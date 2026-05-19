@@ -10,6 +10,7 @@ interface DashboardData {
     todayWorking: number; todayDone: number;
     unconfirmedCount: number; docPendingSubmit: number; docOverdue: number;
     endingIn5: number; endingIn10: number; unassignedSiteCount: number;
+    unassignedSiteList?: Array<{ id: string; companyName: string }>;
   };
   attendanceIssueList: Array<{
     id: string; userName: string; siteName: string;
@@ -108,7 +109,7 @@ export default function AdminDashboardPage() {
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
   // 팝업 상태
-  const [popup, setPopup] = useState<null | "attendance_unconfirmed" | "attendance_gps" | "attendance_time" | "doc_pending" | "doc_overdue" | "assign_ending">(null);
+  const [popup, setPopup] = useState<null | "attendance_unconfirmed" | "attendance_gps" | "attendance_time" | "doc_pending" | "doc_overdue" | "assign_ending" | "unassigned_site">(null);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -304,9 +305,17 @@ export default function AdminDashboardPage() {
             <ActionRow
               icon="⊙" iconColor="#6b7280" label="직무지도원 미배정 Site"
               count={s?.unassignedSiteCount ?? 0} countColor="#6b7280" countBg="#f9fafb"
-              onCountClick={() => router.push("/admin/sites")}
-              showPopup={false} popupItems={[]}
-              onPopupItemClick={() => {}} onPopupClose={() => {}} renderPopupItem={() => null}
+              onCountClick={() => setPopup(p => p === "unassigned_site" ? null : "unassigned_site")}
+              showPopup={popup === "unassigned_site"}
+              popupItems={d?.summary?.unassignedSiteList ?? []}
+              onPopupItemClick={() => router.push("/admin/sites")}
+              onPopupClose={() => setPopup(null)}
+              renderPopupItem={(item: any) => (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontWeight: 600 }}>{item.companyName}</span>
+                  <span style={{ fontSize: 12, color: "#9ca3af" }}>배정 없음</span>
+                </div>
+              )}
             />
             <div style={{ marginTop: 8, padding: "8px 0 0", borderTop: "1px solid #f0f0f0" }}>
               <button onClick={() => router.push("/admin/coaches")}

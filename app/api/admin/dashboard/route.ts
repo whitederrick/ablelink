@@ -180,6 +180,7 @@ export async function GET(req: Request) {
           endingIn5,
           endingIn10: endingSoonAssignments.length,
           unassignedSiteCount: unassignedSites.length,
+          unassignedSiteList: unassignedSites.slice(0, 10).map(s => ({ id: s.id.toString(), companyName: s.companyName })),
         },
         attendanceIssueList: unconfirmedIssues.slice(0, 10).map(i => ({
           id: i.id.toString(),
