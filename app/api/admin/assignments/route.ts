@@ -1,0 +1,214 @@
+// app/api/admin/assignments/route.ts
+// SiteAssignment 생성/조회(간단 list) API
+
+export const runtime = "nodejs";
+
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+
+function errToStatus(msg: string) {
+  if (msg === "UNAUTHORIZED") return 401;
+  if (msg === "FORBIDDEN") return 403;
+  if (msg === "NOT_FOUND") return 404;
+  if (msg.startsWith("VALIDATION:")) return 400;
+  return 500;
+}
+
+function isValidNumericId(s: string) {
+  return /^[0-9]+$/.test(s);
+}
+
+function toItem(r: any) {
+  return {
+    id: String(r.id),
+    userId: String(r.userId),
+    siteId: String(r.siteId),
+    status: r.status,
+    startDate: r.startDate?.toISOString?.() ?? r.startDate ?? null,
+    endDate: r.endDate?.toISOString?.() ?? r.endDate ?? null,
+    assignedAt: r.assignedAt?.toISOString?.() ?? r.assignedAt ?? null,
+    confirmedAt: r.confirmedAt?.toISOString?.() ?? r.confirmedAt ?? null,
+    rejectedAt: r.rejectedAt?.toISOString?.() ?? r.rejectedAt ?? null,
+    droppedAt: r.droppedAt?.toISOString?.() ?? r.droppedAt ?? null,
+    endedAt: r.endedAt?.toISOString?.() ?? r.endedAt ?? null,
+    statusReason: r.statusReason ?? null,
+    assignedByAdminId: r.assignedByAdminId != null ? String(r.assignedByAdminId) : null,
+    site: r.site
+      ? {
+          id: String(r.site.id),
+          companyName: r.site.companyName,
+          address: r.site.address,
+          agencyId: r.site.agencyId != null ? String(r.site.agencyId) : null,
+        }
+      : null,
+    user: r.user
+      ? {
+          id: String(r.user.id),
+          userName: r.user.userName,
+          loginId: r.user.loginId,
+          phoneNumber: r.user.phoneNumber,
+          role: r.user.role,
+          status: r.user.status,
+        }
+      : null,
+  };
+}
+
+// GET: 간단 조회(필요 최소)
+// - 필터: siteId, userId, status
+export async function GET(req: NextRequest) {
+  try {
+    const scope = await requireAdminSession(req);
+
+    const { searchParams } = new URL(req.url);
+    const siteIdStr = (searchParams.get("siteId") || "").trim();
+    const userIdStr = (searchParams.get("userId") || "").trim();
+    const status = (searchParams.get("status") || "").trim();
+
+    const where: any = {};
+    if (siteIdStr) {
+      if (!isValidNumericId(siteIdStr)) throw new Error("VALIDATION:siteId");
+      where.siteId = BigInt(siteIdStr);
+    }
+    if (userIdStr) {
+      if (!isValidNumericId(userIdStr)) throw new Error("VALIDATION:userId");
+      where.userId = BigInt(userIdStr);
+    }
+    if (status) where.status = status;
+
+    // AGENCY 스코프: 해당 agency의 site에 속한 assignment만
+    if (scope.role === "AGENCY") {
+      const agencyId = requireAgencyScope(scope);
+      where.site = { agencyId };
+    }
+
+    const rows = await prisma.siteAssignment.findMany({
+      where,
+      orderBy: { id: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        userId: true,
+        siteId: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        assignedAt: true,
+        confirmedAt: true,
+        rejectedAt: true,
+        droppedAt: true,
+        endedAt: true,
+        statusReason: true,
+        assignedByAdminId: true,
+        site: { select: { id: true, companyName: true, address: true, agencyId: true } },
+        user: {
+          select: { id: true, userName: true, loginId: true, phoneNumber: true, role: true, status: true },
+        },
+      },
+    });
+
+    return NextResponse.json({ success: true, items: rows.map(toItem) });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    const msg = e?.message || "UNKNOWN";
+    return NextResponse.json({ success: false, message: msg }, { status: errToStatus(msg) });
+  }
+}
+
+// POST: 배정 생성 (ASSIGNED)
+// body: { siteId, userId, isMainCoach?, memo? }
+export async function POST(req: NextRequest) {
+  try {
+    const scope = await requireAdminSession(req);
+
+    const body = await req.json();
+    const siteIdStr = String(body.siteId ?? "").trim();
+    const userIdStr = String(body.userId ?? "").trim();
+
+    if (!isValidNumericId(siteIdStr)) throw new Error("VALIDATION:siteId");
+    if (!isValidNumericId(userIdStr)) throw new Error("VALIDATION:userId");
+
+    const siteId = BigInt(siteIdStr);
+    const userId = BigInt(userIdStr);
+
+    // AGENCY 스코프: 배정하려는 site가 내 agency 소속인지 검증
+    if (scope.role === "AGENCY") {
+      const myAgencyId = requireAgencyScope(scope);
+      const site = await prisma.site.findUnique({
+        where: { id: siteId },
+        select: { agencyId: true, isActive: true },
+      });
+      if (!site) throw new Error("NOT_FOUND");
+      if (!site.isActive) throw new Error("VALIDATION:siteInactive");
+      if (site.agencyId == null) throw new Error("FORBIDDEN");
+      if (site.agencyId !== myAgencyId) throw new Error("FORBIDDEN");
+    } else {
+      // ADMIN도 site 존재만 확인
+      const site = await prisma.site.findUnique({
+        where: { id: siteId },
+        select: { isActive: true },
+      });
+      if (!site) throw new Error("NOT_FOUND");
+      if (!site.isActive) throw new Error("VALIDATION:siteInactive");
+    }
+
+    // 배정 대상 user 존재 확인
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { status: true },
+    });
+    if (!user) throw new Error("NOT_FOUND");
+    if (String(user.status) !== "ACTIVE") throw new Error("VALIDATION:userInactive");
+
+    // 동일 site/user에 “활성 배정”이 이미 있으면 중복 방지(정책)
+    const dup = await prisma.siteAssignment.findFirst({
+      where: { siteId, userId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      select: { id: true },
+    });
+    if (dup) throw new Error("VALIDATION:alreadyAssigned");
+
+    const isMainCoach = body.isMainCoach === false ? false : true;
+    const memo = body.memo != null ? String(body.memo).trim() : null;
+
+    const assignedByAdminId = scope.userId;
+
+    const created = await prisma.siteAssignment.create({
+      data: {
+        siteId,
+        userId,
+        status: "ASSIGNED",
+        isMainCoach,
+        assignedAt: new Date(),
+        startDate: new Date(),
+        assignedByAdminId,
+        statusReason: memo,
+      },
+      select: {
+        id: true,
+        userId: true,
+        siteId: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        assignedAt: true,
+        confirmedAt: true,
+        rejectedAt: true,
+        droppedAt: true,
+        endedAt: true,
+        statusReason: true,
+        assignedByAdminId: true,
+        site: { select: { id: true, companyName: true, address: true, agencyId: true } },
+        user: {
+          select: { id: true, userName: true, loginId: true, phoneNumber: true, role: true, status: true },
+        },
+      },
+    });
+
+    return NextResponse.json({ success: true, item: toItem(created) });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    const msg = e?.message || "UNKNOWN";
+    return NextResponse.json({ success: false, message: msg }, { status: errToStatus(msg) });
+  }
+}

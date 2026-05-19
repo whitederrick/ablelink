@@ -1,0 +1,897 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ------------------------------------------------------
+// 1. 공통 및 사용자 관리 (User & Auth)
+// ------------------------------------------------------
+
+model CommonCode {
+  codeGroup String  @map("code_group")
+  codeValue String  @map("code_value")
+  codeName  String  @map("code_name")
+  sortOrder Int     @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+
+  @@id([codeGroup, codeValue])
+  @@map("common_codes")
+}
+
+model User {
+  id          BigInt     @id @default(autoincrement())
+  loginId     String     @unique @map("login_id")
+  password    String
+  userName    String     @map("user_name")
+  phoneNumber String     @map("phone_number")
+  role        UserRole   @default(COACH)
+  status      UserStatus @default(ACTIVE)
+
+  // ✅ 서비스 플랜 (개인 단위; 프리랜서 전제)
+  planType PlanType @default(FREE) @map("plan_type")
+
+  ciKey        String?  @unique @map("ci_key")
+  signatureUrl String?  @map("signature_url") // PREMIUM에서만 사용(정책 레이어에서 강제)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  attendances DailyAttendance[]
+  assignments SiteAssignment[]
+  writtenLogs TraineeLog[]
+
+  payContracts PayContract[]
+  payrollItems PayrollItem[]
+  submissions  Submission[]
+
+  confirmedSiteBasePoints SiteBasePoint[]         @relation("UserConfirmedBasePoints")
+  DocumentRun             DocumentRun[]
+  DocumentVersion         DocumentVersion[]
+  DocumentSubmissionLog   DocumentSubmissionLog[]
+
+  attendanceIssueEvents AttendanceIssueEvent[] @relation("AttendanceIssueEventActor")
+
+  @@map("users")
+}
+
+// ------------------------------------------------------
+// 2. 사업체 및 현장 관리 (Site & Contact)
+// ------------------------------------------------------
+
+model Site {
+  id             BigInt  @id @default(autoincrement())
+  companyName    String  @map("company_name")
+  address        String
+  detailAddress  String? @map("detail_address")
+  gpsLat         Decimal @map("gps_lat")
+  gpsLon         Decimal @map("gps_lon")
+  allowanceRange Int     @default(100) @map("allowance_range")
+
+  // ✅ COACH_ENTRY / 클린징 대비
+  isVerified     Boolean        @default(true) @map("is_verified")
+  siteSourceType SiteSourceType @default(AGENCY)
+
+  // ✅ 중복 최소화/검색 품질 보강
+  // - placeId: 지도 API(카카오/네이버/구글 등)의 placeId를 쓰는 경우
+  // - normalizedAddressKey: 공백/특수문자 제거 등 서버에서 정규화한 키
+  placeId              String? @unique @map("place_id")
+  normalizedAddressKey String? @map("normalized_address_key")
+
+  // ✅ 병합(클린징) 링크: 임시(COACH_ENTRY) Site가 정식 Site로 병합될 때 사용
+  mergedToSiteId  BigInt? @map("merged_to_site_id")
+  mergedToSite    Site?   @relation("SiteMerge", fields: [mergedToSiteId], references: [id])
+  mergedFromSites Site[]  @relation("SiteMerge")
+
+  // 기존 기준점 관련 필드 유지
+  basePointConfirmed        Boolean                 @default(false) @map("base_point_confirmed")
+  basePointSource           String?                 @map("base_point_source")
+  basePointAuthority        ApprovalAuthorityType   @default(AGENCY)
+  basePointApprovalStatus   BasePointApprovalStatus @default(ORIGINAL_SET)
+  basePointAccuracyM        Float?                  @map("base_point_accuracy_m")
+  basePointUpdatedAt        DateTime?               @map("base_point_updated_at")
+  basePointMemo             String?                 @map("base_point_memo")
+  basePointProposedLat      Decimal?
+  basePointProposedLon      Decimal?
+  basePointProposedByUserId BigInt?
+  basePointProposedAt       DateTime?
+  basePointDecidedAt        DateTime?
+  basePointDecidedById      BigInt?
+  basePointDecisionMemo     String?
+  basePointCorrectionReason String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  isActive  Boolean  @default(true) @map("is_active")
+
+  // “현재 운영 주체”는 참고용으로 유지 가능(하지만 실귀속은 assignment.agencyId)
+  agencyId  BigInt? @map("agency_id")
+  managerId BigInt? @map("manager_id")
+
+  // ✅ (구멍 #4 해결) Site에 박혀있던 훈련기간/근무형태 정보 제거
+  // - 기간/근무형태는 배정(SiteAssignment) 또는 Placement에 귀속하는 것이 정확함
+
+  currentBasePointId BigInt?        @map("current_base_point_id")
+  currentBasePoint   SiteBasePoint? @relation("SiteCurrentBasePoint", fields: [currentBasePointId], references: [id])
+
+  attendances DailyAttendance[]
+  assignments SiteAssignment[]
+  placements  TraineePlacement[]
+  trainees    Trainee[]
+  basePoints  SiteBasePoint[]
+  contacts    SiteContact[]
+
+  agency        Agency?        @relation(fields: [agencyId], references: [id])
+  agencyManager AgencyManager? @relation(fields: [managerId], references: [id])
+  DocumentRun   DocumentRun[]
+
+  @@index([agencyId, isActive])
+  @@index([siteSourceType, isVerified])
+  @@index([normalizedAddressKey])
+  @@map("sites")
+}
+
+model SiteContact {
+  id          BigInt   @id @default(autoincrement())
+  siteId      BigInt   @map("site_id")
+  name        String   @map("name")
+  email       String?  @map("email")
+  phoneNumber String?  @map("phone_number")
+  role        String?  @map("role")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, isActive])
+  @@map("site_contacts")
+}
+
+// ------------------------------------------------------
+// 3. 배정 및 근태 정책 (Assignment & Policy)
+// ------------------------------------------------------
+
+model SiteAssignment {
+  id     BigInt @id @default(autoincrement())
+  userId BigInt @map("user_id")
+  siteId BigInt @map("site_id")
+
+  // ✅ 업무 단계 구분 (훈련 PRE/FIELD/적응지도)
+  serviceStep ServiceStep @default(FIELD_TRAINING) @map("service_step")
+
+  // ✅ 근태 인증 정책 (에이전시/사이트 방침 반영)
+  attendanceMode AttendanceMode @default(APP_GPS) @map("attendance_mode")
+
+  status AssignStatus @default(ACTIVE)
+
+  // ✅ (구멍 #4 해결) 기간/근무형태는 Site가 아니라 Assignment에 귀속
+  startDate DateTime  @default(now()) @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  // 선택: 단계별 세부 기간이 필요한 경우(특히 PRE/FIELD 분리 운영용)
+  stepStart DateTime? @map("step_start")
+  stepEnd   DateTime? @map("step_end")
+
+  // 근무형태/추가지도 인정 여부 등(기존 메모리 정책 반영 가능)
+  // workType: AM/PM/ALL 등
+  workType    String? @map("work_type")
+  isExtraTime Boolean @default(false) @map("is_extra_time") // 출퇴근+휴게시간 지도 인정 여부(단일 Y/N)
+
+  assignedAt  DateTime  @default(now()) @map("assigned_at")
+  confirmedAt DateTime? @map("confirmed_at")
+  rejectedAt  DateTime? @map("rejected_at")
+  droppedAt   DateTime? @map("dropped_at")
+  endedAt     DateTime? @map("ended_at")
+
+  assignedByAdminId BigInt?    @map("assigned_by_admin_id")
+  assignedByAdmin   AdminUser? @relation(fields: [assignedByAdminId], references: [id])
+  statusReason      String?    @map("status_reason")
+
+  // ✅ 배정 주체 에이전시 명시 (멀티 에이전시 대응)
+  agencyId BigInt? @map("agency_id")
+  agency   Agency? @relation(fields: [agencyId], references: [id])
+
+  isMainCoach Boolean @default(true) @map("is_main_coach")
+
+  site Site @relation(fields: [siteId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  attendances        DailyAttendance[]
+  submissionRequests SubmissionRequest[]
+  DocumentRun        DocumentRun[]
+
+  @@index([userId, status])
+  @@index([siteId, status])
+  @@index([agencyId, status])
+  @@index([serviceStep, attendanceMode])
+  @@map("site_assignments")
+}
+
+// ------------------------------------------------------
+// 4. 훈련생 및 일지 (Trainee & Log)
+// ------------------------------------------------------
+
+model Trainee {
+  id                  BigInt        @id @default(autoincrement())
+  currentSiteId       BigInt?       @map("current_site_id")
+  name                String
+  birthDate           String?       @map("birth_date")
+  gender              String
+  phoneNumber         String?       @map("phone_number")
+  guardianPhoneNumber String?
+  disabilityType      String        @map("disability_type")
+  severity            String
+  status              TraineeStatus @default(TRAINING)
+  leftAt              DateTime?
+  note                String?
+  createdAt           DateTime      @default(now()) @map("created_at")
+
+  logs       TraineeLog[]
+  placements TraineePlacement[]
+  site       Site?              @relation(fields: [currentSiteId], references: [id])
+
+  @@map("trainees")
+}
+
+model TraineePlacement {
+  id        BigInt @id @default(autoincrement())
+  traineeId BigInt @map("trainee_id")
+  siteId    BigInt @map("site_id")
+
+  startDate DateTime  @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  // ✅ (구멍 #2 해결) String → Enum
+  status TraineePlacementStatus @default(ACTIVE) @map("status")
+
+  site    Site    @relation(fields: [siteId], references: [id])
+  trainee Trainee @relation(fields: [traineeId], references: [id])
+
+  @@index([siteId, status])
+  @@index([traineeId, status])
+  @@map("trainee_placements")
+}
+
+// ✅ (구멍 #3 해결) assignment 기준으로 유니크/귀속 강화
+model DailyAttendance {
+  id     BigInt @id @default(autoincrement())
+  userId BigInt @map("user_id")
+  siteId BigInt @map("site_id")
+
+  // ✅ assignmentId를 “사실상 필수”로 운영하는 게 안정적
+  // - 멀티 배정/멀티 에이전시에서 userId+workDate 유니크는 깨짐
+  assignmentId BigInt  @map("assignment_id")
+  basePointId  BigInt? @map("base_point_id")
+
+  workDate    String    @map("work_date") // yyyy-mm-dd
+  startTime   DateTime? @map("start_time")
+  startLocLat Decimal?  @map("start_loc_lat")
+  startLocLon Decimal?  @map("start_loc_lon")
+  endTime     DateTime? @map("end_time")
+  endLocLat   Decimal?  @map("end_loc_lat")
+  endLocLon   Decimal?  @map("end_loc_lon")
+
+  startDistanceM Float?   @map("start_distance_m")
+  endDistanceM   Float?   @map("end_distance_m")
+  withinRange    Boolean? @map("within_range")
+  rangeM         Int?     @map("range_m")
+
+  attendanceIssue AttendanceIssue?
+
+  isGpsModified Boolean    @default(false) @map("is_gps_modified")
+  status        WorkStatus @default(WORKING)
+  isFinalClosed Boolean    @default(false) @map("is_final_closed")
+  finalizedAt   DateTime?  @map("finalized_at") @db.Timestamp(6)
+
+  site Site @relation(fields: [siteId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  assignment SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  basePoint  SiteBasePoint? @relation(fields: [basePointId], references: [id])
+
+  logs TraineeLog[]
+
+  // ✅ 기존: @@unique([userId, workDate]) → 멀티배정에서 충돌
+  // ✅ 변경: assignmentId+workDate로 유니크
+  @@unique([assignmentId, workDate])
+  @@index([userId, workDate])
+  @@index([siteId, workDate])
+  @@index([basePointId])
+  @@map("daily_attendances")
+}
+
+model TraineeLog {
+  id                  BigInt  @id @default(autoincrement())
+  attendanceId        BigInt  @map("attendance_id")
+  traineeId           BigInt  @map("trainee_id")
+  writerId            BigInt  @map("writer_id")
+  trainingType        String  @map("training_type")
+  time1on1            Decimal @default(0) @map("time_1on1")
+  timeGroup           Decimal @default(0) @map("time_group")
+  content             String?
+  evaluation          String? @map("evaluation")
+  isCompleted         Boolean @default(false) @map("is_completed")
+  extTime1on1         Decimal @default(0) @map("ext_time_1on1")
+  extTimeGroup        Decimal @default(0) @map("ext_time_group")
+  totalRecognizedTime Decimal @default(0) @map("total_recognized_time")
+
+  tasks      TraineeLogTask[]
+  attendance DailyAttendance  @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  trainee    Trainee          @relation(fields: [traineeId], references: [id])
+  writer     User             @relation(fields: [writerId], references: [id])
+
+  @@index([traineeId])
+  @@index([writerId])
+  @@map("trainee_logs")
+}
+
+model TraineeLogTask {
+  id               BigInt  @id @default(autoincrement())
+  logId            BigInt  @map("log_id")
+  taskName         String  @map("task_name")
+  performanceScore Int     @map("performance_score")
+  difficulty       String?
+  feedback         String? @map("feedback")
+
+  log TraineeLog @relation(fields: [logId], references: [id], onDelete: Cascade)
+
+  @@map("trainee_log_tasks")
+}
+
+// ------------------------------------------------------
+// 5. 기관 및 관리자 (Agency & Admin)
+// ------------------------------------------------------
+
+model Agency {
+  id          BigInt   @id @default(autoincrement())
+  name        String   @unique @map("name")
+  phoneNumber String?  @map("phone_number")
+  address     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // ✅ 구독 관리
+  planType        AgencyPlanType @default(FREE)    @map("plan_type")
+  maxCoaches      Int            @default(0)        @map("max_coaches")     // 0 = 무제한(PRO)
+  maxSites        Int            @default(0)        @map("max_sites")       // 0 = 무제한(PRO)
+
+  // ✅ 15일 무료 체험
+  trialStartedAt  DateTime?      @map("trial_started_at")  // 최초 PREMIUM 기능 사용 시점
+  trialEndsAt     DateTime?      @map("trial_ends_at")     // trialStartedAt + 15일
+
+  // ✅ 토스페이먼츠 구독 연동
+  tossCustomerKey String?        @unique @map("toss_customer_key")  // 빌링키 발급용 고객 키
+  tossBillingKey  String?        @map("toss_billing_key")           // 발급된 빌링키 (암호화 저장)
+  subscriptionId  String?        @unique @map("subscription_id")    // 구독 ID
+  nextBillingAt   DateTime?      @map("next_billing_at")            // 다음 결제일
+  subscribedAt    DateTime?      @map("subscribed_at")              // 최초 구독 전환일
+
+  managers     AgencyManager[]
+  sites        Site[]
+  assignments  SiteAssignment[]
+  payContracts PayContract[]
+  payrollRuns  PayrollRun[]
+  adminUsers   AdminUser[]
+
+  @@index([planType])
+  @@map("agencies")
+}
+
+model AgencyManager {
+  id          BigInt  @id @default(autoincrement())
+  agencyId    BigInt  @map("agency_id")
+  name        String  @map("name")
+  email       String  @map("email")
+  phoneNumber String? @map("phone_number")
+
+  agency Agency @relation(fields: [agencyId], references: [id])
+  sites  Site[]
+
+  @@map("agency_managers")
+}
+
+model AdminUser {
+  id           BigInt    @id @default(autoincrement())
+  loginId      String    @unique
+  passwordHash String
+  role         AdminRole @default(ADMIN)
+  displayName  String?
+
+  // ✅ (구멍 #1 해결) agencyName만으로 스코프 잡는 방식은 403/오염의 원인
+  // - agencyId FK를 정식으로 두고, agencyName은 표시/레거시로 optional 유지
+  agencyId BigInt? @map("agency_id")
+  agency   Agency? @relation(fields: [agencyId], references: [id])
+
+  agencyName String? // legacy/표시용
+
+  isActive    Boolean   @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  assignedSiteAssignments SiteAssignment[]
+  submissionRequests      SubmissionRequest[]
+  confirmedSiteBasePoints SiteBasePoint[]         @relation("AdminConfirmedBasePoints")
+  DocumentVersion         DocumentVersion[]
+  DocumentSubmissionLog   DocumentSubmissionLog[]
+  attendanceIssueEvents   AttendanceIssueEvent[]  @relation("AttendanceIssueEventAdminActor")
+
+  @@index([role])
+  @@index([agencyId])
+  @@index([agencyName])
+}
+
+// ------------------------------------------------------
+// 6. 문서 및 리포트 (Document LifeCycle)
+// ------------------------------------------------------
+
+model DocumentRun {
+  id           BigInt  @id @default(autoincrement())
+  agencyId     BigInt? @map("agency_id")
+  assignmentId BigInt  @map("assignment_id")
+  siteId       BigInt  @map("site_id")
+  coachUserId  BigInt  @map("coach_user_id")
+
+  docType     DocumentType @map("doc_type")
+  periodStart DateTime     @map("period_start")
+  periodEnd   DateTime     @map("period_end")
+
+  openAt DateTime @map("open_at")
+  dueAt  DateTime @map("due_at")
+
+  status DocumentRunStatus @default(OPEN) @map("status")
+
+  currentVersionId BigInt? @map("current_version_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  assignment SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  site       Site           @relation(fields: [siteId], references: [id])
+  coach      User           @relation(fields: [coachUserId], references: [id])
+
+  versions       DocumentVersion[]
+  submissionLogs DocumentSubmissionLog[]
+
+  currentVersion DocumentVersion? @relation("DocumentRunCurrentVersion", fields: [currentVersionId], references: [id])
+
+  @@unique([assignmentId, docType, periodStart])
+  @@index([agencyId, docType, periodStart])
+  @@index([assignmentId, docType])
+  @@map("document_runs")
+}
+
+model DocumentVersion {
+  id          BigInt        @id @default(autoincrement())
+  runId       BigInt        @map("run_id")
+  versionNo   Int           @map("version_no")
+  stage       DocumentStage @map("stage")
+  pdfUrl      String        @map("pdf_url")
+  pdfFileName String?       @map("pdf_file_name")
+  sourceData  Json?         @map("source_data")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  createdByUserId  BigInt? @map("created_by_user_id")
+  createdByAdminId BigInt? @map("created_by_admin_id")
+
+  run            DocumentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  createdByUser  User?       @relation(fields: [createdByUserId], references: [id])
+  createdByAdmin AdminUser?  @relation(fields: [createdByAdminId], references: [id])
+
+  currentForRuns DocumentRun[]           @relation("DocumentRunCurrentVersion")
+  submissionLogs DocumentSubmissionLog[]
+
+  @@unique([runId, versionNo])
+  @@index([runId, stage, createdAt])
+  @@map("document_versions")
+}
+
+model DocumentSubmissionLog {
+  id        BigInt        @id @default(autoincrement())
+  runId     BigInt        @map("run_id")
+  versionId BigInt        @map("version_id")
+  stage     DocumentStage @map("stage")
+
+  submittedAt        DateTime @default(now()) @map("submitted_at")
+  submittedByUserId  BigInt?  @map("submitted_by_user_id")
+  submittedByAdminId BigInt?  @map("submitted_by_admin_id")
+
+  sentToEmail  String?   @map("sent_to_email")
+  emailSentAt  DateTime? @map("email_sent_at")
+  emailStatus  String?   @map("email_status")
+  emailPayload Json?     @map("email_payload")
+
+  run              DocumentRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  version          DocumentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  submittedByUser  User?           @relation(fields: [submittedByUserId], references: [id])
+  submittedByAdmin AdminUser?      @relation(fields: [submittedByAdminId], references: [id])
+
+  @@index([runId, stage, submittedAt])
+  @@index([versionId])
+  @@map("document_submission_logs")
+}
+
+// ------------------------------------------------------
+// 7. 기타 보조 모델 (BasePoint, Pay, Issue, Audit)
+// ------------------------------------------------------
+
+model SiteBasePoint {
+  id     BigInt @id @default(autoincrement())
+  siteId BigInt @map("site_id")
+
+  lat       Decimal @map("lat")
+  lon       Decimal @map("lon")
+  accuracyM Float?  @map("accuracy_m")
+
+  sourceType BasePointSourceType   @map("source_type")
+  stage      BasePointStage        @map("stage")
+  authority  ApprovalAuthorityType @map("authority")
+
+  confirmedByUserId  BigInt?  @map("confirmed_by_user_id")
+  confirmedByAdminId BigInt?  @map("confirmed_by_admin_id")
+  confirmedAt        DateTime @default(now()) @map("confirmed_at")
+
+  memo             String? @map("memo")
+  correctionReason String? @map("correction_reason")
+  prevBasePointId  BigInt? @map("prev_base_point_id")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  confirmedByUser  User?      @relation("UserConfirmedBasePoints", fields: [confirmedByUserId], references: [id])
+  confirmedByAdmin AdminUser? @relation("AdminConfirmedBasePoints", fields: [confirmedByAdminId], references: [id])
+
+  prevBasePoint  SiteBasePoint?  @relation("BasePointPrev", fields: [prevBasePointId], references: [id])
+  nextBasePoints SiteBasePoint[] @relation("BasePointPrev")
+
+  currentForSites Site[]            @relation("SiteCurrentBasePoint")
+  attendances     DailyAttendance[]
+
+  @@index([siteId, stage])
+  @@index([confirmedByUserId])
+  @@index([confirmedByAdminId])
+  @@map("site_base_points")
+}
+
+model SubmissionRequest {
+  id                 BigInt                  @id @default(autoincrement())
+  agencyId           BigInt?                 @map("agency_id")
+  assignmentId       BigInt                  @map("assignment_id")
+  requestedByAdminId BigInt?                 @map("requested_by_admin_id")
+  requestedAt        DateTime                @default(now()) @map("requested_at")
+  dueDate            DateTime?               @map("due_date")
+  status             SubmissionRequestStatus @default(REQUESTED) @map("status")
+  memo               String?                 @map("memo")
+
+  assignment  SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  requestedBy AdminUser?     @relation(fields: [requestedByAdminId], references: [id])
+  submissions Submission[]
+
+  @@index([assignmentId, status])
+  @@index([agencyId, status])
+  @@map("submission_requests")
+}
+
+model Submission {
+  id                BigInt   @id @default(autoincrement())
+  requestId         BigInt   @map("request_id")
+  submittedByUserId BigInt   @map("submitted_by_user_id")
+  submittedAt       DateTime @default(now()) @map("submitted_at")
+  fileUrl           String?  @map("file_url")
+  fileName          String?  @map("file_name")
+
+  request SubmissionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user    User              @relation(fields: [submittedByUserId], references: [id])
+
+  @@index([requestId, submittedAt])
+  @@index([submittedByUserId, submittedAt])
+  @@map("submissions")
+}
+
+model AuditEvent {
+  id         BigInt     @id @default(autoincrement())
+  agencyId   BigInt?    @map("agency_id")
+  actorType  ActorType  @map("actor_type")
+  actorId    BigInt?    @map("actor_id")
+  entityType EntityType @map("entity_type")
+  entityId   BigInt?    @map("entity_id")
+  action     String     @map("action")
+  payload    Json?      @map("payload")
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  @@index([agencyId, entityType, entityId])
+  @@index([actorType, actorId])
+  @@map("audit_events")
+}
+
+model PayContract {
+  id       BigInt @id @default(autoincrement())
+  agencyId BigInt @map("agency_id")
+  userId   BigInt @map("user_id")
+
+  payType    PayType @map("pay_type")
+  baseAmount Decimal @map("base_amount")
+  currency   String  @default("KRW")
+
+  effectiveFrom DateTime  @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id])
+  agency Agency @relation(fields: [agencyId], references: [id])
+
+  @@index([agencyId, userId, effectiveFrom])
+  @@map("pay_contracts")
+}
+
+model PayrollRun {
+  id        BigInt @id @default(autoincrement())
+  agencyId  BigInt @map("agency_id")
+  yearMonth String @map("year_month")
+
+  status      PayrollStatus @default(DRAFT) @map("status")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  finalizedAt DateTime?     @map("finalized_at")
+
+  agency Agency        @relation(fields: [agencyId], references: [id])
+  items  PayrollItem[]
+
+  @@unique([agencyId, yearMonth])
+  @@map("payroll_runs")
+}
+
+model PayrollItem {
+  id     BigInt @id @default(autoincrement())
+  runId  BigInt @map("run_id")
+  userId BigInt @map("user_id")
+
+  grossPay       Decimal @map("gross_pay")
+  totalDeduction Decimal @map("total_deduction")
+  netPay         Decimal @map("net_pay")
+
+  workedDays    Int?  @map("worked_days")
+  workedMinutes Int?  @map("worked_minutes")
+  breakdown     Json? @map("breakdown")
+
+  run  PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id])
+
+  @@unique([runId, userId])
+  @@map("payroll_items")
+}
+
+model AttendanceIssue {
+  id                BigInt @id @default(autoincrement())
+  dailyAttendanceId BigInt @unique @map("daily_attendance_id")
+
+  status     AttendanceIssueStatus @default(OPEN)
+  issueTypes AttendanceIssueType[] @default([])
+
+  coachReasonText String? @map("coach_reason_text")
+  adminMemo       String? @map("admin_memo")
+
+  requestedAt DateTime? @map("requested_at")
+  repliedAt   DateTime? @map("replied_at")
+  resolvedAt  DateTime? @map("resolved_at")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  dailyAttendance DailyAttendance        @relation(fields: [dailyAttendanceId], references: [id], onDelete: Cascade)
+  events          AttendanceIssueEvent[]
+
+  @@index([status, updatedAt])
+  @@map("attendance_issues")
+}
+
+model AttendanceIssueEvent {
+  id      BigInt @id @default(autoincrement())
+  issueId BigInt @map("issue_id")
+
+  type      AttendanceIssueEventType
+  actorRole AttendanceIssueActorRole @map("actor_role")
+
+  actorUserId  BigInt? @map("actor_user_id")
+  actorAdminId BigInt? @map("actor_admin_id")
+
+  message   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue AttendanceIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  actorUser  User?      @relation("AttendanceIssueEventActor", fields: [actorUserId], references: [id])
+  actorAdmin AdminUser? @relation("AttendanceIssueEventAdminActor", fields: [actorAdminId], references: [id])
+
+  @@index([issueId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([actorAdminId, createdAt])
+  @@map("attendance_issue_events")
+}
+
+// ------------------------------------------------------
+// 8. Enums
+// ------------------------------------------------------
+
+enum PlanType {
+  FREE
+  PREMIUM
+}
+
+// 에이전시 구독 플랜 (실제 과금 단위)
+enum AgencyPlanType {
+  FREE        // 무료: 출퇴근+수동일지만
+  TRIAL       // 15일 무료 체험: AI+PDF 포함
+  STARTER     // 유료 스타터: 최대 5명/5개 Site
+  STANDARD    // 유료 스탠다드: 최대 20명/20개 Site
+  PRO         // 유료 프로: 무제한
+}
+
+enum ServiceStep {
+  PRE_TRAINING
+  FIELD_TRAINING
+  ADAPTATION
+}
+
+enum AttendanceMode {
+  APP_GPS
+  EXTERNAL
+  NONE
+}
+
+enum UserRole {
+  ADMIN
+  COACH
+}
+
+enum UserStatus {
+  ACTIVE
+  RESIGNED
+  PAUSED
+}
+
+enum AssignStatus {
+  ACTIVE
+  ENDED
+  ASSIGNED
+  CONFIRMED
+  REJECTED
+  DROPPED
+}
+
+enum TraineeStatus {
+  TRAINING
+  EMPLOYED
+  DROPOUT
+  PAUSED
+}
+
+// ✅ (구멍 #2 해결)
+enum TraineePlacementStatus {
+  ACTIVE
+  COMPLETED
+  DROPOUT
+  PAUSED
+}
+
+enum WorkStatus {
+  WORKING
+  DONE
+  ABSENT
+}
+
+enum SiteSourceType {
+  KEAD
+  AGENCY
+  COACH_ENTRY
+}
+
+enum BasePointApprovalStatus {
+  ORIGINAL_SET
+  COACH_PROPOSED
+  APPROVED
+  REJECTED
+  CORRECTION_REQUESTED
+}
+
+enum ApprovalAuthorityType {
+  AGENCY
+  KEAD
+}
+
+enum AdminRole {
+  ADMIN
+  GOV
+  AGENCY
+}
+
+enum BasePointStage {
+  AGENCY_CONFIRMED
+  COACH_FINAL
+}
+
+enum BasePointSourceType {
+  ADDRESS
+  DEVICE
+  MANUAL
+}
+
+enum AttendanceIssueStatus {
+  OPEN
+  REQUESTED
+  REPLIED
+  RESOLVED
+}
+
+enum AttendanceIssueType {
+  MISSING_CLOCK_IN
+  MISSING_CLOCK_OUT
+  OUT_OF_RANGE
+  TIME_ANOMALY
+}
+
+enum AttendanceIssueEventType {
+  ISSUE_CREATED
+  REASON_REQUESTED
+  REASON_REPLIED
+  SUPPLEMENT_REQUESTED
+  RESOLVED
+  MEMO_UPDATED
+}
+
+enum AttendanceIssueActorRole {
+  ADMIN
+  COACH
+}
+
+enum DocumentType {
+  ATTENDANCE_SHEET
+  TRAINING_DAILY_LOG
+  TRAINEE_COMPREHENSIVE_EVAL
+  POST_EMPLOY_ADAPT_LOG
+  ADAPTATION_COMPREHENSIVE_EVAL
+  CHECKLIST
+}
+
+enum DocumentStage {
+  PRE
+  FINAL
+}
+
+enum DocumentRunStatus {
+  OPEN
+  CLOSED
+}
+
+enum SubmissionRequestStatus {
+  REQUESTED
+  SUBMITTED
+  REVIEWED
+  CLOSED
+}
+
+enum ActorType {
+  ADMIN_USER
+  USER
+  SITE_CONTACT
+}
+
+enum EntityType {
+  SITE
+  ASSIGNMENT
+  ATTENDANCE
+  TRAINEE
+  SUBMISSION
+  BASEPOINT
+  PAYROLL
+}
+
+enum PayType {
+  MONTHLY
+  DAILY
+  HOURLY
+}
+
+enum PayrollStatus {
+  DRAFT
+  FINALIZED
+}
