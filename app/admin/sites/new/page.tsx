@@ -211,9 +211,9 @@ export default function AdminSiteNewPage() {
   }
 
   return (
-    <div style={{ padding: 16, maxWidth: 980 }}>
+    <div style={{ maxWidth: 980 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ fontSize: 18, fontWeight: 800 }}>Site 신규 등록</h1>
+        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: 0, letterSpacing: "-0.3px" }}>Site 신규 등록</h1>
         <Link href="/admin/sites" style={{ fontSize: 13, color: "#111827" }}>
           ← 목록으로
         </Link>
@@ -423,20 +423,22 @@ const lbl: React.CSSProperties = { width: 90, fontSize: 13, color: "#555" };
 
 const inp: React.CSSProperties = {
   flex: 1,
-  padding: 10,
-  border: "1px solid #d1d5db",
-  borderRadius: 10,
+  padding: "9px 12px",
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
   fontSize: 13,
   background: "#fff",
+  outline: "none",
 };
 
 const sel: React.CSSProperties = {
   flex: 1,
-  padding: 10,
-  border: "1px solid #d1d5db",
-  borderRadius: 10,
+  padding: "9px 12px",
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
   fontSize: 13,
   background: "#fff",
+  outline: "none",
 };
 
 const btn: React.CSSProperties = {
@@ -448,12 +450,14 @@ const btn: React.CSSProperties = {
 };
 
 const btnPrimary: React.CSSProperties = {
-  padding: "10px 14px",
-  border: "1px solid #111827",
-  borderRadius: 10,
-  background: "#111827",
+  padding: "9px 18px",
+  border: "none",
+  borderRadius: 8,
+  background: "#2563eb",
   color: "#fff",
   fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
 };
 
 const modalBack: React.CSSProperties = {

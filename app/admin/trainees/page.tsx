@@ -170,7 +170,7 @@ export default function TraineesPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { padding: 24 },
+  page: {},
   header: { marginBottom: 16 },
   title: { fontSize: 20, fontWeight: 800, color: "#111", margin: "0 0 4px" },
   subtitle: { fontSize: 13, color: "#888", margin: 0 },

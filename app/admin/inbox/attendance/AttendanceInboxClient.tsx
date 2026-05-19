@@ -696,7 +696,7 @@ export default function AttendanceInboxClient() {
                         onClick={() => setSelectedId(it.id)}
                         className={cx(
                           "w-full rounded-lg border border-gray-100 px-4 py-3 text-left transition",
-                          active ? "border-black bg-black/5" : "hover:bg-black/5"
+                          active ? "border-blue-200 bg-blue-50" : "hover:bg-gray-50"
                         )}
                       >
                         <div className="mb-0 flex items-start gap-3">
@@ -767,7 +767,7 @@ export default function AttendanceInboxClient() {
                       key={p}
                       className={cx(
                         "rounded-lg border px-2 py-1 text-xs",
-                        p === page ? "bg-black text-white" : "hover:bg-black/5"
+                        p === page ? "bg-blue-600 text-white border-blue-600" : "hover:bg-gray-50"
                       )}
                       onClick={() => setPage(p)}
                     >
@@ -825,7 +825,7 @@ export default function AttendanceInboxClient() {
                     </div>
 
                     <div className="shrink-0">
-                      <div className="rounded-xl bg-black px-4 py-2 text-center text-xs font-semibold text-white">
+                      <div className="rounded-lg bg-gray-700 px-4 py-2 text-center text-xs font-semibold text-white">
                         {STATUS_LABEL[selected.status]}
                       </div>
                     </div>
@@ -918,7 +918,7 @@ export default function AttendanceInboxClient() {
                     <button
                       onClick={saveAdminMemo}
                       disabled={savingMemo}
-                      className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                     >
                       메모 저장
                     </button>
