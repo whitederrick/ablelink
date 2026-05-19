@@ -1,9 +1,6 @@
 "use client";
-// app/admin/coaches/page.tsx
-// 직무지도원 관리 페이지
-
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { sharedStyles } from "../_styles";
 
 interface Coach {
   id: string;
@@ -13,15 +10,21 @@ interface Coach {
   planType: string;
   status: string;
   createdAt: string;
-  activeAssignment: {
-    siteName: string;
-    agencyName: string;
-    startDate: string;
-  } | null;
+  activeAssignment: { siteName: string; agencyName: string; startDate: string; } | null;
 }
 
+const STATUS: Record<string, { label: string; color: string; bg: string }> = {
+  ACTIVE:   { label: "활성",   color: "#16a34a", bg: "#f0fdf4" },
+  RESIGNED: { label: "퇴사",   color: "#6b7280", bg: "#f9fafb" },
+  PAUSED:   { label: "일시정지", color: "#d97706", bg: "#fffbeb" },
+};
+const PLAN: Record<string, { label: string; color: string; bg: string }> = {
+  FREE:     { label: "무료",   color: "#6b7280", bg: "#f9fafb" },
+  PREMIUM:  { label: "프리미엄", color: "#7c3aed", bg: "#f5f3ff" },
+};
+
 export default function CoachesPage() {
-  const router = useRouter();
+  const T = sharedStyles();
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -30,116 +33,73 @@ export default function CoachesPage() {
   useEffect(() => {
     fetch("/api/admin/coaches")
       .then(r => r.json())
-      .then(d => {
-        if (d.success && Array.isArray(d.data)) {
-          setCoaches(d.data);
-          setTotal(d.total ?? d.data.length);
-        }
-      })
+      .then(d => { if (d.success && Array.isArray(d.data)) { setCoaches(d.data); setTotal(d.total ?? d.data.length); } })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = (coaches || []).filter(c =>
+  const filtered = coaches.filter(c =>
     c.userName.includes(search) ||
     c.phoneNumber.includes(search) ||
     c.activeAssignment?.siteName.includes(search) ||
-    c.activeAssignment?.agencyName.includes(search)
+    c.loginId.includes(search)
   );
 
-  const STATUS_LABEL: Record<string, string> = {
-    ACTIVE: "활성", INACTIVE: "비활성", SUSPENDED: "정지",
-  };
-  const STATUS_COLOR: Record<string, string> = {
-    ACTIVE: "#2e7d32", INACTIVE: "#888", SUSPENDED: "#e53935",
-  };
-  const PLAN_LABEL: Record<string, string> = {
-    FREE: "무료", TRIAL: "체험", STARTER: "스타터", STANDARD: "스탠다드", PRO: "프로",
-  };
-  const PLAN_COLOR: Record<string, string> = {
-    FREE: "#888", TRIAL: "#f57c00", STARTER: "#5865F2", STANDARD: "#5865F2", PRO: "#2e7d32",
-  };
-
   return (
-    <div style={s.page}>
-      <div style={s.header}>
-        <h1 style={s.title}>직무지도원 관리</h1>
-        <span style={s.total}>총 {total}명</span>
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div>
+          <h1 style={T.pageTitle}>직무지도원 관리</h1>
+          <p style={T.pageSub}>총 {total}명</p>
+        </div>
       </div>
 
-      {/* 검색 */}
-      <div style={s.searchRow}>
-        <input
-          style={s.searchInput}
-          placeholder="이름 / 전화번호 / 현장명 / 기관명 검색"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-        <button style={s.searchBtn}>검색</button>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="이름 / 전화번호 / 현장명 / 아이디 검색" style={T.input} />
       </div>
 
-      {/* 테이블 */}
-      {loading ? (
-        <p style={s.empty}>로딩 중...</p>
-      ) : filtered.length === 0 ? (
-        <p style={s.empty}>등록된 직무지도원이 없습니다.</p>
-      ) : (
-        <div style={s.tableWrap}>
-          <table style={s.table}>
-            <thead>
-              <tr style={s.thead}>
-                <th style={s.th}>이름</th>
-                <th style={s.th}>전화번호</th>
-                <th style={s.th}>현장</th>
-                <th style={s.th}>기관</th>
-                <th style={s.th}>배정일</th>
-                <th style={s.th}>플랜</th>
-                <th style={s.th}>상태</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(c => (
-                <tr key={c.id} style={s.tr}>
-                  <td style={s.td}><strong>{c.userName}</strong></td>
-                  <td style={s.td}>{c.phoneNumber}</td>
-                  <td style={s.td}>{c.activeAssignment?.siteName || <span style={s.none}>미배정</span>}</td>
-                  <td style={s.td}>{c.activeAssignment?.agencyName || "-"}</td>
-                  <td style={s.td}>{c.activeAssignment?.startDate?.slice(0, 10) || "-"}</td>
-                  <td style={s.td}>
-                    <span style={{ ...s.planBadge, color: PLAN_COLOR[c.planType] || "#888" }}>
-                      {PLAN_LABEL[c.planType] || c.planType}
-                    </span>
+      <div style={T.tableWrap}>
+        <table style={T.table}>
+          <thead>
+            <tr>
+              {["이름", "전화번호", "아이디", "현장", "기관", "배정일", "플랜", "상태"].map(h => (
+                <th key={h} style={T.th}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={8} style={T.tdCenter}>로딩 중...</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={8} style={T.tdCenter}>직무지도원이 없습니다.</td></tr>
+            ) : filtered.map(c => {
+              const status = STATUS[c.status] || { label: c.status, color: "#6b7280", bg: "#f9fafb" };
+              const plan = PLAN[c.planType] || { label: c.planType, color: "#6b7280", bg: "#f9fafb" };
+              return (
+                <tr key={c.id} style={T.tr}>
+                  <td style={T.td}><strong style={{ color: "#111827" }}>{c.userName}</strong></td>
+                  <td style={{ ...T.td, color: "#6b7280" }}>{c.phoneNumber}</td>
+                  <td style={{ ...T.td, color: "#9ca3af", fontSize: 12 }}>{c.loginId}</td>
+                  <td style={T.td}>
+                    {c.activeAssignment?.siteName
+                      ? <span style={{ color: "#374151" }}>{c.activeAssignment.siteName}</span>
+                      : <span style={{ color: "#d1d5db", fontStyle: "italic" }}>미배정</span>}
                   </td>
-                  <td style={s.td}>
-                    <span style={{ ...s.statusDot, backgroundColor: STATUS_COLOR[c.status] || "#888" }} />
-                    {STATUS_LABEL[c.status] || c.status}
+                  <td style={{ ...T.td, color: "#6b7280" }}>{c.activeAssignment?.agencyName || "-"}</td>
+                  <td style={{ ...T.td, color: "#9ca3af", fontSize: 12 }}>{c.activeAssignment?.startDate?.slice(0, 10) || "-"}</td>
+                  <td style={T.td}>
+                    <span style={{ ...T.badge, background: plan.bg, color: plan.color }}>{plan.label}</span>
+                  </td>
+                  <td style={T.td}>
+                    <span style={{ ...T.badge, background: status.bg, color: status.color }}>{status.label}</span>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page: { padding: 24 },
-  header: { display: "flex", alignItems: "baseline", gap: 12, marginBottom: 20 },
-  title: { fontSize: 20, fontWeight: 800, color: "#111", margin: 0 },
-  total: { fontSize: 14, color: "#888" },
-  searchRow: { display: "flex", gap: 8, marginBottom: 16 },
-  searchInput: { flex: 1, height: 40, border: "1px solid #ddd", borderRadius: 8, padding: "0 14px", fontSize: 14, outline: "none" },
-  searchBtn: { padding: "0 20px", backgroundColor: "#5865F2", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer" },
-  tableWrap: { overflowX: "auto" },
-  table: { width: "100%", borderCollapse: "collapse", backgroundColor: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.06)" },
-  thead: { backgroundColor: "#f8f9ff" },
-  th: { padding: "12px 16px", textAlign: "left" as const, fontSize: 13, fontWeight: 700, color: "#555", borderBottom: "1px solid #eee" },
-  tr: { borderBottom: "1px solid #f5f5f5" },
-  td: { padding: "12px 16px", fontSize: 14, color: "#333", verticalAlign: "middle" as const },
-  planBadge: { fontWeight: 700, fontSize: 13 },
-  statusDot: { display: "inline-block", width: 8, height: 8, borderRadius: "50%", marginRight: 6 },
-  none: { color: "#ccc", fontStyle: "italic" },
-  empty: { textAlign: "center", color: "#aaa", padding: "40px 0" },
-};

@@ -1,45 +1,39 @@
-// app/admin/sites/page.tsx
-// This is the client component for the site management page in the admin panel.
-// It provides search, pagination, and links to site details.
-
 "use client";
-
 import Link from "next/link";
+import { sharedStyles } from "../_styles";
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
 
 type SiteItem = {
-  id: string; // API에서 문자열로 내려오므로 string 고정 권장
+  id: string;
   companyName: string;
   address: string;
   detailAddress: string | null;
-
   agencyName: string | null;
-
   managerName: string | null;
   managerEmail: string | null;
   managerPhone: string | null;
-
   basePointConfirmed: boolean;
   basePointApprovalStatus: string;
-  basePointUpdatedAt: string | null;
-
   isActive: boolean;
+  allowanceRange?: number;
+};
+
+const APPROVAL_LABEL: Record<string, { label: string; color: string; bg: string }> = {
+  ORIGINAL_SET:           { label: "미확정",      color: "#6b7280", bg: "#f9fafb" },
+  COACH_PROPOSED:         { label: "제안됨",      color: "#d97706", bg: "#fffbeb" },
+  APPROVED:               { label: "승인",        color: "#16a34a", bg: "#f0fdf4" },
+  REJECTED:               { label: "반려",        color: "#dc2626", bg: "#fef2f2" },
+  CORRECTION_REQUESTED:   { label: "수정요청",    color: "#2563eb", bg: "#eff6ff" },
 };
 
 export default function AdminSitesPage() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
-
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<SiteItem[]>([]);
   const [total, setTotal] = useState(0);
-
-  const totalPages = useMemo(
-    () => Math.max(1, Math.ceil(total / pageSize)),
-    [total, pageSize]
-  );
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
 
   async function fetchList(targetPage: number) {
     setLoading(true);
@@ -49,161 +43,102 @@ export default function AdminSitesPage() {
       sp.set("page", String(targetPage));
       sp.set("pageSize", String(pageSize));
       sp.set("isActive", "true");
-
-      const res = await fetch(`/api/admin/sites?${sp.toString()}`, {
-        method: "GET",
-        cache: "no-store",
-      });
-
+      const res = await fetch(`/api/admin/sites?${sp.toString()}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok || !data?.success) throw new Error(data?.message || "FAILED");
-
-      setItems((data.items || []) as SiteItem[]);
+      setItems(data.items || []);
       setTotal(Number(data.total || 0));
-    } catch (e) {
-      console.error(e);
-      setItems([]);
-      setTotal(0);
-      alert("목록 조회에 실패했습니다.");
-    } finally {
-      setLoading(false);
-    }
+    } catch { setItems([]); setTotal(0); }
+    finally { setLoading(false); }
   }
 
-  useEffect(() => {
-    fetchList(page);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  useEffect(() => { fetchList(page); }, [page]);
 
   function onSearch() {
-    // 검색은 1페이지로 고정 후, useEffect(page)로 조회되게 처리
     if (page !== 1) setPage(1);
     else fetchList(1);
   }
 
-  const fmt = (v: string | null | undefined) => (v && String(v).trim() ? String(v) : "-");
-
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700 }}>Site 관리</h1>
+    <div>
+      {/* 헤더 */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div>
+          <h1 style={T.pageTitle}>Site 관리</h1>
+          <p style={T.pageSub}>총 {total}건 · page {page} / {totalPages}</p>
+        </div>
         <Link href="/admin/sites/new">
-          <button style={{ padding: "8px 12px", border: "1px solid #ccc", borderRadius: 6 }}>
-            신규 등록
-          </button>
+          <button style={T.btnPrimary}>신규 등록</button>
         </Link>
       </div>
 
-      <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="사업체명/주소/담당자명/메일/전화/기관 검색"
-          style={{ flex: 1, padding: 10, border: "1px solid #ccc", borderRadius: 6 }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") onSearch();
-          }}
-        />
-        <button
-          onClick={onSearch}
-          style={{ padding: "10px 14px", border: "1px solid #ccc", borderRadius: 6 }}
-        >
-          검색
-        </button>
+      {/* 검색 */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && onSearch()}
+          placeholder="사업체명/주소/담당자명/메일/전화/기관 검색" style={T.input} />
+        <button onClick={onSearch} style={T.btnSecondary}>검색</button>
       </div>
 
-      <div style={{ marginTop: 12, fontSize: 13, color: "#555" }}>
-        총 {total}건 (page {page} / {totalPages})
-      </div>
-
-      <div style={{ backgroundColor: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#f8f9ff" }}>
+      {/* 테이블 */}
+      <div style={T.tableWrap}>
+        <table style={T.table}>
+          <thead>
             <tr>
-              <th style={th}>ID</th>
-              <th style={th}>사업체명</th>
-              <th style={th}>주소</th>
-              <th style={th}>담당자</th>
-              <th style={th}>기관</th>
-              <th style={th}>GPS 범위</th>
-              <th style={th}>기준점</th>
-              <th style={th}>상태</th>
+              {["ID", "사업체명", "주소", "담당자", "기관", "GPS 범위", "기준점", "상태"].map(h => (
+                <th key={h} style={T.th}>{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td style={td} colSpan={7}>로딩 중...</td>
-              </tr>
+              <tr><td colSpan={8} style={T.tdCenter}>로딩 중...</td></tr>
             ) : items.length === 0 ? (
-              <tr>
-                <td style={td} colSpan={7}>데이터가 없습니다.</td>
-              </tr>
-            ) : (
-              items.map((it) => (
-                <tr key={it.id}>
-                  <td style={td}>{it.id}</td>
-                  <td style={td}>
-                    <Link href={`/admin/sites/${it.id}`} style={{ textDecoration: "underline" }}>
+              <tr><td colSpan={8} style={T.tdCenter}>데이터가 없습니다.</td></tr>
+            ) : items.map(it => {
+              const approval = APPROVAL_LABEL[it.basePointApprovalStatus] || APPROVAL_LABEL.ORIGINAL_SET;
+              return (
+                <tr key={it.id} style={T.tr}>
+                  <td style={{ ...T.td, color: "#9ca3af", fontSize: 12 }}>{it.id}</td>
+                  <td style={T.td}>
+                    <Link href={`/admin/sites/${it.id}`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600 }}>
                       {it.companyName}
                     </Link>
                   </td>
-                  <td style={td}>
-                    <div>{it.address}</div>
-                    {it.detailAddress ? (
-                      <div style={{ fontSize: 12, color: "#666" }}>{it.detailAddress}</div>
-                    ) : null}
+                  <td style={T.td}>
+                    <div style={{ fontSize: 13 }}>{it.address}</div>
+                    {it.detailAddress && <div style={{ fontSize: 12, color: "#9ca3af" }}>{it.detailAddress}</div>}
                   </td>
-                  <td style={td}>
-                    <div>{fmt(it.managerName)}</div>
-                    <div style={{ fontSize: 12, color: "#666" }}>{fmt(it.managerEmail)}</div>
-                    <div style={{ fontSize: 12, color: "#666" }}>{fmt(it.managerPhone)}</div>
+                  <td style={T.td}>
+                    <div style={{ fontSize: 13 }}>{it.managerName || "-"}</div>
+                    {it.managerEmail && <div style={{ fontSize: 12, color: "#9ca3af" }}>{it.managerEmail}</div>}
+                    {it.managerPhone && <div style={{ fontSize: 12, color: "#9ca3af" }}>{it.managerPhone}</div>}
                   </td>
-                  <td style={td}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#5865F2" }}>
-                      {(it as any).allowanceRange ?? 100}m
+                  <td style={T.td}><span style={{ fontSize: 12, color: "#6b7280" }}>{it.agencyName || "-"}</span></td>
+                  <td style={T.td}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#2563eb" }}>{it.allowanceRange ?? 100}m</span>
+                  </td>
+                  <td style={T.td}>
+                    <span style={{ fontSize: 12, color: it.basePointConfirmed ? "#16a34a" : "#9ca3af" }}>
+                      {it.basePointConfirmed ? "확정" : "미확정"}
                     </span>
                   </td>
-                  <td style={td}>{fmt(it.agencyName)}</td>
-                  <td style={td}>{it.basePointConfirmed ? "확정" : "미확정"}</td>
-                  <td style={td}>{it.basePointApprovalStatus}</td>
+                  <td style={T.td}>
+                    <span style={{ ...T.badge, background: approval.bg, color: approval.color }}>{approval.label}</span>
+                  </td>
                 </tr>
-              ))
-            )}
+              );
+            })}
           </tbody>
         </table>
       </div>
 
-      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
-        <button
-          disabled={page <= 1}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          style={{ padding: "8px 12px", border: "1px solid #ccc", borderRadius: 6, opacity: page <= 1 ? 0.5 : 1 }}
-        >
-          이전
-        </button>
-        <button
-          disabled={page >= totalPages}
-          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          style={{ padding: "8px 12px", border: "1px solid #ccc", borderRadius: 6, opacity: page >= totalPages ? 0.5 : 1 }}
-        >
-          다음
-        </button>
+      {/* 페이지네이션 */}
+      <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+        <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ ...T.btnSecondary, opacity: page <= 1 ? 0.4 : 1 }}>이전</button>
+        <button disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} style={{ ...T.btnSecondary, opacity: page >= totalPages ? 0.4 : 1 }}>다음</button>
       </div>
     </div>
   );
 }
 
-const th: CSSProperties = {
-  textAlign: "left",
-  padding: 10,
-  fontSize: 13,
-  borderBottom: "1px solid #e5e5e5",
-};
-
-const td: CSSProperties = {
-  padding: 10,
-  fontSize: 13,
-  borderBottom: "1px solid #f0f0f0",
-  verticalAlign: "top",
-};
+const T = sharedStyles();

@@ -2,6 +2,7 @@
 // 담당자(기관 매니저) 관리 페이지 (정식 /api/admin/managers CRUD)
 
 "use client";
+import { sharedStyles } from "../_styles";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -254,12 +255,12 @@ export default function AdminManagersPage() {
   }
 
   return (
-    <div style={{ padding: 24 }}>
+    <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111", margin: 0 }}>담당자(기관) 관리</h1>
+        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827", letterSpacing: "-0.3px" }}>담당자(기관) 관리</h1>
         <button
           onClick={openCreate}
-          style={{ padding: "9px 18px", border: "none", borderRadius: 8, background: "#5865F2", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 14 }}
+          style={{ padding: "9px 18px", border: "none", borderRadius: 8, background: "#2563eb", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 13 }}
         >
           + 신규 등록
         </button>
@@ -271,20 +272,20 @@ export default function AdminManagersPage() {
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onSearch()}
           placeholder="담당자명/메일/전화/기관 검색"
-          style={{ flex: 1, height: 40, border: "1px solid #ddd", borderRadius: 8, padding: "0 14px", fontSize: 14, outline: "none" }}
+          style={{ flex: 1, height: 38, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 12px", fontSize: 13, outline: "none", background: "#fff" }}
         />
-        <button onClick={onSearch} style={{ padding: "0 20px", height: 40, border: "none", borderRadius: 8, background: "#5865F2", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>
+        <button onClick={onSearch} style={{ padding: "0 16px", height: 38, border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff", color: "#374151", fontWeight: 500, cursor: "pointer", fontSize: 13 }}>
           검색
         </button>
       </div>
 
-      <div style={{ marginBottom: 12, fontSize: 13, color: "#888" }}>
+      <div style={{ marginBottom: 12, fontSize: 13, color: "#9ca3af" }}>
         총 {total}건 (page {page} / {totalPages})
       </div>
 
-      <div style={{ backgroundColor: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
+      <div style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 12, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#f8f9ff" }}>
+          <thead>
             <tr>
               <th style={th}>ID</th>
               <th style={th}>담당자명</th>
@@ -330,21 +331,14 @@ export default function AdminManagersPage() {
                     <div style={{ display: "flex", gap: 8 }}>
                       <button
                         onClick={() => openEdit(it.id)}
-                        style={{ padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 8, background: "#fff" }}
+                        style={{ padding: "5px 12px", border: "1px solid #e5e7eb", borderRadius: 7, background: "#fff", fontSize: 12, cursor: "pointer" }}
                       >
                         수정
                       </button>
                       <button
                         onClick={() => remove(it.id)}
                         disabled={deletingId === it.id}
-                        style={{
-                          padding: "6px 10px",
-                          border: "1px solid #ef4444",
-                          borderRadius: 8,
-                          background: "#fff",
-                          color: "#ef4444",
-                          opacity: deletingId === it.id ? 0.6 : 1,
-                        }}
+                        style={{ padding: "5px 12px", border: "1px solid #fecaca", borderRadius: 7, background: "#fff", color: "#dc2626", fontSize: 12, cursor: "pointer", opacity: deletingId === it.id ? 0.6 : 1 }}
                       >
                         {deletingId === it.id ? "삭제 중..." : "삭제"}
                       </button>
@@ -477,16 +471,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const th: React.CSSProperties = {
   textAlign: "left",
-  padding: 10,
-  fontSize: 13,
-  borderBottom: "1px solid #e5e5e5",
+  padding: "10px 16px",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#9ca3af",
+  borderBottom: "1px solid #f0f0f0",
+  whiteSpace: "nowrap",
+  letterSpacing: "0.3px",
+  textTransform: "uppercase",
+  background: "#fafafa",
 };
 
 const td: React.CSSProperties = {
-  padding: 10,
+  padding: "12px 16px",
   fontSize: 13,
-  borderBottom: "1px solid #f0f0f0",
-  verticalAlign: "top",
+  color: "#374151",
+  borderBottom: "1px solid #f9f9f9",
+  verticalAlign: "middle",
 };
 
 const overlay: React.CSSProperties = {
