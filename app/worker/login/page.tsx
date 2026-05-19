@@ -1,4 +1,3 @@
-// app/worker/login/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -23,37 +22,32 @@ export default function WorkerLoginPage() {
         body: JSON.stringify({ loginId: loginId.replace(/-/g, ""), password }),
       });
       const data = await res.json();
-      if (!data.success) {
-        setError(data.message || "로그인에 실패했습니다.");
-        return;
-      }
-      if (data.hasActiveSite) {
-        router.replace("/worker/home");
-      } else {
-        router.replace("/worker/site/register");
-      }
+      if (!data.success) { setError(data.message || "로그인에 실패했습니다."); return; }
+      router.replace(data.hasActiveSite ? "/worker/home" : "/worker/site/register");
     } catch {
       setError("서버와 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   return (
-    <div style={s.wrap}>
-      <div style={s.inner}>
+    <div style={s.page}>
+      <div style={s.card}>
         {/* 로고 */}
-        <div style={s.logoBox}>
-          <h1 style={s.logo}>Able Link</h1>
-          <p style={s.sub}>장애인 직무지도 지원 서비스</p>
+        <div style={s.logoWrap}>
+          <div style={s.logoText}>
+            <span style={{ color: "#111827" }}>Able</span>
+            <span style={{ color: "#ef4444" }}> Link</span>
+          </div>
+          <p style={s.logoSub}>장애인 직무지도 지원 서비스</p>
         </div>
 
         {/* 폼 */}
         <form onSubmit={handleSubmit} style={s.form}>
-          <div style={s.field}>
+          <div style={s.fieldGroup}>
+            <label style={s.label}>아이디 (휴대전화번호)</label>
             <input
               type="tel"
-              placeholder="아이디 (휴대전화번호)"
+              placeholder="01012345678"
               value={loginId}
               onChange={e => setLoginId(e.target.value)}
               style={s.input}
@@ -62,10 +56,11 @@ export default function WorkerLoginPage() {
               required
             />
           </div>
-          <div style={s.field}>
+          <div style={s.fieldGroup}>
+            <label style={s.label}>비밀번호</label>
             <input
               type="password"
-              placeholder="비밀번호"
+              placeholder="비밀번호를 입력하세요"
               value={password}
               onChange={e => setPassword(e.target.value)}
               style={s.input}
@@ -74,26 +69,24 @@ export default function WorkerLoginPage() {
             />
           </div>
 
-          {error && <p style={s.errorMsg}>{error}</p>}
+          {error && <div style={s.error}>{error}</div>}
 
-          <button type="submit" style={{ ...s.btn, opacity: loading ? 0.7 : 1 }} disabled={loading}>
+          <button type="submit" disabled={loading}
+            style={{ ...s.btn, opacity: loading ? 0.7 : 1 }}>
             {loading ? "로그인 중..." : "로그인"}
           </button>
         </form>
 
-        {/* 링크 */}
+        {/* 회원가입 링크 */}
         <div style={s.links}>
           <span style={s.linkText}>계정이 없으신가요?</span>
           <Link href="/worker/register" style={s.link}>회원가입</Link>
         </div>
 
-        {/* 플랜 안내 배너 */}
+        {/* AI 기능 배너 */}
         <div style={s.banner}>
           <p style={s.bannerTitle}>🎁 AI 기능 15일 무료 체험</p>
-          <p style={s.bannerDesc}>
-            음성 일지 작성, PDF 자동 생성 등<br />
-            PREMIUM 기능을 무료로 경험해보세요.
-          </p>
+          <p style={s.bannerDesc}>음성 일지 작성, PDF 자동 생성 등<br />PREMIUM 기능을 무료로 경험해보세요.</p>
         </div>
       </div>
     </div>
@@ -101,77 +94,86 @@ export default function WorkerLoginPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  wrap: {
+  page: {
     minHeight: "100dvh",
-    backgroundColor: "#f8f9ff",
+    background: "#f7f8fa",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "20px",
+    padding: 20,
   },
-  inner: {
+  card: {
     width: "100%",
-    maxWidth: "420px",
-    backgroundColor: "#fff",
-    borderRadius: "20px",
-    padding: "40px 32px",
-    boxShadow: "0 4px 24px rgba(88,101,242,0.10)",
+    maxWidth: 400,
+    background: "#fff",
+    borderRadius: 20,
+    padding: "40px 28px",
+    boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
+    border: "1px solid #f0f0f0",
   },
-  logoBox: { textAlign: "center", marginBottom: "40px" },
-  logo: { fontSize: "36px", fontWeight: 700, color: "#5865F2", margin: 0 },
-  sub: { fontSize: "14px", color: "#888", marginTop: "6px" },
-  form: { display: "flex", flexDirection: "column", gap: "14px" },
-  field: { width: "100%" },
+  logoWrap: { textAlign: "center", marginBottom: 36 },
+  logoText: {
+    fontSize: 34,
+    fontWeight: 900,
+    fontFamily: "'Arial Black', sans-serif",
+    letterSpacing: "-0.5px",
+    lineHeight: 1,
+    marginBottom: 6,
+  },
+  logoSub: { fontSize: 13, color: "#9ca3af", margin: 0 },
+  form: { display: "flex", flexDirection: "column", gap: 16 },
+  fieldGroup: { display: "flex", flexDirection: "column", gap: 6 },
+  label: { fontSize: 13, fontWeight: 600, color: "#374151" },
   input: {
     width: "100%",
-    height: "52px",
-    border: "none",
-    borderBottom: "1.5px solid #ddd",
-    fontSize: "16px",
-    color: "#333",
-    backgroundColor: "transparent",
+    padding: "12px 14px",
+    border: "1px solid #e5e7eb",
+    borderRadius: 10,
+    fontSize: 15,
+    color: "#111827",
     outline: "none",
+    background: "#fafafa",
+    fontFamily: "inherit",
     boxSizing: "border-box",
-    padding: "0 4px",
   },
-  errorMsg: {
-    color: "#e53935",
-    fontSize: "13px",
-    margin: "0",
-    padding: "8px 12px",
-    backgroundColor: "#fff5f5",
-    borderRadius: "8px",
+  error: {
+    padding: "10px 14px",
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    borderRadius: 8,
+    fontSize: 13,
+    color: "#dc2626",
     textAlign: "center",
   },
   btn: {
     width: "100%",
-    height: "52px",
-    backgroundColor: "#5865F2",
+    padding: "14px",
+    background: "#111827",
     color: "#fff",
-    fontSize: "17px",
-    fontWeight: 700,
     border: "none",
-    borderRadius: "10px",
+    borderRadius: 10,
+    fontSize: 16,
+    fontWeight: 700,
     cursor: "pointer",
-    marginTop: "6px",
-    transition: "opacity 0.2s",
+    marginTop: 4,
   },
   links: {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    gap: "8px",
-    marginTop: "20px",
+    gap: 8,
+    marginTop: 20,
   },
-  linkText: { fontSize: "14px", color: "#888" },
-  link: { fontSize: "14px", color: "#5865F2", fontWeight: 600, textDecoration: "none" },
+  linkText: { fontSize: 14, color: "#9ca3af" },
+  link: { fontSize: 14, color: "#2563eb", fontWeight: 600, textDecoration: "none" },
   banner: {
-    marginTop: "28px",
-    padding: "16px",
-    backgroundColor: "#f0f2ff",
-    borderRadius: "12px",
+    marginTop: 24,
+    padding: "14px 16px",
+    background: "#eff6ff",
+    borderRadius: 12,
     textAlign: "center",
+    border: "1px solid #bfdbfe",
   },
-  bannerTitle: { fontSize: "14px", fontWeight: 700, color: "#5865F2", margin: "0 0 6px" },
-  bannerDesc: { fontSize: "12px", color: "#666", margin: 0, lineHeight: 1.6 },
+  bannerTitle: { fontSize: 13, fontWeight: 700, color: "#2563eb", margin: "0 0 4px" },
+  bannerDesc: { fontSize: 12, color: "#6b7280", margin: 0, lineHeight: 1.6 },
 };

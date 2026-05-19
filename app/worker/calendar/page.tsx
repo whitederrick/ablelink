@@ -188,7 +188,7 @@ export default function CalendarPage() {
                 >
                   <span style={{
                     ...s.dayNum,
-                    color: isToday ? "#5865F2"
+                    color: isToday ? "#2563eb"
                       : isWeekend ? (idx % 7 === 0 ? "#e53935" : "#1565c0")
                       : "#333",
                     fontWeight: isToday ? 700 : 400,
@@ -238,8 +238,8 @@ export default function CalendarPage() {
           <span style={s.navLabel}>홈</span>
         </button>
         <button style={s.navItem} onClick={() => router.push("/worker/calendar")}>
-          <span style={{ ...s.navIcon, color: "#5865F2" }}>📅</span>
-          <span style={{ ...s.navLabel, color: "#5865F2" }}>캘린더</span>
+          <span style={{ ...s.navIcon, color: "#2563eb" }}>📅</span>
+          <span style={{ ...s.navLabel, color: "#2563eb" }}>캘린더</span>
         </button>
         <button style={s.navItem} onClick={() => router.push("/worker/signature")}>
           <span style={s.navIcon}>✍️</span>
@@ -307,7 +307,7 @@ export default function CalendarPage() {
 
 // ─── 스타일 ──────────────────────────────────────────────
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", backgroundColor: "#f8f9ff" },
+  page: { minHeight: "100dvh", backgroundColor: "#f7f8fa" },
   bottomNav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, backgroundColor: "#fff", borderTop: "1px solid #eee", display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom)" },
   navItem: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: "10px 0", border: "none", backgroundColor: "transparent", cursor: "pointer" },
   navIcon: { fontSize: 22 },
@@ -318,7 +318,7 @@ const s: Record<string, React.CSSProperties> = {
   backBtn: { background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#333", width: 36 },
   title: { fontSize: 18, fontWeight: 700, color: "#333", margin: 0 },
 
-  siteName: { fontSize: 14, color: "#5865F2", fontWeight: 600, textAlign: "center", margin: "12px 0 0", padding: "0 16px" },
+  siteName: { fontSize: 14, color: "#2563eb", fontWeight: 600, textAlign: "center", margin: "12px 0 0", padding: "0 16px" },
 
   monthNav: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px" },
   navBtn: { background: "none", border: "none", fontSize: 28, cursor: "pointer", color: "#333", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center" },
@@ -337,12 +337,12 @@ const s: Record<string, React.CSSProperties> = {
   emptyCell: { aspectRatio: "1", borderRadius: 10 },
   cell: { aspectRatio: "1", borderRadius: 10, border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, position: "relative", transition: "transform 0.1s" },
   dayNum: { fontSize: 15, lineHeight: 1 },
-  todayDot: { color: "#5865F2", fontSize: 10, marginLeft: 1 },
+  todayDot: { color: "#2563eb", fontSize: 10, marginLeft: 1 },
   statusDot: { width: 6, height: 6, borderRadius: "50%" },
   checkMark: { fontSize: 10, color: "#2e7d32", fontWeight: 700 },
 
   loadingBox: { display: "flex", justifyContent: "center", padding: "40px 0" },
-  spinner: { width: 32, height: 32, border: "3px solid #e0e5ff", borderTop: "3px solid #5865F2", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
+  spinner: { width: 32, height: 32, border: "3px solid #e5e7eb", borderTop: "3px solid #2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
 
   legend: { display: "flex", justifyContent: "center", gap: 20, padding: "16px 0", marginTop: 8 },
   legendItem: { display: "flex", alignItems: "center", gap: 6 },
@@ -366,5 +366,5 @@ const s: Record<string, React.CSSProperties> = {
   timeLabel: { fontSize: 13, color: "#888" },
   timeValue: { fontSize: 20, fontWeight: 700, color: "#333" },
   logInfo: { textAlign: "center", fontSize: 14, color: "#666", margin: 0 },
-  writeBtn: { width: "100%", padding: "14px", backgroundColor: "#5865F2", color: "#fff", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: "pointer" },
+  writeBtn: { width: "100%", padding: "14px", backgroundColor: "#2563eb", color: "#fff", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: "pointer" },
 };

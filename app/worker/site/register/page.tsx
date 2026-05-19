@@ -275,7 +275,7 @@ export default function SiteRegisterPage() {
                 </p>
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                   <button type="button" style={{ ...s.smBtn, flex: 1 }} onClick={() => setShowGpsMap(false)}>취소</button>
-                  <button type="button" style={{ ...s.smBtn, flex: 1, backgroundColor: "#5865F2", color: "#fff" }}
+                  <button type="button" style={{ ...s.smBtn, flex: 1, backgroundColor: "#2563eb", color: "#fff" }}
                     onClick={() => { if (!gps) setGps(currentGps); setShowGpsMap(false); }}>
                     확인
                   </button>
@@ -313,7 +313,7 @@ export default function SiteRegisterPage() {
               <span style={s.label}>사전 훈련기간</span>
               <label style={s.toggle}>
                 <input type="checkbox" checked={noPreTraining} onChange={e => setNoPreTraining(e.target.checked)} style={{ display: "none" }} />
-                <span style={{ ...s.toggleTrack, backgroundColor: noPreTraining ? "#5865F2" : "#ccc" }}>
+                <span style={{ ...s.toggleTrack, backgroundColor: noPreTraining ? "#2563eb" : "#ccc" }}>
                   <span style={{ ...s.toggleThumb, transform: noPreTraining ? "translateX(18px)" : "none" }} />
                 </span>
                 <span style={{ fontSize: 13, color: "#888" }}>없음</span>
@@ -331,7 +331,7 @@ export default function SiteRegisterPage() {
               <span style={s.label}>현장 훈련기간</span>
               <label style={s.toggle}>
                 <input type="checkbox" checked={noFieldTraining} onChange={e => setNoFieldTraining(e.target.checked)} style={{ display: "none" }} />
-                <span style={{ ...s.toggleTrack, backgroundColor: noFieldTraining ? "#5865F2" : "#ccc" }}>
+                <span style={{ ...s.toggleTrack, backgroundColor: noFieldTraining ? "#2563eb" : "#ccc" }}>
                   <span style={{ ...s.toggleThumb, transform: noFieldTraining ? "translateX(18px)" : "none" }} />
                 </span>
                 <span style={{ fontSize: 13, color: "#888" }}>없음</span>
@@ -475,7 +475,7 @@ export default function SiteRegisterPage() {
                 <button key={i} style={s.resultItem} onClick={() => selectAddress(item)}>
                   <span style={{ fontSize: 14, color: "#333" }}>{item.addressName || item.address_name}</span>
                   {item.roadAddress?.addressName && (
-                    <span style={{ fontSize: 12, color: "#5865F2", marginTop: 2, display: "block" }}>
+                    <span style={{ fontSize: 12, color: "#2563eb", marginTop: 2, display: "block" }}>
                       {item.roadAddress.addressName}
                     </span>
                   )}
@@ -499,7 +499,7 @@ const s: Record<string, React.CSSProperties> = {
   editNotice: { backgroundColor: "#fff8e1", color: "#795548", fontSize: 13, padding: "10px 14px", borderRadius: 10, marginBottom: 16, lineHeight: 1.5 },
 
   section: { backgroundColor: "#fff", borderRadius: 16, padding: "18px 16px", marginBottom: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.05)" },
-  sectionTitle: { fontSize: 15, fontWeight: 700, color: "#5865F2", margin: "0 0 14px" },
+  sectionTitle: { fontSize: 15, fontWeight: 700, color: "#2563eb", margin: "0 0 14px" },
   field: { marginBottom: 14 },
   label: { fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 },
   input: { width: "100%", height: 44, border: "none", borderBottom: "1.5px solid #eee", fontSize: 15, color: "#333", backgroundColor: "transparent", outline: "none", padding: "0 4px", boxSizing: "border-box" },
@@ -507,8 +507,8 @@ const s: Record<string, React.CSSProperties> = {
   row: { display: "flex", gap: 8, alignItems: "center" },
   smBtn: { padding: "10px 16px", backgroundColor: "#f0f0f0", color: "#333", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
   gpsInfo: { fontSize: 11, color: "#aaa", margin: "4px 0 0" },
-  gpsBtn: { width: "100%", padding: "11px", backgroundColor: "#f0f2ff", color: "#5865F2", border: "1px solid #c7ceff", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 },
-  gpsCard: { backgroundColor: "#f8f9ff", borderRadius: 12, padding: 14, marginTop: 10, border: "1px solid #e0e5ff" },
+  gpsBtn: { width: "100%", padding: "11px", backgroundColor: "#f0f2ff", color: "#2563eb", border: "1px solid #c7ceff", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 },
+  gpsCard: { backgroundColor: "#f8f9ff", borderRadius: 12, padding: 14, marginTop: 10, border: "1px solid #e5e7eb" },
   gpsRow: { display: "flex", justifyContent: "space-between", fontSize: 13, color: "#444", marginBottom: 6 },
 
   toggleRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
@@ -521,20 +521,20 @@ const s: Record<string, React.CSSProperties> = {
 
   workTypeRow: { display: "flex", gap: 8, marginBottom: 12 },
   workTypeBtn: { flex: 1, padding: "10px", border: "1.5px solid #eee", borderRadius: 8, fontSize: 14, cursor: "pointer", backgroundColor: "#fff", color: "#555", fontWeight: 600 },
-  workTypeActive: { backgroundColor: "#5865F2", color: "#fff", border: "1.5px solid #5865F2" },
+  workTypeActive: { backgroundColor: "#2563eb", color: "#fff", border: "1.5px solid #2563eb" },
   checkRow: { display: "flex", alignItems: "center", cursor: "pointer" },
 
   traineeForm: { display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 },
   traineeRow: { display: "flex", gap: 8, alignItems: "flex-end" },
   genderBtns: { display: "flex", gap: 4, flexShrink: 0 },
   genderBtn: { width: 40, height: 40, border: "1.5px solid #eee", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", backgroundColor: "#fff", color: "#555" },
-  genderActive: { backgroundColor: "#5865F2", color: "#fff", border: "1.5px solid #5865F2" },
+  genderActive: { backgroundColor: "#2563eb", color: "#fff", border: "1.5px solid #2563eb" },
   addTraineeBtn: { width: "100%", padding: "12px", backgroundColor: "#333", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" },
   traineeItem: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 12px", backgroundColor: "#f8f9ff", borderRadius: 10, marginBottom: 8, border: "1px solid #eee" },
   removeBtn: { background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#e53935", padding: 4 },
 
   error: { color: "#e53935", fontSize: 13, backgroundColor: "#fff5f5", padding: "12px 16px", borderRadius: 10, margin: "12px 0", textAlign: "center" },
-  submitBtn: { width: "100%", padding: "16px", backgroundColor: "#5865F2", color: "#fff", fontSize: 17, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer", marginTop: 8 },
+  submitBtn: { width: "100%", padding: "16px", backgroundColor: "#2563eb", color: "#fff", fontSize: 17, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer", marginTop: 8 },
 
   // 모달
   modalOverlay: { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", flexDirection: "column" },

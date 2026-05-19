@@ -19,7 +19,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#5865F2",
+  themeColor: "#111827",
 };
 
 export default function WorkerLayout({ children }: { children: React.ReactNode }) {
@@ -27,7 +27,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
     <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif" }}>
       <style>{`
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; padding: 0; background: #f8f9ff; }
+        body { margin: 0; padding: 0; background: #f7f8fa; }
         button { font-family: inherit; }
         input { font-family: inherit; }
         @keyframes spin { to { transform: rotate(360deg); } }

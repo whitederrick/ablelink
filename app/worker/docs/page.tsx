@@ -243,8 +243,8 @@ export default function DocsPage() {
           <span style={s.navLabel}>전자서명</span>
         </button>
         <button style={s.navItem} onClick={() => router.push("/worker/docs")}>
-          <span style={{ ...s.navIcon, color: "#5865F2" }}>📄</span>
-          <span style={{ ...s.navLabel, color: "#5865F2" }}>문서</span>
+          <span style={{ ...s.navIcon, color: "#2563eb" }}>📄</span>
+          <span style={{ ...s.navLabel, color: "#2563eb" }}>문서</span>
         </button>
       </nav>
     </div>
@@ -270,11 +270,11 @@ const s: Record<string, React.CSSProperties> = {
 
   docList: { display: "flex", flexDirection: "column", gap: 8 },
   docItem: { display: "flex", alignItems: "center", gap: 12, padding: "12px", border: "1.5px solid #eee", borderRadius: 10, backgroundColor: "#fff", cursor: "pointer", textAlign: "left" as const },
-  docItemActive: { border: "1.5px solid #5865F2", backgroundColor: "#f0f2ff" },
+  docItemActive: { border: "1.5px solid #2563eb", backgroundColor: "#f0f2ff" },
   docIcon: { fontSize: 24, flexShrink: 0 },
   docLabel: { fontSize: 15, fontWeight: 700, color: "#333", margin: "0 0 2px" },
   docDesc: { fontSize: 12, color: "#888", margin: 0 },
-  checkIcon: { color: "#5865F2", fontWeight: 700, fontSize: 18, flexShrink: 0 },
+  checkIcon: { color: "#2563eb", fontWeight: 700, fontSize: 18, flexShrink: 0 },
 
   dateRow: { display: "flex", alignItems: "center", gap: 8 },
   dateInput: { flex: 1, height: 44, border: "1.5px solid #eee", borderRadius: 8, padding: "0 10px", fontSize: 14, color: "#333", outline: "none" },
@@ -282,12 +282,12 @@ const s: Record<string, React.CSSProperties> = {
 
   resultBox: { margin: "12px 16px 0", padding: "14px 16px", borderRadius: 12, border: "1px solid" },
   resultMsg: { fontSize: 14, margin: "0 0 10px", fontWeight: 600 },
-  downloadBtn: { width: "100%", padding: "10px", backgroundColor: "#5865F2", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer" },
+  downloadBtn: { width: "100%", padding: "10px", backgroundColor: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer" },
 
-  sendBtn: { width: "calc(100% - 32px)", margin: "16px 16px 0", padding: "17px", backgroundColor: "#5865F2", color: "#fff", fontSize: 17, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer" },
+  sendBtn: { width: "calc(100% - 32px)", margin: "16px 16px 0", padding: "17px", backgroundColor: "#2563eb", color: "#fff", fontSize: 17, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer" },
 
   noteBox: { margin: "12px 16px 0", padding: "14px 16px", backgroundColor: "#f0f2ff", borderRadius: 12 },
-  noteText: { fontSize: 13, color: "#5865F2", margin: 0, lineHeight: 1.7, textAlign: "center" as const },
+  noteText: { fontSize: 13, color: "#2563eb", margin: 0, lineHeight: 1.7, textAlign: "center" as const },
 
   bottomNav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, backgroundColor: "#fff", borderTop: "1px solid #eee", display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom)" },
   navItem: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: "10px 0", border: "none", backgroundColor: "transparent", cursor: "pointer" },

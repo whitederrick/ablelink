@@ -145,7 +145,7 @@ const s: Record<string, React.CSSProperties> = {
   wrap: { minHeight: "100dvh", backgroundColor: "#f8f9ff", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 },
   inner: { width: "100%", maxWidth: 420, backgroundColor: "#fff", borderRadius: 20, padding: "32px 28px", boxShadow: "0 4px 24px rgba(88,101,242,0.10)" },
   header: { marginBottom: 28 },
-  back: { fontSize: 14, color: "#5865F2", textDecoration: "none" },
+  back: { fontSize: 14, color: "#2563eb", textDecoration: "none" },
   title: { fontSize: 24, fontWeight: 700, color: "#333", margin: "8px 0 0" },
   form: { display: "flex", flexDirection: "column", gap: 18 },
   group: { display: "flex", flexDirection: "column", gap: 6 },
@@ -153,7 +153,7 @@ const s: Record<string, React.CSSProperties> = {
   input: { height: 48, border: "none", borderBottom: "1.5px solid #ddd", fontSize: 16, color: "#333", backgroundColor: "transparent", outline: "none", padding: "0 4px" },
   hint: { fontSize: 12, color: "#aaa", margin: 0 },
   error: { color: "#e53935", fontSize: 13, backgroundColor: "#fff5f5", padding: "10px 14px", borderRadius: 8, margin: 0, textAlign: "center" },
-  btn: { height: 52, backgroundColor: "#5865F2", color: "#fff", fontSize: 17, fontWeight: 700, border: "none", borderRadius: 10, cursor: "pointer", marginTop: 4 },
+  btn: { height: 52, backgroundColor: "#2563eb", color: "#fff", fontSize: 17, fontWeight: 700, border: "none", borderRadius: 10, cursor: "pointer", marginTop: 4 },
   loginLink: { textAlign: "center", fontSize: 14, color: "#888", marginTop: 20 },
-  link: { color: "#5865F2", fontWeight: 600, textDecoration: "none" },
+  link: { color: "#2563eb", fontWeight: 600, textDecoration: "none" },
 };

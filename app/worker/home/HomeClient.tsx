@@ -550,7 +550,7 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
           ...s.toast,
           backgroundColor:
             toast.type === "success" ? "#2e7d32" :
-            toast.type === "error" ? "#c62828" : "#5865F2",
+            toast.type === "error" ? "#c62828" : "#2563eb",
         }}>
           {toast.msg}
         </div>
@@ -559,8 +559,8 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
       {/* ── 하단 네비게이션 ── */}
       <nav style={s.bottomNav}>
         <button style={s.navItem} onClick={() => router.push("/worker/home")}>
-          <span style={{ ...s.navIcon, color: "#5865F2" }}>🏠</span>
-          <span style={{ ...s.navLabel, color: "#5865F2" }}>홈</span>
+          <span style={{ ...s.navIcon, color: "#2563eb" }}>🏠</span>
+          <span style={{ ...s.navLabel, color: "#2563eb" }}>홈</span>
         </button>
         <button style={s.navItem} onClick={() => router.push("/worker/calendar")}>
           <span style={s.navIcon}>📅</span>
@@ -584,12 +584,12 @@ const s: Record<string, React.CSSProperties> = {
   page: { minHeight: "100dvh", backgroundColor: "#f8f9ff" },
   container: { maxWidth: "480px", margin: "0 auto", padding: "20px 16px 90px" },
   center: { minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" },
-  spinner: { width: 40, height: 40, border: "4px solid #e0e5ff", borderTop: "4px solid #5865F2", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
+  spinner: { width: 40, height: 40, border: "3px solid #e5e7eb", borderTop: "3px solid #2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
 
   // 헤더
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
-  greeting: { fontSize: 22, fontWeight: 700, color: "#333", margin: "0 0 8px" },
-  siteBadge: { display: "inline-flex", alignItems: "center", gap: 4, backgroundColor: "#5865F2", color: "#fff", border: "none", borderRadius: 20, padding: "7px 14px", fontSize: 15, fontWeight: 700, cursor: "pointer" },
+  greeting: { fontSize: 20, fontWeight: 700, color: "#111827", margin: "0 0 8px" },
+  siteBadge: { display: "inline-flex", alignItems: "center", gap: 4, backgroundColor: "#2563eb", color: "#fff", border: "none", borderRadius: 20, padding: "7px 14px", fontSize: 15, fontWeight: 700, cursor: "pointer" },
   profileBtn: { width: 48, height: 48, borderRadius: "50%", backgroundColor: "#f0f0f0", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
   profileIcon: { fontSize: 22 },
   profileMenu: { position: "absolute", right: 0, top: 56, backgroundColor: "#fff", border: "1px solid #eee", borderRadius: 14, padding: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 100, minWidth: 140 },
@@ -604,33 +604,33 @@ const s: Record<string, React.CSSProperties> = {
   statusClosed: { backgroundColor: "#f0f0f0", color: "#999" },
 
   // 카드
-  card: { backgroundColor: "#fff", borderRadius: 20, padding: "28px 24px", textAlign: "center", marginBottom: 24, boxShadow: "0 2px 12px rgba(88,101,242,0.08)", border: "1px solid #eee" },
-  cardTitle: { fontSize: 15, fontWeight: 700, color: "#333", margin: "0 0 12px" },
+  card: { backgroundColor: "#fff", borderRadius: 20, padding: "28px 24px", textAlign: "center", marginBottom: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.06)", border: "1px solid #eee" },
+  cardTitle: { fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 12px" },
   cardSub: { fontSize: 13, color: "#888", margin: "0 0 4px" },
-  clockTime: { fontSize: 40, fontWeight: 700, color: "#333", margin: "4px 0 20px" },
-  actionBtn: { width: "100%", padding: "15px", backgroundColor: "#5865F2", color: "#fff", fontSize: 18, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer", transition: "opacity 0.2s" },
+  clockTime: { fontSize: 38, fontWeight: 800, color: "#111827", margin: "4px 0 20px" },
+  actionBtn: { width: "100%", padding: "15px", backgroundColor: "#2563eb", color: "#fff", fontSize: 18, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer", transition: "opacity 0.2s" },
 
   // 훈련생
   traineeSection: { display: "flex", flexDirection: "column", gap: 12 },
   traineeCard: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#fff", borderRadius: 14, padding: "16px 18px", boxShadow: "0 1px 6px rgba(0,0,0,0.05)", border: "1px solid #eee" },
-  traineeName: { fontSize: 17, fontWeight: 700, color: "#333", margin: "0 0 2px" },
+  traineeName: { fontSize: 16, fontWeight: 700, color: "#111827", margin: "0 0 2px" },
   traineeGender: { fontSize: 13, color: "#888", margin: 0 },
-  logBtn: { backgroundColor: "#5865F2", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 14, fontWeight: 700, cursor: "pointer" },
+  logBtn: { backgroundColor: "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
 
   noSite: { textAlign: "center", padding: "40px 0" },
-  subscribeBanner: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#f0f2ff", borderRadius: 14, padding: "14px 16px", marginTop: 16, cursor: "pointer", border: "1px solid #c7ceff" },
-  bannerTitle: { fontSize: 14, fontWeight: 700, color: "#5865F2", margin: "0 0 4px" },
+  subscribeBanner: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#eff6ff", borderRadius: 14, padding: "14px 16px", marginTop: 16, cursor: "pointer", border: "1px solid #bfdbfe" },
+  bannerTitle: { fontSize: 14, fontWeight: 700, color: "#2563eb", margin: "0 0 4px" },
   bannerDesc: { fontSize: 12, color: "#666", margin: 0, lineHeight: 1.5 },
-  bannerArrow: { fontSize: 22, color: "#5865F2", flexShrink: 0 },
+  bannerArrow: { fontSize: 22, color: "#2563eb", flexShrink: 0 },
 
   // 다이얼로그
   overlay: { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 },
   dialogBox: { backgroundColor: "#fff", borderRadius: 16, padding: "24px 20px", maxWidth: 320, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" },
-  dialogTitle: { fontSize: 17, fontWeight: 700, color: "#333", margin: "0 0 10px" },
+  dialogTitle: { fontSize: 16, fontWeight: 700, color: "#111827", margin: "0 0 10px" },
   dialogMsg: { fontSize: 14, color: "#555", lineHeight: 1.6, margin: "0 0 20px", whiteSpace: "pre-line" },
   dialogBtns: { display: "flex", gap: 8, justifyContent: "flex-end" },
   dialogBtn: { padding: "10px 18px", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer" },
-  dialogBtnPrimary: { backgroundColor: "#5865F2", color: "#fff" },
+  dialogBtnPrimary: { backgroundColor: "#2563eb", color: "#fff" },
   dialogBtnDanger: { backgroundColor: "#e53935", color: "#fff" },
   dialogBtnCancel: { backgroundColor: "#f0f0f0", color: "#555" },
 

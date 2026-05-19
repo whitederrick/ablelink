@@ -305,7 +305,7 @@ function WorklogForm() {
             {(["출석", "결석", "지각", "조퇴"] as Attendance[]).map(a => (
               <label key={a} style={s.radioLabel}>
                 <input type="radio" name="attendance" checked={attendance === a}
-                  onChange={() => setAttendance(a)} style={{ accentColor: "#5865F2" }} />
+                  onChange={() => setAttendance(a)} style={{ accentColor: "#2563eb" }} />
                 <span style={{ fontSize: 15, color: attendance === a ? "#333" : "#aaa" }}>{a}</span>
               </label>
             ))}
@@ -333,7 +333,7 @@ function WorklogForm() {
                 <input type="checkbox" checked={val || fixed}
                   onChange={e => !fixed && set(e.target.checked)}
                   disabled={fixed}
-                  style={{ accentColor: "#5865F2", width: 18, height: 18 }} />
+                  style={{ accentColor: "#2563eb", width: 18, height: 18 }} />
                 <span style={{ fontSize: 14, color: "#444" }}>{label}{fixed ? " (고정)" : ""}</span>
               </label>
             ))}
@@ -385,7 +385,7 @@ function WorklogForm() {
                 type="button"
                 style={{
                   ...s.voiceBtn,
-                  backgroundColor: isRecording ? "#e53935" : "#5865F2",
+                  backgroundColor: isRecording ? "#e53935" : "#2563eb",
                   opacity: aiLoading ? 0.7 : 1,
                 }}
                 onClick={isRecording ? stopRecording : startRecording}
@@ -462,33 +462,33 @@ export default function WorklogPage() {
 
 // ─── 스타일 ────────────────────────────────────────────────
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", backgroundColor: "#f8f9ff" },
+  page: { minHeight: "100dvh", backgroundColor: "#f7f8fa" },
   container: { maxWidth: 480, margin: "0 auto", padding: "0 0 60px" },
 
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid #eee", backgroundColor: "#fff", position: "sticky", top: 0, zIndex: 10 },
   closeBtn: { background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#666", width: 36 },
   headerTitle: { fontSize: 17, fontWeight: 700, color: "#333" },
-  doneBtn: { backgroundColor: "transparent", border: "none", color: "#5865F2", fontSize: 16, fontWeight: 700, cursor: "pointer" },
+  doneBtn: { backgroundColor: "transparent", border: "none", color: "#2563eb", fontSize: 16, fontWeight: 700, cursor: "pointer" },
 
   dateInput: { margin: "16px 16px 8px", fontSize: 20, fontWeight: 700, border: "none", backgroundColor: "transparent", color: "#333", cursor: "pointer", width: "calc(100% - 32px)" },
 
   infoBadge: { display: "flex", alignItems: "flex-start", gap: 8, backgroundColor: "#f0f2ff", margin: "0 16px 12px", padding: "12px", borderRadius: 12 },
   infoIcon: { fontSize: 16, flexShrink: 0, marginTop: 1 },
-  infoTitle: { fontSize: 14, fontWeight: 700, color: "#5865F2", margin: 0 },
-  infoSub: { fontSize: 12, color: "#5865F2", margin: "2px 0 0" },
+  infoTitle: { fontSize: 14, fontWeight: 700, color: "#2563eb", margin: 0 },
+  infoSub: { fontSize: 12, color: "#2563eb", margin: "2px 0 0" },
 
   card: { backgroundColor: "#fff", margin: "0 16px 12px", borderRadius: 14, padding: "16px" },
   row: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   cardLabel: { fontSize: 15, fontWeight: 700, color: "#444" },
   timeRow: { display: "flex", alignItems: "center", gap: 6 },
-  timeInput: { border: "none", borderBottom: "1.5px solid #ddd", fontSize: 16, color: "#5865F2", fontWeight: 600, width: 72, textAlign: "center", outline: "none", backgroundColor: "transparent" },
+  timeInput: { border: "none", borderBottom: "1.5px solid #ddd", fontSize: 16, color: "#2563eb", fontWeight: 600, width: 72, textAlign: "center", outline: "none", backgroundColor: "transparent" },
   sep: { color: "#888", fontSize: 14 },
-  badge: { backgroundColor: "#5865F2", color: "#fff", fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 6 },
+  badge: { backgroundColor: "#2563eb", color: "#fff", fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 6 },
   notice: { fontSize: 12, color: "#e53935", margin: "8px 0 0", fontWeight: 500 },
 
   traineeSection: { backgroundColor: "#fff", margin: "0 16px 12px", borderRadius: 14, padding: "16px", borderTop: "6px solid #f5f5f5" },
   traineeHeader: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16 },
-  traineeBadge: { backgroundColor: "#5865F2", color: "#fff", padding: "6px 14px", borderRadius: 20, fontSize: 14, fontWeight: 700 },
+  traineeBadge: { backgroundColor: "#2563eb", color: "#fff", padding: "6px 14px", borderRadius: 20, fontSize: 14, fontWeight: 700 },
   traineeLabel: { fontSize: 18, fontWeight: 700, color: "#333" },
   attendanceRow: { display: "flex", gap: 16, marginBottom: 20 },
   radioLabel: { display: "flex", alignItems: "center", gap: 4, cursor: "pointer" },
@@ -497,7 +497,7 @@ const s: Record<string, React.CSSProperties> = {
   subTitle: { fontSize: 15, fontWeight: 700, color: "#333", margin: "16px 0 10px" },
   ratingRow: { display: "flex", gap: 6, marginBottom: 8 },
   ratingBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 4px", border: "1.5px solid #eee", borderRadius: 10, cursor: "pointer", backgroundColor: "#fff", fontSize: 15, fontWeight: 600, color: "#666" },
-  ratingActive: { backgroundColor: "#5865F2", color: "#fff", border: "1.5px solid #5865F2" },
+  ratingActive: { backgroundColor: "#2563eb", color: "#fff", border: "1.5px solid #2563eb" },
   ratingLabel: { fontSize: 9, fontWeight: 400, textAlign: "center" as const },
 
   contentHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
@@ -509,13 +509,13 @@ const s: Record<string, React.CSSProperties> = {
   recordingDot: { width: 10, height: 10, borderRadius: "50%", backgroundColor: "#e53935", animation: "pulse 1s infinite" },
   textarea: { width: "100%", border: "1.5px solid #eee", borderRadius: 12, padding: "12px", fontSize: 15, color: "#333", backgroundColor: "#fafafa", outline: "none", resize: "vertical" as const, boxSizing: "border-box" as const, fontFamily: "inherit", lineHeight: 1.6, marginTop: 8 },
 
-  summaryBox: { backgroundColor: "#f8f9ff", margin: "0 16px 12px", borderRadius: 14, padding: "16px", border: "1px solid #e0e5ff" },
+  summaryBox: { backgroundColor: "#f7f8fa", margin: "0 16px 12px", borderRadius: 14, padding: "16px", border: "1px solid #e5e7eb" },
   summaryRow: { display: "flex", justifyContent: "space-between", marginBottom: 8 },
   summaryLabel: { fontSize: 13 },
   summaryValue: { fontSize: 13, fontWeight: 700 },
-  divider: { height: 1, backgroundColor: "#e0e5ff", margin: "10px 0" },
-  totalLabel: { fontSize: 15, fontWeight: 700, color: "#5865F2" },
-  totalValue: { fontSize: 18, fontWeight: 700, color: "#5865F2" },
+  divider: { height: 1, backgroundColor: "#e5e7eb", margin: "10px 0" },
+  totalLabel: { fontSize: 15, fontWeight: 700, color: "#2563eb" },
+  totalValue: { fontSize: 18, fontWeight: 700, color: "#2563eb" },
 
   error: { color: "#e53935", fontSize: 13, backgroundColor: "#fff5f5", padding: "12px 16px", borderRadius: 10, margin: "0 16px 12px", textAlign: "center" },
   tempSaveBtn: { width: "calc(100% - 32px)", margin: "0 16px", padding: 14, backgroundColor: "#333", color: "#fff", fontSize: 16, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer" },

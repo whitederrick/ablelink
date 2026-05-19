@@ -21,7 +21,7 @@ const PLANS = [
       "전자서명",
       "이메일 자동 발송",
     ],
-    color: "#5865F2",
+    color: "#2563eb",
     recommended: false,
   },
   {
@@ -265,7 +265,7 @@ const s: Record<string, React.CSSProperties> = {
   paidTitle: { fontSize: 14, fontWeight: 700, color: "#2e7d32", margin: 0 },
   cancelBtn: { padding: "6px 14px", backgroundColor: "#fff", border: "1.5px solid #e53935", borderRadius: 8, color: "#e53935", fontSize: 13, fontWeight: 700, cursor: "pointer" },
   freeBanner: { backgroundColor: "#f0f2ff", borderRadius: 12, padding: "14px 16px", border: "1px solid #c7ceff" },
-  freeTitle: { fontSize: 14, fontWeight: 700, color: "#5865F2", margin: "0 0 4px" },
+  freeTitle: { fontSize: 14, fontWeight: 700, color: "#2563eb", margin: "0 0 4px" },
   freeDesc: { fontSize: 13, color: "#666", margin: 0, lineHeight: 1.6 },
 
   plansGrid: { display: "flex", flexDirection: "column", gap: 12, margin: "16px 16px 0" },

@@ -289,8 +289,8 @@ export default function SignaturePage() {
           <span style={s.navLabel}>캘린더</span>
         </button>
         <button style={s.navItem} onClick={() => router.push("/worker/signature")}>
-          <span style={{ ...s.navIcon, color: "#5865F2" }}>✍️</span>
-          <span style={{ ...s.navLabel, color: "#5865F2" }}>전자서명</span>
+          <span style={{ ...s.navIcon, color: "#2563eb" }}>✍️</span>
+          <span style={{ ...s.navLabel, color: "#2563eb" }}>전자서명</span>
         </button>
         <button style={s.navItem} onClick={() => router.push("/worker/docs")}>
           <span style={s.navIcon}>📄</span>
@@ -306,14 +306,14 @@ const s: Record<string, React.CSSProperties> = {
   page: { minHeight: "100dvh", backgroundColor: "#f8f9ff" },
   container: { maxWidth: 480, margin: "0 auto", padding: "0 0 90px" },
   center: { minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" },
-  spinner: { width: 36, height: 36, border: "3px solid #e0e5ff", borderTop: "3px solid #5865F2", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
+  spinner: { width: 36, height: 36, border: "3px solid #e5e7eb", borderTop: "3px solid #2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
 
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", backgroundColor: "#fff", borderBottom: "1px solid #eee", position: "sticky", top: 0, zIndex: 10 },
   backBtn: { background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#333", width: 36 },
   title: { fontSize: 18, fontWeight: 700, color: "#333", margin: 0 },
 
   infoBox: { backgroundColor: "#f0f2ff", margin: "16px 16px 0", padding: "14px 16px", borderRadius: 12, border: "1px solid #c7ceff" },
-  infoTitle: { fontSize: 15, fontWeight: 700, color: "#5865F2", margin: "0 0 6px" },
+  infoTitle: { fontSize: 15, fontWeight: 700, color: "#2563eb", margin: "0 0 6px" },
   infoDesc: { fontSize: 13, color: "#555", margin: 0, lineHeight: 1.6 },
 
   // 저장된 서명
@@ -322,23 +322,23 @@ const s: Record<string, React.CSSProperties> = {
   signaturePreview: { backgroundColor: "#f8f9ff", borderRadius: 12, padding: 16, border: "2px dashed #c7ceff", minHeight: 120, display: "flex", alignItems: "center", justifyContent: "center" },
   signatureImg: { maxWidth: "100%", maxHeight: 160, objectFit: "contain" },
   savedBtns: { display: "flex", gap: 10, marginTop: 16 },
-  reDrawBtn: { flex: 1, padding: "12px", backgroundColor: "#5865F2", color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: "pointer" },
+  reDrawBtn: { flex: 1, padding: "12px", backgroundColor: "#2563eb", color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: "pointer" },
   deleteBtn: { padding: "12px 20px", backgroundColor: "#fff", color: "#e53935", border: "1.5px solid #e53935", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: "pointer" },
 
   // 서명 없을 때
   emptyBox: { margin: "40px 16px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 },
   emptyIcon: { fontSize: 48, margin: 0 },
   emptyText: { fontSize: 16, color: "#888", margin: 0 },
-  startBtn: { padding: "14px 32px", backgroundColor: "#5865F2", color: "#fff", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: "pointer" },
+  startBtn: { padding: "14px 32px", backgroundColor: "#2563eb", color: "#fff", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: "pointer" },
 
   // 캔버스
   drawSection: { margin: "16px 16px 0", display: "flex", flexDirection: "column", gap: 12 },
-  canvasWrap: { position: "relative", backgroundColor: "#fff", borderRadius: 16, border: "2px solid #e0e5ff", overflow: "hidden" },
+  canvasWrap: { position: "relative", backgroundColor: "#fff", borderRadius: 16, border: "2px solid #e5e7eb", overflow: "hidden" },
   canvas: { display: "block", width: "100%", height: "200px", touchAction: "none", cursor: "crosshair" },
   canvasHint: { position: "absolute", bottom: 8, right: 12, fontSize: 11, color: "#ccc", margin: 0, pointerEvents: "none" },
   drawBtns: { display: "flex", gap: 10 },
   clearBtn: { flex: 1, padding: "13px", backgroundColor: "#f0f0f0", color: "#555", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: "pointer" },
-  saveBtn: { flex: 2, padding: "13px", backgroundColor: "#5865F2", color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: "pointer" },
+  saveBtn: { flex: 2, padding: "13px", backgroundColor: "#2563eb", color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: "pointer" },
   cancelBtn: { width: "100%", padding: "12px", backgroundColor: "transparent", color: "#888", border: "1.5px solid #eee", borderRadius: 10, fontSize: 14, cursor: "pointer" },
 
   // PREMIUM 안내
