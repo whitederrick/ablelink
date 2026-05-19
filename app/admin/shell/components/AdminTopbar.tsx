@@ -1,6 +1,4 @@
 "use client";
-// app/admin/shell/components/AdminTopbar.tsx
-
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -8,12 +6,6 @@ type SessionInfo = {
   role: "ADMIN" | "GOV" | "AGENCY" | string;
   loginId: string;
   agencyName?: string | null;
-};
-
-const ROLE_LABEL: Record<string, string> = {
-  ADMIN: "시스템 관리자",
-  GOV: "정부 기관",
-  AGENCY: "에이전시",
 };
 
 export default function AdminTopbar({
@@ -40,32 +32,20 @@ export default function AdminTopbar({
     }
   }
 
-  const agencyName = session?.agencyName || null;
-  const roleLabel = ROLE_LABEL[session?.role ?? ""] || session?.role || "";
-
   return (
     <header style={s.header}>
-      {/* 좌측: 기관명 + 역할 */}
+      {/* 좌측: 기관명만 */}
       <div style={s.left}>
-        {agencyName && (
-          <span style={s.agencyName}>{agencyName}</span>
+        {session?.agencyName && (
+          <span style={s.agencyName}>{session.agencyName}</span>
         )}
-        {agencyName && <span style={s.sep}>·</span>}
-        <span style={s.roleLabel}>{roleLabel}</span>
         {session?.loginId && (
-          <>
-            <span style={s.sep}>·</span>
-            <span style={s.loginId}>{session.loginId}</span>
-          </>
+          <span style={s.loginId}>{session.loginId}</span>
         )}
       </div>
 
       {/* 우측: 로그아웃 */}
-      <button
-        onClick={logout}
-        disabled={loading}
-        style={s.logoutBtn}
-      >
+      <button onClick={logout} disabled={loading} style={s.logoutBtn}>
         {loading ? "로그아웃 중..." : "로그아웃"}
       </button>
     </header>
@@ -86,26 +66,20 @@ const s: Record<string, React.CSSProperties> = {
   left: {
     display: "flex",
     alignItems: "center",
-    gap: 6,
-    fontSize: 13,
-    color: "#6b7280",
+    gap: 8,
   },
   agencyName: {
-    color: "#111827",
+    fontSize: 14,
     fontWeight: 600,
-    fontSize: 13,
-  },
-  sep: {
-    color: "#d1d5db",
-    fontSize: 12,
-  },
-  roleLabel: {
-    color: "#6b7280",
-    fontSize: 12,
+    color: "#111827",
   },
   loginId: {
-    color: "#9ca3af",
     fontSize: 12,
+    color: "#9ca3af",
+    background: "#f9fafb",
+    padding: "2px 8px",
+    borderRadius: 20,
+    border: "1px solid #f0f0f0",
   },
   logoutBtn: {
     padding: "6px 14px",
@@ -116,6 +90,5 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 12,
     color: "#6b7280",
     fontWeight: 500,
-    transition: "all 0.15s",
   },
 };
