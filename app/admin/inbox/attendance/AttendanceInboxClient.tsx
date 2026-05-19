@@ -284,8 +284,8 @@ function Chip({
       type="button"
       onClick={onClick}
       className={cx(
-        "rounded-full border px-3 py-2 text-sm font-medium transition",
-        active ? "border-black bg-black text-white" : "bg-white hover:bg-black/5",
+        "rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium transition",
+        active ? "border-blue-600 bg-blue-600 text-white" : "bg-white hover:bg-black/5",
         tone === "danger" ? "border-red-200" : ""
       )}
     >
@@ -298,7 +298,7 @@ function SectionTitle({ title, note }: { title: string; note?: string }) {
   return (
     <div className="flex items-baseline gap-2">
       <div className="text-sm font-semibold">{title}</div>
-      {note ? <div className="text-xs text-black/60">※ {note}</div> : null}
+      {note ? <div className="text-xs text-gray-400">※ {note}</div> : null}
     </div>
   );
 }
@@ -537,15 +537,15 @@ export default function AttendanceInboxClient() {
   }
 
   return (
-    <div className="px-6 pb-6 pt-1">
+    <div className="pb-6">
       {/* ===== Header ===== */}
-      <div className="mb-2 flex items-baseline gap-3">
-        <div className="text-xl font-semibold">근태 인박스</div>
-        <div className="text-sm text-black/60">※ 근태 관련 이슈를 파악하고, 근태 이슈 발생 사유를 확인합니다.</div>
+      <div className="mb-5 flex items-baseline gap-3">
+        <div className="text-lg font-700 text-gray-900" style={{fontWeight:700,fontSize:18,color:"#111827",letterSpacing:"-0.3px"}}>근태 인박스</div>
+        <div className="text-sm text-gray-400">※ 근태 관련 이슈를 파악하고, 근태 이슈 발생 사유를 확인합니다.</div>
       </div>
 
       {/* ===== Top Filter Bar (시안 구조) ===== */}
-      <div className="mb-4 rounded-2xl border bg-white p-3">
+      <div className="mb-5 rounded-xl border border-gray-100 bg-white p-4">
         <div className="grid grid-cols-12 gap-3">
           {/* 통합 검색 */}
           <div className="col-span-12 lg:col-span-6">
@@ -554,7 +554,7 @@ export default function AttendanceInboxClient() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="직무지도원명 / Site명 / 날짜(예: 2/3, 2026-02-03)"
-              className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/20"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
             />
           </div>
 
@@ -660,17 +660,17 @@ export default function AttendanceInboxClient() {
       <div className="grid grid-cols-12 gap-4">
         {/* Left list */}
         <div className="col-span-12 lg:col-span-6 xl:col-span-6">
-          <div className="rounded-2xl border bg-white">
-            <div className="flex items-center justify-between border-b px-4 py-1">
+          <div className="rounded-xl border border-gray-100 bg-white">
+            <div className="flex items-center justify-between border-b border-gray-50 px-4 py-3">
               <div className="flex items-baseline gap-2">
-                <div className="text-medium font-semibold">목록 조회</div>
-                <div className="text-sm text-red-700">{loading ? "불러오는 중…" : `(총 ${items.length}건)`}</div>
+                <div className="text-sm font-semibold text-gray-800">목록 조회</div>
+                <div className="text-sm text-blue-600 ml-1">{loading ? "불러오는 중…" : `(총 ${items.length}건)`}</div>
               </div>
-              <div className="text-xs text-black/60">정렬: 날짜 최신순</div>
+              <div className="text-xs text-gray-400">정렬: 날짜 최신순</div>
             </div>
 
             <div className="p-2">
-              <div className="space-y-1">
+              <div className="space-y-1 p-2">
                 {pageItems.length === 0 ? (
                   <div className="rounded-xl border p-6 text-sm text-black/60">조건에 해당하는 항목이 없습니다.</div>
                 ) : (
@@ -684,7 +684,7 @@ export default function AttendanceInboxClient() {
                         type="button"
                         onClick={() => setSelectedId(it.id)}
                         className={cx(
-                          "w-full rounded-xl border px-3 py-1 text-left transition",
+                          "w-full rounded-lg border border-gray-100 px-4 py-3 text-left transition",
                           active ? "border-black bg-black/5" : "hover:bg-black/5"
                         )}
                       >
@@ -740,7 +740,7 @@ export default function AttendanceInboxClient() {
 
               {/* pagination */}
               <div className="mt-3 flex items-center justify-between px-1">
-                <div className="text-xs text-black/60">
+                <div className="text-xs text-gray-400">
                   페이지 {page} / {totalPages}
                 </div>
                 <div className="flex items-center gap-1">
@@ -778,7 +778,7 @@ export default function AttendanceInboxClient() {
 
         {/* Right detail */}
         <div className="col-span-12 lg:col-span-6 xl:col-span-6">
-          <div className="rounded-2xl border bg-white p-4">
+          <div className="rounded-xl border border-gray-100 bg-white p-5">
             {!selected ? (
               <div className="rounded-xl border p-6 text-sm text-black/60">좌측 목록에서 항목을 선택하세요.</div>
             ) : (
@@ -789,7 +789,7 @@ export default function AttendanceInboxClient() {
                     <div className="text-base font-semibold">상세 내용 조회</div>
                     <div className="text-xs text-black/50">최근 업데이트: {new Date(selected.updatedAt).toLocaleString()}</div>
                   </div>
-                  <div className="text-xs text-black/60">※ 이슈를 확인하고, 직무지도원으로부터 사유를 확인합니다.</div>
+                  <div className="text-xs text-gray-400">※ 이슈를 확인하고, 직무지도원으로부터 사유를 확인합니다.</div>
 
                   <div className="mt-3 flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -822,22 +822,22 @@ export default function AttendanceInboxClient() {
                 </div>
 
                 {/* KPI */}
-                <div className="mb-4 rounded-2xl bg-black/5 p-2">
+                <div className="mb-4 rounded-xl bg-gray-50 p-4 border border-gray-100">
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <div className="text-xs text-black/60">출근</div>
+                      <div className="text-xs text-gray-400">출근</div>
                       <div className="font-semibold">{fmtTime(selected.clockInAt)}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-black/60">퇴근</div>
+                      <div className="text-xs text-gray-400">퇴근</div>
                       <div className="font-semibold">{fmtTime(selected.clockOutAt)}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-black/60">기준거리</div>
+                      <div className="text-xs text-gray-400">기준거리</div>
                       <div className="font-semibold">{selected.rangeM ?? "-"}m</div>
                     </div>
                     <div>
-                      <div className="text-xs text-black/60">거리(출근)</div>
+                      <div className="text-xs text-gray-400">거리(출근)</div>
                       <div className="font-semibold">{selected.startDistanceM ?? "-"}m</div>
                     </div>
                   </div>
@@ -848,7 +848,7 @@ export default function AttendanceInboxClient() {
                   {actions?.showRequestReason ? (
                     <button
                       onClick={actionRequestReason}
-                      className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                     >
                       사유 등록 요청
                     </button>
@@ -858,13 +858,13 @@ export default function AttendanceInboxClient() {
                     <>
                       <button
                         onClick={actionRequestSupplement}
-                        className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-black/5"
+                        className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
                       >
                         보완 요청
                       </button>
                       <button
                         onClick={actionResolve}
-                        className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                       >
                         처리 완료
                       </button>
@@ -901,13 +901,13 @@ export default function AttendanceInboxClient() {
                       onChange={(e) =>
                         updateSelected((it) => ({ ...it, adminMemo: e.target.value, updatedAt: new Date().toISOString() }))
                       }
-                      className="h-14 flex-1 resize-none rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/20"
+                      className="h-14 flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
                       placeholder="운영 메모를 입력하세요"
                     />
                     <button
                       onClick={saveAdminMemo}
                       disabled={savingMemo}
-                      className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90 disabled:opacity-50"
+                      className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
                     >
                       메모 저장
                     </button>
@@ -922,8 +922,8 @@ export default function AttendanceInboxClient() {
 
       {/* modal (prototype) */}
       {modal.type !== "NONE" ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-4 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-6">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl">
             <div className="mb-2 flex items-center justify-between">
               <div className="text-sm font-semibold">
                 {modal.type === "REQUEST_REASON" ? "사유 등록 요청" : "보완 요청"}
@@ -935,17 +935,17 @@ export default function AttendanceInboxClient() {
             <textarea
               value={modal.draft}
               onChange={(e) => setModal({ ...modal, draft: e.target.value } as any)}
-              className="h-64 w-full resize-none rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/20"
+              className="h-64 w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
             />
             <div className="mt-3 flex justify-end gap-2">
               <button
-                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-black/5"
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
                 onClick={() => setModal({ type: "NONE" })}
               >
                 취소
               </button>
               <button
-                className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                 onClick={async () => {
                   if (!selected) return;
 

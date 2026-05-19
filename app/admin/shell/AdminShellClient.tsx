@@ -1,8 +1,5 @@
-// app/admin/shell/AdminShellClient.tsx
-// This is the layout component for the admin panel, wrapping all admin pages with the AdminShellClient.
-// It ensures consistent layout and navigation across the admin interface.
-
 "use client";
+// app/admin/shell/AdminShellClient.tsx
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -23,34 +20,21 @@ type MeResponse =
 export default function AdminShellClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<MeResponse | null>(null);
 
-  // ✅ 실제 라우트와 동일하게 (소문자)
   const isLoginPage = pathname === "/admin/login";
 
   useEffect(() => {
-    if (isLoginPage) {
-      setLoading(false);
-      return;
-    }
-
+    if (isLoginPage) { setLoading(false); return; }
     let cancelled = false;
-
     (async () => {
       setLoading(true);
       try {
         const res = await fetch("/api/admin/auth/me", { method: "GET", cache: "no-store" });
         const data = (await res.json()) as MeResponse;
-
         if (cancelled) return;
-
-        if (!data || (data as any).success !== true) {
-          router.replace("/admin/login");
-          return;
-        }
-
+        if (!data || (data as any).success !== true) { router.replace("/admin/login"); return; }
         setSession(data);
       } catch {
         router.replace("/admin/login");
@@ -58,27 +42,38 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
         if (!cancelled) setLoading(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [isLoginPage, router]);
 
   if (isLoginPage) return <>{children}</>;
 
   if (loading) {
-    return <div style={{ padding: 24, fontSize: 14, color: "#444" }}>관리자 포털 로딩 중...</div>;
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f9fafb" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ width: 28, height: 28, border: "2.5px solid #e5e7eb", borderTop: "2.5px solid #3b82f6", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>로딩 중...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#fafafa" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "#f7f8fa" }}>
       <AdminNav />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <AdminTopbar
           session={(session as any)?.session}
           onLoggedOut={() => router.replace("/admin/login")}
         />
-        <main style={{ padding: 16 }}>{children}</main>
+        <main style={{
+          flex: 1,
+          padding: "28px 32px",
+          overflowY: "auto" as const,
+        }}>
+          {children}
+        </main>
       </div>
     </div>
   );

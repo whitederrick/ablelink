@@ -1,29 +1,31 @@
 // app/api/admin/dashboard/route.ts
-// 관리자 대시보드 실시간 통계 API
+// 관리자 대시보드 — 에이전시 관점 통합 현황 API
 
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAdminSession } from "@/lib/adminScope";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const scope = await requireAdminSession(req);
+    const agencyFilter = scope.role === "AGENCY" && scope.agencyId
+      ? { agencyId: scope.agencyId }
+      : {};
+
     const today = new Date();
     const todayStr = today.toISOString().slice(0, 10);
-    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-    const thisMonthStr = thisMonthStart.toISOString().slice(0, 10);
+    const now = new Date();
 
-    // 1. 전체 활성 배정 수
-    const totalActiveCoaches = await prisma.siteAssignment.count({
-      where: { status: "ACTIVE" },
-    });
-
-    // 2. 오늘 출근 기록
+    // ── 1. 오늘 출근 현황 ─────────────────────────────────────────
     const todayAttendances = await prisma.dailyAttendance.findMany({
-      where: { workDate: todayStr },
+      where: {
+        workDate: todayStr,
+        assignment: { ...agencyFilter },
+      },
       select: {
         id: true,
-        userId: true,
         startTime: true,
         endTime: true,
         isFinalClosed: true,
@@ -31,111 +33,216 @@ export async function GET() {
         user: { select: { userName: true } },
         site: { select: { companyName: true } },
         logs: { select: { isCompleted: true } },
-        attendanceIssue: { select: { id: true, status: true } },
+        attendanceIssue: { select: { id: true, status: true, issueTypes: true } },
       },
     });
 
-    const clockedIn = todayAttendances.filter(a => a.startTime).length;
-    const clockedOut = todayAttendances.filter(a => a.endTime).length;
-    const finalized = todayAttendances.filter(a => a.isFinalClosed).length;
-    const logCompleted = todayAttendances.filter(a =>
-      a.logs.length > 0 && a.logs.every(l => l.isCompleted)
-    ).length;
-    const logPending = todayAttendances.filter(a =>
-      a.startTime && (a.logs.length === 0 || a.logs.some(l => !l.isCompleted))
-    ).length;
+    const todayWorking = todayAttendances.filter(a => a.startTime && !a.isFinalClosed).length;
+    const todayDone = todayAttendances.filter(a => a.isFinalClosed).length;
 
-    // 3. GPS 이탈 승인 대기 (attendanceIssue 통해 처리)
-    const gpsPendingAttendances = todayAttendances.filter(a =>
-      a.isGpsModified && a.attendanceIssue && a.attendanceIssue.status === "OPEN"
-    );
-
-    // 4. 이번 달 통계
-    const monthAttendances = await prisma.dailyAttendance.findMany({
-      where: { workDate: { gte: thisMonthStr, lte: todayStr } },
-      select: {
-        startTime: true,
-        logs: { select: { totalRecognizedTime: true, isCompleted: true } },
-      },
-    });
-
-    const monthWorkDays = monthAttendances.filter(a => a.startTime).length;
-    const monthTotalHours = monthAttendances.reduce((sum, a) =>
-      sum + a.logs.reduce((s, l) => s + Number(l.totalRecognizedTime || 0), 0), 0
-    );
-    const monthCompletedDocs = monthAttendances.filter(a =>
-      a.logs.length > 0 && a.logs.every(l => l.isCompleted)
-    ).length;
-
-    // 5. 이번 달 미제출 훈련생 수 (일지 미완료)
-    const monthPendingLogs = monthAttendances.filter(a =>
-      a.startTime && a.logs.some(l => !l.isCompleted)
-    ).length;
-
-    // 6. 오늘 출근 목록
-    const todayList = todayAttendances.map(a => ({
-      id: a.id.toString(),
-      userName: a.user?.userName || "-",
-      siteName: a.site?.companyName || "-",
-      clockIn: a.startTime ? formatHHMM(a.startTime) : null,
-      clockOut: a.endTime ? formatHHMM(a.endTime) : null,
-      isFinalClosed: a.isFinalClosed,
-      isGpsModified: a.isGpsModified,
-      logStatus: a.logs.length === 0 ? "미작성"
-        : a.logs.every(l => l.isCompleted) ? "완료"
-        : "임시저장",
-    }));
-
-    // 7. GPS 이탈 대기 목록 (전체 기간, OPEN 상태)
-    const gpsPendingList = await prisma.dailyAttendance.findMany({
+    // ── 2. 미확인 근태 ────────────────────────────────────────────
+    const unconfirmedIssues = await prisma.attendanceIssue.findMany({
       where: {
-        isGpsModified: true,
-        attendanceIssue: { status: "OPEN" },
+        status: "OPEN",
+        dailyAttendance: { assignment: { ...agencyFilter } },
       },
       select: {
         id: true,
-        workDate: true,
+        issueTypes: true,
+        createdAt: true,
+        dailyAttendance: {
+          select: {
+            workDate: true,
+            user: { select: { userName: true } },
+            site: { select: { companyName: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // ── 3. 보고서 현황 ────────────────────────────────────────────
+    const docRunsOpen = await prisma.documentRun.findMany({
+      where: {
+        status: "OPEN",
+        ...(scope.role === "AGENCY" && scope.agencyId ? { agencyId: scope.agencyId } : {}),
+      },
+      select: {
+        id: true,
+        docType: true,
+        dueAt: true,
+        currentVersionId: true,
+        coach: { select: { userName: true } },
+        site: { select: { companyName: true } },
+      },
+    });
+
+    const docPendingSubmit = docRunsOpen.filter(r => !r.currentVersionId && r.dueAt > now).length;
+    const docOverdue = docRunsOpen.filter(r => !r.currentVersionId && r.dueAt <= now).length;
+
+    // ── 4. 배정 종료 임박 ─────────────────────────────────────────
+    const in5Days = new Date(today); in5Days.setDate(in5Days.getDate() + 5);
+    const in10Days = new Date(today); in10Days.setDate(in10Days.getDate() + 10);
+
+    const endingSoonAssignments = await prisma.siteAssignment.findMany({
+      where: {
+        status: "ACTIVE",
+        endDate: { gte: today, lte: in10Days },
+        ...agencyFilter,
+      },
+      select: {
+        id: true,
+        endDate: true,
+        serviceStep: true,
         user: { select: { userName: true } },
         site: { select: { companyName: true } },
       },
-      orderBy: { id: "desc" },
-      take: 10,
+      orderBy: { endDate: "asc" },
     });
+
+    const endingIn5 = endingSoonAssignments.filter(a => a.endDate && a.endDate <= in5Days).length;
+
+    // ── 5. 미배정 Site ────────────────────────────────────────────
+    const allActiveSites = await prisma.site.findMany({
+      where: {
+        isActive: true,
+        ...(scope.role === "AGENCY" && scope.agencyId ? { agencyId: scope.agencyId } : {}),
+      },
+      select: {
+        id: true,
+        companyName: true,
+        assignments: { where: { status: "ACTIVE" }, select: { id: true } },
+      },
+    });
+    const unassignedSites = allActiveSites.filter(s => s.assignments.length === 0);
+
+    // ── 6. 운영 리스크 알림 ───────────────────────────────────────
+    const riskAlerts: Array<{
+      type: string; label: string; target: string; detail: string; severity: "high" | "medium" | "low";
+    }> = [];
+
+    for (const issue of unconfirmedIssues.slice(0, 15)) {
+      const daysAgo = Math.floor((now.getTime() - issue.createdAt.getTime()) / 86400000);
+      if (daysAgo >= 3) {
+        riskAlerts.push({
+          type: "attendance", label: "[근태]",
+          target: issue.dailyAttendance?.user?.userName || "-",
+          detail: `${daysAgo}일 연속 미확인 근태 — 『${issue.dailyAttendance?.site?.companyName || ""}』`,
+          severity: daysAgo >= 7 ? "high" : "medium",
+        });
+      }
+    }
+
+    for (const r of docRunsOpen.filter(r => !r.currentVersionId && r.dueAt <= now).slice(0, 8)) {
+      const daysOver = Math.ceil((now.getTime() - r.dueAt.getTime()) / 86400000);
+      riskAlerts.push({
+        type: "document", label: "[보고서]",
+        target: r.site?.companyName || "-",
+        detail: `${docTypeLabel(r.docType)} 미제출(D+${daysOver}) — 『${r.coach?.userName || ""}』`,
+        severity: daysOver >= 7 ? "high" : "medium",
+      });
+    }
+
+    for (const a of endingSoonAssignments.slice(0, 8)) {
+      const daysLeft = a.endDate
+        ? Math.ceil((a.endDate.getTime() - today.getTime()) / 86400000)
+        : 0;
+      riskAlerts.push({
+        type: "assignment", label: "[배정]",
+        target: a.user?.userName || "-",
+        detail: `배정 종료 D-${daysLeft} — 『${a.site?.companyName || ""}』`,
+        severity: daysLeft <= 3 ? "high" : "medium",
+      });
+    }
+
+    for (const s of unassignedSites.slice(0, 3)) {
+      riskAlerts.push({
+        type: "site", label: "[미배정]",
+        target: s.companyName,
+        detail: "활성 직무지도원 배정 없음",
+        severity: "low",
+      });
+    }
+
+    const severityOrder = { high: 0, medium: 1, low: 2 };
+    riskAlerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 
     return NextResponse.json({
       success: true,
       data: {
         today: todayStr,
         summary: {
-          totalActiveCoaches,
-          clockedIn,
-          clockedOut,
-          finalized,
-          gpsIssues: gpsPendingAttendances.length,
-          logCompleted,
-          logPending,
+          todayWorking,
+          todayDone,
+          unconfirmedCount: unconfirmedIssues.length,
+          docPendingSubmit,
+          docOverdue,
+          endingIn5,
+          endingIn10: endingSoonAssignments.length,
+          unassignedSiteCount: unassignedSites.length,
         },
-        month: {
-          workDays: monthWorkDays,
-          totalHours: Math.round(monthTotalHours * 10) / 10,
-          completedDocs: monthCompletedDocs,
-          pendingLogs: monthPendingLogs,
-        },
-        gpsPendingList: gpsPendingList.map(g => ({
-          id: g.id.toString(),
-          userName: g.user?.userName || "-",
-          siteName: g.site?.companyName || "-",
-          workDate: g.workDate,
+        attendanceIssueList: unconfirmedIssues.slice(0, 10).map(i => ({
+          id: i.id.toString(),
+          userName: i.dailyAttendance?.user?.userName || "-",
+          siteName: i.dailyAttendance?.site?.companyName || "-",
+          workDate: i.dailyAttendance?.workDate || "-",
+          issueTypes: i.issueTypes,
+          createdAt: i.createdAt.toISOString(),
         })),
-        todayList,
+        docList: docRunsOpen.slice(0, 8).map(r => ({
+          id: r.id.toString(),
+          docType: r.docType,
+          docTypeLabel: docTypeLabel(r.docType),
+          coachName: r.coach?.userName || "-",
+          siteName: r.site?.companyName || "-",
+          dueAt: r.dueAt.toISOString(),
+          isOverdue: r.dueAt <= now,
+          hasVersion: !!r.currentVersionId,
+        })),
+        assignmentAlerts: endingSoonAssignments.slice(0, 8).map(a => ({
+          id: a.id.toString(),
+          userName: a.user?.userName || "-",
+          siteName: a.site?.companyName || "-",
+          endDate: a.endDate ? a.endDate.toISOString() : null,
+          serviceStep: a.serviceStep,
+          daysLeft: a.endDate
+            ? Math.ceil((a.endDate.getTime() - today.getTime()) / 86400000)
+            : null,
+        })),
+        riskAlerts: riskAlerts.slice(0, 20),
+        todayList: todayAttendances.map(a => ({
+          id: a.id.toString(),
+          userName: a.user?.userName || "-",
+          siteName: a.site?.companyName || "-",
+          clockIn: a.startTime ? formatHHMM(a.startTime) : null,
+          clockOut: a.endTime ? formatHHMM(a.endTime) : null,
+          isFinalClosed: a.isFinalClosed,
+          isGpsModified: a.isGpsModified,
+          hasIssue: !!a.attendanceIssue && a.attendanceIssue.status === "OPEN",
+          logStatus: a.logs.length === 0 ? "미작성"
+            : a.logs.every(l => l.isCompleted) ? "완료" : "임시저장",
+        })),
       },
     });
   } catch (error: any) {
+    if (error && typeof error.status === "number") return error as any;
     console.error("[admin/dashboard]", error);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }
 
-function formatHHMM(date: Date): string {
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+function formatHHMM(d: Date) {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function docTypeLabel(type: string) {
+  const map: Record<string, string> = {
+    ATTENDANCE_SHEET: "직무지도원 출근부",
+    TRAINING_DAILY_LOG: "지원고용 훈련일지",
+    TRAINEE_COMPREHENSIVE_EVAL: "훈련생 종합평가",
+    POST_EMPLOY_ADAPT_LOG: "적응지도 일지",
+    ADAPTATION_COMPREHENSIVE_EVAL: "적응지도 종합평가",
+    CHECKLIST: "체크리스트",
+  };
+  return map[type] || type;
 }

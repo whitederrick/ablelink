@@ -267,30 +267,44 @@ export default function AdminDocumentsPage() {
     }
   }
 
-  return (
-    <div style={{ padding: 24, maxWidth: 1100 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111", marginBottom: 20 }}>문서 운영</h1>
+  const DOC_TYPE_LABEL: Record<string, string> = {
+    TRAINING_DAILY_LOG: "지원고용 훈련일지",
+    ATTENDANCE_SHEET: "직무지도원 출근부",
+    TRAINEE_COMPREHENSIVE_EVAL: "훈련생 종합평가",
+    POST_EMPLOY_ADAPT_LOG: "적응지도 일지",
+    ADAPTATION_COMPREHENSIVE_EVAL: "적응지도 종합평가",
+    CHECKLIST: "체크리스트",
+  };
 
-      {/* Assignment */}
-      <section style={{ backgroundColor: "#fff", border: "none", borderRadius: 14, padding: 20, marginBottom: 16, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#333", minWidth: 120 }}>배정 선택</div>
+  return (
+    <div>
+      {/* 페이지 헤더 */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827", letterSpacing: "-0.3px" }}>문서 운영</h1>
+        <p style={{ margin: "4px 0 0", fontSize: 13, color: "#9ca3af" }}>직무지도원별 문서 Run 생성 및 제출 이력 관리</p>
+      </div>
+
+      {/* 배정 선택 */}
+      <div style={card}>
+        <div style={sectionHeader}>
+          <span style={sectionTitle}>배정 선택</span>
+        </div>
+        <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
           <input
             value={assignQuery}
             onChange={(e) => setAssignQuery(e.target.value)}
             placeholder="검색(사이트/직무지도원 등)"
-            style={{ flex: 1, padding: 8, border: "1px solid #ddd", borderRadius: 8 }}
+            style={inputStyle}
           />
-          <button onClick={() => loadAssignments(false)} disabled={assignLoading} style={{ padding: "8px 12px" }}>
+          <button onClick={() => loadAssignments(false)} disabled={assignLoading} style={btnSecondary}>
             {assignLoading ? "조회중..." : "검색"}
           </button>
         </div>
-
-        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" as const }}>
           <select
             value={selectedAssignmentId}
             onChange={(e) => setSelectedAssignmentId(e.target.value)}
-            style={{ width: 520, padding: 8, border: "1px solid #ddd", borderRadius: 8 }}
+            style={{ ...inputStyle, width: 480, flex: "none" }}
           >
             <option value="">배정 선택...</option>
             {assignments.map((a) => (
@@ -299,262 +313,270 @@ export default function AdminDocumentsPage() {
               </option>
             ))}
           </select>
-
-          <div style={{ fontSize: 13, color: "#444", lineHeight: 1.6 }}>
-            <div>선택 배정: {selectedAssignment ? `#${selectedAssignment.id}` : "-"}</div>
-            <div>Site: {selectedAssignment?.siteName ?? "-"}</div>
-            <div>Coach: {selectedAssignment?.userName ?? "-"}</div>
-          </div>
+          {selectedAssignment && (
+            <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.8 }}>
+              <div><span style={{ color: "#9ca3af" }}>선택 배정</span> #{selectedAssignment.id}</div>
+              <div><span style={{ color: "#9ca3af" }}>Site</span> {selectedAssignment.siteName ?? "-"}</div>
+              <div><span style={{ color: "#9ca3af" }}>Coach</span> {selectedAssignment.userName ?? "-"}</div>
+            </div>
+          )}
         </div>
-      </section>
+      </div>
 
-      {/* Doc settings */}
-      <section style={{ backgroundColor: "#fff", borderRadius: 14, padding: 20, marginBottom: 16, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#333", minWidth: 120 }}>문서 설정</div>
-
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 13, color: "#444" }}>문서 타입</span>
-            <select value={docType} onChange={(e) => setDocType(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
-              <option value="TRAINING_DAILY_LOG">TRAINING_DAILY_LOG (단순 업무일지)</option>
-              {/* 향후 확장 */}
-            </select>
-          </label>
-
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 13, color: "#444" }}>기간 시작</span>
-            <input type="date" value={periodStartDate} onChange={(e) => setPeriodStartDate(e.target.value)} />
-          </label>
-
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 13, color: "#444" }}>기간 종료</span>
-            <input type="date" value={periodEndDate} onChange={(e) => setPeriodEndDate(e.target.value)} />
-          </label>
-
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 13, color: "#444" }}>마감(dueAt)</span>
-            <input type="date" value={dueAtDate} onChange={(e) => setDueAtDate(e.target.value)} />
-          </label>
-
-          <button onClick={onCreateRun} disabled={runLoading || !selectedAssignmentId} style={{ padding: "8px 12px" }}>
+      {/* 문서 설정 */}
+      <div style={{ ...card, marginTop: 12 }}>
+        <div style={sectionHeader}>
+          <span style={sectionTitle}>문서 설정</span>
+          <button onClick={onCreateRun} disabled={runLoading || !selectedAssignmentId} style={btnPrimary}>
             {runLoading ? "처리중..." : "Run 생성"}
           </button>
         </div>
-      </section>
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" as const, alignItems: "center" }}>
+          <label style={labelRow}>
+            <span style={labelText}>문서 타입</span>
+            <select value={docType} onChange={(e) => setDocType(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
+              <option value="TRAINING_DAILY_LOG">지원고용 훈련일지</option>
+              <option value="ATTENDANCE_SHEET">직무지도원 출근부</option>
+              <option value="TRAINEE_COMPREHENSIVE_EVAL">훈련생 종합평가</option>
+              <option value="POST_EMPLOY_ADAPT_LOG">적응지도 일지</option>
+              <option value="ADAPTATION_COMPREHENSIVE_EVAL">적응지도 종합평가</option>
+              <option value="CHECKLIST">체크리스트</option>
+            </select>
+          </label>
+          <label style={labelRow}>
+            <span style={labelText}>기간 시작</span>
+            <input type="date" value={periodStartDate} onChange={(e) => setPeriodStartDate(e.target.value)} style={{ ...inputStyle, width: "auto" }} />
+          </label>
+          <label style={labelRow}>
+            <span style={labelText}>기간 종료</span>
+            <input type="date" value={periodEndDate} onChange={(e) => setPeriodEndDate(e.target.value)} style={{ ...inputStyle, width: "auto" }} />
+          </label>
+          <label style={labelRow}>
+            <span style={labelText}>마감(dueAt)</span>
+            <input type="date" value={dueAtDate} onChange={(e) => setDueAtDate(e.target.value)} style={{ ...inputStyle, width: "auto" }} />
+          </label>
+        </div>
+      </div>
 
-      {/* Runs */}
-      <section style={{ backgroundColor: "#fff", borderRadius: 14, padding: 20, marginBottom: 16, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#333", minWidth: 120 }}>Run 목록</div>
-          <button onClick={() => loadRuns()} disabled={runLoading} style={{ padding: "8px 12px" }}>
+      {/* Run 목록 */}
+      <div style={{ ...card, marginTop: 12 }}>
+        <div style={sectionHeader}>
+          <span style={sectionTitle}>Run 목록</span>
+          <button onClick={() => loadRuns()} disabled={runLoading} style={btnSecondary}>
             {runLoading ? "조회중..." : "새로고침"}
           </button>
-          <div style={{ fontSize: 13, color: "#444" }}>
-            선택 Run: {selectedRun ? `#${selectedRun.id}` : "-"}
-          </div>
         </div>
-
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" as const, alignItems: "flex-start" }}>
           <select
             value={selectedRunId}
             onChange={(e) => setSelectedRunId(e.target.value)}
-            style={{ width: 520, padding: 8, border: "1px solid #ddd", borderRadius: 8 }}
+            style={{ ...inputStyle, width: 480, flex: "none" }}
           >
             <option value="">Run 선택...</option>
             {runs.map((r) => (
               <option key={r.id} value={r.id}>
-                #{r.id} / {r.docType} / {new Date(r.periodStart).toLocaleDateString()}~{new Date(r.periodEnd).toLocaleDateString()} / due {new Date(r.dueAt).toLocaleDateString()}
+                #{r.id} / {DOC_TYPE_LABEL[r.docType] || r.docType} / {new Date(r.periodStart).toLocaleDateString()}~{new Date(r.periodEnd).toLocaleDateString()} / 마감 {new Date(r.dueAt).toLocaleDateString()}
               </option>
             ))}
           </select>
-
-          <div style={{ fontSize: 13, color: "#444", lineHeight: 1.6 }}>
-            <div>Status: {selectedRun?.status ?? "-"}</div>
-            <div>OpenAt: {selectedRun ? new Date(selectedRun.openAt).toLocaleString() : "-"}</div>
-            <div>CurrentVersionId: {selectedRun?.currentVersionId ?? "-"}</div>
-          </div>
+          {selectedRun && (
+            <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.8 }}>
+              <div><span style={{ color: "#9ca3af" }}>Status</span> <span style={{ ...badge, ...(selectedRun.status === "OPEN" ? badgeBlue : badgeGray) }}>{selectedRun.status}</span></div>
+              <div><span style={{ color: "#9ca3af" }}>OpenAt</span> {new Date(selectedRun.openAt).toLocaleString()}</div>
+              <div><span style={{ color: "#9ca3af" }}>CurrentVersionId</span> {selectedRun.currentVersionId ?? "-"}</div>
+            </div>
+          )}
         </div>
-      </section>
+      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {/* Versions */}
-        <section style={{ backgroundColor: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontWeight: 600 }}>Version</div>
-            <button
-              onClick={() => selectedRunId && loadVersions(selectedRunId)}
-              disabled={!selectedRunId || versionsLoading}
-              style={{ padding: "6px 10px" }}
-            >
-              {versionsLoading ? "조회중..." : "새로고침"}
-            </button>
-            <div style={{ fontSize: 13, color: "#444" }}>
-              최신: {latestVersion ? `v${latestVersion.versionNo}(${latestVersion.stage})` : "-"}
+      {/* Version + 제출 로그 */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+        {/* Version */}
+        <div style={card}>
+          <div style={sectionHeader}>
+            <span style={sectionTitle}>Version</span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "#9ca3af" }}>최신: {latestVersion ? `v${latestVersion.versionNo}(${latestVersion.stage})` : "-"}</span>
+              <button onClick={() => selectedRunId && loadVersions(selectedRunId)} disabled={!selectedRunId || versionsLoading} style={btnSecondary}>
+                {versionsLoading ? "조회중..." : "새로고침"}
+              </button>
             </div>
           </div>
 
-          <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 10, marginBottom: 10 }}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>버전 생성</div>
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-              <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <span style={{ fontSize: 13, color: "#444" }}>Stage</span>
-                <select value={newStage} onChange={(e) => setNewStage(e.target.value)} style={{ padding: 6, borderRadius: 8 }}>
+          {/* 버전 생성 폼 */}
+          <div style={{ border: "1px solid #f0f0f0", borderRadius: 8, padding: 14, marginBottom: 14, background: "#fafafa" }}>
+            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: "#374151" }}>버전 생성</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <label style={labelRow}>
+                <span style={labelText}>Stage</span>
+                <select value={newStage} onChange={(e) => setNewStage(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
                   <option value="PRE">PRE</option>
                   <option value="FINAL">FINAL</option>
                 </select>
               </label>
-
-              <input
-                value={newPdfUrl}
-                onChange={(e) => setNewPdfUrl(e.target.value)}
-                placeholder="pdfUrl (필수)"
-                style={{ flex: 1, minWidth: 220, padding: 8, border: "1px solid #ddd", borderRadius: 8 }}
-              />
+              <input value={newPdfUrl} onChange={(e) => setNewPdfUrl(e.target.value)} placeholder="pdfUrl (필수)" style={{ ...inputStyle, flex: 1 }} />
             </div>
-
-            <input
-              value={newPdfFileName}
-              onChange={(e) => setNewPdfFileName(e.target.value)}
-              placeholder="pdfFileName (선택)"
-              style={{ width: "100%", padding: 8, border: "1px solid #ddd", borderRadius: 8, marginBottom: 8 }}
-            />
-
-            <textarea
-              value={newSourceDataText}
-              onChange={(e) => setNewSourceDataText(e.target.value)}
-              placeholder="sourceData JSON"
-              rows={6}
-              style={{ width: "100%", padding: 8, border: "1px solid #ddd", borderRadius: 8, fontFamily: "monospace", fontSize: 12 }}
-            />
-
+            <input value={newPdfFileName} onChange={(e) => setNewPdfFileName(e.target.value)} placeholder="pdfFileName (선택)" style={{ ...inputStyle, marginBottom: 8 }} />
+            <textarea value={newSourceDataText} onChange={(e) => setNewSourceDataText(e.target.value)} placeholder="sourceData JSON" rows={4}
+              style={{ ...inputStyle, fontFamily: "monospace", fontSize: 12, resize: "vertical" as const }} />
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-              <button onClick={onCreateVersion} disabled={!selectedRunId || versionsLoading} style={{ padding: "8px 12px" }}>
+              <button onClick={onCreateVersion} disabled={!selectedRunId || versionsLoading} style={btnPrimary}>
                 {versionsLoading ? "처리중..." : "Version 생성"}
               </button>
             </div>
           </div>
 
-          <div style={{ fontSize: 13, color: "#444", marginBottom: 8 }}>목록</div>
-          <div style={{ maxHeight: 280, overflow: "auto", border: "1px solid #eee", borderRadius: 8 }}>
+          {/* 버전 목록 */}
+          <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6 }}>목록</div>
+          <div style={{ border: "1px solid #f0f0f0", borderRadius: 8, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
-                <tr style={{ background: "#fafafa" }}>
-                  <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #eee" }}>No</th>
-                  <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #eee" }}>Stage</th>
-                  <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #eee" }}>PDF</th>
-                  <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #eee" }}>Created</th>
+                <tr style={{ background: "#f9fafb" }}>
+                  {["No", "Stage", "PDF", "Created"].map(h => (
+                    <th key={h} style={{ textAlign: "left", padding: "8px 12px", borderBottom: "1px solid #f0f0f0", color: "#9ca3af", fontWeight: 600, fontSize: 11 }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {versions.map((v) => (
-                  <tr key={v.id}>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f1f5f9" }}>v{v.versionNo}</td>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f1f5f9" }}>{v.stage}</td>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f1f5f9" }}>
-                      <a href={v.pdfUrl} target="_blank" rel="noreferrer">
-                        open
-                      </a>
-                    </td>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f1f5f9" }}>{new Date(v.createdAt).toLocaleString()}</td>
+                {versions.length === 0 ? (
+                  <tr><td colSpan={4} style={{ padding: 16, color: "#d1d5db", textAlign: "center" }}>버전이 없습니다.</td></tr>
+                ) : versions.map((v) => (
+                  <tr key={v.id} style={{ borderBottom: "1px solid #f9f9f9" }}>
+                    <td style={{ padding: "10px 12px" }}>v{v.versionNo}</td>
+                    <td style={{ padding: "10px 12px" }}><span style={{ ...badge, ...(v.stage === "FINAL" ? badgeBlue : badgeGray) }}>{v.stage}</span></td>
+                    <td style={{ padding: "10px 12px" }}><a href={v.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "#2563eb", textDecoration: "none" }}>열기</a></td>
+                    <td style={{ padding: "10px 12px", color: "#9ca3af" }}>{new Date(v.createdAt).toLocaleString()}</td>
                   </tr>
                 ))}
-                {versions.length === 0 && (
-                  <tr>
-                    <td colSpan={4} style={{ padding: 10, color: "#777" }}>
-                      버전이 없습니다.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
-        </section>
+        </div>
 
-        {/* Submission logs */}
-        <section style={{ backgroundColor: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontWeight: 600 }}>제출 로그</div>
-            <button
-              onClick={() => selectedRunId && loadLogs(selectedRunId)}
-              disabled={!selectedRunId || logsLoading}
-              style={{ padding: "6px 10px" }}
-            >
+        {/* 제출 로그 */}
+        <div style={card}>
+          <div style={sectionHeader}>
+            <span style={sectionTitle}>제출 로그</span>
+            <button onClick={() => selectedRunId && loadLogs(selectedRunId)} disabled={!selectedRunId || logsLoading} style={btnSecondary}>
               {logsLoading ? "조회중..." : "새로고침"}
             </button>
           </div>
 
-          <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 10, marginBottom: 10 }}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>제출</div>
-
-            <div style={{ fontSize: 12, color: "#444", marginBottom: 8 }}>
+          {/* 제출 폼 */}
+          <div style={{ border: "1px solid #f0f0f0", borderRadius: 8, padding: 14, marginBottom: 14, background: "#fafafa" }}>
+            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4, color: "#374151" }}>제출</div>
+            <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 10 }}>
               제출 대상 버전: {latestVersion ? `v${latestVersion.versionNo} (${latestVersion.stage})` : "-"}
             </div>
-
-            <input
-              value={submitEmail}
-              onChange={(e) => setSubmitEmail(e.target.value)}
-              placeholder="sentToEmail (선택)"
-              style={{ width: "100%", padding: 8, border: "1px solid #ddd", borderRadius: 8, marginBottom: 8 }}
-            />
-
-            <input
-              value={submitStatus}
-              onChange={(e) => setSubmitStatus(e.target.value)}
-              placeholder="emailStatus (예: SENT)"
-              style={{ width: "100%", padding: 8, border: "1px solid #ddd", borderRadius: 8, marginBottom: 8 }}
-            />
-
-            <textarea
-              value={submitPayloadText}
-              onChange={(e) => setSubmitPayloadText(e.target.value)}
-              placeholder="emailPayload JSON"
-              rows={6}
-              style={{ width: "100%", padding: 8, border: "1px solid #ddd", borderRadius: 8, fontFamily: "monospace", fontSize: 12 }}
-            />
-
+            <input value={submitEmail} onChange={(e) => setSubmitEmail(e.target.value)} placeholder="sentToEmail (선택)" style={{ ...inputStyle, marginBottom: 8 }} />
+            <input value={submitStatus} onChange={(e) => setSubmitStatus(e.target.value)} placeholder="emailStatus (예: SENT)" style={{ ...inputStyle, marginBottom: 8 }} />
+            <textarea value={submitPayloadText} onChange={(e) => setSubmitPayloadText(e.target.value)} placeholder="emailPayload JSON" rows={4}
+              style={{ ...inputStyle, fontFamily: "monospace", fontSize: 12, resize: "vertical" as const }} />
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-              <button onClick={() => onSubmit("PRE")} disabled={!selectedRunId || logsLoading || !latestVersion} style={{ padding: "8px 12px" }}>
-                PRE 제출 로그
-              </button>
-              <button onClick={() => onSubmit("FINAL")} disabled={!selectedRunId || logsLoading || !latestVersion} style={{ padding: "8px 12px" }}>
-                FINAL 제출 로그
-              </button>
+              <button onClick={() => onSubmit("PRE")} disabled={!selectedRunId || logsLoading || !latestVersion} style={btnSecondary}>PRE 제출</button>
+              <button onClick={() => onSubmit("FINAL")} disabled={!selectedRunId || logsLoading || !latestVersion} style={btnPrimary}>FINAL 제출</button>
             </div>
           </div>
 
-          <div style={{ fontSize: 13, color: "#444", marginBottom: 8 }}>목록</div>
-          <div style={{ maxHeight: 280, overflow: "auto", border: "1px solid #eee", borderRadius: 8 }}>
+          {/* 제출 로그 목록 */}
+          <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6 }}>목록</div>
+          <div style={{ border: "1px solid #f0f0f0", borderRadius: 8, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
-                <tr style={{ background: "#fafafa" }}>
-                  <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #eee" }}>At</th>
-                  <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #eee" }}>Stage</th>
-                  <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #eee" }}>Email</th>
-                  <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #eee" }}>Status</th>
+                <tr style={{ background: "#f9fafb" }}>
+                  {["At", "Stage", "Email", "Status"].map(h => (
+                    <th key={h} style={{ textAlign: "left", padding: "8px 12px", borderBottom: "1px solid #f0f0f0", color: "#9ca3af", fontWeight: 600, fontSize: 11 }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {logs.map((l) => (
-                  <tr key={l.id}>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f1f5f9" }}>{new Date(l.submittedAt).toLocaleString()}</td>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f1f5f9" }}>{l.stage}</td>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f1f5f9" }}>{l.sentToEmail ?? "-"}</td>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f1f5f9" }}>{l.emailStatus ?? "-"}</td>
+                {logs.length === 0 ? (
+                  <tr><td colSpan={4} style={{ padding: 16, color: "#d1d5db", textAlign: "center" }}>제출 로그가 없습니다.</td></tr>
+                ) : logs.map((l) => (
+                  <tr key={l.id} style={{ borderBottom: "1px solid #f9f9f9" }}>
+                    <td style={{ padding: "10px 12px", color: "#9ca3af" }}>{new Date(l.submittedAt).toLocaleString()}</td>
+                    <td style={{ padding: "10px 12px" }}><span style={{ ...badge, ...(l.stage === "FINAL" ? badgeBlue : badgeGray) }}>{l.stage}</span></td>
+                    <td style={{ padding: "10px 12px" }}>{l.sentToEmail ?? "-"}</td>
+                    <td style={{ padding: "10px 12px" }}>{l.emailStatus ?? "-"}</td>
                   </tr>
                 ))}
-                {logs.length === 0 && (
-                  <tr>
-                    <td colSpan={4} style={{ padding: 10, color: "#777" }}>
-                      제출 로그가 없습니다.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
-        </section>
+        </div>
       </div>
     </div>
   );
 }
+
+// ── 공통 스타일 ──────────────────────────────────────────────────
+const card: React.CSSProperties = {
+  background: "#fff",
+  border: "1px solid #f0f0f0",
+  borderRadius: 12,
+  padding: "18px 20px",
+};
+const sectionHeader: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 14,
+};
+const sectionTitle: React.CSSProperties = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "#111827",
+};
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "8px 11px",
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
+  fontSize: 13,
+  color: "#111827",
+  background: "#fff",
+  outline: "none",
+  fontFamily: "inherit",
+};
+const labelRow: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  alignItems: "center",
+};
+const labelText: React.CSSProperties = {
+  fontSize: 12,
+  color: "#9ca3af",
+  whiteSpace: "nowrap" as const,
+};
+const btnPrimary: React.CSSProperties = {
+  padding: "8px 16px",
+  background: "#2563eb",
+  color: "#fff",
+  border: "none",
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 500,
+  cursor: "pointer",
+  whiteSpace: "nowrap" as const,
+};
+const btnSecondary: React.CSSProperties = {
+  padding: "8px 14px",
+  background: "#fff",
+  color: "#374151",
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 500,
+  cursor: "pointer",
+  whiteSpace: "nowrap" as const,
+};
+const badge: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "2px 8px",
+  borderRadius: 20,
+  fontSize: 11,
+  fontWeight: 600,
+};
+const badgeBlue: React.CSSProperties = { background: "#eff6ff", color: "#2563eb" };
+const badgeGray: React.CSSProperties = { background: "#f9fafb", color: "#6b7280" };

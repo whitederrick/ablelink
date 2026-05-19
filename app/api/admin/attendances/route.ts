@@ -15,26 +15,8 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { readAdminSessionFromRequest } from "@/lib/adminCookies";
+import { requireAdminSession } from "@/lib/adminScope";
 import { Prisma } from "@prisma/client";
-
-type AdminSession = {
-  sub: string;
-  role: "ADMIN" | "GOV" | "AGENCY";
-  loginId: string;
-  agencyName?: string | null; // AGENCY 스코프 산정용(레거시)
-};
-
-async function getSessionOrThrow(req: Request): Promise<AdminSession> {
-  const s = await readAdminSessionFromRequest(req);
-  if (!s) throw new Error("UNAUTHORIZED");
-  return {
-    sub: String(s.sub),
-    role: s.role,
-    loginId: s.loginId,
-    agencyName: s.agencyName ?? null,
-  };
-}
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -58,14 +40,6 @@ function isYearMonth(s: string) {
   return /^[0-9]{4}-[0-9]{2}$/.test(s);
 }
 
-async function resolveAgencyIdByNameOrThrow(agencyName: string): Promise<bigint> {
-  const a = await prisma.agency.findUnique({
-    where: { name: agencyName },
-    select: { id: true },
-  });
-  if (!a) throw new Error("VALIDATION:agencyName");
-  return a.id;
-}
 
 function asIso(d: any) {
   return d?.toISOString?.() ?? d ?? null;
@@ -142,10 +116,7 @@ function toItem(r: any) {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getSessionOrThrow(req);
-
-    // 현재 정책: GOV는 아직 막음 (요청대로 AGENCY 중심)
-    if (session.role !== "AGENCY" && session.role !== "ADMIN") throw new Error("FORBIDDEN");
+    const scope = await requireAdminSession(req);
 
     const { searchParams } = new URL(req.url);
 
@@ -154,7 +125,7 @@ export async function GET(req: NextRequest) {
 
     const from = (searchParams.get("from") || "").trim();
     const to = (searchParams.get("to") || "").trim();
-    const yearMonth = (searchParams.get("yearMonth") || "").trim(); // YYYY-MM
+    const yearMonth = (searchParams.get("yearMonth") || "").trim();
 
     const pageStr = (searchParams.get("page") || "1").trim();
     const pageSizeStr = (searchParams.get("pageSize") || "50").trim();
@@ -166,11 +137,8 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(200, Math.max(1, Number(pageSizeStr)));
     const skip = (page - 1) * pageSize;
 
-    let agencyId: bigint | undefined;
-    if (session.role === "AGENCY") {
-      if (!session.agencyName) throw new Error("FORBIDDEN");
-      agencyId = await resolveAgencyIdByNameOrThrow(session.agencyName);
-    }
+    // ✅ requireAdminSession이 agencyId를 직접 제공
+    const agencyId: bigint | undefined = scope.agencyId ?? undefined;
 
     // 기간 파싱(assignment 오버랩 및 startTime 필터용)
     let fromDt: Date | null = null;
@@ -213,40 +181,9 @@ export async function GET(req: NextRequest) {
       where.workDate = { gte: start, lte: end };
     }
 
-    // ✅ AGENCY 스코프(assignment 기반 + 레거시 fallback)
+    // ✅ AGENCY 스코프 — assignment.agencyId 기준으로 단순 필터
     if (agencyId) {
-      const assignmentOverlap: Prisma.SiteAssignmentWhereInput | undefined =
-        fromDt || toDt
-          ? {
-              AND: [
-                ...(toDt ? [{ startDate: { lte: toDt } }] : []),
-                ...(fromDt ? [{ OR: [{ endDate: null }, { endDate: { gte: fromDt } }] }] : []),
-              ],
-            }
-          : undefined;
-
-      where.AND = [
-        ...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []),
-        {
-          OR: [
-            // (A) 정식: assignmentId가 있을 때는 assignment.site.agencyId 기준
-            {
-              assignmentId: { not: null },
-              assignment: {
-                is: {
-                  site: { is: { agencyId } },
-                  ...(assignmentOverlap ? assignmentOverlap : {}),
-                },
-              },
-            },
-            // (B) 레거시: assignmentId가 null이면 site.agencyId로 fallback
-            {
-              assignmentId: null,
-              site: { is: { agencyId } },
-            },
-          ],
-        },
-      ];
+      where.assignment = { agencyId };
     }
 
     const [total, rows] = await Promise.all([
@@ -297,6 +234,7 @@ export async function GET(req: NextRequest) {
       items: rows.map(toItem),
     });
   } catch (e: any) {
+    if (e instanceof Response || (e && typeof e.status === "number")) return e as any;
     const msg = e?.message || "UNKNOWN";
     return NextResponse.json({ success: false, message: msg }, { status: errToStatus(msg) });
   }

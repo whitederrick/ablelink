@@ -79,21 +79,20 @@ export async function GET(req: Request) {
       }
       agencyId = scope.agencyId;
     }
-    // ADMIN 롤은 agencyId = null → 전체 조회
 
     const { searchParams } = new URL(req.url);
-
     const q = (searchParams.get("q") ?? "").trim();
-    const from = searchParams.get("from"); // YYYY-MM-DD
-    const to = searchParams.get("to"); // YYYY-MM-DD
-    const issue = (searchParams.get("issue") ?? "ALL").toUpperCase(); // ALL | OUT_OF_RANGE ...
-    const statusesParam = (searchParams.get("statuses") ?? "").trim(); // comma-separated
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    const issue = (searchParams.get("issue") ?? "ALL").toUpperCase();
+    const statusesParam = (searchParams.get("statuses") ?? "").trim();
 
     const statuses: InboxStatus[] = statusesParam
       ? (statusesParam.split(",").map((s) => s.trim()).filter(Boolean) as InboxStatus[])
       : [];
 
-    const where: any = agencyId ? { site: { agencyId } } : {};
+    // ✅ agencyId 필터는 assignment 기준으로 (Site에 agencyId 없을 수 있음)
+    const where: any = agencyId ? { assignment: { agencyId } } : {};
 
     if (from || to) {
       where.workDate = {
@@ -103,14 +102,12 @@ export async function GET(req: Request) {
     }
 
     if (q) {
-      // ✅ 괄호 오류 수정(컴파일 에러 원인)
       where.OR = [
         { user: { userName: { contains: q } } },
         { site: { companyName: { contains: q } } },
       ];
     }
 
-    // ✅ 클라이언트가 10개 단위 페이징(slice)하므로, 서버 skip/take는 적용하지 않음(충돌 방지)
     const rows = await prisma.dailyAttendance.findMany({
       where,
       orderBy: [{ workDate: "desc" }, { id: "desc" }],
@@ -123,8 +120,10 @@ export async function GET(req: Request) {
         startDistanceM: true,
         endDistanceM: true,
         user: { select: { id: true, userName: true } },
-        site: { select: { id: true, companyName: true, workType: true } },
-        issue: {
+        site: { select: { id: true, companyName: true } },
+        // ✅ workType은 Site가 아닌 SiteAssignment에 있음
+        assignment: { select: { id: true, workType: true } },
+        attendanceIssue: {
           select: {
             status: true,
             issueTypes: true,
@@ -140,46 +139,49 @@ export async function GET(req: Request) {
     const items: any[] = [];
 
     for (const r of rows) {
+      const workType = r.assignment?.workType ?? null;
+
       const derived = deriveIssueTypes({
         startTime: r.startTime,
         endTime: r.endTime,
         startDistanceM: r.startDistanceM ?? null,
         rangeM: r.rangeM ?? null,
-        workType: r.site.workType ?? null,
+        workType,
       });
 
-      // 이슈 없는 날 제외
       if (derived.length === 0) continue;
 
-      const upserted = await prisma.attendanceIssue.upsert({
+      // 기존 이슈 조회 → 없으면 생성 (upsert race condition 방지)
+      let existing = await prisma.attendanceIssue.findUnique({
         where: { dailyAttendanceId: r.id },
-        create: {
-          dailyAttendanceId: r.id,
-          issueTypes: derived as any,
-          events: {
-            create: [
-              {
+        select: { status: true, issueTypes: true, coachReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
+      });
+
+      if (!existing) {
+        existing = await prisma.attendanceIssue.create({
+          data: {
+            dailyAttendanceId: r.id,
+            issueTypes: derived as any,
+            events: {
+              create: [{
                 type: "ISSUE_CREATED",
                 actorRole: "ADMIN",
-                actorUserId: scope.userId,
+                actorAdminId: scope.userId,
                 message: `이슈 등록: ${derived.join(", ")}`,
-              },
-            ],
+              }],
+            },
           },
-        },
-        update: {
-          // ✅ OPEN 상태일 때만 자동 동기화(운영상 안전)
-          ...(r.issue?.status === "OPEN" ? { issueTypes: derived as any } : {}),
-        },
-        select: {
-          status: true,
-          issueTypes: true,
-          coachReasonText: true,
-          adminMemo: true,
-          updatedAt: true,
-          createdAt: true,
-        },
-      });
+          select: { status: true, issueTypes: true, coachReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
+        });
+      } else if (existing.status === "OPEN") {
+        existing = await prisma.attendanceIssue.update({
+          where: { dailyAttendanceId: r.id },
+          data: { issueTypes: derived as any },
+          select: { status: true, issueTypes: true, coachReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
+        });
+      }
+
+      const upserted = existing;
 
       const inboxStatus = mapIssueStatusToInboxStatus({
         status: upserted.status as any,
@@ -191,28 +193,22 @@ export async function GET(req: Request) {
 
       items.push({
         id: r.id.toString(),
-        coachName: r.user.userName ?? "-",
-        siteName: r.site.companyName ?? "-",
+        coachName: r.user?.userName ?? "-",
+        siteName: r.site?.companyName ?? "-",
         workDate: r.workDate,
-
         issueTypes: (upserted.issueTypes as any) as IssueType[],
         status: inboxStatus,
-
-        workType: r.site.workType ?? null,
+        workType,
         expectedStartAt: null,
-
         clockInAt: r.startTime ? r.startTime.toISOString() : null,
         clockOutAt: r.endTime ? r.endTime.toISOString() : null,
-
         rangeM: r.rangeM ?? null,
         startDistanceM: r.startDistanceM ?? null,
         endDistanceM: r.endDistanceM ?? null,
-
         coachReasonText: upserted.coachReasonText ?? null,
         adminMemo: upserted.adminMemo ?? null,
         updatedAt: (upserted.updatedAt ?? upserted.createdAt).toISOString(),
-
-        timeline: [], // 상세 조회 API로 분리 권장
+        timeline: [],
       });
     }
 
