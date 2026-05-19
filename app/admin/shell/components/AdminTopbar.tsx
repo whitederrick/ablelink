@@ -25,10 +25,8 @@ export default function AdminTopbar({
       await fetch("/api/admin/auth/logout", { method: "POST", cache: "no-store" });
     } catch {}
     finally {
-      setLoading(false);
       onLoggedOut();
-      router.replace("/admin/login");
-      router.refresh();
+      window.location.href = "/admin/login";
     }
   }
 

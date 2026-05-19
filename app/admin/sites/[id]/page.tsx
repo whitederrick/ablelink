@@ -246,9 +246,8 @@ export default function AdminSiteDetailPage() {
 
           {/* 현재 설정 미리보기 */}
           <div style={s.rangePreview}>
-            <span style={s.rangePreviewIcon}>🎯</span>
-            <span>현재 설정: </span>
-            <strong style={{ color: "#5865F2" }}>
+            <span style={{ fontSize: 12, color: "#6b7280" }}>현재 설정</span>
+            <strong style={{ color: "#2563eb" }}>
               반경 {isNaN(finalRange) ? "-" : finalRange}m
             </strong>
             <span style={{ color: "#888", fontSize: 12, marginLeft: 8 }}>
@@ -285,50 +284,49 @@ function Field({ label, value, onChange }: {
 }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>
+      <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6, letterSpacing: "0.2px" }}>
         {label}
       </label>
       <input
         value={value}
         onChange={e => onChange(e.target.value)}
-        style={{ width: "100%", height: 42, border: "1.5px solid #eee", borderRadius: 8, padding: "0 12px", fontSize: 14, color: "#333", outline: "none", boxSizing: "border-box" }}
+        style={{ width: "100%", height: 40, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 12px", fontSize: 14, color: "#111827", outline: "none", boxSizing: "border-box", background: "#fff", fontFamily: "inherit" }}
       />
     </div>
   );
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { padding: 24, maxWidth: 800 },
+  page: { maxWidth: 800 },
   center: { display: "flex", justifyContent: "center", padding: "60px 0" },
-  spinner: { width: 36, height: 36, border: "3px solid #e0e5ff", borderTop: "3px solid #5865F2", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
+  spinner: { width: 28, height: 28, border: "2.5px solid #e5e7eb", borderTop: "2.5px solid #2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
 
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
-  title: { fontSize: 20, fontWeight: 800, color: "#111", margin: "0 0 4px" },
-  subtitle: { fontSize: 13, color: "#888", margin: 0 },
+  title: { fontSize: 18, fontWeight: 700, color: "#111827", margin: "0 0 4px", letterSpacing: "-0.3px" },
+  subtitle: { fontSize: 13, color: "#9ca3af", margin: 0 },
   headerBtns: { display: "flex", gap: 8 },
-  backBtn: { padding: "8px 16px", border: "1.5px solid #eee", borderRadius: 8, backgroundColor: "#fff", cursor: "pointer", fontSize: 14 },
-  deleteBtn: { padding: "8px 16px", border: "1.5px solid #ffcdd2", borderRadius: 8, backgroundColor: "#fff5f5", color: "#e53935", cursor: "pointer", fontSize: 14, fontWeight: 600 },
+  backBtn: { padding: "8px 16px", border: "1px solid #e5e7eb", borderRadius: 8, backgroundColor: "#fff", cursor: "pointer", fontSize: 13, color: "#374151" },
+  deleteBtn: { padding: "8px 16px", border: "1px solid #fecaca", borderRadius: 8, backgroundColor: "#fff", color: "#dc2626", cursor: "pointer", fontSize: 13, fontWeight: 500 },
 
-  content: { display: "flex", flexDirection: "column", gap: 16 },
-  section: { backgroundColor: "#fff", borderRadius: 14, padding: "20px 24px", boxShadow: "0 1px 6px rgba(0,0,0,0.06)" },
-  sectionTitle: { fontSize: 15, fontWeight: 700, color: "#333", margin: "0 0 4px" },
-  sectionDesc: { fontSize: 13, color: "#888", margin: "0 0 16px", lineHeight: 1.6 },
+  content: { display: "flex", flexDirection: "column", gap: 14 },
+  section: { backgroundColor: "#fff", borderRadius: 12, padding: "20px 24px", border: "1px solid #f0f0f0" },
+  sectionTitle: { fontSize: 14, fontWeight: 700, color: "#111827", margin: "0 0 4px" },
+  sectionDesc: { fontSize: 13, color: "#9ca3af", margin: "0 0 16px", lineHeight: 1.6 },
   fieldGrid: { display: "flex", flexDirection: "column" },
   row: { display: "flex", gap: 12 },
-  infoBox: { display: "flex", alignItems: "center", gap: 8, marginTop: 12, padding: "10px 14px", backgroundColor: "#f8f9ff", borderRadius: 8, fontSize: 13 },
-  infoLabel: { color: "#888" },
+  infoBox: { display: "flex", alignItems: "center", gap: 8, marginTop: 12, padding: "10px 14px", backgroundColor: "#f9fafb", borderRadius: 8, fontSize: 13, border: "1px solid #f0f0f0" },
+  infoLabel: { color: "#9ca3af" },
 
-  // GPS 범위 설정
   rangeGrid: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 12 },
-  rangeBtn: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "12px 8px", border: "1.5px solid #eee", borderRadius: 10, cursor: "pointer", backgroundColor: "#fff", transition: "all 0.15s" },
-  rangeBtnActive: { border: "1.5px solid #5865F2", backgroundColor: "#f0f2ff" },
-  rangeBtnValue: { fontSize: 15, fontWeight: 700, color: "#333" },
-  rangeBtnDesc: { fontSize: 11, color: "#888" },
+  rangeBtn: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "12px 8px", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", backgroundColor: "#fff", transition: "all 0.15s" },
+  rangeBtnActive: { border: "1.5px solid #2563eb", backgroundColor: "#eff6ff" },
+  rangeBtnValue: { fontSize: 15, fontWeight: 700, color: "#111827" },
+  rangeBtnDesc: { fontSize: 11, color: "#9ca3af" },
   customRangeRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 12 },
-  customRangeInput: { width: 120, height: 42, border: "1.5px solid #5865F2", borderRadius: 8, padding: "0 12px", fontSize: 16, fontWeight: 700, color: "#5865F2", outline: "none", textAlign: "center" as const },
-  customRangeUnit: { fontSize: 15, color: "#666", fontWeight: 600 },
-  rangePreview: { display: "flex", alignItems: "center", gap: 6, padding: "10px 14px", backgroundColor: "#f0f2ff", borderRadius: 8, fontSize: 14 },
+  customRangeInput: { width: 120, height: 42, border: "1.5px solid #2563eb", borderRadius: 8, padding: "0 12px", fontSize: 16, fontWeight: 700, color: "#2563eb", outline: "none", textAlign: "center" as const },
+  customRangeUnit: { fontSize: 15, color: "#6b7280", fontWeight: 600 },
+  rangePreview: { display: "flex", alignItems: "center", gap: 6, padding: "10px 14px", backgroundColor: "#eff6ff", borderRadius: 8, fontSize: 14, border: "1px solid #bfdbfe" },
   rangePreviewIcon: { fontSize: 16 },
 
-  saveBtn: { width: "100%", padding: "15px", backgroundColor: "#5865F2", color: "#fff", fontSize: 16, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer", marginTop: 4 },
+  saveBtn: { width: "100%", padding: "14px", backgroundColor: "#2563eb", color: "#fff", fontSize: 14, fontWeight: 700, border: "none", borderRadius: 10, cursor: "pointer", marginTop: 4 },
 };
