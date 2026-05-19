@@ -48,8 +48,7 @@ export default function AdminNav() {
       <Link href="/admin" style={{ textDecoration: "none" }}>
         <div style={s.logoWrap}>
           <div style={s.logoText}>
-            <span style={s.logoAble}>Able</span>
-            <span style={s.logoLink}>Link</span>
+            <span style={s.logoAble}>Able</span><span style={s.logoLink}> Link</span>
           </div>
           <div style={s.logoSub}>에이전시 운영 플랫폼</div>
         </div>
@@ -108,7 +107,6 @@ const s: Record<string, React.CSSProperties> = {
   },
   logoLink: {
     color: "#ef4444",
-    marginLeft: 2,
   },
   logoSub: {
     fontSize: 10,

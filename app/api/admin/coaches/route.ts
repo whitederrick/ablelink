@@ -101,6 +101,18 @@ export async function GET(req: NextRequest) {
           userName: true,
           phoneNumber: true,
           status: true,
+          planType: true,
+          createdAt: true,
+          assignments: {
+            where: { status: { in: [AssignStatus.ACTIVE, AssignStatus.ASSIGNED, AssignStatus.CONFIRMED] } },
+            orderBy: { id: "desc" },
+            take: 1,
+            select: {
+              startDate: true,
+              site: { select: { companyName: true } },
+              agency: { select: { name: true } },
+            },
+          },
         },
       }),
     ]);
@@ -110,12 +122,19 @@ export async function GET(req: NextRequest) {
       page,
       pageSize,
       total,
-      items: rows.map((u) => ({
+      data: rows.map((u) => ({
         id: String(u.id),
         loginId: u.loginId,
         userName: u.userName,
         phoneNumber: u.phoneNumber,
         status: String(u.status),
+        planType: String(u.planType),
+        createdAt: u.createdAt.toISOString(),
+        activeAssignment: u.assignments[0] ? {
+          siteName: u.assignments[0].site?.companyName || "-",
+          agencyName: u.assignments[0].agency?.name || "-",
+          startDate: u.assignments[0].startDate.toISOString(),
+        } : null,
       })),
     });
   } catch (e: any) {

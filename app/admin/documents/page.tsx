@@ -67,12 +67,12 @@ export default function AdminDocumentsPage() {
   const [newStage, setNewStage] = useState<DocStage>("PRE");
   const [newPdfUrl, setNewPdfUrl] = useState("");
   const [newPdfFileName, setNewPdfFileName] = useState("");
-  const [newSourceDataText, setNewSourceDataText] = useState('{"note":"sample"}');
+  const [newSourceDataText, setNewSourceDataText] = useState('');
 
   // Submit form
   const [submitEmail, setSubmitEmail] = useState("");
-  const [submitStatus, setSubmitStatus] = useState("SENT");
-  const [submitPayloadText, setSubmitPayloadText] = useState('{"provider":"MANUAL"}');
+  const [submitStatus, setSubmitStatus] = useState('');
+  const [submitPayloadText, setSubmitPayloadText] = useState('');
 
   const selectedAssignment = assignments.find((a) => a.id === selectedAssignmentId) || null;
   const selectedRun = runs.find((r) => r.id === selectedRunId) || null;

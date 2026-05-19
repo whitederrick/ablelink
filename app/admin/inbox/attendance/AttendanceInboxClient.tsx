@@ -283,11 +283,22 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      className={cx(
-        "rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium transition",
-        active ? "border-blue-600 bg-blue-600 text-white" : "bg-white hover:bg-black/5",
-        tone === "danger" ? "border-red-200" : ""
-      )}
+      style={{
+        padding: "5px 12px",
+        borderRadius: 20,
+        border: active
+          ? "1px solid #3b82f6"
+          : tone === "danger"
+          ? "1px solid #fecaca"
+          : "1px solid #e5e7eb",
+        background: active ? "#3b82f6" : "#fff",
+        color: active ? "#fff" : tone === "danger" ? "#dc2626" : "#374151",
+        fontSize: 12,
+        fontWeight: 500,
+        cursor: "pointer",
+        transition: "all 0.15s",
+        whiteSpace: "nowrap" as const,
+      }}
     >
       {children}
     </button>
