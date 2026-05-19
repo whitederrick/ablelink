@@ -731,14 +731,22 @@ export default function AttendanceInboxClient() {
                           </div>
 
                           <span
-                            className="
-                              shrink-0 inline-flex
-                              w-[138px] h-[35px]
-                              items-center justify-center
-                              rounded-xl bg-black
-                              text-xs font-semibold text-white
-                              text-center whitespace-pre-line leading-tight
-                            "
+                            style={{
+                              flexShrink: 0,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: "5px 12px",
+                              borderRadius: 8,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: "#fff",
+                              whiteSpace: "nowrap",
+                              background: it.status === "ADMIN_RESOLVED" ? "#16a34a"
+                                : it.status === "COACH_REPLIED" ? "#2563eb"
+                                : it.status === "COACH_REASON_MISSING" ? "#dc2626"
+                                : "#374151",
+                            }}
                           >
                             {STATUS_LABEL[it.status]}
                           </span>
@@ -825,7 +833,7 @@ export default function AttendanceInboxClient() {
                     </div>
 
                     <div className="shrink-0">
-                      <div className="rounded-lg bg-gray-700 px-4 py-2 text-center text-xs font-semibold text-white">
+                      <div style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, color: "#fff", background: selected.status === "ADMIN_RESOLVED" ? "#16a34a" : selected.status === "COACH_REPLIED" ? "#2563eb" : selected.status === "COACH_REASON_MISSING" ? "#dc2626" : "#374151" }}>
                         {STATUS_LABEL[selected.status]}
                       </div>
                     </div>
