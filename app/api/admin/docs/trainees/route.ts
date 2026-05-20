@@ -1,5 +1,6 @@
 // app/api/admin/docs/trainees/route.ts
-// 직무지도원의 담당 훈련생 목록 조회 (문서 뷰어 선택용)
+// 직무지도원의 담당 훈련생 목록 조회
+// Trainee.currentSiteId + TraineePlacement 양쪽 모두 조회
 
 export const runtime = "nodejs";
 
@@ -16,38 +17,39 @@ export async function GET(request: NextRequest) {
 
     const userId = BigInt(coachUserId);
 
-    // 직무지도원의 현장 배정 확인
+    // 직무지도원의 현장 배정
     const assignment = await prisma.siteAssignment.findFirst({
       where: { userId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] } },
       select: { siteId: true },
       orderBy: { assignedAt: "desc" },
     });
 
-    if (!assignment) {
-      return NextResponse.json({ success: true, trainees: [] });
-    }
+    if (!assignment) return NextResponse.json({ success: true, trainees: [] });
 
-    // 해당 현장의 활성 훈련생 조회 (TraineePlacement 기반)
-    const placements = await prisma.traineePlacement.findMany({
-      where: {
-        siteId: assignment.siteId,
-        status: "ACTIVE",
-      },
-      include: {
-        trainee: { select: { id: true, name: true, gender: true, status: true } },
-      },
+    const siteId = assignment.siteId;
+
+    // 방법 1: Trainee.currentSiteId 기반
+    const byCurrentSite = await prisma.trainee.findMany({
+      where: { currentSiteId: siteId, status: { in: ["TRAINING","EMPLOYED"] } },
+      select: { id: true, name: true, gender: true },
     });
 
-    // TraineeStatus: TRAINING | EMPLOYED | DROPOUT | PAUSED
-    const trainees = placements
-      .filter(p => p.trainee.status === "TRAINING")
-      .map(p => ({
-        id:     String(p.trainee.id),
-        name:   p.trainee.name,
-        gender: p.trainee.gender,
-      }));
+    // 방법 2: TraineePlacement 기반 (중복 제거용 id 수집)
+    const placements = await prisma.traineePlacement.findMany({
+      where: { siteId, status: "ACTIVE" },
+      include: { trainee: { select: { id: true, name: true, gender: true, status: true } } },
+    });
+    const byPlacement = placements
+      .filter(p => p.trainee.status === "TRAINING" || p.trainee.status === "EMPLOYED")
+      .map(p => p.trainee);
 
-    return NextResponse.json({ success: true, trainees });
+    // 두 결과 합치고 중복 제거
+    const allMap = new Map<string, { id: string; name: string; gender: string }>();
+    [...byCurrentSite, ...byPlacement].forEach(t => {
+      allMap.set(String(t.id), { id: String(t.id), name: t.name, gender: t.gender });
+    });
+
+    return NextResponse.json({ success: true, trainees: Array.from(allMap.values()) });
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[admin/docs/trainees]", e);
