@@ -204,7 +204,7 @@ export default function AdminDocumentsPage() {
 
   async function onCreateVersion() {
     if (!selectedRunId) return alert("Run을 먼저 선택/생성하세요.");
-    if (!newPdfUrl.trim()) return alert("pdfUrl은 필수입니다.");
+    // pdfUrl은 선택 - 비워두면 jsreport로 자동 생성
 
     let sourceData: any = undefined;
     if (newSourceDataText.trim()) {
@@ -414,7 +414,7 @@ export default function AdminDocumentsPage() {
                   <option value="FINAL">FINAL</option>
                 </select>
               </label>
-              <input value={newPdfUrl} onChange={(e) => setNewPdfUrl(e.target.value)} placeholder="pdfUrl (필수)" style={{ ...inputStyle, flex: 1 }} />
+              <input value={newPdfUrl} onChange={(e) => setNewPdfUrl(e.target.value)} placeholder="pdfUrl (선택 - 비워두면 jsreport 자동 생성)" style={{ ...inputStyle, flex: 1 }} />
             </div>
             <input value={newPdfFileName} onChange={(e) => setNewPdfFileName(e.target.value)} placeholder="pdfFileName (선택)" style={{ ...inputStyle, marginBottom: 8 }} />
             <textarea value={newSourceDataText} onChange={(e) => setNewSourceDataText(e.target.value)} placeholder="sourceData JSON" rows={4}
@@ -444,7 +444,7 @@ export default function AdminDocumentsPage() {
                   <tr key={v.id} style={{ borderBottom: "1px solid #f9f9f9" }}>
                     <td style={{ padding: "10px 12px" }}>v{v.versionNo}</td>
                     <td style={{ padding: "10px 12px" }}><span style={{ ...badge, ...(v.stage === "FINAL" ? badgeBlue : badgeGray) }}>{v.stage}</span></td>
-                    <td style={{ padding: "10px 12px" }}><a href={v.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "#2563eb", textDecoration: "none" }}>열기</a></td>
+                    <td style={{ padding: "10px 12px" }}><a href={`/api/admin/document-versions/${v.id}/pdf`} target="_blank" rel="noreferrer" style={{ color: "#2563eb", textDecoration: "none" }}>열기</a></td>
                     <td style={{ padding: "10px 12px", color: "#9ca3af" }}>{new Date(v.createdAt).toLocaleString()}</td>
                   </tr>
                 ))}
