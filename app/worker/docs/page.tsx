@@ -126,7 +126,7 @@ export default function DocsPage() {
         <div style={s.header}>
           <button onClick={() => router.back()} style={s.backBtn}>←</button>
           <h1 style={s.title}>문서 발송</h1>
-          <div style={{ width: 36 }} />
+          <button onClick={() => router.push("/worker/docs/view")} style={s.viewBtn}>조회</button>
         </div>
 
         {/* 현장 + 수신자 정보 */}
@@ -284,6 +284,7 @@ const s: Record<string, React.CSSProperties> = {
   resultMsg: { fontSize: 14, margin: "0 0 10px", fontWeight: 600 },
   downloadBtn: { width: "100%", padding: "10px", backgroundColor: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer" },
 
+  viewBtn:     { background:"none", border:"1px solid #e5e7eb", borderRadius:8, padding:"6px 12px", fontSize:13, fontWeight:600, color:"#374151", cursor:"pointer" },
   sendBtn: { width: "calc(100% - 32px)", margin: "16px 16px 0", padding: "17px", backgroundColor: "#2563eb", color: "#fff", fontSize: 17, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer" },
 
   noteBox: { margin: "12px 16px 0", padding: "14px 16px", backgroundColor: "#f0f2ff", borderRadius: 12 },

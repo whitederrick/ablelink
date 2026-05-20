@@ -250,7 +250,7 @@ export default function SubscribePage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", backgroundColor: "#f8f9ff" },
+  page: { minHeight: "100dvh", backgroundColor: "#f9fafb" },
   container: { maxWidth: 480, margin: "0 auto", padding: "0 0 40px" },
 
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", backgroundColor: "#fff", borderBottom: "1px solid #eee", position: "sticky", top: 0, zIndex: 10 },
@@ -280,6 +280,6 @@ const s: Record<string, React.CSSProperties> = {
   planFeatureItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#444" },
   subscribeBtn: { width: "100%", padding: "13px", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, transition: "opacity 0.2s" },
 
-  notice: { margin: "16px 16px 0", padding: "14px 16px", backgroundColor: "#f8f9ff", borderRadius: 12 },
+  notice: { margin: "16px 16px 0", padding: "14px 16px", backgroundColor: "#f9fafb", borderRadius: 12 },
   noticeText: { fontSize: 13, color: "#888", margin: 0, lineHeight: 1.8 },
 };

@@ -339,7 +339,7 @@ const s: Record<string, React.CSSProperties> = {
   dayNum: { fontSize: 15, lineHeight: 1 },
   todayDot: { color: "#2563eb", fontSize: 10, marginLeft: 1 },
   statusDot: { width: 6, height: 6, borderRadius: "50%" },
-  checkMark: { fontSize: 10, color: "#2e7d32", fontWeight: 700 },
+  checkMark: { fontSize: 10, color: "#16a34a", fontWeight: 700 },
 
   loadingBox: { display: "flex", justifyContent: "center", padding: "40px 0" },
   spinner: { width: 32, height: 32, border: "3px solid #e5e7eb", borderTop: "3px solid #2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
@@ -351,7 +351,7 @@ const s: Record<string, React.CSSProperties> = {
 
   warningBox: { display: "flex", alignItems: "flex-start", gap: 10, margin: "12px 16px 0", backgroundColor: "#fff8e1", padding: "14px", borderRadius: 12, border: "1px solid #ffe082" },
   warningIcon: { fontSize: 20, flexShrink: 0 },
-  warningTitle: { fontSize: 14, fontWeight: 700, color: "#f57c00", margin: "0 0 2px" },
+  warningTitle: { fontSize: 14, fontWeight: 700, color: "#d97706", margin: "0 0 2px" },
   warningDesc: { fontSize: 12, color: "#888", margin: 0 },
 
   // 모달

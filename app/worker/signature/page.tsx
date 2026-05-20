@@ -289,8 +289,8 @@ export default function SignaturePage() {
           <span style={s.navLabel}>캘린더</span>
         </button>
         <button style={s.navItem} onClick={() => router.push("/worker/signature")}>
-          <span style={{ ...s.navIcon, color: "#2563eb" }}>✍️</span>
-          <span style={{ ...s.navLabel, color: "#2563eb" }}>전자서명</span>
+          <span style={{ ...s.navIcon, color: "#111827" }}>✍️</span>
+          <span style={{ ...s.navLabel, color: "#111827" }}>전자서명</span>
         </button>
         <button style={s.navItem} onClick={() => router.push("/worker/docs")}>
           <span style={s.navIcon}>📄</span>

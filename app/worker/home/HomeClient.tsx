@@ -111,8 +111,10 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
     msg: string;
     confirmLabel?: string;
     cancelLabel?: string;
+    dismissLabel?: string;
     onConfirm: () => void;
     onCancel?: () => void;
+    onDismiss?: () => void;
     variant?: "danger" | "default";
   } | null>(null);
   const [showProfile, setShowProfile] = useState(false);
@@ -282,9 +284,10 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
   async function handleReconfirm() {
     setDialog({
       title: "퇴근 시간 재확인",
-      msg: "선택하신 시점의 위치값과 퇴근 시간이 업데이트됩니다.",
+      msg: "퇴근 시간을 어떻게 처리할까요?",
       confirmLabel: "재확인",
       cancelLabel: "최종마감",
+      dismissLabel: "취소",
       variant: "default",
       onConfirm: async () => {
         setDialog(null);
@@ -307,6 +310,7 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
           onCancel: () => setDialog(null),
         });
       },
+      onDismiss: () => setDialog(null),
     });
   }
 
@@ -548,22 +552,34 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
           <div style={s.dialogBox}>
             <p style={s.dialogTitle}>{dialog.title}</p>
             <p style={s.dialogMsg}>{dialog.msg}</p>
-            <div style={s.dialogBtns}>
-              {dialog.onCancel && (
-                <button style={{ ...s.dialogBtn, ...s.dialogBtnCancel }} onClick={dialog.onCancel}>
-                  {dialog.cancelLabel ?? "취소"}
+            {/* 3버튼(재확인/최종마감/취소)일 때 세로 스택 */}
+            {dialog.onDismiss ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <button style={{ ...s.dialogBtn, ...s.dialogBtnPrimary, width: "100%" }} onClick={dialog.onConfirm}>
+                  {dialog.confirmLabel ?? "확인"}
                 </button>
-              )}
-              <button
-                style={{
-                  ...s.dialogBtn,
-                  ...(dialog.variant === "danger" ? s.dialogBtnDanger : s.dialogBtnPrimary),
-                }}
-                onClick={dialog.onConfirm}
-              >
-                {dialog.confirmLabel ?? "확인"}
-              </button>
-            </div>
+                <button style={{ ...s.dialogBtn, ...s.dialogBtnDanger, width: "100%" }} onClick={dialog.onCancel}>
+                  {dialog.cancelLabel ?? "최종마감"}
+                </button>
+                <button style={{ ...s.dialogBtn, ...s.dialogBtnCancel, width: "100%" }} onClick={dialog.onDismiss}>
+                  {dialog.dismissLabel ?? "취소"}
+                </button>
+              </div>
+            ) : (
+              <div style={s.dialogBtns}>
+                {dialog.onCancel && (
+                  <button style={{ ...s.dialogBtn, ...s.dialogBtnCancel }} onClick={dialog.onCancel}>
+                    {dialog.cancelLabel ?? "취소"}
+                  </button>
+                )}
+                <button
+                  style={{ ...s.dialogBtn, ...(dialog.variant === "danger" ? s.dialogBtnDanger : s.dialogBtnPrimary) }}
+                  onClick={dialog.onConfirm}
+                >
+                  {dialog.confirmLabel ?? "확인"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

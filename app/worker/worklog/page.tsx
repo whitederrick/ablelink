@@ -56,67 +56,247 @@ function defaultTimes(workType: string): { workStart: string; workEnd: string; t
   return { workStart: "09:00", workEnd: "18:00", trainStart: "09:00", trainEnd: "17:00" };
 }
 
-// ─── 시간 입력 컴포넌트 (HH:MM 직접 입력 — type=time 로케일 문제 우회) ───
-function TimeInput({ value, onChange, label }: {
-  value: string; onChange: (v: string) => void; label?: string;
+// ─── 시계 다이얼 피커 ────────────────────────────────────
+// iOS/안드로이드 기본 시계 선택 UI와 동일한 방식:
+// 시 선택 → 자동으로 분 선택으로 전환, 모두 동일한 원형 다이얼
+
+function ClockPicker({ value, onChange, onClose, label }: {
+  value: string; onChange: (v: string) => void; onClose: () => void; label?: string;
 }) {
-  const [hh, mm] = value.split(":").map(v => v ?? "00");
+  const [hStr, mStr] = value.split(":");
+  const [mode, setMode]     = useState<"hour" | "minute">("hour");
+  const [hour, setHour]     = useState(parseInt(hStr ?? "9", 10));
+  const [minute, setMinute] = useState(parseInt(mStr ?? "0", 10));
+  const [manualH, setManualH] = useState(String(parseInt(hStr ?? "9", 10)).padStart(2, "0"));
+  const [manualM, setManualM] = useState(String(parseInt(mStr ?? "0", 10)).padStart(2, "0"));
 
-  function handleHH(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value.replace(/\D/g, "").slice(0, 2);
-    const h = Math.min(23, parseInt(val || "0", 10));
-    onChange(`${String(h).padStart(2, "0")}:${mm}`);
-  }
-  function handleMM(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value.replace(/\D/g, "").slice(0, 2);
-    const m = Math.min(59, parseInt(val || "0", 10));
-    onChange(`${hh}:${String(m).padStart(2, "0")}`);
+  const SIZE = 240;
+  const CX = SIZE / 2;
+  const CY = SIZE / 2;
+  const R_OUTER = 95;
+  const R_INNER = 60;
+  const HAND_OUTER = 80;
+  const HAND_INNER = 48;
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  function draw() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = SIZE * dpr;
+    canvas.height = SIZE * dpr;
+    canvas.style.width  = SIZE + "px";
+    canvas.style.height = SIZE + "px";
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, SIZE, SIZE);
+
+    // 배경 원
+    ctx.fillStyle = "#f3f4f6";
+    ctx.beginPath();
+    ctx.arc(CX, CY, SIZE / 2 - 1, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (mode === "hour") {
+      // 바깥(1~12), 안쪽(0/13~23)
+      const outer = Array.from({length:12}, (_, i) => ({ val: i===0?12:i, idx:i }));
+      const inner = Array.from({length:12}, (_, i) => ({ val: i===0?0:i+12, idx:i }));
+      const isOuter = hour >= 1 && hour <= 12;
+      const selIdx  = isOuter ? (hour===12?0:hour) : (hour===0?0:hour-12);
+      const handR   = isOuter ? HAND_OUTER : HAND_INNER;
+      const ang     = (selIdx/12)*Math.PI*2 - Math.PI/2;
+      const hx = CX + Math.cos(ang)*handR;
+      const hy = CY + Math.sin(ang)*handR;
+
+      // 핸드
+      ctx.strokeStyle="#111827"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(hx,hy); ctx.stroke();
+      ctx.fillStyle="#111827";
+      ctx.beginPath(); ctx.arc(CX,CY,5,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(hx,hy,20,0,Math.PI*2); ctx.fill();
+
+      // 바깥 숫자
+      outer.forEach(({val,idx}) => {
+        const a=(idx/12)*Math.PI*2-Math.PI/2;
+        const nx=CX+Math.cos(a)*R_OUTER, ny=CY+Math.sin(a)*R_OUTER;
+        const sel=isOuter&&idx===selIdx;
+        ctx.font=`${sel?"700":"400"} 15px -apple-system,sans-serif`;
+        ctx.fillStyle=sel?"#fff":"#374151";
+        ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillText(String(val),nx,ny);
+      });
+
+      // 안쪽 숫자
+      inner.forEach(({val,idx}) => {
+        const a=(idx/12)*Math.PI*2-Math.PI/2;
+        const nx=CX+Math.cos(a)*R_INNER, ny=CY+Math.sin(a)*R_INNER;
+        const sel=!isOuter&&idx===selIdx;
+        if(sel){ ctx.fillStyle="#111827"; ctx.beginPath(); ctx.arc(nx,ny,15,0,Math.PI*2); ctx.fill(); }
+        ctx.font=`${sel?"700":"400"} 11px -apple-system,sans-serif`;
+        ctx.fillStyle=sel?"#fff":"#9ca3af";
+        ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillText(String(val),nx,ny);
+      });
+
+    } else {
+      // 분 다이얼: 5분 단위 12개
+      const mins=Array.from({length:12},(_,i)=>i*5);
+      const selIdx=Math.round(minute/5)%12;
+      const ang=(selIdx/12)*Math.PI*2-Math.PI/2;
+      const hx=CX+Math.cos(ang)*HAND_OUTER;
+      const hy=CY+Math.sin(ang)*HAND_OUTER;
+
+      ctx.strokeStyle="#111827"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(hx,hy); ctx.stroke();
+      ctx.fillStyle="#111827";
+      ctx.beginPath(); ctx.arc(CX,CY,5,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(hx,hy,20,0,Math.PI*2); ctx.fill();
+
+      mins.forEach((val,i) => {
+        const a=(i/12)*Math.PI*2-Math.PI/2;
+        const nx=CX+Math.cos(a)*R_OUTER, ny=CY+Math.sin(a)*R_OUTER;
+        const sel=i===selIdx;
+        ctx.font=`${sel?"700":"400"} 14px -apple-system,sans-serif`;
+        ctx.fillStyle=sel?"#fff":"#374151";
+        ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillText(String(val).padStart(2,"0"),nx,ny);
+      });
+
+      // 5분 단위 아닌 경우 중앙에 현재 분 표시
+      if(minute%5!==0){
+        ctx.font="600 14px -apple-system,sans-serif";
+        ctx.fillStyle="#6b7280";
+        ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillText(String(minute).padStart(2,"0"),CX,CY);
+      }
+    }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: 38,
-    textAlign: "center",
-    border: "none",
-    outline: "none",
-    background: "transparent",
-    fontSize: 22,
-    fontWeight: 800,
-    color: "#111827",
-    fontVariantNumeric: "tabular-nums",
-    letterSpacing: "-0.5px",
-    padding: 0,
-  };
+  useEffect(()=>{ draw(); }, [mode, hour, minute]);
+
+  function interact(clientX: number, clientY: number) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const dx = clientX - rect.left - CX;
+    const dy = clientY - rect.top  - CY;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+    if (dist < 15) return;
+
+    let angle = Math.atan2(dy,dx)+Math.PI/2;
+    if(angle<0) angle+=Math.PI*2;
+    const idx = Math.round(angle/(Math.PI*2/12))%12;
+
+    if(mode==="hour"){
+      const h = dist<72 ? (idx===0?0:idx+12) : (idx===0?12:idx);
+      setHour(h); setManualH(String(h).padStart(2,"0"));
+      setTimeout(()=>setMode("minute"), 200);
+    } else {
+      const m = idx*5;
+      setMinute(m); setManualM(String(m).padStart(2,"0"));
+    }
+  }
+
+  function applyH(v:string){ const h=Math.min(23,Math.max(0,parseInt(v.replace(/\D/g,"")||"0",10))); setHour(h); setManualH(String(h).padStart(2,"0")); }
+  function applyM(v:string){ const m=Math.min(59,Math.max(0,parseInt(v.replace(/\D/g,"")||"0",10))); setMinute(m); setManualM(String(m).padStart(2,"0")); }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-      {label && (
-        <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>
-          {label}
-        </span>
-      )}
-      <div style={{ display: "flex", alignItems: "center", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "8px 10px", gap: 2 }}>
-        <input
-          type="text"
-          inputMode="numeric"
-          value={hh}
-          onChange={handleHH}
-          style={inputStyle}
-          maxLength={2}
-        />
-        <span style={{ fontSize: 20, fontWeight: 700, color: "#9ca3af", lineHeight: 1 }}>:</span>
-        <input
-          type="text"
-          inputMode="numeric"
-          value={mm}
-          onChange={handleMM}
-          style={inputStyle}
-          maxLength={2}
-        />
+    <div style={cp.overlay} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={cp.modal}>
+        {/* 헤더 */}
+        <div style={cp.header}>
+          <span style={cp.title}>{label??"시간 선택"}</span>
+          <button onClick={onClose} style={cp.closeBtn}>✕</button>
+        </div>
+
+        {/* 시:분 수동 입력 디스플레이 */}
+        <div style={cp.display}>
+          <div style={cp.digitWrap}>
+            <span style={cp.unit}>시</span>
+            <input
+              style={{...cp.digit, background:mode==="hour"?"#111827":"#f3f4f6", color:mode==="hour"?"#fff":"#111827"}}
+              value={manualH} inputMode="numeric" maxLength={2}
+              onChange={e=>setManualH(e.target.value)}
+              onBlur={e=>applyH(e.target.value)}
+              onFocus={()=>setMode("hour")}
+            />
+          </div>
+          <span style={cp.colon}>:</span>
+          <div style={cp.digitWrap}>
+            <span style={cp.unit}>분</span>
+            <input
+              style={{...cp.digit, background:mode==="minute"?"#111827":"#f3f4f6", color:mode==="minute"?"#fff":"#111827"}}
+              value={manualM} inputMode="numeric" maxLength={2}
+              onChange={e=>setManualM(e.target.value)}
+              onBlur={e=>applyM(e.target.value)}
+              onFocus={()=>setMode("minute")}
+            />
+          </div>
+        </div>
+
+        {/* 모드 힌트 */}
+        <p style={cp.hint}>
+          {mode==="hour" ? "시를 선택하면 분으로 이동합니다" : "분을 선택하세요"}
+        </p>
+
+        {/* 시계 다이얼 */}
+        <div style={{display:"flex",justifyContent:"center",padding:"4px 0 16px"}}>
+          <canvas
+            ref={canvasRef}
+            onClick={e=>interact(e.clientX,e.clientY)}
+            onTouchEnd={e=>{e.preventDefault(); const t=e.changedTouches[0]; if(t)interact(t.clientX,t.clientY);}}
+            style={{cursor:"pointer",borderRadius:"50%",touchAction:"none",display:"block"}}
+          />
+        </div>
+
+        {/* 확인 */}
+        <div style={{padding:"0 20px 20px"}}>
+          <button
+            onClick={()=>{onChange(`${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`);onClose();}}
+            style={cp.confirm}
+          >확인</button>
+        </div>
       </div>
     </div>
   );
 }
 
+const cp: Record<string, React.CSSProperties> = {
+  overlay:   {position:"fixed",inset:0,background:"rgba(0,0,0,0.50)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:20},
+  modal:     {background:"#fff",borderRadius:20,width:"100%",maxWidth:320,boxShadow:"0 20px 60px rgba(0,0,0,0.20)"},
+  header:    {display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 18px 10px",borderBottom:"1px solid #f3f4f6"},
+  title:     {fontSize:15,fontWeight:700,color:"#111827"},
+  closeBtn:  {background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#9ca3af",lineHeight:1},
+  display:   {display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"16px 0 8px"},
+  digitWrap: {display:"flex",flexDirection:"column" as const,alignItems:"center",gap:3},
+  unit:      {fontSize:10,color:"#9ca3af",fontWeight:600,letterSpacing:"0.5px"},
+  digit:     {width:64,height:48,textAlign:"center" as const,border:"none",borderRadius:10,fontSize:28,fontWeight:800,outline:"none",cursor:"pointer",fontVariantNumeric:"tabular-nums",transition:"background 0.15s,color 0.15s"},
+  colon:     {fontSize:26,fontWeight:700,color:"#d1d5db",marginTop:16},
+  hint:      {textAlign:"center" as const,fontSize:11,color:"#9ca3af",margin:"0 0 4px",fontWeight:500},
+  confirm:   {width:"100%",padding:"13px",background:"#111827",color:"#fff",border:"none",borderRadius:12,fontSize:15,fontWeight:700,cursor:"pointer"},
+};
+
+// ─── 시간 버튼 (탭 → 시계 피커) ─────────────────────────
+function TimeInput({ value, onChange, label }: {
+  value: string; onChange: (v: string) => void; label?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hh, mm] = value.split(":");
+  return (
+    <>
+      <div style={{display:"flex",flexDirection:"column" as const,alignItems:"center",gap:6}}>
+        {label && <span style={{fontSize:11,color:"#9ca3af",fontWeight:600,textTransform:"uppercase" as const,letterSpacing:"0.5px"}}>{label}</span>}
+        <button
+          onClick={()=>setOpen(true)}
+          style={{background:"#f3f4f6",border:"1px solid #e5e7eb",borderRadius:10,padding:"10px 14px",fontSize:22,fontWeight:800,color:"#111827",cursor:"pointer",fontVariantNumeric:"tabular-nums",letterSpacing:"-0.5px",minWidth:82,textAlign:"center" as const}}
+        >{hh}:{mm}</button>
+      </div>
+      {open && <ClockPicker value={value} onChange={v=>{onChange(v);setOpen(false);}} onClose={()=>setOpen(false)} label={label} />}
+    </>
+  );
+}
 // ─── 메인 컴포넌트 ─────────────────────────────────────────
 function WorklogForm() {
   const router = useRouter();
