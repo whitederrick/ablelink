@@ -50,14 +50,14 @@ export default function AdminSignaturePage() {
 
   async function save(){
     const c=canvasRef.current!; setSaving(true);
-    c.toBlob(async blob=>{
-      if(!blob){ setSaving(false); return; }
+    const blob = await resizeSignature(c, 600, 200);
+    {
       const fd=new FormData(); fd.append("signature",blob,"sig.png");
       const d=await fetch("/api/admin/signature",{method:"POST",body:fd}).then(r=>r.json());
       setSaving(false);
       if(d.success){ setSavedUrl(d.signatureUrl); setMode("view"); flash("서명이 저장되었습니다."); }
       else flash(d.message||"저장 실패");
-    },"image/png");
+    setSaving(false);
   }
 
   async function del(){

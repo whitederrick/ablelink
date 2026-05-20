@@ -104,16 +104,16 @@ export default function SignPage() {
   async function submit() {
     const canvas = canvasRef.current!;
     setSaving(true);
-    canvas.toBlob(async blob => {
-      if (!blob) { setSaving(false); alert("서명 이미지 생성 실패"); return; }
+    try {
+      const blob = await resizeSignature(canvas, 600, 200);
       const fd = new FormData();
       fd.append("signature", blob, "signature.png");
       const res = await fetch(`/api/sign/${token}`, { method: "POST", body: fd });
       const d = await res.json();
-      setSaving(false);
       if (d.success) setPhase("done");
       else alert(d.message || "저장 실패");
-    }, "image/png");
+    } catch { alert("서명 이미지 생성 실패"); }
+    finally { setSaving(false); }
   }
 
   if (phase === "loading") return (

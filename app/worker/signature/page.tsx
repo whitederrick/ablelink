@@ -120,9 +120,8 @@ export default function SignaturePage() {
 
     setSaving(true);
     try {
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(b => b ? resolve(b) : reject(new Error("변환 실패")), "image/png", 0.95);
-      });
+      // 항상 600x200px으로 리사이즈해서 저장 (크기 통일)
+      const blob = await resizeSignature(canvas, 600, 200);
 
       const formData = new FormData();
       formData.append("signature", blob, "signature.png");
