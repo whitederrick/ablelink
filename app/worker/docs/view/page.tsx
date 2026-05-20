@@ -54,14 +54,21 @@ function DocsViewInner() {
   const router = useRouter();
   const def = defaultPeriod();
 
-  const [docType,     setDocType]     = useState<DocType>("attendance-sheet");
-  const [periodStart, setPeriodStart] = useState(def.start);
-  const [periodEnd,   setPeriodEnd]   = useState(def.end);
-  const [mode,        setMode]        = useState<"select"|"view">("select");
-  const [iframeKey,   setIframeKey]   = useState(0);
+  const [docType,        setDocType]        = useState<DocType>("attendance-sheet");
+  const [periodStart,    setPeriodStart]    = useState(def.start);
+  const [periodEnd,      setPeriodEnd]      = useState(def.end);
+  const [selectedTrainee,setSelectedTrainee]= useState("");
+  const [signToken,      setSignToken]      = useState("");
+  const [mode,           setMode]           = useState<"select"|"view">("select");
+  const [iframeKey,      setIframeKey]      = useState(0);
 
-  function previewUrl(fmt: "html"|"pdf" = "html") {
-    return `/api/worker/docs/preview?docType=${docType}&periodStart=${periodStart}&periodEnd=${periodEnd}&format=${fmt}`;
+  function previewUrl() {
+    const p = new URLSearchParams({
+      docType, periodStart, periodEnd,
+      ...(selectedTrainee ? { traineeId: selectedTrainee } : {}),
+      ...(signToken       ? { signToken }                  : {}),
+    });
+    return `/api/worker/docs/preview?${p.toString()}`;
   }
 
   function handleView() {
@@ -70,7 +77,7 @@ function DocsViewInner() {
   }
 
   function handleDownload() {
-    window.open(previewUrl("pdf"), "_blank");
+    window.open(previewUrl(), "_blank");
   }
 
   // ── 문서 선택 화면 ─────────────────────────────────────
@@ -158,7 +165,7 @@ function DocsViewInner() {
       <div style={{ flex:1, overflow:"hidden", background:"#e5e7eb" }}>
         <iframe
           key={iframeKey}
-          src={previewUrl("html")}
+          src={previewUrl()}
           style={{ width:"100%", height:"100%", border:"none" }}
           title="문서 미리보기"
         />

@@ -76,9 +76,13 @@ export async function POST(request: NextRequest) {
 
     const signatures: SignatureSet = {
       coachImageUrl:          user?.signatureUrl          || null,
+      coachName:              user?.userName              || "",
       govAgentImageUrl:       (assignment.assignedByAdmin as any)?.signatureUrl || null,
+      govAgentName:           (assignment.assignedByAdmin as any)?.displayName  || "",
       companyManagerImageUrl: companyManagerSignatureUrl,
+      companyManagerName:     companyManagerSignerName    || "",
       agencyAgentImageUrl:    (assignment.assignedByAdmin as any)?.signatureUrl || null,
+      agencyAgentName:        (assignment.assignedByAdmin as any)?.displayName  || "",
     };
 
     // ── 문서별 데이터 빌드 & PDF 생성 ────────────────────

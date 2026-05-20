@@ -5,98 +5,97 @@
 export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
-import { getAdminSession } from "@/lib/adminSession";
+import { requireAdminSession } from "@/lib/adminScope";
 import { prisma } from "@/lib/prisma";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const BUCKET = "signatures";
 
-// ── 조회 ─────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
-  const session = await getAdminSession(request);
-  if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
-
-  const admin = await prisma.adminUser.findUnique({
-    where: { id: BigInt(session.adminId) },
-    select: { signatureUrl: true, displayName: true },
-  });
-
-  return NextResponse.json({ success: true, signatureUrl: admin?.signatureUrl ?? null, displayName: admin?.displayName });
+  try {
+    const scope = await requireAdminSession(request);
+    const admin = await prisma.adminUser.findUnique({
+      where: { id: scope.userId },
+      select: { signatureUrl: true, displayName: true } as any,
+    });
+    return NextResponse.json({ success: true, signatureUrl: (admin as any)?.signatureUrl ?? null, displayName: (admin as any)?.displayName });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
+  }
 }
 
-// ── 저장 ─────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
-  const session = await getAdminSession(request);
-  if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
+  try {
+    const scope = await requireAdminSession(request);
+    const formData = await request.formData();
+    const imageBlob = formData.get("signature") as Blob | null;
 
-  const formData = await request.formData();
-  const imageBlob = formData.get("signature") as Blob | null;
+    if (!imageBlob || imageBlob.size === 0)
+      return NextResponse.json({ success: false, message: "서명 이미지가 없습니다." }, { status: 400 });
+    if (imageBlob.size > 500 * 1024)
+      return NextResponse.json({ success: false, message: "서명이 너무 큽니다. (최대 500KB)" }, { status: 400 });
 
-  if (!imageBlob || imageBlob.size === 0)
-    return NextResponse.json({ success: false, message: "서명 이미지가 없습니다." }, { status: 400 });
-  if (imageBlob.size > 500 * 1024)
-    return NextResponse.json({ success: false, message: "서명이 너무 큽니다. (최대 500KB)" }, { status: 400 });
+    // 기존 서명 삭제
+    const existing = await prisma.adminUser.findUnique({
+      where: { id: scope.userId },
+      select: { signatureUrl: true } as any,
+    });
+    if ((existing as any)?.signatureUrl) {
+      const oldPath = extractPath((existing as any).signatureUrl);
+      if (oldPath) await deleteStorage(oldPath);
+    }
 
-  const adminId = session.adminId;
-  const fileName = `admin/${adminId}/signature_${Date.now()}.png`;
+    const fileName = `admin/${scope.userId}/signature_${Date.now()}.png`;
+    const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${fileName}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        "Content-Type": "image/png",
+        "x-upsert": "true",
+      },
+      body: imageBlob,
+    });
 
-  // 기존 서명 삭제
-  const existing = await prisma.adminUser.findUnique({
-    where: { id: BigInt(adminId) },
-    select: { signatureUrl: true },
-  });
-  if (existing?.signatureUrl) {
-    const oldPath = extractPath(existing.signatureUrl);
-    if (oldPath) await deleteStorage(oldPath);
+    if (!uploadRes.ok) {
+      console.error("[admin/signature] 업로드 실패:", await uploadRes.text());
+      return NextResponse.json({ success: false, message: "서명 저장 실패" }, { status: 500 });
+    }
+
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
+    await prisma.adminUser.update({
+      where: { id: scope.userId },
+      data: { signatureUrl: publicUrl } as any,
+    });
+
+    return NextResponse.json({ success: true, signatureUrl: publicUrl });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
-
-  // Supabase Storage 업로드
-  const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${fileName}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-      "Content-Type": "image/png",
-      "x-upsert": "true",
-    },
-    body: imageBlob,
-  });
-
-  if (!uploadRes.ok) {
-    console.error("[admin/signature] 업로드 실패:", await uploadRes.text());
-    return NextResponse.json({ success: false, message: "서명 저장 실패" }, { status: 500 });
-  }
-
-  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
-
-  await prisma.adminUser.update({
-    where: { id: BigInt(adminId) },
-    data: { signatureUrl: publicUrl } as any,
-  });
-
-  return NextResponse.json({ success: true, signatureUrl: publicUrl });
 }
 
-// ── 삭제 ─────────────────────────────────────────────────
 export async function DELETE(request: NextRequest) {
-  const session = await getAdminSession(request);
-  if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
-
-  const admin = await prisma.adminUser.findUnique({
-    where: { id: BigInt(session.adminId) },
-    select: { signatureUrl: true },
-  });
-  if (admin?.signatureUrl) {
-    const path = extractPath(admin.signatureUrl);
-    if (path) await deleteStorage(path);
+  try {
+    const scope = await requireAdminSession(request);
+    const admin = await prisma.adminUser.findUnique({
+      where: { id: scope.userId },
+      select: { signatureUrl: true } as any,
+    });
+    if ((admin as any)?.signatureUrl) {
+      const path = extractPath((admin as any).signatureUrl);
+      if (path) await deleteStorage(path);
+    }
+    await prisma.adminUser.update({
+      where: { id: scope.userId },
+      data: { signatureUrl: null } as any,
+    });
+    return NextResponse.json({ success: true });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
-
-  await prisma.adminUser.update({
-    where: { id: BigInt(session.adminId) },
-    data: { signatureUrl: null } as any,
-  });
-
-  return NextResponse.json({ success: true });
 }
 
 function extractPath(url: string): string | null {

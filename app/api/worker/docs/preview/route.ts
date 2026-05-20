@@ -1,325 +1,222 @@
 // app/api/worker/docs/preview/route.ts
-// 문서 미리보기 API — HTML 반환 (브라우저 렌더링용)
-// GET ?docType=...&periodStart=...&periodEnd=...&traineeId=...&format=html|pdf
+// jsreport에서 PDF를 받아 브라우저로 스트리밍 (실제 양식 그대로 표시)
 
 export const runtime = "nodejs";
 
-import { NextResponse, NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import {
+  generatePdf,
+  buildAttendanceSheetData,
+  buildTrainingDailyLogData,
+  buildTraineeFinalEvalData,
+  buildAdaptationDailyLogData,
+  buildAdaptationFinalEvalData,
+  type DocType, type SignatureSet,
+} from "@/lib/pdfGenerator";
 
-function fmt(d: Date): string {
+function fmtHHMM(d: Date): string {
   const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
   return `${String(kst.getUTCHours()).padStart(2,"0")}:${String(kst.getUTCMinutes()).padStart(2,"0")}`;
 }
+function fmtPeriod(s: string, e: string) {
+  return `${s.replace(/-/g,".")} ~ ${e.replace(/-/g,".")}`;
+}
 function defaultPeriod() {
-  const n = new Date();
-  const y = n.getFullYear(), m = String(n.getMonth()+1).padStart(2,"0");
+  const n = new Date(), y = n.getFullYear(), m = String(n.getMonth()+1).padStart(2,"0");
   const last = new Date(y, n.getMonth()+1, 0).getDate();
   return { start:`${y}-${m}-01`, end:`${y}-${m}-${String(last).padStart(2,"0")}` };
 }
-function fmtYMD(s: string) { return s.replace(/-/g,"."); }
-function weekDay(s: string) { return ["일","월","화","수","목","금","토"][new Date(s).getDay()]; }
-
-// ── 공통 CSS ─────────────────────────────────────────────
-const BASE_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Noto Sans KR', sans-serif; color: #000; background: #f5f5f5; padding: 20px; }
-  .doc-page { background: #fff; width: 210mm; margin: 0 auto; padding: 15mm; box-shadow: 0 2px 12px rgba(0,0,0,0.15); min-height: 297mm; }
-  .doc-title { text-align: center; font-size: 18px; font-weight: 900; margin-bottom: 8mm; letter-spacing: 4px; }
-  table { border-collapse: collapse; width: 100%; }
-  td, th { border: 1px solid #000; padding: 3px 5px; font-size: 11px; vertical-align: middle; }
-  th { font-weight: 700; text-align: center; background: #f8f8f8; }
-  .center { text-align: center; }
-  .meta-table td { height: 24px; }
-  .meta-label { font-weight: 700; background: #f0f0f0; width: 80px; text-align: center; }
-  .sig-area { margin-top: 8mm; display: flex; justify-content: flex-end; gap: 20px; font-size: 11px; }
-  .sig-box { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  .sig-line { width: 60px; height: 40px; border: 1px solid #000; }
-  @media print { body { background: #fff; padding: 0; } .doc-page { box-shadow: none; } }
-`;
-
-// ── 출근부 HTML ──────────────────────────────────────────
-function buildAttendanceHTML(data: any): string {
-  const rows = data.rows as any[];
-  const tableRows = rows.map(r => `
-    <tr>
-      <td class="center">${fmtYMD(r.date)}</td>
-      <td class="center">${r.date ? weekDay(r.date) : ""}</td>
-      <td class="center">${r.startTime ?? "-"}</td>
-      <td class="center">${r.endTime ?? "-"}</td>
-      <td class="center">${r.startTime && r.endTime ? calcHours(r.startTime, r.endTime) : "-"}</td>
-      <td class="center">${r.isFinalClosed ? "✓" : ""}</td>
-      <td></td>
-    </tr>`).join("");
-
-  const workDays = rows.filter(r => r.startTime).length;
-  const totalH = rows.filter(r => r.startTime && r.endTime)
-    .reduce((s,r) => s + parseHours(r.startTime, r.endTime), 0);
-
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${BASE_CSS}
-    .main-table td { height: 22px; }
-  </style></head><body><div class="doc-page">
-    <div class="doc-title">출 근 부</div>
-    <table class="meta-table" style="margin-bottom:6mm">
-      <tr>
-        <td class="meta-label">현장명</td><td>${data.site}</td>
-        <td class="meta-label">기간</td><td>${fmtYMD(data.period.start)} ~ ${fmtYMD(data.period.end)}</td>
-      </tr>
-      <tr>
-        <td class="meta-label">출근일수</td><td>${workDays}일</td>
-        <td class="meta-label">총 근무시간</td><td>${totalH.toFixed(1)}H</td>
-      </tr>
-    </table>
-    <table class="main-table">
-      <thead><tr>
-        <th style="width:22mm">날짜</th><th style="width:10mm">요일</th>
-        <th style="width:18mm">출근</th><th style="width:18mm">퇴근</th>
-        <th style="width:18mm">근무시간</th><th style="width:14mm">확정</th>
-        <th>비고</th>
-      </tr></thead>
-      <tbody>${tableRows}</tbody>
-      <tfoot><tr>
-        <td colspan="4" class="center" style="font-weight:700">합계</td>
-        <td class="center" style="font-weight:700">${totalH.toFixed(1)}H</td>
-        <td colspan="2"></td>
-      </tr></tfoot>
-    </table>
-    <div class="sig-area">
-      <div class="sig-box"><div class="sig-line"></div><div>직무지도원</div></div>
-      <div class="sig-box"><div class="sig-line"></div><div>확인자</div></div>
-    </div>
-  </div></body></html>`;
+function scoreLabel(score?: number|null) {
+  if (!score) return "";
+  return ({1:"매우못함",2:"못함",3:"보통",4:"잘함",5:"매우잘함"} as any)[score] || String(score);
 }
+function defaultScores() { return Array.from({length:5}, ()=>({initial:"",final:""})); }
 
-// ── 훈련일지 HTML ────────────────────────────────────────
-function buildTrainingLogHTML(data: any): string {
-  const rows = data.rows as any[];
-
-  const tableRows = rows.map(r => `
-    <tr>
-      <td class="center">${fmtYMD(r.date)}<br/>(${weekDay(r.date)})</td>
-      <td class="center">${r.traineeName}</td>
-      <td class="center">${r.trainingType === "PRE" ? "사전" : "현장"}</td>
-      <td class="center">${r.isCompleted ? "출석" : (r.evaluation ?? "-")}</td>
-      <td class="center">${r.totalTime}H</td>
-      <td class="center">${r.taskScore !== null ? scoreStr(r.taskScore) : "-"}</td>
-      <td style="padding:4px 6px; font-size:10px; line-height:1.5">${r.content || "-"}</td>
-    </tr>`).join("");
-
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${BASE_CSS}
-    .main-table td { height: auto; min-height: 28px; }
-    .main-table tr td:last-child { min-height: 50px; }
-  </style></head><body><div class="doc-page">
-    <div class="doc-title">지원고용 훈련일지</div>
-    <table class="meta-table" style="margin-bottom:6mm">
-      <tr>
-        <td class="meta-label">현장명</td><td colspan="3">${data.site}</td>
-      </tr>
-      <tr>
-        <td class="meta-label">기간</td><td>${fmtYMD(data.period.start)} ~ ${fmtYMD(data.period.end)}</td>
-        <td class="meta-label">총 인정시간</td><td>${data.summary.totalTime}H</td>
-      </tr>
-      <tr>
-        <td class="meta-label">작성 일지</td><td>${data.summary.totalLogs}건</td>
-        <td class="meta-label">완료</td><td>${data.summary.completedLogs}건</td>
-      </tr>
-    </table>
-    <table class="main-table">
-      <thead><tr>
-        <th style="width:20mm">날짜</th>
-        <th style="width:16mm">훈련생</th>
-        <th style="width:12mm">구분</th>
-        <th style="width:14mm">출결</th>
-        <th style="width:16mm">인정시간</th>
-        <th style="width:18mm">과제점수</th>
-        <th>지도내용</th>
-      </tr></thead>
-      <tbody>${tableRows}</tbody>
-    </table>
-    <div class="sig-area">
-      <div class="sig-box"><div class="sig-line"></div><div>직무지도원</div></div>
-      <div class="sig-box"><div class="sig-line"></div><div>확인자</div></div>
-    </div>
-  </div></body></html>`;
-}
-
-// ── 종합평가 HTML (훈련생/적응지도 공통) ────────────────
-function buildEvalHTML(data: any, title: string): string {
-  const rows = data.rows as any[];
-  const tableRows = rows.map(r => `
-    <tr>
-      <td class="center">${r.traineeName}</td>
-      <td class="center">${r.traineeGender === "M" ? "남" : "여"}</td>
-      <td class="center">${r.logCount}일</td>
-      <td class="center">${r.completedCount}일</td>
-      <td class="center">${r.totalTime}H</td>
-      <td class="center">${r.avgTaskScore !== null ? scoreStr(r.avgTaskScore) : "-"}</td>
-      <td class="center" style="font-weight:700;color:${r.completionRate>=80?"#166534":r.completionRate>=50?"#92400e":"#991b1b"}">${r.completionRate}%</td>
-      <td style="padding:3px 5px;font-size:10px">${r.evaluations?.join(", ") || "-"}</td>
-    </tr>`).join("");
-
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${BASE_CSS}
-    .main-table td { height: 26px; }
-  </style></head><body><div class="doc-page">
-    <div class="doc-title">${title}</div>
-    <table class="meta-table" style="margin-bottom:6mm">
-      <tr>
-        <td class="meta-label">현장명</td><td>${data.site}</td>
-        <td class="meta-label">기간</td><td>${fmtYMD(data.period.start)} ~ ${fmtYMD(data.period.end)}</td>
-      </tr>
-      <tr>
-        <td class="meta-label">훈련생 수</td><td>${data.summary.traineeCount}명</td>
-        <td class="meta-label">총 인정시간</td><td>${data.summary.totalTime}H</td>
-      </tr>
-    </table>
-    <table class="main-table">
-      <thead><tr>
-        <th style="width:20mm">훈련생명</th>
-        <th style="width:12mm">성별</th>
-        <th style="width:14mm">지도일수</th>
-        <th style="width:14mm">완료일수</th>
-        <th style="width:16mm">인정시간</th>
-        <th style="width:22mm">평균 과제점수</th>
-        <th style="width:14mm">완료율</th>
-        <th>수행률 기록</th>
-      </tr></thead>
-      <tbody>${tableRows}</tbody>
-    </table>
-    <div class="sig-area">
-      <div class="sig-box"><div class="sig-line"></div><div>직무지도원</div></div>
-      <div class="sig-box"><div class="sig-line"></div><div>확인자</div></div>
-    </div>
-  </div></body></html>`;
-}
-
-// ── 적응지도 일지 HTML ───────────────────────────────────
-function buildAdaptLogHTML(data: any): string {
-  const rows = data.rows as any[];
-  const tableRows = rows.map(r => `
-    <tr>
-      <td class="center">${fmtYMD(r.date)}<br/>(${weekDay(r.date)})</td>
-      <td class="center">${r.traineeName}</td>
-      <td class="center">${r.totalTime}H</td>
-      <td class="center">${r.isCompleted ? "완료" : "임시"}</td>
-      <td class="center">${r.taskScore !== null ? scoreStr(r.taskScore) : "-"}</td>
-      <td style="padding:4px 6px; font-size:10px; line-height:1.5">${r.content || "-"}</td>
-    </tr>`).join("");
-
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${BASE_CSS}
-    .main-table td { height: auto; min-height: 28px; }
-  </style></head><body><div class="doc-page">
-    <div class="doc-title">취업 후 적응지도 일지</div>
-    <table class="meta-table" style="margin-bottom:6mm">
-      <tr>
-        <td class="meta-label">현장명</td><td>${data.site}</td>
-        <td class="meta-label">기간</td><td>${fmtYMD(data.period.start)} ~ ${fmtYMD(data.period.end)}</td>
-      </tr>
-      <tr>
-        <td class="meta-label">총 일지</td><td>${data.summary.totalLogs}건</td>
-        <td class="meta-label">총 인정시간</td><td>${data.summary.totalTime}H</td>
-      </tr>
-    </table>
-    <table class="main-table">
-      <thead><tr>
-        <th style="width:20mm">날짜</th>
-        <th style="width:18mm">훈련생</th>
-        <th style="width:16mm">인정시간</th>
-        <th style="width:14mm">상태</th>
-        <th style="width:18mm">과제점수</th>
-        <th>지도내용</th>
-      </tr></thead>
-      <tbody>${tableRows}</tbody>
-    </table>
-    <div class="sig-area">
-      <div class="sig-box"><div class="sig-line"></div><div>직무지도원</div></div>
-      <div class="sig-box"><div class="sig-line"></div><div>확인자</div></div>
-    </div>
-  </div></body></html>`;
-}
-
-// ── 유틸 ────────────────────────────────────────────────
-function calcHours(start: string, end: string): string {
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  const diff = (eh*60+em) - (sh*60+sm);
-  return diff > 0 ? `${(diff/60).toFixed(1)}H` : "-";
-}
-function parseHours(start: string, end: string): number {
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  const diff = (eh*60+em) - (sh*60+sm);
-  return diff > 0 ? diff/60 : 0;
-}
-function scoreStr(n: number): string {
-  const labels = ["","매우못함","못함","보통","잘함","매우잘함"];
-  const idx = Math.round(n);
-  return labels[idx] ? `${n}점 (${labels[idx]})` : `${n}점`;
-}
-
-// ── 메인 핸들러 ─────────────────────────────────────────
 export async function GET(request: NextRequest) {
   try {
     const session = await getWorkerSessionFromReq(request);
     if (!session) return new Response("Unauthorized", { status: 401 });
 
     const { searchParams } = new URL(request.url);
-    const docType   = searchParams.get("docType") ?? "attendance-sheet";
-    const def       = defaultPeriod();
-    const startStr  = searchParams.get("periodStart") || def.start;
-    const endStr    = searchParams.get("periodEnd")   || def.end;
-    const format    = searchParams.get("format") ?? "html"; // html | pdf
+    const docType   = (searchParams.get("docType") ?? "attendance-sheet") as DocType;
+    const traineeId = searchParams.get("traineeId") ?? "";
+    const signToken = searchParams.get("signToken") ?? "";
+    const def = defaultPeriod();
+    const startStr = searchParams.get("periodStart") || def.start;
+    const endStr   = searchParams.get("periodEnd")   || def.end;
 
-    // 조회 API 재사용
-    const viewUrl = new URL(`/api/worker/docs/view`, request.url);
-    viewUrl.searchParams.set("docType", docType);
-    viewUrl.searchParams.set("periodStart", startStr);
-    viewUrl.searchParams.set("periodEnd", endStr);
+    const userId = BigInt(session.userId);
 
-    const viewRes = await fetch(viewUrl.toString(), {
-      headers: { cookie: request.headers.get("cookie") ?? "" },
+    // 현장 배정 + 에이전시 관리자(govAgent) 정보
+    const assignment = await prisma.siteAssignment.findFirst({
+      where: { userId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] } },
+      include: {
+        site: true,
+        assignedByAdmin: { select: { signatureUrl: true, displayName: true } },
+      },
+      orderBy: { assignedAt: "desc" },
     });
-    const data = await viewRes.json();
+    if (!assignment?.site) return new Response("배정된 현장이 없습니다.", { status: 404 });
 
-    if (!data.success) {
-      return new Response(`<html><body><p style="padding:20px;color:red">${data.message}</p></body></html>`, {
-        headers: { "Content-Type": "text/html; charset=utf-8" }
+    // 직무지도원 정보
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { userName: true, phoneNumber: true, signatureUrl: true, loginId: true },
+    });
+
+    // 사업체담당자 즉석 서명 확인
+    let companyManagerSignatureUrl: string|null = null;
+    let companyManagerSignerName = "";
+    if (signToken) {
+      const tokenRec = await (prisma as any).siteSignToken.findUnique({
+        where: { token: signToken },
+        select: { signatureUrl: true, usedAt: true, signRole: true, signerName: true },
       });
-    }
-
-    // HTML 생성
-    let html = "";
-    if (docType === "attendance-sheet")    html = buildAttendanceHTML(data);
-    else if (docType === "training-daily-log")   html = buildTrainingLogHTML(data);
-    else if (docType === "trainee-final-eval")    html = buildEvalHTML(data, "훈련생 종합 평가기록부");
-    else if (docType === "adaptation-daily-log")  html = buildAdaptLogHTML(data);
-    else if (docType === "adaptation-final-eval") html = buildEvalHTML(data, "적응지도 종합 평가기록부");
-    else return new Response("지원하지 않는 문서 유형", { status: 400 });
-
-    // PDF 변환 (Playwright)
-    if (format === "pdf") {
-      try {
-        const { htmlToPdfBuffer } = await import("@/lib/pdf/engine/playwright");
-        const pdfBuf = await htmlToPdfBuffer({ html });
-        const fileName = encodeURIComponent(`${docType}_${startStr}_${endStr}.pdf`);
-        return new Response(pdfBuf, {
-          headers: {
-            "Content-Type": "application/pdf",
-            "Content-Disposition": `attachment; filename*=UTF-8''${fileName}`,
-          },
-        });
-      } catch (e: any) {
-        return new Response(`PDF 생성 실패: ${e.message}`, { status: 500 });
+      if (tokenRec?.usedAt && tokenRec.signRole === "company_manager") {
+        companyManagerSignatureUrl = tokenRec.signatureUrl;
+        companyManagerSignerName   = tokenRec.signerName || "";
       }
     }
 
-    return new Response(html, {
-      headers: { "Content-Type": "text/html; charset=utf-8" },
+    const admin = assignment.assignedByAdmin as any;
+    const signatures: SignatureSet = {
+      coachImageUrl:          user?.signatureUrl || null,
+      coachName:              user?.userName     || "",
+      govAgentImageUrl:       admin?.signatureUrl || null,
+      govAgentName:           admin?.displayName  || "",
+      companyManagerImageUrl: companyManagerSignatureUrl,
+      companyManagerName:     companyManagerSignerName,
+      agencyAgentImageUrl:    admin?.signatureUrl || null,
+      agencyAgentName:        admin?.displayName  || "",
+    };
+
+    const site = assignment.site;
+    let pdfData: Record<string, any>;
+
+    if (docType === "attendance-sheet") {
+      const attendances = await prisma.dailyAttendance.findMany({
+        where: { userId, workDate: { gte: startStr, lte: endStr } },
+        include: { logs: { select: { time1on1:true, timeGroup:true, extTime1on1:true, extTimeGroup:true } } },
+        orderBy: { workDate: "asc" },
+      });
+      pdfData = buildAttendanceSheetData({
+        coachName:   user?.userName || "",
+        coachPhone:  user?.phoneNumber || user?.loginId || "",
+        companyName: site.companyName,
+        periodStart: startStr, periodEnd: endStr,
+        attendances: attendances.map(a => ({
+          workDate:    a.workDate,
+          startTime:   a.startTime ? fmtHHMM(a.startTime) : null,
+          endTime:     a.endTime   ? fmtHHMM(a.endTime)   : null,
+          time1on1:    a.logs.reduce((s,l)=>s+Number(l.time1on1),0),
+          timeGroup:   a.logs.reduce((s,l)=>s+Number(l.timeGroup),0),
+          extTime1on1: a.logs.reduce((s,l)=>s+Number(l.extTime1on1),0),
+          extTimeGroup:a.logs.reduce((s,l)=>s+Number(l.extTimeGroup),0),
+        })),
+        signatures,
+      });
+
+    } else if (docType === "training-daily-log") {
+      const tid = traineeId ? BigInt(traineeId) : null;
+      const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
+      const logs = tid ? await prisma.traineeLog.findMany({
+        where: { writerId:userId, traineeId:tid, trainingType:{in:["PRE","FIELD"]}, attendance:{workDate:{gte:startStr,lte:endStr}} },
+        include: { attendance:true, tasks:true },
+        orderBy: { attendance:{workDate:"asc"} },
+      }) : [];
+      pdfData = buildTrainingDailyLogData({
+        traineeName: trainee?.name || "",
+        companyName: site.companyName,
+        preTrainingPeriod:   fmtPeriod(assignment.stepStart?.toISOString().slice(0,10)||startStr, startStr),
+        fieldTrainingPeriod: fmtPeriod(startStr, endStr),
+        entries: logs.map(l => ({
+          trainingType:     l.trainingType as "PRE"|"FIELD",
+          date:             l.attendance.workDate,
+          attendance:       l.evaluation || "출석",
+          hours:            `${Number(l.totalRecognizedTime)}H`,
+          guidance:         "Y",
+          task:             l.tasks[0]?.taskName || "",
+          performanceLabel: scoreLabel(l.tasks[0]?.performanceScore),
+          performanceTime:  "",
+          coaching:         l.content || "",
+        })),
+        signatures,
+      });
+
+    } else if (docType === "trainee-final-eval") {
+      const tid = traineeId ? BigInt(traineeId) : null;
+      const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
+      pdfData = buildTraineeFinalEvalData({
+        traineeName: trainee?.name || "",
+        companyName: site.companyName,
+        prePeriod:   fmtPeriod(assignment.stepStart?.toISOString().slice(0,10)||startStr, startStr),
+        fieldPeriod: fmtPeriod(startStr, endStr),
+        scores:   { WORK_ATTITUDE:defaultScores(), INTERPERSONAL:defaultScores(), WORK_STYLE:defaultScores(), WORK_PERFORMANCE:defaultScores() },
+        comments: {},
+        signatures,
+      });
+
+    } else if (docType === "adaptation-daily-log") {
+      const tid = traineeId ? BigInt(traineeId) : null;
+      const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
+      const logs = tid ? await prisma.traineeLog.findMany({
+        where: { writerId:userId, traineeId:tid, trainingType:"ADAPTATION", attendance:{workDate:{gte:startStr,lte:endStr}} },
+        include: { attendance:true, tasks:true },
+        orderBy: { attendance:{workDate:"asc"} },
+      }) : [];
+      pdfData = buildAdaptationDailyLogData({
+        traineeName: trainee?.name || "",
+        companyName: site.companyName,
+        periodStart: startStr, periodEnd: endStr,
+        entries: logs.map(l => ({
+          date:             l.attendance.workDate,
+          attendance:       l.evaluation || "출석",
+          workTime:         "",
+          guidance:         "Y",
+          task:             l.tasks[0]?.taskName || "",
+          performanceLabel: scoreLabel(l.tasks[0]?.performanceScore),
+          performanceTime:  "",
+          coaching:         l.content || "",
+        })),
+        signatures,
+      });
+
+    } else if (docType === "adaptation-final-eval") {
+      const tid = traineeId ? BigInt(traineeId) : null;
+      const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
+      pdfData = buildAdaptationFinalEvalData({
+        traineeName: trainee?.name || "",
+        companyName: site.companyName,
+        periodStart: startStr, periodEnd: endStr,
+        scores:   { WORK_ATTITUDE:defaultScores(), INTERPERSONAL:defaultScores(), WORK_STYLE:defaultScores(), WORK_PERFORMANCE:defaultScores() },
+        comments: {},
+        signatures,
+      });
+
+    } else {
+      return new Response("지원하지 않는 문서 유형", { status: 400 });
+    }
+
+    // jsreport에서 PDF 생성 → 브라우저에서 inline 표시
+    const pdfBuffer = await generatePdf(docType, pdfData);
+    return new Response(pdfBuffer, {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": "inline",
+      },
     });
 
   } catch (error: any) {
     console.error("[docs/preview]", error);
-    return new Response(`서버 오류: ${error.message}`, { status: 500 });
+    const msg = error?.message || "오류가 발생했습니다.";
+    const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;text-align:center;">
+      <p style="font-size:40px">⚠️</p>
+      <p style="font-size:16px;color:#dc2626;font-weight:700">문서 생성 실패</p>
+      <p style="font-size:14px;color:#6b7280">${msg}</p>
+      <p style="font-size:12px;color:#9ca3af">jsreport 서버가 실행 중인지 확인해주세요.</p>
+    </body></html>`;
+    return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" }, status: 500 });
   }
 }

@@ -34,9 +34,13 @@ export async function generatePdf(template: DocType, data: Record<string, any>):
 // ── 서명 구조 타입 ───────────────────────────────────────
 export interface SignatureSet {
   coachImageUrl?:          string | null;  // 직무지도원
+  coachName?:              string | null;
   govAgentImageUrl?:       string | null;  // (공단/위탁기관) 담당자 = 에이전시 관리자
+  govAgentName?:           string | null;
   companyManagerImageUrl?: string | null;  // 사업체 담당자 (즉석 서명)
+  companyManagerName?:     string | null;
   agencyAgentImageUrl?:    string | null;  // 적응지도 문서용 위탁기관 담당자
+  agencyAgentName?:        string | null;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -88,9 +92,9 @@ export function buildAttendanceSheetData(params: {
     year: now.getFullYear(), month: now.getMonth()+1, day: now.getDate(),
     entries, // beforeRender가 entries → weeks 변환
     signatures: {
-      govAgent:       { imageUrl: signatures.govAgentImageUrl       || null },
-      companyManager: { imageUrl: signatures.companyManagerImageUrl || null },
-      coach:          { imageUrl: signatures.coachImageUrl          || null },
+      govAgent:       { imageUrl: signatures.govAgentImageUrl       || null, name: signatures.govAgentName       || "" },
+      companyManager: { imageUrl: signatures.companyManagerImageUrl || null, name: signatures.companyManagerName || "" },
+      coach:          { imageUrl: signatures.coachImageUrl          || null, name: signatures.coachName          || "" },
     },
   };
 }
@@ -144,9 +148,9 @@ export function buildTrainingDailyLogData(params: {
     preTrainingPeriod, fieldTrainingPeriod,
     entries: mappedEntries,
     signatures: {
-      govAgent:       { imageUrl: signatures.govAgentImageUrl       || null },
-      companyManager: { imageUrl: signatures.companyManagerImageUrl || null },
-      coach:          { imageUrl: signatures.coachImageUrl          || null },
+      govAgent:       { imageUrl: signatures.govAgentImageUrl       || null, name: signatures.govAgentName       || "" },
+      companyManager: { imageUrl: signatures.companyManagerImageUrl || null, name: signatures.companyManagerName || "" },
+      coach:          { imageUrl: signatures.coachImageUrl          || null, name: signatures.coachName          || "" },
     },
   };
 }
@@ -181,8 +185,8 @@ export function buildTraineeFinalEvalData(params: {
     prePeriod, fieldPeriod,
     scores, comments,
     signatures: {
-      coach:       { imageUrl: signatures.coachImageUrl       || null },
-      agencyAgent: { imageUrl: signatures.govAgentImageUrl    || null }, // 위탁기관 = 에이전시 관리자
+      coach:       { imageUrl: signatures.coachImageUrl    || null, name: signatures.coachName       || "" },
+      agencyAgent: { imageUrl: signatures.govAgentImageUrl || null, name: signatures.govAgentName    || "" }, // 위탁기관 = 에이전시 관리자
     },
   };
 }
@@ -236,8 +240,8 @@ export function buildAdaptationDailyLogData(params: {
     entries: mappedEntries,
     issues: issues || "",
     signatures: {
-      coach:    { imageUrl: signatures.coachImageUrl    || null },
-      govAgent: { imageUrl: signatures.govAgentImageUrl || null },
+      coach:    { imageUrl: signatures.coachImageUrl    || null, name: signatures.coachName    || "" },
+      govAgent: { imageUrl: signatures.govAgentImageUrl || null, name: signatures.govAgentName || "" },
     },
   };
 }
@@ -272,8 +276,8 @@ export function buildAdaptationFinalEvalData(params: {
     periodStart, periodEnd,
     scores, comments,
     signatures: {
-      coach:       { imageUrl: signatures.coachImageUrl    || null },
-      agencyAgent: { imageUrl: signatures.govAgentImageUrl || null },
+      coach:       { imageUrl: signatures.coachImageUrl    || null, name: signatures.coachName    || "" },
+      agencyAgent: { imageUrl: signatures.govAgentImageUrl || null, name: signatures.govAgentName || "" },
     },
   };
 }
