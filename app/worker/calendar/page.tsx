@@ -10,6 +10,7 @@ type DayStatus = "GREEN" | "ORANGE" | "RED" | "NONE";
 
 interface DayData {
   status: DayStatus;
+  attendanceId: string;
   startTime: string | null;
   endTime: string | null;
   isFinalClosed: boolean;
@@ -27,6 +28,7 @@ interface CalendarData {
   totalWorkDays: number;
   totalGreenDays: number;
   totalOrangeDays: number;
+  trainingType: "PRE" | "FIELD" | "ADAPTATION";
 }
 
 // ─── 유틸 ──────────────────────────────────────────────
@@ -291,7 +293,15 @@ export default function CalendarPage() {
                   style={s.writeBtn}
                   onClick={() => {
                     setSelectedDay(null);
-                    router.push("/worker/home");
+                    // attendanceId가 있으면 worklog로 직접 이동 (home 거치지 않음)
+                    const aid = selectedDay.data.attendanceId;
+                    const tt  = data?.trainingType || "FIELD";
+                    if (aid) {
+                      const p = new URLSearchParams({ attendanceId: aid, trainingType: tt });
+                      router.push(`/worker/worklog?${p.toString()}`);
+                    } else {
+                      router.push("/worker/home");
+                    }
                   }}
                 >
                   일지 작성하러 가기

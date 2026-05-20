@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
     // 날짜별 상태 맵 생성
     const dayMap: Record<string, {
       status: "GREEN" | "ORANGE" | "RED" | "NONE";
+      attendanceId: string;
       startTime: string | null;
       endTime: string | null;
       isFinalClosed: boolean;
@@ -84,6 +85,7 @@ export async function GET(request: NextRequest) {
 
       dayMap[att.workDate] = {
         status,
+        attendanceId: att.id.toString(),
         startTime: att.startTime?.toISOString() ?? null,
         endTime: att.endTime?.toISOString() ?? null,
         isFinalClosed: att.isFinalClosed,
@@ -100,6 +102,9 @@ export async function GET(request: NextRequest) {
         siteName: assignment?.site?.companyName ?? null,
         assignmentStart: assignment?.startDate?.toISOString().slice(0, 10) ?? null,
         assignmentEnd: assignment?.endDate?.toISOString().slice(0, 10) ?? null,
+        trainingType: (assignment as any)?.serviceStep === "PRE_TRAINING"
+          ? "PRE" : (assignment as any)?.serviceStep === "ADAPTATION"
+          ? "ADAPTATION" : "FIELD",
         days: dayMap,
         totalWorkDays: attendances.filter(a => a.startTime).length,
         totalGreenDays: attendances.filter(a => {

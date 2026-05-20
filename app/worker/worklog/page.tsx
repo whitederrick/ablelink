@@ -339,12 +339,19 @@ function WorklogForm() {
 
   const premium = isPremium(siteInfo.agencyPlanType, siteInfo.trialEndsAt);
 
+  // attendanceId 없으면 오늘 출근 기록에서 자동 조회
+  const [resolvedAttendanceId, setResolvedAttendanceId] = useState(attendanceId);
+
   useEffect(() => {
     fetch("/api/worker/site/current")
       .then(r => r.json())
       .then(d => {
         if (d.success && d.data) {
           setSiteInfo(d.data);
+          // attendanceId 없으면 오늘 출근 기록 ID 사용
+          if (!attendanceId && d.data.attendanceId) {
+            setResolvedAttendanceId(d.data.attendanceId);
+          }
           // workType에서 기본 근무/훈련 시간 자동 적용
           const times = defaultTimes(d.data.workType ?? "전일(8H)");
           setWorkStart(times.workStart);
@@ -455,7 +462,7 @@ function WorklogForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          traineeId, attendanceId, trainingType, attendance,
+          traineeId, attendanceId: resolvedAttendanceId, trainingType, attendance,
           trainStartTime: trainStart, trainEndTime: trainEnd,
           isCommuteGuide, isBreakGuide, isExtraGuide,
           extraStartTime: isExtraGuide ? extraStart : null,
