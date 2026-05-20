@@ -27,11 +27,13 @@ const groups: NavGroup[] = [
       { href: "/admin/attendances",       label: "근태 현황" },
       { href: "/admin/inbox/attendance",  label: "GPS 승인 대기" },
       { href: "/admin/documents",         label: "문서 운영" },
+      { href: "/admin/docs",              label: "문서 조회" },
     ],
   },
   {
     title: "구독/정산",
     items: [
+      { href: "/admin/signature",    label: "내 서명" },
       { href: "/admin/subscription", label: "구독 관리" },
     ],
   },

@@ -2,7 +2,7 @@
 // app/worker/docs/view/page.tsx
 // 문서 조회 + 뷰어 화면
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type DocType =
@@ -58,9 +58,18 @@ function DocsViewInner() {
   const [periodStart,    setPeriodStart]    = useState(def.start);
   const [periodEnd,      setPeriodEnd]      = useState(def.end);
   const [selectedTrainee,setSelectedTrainee]= useState("");
+  const [trainees,       setTrainees]       = useState<{id:string;name:string;gender:string}[]>([]);
   const [signToken,      setSignToken]      = useState("");
   const [mode,           setMode]           = useState<"select"|"view">("select");
   const [iframeKey,      setIframeKey]      = useState(0);
+
+  const needsTrainee = ["training-daily-log","trainee-final-eval","adaptation-daily-log","adaptation-final-eval"].includes(docType);
+
+  useEffect(() => {
+    fetch("/api/worker/site/current").then(r=>r.json()).then(d => {
+      if (d.success && d.data?.trainees) setTrainees(d.data.trainees.map((t:any)=>({ id:String(t.id), name:t.name, gender:t.gender||"M" })));
+    });
+  }, []);
 
   function previewUrl() {
     const p = new URLSearchParams({
@@ -72,6 +81,7 @@ function DocsViewInner() {
   }
 
   function handleView() {
+    if (needsTrainee && !selectedTrainee) { alert("훈련생을 선택해주세요."); return; }
     setIframeKey(k => k+1);
     setMode("view");
   }
@@ -111,6 +121,29 @@ function DocsViewInner() {
               </div>
             </div>
           ))}
+
+          {/* 훈련생 선택 */}
+          {needsTrainee && (
+            <div style={s.section}>
+              <p style={s.sectionTitle}>훈련생 선택</p>
+              {trainees.length === 0 ? (
+                <p style={{ fontSize:13, color:"#9ca3af", margin:0 }}>담당 훈련생이 없습니다.</p>
+              ) : (
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {trainees.map(t => (
+                    <button key={t.id} onClick={() => setSelectedTrainee(t.id)}
+                      style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px",
+                        border:`1.5px solid ${selectedTrainee===t.id?"#111827":"#e5e7eb"}`,
+                        borderRadius:10, background:selectedTrainee===t.id?"#111827":"#fafafa", cursor:"pointer" }}>
+                      <span style={{ fontSize:18 }}>{t.gender==="M"?"👨":"👩"}</span>
+                      <span style={{ fontSize:14, fontWeight:600, color:selectedTrainee===t.id?"#fff":"#111827" }}>{t.name}</span>
+                      {selectedTrainee===t.id && <span style={{ marginLeft:"auto", color:"#fff" }}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 기간 선택 */}
           <div style={s.section}>
