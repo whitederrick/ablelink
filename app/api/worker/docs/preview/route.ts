@@ -80,16 +80,25 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const admin = assignment.assignedByAdmin as any;
+    // govAgent: assignedByAdmin 우선, 없으면 같은 agency의 관리자 조회
+    let admin = assignment.assignedByAdmin as any;
+    if (!admin && assignment.agencyId) {
+      admin = await prisma.adminUser.findFirst({
+        where: { agencyId: assignment.agencyId, isActive: true },
+        select: { signatureUrl: true, displayName: true } as any,
+        orderBy: { id: "asc" },
+      });
+    }
+
     const signatures: SignatureSet = {
-      coachImageUrl:          user?.signatureUrl || null,
-      coachName:              user?.userName     || "",
-      govAgentImageUrl:       admin?.signatureUrl || null,
-      govAgentName:           admin?.displayName  || "",
+      coachImageUrl:          user?.signatureUrl  || null,
+      coachName:              user?.userName      || "",
+      govAgentImageUrl:       (admin as any)?.signatureUrl || null,
+      govAgentName:           (admin as any)?.displayName  || "",
       companyManagerImageUrl: companyManagerSignatureUrl,
       companyManagerName:     companyManagerSignerName,
-      agencyAgentImageUrl:    admin?.signatureUrl || null,
-      agencyAgentName:        admin?.displayName  || "",
+      agencyAgentImageUrl:    (admin as any)?.signatureUrl || null,
+      agencyAgentName:        (admin as any)?.displayName  || "",
     };
 
     const site = assignment.site;

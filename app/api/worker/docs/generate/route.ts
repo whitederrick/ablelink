@@ -74,15 +74,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // govAgent: assignedByAdmin 우선, 없으면 같은 agency의 관리자 조회
+    let adminForSign = assignment.assignedByAdmin as any;
+    if (!adminForSign && assignment.agencyId) {
+      adminForSign = await prisma.adminUser.findFirst({
+        where: { agencyId: assignment.agencyId, isActive: true },
+        select: { signatureUrl: true, displayName: true } as any,
+        orderBy: { id: "asc" },
+      });
+    }
+
     const signatures: SignatureSet = {
-      coachImageUrl:          user?.signatureUrl          || null,
-      coachName:              user?.userName              || "",
-      govAgentImageUrl:       (assignment.assignedByAdmin as any)?.signatureUrl || null,
-      govAgentName:           (assignment.assignedByAdmin as any)?.displayName  || "",
+      coachImageUrl:          user?.signatureUrl        || null,
+      coachName:              user?.userName            || "",
+      govAgentImageUrl:       adminForSign?.signatureUrl || null,
+      govAgentName:           adminForSign?.displayName  || "",
       companyManagerImageUrl: companyManagerSignatureUrl,
-      companyManagerName:     companyManagerSignerName    || "",
-      agencyAgentImageUrl:    (assignment.assignedByAdmin as any)?.signatureUrl || null,
-      agencyAgentName:        (assignment.assignedByAdmin as any)?.displayName  || "",
+      companyManagerName:     companyManagerSignerName   || "",
+      agencyAgentImageUrl:    adminForSign?.signatureUrl || null,
+      agencyAgentName:        adminForSign?.displayName  || "",
     };
 
     // ── 문서별 데이터 빌드 & PDF 생성 ────────────────────
