@@ -1,6 +1,6 @@
 "use client";
 // app/worker/register/page.tsx
-// 직무지도원 회원가입
+// 직무지도원 회원가입 — 로그인과 동일한 스타일
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -62,16 +62,21 @@ export default function WorkerRegisterPage() {
   }
 
   return (
-    <div style={s.wrap}>
-      <div style={s.inner}>
-        <div style={s.header}>
-          <Link href="/worker/login" style={s.back}>← 돌아가기</Link>
-          <h1 style={s.title}>회원가입</h1>
+    <div style={s.page}>
+      <div style={s.card}>
+        {/* 로고 */}
+        <div style={s.logoWrap}>
+          <div style={s.logoText}>
+            <span style={{ color: "#111827" }}>Able</span>
+            <span style={{ color: "#ef4444" }}> Link</span>
+          </div>
+          <p style={s.logoSub}>회원가입</p>
         </div>
 
+        {/* 폼 */}
         <form onSubmit={handleSubmit} style={s.form}>
-          <div style={s.group}>
-            <label style={s.label}>이름 *</label>
+          <div style={s.fieldGroup}>
+            <label style={s.label}>이름</label>
             <input
               style={s.input}
               placeholder="홍길동"
@@ -81,8 +86,8 @@ export default function WorkerRegisterPage() {
             />
           </div>
 
-          <div style={s.group}>
-            <label style={s.label}>아이디 (휴대전화번호) *</label>
+          <div style={s.fieldGroup}>
+            <label style={s.label}>아이디 (휴대전화번호)</label>
             <input
               style={s.input}
               type="tel"
@@ -95,8 +100,8 @@ export default function WorkerRegisterPage() {
             <p style={s.hint}>휴대전화번호가 아이디가 됩니다.</p>
           </div>
 
-          <div style={s.group}>
-            <label style={s.label}>비밀번호 *</label>
+          <div style={s.fieldGroup}>
+            <label style={s.label}>비밀번호</label>
             <input
               style={s.input}
               type="password"
@@ -108,8 +113,8 @@ export default function WorkerRegisterPage() {
             />
           </div>
 
-          <div style={s.group}>
-            <label style={s.label}>비밀번호 확인 *</label>
+          <div style={s.fieldGroup}>
+            <label style={s.label}>비밀번호 확인</label>
             <input
               style={s.input}
               type="password"
@@ -121,7 +126,7 @@ export default function WorkerRegisterPage() {
             />
           </div>
 
-          {error && <p style={s.error}>{error}</p>}
+          {error && <div style={s.error}>{error}</div>}
 
           <button
             type="submit"
@@ -132,28 +137,80 @@ export default function WorkerRegisterPage() {
           </button>
         </form>
 
-        <p style={s.loginLink}>
-          이미 계정이 있으신가요?{" "}
+        <div style={s.links}>
+          <span style={s.linkText}>이미 계정이 있으신가요?</span>
           <Link href="/worker/login" style={s.link}>로그인</Link>
-        </p>
+        </div>
       </div>
     </div>
   );
 }
 
 const s: Record<string, React.CSSProperties> = {
-  wrap: { minHeight: "100dvh", backgroundColor: "#f8f9ff", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 },
-  inner: { width: "100%", maxWidth: 420, backgroundColor: "#fff", borderRadius: 20, padding: "32px 28px", boxShadow: "0 4px 24px rgba(88,101,242,0.10)" },
-  header: { marginBottom: 28 },
-  back: { fontSize: 14, color: "#2563eb", textDecoration: "none" },
-  title: { fontSize: 24, fontWeight: 700, color: "#333", margin: "8px 0 0" },
+  page: {
+    minHeight: "100dvh",
+    backgroundColor: "#f9fafb",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: "32px 28px",
+    border: "1px solid #f3f4f6",
+    boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+  },
+  logoWrap: { textAlign: "center", marginBottom: 28 },
+  logoText: { fontSize: 26, fontWeight: 800, letterSpacing: "-0.5px", marginBottom: 6 },
+  logoSub: { fontSize: 14, color: "#9ca3af", fontWeight: 500, margin: 0 },
   form: { display: "flex", flexDirection: "column", gap: 18 },
-  group: { display: "flex", flexDirection: "column", gap: 6 },
-  label: { fontSize: 13, fontWeight: 600, color: "#555" },
-  input: { height: 48, border: "none", borderBottom: "1.5px solid #ddd", fontSize: 16, color: "#333", backgroundColor: "transparent", outline: "none", padding: "0 4px" },
-  hint: { fontSize: 12, color: "#aaa", margin: 0 },
-  error: { color: "#e53935", fontSize: 13, backgroundColor: "#fff5f5", padding: "10px 14px", borderRadius: 8, margin: 0, textAlign: "center" },
-  btn: { height: 52, backgroundColor: "#2563eb", color: "#fff", fontSize: 17, fontWeight: 700, border: "none", borderRadius: 10, cursor: "pointer", marginTop: 4 },
-  loginLink: { textAlign: "center", fontSize: 14, color: "#888", marginTop: 20 },
-  link: { color: "#2563eb", fontWeight: 600, textDecoration: "none" },
+  fieldGroup: { display: "flex", flexDirection: "column", gap: 6 },
+  label: { fontSize: 13, fontWeight: 600, color: "#374151" },
+  input: {
+    height: 48,
+    padding: "0 14px",
+    border: "1px solid #e5e7eb",
+    borderRadius: 10,
+    fontSize: 15,
+    color: "#111827",
+    outline: "none",
+    background: "#fafafa",
+    fontFamily: "inherit",
+    boxSizing: "border-box" as const,
+  },
+  hint: { fontSize: 12, color: "#9ca3af", margin: 0 },
+  error: {
+    padding: "10px 14px",
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    borderRadius: 8,
+    fontSize: 13,
+    color: "#dc2626",
+    textAlign: "center" as const,
+  },
+  btn: {
+    width: "100%",
+    padding: "14px",
+    background: "#111827",
+    color: "#fff",
+    border: "none",
+    borderRadius: 10,
+    fontSize: 16,
+    fontWeight: 700,
+    cursor: "pointer",
+    marginTop: 4,
+  },
+  links: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 20,
+  },
+  linkText: { fontSize: 14, color: "#9ca3af" },
+  link: { fontSize: 14, color: "#111827", fontWeight: 700, textDecoration: "none" },
 };

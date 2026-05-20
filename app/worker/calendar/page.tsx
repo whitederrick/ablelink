@@ -44,10 +44,10 @@ function dateKey(year: number, month: number, day: number): string {
 
 // ─── 상태별 스타일 ──────────────────────────────────────
 const STATUS_STYLE: Record<DayStatus | "NONE", { bg: string; color: string; label: string }> = {
-  GREEN:  { bg: "#e8f5e9", color: "#2e7d32", label: "완료" },
-  ORANGE: { bg: "#fff8e1", color: "#f57c00", label: "일지미작성" },
-  RED:    { bg: "#ffebee", color: "#c62828", label: "미출근" },
-  NONE:   { bg: "transparent", color: "#999", label: "" },
+  GREEN:  { bg: "#f0fdf4", color: "#16a34a", label: "완료" },
+  ORANGE: { bg: "#fffbeb", color: "#d97706", label: "일지미작성" },
+  RED:    { bg: "#fff1f2", color: "#e11d48", label: "미출근" },
+  NONE:   { bg: "transparent", color: "#9ca3af", label: "" },
 };
 
 // ─── 메인 컴포넌트 ──────────────────────────────────────
@@ -137,13 +137,13 @@ export default function CalendarPage() {
             </div>
             <div style={s.summaryDivider} />
             <div style={s.summaryItem}>
-              <span style={{ ...s.summaryNum, color: "#2e7d32" }}>{data.totalGreenDays}</span>
-              <span style={s.summaryLabel}>일지완료</span>
+              <span style={{ ...s.summaryNum, color: "#16a34a" }}>{data.totalGreenDays}</span>
+              <span style={{ ...s.summaryLabel, color: "#16a34a" }}>완료</span>
             </div>
             <div style={s.summaryDivider} />
             <div style={s.summaryItem}>
-              <span style={{ ...s.summaryNum, color: "#f57c00" }}>{data.totalOrangeDays}</span>
-              <span style={s.summaryLabel}>일지미작성</span>
+              <span style={{ ...s.summaryNum, color: data.totalOrangeDays > 0 ? "#d97706" : "#9ca3af" }}>{data.totalOrangeDays}</span>
+              <span style={{ ...s.summaryLabel, color: data.totalOrangeDays > 0 ? "#d97706" : "#9ca3af" }}>미작성</span>
             </div>
           </div>
         )}
@@ -324,11 +324,11 @@ const s: Record<string, React.CSSProperties> = {
   navBtn: { background: "none", border: "none", fontSize: 28, cursor: "pointer", color: "#333", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center" },
   monthLabel: { fontSize: 20, fontWeight: 700, color: "#333" },
 
-  summary: { display: "flex", backgroundColor: "#fff", margin: "0 16px 16px", borderRadius: 14, padding: "16px", boxShadow: "0 1px 6px rgba(0,0,0,0.06)" },
-  summaryItem: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 },
-  summaryNum: { fontSize: 24, fontWeight: 700, color: "#333" },
-  summaryLabel: { fontSize: 12, color: "#888" },
-  summaryDivider: { width: 1, backgroundColor: "#eee", margin: "0 8px" },
+  summary: { display: "flex", backgroundColor: "#fff", margin: "0 16px 16px", borderRadius: 16, padding: "18px 16px", border: "1px solid #f3f4f6" },
+  summaryItem: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 },
+  summaryNum: { fontSize: 28, fontWeight: 800, color: "#111827", letterSpacing: "-1px" },
+  summaryLabel: { fontSize: 12, color: "#9ca3af", fontWeight: 600 },
+  summaryDivider: { width: 1, backgroundColor: "#f3f4f6", margin: "0 4px" },
 
   weekRow: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", padding: "0 16px", marginBottom: 4 },
   weekDay: { textAlign: "center", fontSize: 13, fontWeight: 600, padding: "4px 0" },

@@ -1,12 +1,12 @@
 "use client";
 // app/worker/home/HomeClient.tsx
-// 직무지도원 메인화면 - 출퇴근 전체 플로우
+// 직무지도원 메인화면 — Phase 2 UX 개선
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { WorkerPayload } from "../_lib/session";
 
-// ─── 타입 ───────────────────────────────────────────
+// ─── 타입 ───────────────────────────────────────────────
 type AttendanceStatus = "BEFORE" | "WORKING" | "DONE" | "CLOSED";
 
 interface Trainee {
@@ -33,7 +33,7 @@ interface HomeData {
   isFinalClosed: boolean;
 }
 
-// ─── 유틸 ───────────────────────────────────────────
+// ─── 유틸 ───────────────────────────────────────────────
 function calcDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -71,10 +71,11 @@ function formatHHMM(val: string | null | Date): string {
 
 function nowDateStr(): string {
   const d = new Date();
-  return `${String(d.getFullYear()).slice(2)}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${weekdays[d.getDay()]})`;
 }
 
-// ─── GPS 획득 ────────────────────────────────────────
+// ─── GPS 획득 ────────────────────────────────────────────
 async function getCurrentPosition(): Promise<GeolocationCoordinates> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
@@ -96,7 +97,7 @@ async function getCurrentPosition(): Promise<GeolocationCoordinates> {
   });
 }
 
-// ─── 메인 컴포넌트 ───────────────────────────────────
+// ─── 메인 컴포넌트 ───────────────────────────────────────
 export default function HomeClient({ session }: { session: WorkerPayload }) {
   const router = useRouter();
   const [homeData, setHomeData] = useState<HomeData | null>(null);
@@ -133,7 +134,7 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
   const showToast = (msg: string, type: "success" | "error" | "info" = "info") =>
     setToast({ msg, type });
 
-  // 홈 데이터 로드 — API 응답 필드명을 HomeData 타입에 맞게 정규화
+  // 홈 데이터 로드
   const fetchHome = useCallback(async () => {
     try {
       const res = await fetch(`/api/home/${session.userId}`, { cache: "no-store" });
@@ -141,8 +142,6 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
       if (!data.success) throw new Error(data.message);
 
       const raw = data.data;
-
-      // API 필드명 → HomeData 필드명 매핑
       const normalized: HomeData = {
         siteName: raw.companyName && raw.companyName !== "배정된 현장 없음"
           ? raw.companyName : null,
@@ -199,14 +198,11 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
       const allowance = homeData?.allowanceRange ?? 100;
       const baseLat = homeData?.gpsLat;
       const baseLon = homeData?.gpsLon;
-
       let isGpsModified = false;
 
-      // 거리 체크
       if (baseLat && baseLon) {
         const dist = Math.round(calcDistance(latitude, longitude, baseLat, baseLon));
         if (dist > allowance && !confirmOutOfRange) {
-          // 범위 초과 → 확인 다이얼로그
           return new Promise(resolve => {
             setDialog({
               title: "위치 확인",
@@ -273,19 +269,16 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
     }
   }
 
-  // 출근
   async function handleClockIn() {
     const ok = await doAttendance("/api/attendance/clock-in");
     if (ok) showToast("출근 처리되었습니다.", "success");
   }
 
-  // 퇴근
   async function handleClockOut() {
     const ok = await doAttendance("/api/attendance/clock-out");
     if (ok) showToast("퇴근 처리되었습니다. (퇴근 시간 재확인 가능)", "success");
   }
 
-  // 퇴근 시간 재확인
   async function handleReconfirm() {
     setDialog({
       title: "퇴근 시간 재확인",
@@ -317,38 +310,47 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
     });
   }
 
-  // 로그아웃
   async function handleLogout() {
     setShowProfile(false);
     await fetch("/api/worker/auth/logout", { method: "POST" });
     router.replace("/worker/login");
   }
 
-  // ─── 렌더 ──────────────────────────────────────────
+  // ─── 렌더 ──────────────────────────────────────────────
   if (loading) {
     return (
       <div style={s.center}>
         <div style={s.spinner} />
-        <p style={{ color: "#888", marginTop: 12 }}>불러오는 중...</p>
+        <p style={{ color: "#9ca3af", marginTop: 12, fontSize: 14 }}>불러오는 중...</p>
       </div>
     );
   }
 
   const pad2 = (n: number) => String(n).padStart(2, "0");
-  const timeStr = `${pad2(currentTime.getHours())} : ${pad2(currentTime.getMinutes())}`;
+  const timeStr = `${pad2(currentTime.getHours())}:${pad2(currentTime.getMinutes())}`;
+  const secStr = pad2(currentTime.getSeconds());
 
-  const statusLabel: Record<AttendanceStatus, string> = {
-    BEFORE: "출근전", WORKING: "퇴근전", DONE: "마감중", CLOSED: "퇴근완료",
-  };
-  const cardTitle: Record<AttendanceStatus, string> = {
-    BEFORE: "출근 버튼을 눌러주세요.",
-    WORKING: "오늘도 화이팅하세요!",
-    DONE: "오늘 업무가 종료되었습니다.",
-    CLOSED: "오늘 업무가 최종 종료되었습니다.",
+  const STATUS_CONFIG: Record<AttendanceStatus, {
+    label: string; badgeBg: string; badgeColor: string;
+    cardBg: string; cardBorder: string; title: string;
+  }> = {
+    BEFORE:  { label: "출근 전",  badgeBg: "#f3f4f6", badgeColor: "#6b7280", cardBg: "#fff", cardBorder: "#e5e7eb", title: "오늘도 좋은 하루 되세요" },
+    WORKING: { label: "근무 중",  badgeBg: "#dcfce7", badgeColor: "#16a34a", cardBg: "#f0fdf4", cardBorder: "#86efac", title: "열심히 일하고 계시네요!" },
+    DONE:    { label: "마감 중",  badgeBg: "#fef3c7", badgeColor: "#d97706", cardBg: "#fffbeb", cardBorder: "#fde68a", title: "수고하셨습니다" },
+    CLOSED:  { label: "퇴근 완료", badgeBg: "#f3f4f6", badgeColor: "#9ca3af", cardBg: "#fafafa", cardBorder: "#e5e7eb", title: "오늘 하루도 고생하셨습니다" },
   };
 
+  const cfg = STATUS_CONFIG[status];
   const startStr = formatHHMM(homeData?.workStartTime ?? null);
   const endStr = formatHHMM(homeData?.workEndTime ?? null);
+
+  // 출퇴근 버튼 스타일
+  const btnStyle: Record<AttendanceStatus, React.CSSProperties> = {
+    BEFORE:  { background: "#111827", color: "#fff" },
+    WORKING: { background: "#dc2626", color: "#fff" },
+    DONE:    { background: "#16a34a", color: "#fff" },
+    CLOSED:  { background: "#d1d5db", color: "#9ca3af", cursor: "not-allowed" },
+  };
 
   return (
     <div style={s.page}>
@@ -356,13 +358,13 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
 
         {/* ── 헤더 ── */}
         <div style={s.header}>
-          <div>
-            <p style={s.greeting}>안녕하세요, {session.userName}님</p>
+          <div style={s.headerLeft}>
+            <span style={s.logoText}>
+              <span style={{ color: "#111827" }}>Able</span>
+              <span style={{ color: "#ef4444" }}>Link</span>
+            </span>
             {homeData?.siteName && (
-              <button
-                onClick={() => router.push("/worker/site")}
-                style={s.siteBadge}
-              >
+              <button onClick={() => router.push("/worker/site")} style={s.siteBadge}>
                 📍 {homeData.siteName}
               </button>
             )}
@@ -374,140 +376,166 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
               style={s.profileBtn}
               aria-label="프로필 메뉴"
             >
-              <span style={s.profileIcon}>👤</span>
+              <span style={{ fontSize: 18 }}>👤</span>
             </button>
             {showProfile && (
               <div style={s.profileMenu}>
+                <div style={s.profileName}>{session.userName}님</div>
                 <button style={s.menuItem} onClick={() => { setShowProfile(false); router.push("/worker/profile"); }}>
                   정보수정
                 </button>
-                <button style={{ ...s.menuItem, ...s.menuDanger }} onClick={handleLogout}>
+                <button style={{ ...s.menuItem, color: "#ef4444" }} onClick={handleLogout}>
                   로그아웃
-                </button>
-                <button style={{ ...s.menuItem, color: "#888" }} onClick={() => setShowProfile(false)}>
-                  닫기
                 </button>
               </div>
             )}
           </div>
         </div>
 
-        {/* ── 날짜 + 상태 배지 ── */}
+        {/* ── 날짜 + 상태 ── */}
         <div style={s.dateRow}>
           <span style={s.dateText}>{nowDateStr()}</span>
-          <span style={{
-            ...s.statusBadge,
-            ...(status === "WORKING" ? s.statusWorking : {}),
-            ...(status === "CLOSED" ? s.statusClosed : {}),
-          }}>
-            {statusLabel[status]}
+          <span style={{ ...s.statusBadge, background: cfg.badgeBg, color: cfg.badgeColor }}>
+            {cfg.label}
           </span>
         </div>
 
         {/* ── 출퇴근 카드 ── */}
-        <div style={s.card}>
-          <p style={s.cardTitle}>{cardTitle[status]}</p>
+        <div style={{ ...s.card, background: cfg.cardBg, borderColor: cfg.cardBorder }}>
+          <p style={s.cardTitle}>{cfg.title}</p>
 
+          {/* 시간 표시 */}
+          <div style={s.clockWrap}>
+            {status === "BEFORE" && (
+              <>
+                <span style={s.clockTime}>{timeStr}</span>
+                <span style={s.clockSec}>{secStr}</span>
+              </>
+            )}
+            {status === "WORKING" && (
+              <div style={s.timePair}>
+                <div style={s.timeBlock}>
+                  <span style={s.timeBlockLabel}>출근</span>
+                  <span style={s.timeBlockValue}>{startStr}</span>
+                </div>
+                <span style={s.timeSep}>/</span>
+                <div style={s.timeBlock}>
+                  <span style={s.timeBlockLabel}>현재</span>
+                  <span style={{ ...s.timeBlockValue, color: "#16a34a" }}>{timeStr}</span>
+                </div>
+              </div>
+            )}
+            {(status === "DONE" || status === "CLOSED") && (
+              <div style={s.timePair}>
+                <div style={s.timeBlock}>
+                  <span style={s.timeBlockLabel}>출근</span>
+                  <span style={s.timeBlockValue}>{startStr}</span>
+                </div>
+                <span style={s.timeSep}>–</span>
+                <div style={s.timeBlock}>
+                  <span style={s.timeBlockLabel}>퇴근</span>
+                  <span style={s.timeBlockValue}>{endStr}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 액션 버튼 */}
           {status === "BEFORE" && (
-            <>
-              <p style={s.cardSub}>현재 시간</p>
-              <p style={s.clockTime}>{timeStr}</p>
-              <button
-                style={{ ...s.actionBtn, opacity: actionLoading ? 0.7 : 1 }}
-                onClick={handleClockIn}
-                disabled={actionLoading}
-              >
-                {actionLoading ? "처리 중..." : "➜ 출근하기"}
-              </button>
-            </>
+            <button
+              style={{ ...s.actionBtn, ...btnStyle.BEFORE, opacity: actionLoading ? 0.7 : 1 }}
+              onClick={handleClockIn}
+              disabled={actionLoading}
+            >
+              {actionLoading ? "위치 확인 중..." : "출근하기"}
+            </button>
           )}
-
           {status === "WORKING" && (
-            <>
-              <p style={s.cardSub}>출근 시각 / 현재 시각</p>
-              <p style={s.clockTime}>{startStr} / {timeStr}</p>
-              <button
-                style={{ ...s.actionBtn, backgroundColor: "#e53935", opacity: actionLoading ? 0.7 : 1 }}
-                onClick={handleClockOut}
-                disabled={actionLoading}
-              >
-                {actionLoading ? "처리 중..." : "➜ 퇴근하기"}
-              </button>
-            </>
+            <button
+              style={{ ...s.actionBtn, ...btnStyle.WORKING, opacity: actionLoading ? 0.7 : 1 }}
+              onClick={handleClockOut}
+              disabled={actionLoading}
+            >
+              {actionLoading ? "처리 중..." : "퇴근하기"}
+            </button>
           )}
-
           {status === "DONE" && (
-            <>
-              <p style={s.cardSub}>시작 시각 / 종료 시각</p>
-              <p style={s.clockTime}>{startStr} / {endStr}</p>
-              <p style={s.cardSub}>현재 시간</p>
-              <p style={{ ...s.clockTime, fontSize: "28px", color: "#888" }}>{timeStr}</p>
-              <button
-                style={{ ...s.actionBtn, backgroundColor: "#2e7d32", opacity: actionLoading ? 0.7 : 1 }}
-                onClick={handleReconfirm}
-                disabled={actionLoading}
-              >
-                {actionLoading ? "처리 중..." : "퇴근 시간 재확인"}
-              </button>
-            </>
+            <button
+              style={{ ...s.actionBtn, ...btnStyle.DONE, opacity: actionLoading ? 0.7 : 1 }}
+              onClick={handleReconfirm}
+              disabled={actionLoading}
+            >
+              {actionLoading ? "처리 중..." : "퇴근 시간 재확인"}
+            </button>
           )}
-
           {status === "CLOSED" && (
-            <>
-              <p style={s.cardSub}>시작 시각 / 종료 시각</p>
-              <p style={s.clockTime}>{startStr} / {endStr}</p>
-              <p style={{ color: "#999", fontSize: "15px", marginTop: 8 }}>오늘 업무가 종료되었습니다.</p>
-              <button style={{ ...s.actionBtn, backgroundColor: "#aaa", cursor: "not-allowed" }} disabled>
-                업무 종료
-              </button>
-            </>
+            <button style={{ ...s.actionBtn, ...btnStyle.CLOSED }} disabled>
+              업무 종료
+            </button>
           )}
         </div>
 
         {/* ── 훈련생 목록 ── */}
         {homeData?.trainees && homeData.trainees.length > 0 && (
-          <div style={s.traineeSection}>
-            {homeData.trainees.map(t => (
-              <div key={t.id} style={s.traineeCard}>
-                <div>
-                  <p style={s.traineeName}>{t.name} 훈련생</p>
-                  <p style={s.traineeGender}>{t.gender === "M" ? "남성" : "여성"}</p>
+          <div style={s.section}>
+            <div style={s.sectionHeader}>
+              <span style={s.sectionTitle}>담당 훈련생</span>
+              <span style={s.sectionCount}>{homeData.trainees.length}명</span>
+            </div>
+            <div style={s.traineeList}>
+              {homeData.trainees.map(t => (
+                <div key={t.id} style={s.traineeCard}>
+                  <div style={s.traineeAvatar}>
+                    {t.gender === "M" ? "👨" : "👩"}
+                  </div>
+                  <div style={s.traineeInfo}>
+                    <p style={s.traineeName}>{t.name}</p>
+                    <p style={s.traineeGender}>{t.gender === "M" ? "남성" : "여성"}</p>
+                  </div>
+                  <button
+                    style={{
+                      ...s.logBtn,
+                      opacity: status === "BEFORE" || status === "CLOSED" ? 0.45 : 1,
+                      cursor: status === "BEFORE" || status === "CLOSED" ? "not-allowed" : "pointer",
+                    }}
+                    disabled={status === "BEFORE" || status === "CLOSED"}
+                    onClick={() => {
+                      if (status === "BEFORE" || status === "CLOSED") return;
+                      const aid = homeData?.attendanceId ?? "";
+                      const params = new URLSearchParams({
+                        traineeId: t.id,
+                        traineeName: t.name,
+                        ...(aid ? { attendanceId: aid } : {}),
+                      });
+                      router.push(`/worker/worklog?${params.toString()}`);
+                    }}
+                  >
+                    일지 작성
+                  </button>
                 </div>
-                <button
-                  style={s.logBtn}
-                  onClick={() => {
-                    const aid = homeData?.attendanceId ?? "";
-                    const params = new URLSearchParams({
-                      traineeId: t.id,
-                      traineeName: t.name,
-                      ...(aid ? { attendanceId: aid } : {}),
-                    });
-                    router.push(`/worker/worklog?${params.toString()}`);
-                  }}
-                >
-                  일지 작성
-                </button>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
 
         {/* 현장 없을 때 */}
         {!homeData?.siteName && (
           <div style={s.noSite}>
-            <p style={{ color: "#888", marginBottom: 12 }}>배정된 현장이 없습니다.</p>
-            <button style={s.actionBtn} onClick={() => router.push("/worker/site/register")}>
+            <span style={{ fontSize: 40, display: "block", marginBottom: 12 }}>🏢</span>
+            <p style={s.noSiteText}>배정된 현장이 없습니다.</p>
+            <button style={s.noSiteBtn} onClick={() => router.push("/worker/site/register")}>
               현장 등록하기
             </button>
           </div>
         )}
 
-        {/* PREMIUM 구독 유도 배너 */}
+        {/* PREMIUM 배너 */}
         {homeData?.siteName && (
           <div style={s.subscribeBanner} onClick={() => router.push("/worker/subscribe")}>
-            <div>
-              <p style={s.bannerTitle}>🎁 AI 기능 & PDF 자동 생성</p>
-              <p style={s.bannerDesc}>구독하시면 음성 일지 작성, PDF 자동 발송 등 PREMIUM 기능을 사용할 수 있어요.</p>
+            <div style={s.bannerIcon}>🎁</div>
+            <div style={s.bannerBody}>
+              <p style={s.bannerTitle}>AI 기능 & PDF 자동 생성</p>
+              <p style={s.bannerDesc}>음성 일지 작성, PDF 자동 발송 등 PREMIUM 기능</p>
             </div>
             <span style={s.bannerArrow}>›</span>
           </div>
@@ -523,10 +551,7 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
             <p style={s.dialogMsg}>{dialog.msg}</p>
             <div style={s.dialogBtns}>
               {dialog.onCancel && (
-                <button
-                  style={{ ...s.dialogBtn, ...s.dialogBtnCancel }}
-                  onClick={dialog.onCancel}
-                >
+                <button style={{ ...s.dialogBtn, ...s.dialogBtnCancel }} onClick={dialog.onCancel}>
                   {dialog.cancelLabel ?? "취소"}
                 </button>
               )}
@@ -549,8 +574,8 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
         <div style={{
           ...s.toast,
           backgroundColor:
-            toast.type === "success" ? "#2e7d32" :
-            toast.type === "error" ? "#c62828" : "#2563eb",
+            toast.type === "success" ? "#16a34a" :
+            toast.type === "error" ? "#dc2626" : "#111827",
         }}>
           {toast.msg}
         </div>
@@ -559,8 +584,8 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
       {/* ── 하단 네비게이션 ── */}
       <nav style={s.bottomNav}>
         <button style={s.navItem} onClick={() => router.push("/worker/home")}>
-          <span style={{ ...s.navIcon, color: "#2563eb" }}>🏠</span>
-          <span style={{ ...s.navLabel, color: "#2563eb" }}>홈</span>
+          <span style={{ ...s.navIcon, color: "#111827" }}>🏠</span>
+          <span style={{ ...s.navLabel, color: "#111827", fontWeight: 700 }}>홈</span>
         </button>
         <button style={s.navItem} onClick={() => router.push("/worker/calendar")}>
           <span style={s.navIcon}>📅</span>
@@ -579,67 +604,90 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
   );
 }
 
-// ─── 스타일 ──────────────────────────────────────────
+// ─── 스타일 ──────────────────────────────────────────────
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", backgroundColor: "#f8f9ff" },
-  container: { maxWidth: "480px", margin: "0 auto", padding: "20px 16px 90px" },
+  page: { minHeight: "100dvh", backgroundColor: "#f9fafb" },
+  container: { maxWidth: "480px", margin: "0 auto", padding: "16px 16px 90px" },
   center: { minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" },
-  spinner: { width: 40, height: 40, border: "3px solid #e5e7eb", borderTop: "3px solid #2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
+  spinner: { width: 36, height: 36, border: "3px solid #e5e7eb", borderTop: "3px solid #111827", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
 
   // 헤더
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
-  greeting: { fontSize: 20, fontWeight: 700, color: "#111827", margin: "0 0 8px" },
-  siteBadge: { display: "inline-flex", alignItems: "center", gap: 4, backgroundColor: "#2563eb", color: "#fff", border: "none", borderRadius: 20, padding: "7px 14px", fontSize: 15, fontWeight: 700, cursor: "pointer" },
-  profileBtn: { width: 48, height: 48, borderRadius: "50%", backgroundColor: "#f0f0f0", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
-  profileIcon: { fontSize: 22 },
-  profileMenu: { position: "absolute", right: 0, top: 56, backgroundColor: "#fff", border: "1px solid #eee", borderRadius: 14, padding: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 100, minWidth: 140 },
-  menuItem: { display: "block", width: "100%", padding: "11px 16px", border: "none", backgroundColor: "transparent", fontSize: 15, fontWeight: 600, cursor: "pointer", textAlign: "left", borderRadius: 8, color: "#333" },
-  menuDanger: { color: "#e53935", backgroundColor: "#fff5f5", marginTop: 4 },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, paddingTop: 4 },
+  headerLeft: { display: "flex", flexDirection: "column", gap: 6 },
+  logoText: { fontSize: 20, fontWeight: 800, letterSpacing: "-0.5px" },
+  siteBadge: { display: "inline-flex", alignItems: "center", gap: 4, background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 20, padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  profileBtn: { width: 40, height: 40, borderRadius: "50%", background: "#f3f4f6", border: "1px solid #e5e7eb", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
+  profileMenu: { position: "absolute", right: 0, top: 48, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.10)", zIndex: 100, minWidth: 140 },
+  profileName: { padding: "8px 12px 8px", fontSize: 12, color: "#9ca3af", fontWeight: 600, borderBottom: "1px solid #f3f4f6", marginBottom: 4 },
+  menuItem: { display: "block", width: "100%", padding: "10px 12px", border: "none", background: "transparent", fontSize: 14, fontWeight: 600, cursor: "pointer", textAlign: "left", borderRadius: 8, color: "#374151" },
 
   // 날짜/상태
-  dateRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  dateText: { fontSize: 20, fontWeight: 700, color: "#333" },
-  statusBadge: { backgroundColor: "#e0e0e0", color: "#555", padding: "7px 14px", borderRadius: 20, fontSize: 14, fontWeight: 700 },
-  statusWorking: { backgroundColor: "#e8f5e9", color: "#2e7d32" },
-  statusClosed: { backgroundColor: "#f0f0f0", color: "#999" },
+  dateRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+  dateText: { fontSize: 17, fontWeight: 700, color: "#111827" },
+  statusBadge: { padding: "5px 12px", borderRadius: 20, fontSize: 13, fontWeight: 600 },
 
   // 카드
-  card: { backgroundColor: "#fff", borderRadius: 20, padding: "28px 24px", textAlign: "center", marginBottom: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.06)", border: "1px solid #eee" },
-  cardTitle: { fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 12px" },
-  cardSub: { fontSize: 13, color: "#888", margin: "0 0 4px" },
-  clockTime: { fontSize: 38, fontWeight: 800, color: "#111827", margin: "4px 0 20px" },
-  actionBtn: { width: "100%", padding: "15px", backgroundColor: "#2563eb", color: "#fff", fontSize: 18, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer", transition: "opacity 0.2s" },
+  card: { borderRadius: 20, padding: "24px 20px", textAlign: "center", marginBottom: 20, border: "1.5px solid" },
+  cardTitle: { fontSize: 13, fontWeight: 500, color: "#6b7280", margin: "0 0 20px" },
+
+  // 시간 표시
+  clockWrap: { display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4, marginBottom: 24 },
+  clockTime: { fontSize: 52, fontWeight: 800, color: "#111827", fontVariantNumeric: "tabular-nums", letterSpacing: "-2px" },
+  clockSec: { fontSize: 24, fontWeight: 600, color: "#9ca3af", letterSpacing: "-1px" },
+  timePair: { display: "flex", alignItems: "center", gap: 20, justifyContent: "center" },
+  timeBlock: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4 },
+  timeBlockLabel: { fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px" },
+  timeBlockValue: { fontSize: 32, fontWeight: 800, color: "#111827", letterSpacing: "-1px", fontVariantNumeric: "tabular-nums" },
+  timeSep: { fontSize: 20, color: "#d1d5db", fontWeight: 300, marginTop: 12 },
+
+  // 버튼
+  actionBtn: { width: "100%", padding: "15px", fontSize: 16, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer", transition: "opacity 0.2s" },
+
+  // 섹션
+  section: { marginBottom: 16 },
+  sectionHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, padding: "0 2px" },
+  sectionTitle: { fontSize: 15, fontWeight: 700, color: "#374151" },
+  sectionCount: { fontSize: 13, color: "#9ca3af", fontWeight: 600 },
 
   // 훈련생
-  traineeSection: { display: "flex", flexDirection: "column", gap: 12 },
-  traineeCard: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#fff", borderRadius: 14, padding: "16px 18px", boxShadow: "0 1px 6px rgba(0,0,0,0.05)", border: "1px solid #eee" },
-  traineeName: { fontSize: 16, fontWeight: 700, color: "#111827", margin: "0 0 2px" },
-  traineeGender: { fontSize: 13, color: "#888", margin: 0 },
-  logBtn: { backgroundColor: "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  traineeList: { display: "flex", flexDirection: "column", gap: 8 },
+  traineeCard: { display: "flex", alignItems: "center", gap: 12, background: "#fff", borderRadius: 14, padding: "14px 16px", border: "1px solid #f3f4f6" },
+  traineeAvatar: { width: 40, height: 40, borderRadius: "50%", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 },
+  traineeInfo: { flex: 1 },
+  traineeName: { fontSize: 15, fontWeight: 700, color: "#111827", margin: "0 0 2px" },
+  traineeGender: { fontSize: 12, color: "#9ca3af", margin: 0 },
+  logBtn: { background: "#111827", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 },
 
+  // 현장 없음
   noSite: { textAlign: "center", padding: "40px 0" },
-  subscribeBanner: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#eff6ff", borderRadius: 14, padding: "14px 16px", marginTop: 16, cursor: "pointer", border: "1px solid #bfdbfe" },
-  bannerTitle: { fontSize: 14, fontWeight: 700, color: "#2563eb", margin: "0 0 4px" },
-  bannerDesc: { fontSize: 12, color: "#666", margin: 0, lineHeight: 1.5 },
-  bannerArrow: { fontSize: 22, color: "#2563eb", flexShrink: 0 },
+  noSiteText: { color: "#9ca3af", fontSize: 15, marginBottom: 20 },
+  noSiteBtn: { padding: "13px 28px", background: "#111827", color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: "pointer" },
+
+  // 배너
+  subscribeBanner: { display: "flex", alignItems: "center", gap: 12, background: "#fff", borderRadius: 14, padding: "14px 16px", marginTop: 8, cursor: "pointer", border: "1px solid #e5e7eb" },
+  bannerIcon: { fontSize: 24, flexShrink: 0 },
+  bannerBody: { flex: 1 },
+  bannerTitle: { fontSize: 13, fontWeight: 700, color: "#111827", margin: "0 0 2px" },
+  bannerDesc: { fontSize: 12, color: "#9ca3af", margin: 0 },
+  bannerArrow: { fontSize: 20, color: "#9ca3af", flexShrink: 0 },
 
   // 다이얼로그
-  overlay: { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 },
-  dialogBox: { backgroundColor: "#fff", borderRadius: 16, padding: "24px 20px", maxWidth: 320, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" },
+  overlay: { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.50)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 },
+  dialogBox: { backgroundColor: "#fff", borderRadius: 16, padding: "24px 20px", maxWidth: 320, width: "100%", boxShadow: "0 16px 48px rgba(0,0,0,0.20)" },
   dialogTitle: { fontSize: 16, fontWeight: 700, color: "#111827", margin: "0 0 10px" },
-  dialogMsg: { fontSize: 14, color: "#555", lineHeight: 1.6, margin: "0 0 20px", whiteSpace: "pre-line" },
-  dialogBtns: { display: "flex", gap: 8, justifyContent: "flex-end" },
-  dialogBtn: { padding: "10px 18px", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer" },
-  dialogBtnPrimary: { backgroundColor: "#2563eb", color: "#fff" },
-  dialogBtnDanger: { backgroundColor: "#e53935", color: "#fff" },
-  dialogBtnCancel: { backgroundColor: "#f0f0f0", color: "#555" },
+  dialogMsg: { fontSize: 14, color: "#6b7280", lineHeight: 1.7, margin: "0 0 20px", whiteSpace: "pre-line" },
+  dialogBtns: { display: "flex", gap: 8 },
+  dialogBtn: { flex: 1, padding: "11px", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" },
+  dialogBtnPrimary: { background: "#111827", color: "#fff" },
+  dialogBtnDanger: { background: "#dc2626", color: "#fff" },
+  dialogBtnCancel: { background: "#f3f4f6", color: "#374151" },
 
   // 하단 네비게이션
-  bottomNav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, backgroundColor: "#fff", borderTop: "1px solid #eee", display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom)" },
-  navItem: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: "10px 0", border: "none", backgroundColor: "transparent", cursor: "pointer" },
+  bottomNav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, backgroundColor: "#fff", borderTop: "1px solid #f3f4f6", display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom)" },
+  navItem: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: "10px 0", border: "none", backgroundColor: "transparent", cursor: "pointer" },
   navIcon: { fontSize: 22 },
-  navLabel: { fontSize: 11, color: "#888", fontWeight: 500 },
+  navLabel: { fontSize: 11, color: "#9ca3af", fontWeight: 500 },
 
   // 토스트
-  toast: { position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", color: "#fff", padding: "12px 20px", borderRadius: 12, fontSize: 14, fontWeight: 600, boxShadow: "0 4px 16px rgba(0,0,0,0.2)", zIndex: 2000, whiteSpace: "nowrap", maxWidth: "90vw", textAlign: "center" },
+  toast: { position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", color: "#fff", padding: "11px 20px", borderRadius: 10, fontSize: 14, fontWeight: 600, boxShadow: "0 4px 16px rgba(0,0,0,0.2)", zIndex: 2000, whiteSpace: "nowrap", maxWidth: "90vw", textAlign: "center" },
 };

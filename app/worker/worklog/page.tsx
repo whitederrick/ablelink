@@ -1,6 +1,6 @@
 "use client";
 // app/worker/worklog/page.tsx
-// 업무일지 작성 — 시간 자동계산 + 음성→AI 변환 (PREMIUM)
+// 업무일지 작성 — Phase 2 UX 개선
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -24,7 +24,7 @@ function parseHHMM(s: string): number {
 }
 function diffHours(start: string, end: string): number {
   const diff = parseHHMM(end) - parseHHMM(start);
-  return Math.max(0, Math.round(diff / 6) / 10); // 소수점 1자리
+  return Math.max(0, Math.round(diff / 6) / 10);
 }
 function calcRecognized(params: {
   core: number; extra: number; bonus: number;
@@ -44,6 +44,79 @@ function isPremium(plan?: string, trialEndsAt?: string | null): boolean {
   return ["STARTER", "STANDARD", "PRO"].includes(plan);
 }
 
+// ─── workType → 기본 시간 파생 ───────────────────────────────
+function defaultTimes(workType: string): { workStart: string; workEnd: string; trainStart: string; trainEnd: string } {
+  if (workType.includes("오전") || workType.includes("AM")) {
+    return { workStart: "09:00", workEnd: "13:00", trainStart: "09:00", trainEnd: "13:00" };
+  }
+  if (workType.includes("오후") || workType.includes("PM")) {
+    return { workStart: "13:00", workEnd: "17:00", trainStart: "13:00", trainEnd: "17:00" };
+  }
+  // 전일(8H) 기본
+  return { workStart: "09:00", workEnd: "18:00", trainStart: "09:00", trainEnd: "17:00" };
+}
+
+// ─── 시간 입력 컴포넌트 (HH:MM 직접 입력 — type=time 로케일 문제 우회) ───
+function TimeInput({ value, onChange, label }: {
+  value: string; onChange: (v: string) => void; label?: string;
+}) {
+  const [hh, mm] = value.split(":").map(v => v ?? "00");
+
+  function handleHH(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 2);
+    const h = Math.min(23, parseInt(val || "0", 10));
+    onChange(`${String(h).padStart(2, "0")}:${mm}`);
+  }
+  function handleMM(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 2);
+    const m = Math.min(59, parseInt(val || "0", 10));
+    onChange(`${hh}:${String(m).padStart(2, "0")}`);
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: 38,
+    textAlign: "center",
+    border: "none",
+    outline: "none",
+    background: "transparent",
+    fontSize: 22,
+    fontWeight: 800,
+    color: "#111827",
+    fontVariantNumeric: "tabular-nums",
+    letterSpacing: "-0.5px",
+    padding: 0,
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+      {label && (
+        <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>
+          {label}
+        </span>
+      )}
+      <div style={{ display: "flex", alignItems: "center", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "8px 10px", gap: 2 }}>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={hh}
+          onChange={handleHH}
+          style={inputStyle}
+          maxLength={2}
+        />
+        <span style={{ fontSize: 20, fontWeight: 700, color: "#9ca3af", lineHeight: 1 }}>:</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={mm}
+          onChange={handleMM}
+          style={inputStyle}
+          maxLength={2}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── 메인 컴포넌트 ─────────────────────────────────────────
 function WorklogForm() {
   const router = useRouter();
@@ -53,7 +126,6 @@ function WorklogForm() {
   const traineeName = params.get("traineeName") ?? "훈련생";
   const trainingType: TrainingType = (params.get("trainingType") as TrainingType) ?? "FIELD";
 
-  // Site 정보 (홈에서 전달받거나 API로 가져옴)
   const [siteInfo, setSiteInfo] = useState<SiteInfo>({
     workType: "전일(8H)", traineeCount: 1, isExtraTime: false,
   });
@@ -61,7 +133,6 @@ function WorklogForm() {
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
-  // 입력 상태
   const [logDate, setLogDate] = useState(todayStr);
   const [attendance, setAttendance] = useState<Attendance>("출석");
   const [workStart, setWorkStart] = useState("09:00");
@@ -77,28 +148,41 @@ function WorklogForm() {
   const [completionRate, setCompletionRate] = useState(3);
   const [content, setContent] = useState("");
 
-  // AI 음성 상태 (Groq Whisper 기반)
   const [isRecording, setIsRecording] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
-  // 제출 상태
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
 
   const premium = isPremium(siteInfo.agencyPlanType, siteInfo.trialEndsAt);
 
-  // Site 정보 로드
   useEffect(() => {
     fetch("/api/worker/site/current")
       .then(r => r.json())
-      .then(d => { if (d.success && d.data) setSiteInfo(d.data); })
+      .then(d => {
+        if (d.success && d.data) {
+          setSiteInfo(d.data);
+          // workType에서 기본 근무/훈련 시간 자동 적용
+          const times = defaultTimes(d.data.workType ?? "전일(8H)");
+          setWorkStart(times.workStart);
+          setWorkEnd(times.workEnd);
+          setTrainStart(times.trainStart);
+          setTrainEnd(times.trainEnd);
+          // 연장 기본 시간도 workEnd 기준으로 설정
+          setExtraStart(times.workEnd);
+          setExtraEnd(
+            times.workEnd === "18:00" ? "19:00" :
+            times.workEnd === "13:00" ? "14:00" :
+            times.workEnd === "17:00" ? "18:00" : "19:00"
+          );
+        }
+      })
       .catch(() => {});
   }, []);
 
-  // isExtraTime 동기화
   useEffect(() => {
     if (siteInfo.isExtraTime) {
       setIsCommuteGuide(true);
@@ -106,15 +190,12 @@ function WorklogForm() {
     }
   }, [siteInfo.isExtraTime]);
 
-  // 시간 계산
   const core = diffHours(trainStart, trainEnd);
   const extra = isExtraGuide ? diffHours(extraStart, extraEnd) : 0;
   const bonus = (isCommuteGuide || isBreakGuide) ? 1.5 : 0;
   const isMulti = siteInfo.traineeCount > 1;
   const recognized = calcRecognized({ core, extra, bonus });
 
-  // ── 음성 녹음 ────────────────────────────────────────────
-  // Groq Whisper 기반 음성 녹음 시작
   async function startRecording() {
     if (!premium) {
       alert("음성 AI 변환은 PREMIUM 기능입니다.\n에이전시 담당자에게 구독 문의해주세요.");
@@ -122,29 +203,19 @@ function WorklogForm() {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      // webm 지원 여부 확인 (Safari 대응)
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
-        : MediaRecorder.isTypeSupported("audio/webm")
-        ? "audio/webm"
-        : "audio/mp4";
-
+        : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
       const recorder = new MediaRecorder(stream, { mimeType });
       chunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         if (chunksRef.current.length === 0) return;
         const blob = new Blob(chunksRef.current, { type: mimeType });
         await sendAudioToGroq(blob, mimeType);
       };
-
-      recorder.start(500); // 500ms마다 데이터 수집
+      recorder.start(500);
       mediaRef.current = recorder;
       setIsRecording(true);
     } catch {
@@ -157,7 +228,6 @@ function WorklogForm() {
     setIsRecording(false);
   }
 
-  // Groq Whisper STT + Gemini 일지 변환
   async function sendAudioToGroq(blob: Blob, mimeType: string) {
     setAiLoading(true);
     setContent("🎤 음성 분석 중...");
@@ -167,13 +237,8 @@ function WorklogForm() {
       formData.append("audio", blob, `recording.${ext}`);
       formData.append("traineeName", traineeName);
       formData.append("taskScore", String(taskScore));
-
-      const res = await fetch("/api/worker/ai/voice-to-log", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await fetch("/api/worker/ai/voice-to-log", { method: "POST", body: formData });
       const data = await res.json();
-
       if (data.success && data.content) {
         setContent(data.content);
       } else {
@@ -188,7 +253,6 @@ function WorklogForm() {
     }
   }
 
-  // ── 전일 내용 불러오기 ──────────────────────────────────
   async function loadPrevContent() {
     try {
       const res = await fetch(`/api/worker/logs/prev?traineeId=${traineeId}`);
@@ -203,7 +267,6 @@ function WorklogForm() {
     }
   }
 
-  // ── 저장 ────────────────────────────────────────────────
   async function handleSave(isComplete: boolean) {
     setError("");
     setSaving(true);
@@ -212,25 +275,16 @@ function WorklogForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          traineeId,
-          attendanceId,
-          trainingType,
-          attendance,
-          trainStartTime: trainStart,
-          trainEndTime: trainEnd,
-          isCommuteGuide,
-          isBreakGuide,
-          isExtraGuide,
+          traineeId, attendanceId, trainingType, attendance,
+          trainStartTime: trainStart, trainEndTime: trainEnd,
+          isCommuteGuide, isBreakGuide, isExtraGuide,
           extraStartTime: isExtraGuide ? extraStart : null,
           extraEndTime: isExtraGuide ? extraEnd : null,
           time1on1: isMulti ? 0 : core + extra,
           timeGroup: isMulti ? core + extra : 0,
-          extTime1on1: 0,
-          extTimeGroup: 0,
+          extTime1on1: 0, extTimeGroup: 0,
           totalRecognizedTime: recognized.total,
-          taskScore,
-          completionRate,
-          content,
+          taskScore, completionRate, content,
           isCompleted: isComplete,
         }),
       });
@@ -247,79 +301,99 @@ function WorklogForm() {
 
   if (saved) {
     return (
-      <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
+      <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, background: "#f9fafb" }}>
         <span style={{ fontSize: 48 }}>✅</span>
-        <p style={{ fontSize: 18, fontWeight: 700, color: "#2e7d32" }}>저장되었습니다.</p>
+        <p style={{ fontSize: 18, fontWeight: 700, color: "#16a34a" }}>저장되었습니다.</p>
       </div>
     );
   }
 
+  const ATTENDANCE_OPTIONS: Attendance[] = ["출석", "결석", "지각", "조퇴"];
+  const ATTENDANCE_COLORS: Record<Attendance, string> = {
+    출석: "#111827", 결석: "#dc2626", 지각: "#d97706", 조퇴: "#7c3aed",
+  };
+
   return (
     <div style={s.page}>
+      {/* ─ 헤더 ─ */}
+      <div style={s.header}>
+        <button onClick={() => router.back()} style={s.closeBtn}>←</button>
+        <div style={s.headerCenter}>
+          <span style={s.headerTitle}>업무일지</span>
+          <span style={s.headerSub}>{traineeName} 훈련생</span>
+        </div>
+        <button onClick={() => handleSave(true)} style={s.doneBtn} disabled={saving}>
+          {saving ? "저장중" : "완료"}
+        </button>
+      </div>
+
       <div style={s.container}>
 
-        {/* 헤더 */}
-        <div style={s.header}>
-          <button onClick={() => router.back()} style={s.closeBtn}>✕</button>
-          <span style={s.headerTitle}>업무일지 작성</span>
-          <button onClick={() => handleSave(true)} style={s.doneBtn} disabled={saving}>
-            {saving ? "저장중" : "완료"}
-          </button>
+        {/* ─ 날짜 ─ */}
+        <div style={s.card}>
+          <div style={s.cardRow}>
+            <span style={s.cardLabel}>날짜</span>
+            <input
+              type="date"
+              value={logDate}
+              onChange={e => setLogDate(e.target.value)}
+              style={s.dateInput}
+            />
+          </div>
         </div>
 
-        {/* 날짜 */}
-        <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)} style={s.dateInput} />
-
-        {/* 1:1 / 1:多 안내 */}
+        {/* ─ 현장 유형 배지 ─ */}
         <div style={s.infoBadge}>
           <span style={s.infoIcon}>ℹ️</span>
-          <div>
-            <p style={s.infoTitle}>현재 {isMulti ? "1:多" : "1:1"} 지도 현장입니다.</p>
-            <p style={s.infoSub}>(훈련생 {siteInfo.traineeCount}명 / {siteInfo.workType})</p>
-          </div>
+          <span style={s.infoText}>
+            {isMulti ? "1:多" : "1:1"} 지도 현장 &nbsp;·&nbsp; {siteInfo.traineeCount}명 &nbsp;·&nbsp; {siteInfo.workType}
+          </span>
         </div>
 
-        {/* 근무 시간 */}
+        {/* ─ 출석 상태 ─ */}
         <div style={s.card}>
-          <div style={s.row}>
-            <span style={s.cardLabel}>근무 시간</span>
-            <div style={s.timeRow}>
-              <input type="time" value={workStart} onChange={e => setWorkStart(e.target.value)} style={s.timeInput} />
-              <span style={s.sep}>~</span>
-              <input type="time" value={workEnd} onChange={e => setWorkEnd(e.target.value)} style={s.timeInput} />
-              <span style={s.badge}>총 {diffHours(workStart, workEnd)}H</span>
-            </div>
-          </div>
-          <p style={s.notice}>※ {isMulti ? "1:多" : "1:1"} 지도 기준이 적용됩니다.</p>
-        </div>
-
-        {/* 훈련생별 섹션 */}
-        <div style={s.traineeSection}>
-          <div style={s.traineeHeader}>
-            <span style={s.traineeBadge}>{traineeName}</span>
-            <span style={s.traineeLabel}>훈련생</span>
-          </div>
-
-          {/* 출석 */}
+          <span style={s.cardLabel}>출결</span>
           <div style={s.attendanceRow}>
-            {(["출석", "결석", "지각", "조퇴"] as Attendance[]).map(a => (
-              <label key={a} style={s.radioLabel}>
-                <input type="radio" name="attendance" checked={attendance === a}
-                  onChange={() => setAttendance(a)} style={{ accentColor: "#2563eb" }} />
-                <span style={{ fontSize: 15, color: attendance === a ? "#333" : "#aaa" }}>{a}</span>
-              </label>
+            {ATTENDANCE_OPTIONS.map(a => (
+              <button
+                key={a}
+                onClick={() => setAttendance(a)}
+                style={{
+                  ...s.attendanceBtn,
+                  background: attendance === a ? ATTENDANCE_COLORS[a] : "#f9fafb",
+                  color: attendance === a ? "#fff" : "#6b7280",
+                  border: attendance === a ? `1.5px solid ${ATTENDANCE_COLORS[a]}` : "1.5px solid #e5e7eb",
+                }}
+              >
+                {a}
+              </button>
             ))}
           </div>
+        </div>
 
-          {/* 훈련 시간 */}
-          <div style={s.row}>
+        {/* ─ 근무 시간 ─ */}
+        <div style={s.card}>
+          <div style={{ ...s.cardRow, marginBottom: 16 }}>
+            <span style={s.cardLabel}>근무 시간</span>
+            <span style={s.timeHours}>{diffHours(workStart, workEnd)}H</span>
+          </div>
+          <div style={s.timeInputRow}>
+            <TimeInput value={workStart} onChange={setWorkStart} label="시작" />
+            <span style={s.timeSep}>—</span>
+            <TimeInput value={workEnd} onChange={setWorkEnd} label="종료" />
+          </div>
+        </div>
+
+        {/* ─ 훈련 시간 ─ */}
+        <div style={s.card}>
+          <div style={{ ...s.cardRow, marginBottom: 16 }}>
             <span style={s.cardLabel}>훈련 시간</span>
-            <div style={s.timeRow}>
-              <input type="time" value={trainStart} onChange={e => setTrainStart(e.target.value)} style={s.timeInput} />
-              <span style={s.sep}>~</span>
-              <input type="time" value={trainEnd} onChange={e => setTrainEnd(e.target.value)} style={s.timeInput} />
-              <span style={s.badge}>{core}H</span>
-            </div>
+            <span style={s.timeHours}>{core}H</span>
+          </div>
+          <div style={s.timeInputRow}>
+            <TimeInput value={trainStart} onChange={setTrainStart} label="시작" />
+            <span style={s.timeSep}>—</span>
+            <TimeInput value={trainEnd} onChange={setTrainEnd} label="종료" />
           </div>
 
           {/* 체크박스 */}
@@ -329,73 +403,85 @@ function WorklogForm() {
               { label: "휴게시간 지도", val: isBreakGuide, set: setIsBreakGuide, fixed: siteInfo.isExtraTime },
               { label: "연장 지도", val: isExtraGuide, set: setIsExtraGuide, fixed: false },
             ].map(({ label, val, set, fixed }) => (
-              <label key={label} style={{ ...s.checkItem, opacity: fixed ? 0.6 : 1 }}>
-                <input type="checkbox" checked={val || fixed}
+              <label key={label} style={{ ...s.checkItem, opacity: fixed ? 0.5 : 1 }}>
+                <input
+                  type="checkbox"
+                  checked={val || fixed}
                   onChange={e => !fixed && set(e.target.checked)}
                   disabled={fixed}
-                  style={{ accentColor: "#2563eb", width: 18, height: 18 }} />
-                <span style={{ fontSize: 14, color: "#444" }}>{label}{fixed ? " (고정)" : ""}</span>
+                  style={{ accentColor: "#111827", width: 17, height: 17, cursor: fixed ? "not-allowed" : "pointer" }}
+                />
+                <span style={{ fontSize: 14, color: "#374151" }}>
+                  {label}{fixed ? " (고정)" : ""}
+                </span>
               </label>
             ))}
           </div>
 
           {/* 연장 시간 */}
           {isExtraGuide && (
-            <div style={{ ...s.row, backgroundColor: "#fff5f5", padding: "8px 12px", borderRadius: 8, marginTop: 8 }}>
-              <span style={{ ...s.cardLabel, color: "#e53935" }}>연장 시간</span>
-              <div style={s.timeRow}>
-                <input type="time" value={extraStart} onChange={e => setExtraStart(e.target.value)} style={s.timeInput} />
-                <span style={s.sep}>~</span>
-                <input type="time" value={extraEnd} onChange={e => setExtraEnd(e.target.value)} style={s.timeInput} />
-                <span style={{ ...s.badge, backgroundColor: "#e53935" }}>{extra}H</span>
+            <div style={s.extraTimeBox}>
+              <div style={{ ...s.cardRow, marginBottom: 12 }}>
+                <span style={{ ...s.cardLabel, color: "#dc2626" }}>연장 시간</span>
+                <span style={{ ...s.timeHours, color: "#dc2626" }}>{extra}H</span>
+              </div>
+              <div style={s.timeInputRow}>
+                <TimeInput value={extraStart} onChange={setExtraStart} label="시작" />
+                <span style={s.timeSep}>—</span>
+                <TimeInput value={extraEnd} onChange={setExtraEnd} label="종료" />
               </div>
             </div>
           )}
+        </div>
 
-          {/* 과제 수행 평가 */}
-          <p style={s.subTitle}>과제 수행 평가</p>
-          <div style={s.ratingRow}>
-            {[1, 2, 3, 4, 5].map(n => (
-              <button key={n} type="button" onClick={() => setTaskScore(n)}
-                style={{ ...s.ratingBtn, ...(taskScore === n ? s.ratingActive : {}) }}>
-                <span>{n}</span>
-                <span style={s.ratingLabel}>{["매우 못함", "못함", "보통", "잘함", "매우 잘함"][n - 1]}</span>
-              </button>
-            ))}
+        {/* ─ 평가 ─ */}
+        <div style={s.card}>
+          <div style={{ marginBottom: 20 }}>
+            <p style={s.cardLabel}>과제 수행 평가</p>
+            <div style={s.ratingRow}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <button key={n} type="button" onClick={() => setTaskScore(n)}
+                  style={{ ...s.ratingBtn, background: taskScore === n ? "#111827" : "#f9fafb", color: taskScore === n ? "#fff" : "#6b7280", border: taskScore === n ? "1.5px solid #111827" : "1.5px solid #e5e7eb" }}>
+                  <span style={{ fontSize: 16, fontWeight: 700 }}>{n}</span>
+                  <span style={s.ratingLabel}>{["매우 못함", "못함", "보통", "잘함", "매우 잘함"][n - 1]}</span>
+                </button>
+              ))}
+            </div>
           </div>
-
-          {/* 과제 수행률 */}
-          <p style={s.subTitle}>과제 수행률</p>
-          <div style={s.ratingRow}>
-            {[1, 2, 3, 4, 5].map(n => (
-              <button key={n} type="button" onClick={() => setCompletionRate(n)}
-                style={{ ...s.ratingBtn, ...(completionRate === n ? s.ratingActive : {}) }}>
-                <span>{n}</span>
-                <span style={s.ratingLabel}>{["25%↓", "25%↑", "50%↑", "75%↑", "100%"][n - 1]}</span>
-              </button>
-            ))}
+          <div>
+            <p style={s.cardLabel}>과제 수행률</p>
+            <div style={s.ratingRow}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <button key={n} type="button" onClick={() => setCompletionRate(n)}
+                  style={{ ...s.ratingBtn, background: completionRate === n ? "#111827" : "#f9fafb", color: completionRate === n ? "#fff" : "#6b7280", border: completionRate === n ? "1.5px solid #111827" : "1.5px solid #e5e7eb" }}>
+                  <span style={{ fontSize: 16, fontWeight: 700 }}>{n}</span>
+                  <span style={s.ratingLabel}>{["25%↓", "25%↑", "50%↑", "75%↑", "100%"][n - 1]}</span>
+                </button>
+              ))}
+            </div>
           </div>
+        </div>
 
-          {/* 지도 내용 */}
+        {/* ─ 지도 내용 ─ */}
+        <div style={s.card}>
           <div style={s.contentHeader}>
-            <p style={s.subTitle}>지도 내용</p>
+            <span style={s.cardLabel}>지도 내용</span>
             <div style={s.contentBtns}>
-              {/* 음성 등록 버튼 */}
               <button
                 type="button"
                 style={{
                   ...s.voiceBtn,
-                  backgroundColor: isRecording ? "#e53935" : "#2563eb",
+                  background: isRecording ? "#dc2626" : "#111827",
                   opacity: aiLoading ? 0.7 : 1,
                 }}
                 onClick={isRecording ? stopRecording : startRecording}
                 disabled={aiLoading}
               >
-                {aiLoading ? "⏳ AI 변환 중..." : isRecording ? "⏹ 녹음 중지" : "🎤 음성등록"}
+                {aiLoading ? "⏳ AI 변환 중..." : isRecording ? "⏹ 중지" : "🎤 음성입력"}
                 {!premium && <span style={s.premiumTag}>PRO</span>}
               </button>
               <button type="button" style={s.prevBtn} onClick={loadPrevContent}>
-                전일내용 불러오기
+                전일내용
               </button>
             </div>
           </div>
@@ -403,7 +489,7 @@ function WorklogForm() {
           {isRecording && (
             <div style={s.recordingIndicator}>
               <span style={s.recordingDot} />
-              <span style={{ fontSize: 13, color: "#e53935" }}>녹음 중... 종료하려면 다시 누르세요</span>
+              <span style={{ fontSize: 13, color: "#dc2626" }}>녹음 중... 다시 누르면 종료</span>
             </div>
           )}
 
@@ -416,30 +502,31 @@ function WorklogForm() {
           />
         </div>
 
-        {/* 공단 인정 시간 요약 */}
+        {/* ─ 공단 인정 시간 요약 ─ */}
         <div style={s.summaryBox}>
+          <p style={s.summaryTitle}>공단 인정 시간</p>
           {[
-            { label: "1:1 지도 시간", value: `${isMulti ? "0.0" : (core + extra).toFixed(1)} H`, red: false },
-            { label: "1:多 지도 시간", value: `${isMulti ? (core + extra).toFixed(1) : "0.0"} H`, red: false },
-            { label: "1:1 연장 지도 시간", value: `${!isMulti && isExtraGuide ? extra.toFixed(1) : "0.0"} H`, red: true },
-            { label: "1:多 연장 지도 시간", value: `${isMulti && isExtraGuide ? extra.toFixed(1) : "0.0"} H`, red: true },
-            { label: "출퇴근/휴게 직무지도 인정", value: `${bonus.toFixed(1)} H`, red: false },
+            { label: "1:1 지도 시간", value: `${isMulti ? "0.0" : (core + extra).toFixed(1)} H` },
+            { label: "1:多 지도 시간", value: `${isMulti ? (core + extra).toFixed(1) : "0.0"} H` },
+            { label: "1:1 연장 지도", value: `${!isMulti && isExtraGuide ? extra.toFixed(1) : "0.0"} H`, red: true },
+            { label: "1:多 연장 지도", value: `${isMulti && isExtraGuide ? extra.toFixed(1) : "0.0"} H`, red: true },
+            { label: "출퇴근/휴게 인정", value: `${bonus.toFixed(1)} H` },
           ].map(row => (
             <div key={row.label} style={s.summaryRow}>
-              <span style={{ ...s.summaryLabel, color: row.red ? "#e53935" : "#666" }}>{row.label}</span>
-              <span style={{ ...s.summaryValue, color: row.red ? "#e53935" : "#333" }}>{row.value}</span>
+              <span style={{ ...s.summaryLabel, color: (row as any).red ? "#dc2626" : "#6b7280" }}>{row.label}</span>
+              <span style={{ ...s.summaryValue, color: (row as any).red ? "#dc2626" : "#374151" }}>{row.value}</span>
             </div>
           ))}
           <div style={s.divider} />
           <div style={s.summaryRow}>
-            <span style={s.totalLabel}>공단 인정 시간</span>
+            <span style={s.totalLabel}>합계</span>
             <span style={s.totalValue}>{recognized.total.toFixed(1)} H</span>
           </div>
         </div>
 
         {error && <p style={s.error}>{error}</p>}
 
-        {/* 임시저장 버튼 */}
+        {/* ─ 임시저장 ─ */}
         <button
           style={{ ...s.tempSaveBtn, opacity: saving ? 0.7 : 1 }}
           onClick={() => handleSave(false)}
@@ -454,7 +541,7 @@ function WorklogForm() {
 
 export default function WorklogPage() {
   return (
-    <Suspense fallback={<div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" }}>로딩 중...</div>}>
+    <Suspense fallback={<div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f9fafb" }}>로딩 중...</div>}>
       <WorklogForm />
     </Suspense>
   );
@@ -462,61 +549,71 @@ export default function WorklogPage() {
 
 // ─── 스타일 ────────────────────────────────────────────────
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", backgroundColor: "#f7f8fa" },
-  container: { maxWidth: 480, margin: "0 auto", padding: "0 0 60px" },
+  page: { minHeight: "100dvh", backgroundColor: "#f9fafb" },
+  container: { maxWidth: 480, margin: "0 auto", padding: "12px 16px 80px" },
 
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid #eee", backgroundColor: "#fff", position: "sticky", top: 0, zIndex: 10 },
-  closeBtn: { background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#666", width: 36 },
-  headerTitle: { fontSize: 17, fontWeight: 700, color: "#333" },
-  doneBtn: { backgroundColor: "transparent", border: "none", color: "#2563eb", fontSize: 16, fontWeight: 700, cursor: "pointer" },
+  // 헤더
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid #f3f4f6", backgroundColor: "#fff", position: "sticky", top: 0, zIndex: 10 },
+  closeBtn: { background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#374151", width: 36, fontWeight: 700 },
+  headerCenter: { display: "flex", flexDirection: "column", alignItems: "center", gap: 2 },
+  headerTitle: { fontSize: 16, fontWeight: 700, color: "#111827" },
+  headerSub: { fontSize: 12, color: "#9ca3af", fontWeight: 500 },
+  doneBtn: { background: "none", border: "none", color: "#111827", fontSize: 15, fontWeight: 700, cursor: "pointer", padding: "0 4px" },
 
-  dateInput: { margin: "16px 16px 8px", fontSize: 20, fontWeight: 700, border: "none", backgroundColor: "transparent", color: "#333", cursor: "pointer", width: "calc(100% - 32px)" },
+  // 카드
+  card: { backgroundColor: "#fff", borderRadius: 14, padding: "16px", marginBottom: 10, border: "1px solid #f3f4f6" },
+  cardRow: { display: "flex", justifyContent: "space-between", alignItems: "center" },
+  cardLabel: { fontSize: 14, fontWeight: 700, color: "#374151", margin: "0 0 12px" },
 
-  infoBadge: { display: "flex", alignItems: "flex-start", gap: 8, backgroundColor: "#f0f2ff", margin: "0 16px 12px", padding: "12px", borderRadius: 12 },
-  infoIcon: { fontSize: 16, flexShrink: 0, marginTop: 1 },
-  infoTitle: { fontSize: 14, fontWeight: 700, color: "#2563eb", margin: 0 },
-  infoSub: { fontSize: 12, color: "#2563eb", margin: "2px 0 0" },
+  // 날짜
+  dateInput: { border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 15, fontWeight: 600, color: "#111827", padding: "8px 12px", outline: "none", background: "#f9fafb", cursor: "pointer" },
 
-  card: { backgroundColor: "#fff", margin: "0 16px 12px", borderRadius: 14, padding: "16px" },
-  row: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  cardLabel: { fontSize: 15, fontWeight: 700, color: "#444" },
-  timeRow: { display: "flex", alignItems: "center", gap: 6 },
-  timeInput: { border: "none", borderBottom: "1.5px solid #ddd", fontSize: 16, color: "#2563eb", fontWeight: 600, width: 72, textAlign: "center", outline: "none", backgroundColor: "transparent" },
-  sep: { color: "#888", fontSize: 14 },
-  badge: { backgroundColor: "#2563eb", color: "#fff", fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 6 },
-  notice: { fontSize: 12, color: "#e53935", margin: "8px 0 0", fontWeight: 500 },
+  // 배지
+  infoBadge: { display: "flex", alignItems: "center", gap: 8, background: "#f0f9ff", borderRadius: 10, padding: "10px 14px", marginBottom: 10, border: "1px solid #bae6fd" },
+  infoIcon: { fontSize: 14, flexShrink: 0 },
+  infoText: { fontSize: 13, color: "#0369a1", fontWeight: 600 },
 
-  traineeSection: { backgroundColor: "#fff", margin: "0 16px 12px", borderRadius: 14, padding: "16px", borderTop: "6px solid #f5f5f5" },
-  traineeHeader: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16 },
-  traineeBadge: { backgroundColor: "#2563eb", color: "#fff", padding: "6px 14px", borderRadius: 20, fontSize: 14, fontWeight: 700 },
-  traineeLabel: { fontSize: 18, fontWeight: 700, color: "#333" },
-  attendanceRow: { display: "flex", gap: 16, marginBottom: 20 },
-  radioLabel: { display: "flex", alignItems: "center", gap: 4, cursor: "pointer" },
-  checks: { display: "flex", flexWrap: "wrap", gap: 12, margin: "12px 0" },
-  checkItem: { display: "flex", alignItems: "center", gap: 6, cursor: "pointer" },
-  subTitle: { fontSize: 15, fontWeight: 700, color: "#333", margin: "16px 0 10px" },
-  ratingRow: { display: "flex", gap: 6, marginBottom: 8 },
-  ratingBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 4px", border: "1.5px solid #eee", borderRadius: 10, cursor: "pointer", backgroundColor: "#fff", fontSize: 15, fontWeight: 600, color: "#666" },
-  ratingActive: { backgroundColor: "#2563eb", color: "#fff", border: "1.5px solid #2563eb" },
-  ratingLabel: { fontSize: 9, fontWeight: 400, textAlign: "center" as const },
+  // 출결
+  attendanceRow: { display: "flex", gap: 8, marginTop: 4 },
+  attendanceBtn: { flex: 1, padding: "10px 0", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", transition: "all 0.15s" },
 
-  contentHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  contentBtns: { display: "flex", gap: 6, flexWrap: "wrap" as const },
-  voiceBtn: { display: "flex", alignItems: "center", gap: 4, padding: "7px 10px", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", position: "relative" as const },
-  premiumTag: { fontSize: 9, backgroundColor: "rgba(255,255,255,0.3)", padding: "1px 4px", borderRadius: 4, marginLeft: 2 },
-  prevBtn: { padding: "7px 10px", backgroundColor: "#f0f0f0", color: "#555", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" },
-  recordingIndicator: { display: "flex", alignItems: "center", gap: 8, padding: "8px 0", animation: "fadeIn 0.3s" },
-  recordingDot: { width: 10, height: 10, borderRadius: "50%", backgroundColor: "#e53935", animation: "pulse 1s infinite" },
-  textarea: { width: "100%", border: "1.5px solid #eee", borderRadius: 12, padding: "12px", fontSize: 15, color: "#333", backgroundColor: "#fafafa", outline: "none", resize: "vertical" as const, boxSizing: "border-box" as const, fontFamily: "inherit", lineHeight: 1.6, marginTop: 8 },
+  // 시간
+  timeHours: { fontSize: 20, fontWeight: 800, color: "#111827" },
+  timeInputRow: { display: "flex", alignItems: "center", justifyContent: "center", gap: 20 },
+  timeSep: { fontSize: 18, color: "#d1d5db", fontWeight: 300, marginTop: 14 },
 
-  summaryBox: { backgroundColor: "#f7f8fa", margin: "0 16px 12px", borderRadius: 14, padding: "16px", border: "1px solid #e5e7eb" },
+  // 체크박스
+  checks: { display: "flex", flexWrap: "wrap", gap: 14, marginTop: 16, paddingTop: 16, borderTop: "1px solid #f3f4f6" },
+  checkItem: { display: "flex", alignItems: "center", gap: 7, cursor: "pointer" },
+
+  // 연장
+  extraTimeBox: { background: "#fff5f5", borderRadius: 10, padding: "14px", marginTop: 14, border: "1px solid #fecaca" },
+
+  // 평가
+  ratingRow: { display: "flex", gap: 6 },
+  ratingBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "10px 4px", borderRadius: 10, cursor: "pointer", fontSize: 14 },
+  ratingLabel: { fontSize: 9, fontWeight: 500, textAlign: "center" as const, lineHeight: 1.2 },
+
+  // 지도 내용
+  contentHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  contentBtns: { display: "flex", gap: 6 },
+  voiceBtn: { display: "flex", alignItems: "center", gap: 4, padding: "7px 11px", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", position: "relative" as const },
+  premiumTag: { fontSize: 9, background: "rgba(255,255,255,0.25)", padding: "1px 4px", borderRadius: 4 },
+  prevBtn: { padding: "7px 11px", background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  recordingIndicator: { display: "flex", alignItems: "center", gap: 8, padding: "10px 0", marginBottom: 4 },
+  recordingDot: { width: 8, height: 8, borderRadius: "50%", background: "#dc2626", animation: "pulse 1s infinite" },
+  textarea: { width: "100%", border: "1px solid #e5e7eb", borderRadius: 10, padding: "12px", fontSize: 14, color: "#374151", background: "#f9fafb", outline: "none", resize: "vertical" as const, boxSizing: "border-box" as const, fontFamily: "inherit", lineHeight: 1.7 },
+
+  // 요약
+  summaryBox: { background: "#fff", borderRadius: 14, padding: "16px", marginBottom: 10, border: "1px solid #f3f4f6" },
+  summaryTitle: { fontSize: 14, fontWeight: 700, color: "#374151", margin: "0 0 12px" },
   summaryRow: { display: "flex", justifyContent: "space-between", marginBottom: 8 },
   summaryLabel: { fontSize: 13 },
-  summaryValue: { fontSize: 13, fontWeight: 700 },
-  divider: { height: 1, backgroundColor: "#e5e7eb", margin: "10px 0" },
-  totalLabel: { fontSize: 15, fontWeight: 700, color: "#2563eb" },
-  totalValue: { fontSize: 18, fontWeight: 700, color: "#2563eb" },
+  summaryValue: { fontSize: 13, fontWeight: 600 },
+  divider: { height: 1, background: "#f3f4f6", margin: "10px 0" },
+  totalLabel: { fontSize: 15, fontWeight: 700, color: "#111827" },
+  totalValue: { fontSize: 20, fontWeight: 800, color: "#111827" },
 
-  error: { color: "#e53935", fontSize: 13, backgroundColor: "#fff5f5", padding: "12px 16px", borderRadius: 10, margin: "0 16px 12px", textAlign: "center" },
-  tempSaveBtn: { width: "calc(100% - 32px)", margin: "0 16px", padding: 14, backgroundColor: "#333", color: "#fff", fontSize: 16, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer" },
+  error: { color: "#dc2626", fontSize: 13, background: "#fef2f2", padding: "12px 16px", borderRadius: 10, marginBottom: 12, textAlign: "center" as const, border: "1px solid #fecaca" },
+  tempSaveBtn: { width: "100%", padding: 14, background: "#374151", color: "#fff", fontSize: 15, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer", marginTop: 4 },
 };
