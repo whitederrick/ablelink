@@ -30,7 +30,7 @@ export async function checkPlanAccess(
   const assignment = await prisma.siteAssignment.findFirst({
     where: {
       userId,
-      status: "ACTIVE",
+      status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] },
     },
     include: {
       agency: true,

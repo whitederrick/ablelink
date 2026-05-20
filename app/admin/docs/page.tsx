@@ -49,6 +49,10 @@ export default function AdminDocsPage() {
   const [mode,         setMode]         = useState<"select"|"view">("select");
   const [iframeKey,    setIframeKey]    = useState(0);
   const [loadingCoaches, setLoadingCoaches] = useState(false);
+  const [toEmail,      setToEmail]      = useState("");
+  const [managerEmail, setManagerEmail] = useState("");
+  const [sending,      setSending]      = useState(false);
+  const [sendResult,   setSendResult]   = useState<{success:boolean;msg:string}|null>(null);
 
   useEffect(() => {
     setLoadingCoaches(true);
@@ -69,9 +73,10 @@ export default function AdminDocsPage() {
       .finally(() => setLoadingCoaches(false));
   }, []);
 
-  // 직무지도원 선택 시 훈련생 목록 조회
+  // 직무지도원 선택 시 훈련생 목록 + 담당자 이메일 조회
   useEffect(() => {
     if (!selectedCoach) return;
+    // 훈련생 목록
     fetch(`/api/admin/docs/trainees?coachUserId=${selectedCoach}`)
       .then(r => r.json())
       .then(d => {
@@ -79,6 +84,15 @@ export default function AdminDocsPage() {
           setCoaches(prev => prev.map(c =>
             c.userId === selectedCoach ? { ...c, trainees: d.trainees } : c
           ));
+        }
+      });
+    // 현장 담당자 이메일
+    fetch(`/api/admin/docs/manager-email?coachUserId=${selectedCoach}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.email) {
+          setManagerEmail(d.email);
+          setToEmail(d.email);
         }
       });
   }, [selectedCoach]);
@@ -99,6 +113,25 @@ export default function AdminDocsPage() {
     window.open(previewUrl(), "_blank");
   }
 
+  async function handleSend() {
+    if (!toEmail) { alert("수신 이메일을 입력해주세요."); return; }
+    setSending(true); setSendResult(null);
+    try {
+      const res = await fetch("/api/admin/docs/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coachUserId: selectedCoach, docType, periodStart, periodEnd,
+          traineeId: traineeId || undefined,
+          toEmail,
+        }),
+      });
+      const d = await res.json();
+      setSendResult({ success: d.success, msg: d.message || (d.success ? "발송 완료" : "발송 실패") });
+    } catch { setSendResult({ success:false, msg:"서버 연결 실패" }); }
+    finally { setSending(false); }
+  }
+
   function handleView() {
     if (!selectedCoach) { alert("직무지도원을 선택해주세요."); return; }
     if (needsTrainee && !traineeId) { alert("훈련생을 선택해주세요."); return; }
@@ -108,6 +141,25 @@ export default function AdminDocsPage() {
 
   function handleDownload() {
     window.open(previewUrl(), "_blank");
+  }
+
+  async function handleSend() {
+    if (!toEmail) { alert("수신 이메일을 입력해주세요."); return; }
+    setSending(true); setSendResult(null);
+    try {
+      const res = await fetch("/api/admin/docs/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coachUserId: selectedCoach, docType, periodStart, periodEnd,
+          traineeId: traineeId || undefined,
+          toEmail,
+        }),
+      });
+      const d = await res.json();
+      setSendResult({ success: d.success, msg: d.message || (d.success ? "발송 완료" : "발송 실패") });
+    } catch { setSendResult({ success:false, msg:"서버 연결 실패" }); }
+    finally { setSending(false); }
   }
 
   const docLabel = DOC_GROUPS.flatMap(g => g.docs).find(d => d.id === docType)?.label || "문서";
@@ -132,13 +184,32 @@ export default function AdminDocsPage() {
           title="문서 미리보기"
         />
         {/* 하단 액션 */}
-        <div style={{ display:"flex", gap:10, padding:"12px 20px", background:"#fff", borderTop:"1px solid #f0f0f0" }}>
-          <button onClick={() => setMode("select")} style={{ flex:1, padding:"12px", background:"#f3f4f6", color:"#374151", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:"pointer" }}>
-            ← 목록으로
-          </button>
-          <button onClick={handleDownload} style={{ flex:2, padding:"12px", background:"#111827", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:"pointer" }}>
-            📥 PDF 다운로드
-          </button>
+        <div style={{ padding:"12px 20px", background:"#fff", borderTop:"1px solid #f0f0f0" }}>
+          {/* 이메일 발송 */}
+          <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+            <input type="email" placeholder={managerEmail ? `담당자: ${managerEmail}` : "수신 이메일 주소"} value={toEmail}
+              onChange={e=>{ setToEmail(e.target.value); setSendResult(null); }}
+              style={{ flex:1, height:40, border:"1px solid #e5e7eb", borderRadius:8, padding:"0 12px", fontSize:13, outline:"none" }} />
+            <button onClick={handleSend} disabled={sending}
+              style={{ padding:"0 16px", background:"#16a34a", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer", opacity:sending?0.7:1, flexShrink:0 }}>
+              {sending ? "발송 중..." : "📧 발송"}
+            </button>
+          </div>
+          {sendResult && (
+            <p style={{ fontSize:13, color:sendResult.success?"#16a34a":"#dc2626", margin:"0 0 8px", fontWeight:600 }}>
+              {sendResult.success?"✅":"❌"} {sendResult.msg}
+            </p>
+          )}
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={() => { setMode("select"); setSendResult(null); }}
+              style={{ flex:1, padding:"11px", background:"#f3f4f6", color:"#374151", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+              ← 목록으로
+            </button>
+            <button onClick={handleDownload}
+              style={{ flex:2, padding:"11px", background:"#111827", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+              📥 PDF 다운로드
+            </button>
+          </div>
         </div>
       </div>
     );
