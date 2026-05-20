@@ -488,9 +488,19 @@ function WorklogForm() {
 
   if (saved) {
     return (
-      <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, background: "#f9fafb" }}>
-        <span style={{ fontSize: 48 }}>✅</span>
-        <p style={{ fontSize: 18, fontWeight: 700, color: "#16a34a" }}>저장되었습니다.</p>
+      <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, background: "#f9fafb", padding: 24 }}>
+        <span style={{ fontSize: 56 }}>✅</span>
+        <p style={{ fontSize: 18, fontWeight: 700, color: "#16a34a", margin: 0 }}>일지가 저장되었습니다.</p>
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <button onClick={() => router.push("/worker/home")}
+            style={{ padding: "12px 24px", background: "#111827", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            🏠 홈으로
+          </button>
+          <button onClick={() => router.push("/worker/calendar")}
+            style={{ padding: "12px 24px", background: "#fff", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            📅 캘린더
+          </button>
+        </div>
       </div>
     );
   }

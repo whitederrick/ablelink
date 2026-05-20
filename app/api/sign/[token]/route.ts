@@ -13,6 +13,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const BUCKET = "signatures";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  try {
   const { token } = await params;
   const rec = await (prisma as any).siteSignToken.findUnique({
     where: { token: token },
@@ -39,9 +40,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     periodEnd: rec.periodEnd,
     expiresAt: rec.expiresAt,
   });
+  } catch (e: any) {
+    console.error("[sign/token GET]", e);
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  try {
   const { token } = await params;
   const rec = await (prisma as any).siteSignToken.findUnique({
     where: { token: token },
@@ -83,4 +89,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   });
 
   return NextResponse.json({ success: true, signatureUrl: publicUrl });
+  } catch (e: any) {
+    console.error("[sign/token POST]", e);
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
+  }
 }
