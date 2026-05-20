@@ -460,13 +460,18 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
             </button>
           )}
           {status === "DONE" && (
-            <button
-              style={{ ...s.actionBtn, ...btnStyle.DONE, opacity: actionLoading ? 0.7 : 1 }}
-              onClick={handleReconfirm}
-              disabled={actionLoading}
-            >
-              {actionLoading ? "처리 중..." : "퇴근 시간 재확인"}
-            </button>
+            <>
+              <button
+                style={{ ...s.actionBtn, ...btnStyle.DONE, opacity: actionLoading ? 0.7 : 1 }}
+                onClick={handleReconfirm}
+                disabled={actionLoading}
+              >
+                {actionLoading ? "처리 중..." : "퇴근 시간 재확인"}
+              </button>
+              <p style={{ fontSize: 12, color: "#d97706", margin: "10px 0 0", textAlign: "center" as const }}>
+                ⏱ 퇴근 후 60분이 지나면 자동으로 확정됩니다
+              </p>
+            </>
           )}
           {status === "CLOSED" && (
             <button style={{ ...s.actionBtn, ...btnStyle.CLOSED }} disabled>
@@ -493,14 +498,8 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
                     <p style={s.traineeGender}>{t.gender === "M" ? "남성" : "여성"}</p>
                   </div>
                   <button
-                    style={{
-                      ...s.logBtn,
-                      opacity: status === "BEFORE" || status === "CLOSED" ? 0.45 : 1,
-                      cursor: status === "BEFORE" || status === "CLOSED" ? "not-allowed" : "pointer",
-                    }}
-                    disabled={status === "BEFORE" || status === "CLOSED"}
+                    style={s.logBtn}
                     onClick={() => {
-                      if (status === "BEFORE" || status === "CLOSED") return;
                       const aid = homeData?.attendanceId ?? "";
                       const params = new URLSearchParams({
                         traineeId: t.id,
