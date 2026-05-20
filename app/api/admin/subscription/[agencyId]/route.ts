@@ -9,11 +9,11 @@ import { PLAN_LIMITS } from "@/lib/planGuard";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { agencyId: string } }
+  { params }: { params: Promise<{ agencyId: string }> }
 ) {
   try {
     const { planType } = await request.json();
-    const agencyId = BigInt(params.agencyId);
+    const agencyId = BigInt(agencyId);
 
     const limits = PLAN_LIMITS[planType] || { maxCoaches: 0, maxSites: 0 };
     const now = new Date();

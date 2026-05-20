@@ -78,6 +78,12 @@ export async function GET(request: NextRequest) {
         managerPhone: manager?.phoneNumber ?? "",
         fieldTrainingStart: assignment.startDate?.toISOString() ?? null,
         fieldTrainingEnd: assignment.endDate?.toISOString() ?? null,
+        // 오늘 출근 기록 ID (worklog에서 attendanceId 없을 때 사용)
+        attendanceId: null, // home API에서 처리
+        // 훈련 단계
+        trainingType: (assignment as any)?.serviceStep === "PRE_TRAINING"
+          ? "PRE" : (assignment as any)?.serviceStep === "ADAPTATION"
+          ? "ADAPTATION" : "FIELD",
       },
     });
   } catch (error: any) {

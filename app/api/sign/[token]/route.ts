@@ -12,9 +12,10 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const BUCKET = "signatures";
 
-export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
   const rec = await (prisma as any).siteSignToken.findUnique({
-    where: { token: params.token },
+    where: { token: token },
     include: { assignment: { include: { site: true } } },
   });
 
@@ -40,9 +41,10 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
   });
 }
 
-export async function POST(request: NextRequest, { params }: { params: { token: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
   const rec = await (prisma as any).siteSignToken.findUnique({
-    where: { token: params.token },
+    where: { token: token },
   });
 
   if (!rec) return NextResponse.json({ success: false, message: "유효하지 않은 링크입니다." }, { status: 404 });
@@ -56,7 +58,7 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
   if (imageBlob.size > 500 * 1024)
     return NextResponse.json({ success: false, message: "서명 이미지가 너무 큽니다." }, { status: 400 });
 
-  const fileName = `sign-tokens/${params.token}/signature_${Date.now()}.png`;
+  const fileName = `sign-tokens/${token}/signature_${Date.now()}.png`;
 
   const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${fileName}`, {
     method: "POST",
@@ -76,7 +78,7 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
   const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
 
   await (prisma as any).siteSignToken.update({
-    where: { token: params.token },
+    where: { token: token },
     data: { signatureUrl: publicUrl, usedAt: new Date() },
   });
 
