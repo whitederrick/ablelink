@@ -31,6 +31,8 @@ interface HomeData {
   workStartTime: string | null;
   workEndTime: string | null;
   isFinalClosed: boolean;
+  serviceStep: string | null;
+  trainingType: "PRE" | "FIELD" | "ADAPTATION";
 }
 
 // ─── 유틸 ───────────────────────────────────────────────
@@ -505,9 +507,11 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
                     style={s.logBtn}
                     onClick={() => {
                       const aid = homeData?.attendanceId ?? "";
+                      const trainingType = homeData?.trainingType || "FIELD";
                       const params = new URLSearchParams({
                         traineeId: t.id,
                         traineeName: t.name,
+                        trainingType,
                         ...(aid ? { attendanceId: aid } : {}),
                       });
                       router.push(`/worker/worklog?${params.toString()}`);

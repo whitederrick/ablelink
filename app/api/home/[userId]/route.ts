@@ -151,6 +151,12 @@ export async function GET(
           gender: t.gender,
           status: t.status,
         })),
+        serviceStep: (activeAssignment as any)?.serviceStep || "FIELD_TRAINING",
+        trainingType: (activeAssignment as any)?.serviceStep === "PRE_TRAINING"
+          ? "PRE"
+          : (activeAssignment as any)?.serviceStep === "ADAPTATION"
+          ? "ADAPTATION"
+          : "FIELD",
         attendanceStatus: attendanceStatus,
         attendanceId: todayAttendance?.id ? todayAttendance.id.toString() : null,
         startTime: todayAttendance?.startTime ?? null,

@@ -499,7 +499,9 @@ function WorklogForm() {
       <div style={s.header}>
         <button onClick={() => router.back()} style={s.closeBtn}>←</button>
         <div style={s.headerCenter}>
-          <span style={s.headerTitle}>업무일지</span>
+          <span style={s.headerTitle}>
+            {trainingType === "ADAPTATION" ? "적응지도 일지" : "훈련 일지"}
+          </span>
           <span style={s.headerSub}>{traineeName} 훈련생</span>
         </div>
         <button onClick={() => handleSave(true)} style={s.doneBtn} disabled={saving}>
