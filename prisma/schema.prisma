@@ -200,6 +200,7 @@ model SiteAssignment {
   attendances        DailyAttendance[]
   submissionRequests SubmissionRequest[]
   DocumentRun        DocumentRun[]
+  signTokens         SiteSignToken[]
 
   @@index([userId, status])
   @@index([siteId, status])
@@ -402,7 +403,8 @@ model AdminUser {
   agencyId BigInt? @map("agency_id")
   agency   Agency? @relation(fields: [agencyId], references: [id])
 
-  agencyName String? // legacy/표시용
+  agencyName   String? // legacy/표시용
+  signatureUrl String? @map("signature_url") // 서명 이미지 URL (위탁기관/공단 담당자 서명용)
 
   isActive    Boolean   @default(true)
   lastLoginAt DateTime?
@@ -585,6 +587,28 @@ model Submission {
   @@index([requestId, submittedAt])
   @@index([submittedByUserId, submittedAt])
   @@map("submissions")
+}
+
+// 사업체담당자 즉석 서명 토큰
+model SiteSignToken {
+  id          BigInt   @id @default(autoincrement())
+  token       String   @unique  // UUID 기반 일회용 토큰
+  docType     String   @map("doc_type")        // attendance-sheet 등
+  assignmentId BigInt  @map("assignment_id")
+  periodStart String   @map("period_start")    // YYYY-MM-DD
+  periodEnd   String   @map("period_end")      // YYYY-MM-DD
+  signRole    String   @map("sign_role")       // company_manager | gov_agent
+  signerName  String?  @map("signer_name")     // 서명자 이름 표시용
+  signatureUrl String? @map("signature_url")   // 서명 완료 후 저장
+  usedAt      DateTime? @map("used_at")        // 서명 완료 시각
+  expiresAt   DateTime  @map("expires_at")     // 만료 시각 (기본 7일)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  assignment SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([assignmentId])
+  @@map("site_sign_tokens")
 }
 
 model AuditEvent {

@@ -1,5 +1,7 @@
 // lib/pdfGenerator.ts
-// jsreport API 호출하여 PDF 생성 + AWS SES 이메일 발송
+// jsreport API 호출 → PDF 생성 + AWS SES 이메일 발송
+// ⚠️ jsreport 템플릿(Handlebars)은 절대 수정하지 않음
+//    각 템플릿이 기대하는 데이터 구조를 정확히 만들어 전달만 함
 
 const JSREPORT_URL = process.env.JSREPORT_URL || "http://localhost:5488";
 
@@ -11,41 +13,41 @@ export type DocType =
   | "adaptation-final-eval";
 
 export const DOC_LABELS: Record<DocType, string> = {
-  "attendance-sheet":     "출근부",
-  "training-daily-log":   "지원고용 훈련일지",
-  "trainee-final-eval":   "훈련생 종합 평가기록부",
-  "adaptation-daily-log": "취업 후 적응지도 일지",
-  "adaptation-final-eval":"적응지도 종합 평가기록부",
+  "attendance-sheet":      "직무지도원 출근부",
+  "training-daily-log":    "지원고용 훈련일지",
+  "trainee-final-eval":    "지원고용 훈련생 종합 평가기록부",
+  "adaptation-daily-log":  "취업 후 적응지도 일지",
+  "adaptation-final-eval": "적응지도 대상자 종합 평가기록부",
 };
 
-// ── PDF 생성 ─────────────────────────────────────────────
-export async function generatePdf(
-  template: DocType,
-  data: Record<string, any>
-): Promise<Buffer> {
+// ── PDF 생성 (jsreport API 호출) ─────────────────────────
+export async function generatePdf(template: DocType, data: Record<string, any>): Promise<Buffer> {
   const res = await fetch(`${JSREPORT_URL}/api/report`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      template: { name: template },
-      data,
-    }),
+    body: JSON.stringify({ template: { name: template }, data }),
   });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`jsreport 오류 (${res.status}): ${errText}`);
-  }
-
+  if (!res.ok) throw new Error(`jsreport 오류 (${res.status}): ${await res.text()}`);
   return Buffer.from(await res.arrayBuffer());
 }
 
-// ── 출근부 데이터 생성 ────────────────────────────────────
+// ── 서명 구조 타입 ───────────────────────────────────────
+export interface SignatureSet {
+  coachImageUrl?:          string | null;  // 직무지도원
+  govAgentImageUrl?:       string | null;  // (공단/위탁기관) 담당자 = 에이전시 관리자
+  companyManagerImageUrl?: string | null;  // 사업체 담당자 (즉석 서명)
+  agencyAgentImageUrl?:    string | null;  // 적응지도 문서용 위탁기관 담당자
+}
+
+// ─────────────────────────────────────────────────────────
+// ① 출근부 (attendance-sheet)
+// beforeRender: entries[] → weeks[] 자동 변환
+// ─────────────────────────────────────────────────────────
 export function buildAttendanceSheetData(params: {
   coachName: string;
   coachPhone: string;
   companyName: string;
-  periodStart: string;
+  periodStart: string;  // YYYY-MM-DD
   periodEnd: string;
   attendances: Array<{
     workDate: string;
@@ -56,100 +58,243 @@ export function buildAttendanceSheetData(params: {
     extTime1on1: number;
     extTimeGroup: number;
   }>;
-  signatureUrl?: string | null;
+  signatures: SignatureSet;
 }) {
-  const { coachName, coachPhone, companyName, periodStart, periodEnd, attendances, signatureUrl } = params;
-  const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-  const startDate = new Date(periodStart);
-  const endDate = new Date(periodEnd);
+  const { coachName, coachPhone, companyName, periodStart, periodEnd, attendances, signatures } = params;
 
-  const weeks: any[] = [];
-  let current = new Date(startDate);
-  const startDay = current.getDay();
-  current.setDate(current.getDate() - ((startDay + 6) % 7));
+  const entries = attendances
+    .filter(a => a.startTime)
+    .map(a => ({
+      date: a.workDate,
+      start: a.startTime,
+      end: a.endTime || "",
+      hours: +(a.time1on1 + a.extTime1on1).toFixed(1),
+      multiHours: +(a.timeGroup + a.extTimeGroup).toFixed(1),
+    }));
 
-  while (current <= endDate) {
-    const week: any = { days: {} };
-    for (let i = 0; i < 7; i++) {
-      const dayKey = DAYS[current.getDay()];
-      const ymd = current.toISOString().slice(0, 10);
-      const att = attendances.find(a => a.workDate === ymd);
-      if (current >= startDate && current <= endDate && att?.startTime) {
-        week.days[dayKey] = {
-          date: `${current.getMonth() + 1}/${current.getDate()}`,
-          start: att.startTime,
-          end: att.endTime || "",
-          hours: att.time1on1 + att.extTime1on1,
-          multiHours: att.timeGroup + att.extTimeGroup,
-        };
-      } else {
-        week.days[dayKey] = { date: null };
-      }
-      current.setDate(current.getDate() + 1);
-    }
-    weeks.push(week);
-    if (current > endDate) break;
-  }
-
-  const workDays = attendances.filter(a => a.startTime).length;
-  const totalHours = attendances.reduce((s, a) => s + a.time1on1 + a.timeGroup + a.extTime1on1 + a.extTimeGroup, 0);
   const now = new Date();
-
   return {
     coachName, coachPhone, companyName,
-    periodStartYMD: periodStart.replace(/-/g, " . "),
-    periodEndYMD: periodEnd.replace(/-/g, " . "),
-    totalDays: workDays,
-    totalHours,
+    periodStart, periodEnd,
+    totalDays:       entries.length,
+    totalHours:      +attendances.reduce((s,a) => s+a.time1on1+a.timeGroup+a.extTime1on1+a.extTimeGroup, 0).toFixed(1),
     weeklyHolidayCount: 0,
-    monthlyLeaveCount: 0,
-    allowanceTotalWon: "0",
-    oneToOneHours: attendances.reduce((s, a) => s + a.time1on1 + a.extTime1on1, 0),
-    oneToManyHours: attendances.reduce((s, a) => s + a.timeGroup + a.extTimeGroup, 0),
-    otOneToOneHours: 0,
-    otOneToManyHours: 0,
-    year: now.getFullYear(),
-    month: now.getMonth() + 1,
-    day: now.getDate(),
-    weeks,
-    signatureUrl: signatureUrl || null,
+    monthlyLeaveCount:  0,
+    allowanceTotalWon:  "0",
+    oneToOneHours:   +attendances.reduce((s,a) => s+a.time1on1+a.extTime1on1, 0).toFixed(1),
+    oneToManyHours:  +attendances.reduce((s,a) => s+a.timeGroup+a.extTimeGroup, 0).toFixed(1),
+    otOneToOneHours: +attendances.reduce((s,a) => s+a.extTime1on1, 0).toFixed(1),
+    otOneToManyHours:+attendances.reduce((s,a) => s+a.extTimeGroup, 0).toFixed(1),
+    year: now.getFullYear(), month: now.getMonth()+1, day: now.getDate(),
+    entries, // beforeRender가 entries → weeks 변환
+    signatures: {
+      govAgent:       { imageUrl: signatures.govAgentImageUrl       || null },
+      companyManager: { imageUrl: signatures.companyManagerImageUrl || null },
+      coach:          { imageUrl: signatures.coachImageUrl          || null },
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────
+// ② 훈련일지 (training-daily-log)
+// 서명: govAgent(공단/위탁기관), companyManager(사업체), coach(직무지도원)
+// ─────────────────────────────────────────────────────────
+export function buildTrainingDailyLogData(params: {
+  traineeName: string;
+  companyName: string;
+  preTrainingPeriod: string;    // "2026.01.05 ~ 2026.01.05"
+  fieldTrainingPeriod: string;  // "2026.01.06 ~ 2026.05.31"
+  entries: Array<{
+    trainingType: "PRE" | "FIELD";
+    date: string;        // YYYY-MM-DD
+    attendance: string;  // 출석/결석/지각/조퇴
+    hours: string;       // "4H"
+    guidance: string;    // Y/N
+    task: string;
+    performanceLabel: string;
+    performanceTime: string;
+    coaching: string;
+  }>;
+  signatures: SignatureSet;
+}) {
+  const { traineeName, companyName, preTrainingPeriod, fieldTrainingPeriod, entries, signatures } = params;
+
+  let prevType = "";
+  const mappedEntries = entries.map(e => {
+    const display = e.trainingType !== prevType
+      ? (e.trainingType === "PRE" ? "사전훈련" : "현장훈련") : "〃";
+    prevType = e.trainingType;
+    const [y, m, d] = e.date.split("-");
+    return {
+      trainingTypeDisplay: display,
+      dateY:  y ? `${y}년` : "",
+      dateMD: m && d ? `${Number(m)}/${Number(d)}` : "",
+      attendance: e.attendance,
+      hours: e.hours,
+      guidance: e.guidance,
+      task: e.task,
+      performanceLabel: e.performanceLabel,
+      performanceTime: e.performanceTime,
+      coaching: e.coaching,
+    };
+  });
+
+  return {
+    traineeName, companyName,
+    preTrainingPeriod, fieldTrainingPeriod,
+    entries: mappedEntries,
+    signatures: {
+      govAgent:       { imageUrl: signatures.govAgentImageUrl       || null },
+      companyManager: { imageUrl: signatures.companyManagerImageUrl || null },
+      coach:          { imageUrl: signatures.coachImageUrl          || null },
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────
+// ③ 훈련생 종합평가 (trainee-final-eval)
+// beforeRender: scores/comments → sections/총점 자동 계산
+// 서명: coach(직무지도원), agencyAgent(위탁기관 담당자)
+// ─────────────────────────────────────────────────────────
+export function buildTraineeFinalEvalData(params: {
+  traineeName: string;
+  companyName: string;
+  prePeriod: string;    // "2026.01.05 ~ 2026.01.05"
+  fieldPeriod: string;  // "2026.01.06 ~ 2026.05.31"
+  scores: {
+    WORK_ATTITUDE:    Array<{ initial: number|string; final: number|string }>;
+    INTERPERSONAL:    Array<{ initial: number|string; final: number|string }>;
+    WORK_STYLE:       Array<{ initial: number|string; final: number|string }>;
+    WORK_PERFORMANCE: Array<{ initial: number|string; final: number|string }>;
+  };
+  comments: {
+    WORK_ATTITUDE?:    string;
+    INTERPERSONAL?:    string;
+    WORK_STYLE?:       string;
+    WORK_PERFORMANCE?: string;
+  };
+  signatures: SignatureSet;
+}) {
+  const { traineeName, companyName, prePeriod, fieldPeriod, scores, comments, signatures } = params;
+  return {
+    traineeName, companyName,
+    prePeriod, fieldPeriod,
+    scores, comments,
+    signatures: {
+      coach:       { imageUrl: signatures.coachImageUrl       || null },
+      agencyAgent: { imageUrl: signatures.govAgentImageUrl    || null }, // 위탁기관 = 에이전시 관리자
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────
+// ④ 적응지도 일지 (adaptation-daily-log)
+// beforeRender: entries 자동 생성 또는 직접 전달
+// 서명: coach(직무지도원), govAgent(위탁기관 담당자)
+// ─────────────────────────────────────────────────────────
+export function buildAdaptationDailyLogData(params: {
+  traineeName: string;
+  companyName: string;
+  periodStart: string;  // YYYY-MM-DD (beforeRender가 포맷 변환)
+  periodEnd: string;
+  defaultWorkTime?: string;  // "09:00~13:00"
+  entries: Array<{
+    date: string;          // YYYY-MM-DD
+    attendance: string;    // 출석/결석/지각/조퇴
+    workTime: string;      // "09:00~13:00"
+    guidance: string;      // Y/N
+    task: string;
+    performanceLabel: string;
+    performanceTime: string;
+    coaching: string;
+  }>;
+  issues?: string;  // 특이사항
+  signatures: SignatureSet;
+}) {
+  const { traineeName, companyName, periodStart, periodEnd, entries, issues, signatures, defaultWorkTime } = params;
+
+  // beforeRender가 dateMD 포맷 자동 변환하므로 dateISO만 전달
+  const mappedEntries = entries.map(e => {
+    const [, m, d] = e.date.split("-");
+    return {
+      dateISO: e.date,
+      dateMD: m && d ? `${m}/${d}` : "",
+      attendance: e.attendance,
+      workTime: e.workTime,
+      guidance: e.guidance,
+      task: e.task,
+      performanceLabel: e.performanceLabel,
+      performanceTime: e.performanceTime,
+      coaching: e.coaching,
+    };
+  });
+
+  return {
+    traineeName, companyName,
+    periodStart, periodEnd,
+    defaultWorkTime: defaultWorkTime || "",
+    entries: mappedEntries,
+    issues: issues || "",
+    signatures: {
+      coach:    { imageUrl: signatures.coachImageUrl    || null },
+      govAgent: { imageUrl: signatures.govAgentImageUrl || null },
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────
+// ⑤ 적응지도 종합평가 (adaptation-final-eval)
+// beforeRender: sections/총점 자동 계산
+// 서명: coach(직무지도원), agencyAgent(위탁기관 담당자)
+// ─────────────────────────────────────────────────────────
+export function buildAdaptationFinalEvalData(params: {
+  traineeName: string;
+  companyName: string;
+  periodStart: string;  // YYYY-MM-DD
+  periodEnd: string;
+  scores: {
+    WORK_ATTITUDE:    Array<{ initial: number|string; final: number|string }>;
+    INTERPERSONAL:    Array<{ initial: number|string; final: number|string }>;
+    WORK_STYLE:       Array<{ initial: number|string; final: number|string }>;
+    WORK_PERFORMANCE: Array<{ initial: number|string; final: number|string }>;
+  };
+  comments: {
+    WORK_ATTITUDE?:    string;
+    INTERPERSONAL?:    string;
+    WORK_STYLE?:       string;
+    WORK_PERFORMANCE?: string;
+  };
+  signatures: SignatureSet;
+}) {
+  const { traineeName, companyName, periodStart, periodEnd, scores, comments, signatures } = params;
+  return {
+    traineeName, companyName,
+    periodStart, periodEnd,
+    scores, comments,
+    signatures: {
+      coach:       { imageUrl: signatures.coachImageUrl    || null },
+      agencyAgent: { imageUrl: signatures.govAgentImageUrl || null },
+    },
   };
 }
 
 // ── AWS SES 이메일 발송 ───────────────────────────────────
 export async function sendEmailWithPdf(params: {
-  from: string;       // 직무지도원 등록 이메일 (발신자)
-  to: string;         // 에이전시 담당자 이메일 (수신자)
-  subject: string;
-  body: string;
-  pdfBuffer: Buffer;
-  fileName: string;
+  from: string; to: string; subject: string; body: string;
+  pdfBuffer: Buffer; fileName: string;
 }): Promise<void> {
-  const region = process.env.AWS_SES_REGION || "ap-northeast-2";
+  const region    = process.env.AWS_SES_REGION     || "ap-northeast-2";
   const accessKey = process.env.AWS_SES_ACCESS_KEY;
   const secretKey = process.env.AWS_SES_SECRET_KEY;
-  const defaultFrom = process.env.EMAIL_FROM || "AbleLink <noreply@able-link.co.kr>";
 
-  if (!accessKey || !secretKey) {
-    throw new Error("AWS SES 환경변수가 설정되지 않았습니다.");
-  }
+  if (!accessKey || !secretKey) throw new Error("AWS SES 환경변수가 설정되지 않았습니다.");
 
   const { SESClient, SendRawEmailCommand } = await import("@aws-sdk/client-ses");
-
-  const client = new SESClient({
-    region,
-    credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
-  });
+  const client = new SESClient({ region, credentials: { accessKeyId: accessKey, secretAccessKey: secretKey } });
 
   const boundary = `----=_Part_${Date.now()}`;
-  const base64Pdf = params.pdfBuffer.toString("base64");
-  const htmlBody = params.body.replace(/\n/g, "<br>");
-
-  // 발신자: 직무지도원 이메일이 있으면 사용, 없으면 기본값
-  const fromAddr = params.from || defaultFrom;
-
   const rawMessage = [
-    `From: ${fromAddr}`,
+    `From: ${params.from}`,
     `To: ${params.to}`,
     `Subject: =?UTF-8?B?${Buffer.from(params.subject).toString("base64")}?=`,
     `MIME-Version: 1.0`,
@@ -159,19 +304,17 @@ export async function sendEmailWithPdf(params: {
     `Content-Type: text/html; charset=UTF-8`,
     `Content-Transfer-Encoding: base64`,
     ``,
-    Buffer.from(`<p>${htmlBody}</p>`).toString("base64"),
+    Buffer.from(`<p>${params.body.replace(/\n/g,"<br>")}</p>`).toString("base64"),
     ``,
     `--${boundary}`,
     `Content-Type: application/pdf; name="${params.fileName}"`,
     `Content-Transfer-Encoding: base64`,
     `Content-Disposition: attachment; filename="${params.fileName}"`,
     ``,
-    base64Pdf,
+    params.pdfBuffer.toString("base64"),
     ``,
     `--${boundary}--`,
   ].join("\r\n");
 
-  await client.send(new SendRawEmailCommand({
-    RawMessage: { Data: Buffer.from(rawMessage) },
-  }));
+  await client.send(new SendRawEmailCommand({ RawMessage: { Data: Buffer.from(rawMessage) } }));
 }
