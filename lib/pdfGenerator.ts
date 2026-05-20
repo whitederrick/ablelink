@@ -20,8 +20,45 @@ export const DOC_LABELS: Record<DocType, string> = {
   "adaptation-final-eval": "적응지도 대상자 종합 평가기록부",
 };
 
+// ── 서명 이미지 URL → base64 data URI 변환 ──────────────
+// jsreport(Chrome PDF)는 외부 URL 이미지를 크기 제어 못함
+// base64로 변환하면 HTML에 직접 포함되어 height/width가 완벽하게 적용됨
+async function urlToBase64(url: string): Promise<string | null> {
+  if (!url || !url.startsWith("http")) return url || null;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    const b64 = Buffer.from(buf).toString("base64");
+    const mime = res.headers.get("content-type") || "image/png";
+    return `data:${mime};base64,${b64}`;
+  } catch {
+    return null;
+  }
+}
+
+// 서명 세트의 모든 imageUrl을 base64로 변환
+async function resolveSignatureImages(sigs: Record<string, any>): Promise<Record<string, any>> {
+  const result: Record<string, any> = {};
+  for (const [key, val] of Object.entries(sigs)) {
+    if (val && typeof val === "object" && "imageUrl" in val) {
+      result[key] = {
+        ...val,
+        imageUrl: val.imageUrl ? await urlToBase64(val.imageUrl) : null,
+      };
+    } else {
+      result[key] = val;
+    }
+  }
+  return result;
+}
+
 // ── PDF 생성 (jsreport API 호출) ─────────────────────────
 export async function generatePdf(template: DocType, data: Record<string, any>): Promise<Buffer> {
+  // 서명 이미지 URL → base64 변환 (Chrome PDF에서 크기 제어 보장)
+  if (data.signatures) {
+    data = { ...data, signatures: await resolveSignatureImages(data.signatures) };
+  }
   const res = await fetch(`${JSREPORT_URL}/api/report`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

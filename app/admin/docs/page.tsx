@@ -95,6 +95,10 @@ export default function AdminDocsPage() {
     return `/api/admin/docs/preview?${p.toString()}`;
   }
 
+  function handleDownload() {
+    window.open(previewUrl(), "_blank");
+  }
+
   function handleView() {
     if (!selectedCoach) { alert("직무지도원을 선택해주세요."); return; }
     if (needsTrainee && !traineeId) { alert("훈련생을 선택해주세요."); return; }
@@ -127,6 +131,15 @@ export default function AdminDocsPage() {
           style={{ flex:1, border:"none", background:"#e5e7eb" }}
           title="문서 미리보기"
         />
+        {/* 하단 액션 */}
+        <div style={{ display:"flex", gap:10, padding:"12px 20px", background:"#fff", borderTop:"1px solid #f0f0f0" }}>
+          <button onClick={() => setMode("select")} style={{ flex:1, padding:"12px", background:"#f3f4f6", color:"#374151", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+            ← 목록으로
+          </button>
+          <button onClick={handleDownload} style={{ flex:2, padding:"12px", background:"#111827", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+            📥 PDF 다운로드
+          </button>
+        </div>
       </div>
     );
   }
