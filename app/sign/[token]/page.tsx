@@ -18,6 +18,22 @@ const DOC_LABELS: Record<string, string> = {
   "adaptation-final-eval": "적응지도 종합 평가기록부",
 };
 
+// 서명 이미지를 고정 크기(w x h)로 리사이즈
+async function resizeSignature(src: HTMLCanvasElement, w: number, h: number): Promise<Blob> {
+  const offscreen = document.createElement("canvas");
+  offscreen.width = w; offscreen.height = h;
+  const ctx = offscreen.getContext("2d")!;
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
+  const pad = 20;
+  const scale = Math.min((w - pad*2) / src.width, (h - pad*2) / src.height);
+  const sw = src.width * scale, sh = src.height * scale;
+  ctx.drawImage(src, (w-sw)/2, (h-sh)/2, sw, sh);
+  return new Promise<Blob>((res, rej) => {
+    offscreen.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95);
+  });
+}
+
+
 export default function SignPage() {
   const { token } = useParams<{ token: string }>();
   const [info, setInfo]   = useState<Info | null>(null);

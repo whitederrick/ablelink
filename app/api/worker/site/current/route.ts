@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
         siteId: site.id.toString(),
         assignmentId: assignment.id.toString(),
         companyName: site.companyName,
-        workType: assignment.workType || site.workType || "전일(8H)",
+        workType: assignment.workType || "전일(8H)",
         isExtraTime: assignment.isExtraTime,
         traineeCount: site.trainees.length,
         trainees: site.trainees.map(t => ({
