@@ -173,12 +173,7 @@ export async function POST(request: NextRequest) {
         companyName: site.companyName,
         prePeriod:    fmtPeriod(assignment.stepStart?.toISOString().slice(0,10) || start, start),
         fieldPeriod:  fmtPeriod(start, end),
-        scores: {
-          WORK_ATTITUDE:    evalScoresT.WORK_ATTITUDE    || defaultScores(),
-          INTERPERSONAL:    evalScoresT.INTERPERSONAL    || defaultScores(),
-          WORK_STYLE:       evalScoresT.WORK_STYLE       || defaultScores(),
-          WORK_PERFORMANCE: evalScoresT.WORK_PERFORMANCE || defaultScores(),
-        },
+        scores: mergeScores(evalScoresT),
         comments: evalCommentsT,
         signatures,
       });
@@ -229,12 +224,7 @@ export async function POST(request: NextRequest) {
         traineeName: trainee?.name || "",
         companyName: site.companyName,
         periodStart: start, periodEnd: end,
-        scores: {
-          WORK_ATTITUDE:    evalScoresA.WORK_ATTITUDE    || defaultScores(),
-          INTERPERSONAL:    evalScoresA.INTERPERSONAL    || defaultScores(),
-          WORK_STYLE:       evalScoresA.WORK_STYLE       || defaultScores(),
-          WORK_PERFORMANCE: evalScoresA.WORK_PERFORMANCE || defaultScores(),
-        },
+        scores: mergeScores(evalScoresA),
         comments: evalCommentsA,
         signatures,
       });
