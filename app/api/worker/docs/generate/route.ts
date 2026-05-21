@@ -162,18 +162,24 @@ export async function POST(request: NextRequest) {
       if (!traineeId) return NextResponse.json({ success: false, message: "traineeId 필요" }, { status: 400 });
       const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
 
+      const evalTraining = await prisma.traineeEvaluation.findFirst({
+        where: { traineeId: BigInt(traineeId), writerId: userId, evalType: "TRAINING" },
+        orderBy: { updatedAt: "desc" },
+      });
+      const evalScoresT = (evalTraining?.scores as any) || {};
+      const evalCommentsT = (evalTraining?.comments as any) || {};
       pdfData = buildTraineeFinalEvalData({
         traineeName: trainee?.name || "",
         companyName: site.companyName,
         prePeriod:    fmtPeriod(assignment.stepStart?.toISOString().slice(0,10) || start, start),
         fieldPeriod:  fmtPeriod(start, end),
         scores: {
-          WORK_ATTITUDE:    defaultScores(),
-          INTERPERSONAL:    defaultScores(),
-          WORK_STYLE:       defaultScores(),
-          WORK_PERFORMANCE: defaultScores(),
+          WORK_ATTITUDE:    evalScoresT.WORK_ATTITUDE    || defaultScores(),
+          INTERPERSONAL:    evalScoresT.INTERPERSONAL    || defaultScores(),
+          WORK_STYLE:       evalScoresT.WORK_STYLE       || defaultScores(),
+          WORK_PERFORMANCE: evalScoresT.WORK_PERFORMANCE || defaultScores(),
         },
-        comments: {},
+        comments: evalCommentsT,
         signatures,
       });
       fileName = `훈련생평가_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
@@ -213,17 +219,23 @@ export async function POST(request: NextRequest) {
       if (!traineeId) return NextResponse.json({ success: false, message: "traineeId 필요" }, { status: 400 });
       const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
 
+      const evalAdapt = await prisma.traineeEvaluation.findFirst({
+        where: { traineeId: BigInt(traineeId), writerId: userId, evalType: "ADAPTATION" },
+        orderBy: { updatedAt: "desc" },
+      });
+      const evalScoresA = (evalAdapt?.scores as any) || {};
+      const evalCommentsA = (evalAdapt?.comments as any) || {};
       pdfData = buildAdaptationFinalEvalData({
         traineeName: trainee?.name || "",
         companyName: site.companyName,
         periodStart: start, periodEnd: end,
         scores: {
-          WORK_ATTITUDE:    defaultScores(),
-          INTERPERSONAL:    defaultScores(),
-          WORK_STYLE:       defaultScores(),
-          WORK_PERFORMANCE: defaultScores(),
+          WORK_ATTITUDE:    evalScoresA.WORK_ATTITUDE    || defaultScores(),
+          INTERPERSONAL:    evalScoresA.INTERPERSONAL    || defaultScores(),
+          WORK_STYLE:       evalScoresA.WORK_STYLE       || defaultScores(),
+          WORK_PERFORMANCE: evalScoresA.WORK_PERFORMANCE || defaultScores(),
         },
-        comments: {},
+        comments: evalCommentsA,
         signatures,
       });
       fileName = `적응지도평가_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;

@@ -212,6 +212,22 @@ export default function DocsPage() {
           </div>
         )}
 
+        {/* 평가 점수 입력 (종합평가 문서일 때) */}
+        {(selectedDoc === "trainee-final-eval" || selectedDoc === "adaptation-final-eval") && selectedTraineeId && (
+          <div style={s.section}>
+            <button
+              onClick={() => {
+                const evalType = selectedDoc === "trainee-final-eval" ? "TRAINING" : "ADAPTATION";
+                const t = siteInfo?.trainees?.find((t: any) => t.id === selectedTraineeId);
+                router.push(`/worker/evaluation?traineeId=${selectedTraineeId}&traineeName=${encodeURIComponent(t?.name||"")}&evalType=${evalType}&periodStart=${periodStart}&periodEnd=${periodEnd}`);
+              }}
+              style={{ width:"100%", padding:"13px", background:"#f0fdf4", color:"#16a34a", border:"1.5px solid #bbf7d0", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer" }}
+            >
+              ✏️ 평가 점수 입력하기
+            </button>
+          </div>
+        )}
+
         {/* 기간 */}
         <div style={s.section}>
           <p style={s.sectionTitle}>기간 설정</p>

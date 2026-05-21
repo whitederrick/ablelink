@@ -228,8 +228,9 @@ model Trainee {
   note                String?
   createdAt           DateTime      @default(now()) @map("created_at")
 
-  logs       TraineeLog[]
-  placements TraineePlacement[]
+  logs        TraineeLog[]
+  placements  TraineePlacement[]
+  evaluations TraineeEvaluation[]
   site       Site?              @relation(fields: [currentSiteId], references: [id])
 
   @@map("trainees")
@@ -918,4 +919,26 @@ enum PayType {
 enum PayrollStatus {
   DRAFT
   FINALIZED
+}
+
+// ------------------------------------------------------
+// 훈련생/적응지도 종합평가 점수
+// ------------------------------------------------------
+model TraineeEvaluation {
+  id          BigInt   @id @default(autoincrement())
+  traineeId   BigInt   @map("trainee_id")
+  writerId    BigInt   @map("writer_id")
+  evalType    String   @map("eval_type")   // "TRAINING" | "ADAPTATION"
+  periodStart String   @map("period_start") // YYYY-MM-DD
+  periodEnd   String   @map("period_end")
+  scores      Json     // { WORK_ATTITUDE:[{initial,final}×5], ... }
+  comments    Json     @default("{}") // { WORK_ATTITUDE:"...", ... }
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+
+  trainee Trainee @relation(fields: [traineeId], references: [id])
+  writer  User    @relation(fields: [writerId],  references: [id])
+
+  @@index([traineeId, evalType])
+  @@map("trainee_evaluations")
 }
