@@ -8,7 +8,7 @@ async function resizeSignature(src: HTMLCanvasElement, w: number, h: number): Pr
   const off = document.createElement("canvas");
   off.width = w; off.height = h;
   const ctx = off.getContext("2d")!;
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 500, 120);
   const pad = 20, scale = Math.min((w-pad*2)/src.width, (h-pad*2)/src.height);
   ctx.drawImage(src, (w-src.width*scale)/2, (h-src.height*scale)/2, src.width*scale, src.height*scale);
   return new Promise<Blob>((res, rej) => off.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95));
@@ -33,10 +33,10 @@ export default function AdminSignaturePage() {
   useEffect(() => {
     if (mode !== "draw") return;
     const c = canvasRef.current; if (!c) return;
-    c.width  = 600;
-    c.height = 200;
+    c.width  = 500;
+    c.height = 120;
     const ctx = c.getContext("2d")!;
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 600, 200);
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 500, 120);
     ctx.strokeStyle = "#111827"; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
   }, [mode]);
 
@@ -57,7 +57,7 @@ export default function AdminSignaturePage() {
   function onEnd() { setDrawing(false); lastPos.current = null; }
   function clear() {
     const c = canvasRef.current!, ctx = c.getContext("2d")!;
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 600, 200);
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 500, 120);
   }
 
   async function save() {
@@ -155,7 +155,7 @@ const s: Record<string, React.CSSProperties> = {
   sectionTitle: { fontSize: 14, fontWeight: 700, color: "#111827", margin: "0 0 12px" },
   previewBox:   { backgroundColor: "#f9fafb", borderRadius: 12, padding: 20, border: "2px dashed #e5e7eb", minHeight: 120, display: "flex", alignItems: "center", justifyContent: "center" },
   canvasWrap:   { position: "relative", backgroundColor: "#fff", borderRadius: 12, border: "1.5px solid #e5e7eb", overflow: "hidden", marginBottom: 12 },
-  canvasStyle:  { display: "block", width: "100%", maxWidth: "600px", height: "200px", touchAction: "none", cursor: "crosshair" },
+  canvasStyle:  { display: "block", width: "100%", maxWidth: "600px", height: "120px", touchAction: "none", cursor: "crosshair" },
   hint:         { position: "absolute", bottom: 8, right: 12, fontSize: 11, color: "#d1d5db", margin: 0, pointerEvents: "none" },
   btnPrimary:   { padding: "9px 18px", background: "#111827", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" },
   btnSecondary: { padding: "9px 14px", background: "#fff", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, cursor: "pointer" },
