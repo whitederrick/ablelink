@@ -66,10 +66,10 @@ export default function SignPage() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
-    canvas.width  = 300;
+    canvas.width  = 230;
     canvas.height = 100;
     ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, 300, 100);
+    ctx.fillRect(0, 0, 230, 100);
     ctx.strokeStyle = "#000000";
     ctx.lineWidth   = 2.5;
     ctx.lineCap     = "round";
@@ -110,7 +110,7 @@ export default function SignPage() {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
     ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, 300, 100);
+    ctx.fillRect(0, 0, 230, 100);
   }
 
   async function submit() {
@@ -262,7 +262,7 @@ const s: Record<string, React.CSSProperties> = {
   clearBtn:   { background:"none", border:"1px solid #e5e7eb", borderRadius:6, padding:"5px 12px", fontSize:13, color:"#374151", cursor:"pointer" },
 
   canvasWrap: { position:"relative", backgroundColor:"#fff", borderRadius:14, border:"2px solid #e5e7eb", overflow:"hidden", marginBottom:14 },
-  canvas:     { display:"block", width:"100%", maxWidth:"300px", height:"100px", touchAction:"none", cursor:"crosshair", border:"2px solid #374151", borderRadius:8, backgroundColor:"#fff" },
+  canvas:     { display:"block", width:"100%", maxWidth:"230px", height:"100px", touchAction:"none", cursor:"crosshair", border:"2px solid #374151", borderRadius:8, backgroundColor:"#fff" },
   canvasHint: { position:"absolute", bottom:8, right:12, fontSize:11, color:"#d1d5db", margin:0, pointerEvents:"none" },
 
   submitBtn:  { width:"100%", padding:"16px", backgroundColor:"#111827", color:"#fff", border:"none", borderRadius:12, fontSize:16, fontWeight:700, cursor:"pointer", marginBottom:12 },
