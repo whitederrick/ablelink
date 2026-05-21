@@ -65,15 +65,11 @@ export default function SignPage() {
     if (phase !== "ready") return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.offsetWidth;
-    const h = canvas.offsetHeight;
-    canvas.width  = w * dpr;
-    canvas.height = h * dpr;
     const ctx = canvas.getContext("2d")!;
-    ctx.scale(dpr, dpr);
+    canvas.width  = 600;
+    canvas.height = 200;
     ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, 600, 200);
     ctx.strokeStyle = "#111827";
     ctx.lineWidth   = 2.5;
     ctx.lineCap     = "round";
@@ -114,14 +110,16 @@ export default function SignPage() {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
     ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
+    ctx.fillRect(0, 0, 600, 200);
   }
 
   async function submit() {
     const canvas = canvasRef.current!;
     setSaving(true);
     try {
-      const blob = await resizeSignature(canvas, 600, 200);
+      const blob = await new Promise<Blob>((res, rej) =>
+        canvas.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95)
+      );
       const fd = new FormData();
       fd.append("signature", blob, "signature.png");
       const res = await fetch(`/api/sign/${token}`, { method: "POST", body: fd });

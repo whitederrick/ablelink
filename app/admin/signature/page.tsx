@@ -33,11 +33,10 @@ export default function AdminSignaturePage() {
   useEffect(() => {
     if (mode !== "draw") return;
     const c = canvasRef.current; if (!c) return;
-    const dpr = window.devicePixelRatio || 1;
-    c.width = c.offsetWidth * dpr; c.height = c.offsetHeight * dpr;
+    c.width  = 600;
+    c.height = 200;
     const ctx = c.getContext("2d")!;
-    ctx.scale(dpr, dpr);
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.offsetWidth, c.offsetHeight);
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 600, 200);
     ctx.strokeStyle = "#111827"; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
   }, [mode]);
 
@@ -58,14 +57,16 @@ export default function AdminSignaturePage() {
   function onEnd() { setDrawing(false); lastPos.current = null; }
   function clear() {
     const c = canvasRef.current!, ctx = c.getContext("2d")!;
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.offsetWidth, c.offsetHeight);
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 600, 200);
   }
 
   async function save() {
     const c = canvasRef.current!;
     setSaving(true);
     try {
-      const blob = await resizeSignature(c, 600, 200);
+      const blob = await new Promise<Blob>((res, rej) =>
+        c.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95)
+      );
       const fd = new FormData(); fd.append("signature", blob, "sig.png");
       const d = await fetch("/api/admin/signature", { method: "POST", body: fd }).then(r => r.json());
       if (d.success) { setSavedUrl(d.signatureUrl); setMode("view"); flash("서명이 저장되었습니다."); }

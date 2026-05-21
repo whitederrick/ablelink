@@ -49,12 +49,9 @@ export default function SignaturePage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // 해상도 선명하게 (devicePixelRatio 적용)
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
+    // 고정 크기(600x200px) - 모든 기기에서 동일한 서명 크기 보장
+    canvas.width  = 600;
+    canvas.height = 200;
 
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, rect.width, rect.height);
@@ -137,7 +134,9 @@ export default function SignaturePage() {
     setSaving(true);
     try {
       // 항상 600x200px으로 리사이즈해서 저장 (크기 통일)
-      const blob = await resizeSignature(canvas, 600, 200);
+      const blob = await new Promise<Blob>((res, rej) =>
+        canvas.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95)
+      );
 
       const formData = new FormData();
       formData.append("signature", blob, "signature.png");
