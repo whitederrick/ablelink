@@ -66,11 +66,11 @@ export default function SignPage() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
-    canvas.width  = 500;
-    canvas.height = 120;
+    canvas.width  = 300;
+    canvas.height = 100;
     ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, 500, 120);
-    ctx.strokeStyle = "#111827";
+    ctx.fillRect(0, 0, 300, 100);
+    ctx.strokeStyle = "#000000";
     ctx.lineWidth   = 2.5;
     ctx.lineCap     = "round";
     ctx.lineJoin    = "round";
@@ -110,7 +110,7 @@ export default function SignPage() {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
     ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, 500, 120);
+    ctx.fillRect(0, 0, 300, 100);
   }
 
   async function submit() {
@@ -221,7 +221,7 @@ export default function SignPage() {
             onTouchMove={draw}
             onTouchEnd={endDraw}
           />
-          <p style={s.canvasHint}>손가락으로 서명하세요</p>
+          <p style={s.canvasHint}>✍️ 패드 전체에 꽉 차게 서명해 주세요</p>
         </div>
 
         {/* 제출 */}
@@ -262,7 +262,7 @@ const s: Record<string, React.CSSProperties> = {
   clearBtn:   { background:"none", border:"1px solid #e5e7eb", borderRadius:6, padding:"5px 12px", fontSize:13, color:"#374151", cursor:"pointer" },
 
   canvasWrap: { position:"relative", backgroundColor:"#fff", borderRadius:14, border:"2px solid #e5e7eb", overflow:"hidden", marginBottom:14 },
-  canvas:     { display:"block", width:"100%", maxWidth:"600px", height:"120px", touchAction:"none", cursor:"crosshair", border:"1px solid #e5e7eb", borderRadius:8 },
+  canvas:     { display:"block", width:"100%", maxWidth:"300px", height:"100px", touchAction:"none", cursor:"crosshair", border:"2px solid #374151", borderRadius:8, backgroundColor:"#fff" },
   canvasHint: { position:"absolute", bottom:8, right:12, fontSize:11, color:"#d1d5db", margin:0, pointerEvents:"none" },
 
   submitBtn:  { width:"100%", padding:"16px", backgroundColor:"#111827", color:"#fff", border:"none", borderRadius:12, fontSize:16, fontWeight:700, cursor:"pointer", marginBottom:12 },

@@ -50,13 +50,13 @@ export default function SignaturePage() {
     if (!ctx) return;
 
     // 고정 크기(600x200px) - 모든 기기에서 동일한 서명 크기 보장
-    canvas.width  = 500;
-    canvas.height = 120;
+    canvas.width  = 300;
+    canvas.height = 100;
 
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, rect.width, rect.height);
     ctx.strokeStyle = "#1a1a2e";
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 4;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
   }, []);
@@ -348,7 +348,7 @@ const s: Record<string, React.CSSProperties> = {
   // 캔버스
   drawSection: { display: "flex", flexDirection: "column", gap: 12 },
   canvasWrap: { position: "relative", backgroundColor: "#fff", borderRadius: 16, border: "1.5px solid #e5e7eb", overflow: "hidden" },
-  canvas: { display: "block", width: "100%", maxWidth: "600px", height: "120px", touchAction: "none", cursor: "crosshair", border: "1px solid #e5e7eb", borderRadius: 8 },
+  canvas: { display: "block", width: "100%", maxWidth: "300px", height: "100px", touchAction: "none", cursor: "crosshair", border: "2px solid #374151", borderRadius: 8, backgroundColor: "#fff" },
   canvasHint: { position: "absolute", bottom: 10, right: 14, fontSize: 11, color: "#d1d5db", margin: 0, pointerEvents: "none" },
   drawBtns: { display: "flex", gap: 10 },
   clearBtn: { flex: 1, padding: "13px", backgroundColor: "#f3f4f6", color: "#374151", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" },

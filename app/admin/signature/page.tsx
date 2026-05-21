@@ -8,7 +8,7 @@ async function resizeSignature(src: HTMLCanvasElement, w: number, h: number): Pr
   const off = document.createElement("canvas");
   off.width = w; off.height = h;
   const ctx = off.getContext("2d")!;
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 500, 120);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 300, 100);
   const pad = 20, scale = Math.min((w-pad*2)/src.width, (h-pad*2)/src.height);
   ctx.drawImage(src, (w-src.width*scale)/2, (h-src.height*scale)/2, src.width*scale, src.height*scale);
   return new Promise<Blob>((res, rej) => off.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95));
@@ -33,11 +33,11 @@ export default function AdminSignaturePage() {
   useEffect(() => {
     if (mode !== "draw") return;
     const c = canvasRef.current; if (!c) return;
-    c.width  = 500;
-    c.height = 120;
+    c.width  = 300;
+    c.height = 100;
     const ctx = c.getContext("2d")!;
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 500, 120);
-    ctx.strokeStyle = "#111827"; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 300, 100);
+    ctx.strokeStyle = "#000000"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
   }, [mode]);
 
   function getPos(e: React.MouseEvent | React.TouchEvent, c: HTMLCanvasElement) {
@@ -57,7 +57,7 @@ export default function AdminSignaturePage() {
   function onEnd() { setDrawing(false); lastPos.current = null; }
   function clear() {
     const c = canvasRef.current!, ctx = c.getContext("2d")!;
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 500, 120);
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 300, 100);
   }
 
   async function save() {
@@ -119,7 +119,7 @@ export default function AdminSignaturePage() {
               <canvas ref={canvasRef} style={s.canvasStyle}
                 onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd} onMouseLeave={onEnd}
                 onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd} />
-              <p style={s.hint}>마우스 또는 터치로 서명하세요</p>
+              <p style={s.hint}>✍️ 패드 전체에 꽉 차게 서명해 주세요</p>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={clear} style={s.btnSecondary}>지우기</button>
@@ -136,6 +136,7 @@ export default function AdminSignaturePage() {
         <p style={s.sectionTitle}>서명 사용 안내</p>
         <ul style={{ margin: 0, padding: "0 0 0 18px", fontSize: 13, color: "#6b7280", lineHeight: 2.0 }}>
           <li><strong>(위탁기관/공단) 담당자</strong> → 현재 로그인한 에이전시 관리자 서명 자동 삽입</li>
+          <li style={{ color: "#ef4444", fontWeight: 600 }}>⚠️ 서명 패드 전체에 꽉 차게 서명하셔야 문서에 적정 크기로 표시됩니다</li>
           <li><strong>직무지도원</strong> → 직무지도원이 앱에서 등록한 서명 자동 삽입</li>
           <li><strong>사업체 담당자</strong> → 문서 생성 화면에서 QR코드/링크로 현장 즉석 서명</li>
         </ul>
