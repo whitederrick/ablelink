@@ -1,5 +1,5 @@
 // lib/pdf/templates-html/TRAINING_DAILY_LOG.ts
-import { buildNotoSansKrFontFaceCss } from "../engine/fontEmbed";
+import { buildHcrFontFaceCss } from "../engine/fontEmbed";
 
 type Section = "PRE" | "FIELD";
 
@@ -108,7 +108,7 @@ function groupByRun(rows: TrainingDailyLogRow[]) {
 }
 
 export function renderTRAINING_DAILY_LOG_HTML(payload: TrainingDailyLogPayload) {
-  const fontCss = buildNotoSansKrFontFaceCss();
+  const fontCss = buildHcrFontFaceCss("20mm 18mm 15mm 30mm");
   const rows = buildRows(payload);
   const runs = groupByRun(rows);
 
@@ -154,7 +154,7 @@ export function renderTRAINING_DAILY_LOG_HTML(payload: TrainingDailyLogPayload) 
     @page { size: A4; margin: 12mm; }
     html, body { padding: 0; margin: 0; }
     body {
-      font-family: "NotoSansKR", sans-serif;
+      font-family: "HCRDotum", "Dotum", sans-serif;
       color: #000;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
