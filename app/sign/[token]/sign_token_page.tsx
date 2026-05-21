@@ -262,7 +262,7 @@ const s: Record<string, React.CSSProperties> = {
   clearBtn:   { background:"none", border:"1px solid #e5e7eb", borderRadius:6, padding:"5px 12px", fontSize:13, color:"#374151", cursor:"pointer" },
 
   canvasWrap: { position:"relative", backgroundColor:"#fff", borderRadius:14, border:"2px solid #e5e7eb", overflow:"hidden", marginBottom:14 },
-  canvas:     { display:"block", width:"100%", height:"220px", touchAction:"none", cursor:"crosshair" },
+  canvas:     { display:"block", width:"100%", maxWidth:"600px", height:"200px", touchAction:"none", cursor:"crosshair", border:"1px solid #e5e7eb", borderRadius:8 },
   canvasHint: { position:"absolute", bottom:8, right:12, fontSize:11, color:"#d1d5db", margin:0, pointerEvents:"none" },
 
   submitBtn:  { width:"100%", padding:"16px", backgroundColor:"#111827", color:"#fff", border:"none", borderRadius:12, fontSize:16, fontWeight:700, cursor:"pointer", marginBottom:12 },

@@ -348,7 +348,7 @@ const s: Record<string, React.CSSProperties> = {
   // 캔버스
   drawSection: { display: "flex", flexDirection: "column", gap: 12 },
   canvasWrap: { position: "relative", backgroundColor: "#fff", borderRadius: 16, border: "1.5px solid #e5e7eb", overflow: "hidden" },
-  canvas: { display: "block", width: "100%", height: "220px", touchAction: "none", cursor: "crosshair" },
+  canvas: { display: "block", width: "100%", maxWidth: "600px", height: "200px", touchAction: "none", cursor: "crosshair", border: "1px solid #e5e7eb", borderRadius: 8 },
   canvasHint: { position: "absolute", bottom: 10, right: 14, fontSize: 11, color: "#d1d5db", margin: 0, pointerEvents: "none" },
   drawBtns: { display: "flex", gap: 10 },
   clearBtn: { flex: 1, padding: "13px", backgroundColor: "#f3f4f6", color: "#374151", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" },

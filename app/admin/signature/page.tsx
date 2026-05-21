@@ -155,7 +155,7 @@ const s: Record<string, React.CSSProperties> = {
   sectionTitle: { fontSize: 14, fontWeight: 700, color: "#111827", margin: "0 0 12px" },
   previewBox:   { backgroundColor: "#f9fafb", borderRadius: 12, padding: 20, border: "2px dashed #e5e7eb", minHeight: 120, display: "flex", alignItems: "center", justifyContent: "center" },
   canvasWrap:   { position: "relative", backgroundColor: "#fff", borderRadius: 12, border: "1.5px solid #e5e7eb", overflow: "hidden", marginBottom: 12 },
-  canvasStyle:  { display: "block", width: "100%", height: 180, touchAction: "none", cursor: "crosshair" },
+  canvasStyle:  { display: "block", width: "100%", maxWidth: "600px", height: "200px", touchAction: "none", cursor: "crosshair" },
   hint:         { position: "absolute", bottom: 8, right: 12, fontSize: 11, color: "#d1d5db", margin: 0, pointerEvents: "none" },
   btnPrimary:   { padding: "9px 18px", background: "#111827", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" },
   btnSecondary: { padding: "9px 14px", background: "#fff", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, cursor: "pointer" },
