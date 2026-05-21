@@ -1,21 +1,12 @@
 // app/api/admin/document-versions/[id]/pdf/route.ts
-// PDF 렌더링 — jsreport 기반 (5종 문서 모두 지원)
+// 저장된 DocumentVersion의 sourceData로 PDF 렌더링
 
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
-import { generatePdf, type DocType } from "@/lib/pdfGenerator";
-
-// DocumentRun.docType(대문자) → jsreport 템플릿명(소문자) 변환
-const DOC_TYPE_MAP: Record<string, DocType> = {
-  TRAINING_DAILY_LOG:  "training-daily-log",
-  ATTENDANCE_SHEET:    "attendance-sheet",
-  ADAPTATION_DAILY_LOG:"adaptation-daily-log",
-  ADAPTATION_FINAL_EVAL:"adaptation-final-eval",
-  TRAINEE_FINAL_EVAL:  "trainee-final-eval",
-};
+import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -38,17 +29,12 @@ export async function GET(
       where: { id: versionId },
       select: {
         id: true,
-        stage: true,
         sourceData: true,
         pdfUrl: true,
         run: {
           select: {
             docType: true,
-            assignment: {
-              select: {
-                site: { select: { companyName: true, agencyId: true } },
-              },
-            },
+            assignment: { select: { site: { select: { companyName: true, agencyId: true } } } },
           },
         },
       },
@@ -62,29 +48,24 @@ export async function GET(
       if (!agencyId || agencyId !== myAgencyId) throw new Error("FORBIDDEN");
     }
 
-    const jsreportType = DOC_TYPE_MAP[v.run?.docType ?? ""];
-
-    // jsreport 미지원 docType이면 기존 pdfUrl로 리다이렉트
-    if (!jsreportType) {
+    const docType = v.run?.docType as DocumentType | undefined;
+    if (!docType) {
       if (v.pdfUrl) return NextResponse.redirect(v.pdfUrl);
       throw new Error("VALIDATION:docType");
     }
 
-    const source = (v.sourceData ?? {}) as any;
-
-    // sourceData에 companyName 보강
-    const data = {
-      ...source,
-      companyName: source.companyName ?? v.run?.assignment?.site?.companyName ?? "",
+    const payload = {
+      ...((v.sourceData ?? {}) as any),
+      companyName: (v.sourceData as any)?.companyName ?? v.run?.assignment?.site?.companyName ?? "",
     };
 
-    const pdfBuffer = await generatePdf(jsreportType, data);
+    const pdfBuffer = await renderPdfToBuffer({ documentType: docType, payload });
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${jsreportType}_v${v.id}.pdf"`,
+        "Content-Disposition": `inline; filename="${docType}_v${v.id}.pdf"`,
         "Cache-Control": "no-store",
       },
     });
@@ -92,9 +73,6 @@ export async function GET(
   } catch (e: any) {
     if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
-    return NextResponse.json(
-      { success: false, message: msg },
-      { status: errToStatus(msg) }
-    );
+    return NextResponse.json({ success: false, message: msg }, { status: errToStatus(msg) });
   }
 }

@@ -14,17 +14,17 @@ interface SiteInfo {
 }
 
 const DOC_TYPES = [
-  { id: "attendance-sheet",      label: "출근부",          icon: "📋", desc: "월별 출퇴근 기록",          needsTrainee: false },
-  { id: "training-daily-log",    label: "훈련일지",         icon: "📝", desc: "지원고용 훈련일지",          needsTrainee: true  },
-  { id: "trainee-final-eval",    label: "훈련생 종합평가",  icon: "📊", desc: "훈련생 종합 평가기록부",      needsTrainee: true  },
-  { id: "adaptation-daily-log",  label: "적응지도 일지",    icon: "📄", desc: "취업 후 적응지도 일지",       needsTrainee: true  },
-  { id: "adaptation-final-eval", label: "적응지도 종합평가",icon: "📈", desc: "적응지도 종합 평가기록부",    needsTrainee: true  },
+  { id: "ATTENDANCE_SHEET",      label: "출근부",          icon: "📋", desc: "월별 출퇴근 기록",          needsTrainee: false },
+  { id: "TRAINING_DAILY_LOG",    label: "훈련일지",         icon: "📝", desc: "지원고용 훈련일지",          needsTrainee: true  },
+  { id: "TRAINEE_FINAL_EVAL",    label: "훈련생 종합평가",  icon: "📊", desc: "훈련생 종합 평가기록부",      needsTrainee: true  },
+  { id: "ADAPTATION_DAILY_LOG",  label: "적응지도 일지",    icon: "📄", desc: "취업 후 적응지도 일지",       needsTrainee: true  },
+  { id: "ADAPTATION_FINAL_EVAL", label: "적응지도 종합평가",icon: "📈", desc: "적응지도 종합 평가기록부",    needsTrainee: true  },
 ];
 
 export default function DocsPage() {
   const router = useRouter();
   const [siteInfo, setSiteInfo] = useState<SiteInfo | null>(null);
-  const [selectedDoc, setSelectedDoc] = useState("attendance-sheet");
+  const [selectedDoc, setSelectedDoc] = useState("ATTENDANCE_SHEET");
   const [selectedTraineeId, setSelectedTraineeId] = useState("");
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
@@ -213,11 +213,11 @@ export default function DocsPage() {
         )}
 
         {/* 평가 점수 입력 (종합평가 문서일 때) */}
-        {(selectedDoc === "trainee-final-eval" || selectedDoc === "adaptation-final-eval") && selectedTraineeId && (
+        {(selectedDoc === "TRAINEE_FINAL_EVAL" || selectedDoc === "ADAPTATION_FINAL_EVAL") && selectedTraineeId && (
           <div style={s.section}>
             <button
               onClick={() => {
-                const evalType = selectedDoc === "trainee-final-eval" ? "TRAINING" : "ADAPTATION";
+                const evalType = selectedDoc === "TRAINEE_FINAL_EVAL" ? "TRAINING" : "ADAPTATION";
                 const t = siteInfo?.trainees?.find((t: any) => t.id === selectedTraineeId);
                 router.push(`/worker/evaluation?traineeId=${selectedTraineeId}&traineeName=${encodeURIComponent(t?.name||"")}&evalType=${evalType}&periodStart=${periodStart}&periodEnd=${periodEnd}`);
               }}

@@ -330,8 +330,10 @@ function WorklogForm() {
 
   const [isRecording, setIsRecording] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [recordingSec, setRecordingSec] = useState(0);
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -405,6 +407,10 @@ function WorklogForm() {
       recorder.start(500);
       mediaRef.current = recorder;
       setIsRecording(true);
+      setRecordingSec(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSec(s => s + 1);
+      }, 1000);
     } catch {
       alert("마이크 권한이 필요합니다. 브라우저 설정에서 마이크를 허용해주세요.");
     }
@@ -413,11 +419,16 @@ function WorklogForm() {
   function stopRecording() {
     mediaRef.current?.stop();
     setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    setRecordingSec(0);
   }
 
   async function sendAudioToGroq(blob: Blob, mimeType: string) {
     setAiLoading(true);
-    setContent("🎤 음성 분석 중...");
+    // 기존 content는 유지 (AI 변환 완료 후 교체)
     try {
       const formData = new FormData();
       const ext = mimeType.includes("mp4") ? "mp4" : "webm";
@@ -688,7 +699,14 @@ function WorklogForm() {
           {isRecording && (
             <div style={s.recordingIndicator}>
               <span style={s.recordingDot} />
-              <span style={{ fontSize: 13, color: "#dc2626" }}>녹음 중... 다시 누르면 종료</span>
+              <span style={{ fontSize: 13, color: "#dc2626", fontWeight: 600 }}>
+                녹음 중 {recordingSec}초 — 중지하려면 다시 누르세요
+              </span>
+            </div>
+          )}
+          {aiLoading && (
+            <div style={s.recordingIndicator}>
+              <span style={{ fontSize: 13, color: "#6b7280" }}>🤖 AI가 일지를 작성 중입니다...</span>
             </div>
           )}
 
