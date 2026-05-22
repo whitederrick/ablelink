@@ -232,6 +232,8 @@ export function renderTRAINING_DAILY_LOG_HTML(payload: TrainingDailyLogPayload) 
       margin-top: auto;
       padding-top: 10mm;
       font-size: 10px;
+      break-inside: avoid;
+      page-break-inside: avoid;
     }
     .sig-row {
       display: flex;
@@ -273,12 +275,12 @@ export function renderTRAINING_DAILY_LOG_HTML(payload: TrainingDailyLogPayload) 
               <col/>
             </colgroup>
             <tr>
-              <td style="border:1px solid #000; text-align:center;">사전</td>
-              <td style="border:1px solid #000;" class="period-value">${payload.periodPreText || "-"}</td>
+              <td style="border:none; border-right:1px solid #000; border-bottom:1px solid #000; text-align:center;">사전</td>
+              <td style="border:none; border-bottom:1px solid #000;" class="period-value">${payload.periodPreText || "-"}</td>
             </tr>
             <tr>
-              <td style="border:1px solid #000; text-align:center;">현장</td>
-              <td style="border:1px solid #000;" class="period-value">${payload.periodFieldText || "-"}</td>
+              <td style="border:none; border-right:1px solid #000; text-align:center;">현장</td>
+              <td style="border:none;" class="period-value">${payload.periodFieldText || "-"}</td>
             </tr>
           </table>
         </td>

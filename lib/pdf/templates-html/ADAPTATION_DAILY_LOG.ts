@@ -121,13 +121,10 @@ function preparePayload(p: AdaptationDailyLogPayload) {
 function sigRow(label: string, name: string, imgUrl?: string): string {
   const img = imgUrl ? `<img class="sign-img" src="${imgUrl}" />` : "";
   return `<div class="sign-row">
-    <div></div>
-    <div class="sign-right">
-      <span class="sign-label"><span class="tx95m5">${label}</span></span>
-      <span></span>
-      <span class="sign-name"><span class="tx95m5">${name}</span></span>
-      <span class="sign-slot">${img}<span class="tx95m5">(서명 또는 인)</span></span>
-    </div>
+    <span class="sign-label"><span class="tx95m5">${label}</span></span>
+    <span class="sign-colon">:</span>
+    <span class="sign-slot"><span class="tx95m5">${name}</span></span>
+    <span class="sign-text"><span class="tx95m5">(서명 또는 인)</span>${img}</span>
   </div>`;
 }
 
@@ -221,15 +218,13 @@ tr { break-inside:avoid; page-break-inside:avoid; }
 .sign-area  { margin-top:12pt; break-inside:avoid; page-break-inside:avoid;
   font-family:"HCRDotum",sans-serif; font-size:12pt; line-height:1.45; }
 .sign-lines { width:100%; }
-.sign-row   { display:grid; grid-template-columns:95mm 6mm 28mm 1fr; align-items:center; }
-.sign-right { display:grid; grid-template-columns:auto auto 1fr auto; column-gap:0; align-items:center; justify-content:end; }
-.sign-label { justify-self:end; text-align:right; white-space:nowrap; width:64mm; }
-.sign-slot  { justify-self:start; text-align:left; padding-left:2mm; white-space:nowrap;
-  display:inline-block; position:relative; min-width:20mm; flex:1; overflow:visible; }
+.sign-row   { display:grid; grid-template-columns:95mm 6mm 1fr auto; align-items:center; height:8mm; white-space:nowrap; }
+.sign-label { text-align:right; padding-right:1mm; }
+.sign-colon { text-align:center; }
+.sign-slot  { white-space:nowrap; display:inline-flex; align-items:center; position:relative; padding-left:2mm; }
 .sign-text  { position:relative; display:inline-block; white-space:nowrap; min-width:28mm; text-align:center; z-index:0; }
 .sign-img   { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
   width:28mm; height:20mm; object-fit:contain; opacity:0.6; pointer-events:none; z-index:1; }
-.sign-name  { text-align:left; white-space:nowrap; font-size:12pt; font-family:"HCRDotum",sans-serif; letter-spacing:-0.05em; }
 .sign-gap   { height:4pt; }
 </style>
 </head>
@@ -267,7 +262,7 @@ tr { break-inside:avoid; page-break-inside:avoid; }
         <tr>
           <th><span class="tx95m5">구<br/>분</span></th>
           <th><span class="tx95m5">지도<br/>일자</span></th>
-          <th><span class="tx95m9">출석/결석/<br/>지각/조퇴</span></th>
+          <th><span class="tx95m9">출석/<br/>결석/<br/>지각/<br/>조퇴</span></th>
           <th><span class="tx95m5">근무시간</span></th>
           <th><span class="tx95m5">출퇴근<br/>지도 및<br/>휴게시간<br/>지도 여부</span></th>
           <th><span class="tx95m5">수행과제</span></th>
@@ -286,9 +281,9 @@ tr { break-inside:avoid; page-break-inside:avoid; }
     <div class="${signBreak}">
       <div class="sign-area">
         <div class="sign-lines">
-          ${sigRow("직무지도원:", sigs.coach?.name ?? "", sigs.coach?.imageUrl)}
+          ${sigRow("직무지도원", sigs.coach?.name ?? "", sigs.coach?.imageUrl)}
           <div class="sign-gap"></div>
-          ${sigRow("위탁기관 담당자:", sigs.govAgent?.name ?? "", sigs.govAgent?.imageUrl)}
+          ${sigRow("위탁기관 담당자", sigs.govAgent?.name ?? "", sigs.govAgent?.imageUrl)}
         </div>
       </div>
     </div>
