@@ -63,8 +63,6 @@ export async function POST(request: Request) {
           preTrainingEnd: typeof body?.preTrainingEnd,
           fieldTrainingStart: typeof body?.fieldTrainingStart,
           fieldTrainingEnd: typeof body?.fieldTrainingEnd,
-          workType: typeof body?.workType,
-          isExtraTime: typeof body?.isExtraTime,
           trainees: Array.isArray(body?.trainees) ? "array" : typeof body?.trainees,
         },
         traineesLen: Array.isArray(body?.trainees) ? body.trainees.length : null,
@@ -102,8 +100,6 @@ export async function POST(request: Request) {
       preTrainingEnd,
       fieldTrainingStart,
       fieldTrainingEnd,
-      workType,
-      isExtraTime,
       trainees,
     } = body;
 
@@ -242,10 +238,6 @@ export async function POST(request: Request) {
         existingSite.fieldTrainingStart != null ||
         existingSite.fieldTrainingEnd != null;
 
-      // 4) 근무형태(등록 여부)
-      const workTypeRegistered =
-        existingSite.workType != null || Boolean(existingSite.isExtraTime) === true;
-
       // 5) 훈련생(등록 여부)
       const traineesRegistered =
         Array.isArray(existingSite.trainees) && existingSite.trainees.length > 0;
@@ -275,25 +267,15 @@ export async function POST(request: Request) {
         prevFieldStartT !== nextFieldStartT ||
         prevFieldEndT !== nextFieldEndT;
 
-      const nextWorkType = workType ?? null;
-      const prevWorkType = existingSite.workType ?? null;
-      const nextExtra = Boolean(isExtraTime);
-      const prevExtra = Boolean(existingSite.isExtraTime);
-
-      const workTypeChanged =
-        prevWorkType !== nextWorkType || prevExtra !== nextExtra;
-
       // trainees는 구조상 deleteMany+create이므로,
       // COACH가 등록된 훈련생을 "실수로" 재생성(삭제 후 재생성)하는 것을 원천 차단하기 위해
       // 등록된 상태에서는 아예 trainees 업데이트를 건드리지 않도록 함(무력화).
       const coachShouldFreezeTraining = isCoach && trainingRegistered && trainingChanged;
-      const coachShouldFreezeWorkType = isCoach && workTypeRegistered && workTypeChanged;
       const coachShouldFreezeTrainees = isCoach && traineesRegistered;
 
       if (
         isCoach &&
         ((trainingRegistered && trainingChanged) ||
-          (workTypeRegistered && workTypeChanged) ||
           traineesRegistered)
       ) {
         // 변경 시도(또는 훈련생 등록됨) 로그
@@ -303,13 +285,10 @@ export async function POST(request: Request) {
           actorRole,
           registered: {
             training: trainingRegistered,
-            workType: workTypeRegistered,
             trainees: traineesRegistered,
           },
           attemptedChange: {
             training: trainingChanged,
-            workType: workTypeChanged,
-            // trainees는 등록 여부만으로 보호(등록 후에는 COACH가 이 API로 건드리지 않도록)
             trainees: Array.isArray(trainees) ? true : false,
           },
           action: "FREEZE_TO_EXISTING_WHEN_REGISTERED",
@@ -406,14 +385,6 @@ export async function POST(request: Request) {
             : fieldTrainingEnd
             ? new Date(fieldTrainingEnd)
             : null,
-
-          // ✅ Step 2 적용: 4) 근무형태는 "등록되어 있으면 COACH 변경 무력화"
-          workType: coachShouldFreezeWorkType
-            ? existingSite.workType ?? null
-            : workType ?? null,
-          isExtraTime: coachShouldFreezeWorkType
-            ? Boolean(existingSite.isExtraTime)
-            : Boolean(isExtraTime),
 
           // ✅ 기준점 메타 갱신 로직 유지
           // - COACH는 좌표가 여기서 바뀌지 않으므로 updatedAt 유지

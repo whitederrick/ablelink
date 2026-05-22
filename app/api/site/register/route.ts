@@ -26,8 +26,6 @@ export async function POST(request: Request) {
       preTrainingEnd,
       fieldTrainingStart,
       fieldTrainingEnd,
-      workType,
-      isExtraTime,
       trainees,
     } = body;
 
@@ -174,9 +172,6 @@ export async function POST(request: Request) {
             : fieldTrainingEnd
             ? new Date(fieldTrainingEnd)
             : null,
-
-          workType,
-          isExtraTime,
 
           // ✅ 전달받은 좌표 저장 (Decimal로 통일)
           gpsLat: gpsLatDec,

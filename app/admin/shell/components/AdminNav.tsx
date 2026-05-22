@@ -26,6 +26,7 @@ const groups: NavGroup[] = [
     items: [
       { href: "/admin/attendances",       label: "근태 현황" },
       { href: "/admin/inbox/attendance",  label: "GPS 승인 대기" },
+      { href: "/admin/contracts",         label: "근로계약서" },
       { href: "/admin/documents",         label: "문서 운영" },
       { href: "/admin/docs",              label: "문서 조회" },
     ],

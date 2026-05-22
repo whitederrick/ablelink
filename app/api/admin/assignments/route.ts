@@ -34,6 +34,10 @@ function toItem(r: any) {
     endedAt: r.endedAt?.toISOString?.() ?? r.endedAt ?? null,
     statusReason: r.statusReason ?? null,
     assignedByAdminId: r.assignedByAdminId != null ? String(r.assignedByAdminId) : null,
+    workType: r.workType ?? "FULL_DAY",
+    commuteGuidanceIncluded: r.commuteGuidanceIncluded ?? true,
+    customWorkStart: r.customWorkStart ?? null,
+    customWorkEnd: r.customWorkEnd ?? null,
     site: r.site
       ? {
           id: String(r.site.id),
@@ -105,6 +109,10 @@ export async function GET(req: NextRequest) {
         user: {
           select: { id: true, userName: true, loginId: true, phoneNumber: true, role: true, status: true },
         },
+        workType: true,
+        commuteGuidanceIncluded: true,
+        customWorkStart: true,
+        customWorkEnd: true,
       },
     });
 
@@ -171,6 +179,15 @@ export async function POST(req: NextRequest) {
     const isMainCoach = body.isMainCoach === false ? false : true;
     const memo = body.memo != null ? String(body.memo).trim() : null;
 
+    // 근무형태
+    const rawWorkType = body.workType != null ? String(body.workType).trim() : null;
+    const validWorkTypes = ["AM", "PM", "FULL_DAY", "CUSTOM"];
+    const workType = validWorkTypes.includes(rawWorkType ?? "") ? rawWorkType : "FULL_DAY";
+    // FULL_DAY는 법적 8시간 제한으로 출퇴근 지도 불가
+    const commuteGuidanceIncluded = workType === "FULL_DAY" ? false : (body.commuteGuidanceIncluded !== false);
+    const customWorkStart = workType === "CUSTOM" ? (body.customWorkStart ?? null) : null;
+    const customWorkEnd   = workType === "CUSTOM" ? (body.customWorkEnd ?? null) : null;
+
     const assignedByAdminId = scope.userId;
 
     const created = await prisma.siteAssignment.create({
@@ -180,9 +197,14 @@ export async function POST(req: NextRequest) {
         status: "ASSIGNED",
         isMainCoach,
         assignedAt: new Date(),
-        startDate: new Date(),
+        startDate: body.startDate ? new Date(body.startDate) : new Date(),
+        endDate: body.endDate ? new Date(body.endDate) : null,
         assignedByAdminId,
         statusReason: memo,
+        workType,
+        commuteGuidanceIncluded,
+        customWorkStart,
+        customWorkEnd,
       },
       select: {
         id: true,

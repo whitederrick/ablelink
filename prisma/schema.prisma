@@ -55,6 +55,9 @@ model User {
   attendanceIssueEvents AttendanceIssueEvent[] @relation("AttendanceIssueEventActor")
 
   evaluations    TraineeEvaluation[]
+  employmentContracts EmploymentContract[]
+
+  notificationSettings UserNotificationSetting?
 
     @@map("users")
 }
@@ -175,10 +178,13 @@ model SiteAssignment {
   stepStart DateTime? @map("step_start")
   stepEnd   DateTime? @map("step_end")
 
-  // 근무형태/추가지도 인정 여부 등(기존 메모리 정책 반영 가능)
-  // workType: AM/PM/ALL 등
-  workType    String? @map("work_type")
-  isExtraTime Boolean @default(false) @map("is_extra_time") // 출퇴근+휴게시간 지도 인정 여부(단일 Y/N)
+  // 근무형태: "AM"(09-12) | "PM"(13-17) | "FULL_DAY"(09-18) | "CUSTOM"
+  workType                String?  @map("work_type")
+  // 출퇴근 지도(30분 출근+30분 퇴근) 포함 여부 — AM/PM 기본 true, FULL_DAY 강제 false
+  commuteGuidanceIncluded Boolean  @default(true) @map("commute_guidance_included")
+  // CUSTOM 근무형태일 때 관리자가 직접 설정하는 시작/종료 시각 (HH:MM)
+  customWorkStart         String?  @map("custom_work_start")
+  customWorkEnd           String?  @map("custom_work_end")
 
   assignedAt  DateTime  @default(now()) @map("assigned_at")
   confirmedAt DateTime? @map("confirmed_at")
@@ -376,6 +382,7 @@ model Agency {
   payContracts PayContract[]
   payrollRuns  PayrollRun[]
   adminUsers   AdminUser[]
+  employmentContracts EmploymentContract[]
 
   @@index([planType])
   @@map("agencies")
@@ -612,6 +619,66 @@ model SiteSignToken {
   @@index([token])
   @@index([assignmentId])
   @@map("site_sign_tokens")
+}
+
+// ------------------------------------------------------
+// 9. 근로계약서 (Employment Contract)
+// ------------------------------------------------------
+
+model EmploymentContract {
+  id           BigInt   @id @default(autoincrement())
+  agencyId     BigInt   @map("agency_id")
+  userId       BigInt   @map("user_id")            // 직무지도원
+  assignmentId BigInt?  @map("assignment_id")       // 연결된 배정 (선택)
+
+  // 계약 기간
+  contractStart DateTime @map("contract_start")
+  contractEnd   DateTime @map("contract_end")
+
+  // 관리자가 미리 입력하는 정보 (미입력 시 직무지도원이 직접 입력)
+  siteName     String?  @map("site_name")          // 배정 사이트명
+  workType     String?  @map("work_type")           // 근무형태
+  commuteGuidanceIncluded Boolean @default(true) @map("commute_guidance_included")
+  customWorkStart String? @map("custom_work_start")
+  customWorkEnd   String? @map("custom_work_end")
+
+  // 서명 토큰 (카카오 링크 발송용)
+  signToken    String   @unique @map("sign_token")  // UUID
+  tokenSentAt  DateTime? @map("token_sent_at")
+  tokenExpiresAt DateTime @map("token_expires_at")
+
+  // 서명 상태
+  status       ContractStatus @default(PENDING) @map("status")
+  coachSignedAt   DateTime? @map("coach_signed_at")
+  coachSignatureUrl String? @map("coach_signature_url")
+  adminSignedAt   DateTime? @map("admin_signed_at")
+  adminSignatureUrl String? @map("admin_signature_url")
+
+  // 직무지도원이 직접 입력한 내용 (관리자 미입력 시)
+  coachFilledSiteName     String? @map("coach_filled_site_name")
+  coachFilledWorkType     String? @map("coach_filled_work_type")
+
+  pdfUrl       String?  @map("pdf_url")
+  adminMemo    String?  @map("admin_memo")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdByAdminId BigInt? @map("created_by_admin_id")
+
+  agency       Agency    @relation(fields: [agencyId], references: [id])
+  user         User      @relation(fields: [userId], references: [id])
+
+  @@index([agencyId, status])
+  @@index([userId, status])
+  @@index([signToken])
+  @@map("employment_contracts")
+}
+
+enum ContractStatus {
+  PENDING      // 서명 대기
+  SIGNED       // 직무지도원 서명 완료
+  COMPLETED    // 쌍방 서명 완료
+  CANCELLED    // 취소
 }
 
 model AuditEvent {
@@ -921,6 +988,28 @@ enum PayType {
 enum PayrollStatus {
   DRAFT
   FINALIZED
+}
+
+// ------------------------------------------------------
+// 10. 알람 설정 (Notification Settings)
+// ------------------------------------------------------
+
+model UserNotificationSetting {
+  id     BigInt @id @default(autoincrement())
+  userId BigInt @unique @map("user_id")
+
+  // 출근 알람: 출근 시각 N분 전 (0=비활성)
+  clockInAlertMinutes  Int @default(3) @map("clock_in_alert_minutes")
+  // 퇴근 알람: 퇴근 시각 N분 전 (0=비활성)
+  clockOutAlertMinutes Int @default(3) @map("clock_out_alert_minutes")
+  // 웹 푸시 구독 정보 (JSON)
+  pushSubscription Json? @map("push_subscription")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_notification_settings")
 }
 
 // ------------------------------------------------------

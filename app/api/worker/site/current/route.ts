@@ -60,8 +60,10 @@ export async function GET(request: NextRequest) {
         assignmentId: assignment.id.toString(),
         agencyId: agency?.id.toString() ?? null,
         companyName: site.companyName,
-        workType: assignment.workType || "전일(8H)",
-        isExtraTime: assignment.isExtraTime,
+        workType: assignment.workType || "FULL_DAY",
+        commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? true,
+        customWorkStart: (assignment as any).customWorkStart ?? null,
+        customWorkEnd: (assignment as any).customWorkEnd ?? null,
         traineeCount: site.trainees.length,
         trainees: site.trainees.map(t => ({
           id: t.id.toString(),

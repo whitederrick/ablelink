@@ -134,9 +134,6 @@ export async function GET(request: Request) {
           fieldTrainingStart: true,
           fieldTrainingEnd: true,
 
-          workType: true,
-          isExtraTime: true,
-
           createdAt: true,
           isActive: true,
           siteSourceType: true,
@@ -166,9 +163,6 @@ export async function GET(request: Request) {
       preTrainingEnd: safeIso(r.preTrainingEnd),
       fieldTrainingStart: safeIso(r.fieldTrainingStart),
       fieldTrainingEnd: safeIso(r.fieldTrainingEnd),
-
-      workType: r.workType ?? null,
-      isExtraTime: Boolean(r.isExtraTime),
 
       createdAt: safeIso(r.createdAt) ?? new Date().toISOString(),
       isActive: Boolean(r.isActive),

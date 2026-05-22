@@ -10,8 +10,12 @@ export interface HomeData {
   gpsLat: number | null;
   gpsLon: number | null;
   allowanceRange: number;
+  /** "AM" | "PM" | "FULL_DAY" | "CUSTOM" */
   workType: string | null;
-  isExtraTime: boolean;
+  /** 출퇴근 지도 포함 여부 (관리자 설정, 직무지도원 변경 불가) */
+  commuteGuidanceIncluded: boolean;
+  customWorkStart: string | null;
+  customWorkEnd: string | null;
   traineeCount: number;
   trainees: Trainee[];
   attendanceStatus: "BEFORE" | "WORKING" | "DONE" | "CLOSED";

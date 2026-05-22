@@ -17,8 +17,7 @@ function getWorkTypeDefaultExpectedStartMin(workType: string | null | undefined)
   if (!workType) return null;
   const t = workType.toUpperCase();
   if (t === "PM") return 13 * 60;
-  if (t === "AM") return 9 * 60;
-  if (t === "FULL") return 9 * 60;
+  if (t === "AM" || t === "FULL_DAY") return 9 * 60;
   return null;
 }
 

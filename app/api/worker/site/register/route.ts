@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       noPreTraining, noFieldTraining,
       preTrainingStart, preTrainingEnd,
       fieldTrainingStart, fieldTrainingEnd,
-      workType, isExtraTime, trainees,
+      trainees,
     } = body;
 
     // 입력값 검증
@@ -75,14 +75,6 @@ export async function POST(request: NextRequest) {
           gpsLon: lonNum,
           agencyId: agency.id,
           managerId: manager.id,
-          noPreTraining: noPre,
-          noFieldTraining: noField,
-          preTrainingStart: noPre ? null : (preTrainingStart ? new Date(preTrainingStart) : null),
-          preTrainingEnd: noPre ? null : (preTrainingEnd ? new Date(preTrainingEnd) : null),
-          fieldTrainingStart: noField ? null : (fieldTrainingStart ? new Date(fieldTrainingStart) : null),
-          fieldTrainingEnd: noField ? null : (fieldTrainingEnd ? new Date(fieldTrainingEnd) : null),
-          workType: workType || "전일(8H)",
-          isExtraTime: isExtraTime === true,
           basePointConfirmed: false,
           basePointSource: "ADDRESS",
           basePointUpdatedAt: new Date(),
@@ -101,16 +93,17 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // 4. SiteAssignment 생성
+      // 4. SiteAssignment 생성 — 근무형태는 관리자가 나중에 설정
       await tx.siteAssignment.create({
         data: {
           userId,
           siteId: site.id,
           agencyId: agency.id,
           status: "ACTIVE",
-          startDate: new Date(),
-          workType: workType || "전일(8H)",
-          isExtraTime: isExtraTime === true,
+          startDate: fieldTrainingStart ? new Date(fieldTrainingStart) : new Date(),
+          endDate: fieldTrainingEnd ? new Date(fieldTrainingEnd) : null,
+          workType: "FULL_DAY",           // 관리자가 확인 후 수정
+          commuteGuidanceIncluded: false, // FULL_DAY 기본값
         },
       });
 

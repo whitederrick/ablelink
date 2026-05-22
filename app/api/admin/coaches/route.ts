@@ -131,6 +131,7 @@ export async function GET(req: NextRequest) {
         planType: String(u.planType),
         createdAt: u.createdAt.toISOString(),
         activeAssignment: u.assignments[0] ? {
+          assignmentId: String(u.assignments[0].id),
           siteName: u.assignments[0].site?.companyName || "-",
           agencyName: u.assignments[0].agency?.name || "-",
           startDate: u.assignments[0].startDate.toISOString(),

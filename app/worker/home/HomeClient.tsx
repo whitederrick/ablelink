@@ -23,7 +23,9 @@ interface HomeData {
   gpsLon: number | null;
   allowanceRange: number;
   workType: string | null;
-  isExtraTime: boolean;
+  commuteGuidanceIncluded: boolean;
+  customWorkStart: string | null;
+  customWorkEnd: string | null;
   traineeCount: number;
   trainees: Trainee[];
   attendanceStatus: AttendanceStatus;
@@ -77,6 +79,34 @@ function nowDateStr(): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 (${weekdays[d.getDay()]})`;
 }
 
+// ─── 근무형태 → 출퇴근 시각 ─────────────────────────────────
+function getWorkTimes(workType: string | null, customStart?: string | null, customEnd?: string | null): { clockIn: string; clockOut: string } | null {
+  if (workType === "AM")       return { clockIn: "09:00", clockOut: "12:00" };
+  if (workType === "PM")       return { clockIn: "13:00", clockOut: "17:00" };
+  if (workType === "FULL_DAY") return { clockIn: "09:00", clockOut: "18:00" };
+  if (workType === "CUSTOM" && customStart && customEnd) return { clockIn: customStart, clockOut: customEnd };
+  return null;
+}
+
+// ─── 알람 스케줄러 ───────────────────────────────────────────
+function scheduleAlarm(targetHHMM: string, alertMinutes: number, message: string, alreadyFired: Set<string>): void {
+  if (alertMinutes === 0) return;
+  const key = `${targetHHMM}-${message}`;
+  if (alreadyFired.has(key)) return;
+  const [h, m] = targetHHMM.split(":").map(Number);
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(h, m - alertMinutes, 0, 0);
+  const diff = target.getTime() - now.getTime();
+  if (diff < 0 || diff > 60 * 60 * 1000) return; // 1시간 이내만
+  alreadyFired.add(key);
+  setTimeout(() => {
+    if (Notification.permission === "granted") {
+      new Notification("AbleLink 알람", { body: message, icon: "/icon-192.png" });
+    }
+  }, diff);
+}
+
 // ─── GPS 획득 ────────────────────────────────────────────
 async function getCurrentPosition(): Promise<GeolocationCoordinates> {
   return new Promise((resolve, reject) => {
@@ -122,6 +152,48 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
   const [showProfile, setShowProfile] = useState(false);
   const profileRef = useRef<HTMLButtonElement>(null);
 
+  // 알람 설정
+  const [clockInAlert,  setClockInAlert]  = useState(3);
+  const [clockOutAlert, setClockOutAlert] = useState(3);
+  const [showAlarmSettings, setShowAlarmSettings] = useState(false);
+  const alarmFiredRef = useRef<Set<string>>(new Set());
+
+  // 알람 설정 로드
+  useEffect(() => {
+    fetch("/api/worker/notification")
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data) {
+          setClockInAlert(d.data.clockInAlertMinutes ?? 3);
+          setClockOutAlert(d.data.clockOutAlertMinutes ?? 3);
+        }
+      })
+      .catch(() => {});
+    // 알림 권한 요청
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
+  // 알람 스케줄링
+  useEffect(() => {
+    if (!homeData) return;
+    const times = getWorkTimes(homeData.workType, homeData.customWorkStart, homeData.customWorkEnd);
+    if (!times) return;
+    scheduleAlarm(times.clockIn,  clockInAlert,  `출근 ${clockInAlert}분 전입니다. 출근 버튼을 눌러주세요.`,  alarmFiredRef.current);
+    scheduleAlarm(times.clockOut, clockOutAlert, `퇴근 ${clockOutAlert}분 전입니다. 퇴근 버튼을 눌러주세요.`, alarmFiredRef.current);
+  }, [homeData, clockInAlert, clockOutAlert]);
+
+  async function saveAlarmSettings(inMin: number, outMin: number) {
+    setClockInAlert(inMin);
+    setClockOutAlert(outMin);
+    await fetch("/api/worker/notification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clockInAlertMinutes: inMin, clockOutAlertMinutes: outMin }),
+    }).catch(() => {});
+  }
+
   // 시계
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -155,7 +227,9 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
         gpsLon: raw.gpsLon ?? null,
         allowanceRange: raw.allowanceRange ?? 100,
         workType: raw.workType ?? null,
-        isExtraTime: raw.isExtraTime ?? false,
+        commuteGuidanceIncluded: raw.commuteGuidanceIncluded ?? false,
+        customWorkStart: raw.customWorkStart ?? null,
+        customWorkEnd: raw.customWorkEnd ?? null,
         traineeCount: Array.isArray(raw.trainees) ? raw.trainees.length : 0,
         trainees: (raw.trainees ?? []).map((t: any) => ({
           id: String(t.id),
@@ -533,6 +607,57 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
             <button style={s.noSiteBtn} onClick={() => router.push("/worker/site/register")}>
               현장 등록하기
             </button>
+          </div>
+        )}
+
+        {/* 근무형태 정보 */}
+        {homeData?.siteName && homeData.workType && (
+          <div style={{ margin: "0 0 10px", padding: "12px 16px", background: "#f0f9ff", borderRadius: 12, border: "1px solid #bae6fd", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <p style={{ fontSize: 11, color: "#0369a1", margin: "0 0 2px", fontWeight: 600 }}>근무형태</p>
+              <p style={{ fontSize: 14, color: "#0c4a6e", margin: 0, fontWeight: 700 }}>
+                {{ AM: "오전 09:00~12:00", PM: "오후 13:00~17:00", FULL_DAY: "전일 09:00~18:00", CUSTOM: `${homeData.customWorkStart}~${homeData.customWorkEnd}` }[homeData.workType] ?? homeData.workType}
+              </p>
+              {homeData.workType !== "FULL_DAY" && (
+                <p style={{ fontSize: 11, color: "#0369a1", margin: "2px 0 0" }}>
+                  {homeData.commuteGuidanceIncluded ? "출퇴근 지도 포함 (+60분) · 휴게 지도 포함 (+30분)" : "휴게 지도 포함 (+30분)"}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setShowAlarmSettings(v => !v)}
+              style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", padding: 4 }}
+              title="알람 설정"
+            >
+              🔔
+            </button>
+          </div>
+        )}
+
+        {/* 알람 설정 패널 */}
+        {showAlarmSettings && (
+          <div style={{ margin: "0 0 10px", padding: "16px", background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", margin: "0 0 12px" }}>출퇴근 알람 설정</p>
+            {[
+              { label: "출근 알람", value: clockInAlert, set: (v: number) => saveAlarmSettings(v, clockOutAlert) },
+              { label: "퇴근 알람", value: clockOutAlert, set: (v: number) => saveAlarmSettings(clockInAlert, v) },
+            ].map(({ label, value, set }) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <span style={{ fontSize: 13, color: "#374151" }}>{label}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {[0, 1, 3, 5, 10].map(m => (
+                    <button
+                      key={m}
+                      onClick={() => set(m)}
+                      style={{ padding: "4px 10px", border: "1px solid " + (value === m ? "#2563eb" : "#e5e7eb"), borderRadius: 6, background: value === m ? "#eff6ff" : "#fff", color: value === m ? "#1d4ed8" : "#374151", fontSize: 12, fontWeight: value === m ? 700 : 400, cursor: "pointer" }}
+                    >
+                      {m === 0 ? "끄기" : `${m}분 전`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <p style={{ fontSize: 11, color: "#9ca3af", margin: "8px 0 0" }}>알람은 브라우저 알림으로 표시됩니다. 브라우저 알림 권한을 허용해주세요.</p>
           </div>
         )}
 

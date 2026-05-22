@@ -94,9 +94,8 @@ export async function GET(
     const site = activeAssignment?.site;
     const trainees = site?.trainees || [];
 
-    // ✅ workType, isExtraTime은 SiteAssignment에 있음 (Site 모델에서 제거됨)
-    const workType = activeAssignment?.workType || (site as any)?.workType || "";
-    const isExtraTime = activeAssignment?.isExtraTime ?? (site as any)?.isExtraTime ?? false;
+    const workType = activeAssignment?.workType || "";
+    const commuteGuidanceIncluded: boolean = (activeAssignment as any)?.commuteGuidanceIncluded ?? true;
 
     // 3. 출근 상태 판정
     const todayAttendance = userWithData.attendances[0];
@@ -110,9 +109,9 @@ export async function GET(
 
     // 4. 1:多 지도 현장 여부 판정
     let isMultipleMode = false;
-    if (workType.includes('4H')) {
+    if (workType === "AM" || workType === "PM") {
       isMultipleMode = trainees.length >= 2;
-    } else if (workType.includes('8H')) {
+    } else {
       isMultipleMode = trainees.length > 2;
     }
 
@@ -142,8 +141,10 @@ export async function GET(
         fieldTrainingStart: activeAssignment?.startDate ?? null,
         fieldTrainingEnd: activeAssignment?.endDate ?? null,
 
-        isExtraTime: Boolean(isExtraTime),
-        workType: workType,
+        workType: workType || "FULL_DAY",
+        commuteGuidanceIncluded,
+        customWorkStart: (activeAssignment as any)?.customWorkStart ?? null,
+        customWorkEnd: (activeAssignment as any)?.customWorkEnd ?? null,
 
         trainees: trainees.map((t: any) => ({
           id: t.id.toString(),

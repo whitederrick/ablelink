@@ -65,10 +65,6 @@ export default function SiteRegisterPage() {
   const [fieldStart, setFieldStart] = useState("");
   const [fieldEnd, setFieldEnd] = useState("");
 
-  // 근무 형태
-  const [workType, setWorkType] = useState("전일(8H)");
-  const [isExtraTime, setIsExtraTime] = useState(false);
-
   // 훈련생
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [traineeForm, setTraineeForm] = useState<Omit<Trainee, "id">>({
@@ -163,7 +159,6 @@ export default function SiteRegisterPage() {
         preTrainingEnd: noPreTraining ? null : preEnd || null,
         fieldTrainingStart: noFieldTraining ? null : fieldStart || null,
         fieldTrainingEnd: noFieldTraining ? null : fieldEnd || null,
-        workType, isExtraTime,
         trainees: trainees.map(t => ({
           name: t.name,
           gender: t.gender,
@@ -346,26 +341,12 @@ export default function SiteRegisterPage() {
             )}
           </div>
 
-          {/* ④ 근무 형태 */}
-          <div style={s.section}>
-            <p style={s.sectionTitle}>4. 근무 형태</p>
-            <div style={s.workTypeRow}>
-              {["오전(4H)", "오후(4H)", "전일(8H)"].map(type => (
-                <button
-                  key={type} type="button"
-                  style={{ ...s.workTypeBtn, ...(workType === type ? s.workTypeActive : {}) }}
-                  onClick={() => setWorkType(type)}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-            <label style={s.checkRow}>
-              <input type="checkbox" checked={isExtraTime} onChange={e => setIsExtraTime(e.target.checked)} />
-              <span style={{ fontSize: 14, color: "#444", marginLeft: 8 }}>
-                출퇴근 / 휴게 시간 직무지도 인정 여부 (+1.5H)
-              </span>
-            </label>
+          {/* ④ 안내 (근무형태는 관리자가 설정) */}
+          <div style={{ ...s.section, backgroundColor: "#f0f9ff", borderColor: "#bae6fd" }}>
+            <p style={{ fontSize: 13, color: "#0369a1", margin: 0, lineHeight: 1.6 }}>
+              근무 형태(오전/오후/전일)와 출퇴근 지도 여부는 에이전시 관리자가 설정합니다.
+              현장 등록 후 관리자에게 확인하세요.
+            </p>
           </div>
 
           {/* ⑤ 훈련생 관리 */}

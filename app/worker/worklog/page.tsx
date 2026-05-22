@@ -12,7 +12,8 @@ type TrainingType = "PRE" | "FIELD" | "ADAPTATION";
 interface SiteInfo {
   workType: string;
   traineeCount: number;
-  isExtraTime: boolean;
+  /** 출퇴근 지도 포함 여부 — 관리자 설정값, 직무지도원 변경 불가 */
+  commuteGuidanceIncluded: boolean;
   agencyPlanType?: string;
   trialEndsAt?: string | null;
 }
@@ -45,15 +46,21 @@ function isPremium(plan?: string, trialEndsAt?: string | null): boolean {
 }
 
 // ─── workType → 기본 시간 파생 ───────────────────────────────
-function defaultTimes(workType: string): { workStart: string; workEnd: string; trainStart: string; trainEnd: string } {
-  if (workType.includes("오전") || workType.includes("AM")) {
-    return { workStart: "09:00", workEnd: "13:00", trainStart: "09:00", trainEnd: "13:00" };
+function defaultTimes(workType: string, customStart?: string | null, customEnd?: string | null): { workStart: string; workEnd: string; trainStart: string; trainEnd: string } {
+  if (workType === "AM") return { workStart: "09:00", workEnd: "12:00", trainStart: "09:00", trainEnd: "12:00" };
+  if (workType === "PM") return { workStart: "13:00", workEnd: "17:00", trainStart: "13:00", trainEnd: "17:00" };
+  if (workType === "CUSTOM" && customStart && customEnd) {
+    return { workStart: customStart, workEnd: customEnd, trainStart: customStart, trainEnd: customEnd };
   }
-  if (workType.includes("오후") || workType.includes("PM")) {
-    return { workStart: "13:00", workEnd: "17:00", trainStart: "13:00", trainEnd: "17:00" };
-  }
-  // 전일(8H) 기본
+  // FULL_DAY 기본
   return { workStart: "09:00", workEnd: "18:00", trainStart: "09:00", trainEnd: "17:00" };
+}
+
+// 근무형태별 출퇴근/휴게 지도 기본값 계산
+function resolveGuidance(workType: string, commuteGuidanceIncluded: boolean): { commute: boolean; breakTime: boolean } {
+  if (workType === "FULL_DAY") return { commute: false, breakTime: false };
+  // AM/PM/CUSTOM: 관리자가 설정한 commuteGuidanceIncluded 적용, 휴게시간 지도는 항상 ON
+  return { commute: commuteGuidanceIncluded, breakTime: true };
 }
 
 // ─── 시계 다이얼 피커 ────────────────────────────────────
@@ -307,7 +314,7 @@ function WorklogForm() {
   const trainingType: TrainingType = (params.get("trainingType") as TrainingType) ?? "FIELD";
 
   const [siteInfo, setSiteInfo] = useState<SiteInfo>({
-    workType: "전일(8H)", traineeCount: 1, isExtraTime: false,
+    workType: "FULL_DAY", traineeCount: 1, commuteGuidanceIncluded: false,
   });
 
   const today = new Date();
@@ -359,7 +366,7 @@ function WorklogForm() {
             setResolvedAttendanceId(d.data.attendanceId);
           }
           // workType에서 기본 근무/훈련 시간 자동 적용
-          const times = defaultTimes(d.data.workType ?? "전일(8H)");
+          const times = defaultTimes(d.data.workType ?? "FULL_DAY", d.data.customWorkStart, d.data.customWorkEnd);
           setWorkStart(times.workStart);
           setWorkEnd(times.workEnd);
           setTrainStart(times.trainStart);
@@ -377,11 +384,10 @@ function WorklogForm() {
   }, []);
 
   useEffect(() => {
-    if (siteInfo.isExtraTime) {
-      setIsCommuteGuide(true);
-      setIsBreakGuide(true);
-    }
-  }, [siteInfo.isExtraTime]);
+    const { commute, breakTime } = resolveGuidance(siteInfo.workType, siteInfo.commuteGuidanceIncluded);
+    setIsCommuteGuide(commute);
+    setIsBreakGuide(breakTime);
+  }, [siteInfo.workType, siteInfo.commuteGuidanceIncluded]);
 
   // 마운트 시 draft 복원
   useEffect(() => {
@@ -628,26 +634,30 @@ function WorklogForm() {
             <TimeInput value={trainEnd} onChange={setTrainEnd} label="종료" />
           </div>
 
-          {/* 체크박스 */}
+          {/* 체크박스 — 출퇴근/휴게 지도는 관리자가 설정한 값으로 고정 */}
           <div style={s.checks}>
-            {[
-              { label: "출퇴근 지도", val: isCommuteGuide, set: setIsCommuteGuide, fixed: siteInfo.isExtraTime },
-              { label: "휴게시간 지도", val: isBreakGuide, set: setIsBreakGuide, fixed: siteInfo.isExtraTime },
-              { label: "연장 지도", val: isExtraGuide, set: setIsExtraGuide, fixed: false },
-            ].map(({ label, val, set, fixed }) => (
-              <label key={label} style={{ ...s.checkItem, opacity: fixed ? 0.5 : 1 }}>
-                <input
-                  type="checkbox"
-                  checked={val || fixed}
-                  onChange={e => !fixed && set(e.target.checked)}
-                  disabled={fixed}
-                  style={{ accentColor: "#111827", width: 17, height: 17, cursor: fixed ? "not-allowed" : "pointer" }}
-                />
-                <span style={{ fontSize: 14, color: "#374151" }}>
-                  {label}{fixed ? " (고정)" : ""}
-                </span>
-              </label>
-            ))}
+            {(() => {
+              const { commute: fixedCommute, breakTime: fixedBreak } = resolveGuidance(siteInfo.workType, siteInfo.commuteGuidanceIncluded);
+              const isFullDay = siteInfo.workType === "FULL_DAY";
+              return [
+                { label: "출퇴근 지도", val: isCommuteGuide, set: setIsCommuteGuide, fixed: true, adminSet: fixedCommute },
+                { label: "휴게시간 지도", val: isBreakGuide, set: setIsBreakGuide, fixed: true, adminSet: fixedBreak },
+                { label: "연장 지도", val: isExtraGuide, set: setIsExtraGuide, fixed: isFullDay, adminSet: false },
+              ].map(({ label, val, set, fixed, adminSet }) => (
+                <label key={label} style={{ ...s.checkItem, opacity: fixed ? 0.6 : 1 }}>
+                  <input
+                    type="checkbox"
+                    checked={fixed ? adminSet : val}
+                    onChange={e => !fixed && set(e.target.checked)}
+                    disabled={fixed}
+                    style={{ accentColor: "#111827", width: 17, height: 17, cursor: fixed ? "not-allowed" : "pointer" }}
+                  />
+                  <span style={{ fontSize: 14, color: "#374151" }}>
+                    {label}{fixed ? " (관리자 설정)" : ""}
+                  </span>
+                </label>
+              ));
+            })()}
           </div>
 
           {/* 연장 시간 */}
