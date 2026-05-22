@@ -242,6 +242,7 @@ export function renderTRAINING_DAILY_LOG_HTML(payload: TrainingDailyLogPayload) 
       margin-left: auto;
       margin-right: auto;
       line-height: 1.8;
+      margin-bottom: 3mm;
     }
     .sig-slot { position: relative; display: inline-block; min-width: 24mm; text-align: center; }
     .sign-img  { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
