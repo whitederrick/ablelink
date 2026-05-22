@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   const token = searchParams.get("token");
   if (!token) return NextResponse.json({ success: false, message: "token 필요" }, { status: 400 });
 
-  const rec = await (prisma as any).siteSignToken.findUnique({
+  const rec = await prisma.siteSignToken.findUnique({
     where: { token },
     select: { signatureUrl: true, usedAt: true, expiresAt: true, signerName: true, signRole: true },
   });
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
   if (!assignment) return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 404 });
 
   // 기존 미사용 토큰 무효화 (같은 조건)
-  await (prisma as any).siteSignToken.deleteMany({
+  await prisma.siteSignToken.deleteMany({
     where: {
       assignmentId: assignment.id,
       docType,
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
   const token = randomUUID();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7일
 
-  await (prisma as any).siteSignToken.create({
+  await prisma.siteSignToken.create({
     data: {
       token,
       docType,

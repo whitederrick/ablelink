@@ -15,7 +15,7 @@ const BUCKET = "signatures";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   try {
   const { token } = await params;
-  const rec = await (prisma as any).siteSignToken.findUnique({
+  const rec = await prisma.siteSignToken.findUnique({
     where: { token: token },
     include: { assignment: { include: { site: true } } },
   });
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   try {
   const { token } = await params;
-  const rec = await (prisma as any).siteSignToken.findUnique({
+  const rec = await prisma.siteSignToken.findUnique({
     where: { token: token },
   });
 
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
 
-  await (prisma as any).siteSignToken.update({
+  await prisma.siteSignToken.update({
     where: { token: token },
     data: { signatureUrl: publicUrl, usedAt: new Date() },
   });

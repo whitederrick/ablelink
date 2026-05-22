@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     let companyManagerSignatureUrl: string | null = null;
     let companyManagerSignerName = "";
     if (companyManagerSignToken) {
-      const tokenRec = await (prisma as any).siteSignToken?.findUnique?.({
+      const tokenRec = await prisma.siteSignToken.findUnique({
         where: { token: companyManagerSignToken },
         select: { signatureUrl: true, usedAt: true, signRole: true, signerName: true },
       });
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     // ── 관리자(govAgent) 서명 ──────────────────────────────
     let adminForSign = assignment.assignedByAdmin as any;
     if (!adminForSign && assignment.agencyId) {
-      adminForSign = await (prisma as any).adminUser?.findFirst?.({
+      adminForSign = await prisma.adminUser.findFirst({
         where: { agencyId: assignment.agencyId, isActive: true },
         select: { signatureUrl: true, displayName: true },
         orderBy: { id: "asc" },
