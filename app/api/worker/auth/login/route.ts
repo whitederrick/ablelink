@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     const activeAssignment = await prisma.siteAssignment.findFirst({
       where: {
         userId: user.id,
-        status: "ACTIVE",
+        status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] },
         startDate: { lte: today },
         OR: [{ endDate: null }, { endDate: { gte: today } }],
       },

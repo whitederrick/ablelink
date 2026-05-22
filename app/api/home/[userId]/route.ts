@@ -76,7 +76,7 @@ export async function GET(
       where: { id: userId },
       include: {
         assignments: {
-          where: { status: 'ACTIVE' },
+          where: { status: { in: ['ASSIGNED', 'CONFIRMED', 'ACTIVE'] } },
           include: {
             site: { include: { trainees: true, agency: true, agencyManager: true } }
           }
