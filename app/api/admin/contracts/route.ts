@@ -28,7 +28,10 @@ export async function GET(req: NextRequest) {
     if (scope.role === "AGENCY") {
       where.agencyId = requireAgencyScope(scope);
     }
-    if (userId) where.userId = BigInt(userId);
+    if (userId) {
+      try { where.userId = BigInt(userId); }
+      catch { return NextResponse.json({ success: false, message: "잘못된 userId입니다." }, { status: 400 }); }
+    }
     if (status) where.status = status;
 
     const rows = await prisma.employmentContract.findMany({

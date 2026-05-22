@@ -35,8 +35,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       ? false
       : (body.commuteGuidanceIncluded !== false);
 
+    const HH_MM = /^\d{2}:\d{2}$/;
     const customWorkStart = workType === "CUSTOM" ? (body.customWorkStart ?? null) : null;
     const customWorkEnd   = workType === "CUSTOM" ? (body.customWorkEnd ?? null)   : null;
+    if (workType === "CUSTOM") {
+      if (!customWorkStart || !HH_MM.test(customWorkStart) || !customWorkEnd || !HH_MM.test(customWorkEnd)) {
+        return NextResponse.json({ success: false, message: "CUSTOM 근무시간은 HH:MM 형식으로 입력해주세요." }, { status: 400 });
+      }
+    }
 
     // AGENCY 스코프: 자기 에이전시 배정만 수정 가능
     if (scope.role === "AGENCY") {

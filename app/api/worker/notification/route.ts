@@ -37,6 +37,10 @@ export async function POST(req: NextRequest) {
 
   const data: any = { clockInAlertMinutes, clockOutAlertMinutes, updatedAt: new Date() };
   if (body.pushSubscription !== undefined) {
+    const subStr = JSON.stringify(body.pushSubscription);
+    if (subStr.length > 4096) {
+      return NextResponse.json({ success: false, message: "pushSubscription이 너무 큽니다." }, { status: 400 });
+    }
     data.pushSubscription = body.pushSubscription;
   }
 

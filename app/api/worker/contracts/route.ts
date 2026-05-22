@@ -77,6 +77,12 @@ export async function POST(req: NextRequest) {
   if (!token || !signatureUrl) {
     return NextResponse.json({ success: false, message: "필수 항목이 없습니다." }, { status: 400 });
   }
+  if (!signatureUrl.startsWith("data:image/")) {
+    return NextResponse.json({ success: false, message: "잘못된 서명 형식입니다." }, { status: 400 });
+  }
+  if (signatureUrl.length > 2 * 1024 * 1024) {
+    return NextResponse.json({ success: false, message: "서명 이미지가 너무 큽니다." }, { status: 400 });
+  }
 
   const contract = await prisma.employmentContract.findUnique({
     where: { signToken: token },
