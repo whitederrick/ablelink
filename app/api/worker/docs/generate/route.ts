@@ -274,16 +274,22 @@ export async function POST(request: NextRequest) {
 
     // ── 이메일 발송 ───────────────────────────────────────
     let emailSent = false;
+    let emailError: string | undefined;
     if (sendEmail && toEmail) {
-      await sendEmailWithPdf({
-        from: process.env.EMAIL_FROM || "AbleLink <noreply@able-link.co.kr>",
-        to: toEmail,
-        subject: `[AbleLink] ${DOC_LABELS[docType] || docType} - ${site.companyName} (${start} ~ ${end})`,
-        body: `안녕하세요.\n\n${site.companyName} 직무지도 ${DOC_LABELS[docType]||docType}를 첨부합니다.\n\n■ 직무지도원: ${user?.userName||""}\n■ 기간: ${start} ~ ${end}\n\n감사합니다.\nAbleLink`,
-        pdfBuffer,
-        fileName,
-      });
-      emailSent = true;
+      try {
+        await sendEmailWithPdf({
+          from: process.env.EMAIL_FROM || "AbleLink <noreply@able-link.co.kr>",
+          to: toEmail,
+          subject: `[AbleLink] ${DOC_LABELS[docType] || docType} - ${site.companyName} (${start} ~ ${end})`,
+          body: `안녕하세요.\n\n${site.companyName} 직무지도 ${DOC_LABELS[docType]||docType}를 첨부합니다.\n\n■ 직무지도원: ${user?.userName||""}\n■ 기간: ${start} ~ ${end}\n\n감사합니다.\nAbleLink`,
+          pdfBuffer,
+          fileName,
+        });
+        emailSent = true;
+      } catch (err: any) {
+        console.error("[docs/generate] 이메일 발송 실패:", err?.message ?? err);
+        emailError = "이메일 발송에 실패했습니다. PDF는 정상 생성되었습니다.";
+      }
     }
 
     return NextResponse.json({
@@ -291,7 +297,7 @@ export async function POST(request: NextRequest) {
       fileName,
       emailSent,
       pdfBase64: pdfBuffer.toString("base64"),
-      message: emailSent ? `${toEmail}로 발송되었습니다.` : "PDF가 생성되었습니다.",
+      message: emailSent ? `${toEmail}로 발송되었습니다.` : (emailError ?? "PDF가 생성되었습니다."),
     });
 
   } catch (error: any) {

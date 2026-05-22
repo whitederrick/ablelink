@@ -158,21 +158,33 @@ export async function GET(req: Request) {
       });
 
       if (!existing) {
-        existing = await prisma.attendanceIssue.create({
-          data: {
-            dailyAttendanceId: r.id,
-            issueTypes: derived as any,
-            events: {
-              create: [{
-                type: "ISSUE_CREATED",
-                actorRole: "ADMIN",
-                actorAdminId: scope.userId,
-                message: `이슈 등록: ${derived.join(", ")}`,
-              }],
+        try {
+          existing = await prisma.attendanceIssue.create({
+            data: {
+              dailyAttendanceId: r.id,
+              issueTypes: derived as any,
+              events: {
+                create: [{
+                  type: "ISSUE_CREATED",
+                  actorRole: "ADMIN",
+                  actorAdminId: scope.userId,
+                  message: `이슈 등록: ${derived.join(", ")}`,
+                }],
+              },
             },
-          },
-          select: { status: true, issueTypes: true, coachReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
-        });
+            select: { status: true, issueTypes: true, coachReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
+          });
+        } catch (e: any) {
+          // 동시 요청으로 이미 생성된 경우 재조회
+          if (e?.code === "P2002") {
+            existing = await prisma.attendanceIssue.findUnique({
+              where: { dailyAttendanceId: r.id },
+              select: { status: true, issueTypes: true, coachReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
+            });
+          } else {
+            throw e;
+          }
+        }
       } else if (existing.status === "OPEN") {
         existing = await prisma.attendanceIssue.update({
           where: { dailyAttendanceId: r.id },
