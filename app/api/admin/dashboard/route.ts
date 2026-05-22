@@ -39,6 +39,8 @@ export async function GET(req: Request) {
 
     const todayWorking = todayAttendances.filter(a => a.startTime && !a.isFinalClosed).length;
     const todayDone = todayAttendances.filter(a => a.isFinalClosed).length;
+    const logDoneCount = todayAttendances.filter(a => a.logs.length > 0 && a.logs.every(l => l.isCompleted)).length;
+    const logPendingCount = todayAttendances.filter(a => !a.logs.every(l => l.isCompleted) || a.logs.length === 0).length;
 
     // ── 2. 미확인 근태 ────────────────────────────────────────────
     const unconfirmedIssues = await prisma.attendanceIssue.findMany({
@@ -174,6 +176,8 @@ export async function GET(req: Request) {
         summary: {
           todayWorking,
           todayDone,
+          logDoneCount,
+          logPendingCount,
           unconfirmedCount: unconfirmedIssues.length,
           docPendingSubmit,
           docOverdue,
@@ -233,7 +237,8 @@ export async function GET(req: Request) {
 }
 
 function formatHHMM(d: Date) {
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const kst = new Date(d.getTime() + 9 * 3600000);
+  return `${String(kst.getUTCHours()).padStart(2, "0")}:${String(kst.getUTCMinutes()).padStart(2, "0")}`;
 }
 
 function docTypeLabel(type: string) {

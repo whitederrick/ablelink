@@ -189,6 +189,7 @@ export async function POST(request: NextRequest) {
           taskLevelMeasured: scoreLabel(l.tasks[0]?.performanceScore as any),
           evalGuidance: l.content || "",
         })),
+        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, coach: sigs.coach },
       };
       fileName = `훈련일지_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
 

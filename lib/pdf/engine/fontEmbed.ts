@@ -2,9 +2,9 @@
 import fs from "fs";
 import path from "path";
 
-function toDataUrl(ttfAbsPath: string): string {
-  const bin = fs.readFileSync(ttfAbsPath);
-  return `data:font/ttf;base64,${bin.toString("base64")}`;
+// base64 임베드 대신 file:// URL 참조 — 150MB+ HTML → 수 KB
+function toFileUrl(absPath: string): string {
+  return "file:///" + absPath.replace(/\\/g, "/");
 }
 
 function fontPath(name: string) {
@@ -32,22 +32,22 @@ html, body { margin: 0; padding: 0; }
 
 @font-face {
   font-family: "HCRDotum";
-  src: url("${toDataUrl(files.dotum)}") format("truetype");
+  src: url("${toFileUrl(files.dotum)}") format("truetype");
   font-weight: 400; font-style: normal;
 }
 @font-face {
   font-family: "HCRDotum";
-  src: url("${toDataUrl(files.dotumBold)}") format("truetype");
+  src: url("${toFileUrl(files.dotumBold)}") format("truetype");
   font-weight: 700; font-style: normal;
 }
 @font-face {
   font-family: "HCRBatang";
-  src: url("${toDataUrl(files.batang)}") format("truetype");
+  src: url("${toFileUrl(files.batang)}") format("truetype");
   font-weight: 400; font-style: normal;
 }
 @font-face {
   font-family: "HCRBatang";
-  src: url("${toDataUrl(files.batangBold)}") format("truetype");
+  src: url("${toFileUrl(files.batangBold)}") format("truetype");
   font-weight: 700; font-style: normal;
 }
 `.trim();
@@ -62,12 +62,12 @@ export function buildNotoSansKrFontFaceCss(): string {
   return `
 @font-face {
   font-family: "NotoSansKR";
-  src: url("${toDataUrl(regular)}") format("truetype");
+  src: url("${toFileUrl(regular)}") format("truetype");
   font-weight: 400; font-style: normal;
 }
 @font-face {
   font-family: "NotoSansKR";
-  src: url("${toDataUrl(bold)}") format("truetype");
+  src: url("${toFileUrl(bold)}") format("truetype");
   font-weight: 700; font-style: normal;
 }
 `.trim();

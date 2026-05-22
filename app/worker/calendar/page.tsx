@@ -28,6 +28,7 @@ interface CalendarData {
   totalWorkDays: number;
   totalGreenDays: number;
   totalOrangeDays: number;
+  totalRedDays: number;
   trainingType: "PRE" | "FIELD" | "ADAPTATION";
 }
 
@@ -145,7 +146,12 @@ export default function CalendarPage() {
             <div style={s.summaryDivider} />
             <div style={s.summaryItem}>
               <span style={{ ...s.summaryNum, color: data.totalOrangeDays > 0 ? "#d97706" : "#9ca3af" }}>{data.totalOrangeDays}</span>
-              <span style={{ ...s.summaryLabel, color: data.totalOrangeDays > 0 ? "#d97706" : "#9ca3af" }}>미작성</span>
+              <span style={{ ...s.summaryLabel, color: data.totalOrangeDays > 0 ? "#d97706" : "#9ca3af" }}>일지미작성</span>
+            </div>
+            <div style={s.summaryDivider} />
+            <div style={s.summaryItem}>
+              <span style={{ ...s.summaryNum, color: (data.totalRedDays ?? 0) > 0 ? "#e11d48" : "#9ca3af" }}>{data.totalRedDays ?? 0}</span>
+              <span style={{ ...s.summaryLabel, color: (data.totalRedDays ?? 0) > 0 ? "#e11d48" : "#9ca3af" }}>미출근</span>
             </div>
           </div>
         )}
@@ -183,7 +189,9 @@ export default function CalendarPage() {
                   style={{
                     ...s.cell,
                     backgroundColor: st.bg,
-                    opacity: status === "NONE" && !isToday ? 0.6 : 1,
+                    opacity: status === "NONE" && !isToday ? 0.5 : 1,
+                    outline: isToday ? "2px solid #2563eb" : "none",
+                    outlineOffset: -2,
                   }}
                   onClick={() => dayData && setSelectedDay({ day, data: dayData })}
                   disabled={!dayData}
@@ -251,6 +259,10 @@ export default function CalendarPage() {
           <span style={s.navIcon}>📄</span>
           <span style={s.navLabel}>문서</span>
         </button>
+        <button style={s.navItem} onClick={() => router.push("/worker/history")}>
+          <span style={s.navIcon}>💰</span>
+          <span style={s.navLabel}>히스토리</span>
+        </button>
       </nav>
 
       {/* 날짜 상세 모달 */}
@@ -273,13 +285,17 @@ export default function CalendarPage() {
                   : "✗ 미출근"}
               </div>
 
-              {selectedDay.data.startTime && (
+              {selectedDay.data.startTime ? (
                 <div style={s.timeRow}>
                   <span style={s.timeLabel}>출근</span>
                   <span style={s.timeValue}>{formatHHMM(selectedDay.data.startTime)}</span>
                   <span style={s.timeLabel}>퇴근</span>
                   <span style={s.timeValue}>{formatHHMM(selectedDay.data.endTime)}</span>
                 </div>
+              ) : (
+                <p style={{ textAlign: "center", fontSize: 13, color: "#9ca3af", margin: 0 }}>
+                  출근 기록이 없습니다.
+                </p>
               )}
 
               {selectedDay.data.traineeCount > 0 && (

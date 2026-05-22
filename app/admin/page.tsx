@@ -8,6 +8,7 @@ interface DashboardData {
   today: string;
   summary: {
     todayWorking: number; todayDone: number;
+    logDoneCount: number; logPendingCount: number;
     unconfirmedCount: number; docPendingSubmit: number; docOverdue: number;
     endingIn5: number; endingIn10: number; unassignedSiteCount: number;
     unassignedSiteList?: Array<{ id: string; companyName: string }>;
@@ -169,7 +170,7 @@ export default function AdminDashboardPage() {
           { label: "보고서 제출 대기", value: s?.docPendingSubmit ?? 0,  unit: "건", color: "#d97706", bg: "#fffbeb", onClick: () => router.push("/admin/documents") },
           { label: "보고서 미제출",   value: s?.docOverdue ?? 0,         unit: "건", color: "#dc2626", bg: "#fef2f2", urgent: (s?.docOverdue ?? 0) > 0, onClick: () => router.push("/admin/documents") },
           { label: "배정 종료 임박",  value: s?.endingIn5 ?? 0,          unit: "명", color: "#dc2626", bg: "#fef2f2", sub: `D-10: ${s?.endingIn10 ?? 0}명` },
-          { label: "종료 임박(D-10)", value: s?.endingIn10 ?? 0,         unit: "명", color: "#dc2626", bg: "#fef2f2" },
+          { label: "일지 미완료",     value: s?.logPendingCount ?? 0,    unit: "건", color: (s?.logPendingCount ?? 0) > 0 ? "#d97706" : "#16a34a", bg: (s?.logPendingCount ?? 0) > 0 ? "#fffbeb" : "#f0fdf4", sub: `완료: ${s?.logDoneCount ?? 0}건` },
           { label: "미배정 Site",     value: s?.unassignedSiteCount ?? 0, unit: "건", color: (s?.unassignedSiteCount ?? 0) > 0 ? "#dc2626" : "#6b7280", bg: (s?.unassignedSiteCount ?? 0) > 0 ? "#fef2f2" : "#f9fafb", onClick: () => router.push("/admin/sites") },
         ].map((card, i) => (
           <div key={i} onClick={card.onClick}

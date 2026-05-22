@@ -33,6 +33,7 @@ const groups: NavGroup[] = [
   {
     title: "구독/정산",
     items: [
+      { href: "/admin/payroll",      label: "급여 관리" },
       { href: "/admin/signature",    label: "내 서명" },
       { href: "/admin/subscription", label: "구독 관리" },
     ],

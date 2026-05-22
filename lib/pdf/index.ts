@@ -15,6 +15,23 @@ export type DocumentType =
   | "ADAPTATION_FINAL_EVAL"
   | "TRAINEE_FINAL_EVAL";
 
+const DOC_TYPE_MAP: Record<string, DocumentType> = {
+  "attendance-sheet":      "ATTENDANCE_SHEET",
+  "training-daily-log":    "TRAINING_DAILY_LOG",
+  "adaptation-daily-log":  "ADAPTATION_DAILY_LOG",
+  "trainee-final-eval":    "TRAINEE_FINAL_EVAL",
+  "adaptation-final-eval": "ADAPTATION_FINAL_EVAL",
+};
+
+/** kebab-case 또는 SCREAMING_SNAKE_CASE 모두 허용 */
+export function normalizeDocType(raw: string | null | undefined): DocumentType | null {
+  if (!raw) return null;
+  if (DOC_TYPE_MAP[raw]) return DOC_TYPE_MAP[raw];
+  const upper = raw as DocumentType;
+  if (Object.values(DOC_TYPE_MAP).includes(upper)) return upper;
+  return null;
+}
+
 export type {
   AttendanceSheetPayload,
   TrainingDailyLogPayload,

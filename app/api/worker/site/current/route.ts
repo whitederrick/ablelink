@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
       data: {
         siteId: site.id.toString(),
         assignmentId: assignment.id.toString(),
+        agencyId: agency?.id.toString() ?? null,
         companyName: site.companyName,
         workType: assignment.workType || "전일(8H)",
         isExtraTime: assignment.isExtraTime,

@@ -32,6 +32,12 @@ export type TrainingDailyLogPayload = {
 
   // 이미 저장된 rows가 있으면 우선 사용(없으면 자동 생성)
   rows?: TrainingDailyLogRow[];
+
+  signatures?: {
+    govAgent?:       { name?: string; imageUrl?: string };
+    companyManager?: { name?: string; imageUrl?: string };
+    coach?:          { name?: string; imageUrl?: string };
+  };
 };
 
 function isWeekend(d: Date) {
@@ -109,6 +115,10 @@ function groupByRun(rows: TrainingDailyLogRow[]) {
 
 export function renderTRAINING_DAILY_LOG_HTML(payload: TrainingDailyLogPayload) {
   const fontCss = buildHcrFontFaceCss("20mm 18mm 15mm 30mm");
+  const sigs = payload.signatures ?? {};
+  const sigSlot = (url?: string) =>
+    url ? `<span class="sig-slot"><img class="sign-img" src="${url}" />(서&nbsp;&nbsp;명)</span>`
+        : `(서&nbsp;&nbsp;명)`;
   const rows = buildRows(payload);
   const runs = groupByRun(rows);
 
@@ -151,7 +161,6 @@ export function renderTRAINING_DAILY_LOG_HTML(payload: TrainingDailyLogPayload) 
   <style>
     ${fontCss}
 
-    @page { size: A4; margin: 12mm; }
     html, body { padding: 0; margin: 0; }
     body {
       font-family: "HCRDotum", "Dotum", sans-serif;
@@ -232,6 +241,9 @@ export function renderTRAINING_DAILY_LOG_HTML(payload: TrainingDailyLogPayload) 
       margin-right: auto;
       line-height: 1.8;
     }
+    .sig-slot { position: relative; display: inline-block; min-width: 24mm; text-align: center; }
+    .sign-img  { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      width: 28mm; height: 20mm; object-fit: contain; opacity: 0.6; pointer-events: none; z-index: 1; }
   </style>
 </head>
 
@@ -303,9 +315,9 @@ export function renderTRAINING_DAILY_LOG_HTML(payload: TrainingDailyLogPayload) 
 
     <!-- 서명 -->
     <div class="footer">
-      <div class="sig-row"><div>(공단/위탁기관) 담당자:</div><div>(서&nbsp;&nbsp;명)</div></div>
-      <div class="sig-row"><div>사업체담당자:</div><div>(서&nbsp;&nbsp;명)</div></div>
-      <div class="sig-row"><div>직무지도원:</div><div>(서&nbsp;&nbsp;명)</div></div>
+      <div class="sig-row"><div>(공단/위탁기관) 담당자: ${sigs.govAgent?.name??""}</div><div>${sigSlot(sigs.govAgent?.imageUrl)}</div></div>
+      <div class="sig-row"><div>사업체담당자: ${sigs.companyManager?.name??""}</div><div>${sigSlot(sigs.companyManager?.imageUrl)}</div></div>
+      <div class="sig-row"><div>직무지도원: ${sigs.coach?.name??""}</div><div>${sigSlot(sigs.coach?.imageUrl)}</div></div>
     </div>
   </div>
 </body>

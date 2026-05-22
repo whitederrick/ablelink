@@ -618,6 +618,10 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
           <span style={s.navIcon}>📄</span>
           <span style={s.navLabel}>문서</span>
         </button>
+        <button style={s.navItem} onClick={() => router.push("/worker/history")}>
+          <span style={s.navIcon}>💰</span>
+          <span style={s.navLabel}>히스토리</span>
+        </button>
       </nav>
     </div>
   );

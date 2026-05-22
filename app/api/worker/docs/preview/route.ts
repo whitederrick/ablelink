@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
-import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
+import { renderPdfToBuffer, normalizeDocType, type DocumentType } from "@/lib/pdf";
 
 function fmtHHMM(d: Date): string {
   const kst = new Date(d.getTime() + 9*3600000);
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     if (!session) return NextResponse.json({ success:false, message:"인증이 필요합니다." }, { status:401 });
 
     const { searchParams } = new URL(request.url);
-    const docType    = searchParams.get("docType") as DocumentType|null;
+    const docType    = normalizeDocType(searchParams.get("docType"));
     const periodStart = searchParams.get("periodStart") || new Date().toISOString().slice(0,10);
     const periodEnd   = searchParams.get("periodEnd")   || periodStart;
     const traineeId   = searchParams.get("traineeId");
@@ -110,6 +110,7 @@ export async function GET(request: NextRequest) {
           attendanceStatus:l.evaluation||"출석", trainingTime:`${Number(l.totalRecognizedTime)}H`,
           guidanceFlag:"Y", task:l.tasks[0]?.taskName||"",
           taskLevelMeasured:scoreLabel(l.tasks[0]?.performanceScore), evalGuidance:l.content||"" })),
+        signatures:{ govAgent:sigs.govAgent, companyManager:{name:"",imageUrl:undefined}, coach:sigs.coach },
       };
     } else if (docType === "ADAPTATION_DAILY_LOG") {
       const tid = traineeId ? BigInt(traineeId) : null;
@@ -124,6 +125,31 @@ export async function GET(request: NextRequest) {
           workTime:"", guidance:"Y", task:l.tasks[0]?.taskName||"",
           performanceLabel:scoreLabel(l.tasks[0]?.performanceScore), performanceTime:"", coaching:l.content||"" })),
         signatures:{ coach:sigs.coach, govAgent:sigs.govAgent },
+      };
+    } else if (docType === "TRAINEE_FINAL_EVAL") {
+      const tid = traineeId ? BigInt(traineeId) : null;
+      const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
+      const ev = tid ? await prisma.traineeEvaluation.findFirst({
+        where:{ traineeId:tid, writerId:userId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
+      }) : null;
+      payload = {
+        traineeName:trainee?.name||"", companyName:site.companyName,
+        preTrainingStart:assignment.stepStart?.toISOString().slice(0,10)||start,
+        preTrainingEnd:start, fieldTrainingStart:start, fieldTrainingEnd:end,
+        scores:(ev?.scores as any)||{}, comments:(ev?.comments as any)||{},
+        signatures:{ coach:sigs.coach, agencyAgent:sigs.agencyAgent },
+      };
+    } else if (docType === "ADAPTATION_FINAL_EVAL") {
+      const tid = traineeId ? BigInt(traineeId) : null;
+      const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
+      const ev = tid ? await prisma.traineeEvaluation.findFirst({
+        where:{ traineeId:tid, writerId:userId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
+      }) : null;
+      payload = {
+        traineeName:trainee?.name||"", companyName:site.companyName,
+        periodStart:start, periodEnd:end,
+        scores:(ev?.scores as any)||{}, comments:(ev?.comments as any)||{},
+        signatures:{ coach:sigs.coach, agencyAgent:sigs.agencyAgent },
       };
     } else {
       payload = { traineeName:"", companyName:site.companyName, periodStart:start, periodEnd:end };

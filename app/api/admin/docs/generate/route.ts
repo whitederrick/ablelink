@@ -141,17 +141,21 @@ export async function POST(request: NextRequest) {
           task:l.tasks[0]?.taskName||"", taskLevelMeasured:scoreLabel(l.tasks[0]?.performanceScore),
           evalGuidance:l.content||"",
         })),
+        signatures: { govAgent: sigs.govAgent, companyManager: { name:"", imageUrl:undefined }, coach: sigs.coach },
       };
       fileName = `훈련일지_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
 
     } else if (docType === "TRAINEE_FINAL_EVAL") {
       const tid = traineeId ? BigInt(traineeId) : null;
       const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
+      const ev = tid ? await prisma.traineeEvaluation.findFirst({
+        where:{ traineeId:tid, writerId:userId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
+      }) : null;
       payload = {
         traineeName: trainee?.name||"", companyName: site.companyName,
         preTrainingStart:  assignment.stepStart?.toISOString().slice(0,10)||start,
         preTrainingEnd:    start, fieldTrainingStart: start, fieldTrainingEnd: end,
-        scores:{}, comments:{},
+        scores:(ev?.scores as any)||{}, comments:(ev?.comments as any)||{},
         signatures: { coach: sigs.coach, agencyAgent: sigs.agencyAgent },
       };
       fileName = `훈련생평가_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
@@ -178,10 +182,13 @@ export async function POST(request: NextRequest) {
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
       const tid = traineeId ? BigInt(traineeId) : null;
       const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
+      const ev = tid ? await prisma.traineeEvaluation.findFirst({
+        where:{ traineeId:tid, writerId:userId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
+      }) : null;
       payload = {
         traineeName: trainee?.name||"", companyName: site.companyName,
         periodStart: start, periodEnd: end,
-        scores:{}, comments:{},
+        scores:(ev?.scores as any)||{}, comments:(ev?.comments as any)||{},
         signatures: { coach: sigs.coach, agencyAgent: sigs.agencyAgent },
       };
       fileName = `적응지도평가_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;

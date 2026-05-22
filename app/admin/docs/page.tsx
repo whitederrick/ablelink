@@ -139,29 +139,6 @@ export default function AdminDocsPage() {
     setMode("view");
   }
 
-  function handleDownload() {
-    window.open(previewUrl(), "_blank");
-  }
-
-  async function handleSend() {
-    if (!toEmail) { alert("수신 이메일을 입력해주세요."); return; }
-    setSending(true); setSendResult(null);
-    try {
-      const res = await fetch("/api/admin/docs/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          coachUserId: selectedCoach, docType, periodStart, periodEnd,
-          traineeId: traineeId || undefined,
-          toEmail,
-        }),
-      });
-      const d = await res.json();
-      setSendResult({ success: d.success, msg: d.message || (d.success ? "발송 완료" : "발송 실패") });
-    } catch { setSendResult({ success:false, msg:"서버 연결 실패" }); }
-    finally { setSending(false); }
-  }
-
   const docLabel = DOC_GROUPS.flatMap(g => g.docs).find(d => d.id === docType)?.label || "문서";
 
   if (mode === "view") {

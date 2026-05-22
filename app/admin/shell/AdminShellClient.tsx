@@ -43,7 +43,8 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
       }
     })();
     return () => { cancelled = true; };
-  }, [isLoginPage, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoginPage]);
 
   if (isLoginPage) return <>{children}</>;
 

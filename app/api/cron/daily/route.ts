@@ -19,16 +19,17 @@ export async function GET(req: NextRequest) {
   try {
     const stale = await prisma.dailyAttendance.findMany({
       where: { workDate: yesterday, startTime: { not: null }, isFinalClosed: false },
+      select: { id: true, endTime: true },
     });
+    const autoEndTime = new Date(`${yesterday}T18:00:00+09:00`);
     for (const att of stale) {
-      const defaultEnd = att.workType?.includes("4H") ? "13:00" : "18:00";
       await prisma.dailyAttendance.update({
         where: { id: att.id },
         data: {
-          endTime:       att.endTime || defaultEnd,
+          endTime:       att.endTime ?? autoEndTime,
           isFinalClosed: true,
-          closedAt:      now,
-          closeReason:   "AUTO_DAILY_CRON",
+          finalizedAt:   now,
+          status:        "DONE",
         },
       });
       autoConfirmed++;
