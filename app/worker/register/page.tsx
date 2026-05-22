@@ -500,9 +500,6 @@ const s: Record<string, React.CSSProperties> = {
   dateInput: { flex: 1, height: 42, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 10px", fontSize: 14, color: "#111827", outline: "none", background: "#fafafa" },
   dateSep: { color: "#9ca3af", fontWeight: 500 },
 
-  workTypeRow: { display: "flex", gap: 8, marginBottom: 12 },
-  workTypeBtn: { flex: 1, padding: "11px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 14, cursor: "pointer", backgroundColor: "#fafafa", color: "#6b7280", fontWeight: 600 },
-  workTypeActive: { backgroundColor: "#111827", color: "#fff", border: "1px solid #111827" },
   checkRow: { display: "flex", alignItems: "center", cursor: "pointer" },
 
   traineeForm: { display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 },
