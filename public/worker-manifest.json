@@ -1,12 +1,12 @@
 {
-  "name": "AbleLink - 직무지도원",
-  "short_name": "AbleLink",
-  "description": "장애인 직무지도 지원 서비스",
+  "name": "ableLink",
+  "short_name": "ableLink",
+  "description": "장애인 직무지도원 및 에이전시 통합 관리 서비스",
   "start_url": "/worker/home",
   "display": "standalone",
-  "background_color": "#f7f8fa",
-  "theme_color": "#111827",
   "orientation": "portrait",
+  "background_color": "#0B0F19",
+  "theme_color": "#0B0F19",
   "icons": [
     {
       "src": "/icons/icon-192.png",

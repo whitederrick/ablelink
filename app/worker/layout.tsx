@@ -2,6 +2,7 @@
 // 직무지도원 웹 레이아웃 - 모바일 최적화 + PWA 지원
 
 import type { Metadata, Viewport } from "next";
+import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 
 export const metadata: Metadata = {
   title: "AbleLink - 직무지도원",
@@ -22,7 +23,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#111827",
+  themeColor: "#0B0F19",
 };
 
 export default function WorkerLayout({ children }: { children: React.ReactNode }) {
@@ -37,6 +38,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
       {children}
+      <PWAInstallPrompt />
     </div>
   );
 }
