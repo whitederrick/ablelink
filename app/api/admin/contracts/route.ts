@@ -32,7 +32,13 @@ export async function GET(req: NextRequest) {
       try { where.userId = BigInt(userId); }
       catch { return NextResponse.json({ success: false, message: "잘못된 userId입니다." }, { status: 400 }); }
     }
-    if (status) where.status = status;
+    const VALID_STATUSES = ["PENDING", "SIGNED", "COMPLETED", "CANCELLED"];
+    if (status) {
+      if (!VALID_STATUSES.includes(status)) {
+        return NextResponse.json({ success: false, message: "유효하지 않은 status입니다." }, { status: 400 });
+      }
+      where.status = status;
+    }
 
     const rows = await prisma.employmentContract.findMany({
       where,
@@ -86,13 +92,26 @@ export async function POST(req: NextRequest) {
       throw new Error("VALIDATION:필수 항목을 입력해주세요.");
     }
 
+    let userIdBig: bigint;
+    try { userIdBig = BigInt(userId); }
+    catch { throw new Error("VALIDATION:잘못된 userId입니다."); }
+
+    const startDate = new Date(contractStart);
+    const endDate   = new Date(contractEnd);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      throw new Error("VALIDATION:날짜 형식이 올바르지 않습니다.");
+    }
+    if (endDate <= startDate) {
+      throw new Error("VALIDATION:계약 종료일은 시작일보다 이후여야 합니다.");
+    }
+
     let agencyId: bigint;
     if (scope.role === "AGENCY") {
       agencyId = requireAgencyScope(scope);
     } else {
       // ADMIN: userId의 배정에서 agencyId 추출
       const assignment = await prisma.siteAssignment.findFirst({
-        where: { userId: BigInt(userId), status: { in: ["ACTIVE", "CONFIRMED", "ASSIGNED"] } },
+        where: { userId: userIdBig, status: { in: ["ACTIVE", "CONFIRMED", "ASSIGNED"] } },
         select: { agencyId: true },
       });
       if (!assignment?.agencyId) throw new Error("VALIDATION:에이전시 정보를 찾을 수 없습니다.");
@@ -105,9 +124,9 @@ export async function POST(req: NextRequest) {
     const contract = await prisma.employmentContract.create({
       data: {
         agencyId,
-        userId: BigInt(userId),
-        contractStart: new Date(contractStart),
-        contractEnd: new Date(contractEnd),
+        userId: userIdBig,
+        contractStart: startDate,
+        contractEnd: endDate,
         siteName: siteName || null,
         workType: workType || null,
         commuteGuidanceIncluded: workType === "FULL_DAY" ? false : (commuteGuidanceIncluded !== false),
