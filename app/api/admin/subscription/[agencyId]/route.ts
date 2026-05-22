@@ -6,15 +6,24 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
+import { requireAdminSession } from "@/lib/adminScope";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ agencyId: string }> }
 ) {
   try {
-    const { planType } = await request.json();
-    const agencyId = BigInt(agencyId);
+    await requireAdminSession(request);
 
+    const { planType } = await request.json();
+    const { agencyId: agencyIdStr } = await params;
+
+    const VALID_PLAN_TYPES = ["FREE", "TRIAL", "STARTER", "STANDARD", "PRO"];
+    if (!planType || !VALID_PLAN_TYPES.includes(planType)) {
+      return NextResponse.json({ success: false, message: "유효하지 않은 planType입니다." }, { status: 400 });
+    }
+
+    const agencyId = BigInt(agencyIdStr);
     const limits = PLAN_LIMITS[planType] || { maxCoaches: 0, maxSites: 0 };
     const now = new Date();
 

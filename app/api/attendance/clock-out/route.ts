@@ -3,9 +3,10 @@
 
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
+import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 
 /**
  * 하버사인(Haversine) 공식을 이용한 두 좌표 사이의 거리 계산 함수 (단위: m)
@@ -47,8 +48,13 @@ function toBigIntOrNull(v: any): bigint | null {
   return BigInt(s);
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const session = await getWorkerSessionFromReq(request);
+    if (!session) {
+      return NextResponse.json({ success: false, message: “인증이 필요합니다.” }, { status: 401 });
+    }
+
     const body = await request.json();
 
     // ✅ 확장 입력(선택): assignmentId/basePointId
@@ -57,7 +63,6 @@ export async function POST(request: Request) {
     // - finalize: 최종 업무 종료(이후 재확인 불가)
     // - confirmOutOfRange: 거리 밖 경고 확인 후 재요청 시 true
     const {
-      userId,
       latitude,
       longitude,
       isGpsModified,
@@ -68,20 +73,20 @@ export async function POST(request: Request) {
       basePointId: inputBasePointId,
     } = body;
 
-    const action = finalize ? "FINALIZE" : reconfirm ? "RECONFIRM" : "CLOCK_OUT";
+    const action = finalize ? “FINALIZE” : reconfirm ? “RECONFIRM” : “CLOCK_OUT”;
 
     console.log(
-      `[퇴근 요청] action=${action}, User=${userId}, lat=${latitude}, lon=${longitude}, 보정여부=${isGpsModified}, 거리예외확인=${confirmOutOfRange}, assignmentId=${inputAssignmentId ?? "auto"}, basePointId=${inputBasePointId ?? "auto"}`
+      `[퇴근 요청] action=${action}, User=${session.userId}, lat=${latitude}, lon=${longitude}, 보정여부=${isGpsModified}, 거리예외확인=${confirmOutOfRange}, assignmentId=${inputAssignmentId ?? “auto”}, basePointId=${inputBasePointId ?? “auto”}`
     );
 
-    if (!userId || latitude === undefined || longitude === undefined) {
+    if (latitude === undefined || longitude === undefined) {
       return NextResponse.json(
-        { success: false, message: "필수 정보(ID, 위치)가 누락되었습니다." },
+        { success: false, message: “필수 정보(위치)가 누락되었습니다.” },
         { status: 400 }
       );
     }
 
-    const userIdBig = BigInt(String(userId).trim());
+    const userIdBig = BigInt(session.userId);
 
     // [STEP 1] 오늘 날짜의 출근 기록 찾기
     // - 최초 퇴근(CLOCK_OUT): WORKING 상태만 허용

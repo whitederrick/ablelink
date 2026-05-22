@@ -3,9 +3,10 @@
 
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
+import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 
 /**
  * 하버사인(Haversine) 거리(m) 계산
@@ -35,13 +36,17 @@ function toBigIntOrNull(v: any): bigint | null {
   return BigInt(s);
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const session = await getWorkerSessionFromReq(request);
+    if (!session) {
+      return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
+    }
+
     const body = await request.json();
 
     // ✅ 확장 입력: assignmentId/basePointId (없으면 서버가 자동 산정)
     const {
-      userId,
       siteId, // (옵션) 클라이언트가 같이 보내면 검증에 활용 가능
       assignmentId: inputAssignmentId,
       basePointId: inputBasePointId,
@@ -52,10 +57,7 @@ export async function POST(request: Request) {
       confirmOutOfRange,
     } = body;
 
-    const userIdStr = String(userId ?? "").trim();
-    if (!isValidNumericId(userIdStr)) {
-      return NextResponse.json({ success: false, message: "VALIDATION:userId" }, { status: 400 });
-    }
+    const userIdStr = session.userId;
     if (latitude === undefined || longitude === undefined) {
       return NextResponse.json({ success: false, message: "VALIDATION:location" }, { status: 400 });
     }
