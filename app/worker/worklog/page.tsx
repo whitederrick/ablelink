@@ -339,6 +339,10 @@ function WorklogForm() {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
 
+  // localStorage 자동저장 — 키: attendanceId + traineeId 조합
+  const draftKey = `worklog_draft_${attendanceId || "noatt"}_${traineeId || "not"}`;
+  const [draftRestored, setDraftRestored] = useState(false);
+
   const premium = isPremium(siteInfo.agencyPlanType, siteInfo.trialEndsAt);
 
   // attendanceId 없으면 오늘 출근 기록에서 자동 조회
@@ -378,6 +382,23 @@ function WorklogForm() {
       setIsBreakGuide(true);
     }
   }, [siteInfo.isExtraTime]);
+
+  // 마운트 시 draft 복원
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(draftKey);
+      if (saved) {
+        setContent(saved);
+        setDraftRestored(true);
+      }
+    } catch {}
+  }, [draftKey]);
+
+  // content 변경 시 자동저장
+  useEffect(() => {
+    if (!content) return;
+    try { localStorage.setItem(draftKey, content); } catch {}
+  }, [content, draftKey]);
 
   const core = diffHours(trainStart, trainEnd);
   const extra = isExtraGuide ? diffHours(extraStart, extraEnd) : 0;
@@ -488,6 +509,7 @@ function WorklogForm() {
       });
       const data = await res.json();
       if (!data.success) { setError(data.message || "저장 실패"); return; }
+      try { localStorage.removeItem(draftKey); } catch {}
       setSaved(true);
       setTimeout(() => router.back(), 1200);
     } catch {
@@ -710,6 +732,13 @@ function WorklogForm() {
             </div>
           )}
 
+          {draftRestored && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px", marginBottom: 8 }}>
+              <span style={{ fontSize: 12, color: "#d97706", fontWeight: 600 }}>📋 이전에 작성 중이던 내용을 불러왔습니다.</span>
+              <button onClick={() => { setContent(""); setDraftRestored(false); try { localStorage.removeItem(draftKey); } catch {} }}
+                style={{ fontSize: 11, color: "#9ca3af", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>지우기</button>
+            </div>
+          )}
           <textarea
             style={s.textarea}
             placeholder="지도 내용을 입력하세요."
