@@ -1,5 +1,5 @@
-// middleware.ts
-// 관리자 + 직무지도원 페이지 및 API 보호 미들웨어
+// proxy.ts
+// 관리자 + 직무지도원 페이지 및 API 보호 (Next.js 16 proxy 컨벤션)
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
@@ -39,7 +39,7 @@ async function verifyWorkerSession(req: NextRequest) {
   }
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // ── 관리자 영역 ──────────────────────────────────────────────
