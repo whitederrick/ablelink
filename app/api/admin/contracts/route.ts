@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
 import { randomUUID } from "crypto";
+import { hash } from "bcryptjs";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -83,18 +84,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const {
-      userId, contractStart, contractEnd,
+      userId,       // 검색 팝업에서 선택한 기존 유저 ID (선택)
+      manualName,   // 수동 입력: 이름
+      manualPhone,  // 수동 입력: 전화번호
+      contractStart, contractEnd,
       siteName, workType, commuteGuidanceIncluded,
       customWorkStart, customWorkEnd, adminMemo,
     } = body;
 
-    if (!userId || !contractStart || !contractEnd) {
-      throw new Error("VALIDATION:필수 항목을 입력해주세요.");
+    if (!contractStart || !contractEnd) {
+      throw new Error("VALIDATION:계약 시작일과 종료일은 필수입니다.");
     }
-
-    let userIdBig: bigint;
-    try { userIdBig = BigInt(userId); }
-    catch { throw new Error("VALIDATION:잘못된 userId입니다."); }
 
     const startDate = new Date(contractStart);
     const endDate   = new Date(contractEnd);
@@ -105,19 +105,70 @@ export async function POST(req: NextRequest) {
       throw new Error("VALIDATION:계약 종료일은 시작일보다 이후여야 합니다.");
     }
 
+    // ─── 직무지도원 유저 확정 ─────────────────────────────────────
+    let userIdBig: bigint;
+
+    if (userId) {
+      // 이력 검색에서 선택한 기존 유저
+      try { userIdBig = BigInt(userId); }
+      catch { throw new Error("VALIDATION:잘못된 userId입니다."); }
+    } else {
+      // 수동 입력: 이름 + 전화번호 필수
+      const name  = (manualName  ?? "").trim();
+      const phone = (manualPhone ?? "").trim();
+      if (!name || !phone) {
+        throw new Error("VALIDATION:직무지도원 이름과 전화번호는 필수입니다.");
+      }
+
+      // 전화번호로 기존 유저 조회
+      const existing = await prisma.user.findFirst({
+        where: { phoneNumber: phone },
+        select: { id: true },
+      });
+
+      if (existing) {
+        // 이미 등록된 유저
+        userIdBig = existing.id;
+      } else {
+        // 신규 직무지도원 생성 — loginId는 항상 전화번호(하이픈 제거)
+        const baseLogin = phone.replace(/-/g, "");
+        const conflict  = await prisma.user.findUnique({ where: { loginId: baseLogin } });
+        const loginId   = conflict ? `${baseLogin}_${Date.now()}` : baseLogin;
+
+        const newUser = await prisma.user.create({
+          data: {
+            loginId,
+            password: await hash(randomUUID(), 10), // 서명 완료 시 readable 임시 비밀번호로 교체됨
+            userName: name,
+            phoneNumber: phone,
+            role: "COACH",
+            status: "ACTIVE",
+            isTemporary: true, // 최초 로그인 시 온보딩 플로우 강제
+          },
+        });
+        userIdBig = newUser.id;
+      }
+    }
+
+    // ─── agencyId 결정 ──────────────────────────────────────────
     let agencyId: bigint;
     if (scope.role === "AGENCY") {
       agencyId = requireAgencyScope(scope);
     } else {
-      // ADMIN: userId의 배정에서 agencyId 추출
-      const assignment = await prisma.siteAssignment.findFirst({
-        where: { userId: userIdBig, status: { in: ["ACTIVE", "CONFIRMED", "ASSIGNED"] } },
-        select: { agencyId: true },
-      });
-      if (!assignment?.agencyId) throw new Error("VALIDATION:에이전시 정보를 찾을 수 없습니다.");
-      agencyId = assignment.agencyId;
+      // ADMIN: 먼저 admin 자신의 agencyId, 없으면 유저 배정에서 추출
+      if (scope.agencyId) {
+        agencyId = scope.agencyId;
+      } else {
+        const assignment = await prisma.siteAssignment.findFirst({
+          where: { userId: userIdBig, status: { in: ["ACTIVE", "CONFIRMED", "ASSIGNED"] } },
+          select: { agencyId: true },
+        });
+        if (!assignment?.agencyId) throw new Error("VALIDATION:에이전시 정보를 찾을 수 없습니다. 관리자 계정에 에이전시를 연결해주세요.");
+        agencyId = assignment.agencyId;
+      }
     }
 
+    // ─── 계약서 생성 ────────────────────────────────────────────
     const signToken = randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7일
 
@@ -140,18 +191,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 카카오 알림톡 발송
+    // ─── 카카오 알림톡 발송 ─────────────────────────────────────
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";
     const contractUrl = `${baseUrl}/contract/${signToken}`;
     let kakaoSent = false;
     let kakaoError: string | undefined;
 
     try {
-      await sendKakaoAlimtalk({
-        userId: BigInt(userId),
-        contractUrl,
-        contractId: String(contract.id),
-      });
+      await sendKakaoAlimtalk({ userId: userIdBig, contractUrl, contractId: String(contract.id) });
       kakaoSent = true;
       await prisma.employmentContract.update({
         where: { id: contract.id },

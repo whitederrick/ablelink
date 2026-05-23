@@ -6,5 +6,6 @@ import HomeClient from "./HomeClient";
 export default async function WorkerHomePage() {
   const session = await getWorkerSession();
   if (!session) redirect("/worker/login");
+  if (session.isTemporary) redirect("/worker/onboarding");
   return <HomeClient session={session} />;
 }

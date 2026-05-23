@@ -2,7 +2,7 @@
 // app/worker/site/register/page.tsx
 // 직무지도 현장 등록/수정 페이지
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 // ─── 타입 ──────────────────────────────────────────────
@@ -37,7 +37,7 @@ function formatBirth(val: string) {
 }
 
 // ─── 컴포넌트 ───────────────────────────────────────────
-export default function SiteRegisterPage() {
+function SiteRegisterPageInner() {
   const router = useRouter();
   const params = useSearchParams();
   const isEdit = params.get("mode") === "edit";
@@ -470,6 +470,14 @@ export default function SiteRegisterPage() {
   );
 }
 
+
+export default function SiteRegisterPage() {
+  return (
+    <Suspense>
+      <SiteRegisterPageInner />
+    </Suspense>
+  );
+}
 // ─── 스타일 ──────────────────────────────────────────────
 const s: Record<string, React.CSSProperties> = {
   page: { minHeight: "100dvh", backgroundColor: "#f9fafb" },

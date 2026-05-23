@@ -2,7 +2,7 @@
 // app/admin/contracts/page.tsx
 // 근로계약서 관리 — 생성/발송/목록 조회
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { sharedStyles } from "../_styles";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM" | "";
@@ -24,10 +24,14 @@ interface ContractItem {
   createdAt: string;
 }
 
-interface CoachOption {
+interface SearchResult {
   id: string;
   userName: string;
   phoneNumber: string;
+  email: string;
+  siteName: string | null;
+  contractStart: string | null;
+  contractEnd: string | null;
 }
 
 const STATUS_LABEL: Record<ContractStatus, { label: string; color: string; bg: string }> = {
@@ -44,12 +48,108 @@ const WORK_TYPE_LABELS: Record<string, string> = {
   CUSTOM:   "직접 입력",
 };
 
-function CreateContractModal({ coaches, onClose, onCreated }: {
-  coaches: CoachOption[];
+function formatPeriod(start: string | null, end: string | null): string {
+  if (!start) return "-";
+  const s = start.slice(0, 7).replace("-", ".");
+  const e = end ? end.slice(0, 7).replace("-", ".") : "진행중";
+  return `${s} ~ ${e}`;
+}
+
+function CoachSearchPopup({ onSelect, onClose }: {
+  onSelect: (r: SearchResult) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery]     = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched]   = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    if (query.trim().length < 2) { setResults([]); setSearched(false); return; }
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/admin/contracts/coach-search?q=${encodeURIComponent(query.trim())}`);
+        const data = await res.json();
+        if (data.success) setResults(data.items);
+      } finally {
+        setSearching(false);
+        setSearched(true);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 680, maxWidth: "100%", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.25)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+          <div>
+            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>직무지도원 검색</h3>
+            <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 0" }}>이름 또는 전화번호로 검색 (과거 근로계약 이력 기준)</p>
+          </div>
+          <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 20, color: "#9ca3af", padding: "0 4px" }}>×</button>
+        </div>
+
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="이름 또는 전화번호 (2자 이상 입력)"
+          style={{ width: "100%", height: 42, border: "1px solid #d1d5db", borderRadius: 8, padding: "0 12px", fontSize: 14, boxSizing: "border-box", marginBottom: 14 }}
+        />
+
+        <div style={{ overflowY: "auto", flex: 1 }}>
+          {searching && <p style={{ textAlign: "center", color: "#9ca3af", fontSize: 13, padding: 20 }}>검색 중...</p>}
+          {!searching && searched && results.length === 0 && (
+            <p style={{ textAlign: "center", color: "#9ca3af", fontSize: 13, padding: 20 }}>검색 결과가 없습니다.</p>
+          )}
+          {!searching && results.length > 0 && (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #f3f4f6" }}>
+                  {["이름", "전화번호", "이메일", "최근 직무지도 사업체", "근무 기간"].map(h => (
+                    <th key={h} style={{ textAlign: "left", padding: "6px 10px", fontSize: 11, fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {results.map(r => (
+                  <tr
+                    key={r.id}
+                    onClick={() => { onSelect(r); onClose(); }}
+                    style={{ borderBottom: "1px solid #f3f4f6", cursor: "pointer" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "#f0f9ff")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "")}
+                  >
+                    <td style={{ padding: "10px 10px", fontWeight: 600 }}>{r.userName}</td>
+                    <td style={{ padding: "10px 10px", color: "#374151" }}>{r.phoneNumber}</td>
+                    <td style={{ padding: "10px 10px", color: "#6b7280", fontSize: 12 }}>{r.email || "-"}</td>
+                    <td style={{ padding: "10px 10px", color: "#374151" }}>{r.siteName || <span style={{ color: "#d1d5db" }}>미지정</span>}</td>
+                    <td style={{ padding: "10px 10px", color: "#6b7280", whiteSpace: "nowrap" }}>{formatPeriod(r.contractStart, r.contractEnd)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreateContractModal({ onClose, onCreated }: {
   onClose: () => void;
   onCreated: (item: ContractItem, url: string) => void;
 }) {
-  const [userId, setUserId]       = useState("");
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [manualName, setManualName]   = useState("");
+  const [manualPhone, setManualPhone] = useState("");
+  const [showSearch, setShowSearch]   = useState(false);
+
   const [contractStart, setStart] = useState("");
   const [contractEnd, setEnd]     = useState("");
   const [siteName, setSiteName]   = useState("");
@@ -61,9 +161,23 @@ function CreateContractModal({ coaches, onClose, onCreated }: {
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState("");
 
+  function handleSelectCoach(r: SearchResult) {
+    setSelectedUserId(r.id);
+    setManualName(r.userName);
+    setManualPhone(r.phoneNumber);
+  }
+
+  function clearSelection() {
+    setSelectedUserId("");
+  }
+
   async function handleCreate() {
-    if (!userId || !contractStart || !contractEnd) {
-      setError("직무지도원, 계약 시작일, 종료일은 필수입니다.");
+    if (!manualName.trim() || !manualPhone.trim()) {
+      setError("직무지도원 이름과 전화번호는 필수입니다.");
+      return;
+    }
+    if (!contractStart || !contractEnd) {
+      setError("계약 시작일과 종료일은 필수입니다.");
       return;
     }
     setSaving(true);
@@ -73,7 +187,9 @@ function CreateContractModal({ coaches, onClose, onCreated }: {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId,
+          userId: selectedUserId || undefined,
+          manualName: manualName.trim(),
+          manualPhone: manualPhone.trim(),
           contractStart,
           contractEnd,
           siteName: siteName || null,
@@ -97,18 +213,48 @@ function CreateContractModal({ coaches, onClose, onCreated }: {
   }
 
   return (
+    <>
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: 480, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 20px" }}>근로계약서 생성</h2>
 
         <div style={fm.field}>
-          <label style={fm.label}>직무지도원 *</label>
-          <select value={userId} onChange={e => setUserId(e.target.value)} style={fm.input}>
-            <option value="">선택하세요</option>
-            {coaches.map(c => (
-              <option key={c.id} value={c.id}>{c.userName} ({c.phoneNumber})</option>
-            ))}
-          </select>
+          <label style={fm.label}>직무지도원 정보 *</label>
+
+          {/* 이름 + 검색 버튼 */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <input
+              value={manualName}
+              onChange={e => { setManualName(e.target.value); clearSelection(); }}
+              placeholder="이름"
+              style={{ ...fm.input, flex: 1 }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowSearch(true)}
+              style={{ padding: "0 14px", border: "1px solid #2563eb", borderRadius: 8, background: "#eff6ff", cursor: "pointer", fontSize: 13, color: "#1d4ed8", fontWeight: 600, whiteSpace: "nowrap" as const }}
+            >
+              이력 검색
+            </button>
+          </div>
+
+          <input
+            value={manualPhone}
+            onChange={e => { setManualPhone(e.target.value); clearSelection(); }}
+            placeholder="전화번호 (예: 010-1234-5678)"
+            style={fm.input}
+          />
+
+          {/* 선택 상태 안내 */}
+          {selectedUserId ? (
+            <div style={{ marginTop: 8, padding: "7px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, fontSize: 12, color: "#16a34a" }}>
+              ✓ 과거 이력에서 선택됨 — <strong>{manualName}</strong>
+            </div>
+          ) : (
+            <div style={{ marginTop: 8, padding: "7px 12px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, fontSize: 12, color: "#0369a1" }}>
+              과거 계약 이력이 있으면 검색으로 자동 입력됩니다. 신규 직무지도원은 이름과 전화번호를 직접 입력하세요.
+            </div>
+          )}
         </div>
 
         <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
@@ -185,6 +331,14 @@ function CreateContractModal({ coaches, onClose, onCreated }: {
         </div>
       </div>
     </div>
+
+    {showSearch && (
+      <CoachSearchPopup
+        onSelect={handleSelectCoach}
+        onClose={() => setShowSearch(false)}
+      />
+    )}
+    </>
   );
 }
 
@@ -201,7 +355,6 @@ const fm: Record<string, React.CSSProperties> = {
 export default function AdminContractsPage() {
   const T = sharedStyles();
   const [contracts, setContracts] = useState<ContractItem[]>([]);
-  const [coaches, setCoaches] = useState<CoachOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [lastCreatedUrl, setLastCreatedUrl] = useState<string | null>(null);
@@ -209,13 +362,11 @@ export default function AdminContractsPage() {
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/admin/contracts").then(r => r.json()),
-      fetch("/api/admin/coaches?pageSize=200").then(r => r.json()),
-    ]).then(([c, co]) => {
-      if (c.success) setContracts(c.items);
-      if (co.success && Array.isArray(co.data)) setCoaches(co.data);
-    }).catch(() => {}).finally(() => setLoading(false));
+    fetch("/api/admin/contracts")
+      .then(r => r.json())
+      .then(c => { if (c.success) setContracts(c.items); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   function copyLink(token: string) {
@@ -292,7 +443,6 @@ export default function AdminContractsPage() {
 
       {showCreate && (
         <CreateContractModal
-          coaches={coaches}
           onClose={() => setShowCreate(false)}
           onCreated={(_, url) => {
             setLastCreatedUrl(url);

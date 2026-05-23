@@ -52,13 +52,13 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getWorkerSessionFromReq(request);
     if (!session) {
-      return NextResponse.json({ success: false, message: “인증이 필요합니다.” }, { status: 401 });
+      return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
     }
 
     const body = await request.json();
 
     // ✅ 확장 입력(선택): assignmentId/basePointId
-    // - assignmentId/basePointId는 “증빙” 목적이며, 없으면 서버가 자동 산정/보강합니다.
+    // - assignmentId/basePointId는 "증빙" 목적이며, 없으면 서버가 자동 산정/보강합니다.
     // - reconfirm: 퇴근 시간 재확인(END 시간/좌표 업데이트)
     // - finalize: 최종 업무 종료(이후 재확인 불가)
     // - confirmOutOfRange: 거리 밖 경고 확인 후 재요청 시 true
@@ -73,15 +73,15 @@ export async function POST(request: NextRequest) {
       basePointId: inputBasePointId,
     } = body;
 
-    const action = finalize ? “FINALIZE” : reconfirm ? “RECONFIRM” : “CLOCK_OUT”;
+    const action = finalize ? "FINALIZE" : reconfirm ? "RECONFIRM" : "CLOCK_OUT";
 
     console.log(
-      `[퇴근 요청] action=${action}, User=${session.userId}, lat=${latitude}, lon=${longitude}, 보정여부=${isGpsModified}, 거리예외확인=${confirmOutOfRange}, assignmentId=${inputAssignmentId ?? “auto”}, basePointId=${inputBasePointId ?? “auto”}`
+      `[퇴근 요청] action=${action}, User=${session.userId}, lat=${latitude}, lon=${longitude}, 보정여부=${isGpsModified}, 거리예외확인=${confirmOutOfRange}, assignmentId=${inputAssignmentId ?? "auto"}, basePointId=${inputBasePointId ?? "auto"}`
     );
 
     if (latitude === undefined || longitude === undefined) {
       return NextResponse.json(
-        { success: false, message: “필수 정보(위치)가 누락되었습니다.” },
+        { success: false, message: "필수 정보(위치)가 누락되었습니다." },
         { status: 400 }
       );
     }

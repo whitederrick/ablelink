@@ -101,8 +101,12 @@ function scheduleAlarm(targetHHMM: string, alertMinutes: number, message: string
   if (diff < 0 || diff > 60 * 60 * 1000) return; // 1시간 이내만
   alreadyFired.add(key);
   setTimeout(() => {
-    if (Notification.permission === "granted") {
-      new Notification("AbleLink 알람", { body: message, icon: "/icon-192.png" });
+    // SW를 통해 알림 표시 (백그라운드에서도 동작)
+    const sw = navigator.serviceWorker?.controller;
+    if (sw) {
+      sw.postMessage({ type: "SHOW_ALARM", body: message });
+    } else if (Notification.permission === "granted") {
+      new Notification("AbleLink 알람", { body: message, icon: "/icons/icon-192.png" });
     }
   }, diff);
 }
@@ -169,10 +173,6 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
         }
       })
       .catch(() => {});
-    // 알림 권한 요청
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      Notification.requestPermission().catch(() => {});
-    }
   }, []);
 
   // 알람 스케줄링
@@ -636,29 +636,11 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
 
         {/* 알람 설정 패널 */}
         {showAlarmSettings && (
-          <div style={{ margin: "0 0 10px", padding: "16px", background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", margin: "0 0 12px" }}>출퇴근 알람 설정</p>
-            {[
-              { label: "출근 알람", value: clockInAlert, set: (v: number) => saveAlarmSettings(v, clockOutAlert) },
-              { label: "퇴근 알람", value: clockOutAlert, set: (v: number) => saveAlarmSettings(clockInAlert, v) },
-            ].map(({ label, value, set }) => (
-              <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <span style={{ fontSize: 13, color: "#374151" }}>{label}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {[0, 1, 3, 5, 10].map(m => (
-                    <button
-                      key={m}
-                      onClick={() => set(m)}
-                      style={{ padding: "4px 10px", border: "1px solid " + (value === m ? "#2563eb" : "#e5e7eb"), borderRadius: 6, background: value === m ? "#eff6ff" : "#fff", color: value === m ? "#1d4ed8" : "#374151", fontSize: 12, fontWeight: value === m ? 700 : 400, cursor: "pointer" }}
-                    >
-                      {m === 0 ? "끄기" : `${m}분 전`}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            <p style={{ fontSize: 11, color: "#9ca3af", margin: "8px 0 0" }}>알람은 브라우저 알림으로 표시됩니다. 브라우저 알림 권한을 허용해주세요.</p>
-          </div>
+          <AlarmSettingsPanel
+            clockInAlert={clockInAlert}
+            clockOutAlert={clockOutAlert}
+            onSave={saveAlarmSettings}
+          />
         )}
 
         {/* PREMIUM 배너 */}
@@ -748,6 +730,80 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
           <span style={s.navLabel}>히스토리</span>
         </button>
       </nav>
+    </div>
+  );
+}
+
+// ─── 알람 설정 패널 ──────────────────────────────────────────
+function AlarmSettingsPanel({ clockInAlert, clockOutAlert, onSave }: {
+  clockInAlert: number;
+  clockOutAlert: number;
+  onSave: (inMin: number, outMin: number) => void;
+}) {
+  const [permission, setPermission] = useState<NotificationPermission>(
+    typeof Notification !== "undefined" ? Notification.permission : "default"
+  );
+
+  async function requestPermission() {
+    const result = await Notification.requestPermission();
+    setPermission(result);
+  }
+
+  const isStandalone =
+    typeof window !== "undefined" &&
+    (window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as any).standalone === true);
+
+  return (
+    <div style={{ margin: "0 0 10px", padding: "16px", background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+      <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", margin: "0 0 12px" }}>출퇴근 알람 설정</p>
+
+      {[
+        { label: "출근 알람", value: clockInAlert, set: (v: number) => onSave(v, clockOutAlert) },
+        { label: "퇴근 알람", value: clockOutAlert, set: (v: number) => onSave(clockInAlert, v) },
+      ].map(({ label, value, set }) => (
+        <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontSize: 13, color: "#374151" }}>{label}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {[0, 1, 3, 5, 10].map(m => (
+              <button
+                key={m}
+                onClick={() => set(m)}
+                style={{ padding: "4px 8px", border: "1px solid " + (value === m ? "#2563eb" : "#e5e7eb"), borderRadius: 6, background: value === m ? "#eff6ff" : "#fff", color: value === m ? "#1d4ed8" : "#374151", fontSize: 12, fontWeight: value === m ? 700 : 400, cursor: "pointer" }}
+              >
+                {m === 0 ? "끄기" : `${m}분`}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* 알림 권한 상태 */}
+      <div style={{ marginTop: 12, padding: "10px 12px", background: "#f9fafb", borderRadius: 8, border: "1px solid #f3f4f6" }}>
+        {permission === "granted" ? (
+          <p style={{ fontSize: 12, color: "#16a34a", margin: 0 }}>
+            ✓ 알림 권한이 허용되어 있습니다{isStandalone ? " · 앱 모드로 실행 중" : ""}
+          </p>
+        ) : permission === "denied" ? (
+          <div>
+            <p style={{ fontSize: 12, color: "#dc2626", margin: "0 0 6px" }}>✕ 알림 권한이 차단되어 있습니다</p>
+            <p style={{ fontSize: 11, color: "#9ca3af", margin: 0 }}>브라우저 설정 → 사이트 설정 → 알림에서 허용해주세요</p>
+          </div>
+        ) : (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <p style={{ fontSize: 12, color: "#d97706", margin: 0 }}>알림 권한이 필요합니다</p>
+            <button
+              onClick={requestPermission}
+              style={{ padding: "5px 12px", background: "#111827", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+            >권한 허용</button>
+          </div>
+        )}
+        {!isStandalone && permission === "granted" && (
+          <p style={{ fontSize: 11, color: "#9ca3af", margin: "6px 0 0" }}>
+            💡 앱을 홈 화면에 설치하면 백그라운드에서도 알림을 받을 수 있습니다
+          </p>
+        )}
+      </div>
     </div>
   );
 }

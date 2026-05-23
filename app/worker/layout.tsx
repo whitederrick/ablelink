@@ -10,11 +10,15 @@ export const metadata: Metadata = {
   manifest: "/worker-manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "AbleLink",
+    startupImage: "/icons/icon-512.png",
   },
   icons: {
-    apple: "/icons/icon-192.png",
+    apple: [
+      { url: "/icons/icon-192.png", sizes: "192x192" },
+      { url: "/icons/icon-512.png", sizes: "512x512" },
+    ],
   },
 };
 
@@ -23,7 +27,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#0B0F19",
+  viewportFit: "cover",
+  themeColor: "#111827",
 };
 
 export default function WorkerLayout({ children }: { children: React.ReactNode }) {

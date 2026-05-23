@@ -97,6 +97,7 @@ export async function POST(request: Request) {
       userId: user.id.toString(),
       userName: user.userName,
       phoneNumber: user.phoneNumber,
+      isTemporary: user.isTemporary,
     });
 
     const res = NextResponse.json({

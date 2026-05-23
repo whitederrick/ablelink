@@ -16,6 +16,7 @@ export interface WorkerPayload {
   userId: string;
   userName: string;
   phoneNumber: string;
+  isTemporary?: boolean;
 }
 
 export async function signWorkerToken(payload: WorkerPayload): Promise<string> {
@@ -34,6 +35,7 @@ export async function verifyWorkerToken(token: string): Promise<WorkerPayload | 
       userId: String((payload as any).userId),
       userName: String((payload as any).userName),
       phoneNumber: String((payload as any).phoneNumber),
+      isTemporary: Boolean((payload as any).isTemporary),
     };
   } catch {
     return null;

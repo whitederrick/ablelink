@@ -37,6 +37,13 @@ model User {
 
   ciKey        String?  @unique @map("ci_key")
   signatureUrl String?  @map("signature_url") // PREMIUM에서만 사용(정책 레이어에서 강제)
+  isTemporary  Boolean  @default(false) @map("is_temporary")
+
+  // 온보딩: 이메일로 loginId 변경 시 인증 코드 보관
+  pendingLoginId       String?   @map("pending_login_id")
+  verifyCode           String?   @map("verify_code")
+  verifyCodeExpiresAt  DateTime? @map("verify_code_expires_at")
+
   createdAt    DateTime @default(now()) @map("created_at")
 
   attendances DailyAttendance[]
