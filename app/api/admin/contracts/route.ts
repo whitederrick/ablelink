@@ -119,6 +119,9 @@ export async function POST(req: NextRequest) {
       if (!name || !phone) {
         throw new Error("VALIDATION:직무지도원 이름과 전화번호는 필수입니다.");
       }
+      if (!/^01[0-9]{1}-?[0-9]{3,4}-?[0-9]{4}$/.test(phone)) {
+        throw new Error("VALIDATION:올바른 휴대폰 번호 형식이 아닙니다. (예: 01012345678)");
+      }
 
       // 전화번호로 기존 유저 조회
       const existing = await prisma.user.findFirst({
@@ -140,7 +143,7 @@ export async function POST(req: NextRequest) {
           newUser = await prisma.user.create({
             data: {
               loginId,
-              password: await hash(randomUUID(), 10), // 서명 완료 시 readable 임시 비밀번호로 교체됨
+              password: await hash(randomUUID(), 12), // 서명 완료 시 readable 임시 비밀번호로 교체됨
               userName: name,
               phoneNumber: phone,
               role: "COACH",
@@ -154,7 +157,7 @@ export async function POST(req: NextRequest) {
             newUser = await prisma.user.create({
               data: {
                 loginId: `${baseLogin}_${Date.now()}`,
-                password: await hash(randomUUID(), 10),
+                password: await hash(randomUUID(), 12),
                 userName: name,
                 phoneNumber: phone,
                 role: "COACH",

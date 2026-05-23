@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
+import { randomInt } from "crypto";
 
 const WORK_TYPE_LABELS: Record<string, string> = {
   AM:       "오전 4시간 (09:00~12:00)",
@@ -65,7 +66,6 @@ export async function GET(req: NextRequest) {
       coachSignedAt: contract.coachSignedAt?.toISOString() ?? null,
       adminSignedAt: contract.adminSignedAt?.toISOString() ?? null,
       coachSignatureUrl: contract.coachSignatureUrl,
-      adminMemo: contract.adminMemo,
     },
   });
 }
@@ -78,11 +78,20 @@ export async function POST(req: NextRequest) {
   if (!token || !signatureUrl) {
     return NextResponse.json({ success: false, message: "필수 항목이 없습니다." }, { status: 400 });
   }
+  if (typeof token !== "string" || token.length > 128) {
+    return NextResponse.json({ success: false, message: "잘못된 토큰입니다." }, { status: 400 });
+  }
   if (!signatureUrl.startsWith("data:image/")) {
     return NextResponse.json({ success: false, message: "잘못된 서명 형식입니다." }, { status: 400 });
   }
   if (signatureUrl.length > 2 * 1024 * 1024) {
     return NextResponse.json({ success: false, message: "서명 이미지가 너무 큽니다." }, { status: 400 });
+  }
+  if (coachFilledSiteName && (typeof coachFilledSiteName !== "string" || coachFilledSiteName.length > 200)) {
+    return NextResponse.json({ success: false, message: "사업체명이 너무 깁니다." }, { status: 400 });
+  }
+  if (coachFilledWorkType && (typeof coachFilledWorkType !== "string" || coachFilledWorkType.length > 100)) {
+    return NextResponse.json({ success: false, message: "근무형태 값이 너무 깁니다." }, { status: 400 });
   }
 
   const contract = await prisma.employmentContract.findUnique({
@@ -131,10 +140,10 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true, message: "서명이 완료되었습니다." });
 }
 
-// ─── 읽기 쉬운 임시 비밀번호 생성 ──────────────────────────────
+// ─── 읽기 쉬운 임시 비밀번호 생성 (crypto.randomInt — 예측 불가) ──
 function generateTempPassword(): string {
   const chars = "abcdefghjkmnpqrstuvwxyz23456789"; // 혼동 문자(0/O, 1/l/I) 제외
-  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  return Array.from({ length: 8 }, () => chars[randomInt(chars.length)]).join("");
 }
 
 // ─── 신규 직무지도원 서명 완료 알림 (임시 비밀번호 발급) ──────────

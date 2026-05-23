@@ -25,7 +25,6 @@ interface ContractData {
   coachSignedAt: string | null;
   adminSignedAt: string | null;
   coachSignatureUrl: string | null;
-  adminMemo: string | null;
 }
 
 // ── 서명 캔버스 ───────────────────────────────────────────────

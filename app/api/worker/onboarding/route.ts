@@ -9,6 +9,7 @@ import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 import { getWorkerSessionFromReq, signWorkerToken, WORKER_COOKIE } from "@/app/worker/_lib/session";
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const ses = new SESClient({ region: process.env.AWS_REGION || "ap-northeast-2" });
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
@@ -89,6 +90,15 @@ export async function POST(req: NextRequest) {
     // ── 이메일 인증 코드 확인 ─────────────────────────────────────────
     if (action === "verify-email") {
       const { code } = body;
+      // 브루트포스 방지: userId당 5분 내 5회 제한
+      const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+      const rl = checkRateLimit(`verify-email:${ip}:${session.userId}`);
+      if (!rl.allowed) {
+        return NextResponse.json(
+          { success: false, message: "인증 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요." },
+          { status: 429 }
+        );
+      }
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { pendingLoginId: true, verifyCode: true, verifyCodeExpiresAt: true },

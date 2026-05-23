@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") ?? "").trim();
 
-    if (q.length < 2) {
+    if (q.length < 2 || q.length > 100) {
       return NextResponse.json({ success: true, items: [] });
     }
 
