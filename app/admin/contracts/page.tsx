@@ -302,7 +302,7 @@ function CreateContractModal({ onClose, onCreated }: {
           </div>
         )}
 
-        {workType && workType !== "FULL_DAY" && workType !== "" && (
+        {workType && workType !== "FULL_DAY" && (
           <div style={{ ...fm.field, padding: "12px", background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
             <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
               <input type="checkbox" checked={commuteGuide} onChange={e => setCommuteGuide(e.target.checked)} style={{ width: 17, height: 17, accentColor: "#2563eb" }} />

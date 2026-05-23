@@ -85,7 +85,7 @@ function SiteRegisterPageInner() {
   const getMyGps = useCallback(async () => {
     setGpsLoading(true);
     try {
-      const pos = await new Promise<GeolocationCoordinates>((resolve, reject) => {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true, timeout: 10000,
         });
@@ -488,7 +488,7 @@ const s: Record<string, React.CSSProperties> = {
   editNotice: { backgroundColor: "#fefce8", color: "#92400e", fontSize: 13, padding: "10px 14px", borderRadius: 10, marginBottom: 16, lineHeight: 1.5, border: "1px solid #fde68a" },
 
   section: { backgroundColor: "#fff", borderRadius: 14, padding: "18px 16px", marginBottom: 10, border: "1px solid #f3f4f6" },
-  sectionTitle: { fontSize: 14, fontWeight: 700, color: "#374151", margin: "0 0 14px", textTransform: "uppercase" as const, letterSpacing: "0.5px", fontSize2: 12 },
+  sectionTitle: { fontSize: 14, fontWeight: 700, color: "#374151", margin: "0 0 14px", textTransform: "uppercase" as const, letterSpacing: "0.5px" },
   field: { marginBottom: 16 },
   label: { fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 },
   input: { width: "100%", height: 46, border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 15, color: "#111827", backgroundColor: "#fafafa", outline: "none", padding: "0 12px", boxSizing: "border-box" as const, fontFamily: "inherit" },

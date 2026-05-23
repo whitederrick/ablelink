@@ -193,6 +193,7 @@ export async function GET(req: Request) {
       }
 
       const upserted = existing;
+      if (!upserted) continue;
 
       const inboxStatus = mapIssueStatusToInboxStatus({
         status: upserted.status as any,

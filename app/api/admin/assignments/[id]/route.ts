@@ -17,10 +17,11 @@ function workTimes(wt: WorkType, customStart?: string | null, customEnd?: string
   return { start: customStart ?? "09:00", end: customEnd ?? "18:00" };
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const scope = await requireAdminSession(req);
-    const assignmentId = BigInt(params.id);
+    const { id } = await params;
+    const assignmentId = BigInt(id);
 
     const body = await req.json();
 

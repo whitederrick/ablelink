@@ -241,6 +241,8 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
         workStartTime: raw.startTime ?? null,
         workEndTime: raw.endTime ?? null,
         isFinalClosed: raw.isFinalClosed ?? false,
+        serviceStep: raw.serviceStep ?? null,
+        trainingType: raw.trainingType ?? "FIELD",
       };
 
       setHomeData(normalized);

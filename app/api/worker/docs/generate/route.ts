@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
         entries: logs.map(l => ({
           dateISO: l.attendance.workDate,
           attendance: l.evaluation || "출석",
-          workTime: l.startTime ? `${fmtHHMM(l.startTime)}~${fmtHHMM(l.endTime!)}` : "",
+          workTime: l.attendance.startTime ? `${fmtHHMM(l.attendance.startTime)}~${fmtHHMM(l.attendance.endTime!)}` : "",
           guidance: "Y",
           task: l.tasks[0]?.taskName || "",
           performanceLabel: scoreLabel(l.tasks[0]?.performanceScore as any),

@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
   // 2. 만료 서명 토큰 삭제
   try {
-    const r = await prisma.signatureToken.deleteMany({ where: { expiresAt: { lt: now } } });
+    const r = await prisma.siteSignToken.deleteMany({ where: { expiresAt: { lt: now } } });
     tokensCleared = r.count;
   } catch (e: any) { errors.push(`토큰삭제: ${e.message}`); }
 

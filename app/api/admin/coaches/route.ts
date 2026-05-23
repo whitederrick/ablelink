@@ -108,6 +108,7 @@ export async function GET(req: NextRequest) {
             orderBy: { id: "desc" },
             take: 1,
             select: {
+              id: true,
               startDate: true,
               site: { select: { companyName: true } },
               agency: { select: { name: true } },
