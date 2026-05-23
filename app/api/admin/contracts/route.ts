@@ -135,17 +135,37 @@ export async function POST(req: NextRequest) {
         const conflict  = await prisma.user.findUnique({ where: { loginId: baseLogin } });
         const loginId   = conflict ? `${baseLogin}_${Date.now()}` : baseLogin;
 
-        const newUser = await prisma.user.create({
-          data: {
-            loginId,
-            password: await hash(randomUUID(), 10), // 서명 완료 시 readable 임시 비밀번호로 교체됨
-            userName: name,
-            phoneNumber: phone,
-            role: "COACH",
-            status: "ACTIVE",
-            isTemporary: true, // 최초 로그인 시 온보딩 플로우 강제
-          },
-        });
+        let newUser;
+        try {
+          newUser = await prisma.user.create({
+            data: {
+              loginId,
+              password: await hash(randomUUID(), 10), // 서명 완료 시 readable 임시 비밀번호로 교체됨
+              userName: name,
+              phoneNumber: phone,
+              role: "COACH",
+              status: "ACTIVE",
+              isTemporary: true, // 최초 로그인 시 온보딩 플로우 강제
+            },
+          });
+        } catch (e: any) {
+          // loginId 레이스 컨디션(동시 요청) 대응: timestamp 충돌 시 재시도
+          if (e?.code === "P2002") {
+            newUser = await prisma.user.create({
+              data: {
+                loginId: `${baseLogin}_${Date.now()}`,
+                password: await hash(randomUUID(), 10),
+                userName: name,
+                phoneNumber: phone,
+                role: "COACH",
+                status: "ACTIVE",
+                isTemporary: true,
+              },
+            });
+          } else {
+            throw e;
+          }
+        }
         userIdBig = newUser.id;
       }
     }

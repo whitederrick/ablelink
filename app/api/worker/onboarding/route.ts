@@ -105,15 +105,23 @@ export async function POST(req: NextRequest) {
       }
 
       // 인증 성공 — loginId 변경 (비밀번호 변경은 다음 단계)
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          loginId: user.pendingLoginId,
-          pendingLoginId: null,
-          verifyCode: null,
-          verifyCodeExpiresAt: null,
-        },
-      });
+      try {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            loginId: user.pendingLoginId,
+            pendingLoginId: null,
+            verifyCode: null,
+            verifyCodeExpiresAt: null,
+          },
+        });
+      } catch (e: any) {
+        // loginId unique constraint 위반 — 다른 유저가 이미 같은 이메일 등록 완료
+        if (e?.code === "P2002") {
+          return NextResponse.json({ success: false, message: "이미 사용 중인 이메일입니다. 다른 이메일을 사용해 주세요." }, { status: 409 });
+        }
+        throw e;
+      }
 
       return NextResponse.json({ success: true, newLoginId: user.pendingLoginId });
     }

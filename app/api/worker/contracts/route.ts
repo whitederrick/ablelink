@@ -139,12 +139,7 @@ function generateTempPassword(): string {
 
 // ─── 신규 직무지도원 서명 완료 알림 (임시 비밀번호 발급) ──────────
 async function sendSignedNotificationNew(userId: bigint, phone: string, name: string) {
-  const tempPassword = generateTempPassword();
-  await prisma.user.update({
-    where: { id: userId },
-    data: { password: await hash(tempPassword, 10) },
-  });
-
+  // 환경변수 체크를 먼저 — 발송 불가 시 비밀번호도 변경하지 않음
   const apiKey = process.env.KAKAO_ALIMTALK_API_KEY;
   const senderKey = process.env.KAKAO_ALIMTALK_SENDER_KEY;
   const templateCode = process.env.KAKAO_SIGNUP_TEMPLATE_CODE;
@@ -152,9 +147,15 @@ async function sendSignedNotificationNew(userId: bigint, phone: string, name: st
   const loginId = phone.replace(/-/g, "");
 
   if (!apiKey || !senderKey || !templateCode) {
-    console.warn("[contracts sign] KAKAO_SIGNUP_TEMPLATE_CODE 미설정 — 알림 건너뜀");
+    console.warn("[contracts sign] KAKAO_SIGNUP_TEMPLATE_CODE 미설정 — 임시 비밀번호 발급 건너뜀");
     return;
   }
+
+  const tempPassword = generateTempPassword();
+  await prisma.user.update({
+    where: { id: userId },
+    data: { password: await hash(tempPassword, 10) },
+  });
 
   const message = `안녕하세요 ${name}님,\n\n근로계약서 서명이 완료되었습니다.\nAbleLink 서비스를 이용하시려면 아래 정보로 로그인해 주세요.\n\n임시 아이디: ${loginId}\n임시 비밀번호: ${tempPassword}\n\n첫 로그인 후 아이디와 비밀번호를 변경해 주세요.\n\n${appUrl}/worker/login`;
 
