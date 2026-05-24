@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { checkAgencyPlanAccess } from "@/lib/planGuard";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -51,11 +52,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { token } = await params;
   const rec = await prisma.siteSignToken.findUnique({
     where: { token: token },
+    include: { assignment: { select: { agencyId: true } } },
   });
 
   if (!rec) return NextResponse.json({ success: false, message: "유효하지 않은 링크입니다." }, { status: 404 });
   if (new Date() > new Date(rec.expiresAt)) return NextResponse.json({ success: false, message: "만료된 링크입니다." }, { status: 410 });
   if (rec.usedAt) return NextResponse.json({ success: false, message: "이미 서명이 완료되었습니다." }, { status: 409 });
+
+  const agencyId = rec.assignment?.agencyId;
+  if (agencyId) {
+    const planCheck = await checkAgencyPlanAccess(agencyId, "SITE_MANAGER_SIGN");
+    if (!planCheck.allowed) {
+      return NextResponse.json({ success: false, message: "사업체 담당자 서명 기능은 STANDARD 플랜 이상에서 사용 가능합니다." }, { status: 403 });
+    }
+  }
 
   const formData = await request.formData();
   const imageBlob = formData.get("signature") as Blob | null;

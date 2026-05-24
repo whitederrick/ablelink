@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
+import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const DEDUCTION_RATE = 0.033; // 단기 시간제 사업소득세 3.3%
@@ -53,6 +54,11 @@ export async function POST(req: NextRequest) {
     const agencyId = scope.agencyId;
     if (!agencyId) {
       return NextResponse.json({ success: false, message: "에이전시 정보 없음" }, { status: 403 });
+    }
+
+    const planCheck = await checkAgencyPlanAccess(agencyId, "PAYROLL");
+    if (!planCheck.allowed) {
+      return NextResponse.json({ success: false, message: planCheck.message, reason: planCheck.reason }, { status: 403 });
     }
 
     const { yearMonth } = await req.json();

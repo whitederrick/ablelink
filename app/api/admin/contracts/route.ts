@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { checkAgencyPlanAccess, checkQuota } from "@/lib/planGuard";
 import { randomUUID } from "crypto";
 import { hash } from "bcryptjs";
 
@@ -189,6 +190,20 @@ export async function POST(req: NextRequest) {
         if (!assignment?.agencyId) throw new Error("VALIDATION:에이전시 정보를 찾을 수 없습니다. 관리자 계정에 에이전시를 연결해주세요.");
         agencyId = assignment.agencyId;
       }
+    }
+
+    // ─── 구독 플랜 + 한도 체크 ──────────────────────────────────
+    const planCheck = await checkAgencyPlanAccess(agencyId, "CONTRACT_ONLINE");
+    if (!planCheck.allowed) {
+      return NextResponse.json({ success: false, message: planCheck.message, reason: planCheck.reason }, { status: 403 });
+    }
+    const quotaCheck = await checkQuota(agencyId, "coaches");
+    if (!quotaCheck.allowed) {
+      return NextResponse.json({
+        success: false,
+        message: `직무지도원 한도(${quotaCheck.max}명)에 도달했습니다. 플랜을 업그레이드해주세요.`,
+        reason: "QUOTA_EXCEEDED",
+      }, { status: 403 });
     }
 
     // ─── 계약서 생성 ────────────────────────────────────────────

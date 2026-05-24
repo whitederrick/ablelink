@@ -1,57 +1,91 @@
 // lib/planGuard.ts
 // 에이전시 구독 플랜 체크 유틸리티
-// 직무지도원의 에이전시 플랜을 기준으로 PREMIUM 기능 접근 제어
 
 import { prisma } from "./prisma";
 
-export type PremiumFeature =
-  | "AI_VOICE"       // 음성→AI 문장 변환
-  | "PDF_GENERATE"   // PDF 자동 생성
-  | "PDF_SIGN"       // 전자서명 합성
-  | "EMAIL_SEND"     // 이메일 자동 발송
-  | "PAYROLL";       // 정산/급여 리포트
+// STARTER 이상 필요한 기능
+export type StarterFeature =
+  | "AI_VOICE"        // 음성→AI 일지 (단일·일괄 통합)
+  | "PDF_GENERATE"    // PDF 자동 생성
+  | "PDF_SIGN"        // 전자서명 합성
+  | "CONTRACT_ONLINE" // 온라인 계약서 작성
+  | "DOC_INBOX";      // 문서 인박스
+
+// STANDARD 이상 필요한 기능
+export type StandardFeature =
+  | "SITE_MANAGER_SIGN" // 사업체담당자 모바일 사인
+  | "PAYROLL"           // 급여 자동계산
+  | "AUDIT_PACKAGE"     // 감사 대응 서류 패키지
+  | "TRAINEE_REPORT";   // 훈련생 진척도 리포트
+
+export type PremiumFeature = StarterFeature | StandardFeature;
+
+const STANDARD_FEATURES = new Set<PremiumFeature>([
+  "SITE_MANAGER_SIGN",
+  "PAYROLL",
+  "AUDIT_PACKAGE",
+  "TRAINEE_REPORT",
+]);
 
 export interface PlanCheckResult {
   allowed: boolean;
-  reason?: "NO_AGENCY" | "FREE_PLAN" | "TRIAL_EXPIRED" | "QUOTA_EXCEEDED";
+  reason?: "NO_AGENCY" | "FREE_PLAN" | "TRIAL_EXPIRED" | "PLAN_TOO_LOW" | "QUOTA_EXCEEDED";
   planType?: string;
   trialEndsAt?: Date | null;
   message?: string;
 }
 
-/**
- * userId 기준으로 현재 배정된 에이전시의 플랜을 확인하여 기능 사용 가능 여부 반환
- */
+function isStandardFeature(f: PremiumFeature): boolean {
+  return STANDARD_FEATURES.has(f);
+}
+
+function planAllows(plan: string, feature: PremiumFeature): boolean {
+  if (plan === "PRO") return true;
+  if (plan === "STANDARD") return true;
+  if (plan === "STARTER") return !isStandardFeature(feature);
+  return false; // FREE, TRIAL (만료)
+}
+
+// ─── Worker 측: userId 기준 ──────────────────────────────────────
+
 export async function checkPlanAccess(
   userId: bigint,
   feature: PremiumFeature
 ): Promise<PlanCheckResult> {
-  // 1. 현재 활성 배정의 에이전시 조회
   const assignment = await prisma.siteAssignment.findFirst({
-    where: {
-      userId,
-      status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] },
-    },
-    include: {
-      agency: true,
-    },
+    where: { userId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+    include: { agency: true },
     orderBy: { startDate: "desc" },
   });
 
   const agency = assignment?.agency;
-
   if (!agency) {
-    return {
-      allowed: false,
-      reason: "NO_AGENCY",
-      message: "소속 에이전시가 없습니다.",
-    };
+    return { allowed: false, reason: "NO_AGENCY", message: "소속 에이전시가 없습니다." };
   }
 
+  return _checkAgency(agency, feature);
+}
+
+// ─── Admin 측: agencyId 기준 ─────────────────────────────────────
+
+export async function checkAgencyPlanAccess(
+  agencyId: bigint,
+  feature: PremiumFeature
+): Promise<PlanCheckResult> {
+  const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
+  if (!agency) {
+    return { allowed: false, reason: "NO_AGENCY", message: "에이전시를 찾을 수 없습니다." };
+  }
+  return _checkAgency(agency, feature);
+}
+
+function _checkAgency(
+  agency: { planType: string; trialEndsAt: Date | null },
+  feature: PremiumFeature
+): PlanCheckResult {
   const plan = agency.planType;
   const now = new Date();
 
-  // 2. FREE 플랜은 PREMIUM 기능 차단
   if (plan === "FREE") {
     return {
       allowed: false,
@@ -61,7 +95,6 @@ export async function checkPlanAccess(
     };
   }
 
-  // 3. TRIAL 플랜: 만료일 확인
   if (plan === "TRIAL") {
     const trialEndsAt = agency.trialEndsAt;
     if (!trialEndsAt || trialEndsAt < now) {
@@ -73,37 +106,40 @@ export async function checkPlanAccess(
         message: "무료 체험 기간이 종료되었습니다. 구독을 시작해보세요.",
       };
     }
+    // TRIAL은 모든 기능 허용
     return { allowed: true, planType: plan, trialEndsAt };
   }
 
-  // 4. STARTER / STANDARD / PRO: 허용
+  if (!planAllows(plan, feature)) {
+    const required = isStandardFeature(feature) ? "STANDARD" : "STARTER";
+    return {
+      allowed: false,
+      reason: "PLAN_TOO_LOW",
+      planType: plan,
+      message: `이 기능은 ${required} 플랜 이상에서 사용 가능합니다.`,
+    };
+  }
+
   return { allowed: true, planType: plan };
 }
 
-/**
- * TRIAL 시작 처리 (최초 PREMIUM 기능 사용 시 자동 호출)
- */
+// ─── TRIAL 자동 시작 ─────────────────────────────────────────────
+
 export async function startTrialIfNeeded(agencyId: bigint): Promise<void> {
   const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
-  if (!agency) return;
-  if (agency.planType !== "FREE") return; // 이미 다른 플랜
+  if (!agency || agency.planType !== "FREE") return;
 
   const now = new Date();
-  const trialEndsAt = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000); // +15일
+  const trialEndsAt = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
 
   await prisma.agency.update({
     where: { id: agencyId },
-    data: {
-      planType: "TRIAL",
-      trialStartedAt: now,
-      trialEndsAt,
-    },
+    data: { planType: "TRIAL", trialStartedAt: now, trialEndsAt },
   });
 }
 
-/**
- * 플랜별 한도 체크 (직무지도원 수, Site 수)
- */
+// ─── 한도 체크 (인원/사업장 수) ──────────────────────────────────
+
 export async function checkQuota(
   agencyId: bigint,
   type: "coaches" | "sites"
@@ -111,29 +147,23 @@ export async function checkQuota(
   const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
   if (!agency) return { allowed: false, current: 0, max: 0 };
 
-  // PRO 또는 max=0은 무제한
   const max = type === "coaches" ? agency.maxCoaches : agency.maxSites;
-  if (max === 0) return { allowed: true, current: 0, max: 0 };
+  if (max === 0) return { allowed: true, current: 0, max: 0 }; // 무제한
 
   const current =
     type === "coaches"
-      ? await prisma.siteAssignment.count({
-          where: { agencyId, status: "ACTIVE" },
-        })
-      : await prisma.site.count({
-          where: { agencyId, isActive: true },
-        });
+      ? await prisma.siteAssignment.count({ where: { agencyId, status: "ACTIVE" } })
+      : await prisma.site.count({ where: { agencyId, isActive: true } });
 
   return { allowed: current < max, current, max };
 }
 
-/**
- * 플랜별 기본 한도 설정값
- */
+// ─── 플랜별 기본 한도 (DB 초기값 세팅용) ─────────────────────────
+
 export const PLAN_LIMITS: Record<string, { maxCoaches: number; maxSites: number }> = {
-  FREE:     { maxCoaches: 0, maxSites: 0 },   // 무제한 (기능 제한만)
-  TRIAL:    { maxCoaches: 0, maxSites: 0 },   // 무제한 (기간 제한만)
-  STARTER:  { maxCoaches: 5, maxSites: 5 },
-  STANDARD: { maxCoaches: 20, maxSites: 20 },
-  PRO:      { maxCoaches: 0, maxSites: 0 },   // 무제한
+  FREE:     { maxCoaches: 3,  maxSites: 2  },
+  TRIAL:    { maxCoaches: 0,  maxSites: 0  }, // 무제한 (기간 제한만)
+  STARTER:  { maxCoaches: 10, maxSites: 10 },
+  STANDARD: { maxCoaches: 30, maxSites: 30 },
+  PRO:      { maxCoaches: 0,  maxSites: 0  }, // 무제한
 };

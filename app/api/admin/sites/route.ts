@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { checkQuota } from "@/lib/planGuard";
 
 function parseIntSafe(v: string | null, fallback: number) {
   const n = Number(v);
@@ -185,6 +186,15 @@ export async function POST(req: NextRequest) {
       } catch {
         throw new Error("VALIDATION:agencyId");
       }
+    }
+
+    const quotaCheck = await checkQuota(agencyId, "sites");
+    if (!quotaCheck.allowed) {
+      return NextResponse.json({
+        success: false,
+        message: `사업장 한도(${quotaCheck.max}개)에 도달했습니다. 플랜을 업그레이드해주세요.`,
+        reason: "QUOTA_EXCEEDED",
+      }, { status: 403 });
     }
 
     if (managerIdRaw == null || String(managerIdRaw).trim() === "") {
