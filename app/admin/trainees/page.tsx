@@ -1,30 +1,25 @@
 "use client";
-// app/admin/trainees/page.tsx
-// 훈련생 현황 (읽기 전용) — 에이전시는 현황 파악만
 
 import { useEffect, useState } from "react";
+import { ChevronDown, ChevronUp, MapPin } from "lucide-react";
+import { T } from "../_styles";
 
 interface TraineeSummary {
-  siteId: string;
-  siteName: string;
-  coachName: string;
+  siteId: string; siteName: string; coachName: string;
   trainees: Array<{
-    id: string;
-    name: string;
-    gender: string;
-    disabilityType: string;
-    severity: string;
-    status: string;
-    logCount: number;
-    lastLogDate: string | null;
+    id: string; name: string; gender: string; disabilityType: string;
+    severity: string; status: string; logCount: number; lastLogDate: string | null;
   }>;
 }
 
+const STATUS_CLS: Record<string, string> = {
+  TRAINING: "bg-sky-50 text-sky-700",
+  EMPLOYED: "bg-emerald-50 text-emerald-700",
+  DROPOUT:  "bg-rose-50 text-rose-700",
+  GRADUATED:"bg-slate-100 text-slate-500",
+};
 const STATUS_LABELS: Record<string, string> = {
   TRAINING: "훈련중", EMPLOYED: "취업", DROPOUT: "중도포기", GRADUATED: "수료",
-};
-const STATUS_COLORS: Record<string, string> = {
-  TRAINING: "#5865F2", EMPLOYED: "#2e7d32", DROPOUT: "#e53935", GRADUATED: "#888",
 };
 
 export default function TraineesPage() {
@@ -39,7 +34,6 @@ export default function TraineesPage() {
       .then(d => {
         if (d.success && Array.isArray(d.data)) {
           setSites(d.data);
-          // 기본적으로 모두 펼치기
           const init: Record<string, boolean> = {};
           d.data.forEach((s: TraineeSummary) => { init[s.siteId] = true; });
           setExpanded(init);
@@ -50,115 +44,94 @@ export default function TraineesPage() {
   }, []);
 
   const totalTrainees = sites.reduce((s, site) => s + site.trainees.length, 0);
-  const trainingCount = sites.reduce((s, site) =>
-    s + site.trainees.filter(t => t.status === "TRAINING").length, 0);
-  const employedCount = sites.reduce((s, site) =>
-    s + site.trainees.filter(t => t.status === "EMPLOYED").length, 0);
+  const trainingCount = sites.reduce((s, site) => s + site.trainees.filter(t => t.status === "TRAINING").length, 0);
+  const employedCount = sites.reduce((s, site) => s + site.trainees.filter(t => t.status === "EMPLOYED").length, 0);
 
   const filteredSites = sites.filter(s =>
-    s.siteName.includes(search) ||
-    s.coachName.includes(search) ||
+    s.siteName.includes(search) || s.coachName.includes(search) ||
     s.trainees.some(t => t.name.includes(search))
   );
 
-  function toggleSite(siteId: string) {
-    setExpanded(prev => ({ ...prev, [siteId]: !prev[siteId] }));
-  }
-
   return (
-    <div style={s.page}>
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>훈련생 현황</h1>
-          <p style={s.subtitle}>
-            ※ 훈련생 등록/수정은 한국장애인고용공단에서 관리합니다. 에이전시는 현황만 조회할 수 있습니다.
-          </p>
-        </div>
+    <div className="space-y-5">
+      <div>
+        <h1 className={T.pageTitle}>훈련생 현황</h1>
+        <p className={T.pageSub}>※ 훈련생 등록/수정은 한국장애인고용공단에서 관리합니다. 에이전시는 현황만 조회할 수 있습니다.</p>
       </div>
 
-      {/* 요약 */}
-      <div style={s.summaryGrid}>
+      <div className={T.summaryGrid}>
         {[
-          { label: "전체 훈련생", value: totalTrainees, color: "#333" },
-          { label: "훈련중", value: trainingCount, color: "#5865F2" },
-          { label: "취업", value: employedCount, color: "#2e7d32" },
-          { label: "담당 Site", value: sites.length, color: "#888" },
+          { label: "전체 훈련생", value: totalTrainees, cls: "text-slate-900" },
+          { label: "훈련중",     value: trainingCount, cls: "text-sky-600" },
+          { label: "취업",       value: employedCount, cls: "text-emerald-600" },
+          { label: "담당 Site",  value: sites.length,  cls: "text-slate-500" },
         ].map((item, i) => (
-          <div key={i} style={s.summaryCard}>
-            <p style={{ ...s.summaryNum, color: item.color }}>{item.value}</p>
-            <p style={s.summaryLabel}>{item.label}</p>
+          <div key={i} className={T.summaryCard}>
+            <p className={`${T.summaryNum} ${item.cls}`}>{item.value}</p>
+            <p className={T.summaryLabel}>{item.label}</p>
           </div>
         ))}
       </div>
 
-      {/* 검색 */}
-      <div style={s.searchRow}>
-        <input
-          style={s.searchInput}
-          placeholder="현장명 / 직무지도원 / 훈련생 이름 검색"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-      </div>
+      <input value={search} onChange={e => setSearch(e.target.value)}
+        placeholder="현장명 / 직무지도원 / 훈련생 이름 검색"
+        className={`max-w-md ${T.input}`} />
 
-      {/* Site별 훈련생 목록 */}
       {loading ? (
-        <p style={s.empty}>로딩 중...</p>
+        <p className={T.empty}>로딩 중...</p>
       ) : filteredSites.length === 0 ? (
-        <p style={s.empty}>훈련생 정보가 없습니다.</p>
+        <p className={T.empty}>훈련생 정보가 없습니다.</p>
       ) : (
-        <div style={s.siteList}>
+        <div className="space-y-3">
           {filteredSites.map(site => (
-            <div key={site.siteId} style={s.siteCard}>
-              {/* Site 헤더 */}
+            <div key={site.siteId} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <button
-                style={s.siteHeader}
-                onClick={() => toggleSite(site.siteId)}
+                onClick={() => setExpanded(prev => ({ ...prev, [site.siteId]: !prev[site.siteId] }))}
+                className="flex w-full items-center justify-between bg-slate-50 px-5 py-4 text-left transition hover:bg-slate-100"
               >
-                <div style={s.siteInfo}>
-                  <span style={s.siteName}>📍 {site.siteName}</span>
-                  <span style={s.coachName}>직무지도원: {site.coachName}</span>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                    <span className="font-black text-slate-900">{site.siteName}</span>
+                  </div>
+                  <p className="pl-6 text-xs font-semibold text-slate-400">직무지도원: {site.coachName}</p>
                 </div>
-                <div style={s.siteRight}>
-                  <span style={s.traineeCount}>{site.trainees.length}명</span>
-                  <span style={s.chevron}>{expanded[site.siteId] ? "▲" : "▼"}</span>
+                <div className="flex items-center gap-3">
+                  <span className="rounded-full bg-sky-50 px-3 py-1 text-sm font-black text-sky-600">{site.trainees.length}명</span>
+                  {expanded[site.siteId]
+                    ? <ChevronUp className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                    : <ChevronDown className="h-4 w-4 text-slate-400" aria-hidden="true" />}
                 </div>
               </button>
 
-              {/* 훈련생 목록 */}
               {expanded[site.siteId] && (
-                <div style={s.traineeList}>
-                  <div style={s.tableHeader}>
-                    <span style={{ flex: 1.5 }}>이름</span>
-                    <span style={{ flex: 0.5 }}>성별</span>
-                    <span style={{ flex: 1.5 }}>장애유형</span>
-                    <span style={{ flex: 1 }}>중증도</span>
-                    <span style={{ flex: 1 }}>일지 수</span>
-                    <span style={{ flex: 1.5 }}>최근 일지</span>
-                    <span style={{ flex: 1, textAlign: "center" }}>상태</span>
-                  </div>
-                  {site.trainees.map(t => (
-                    <div key={t.id} style={s.traineeRow}>
-                      <span style={{ flex: 1.5, fontWeight: 600 }}>{t.name}</span>
-                      <span style={{ flex: 0.5, color: "#888" }}>{t.gender === "M" ? "남" : "여"}</span>
-                      <span style={{ flex: 1.5, color: "#666" }}>{t.disabilityType || "-"}</span>
-                      <span style={{ flex: 1, color: "#666" }}>{t.severity || "-"}</span>
-                      <span style={{ flex: 1, color: "#5865F2", fontWeight: 600 }}>{t.logCount}건</span>
-                      <span style={{ flex: 1.5, color: "#888", fontSize: 13 }}>
-                        {t.lastLogDate || "-"}
-                      </span>
-                      <span style={{ flex: 1, textAlign: "center" }}>
-                        <span style={{
-                          fontSize: 11, fontWeight: 700,
-                          color: STATUS_COLORS[t.status] || "#888",
-                          backgroundColor: (STATUS_COLORS[t.status] || "#888") + "18",
-                          padding: "3px 8px", borderRadius: 20,
-                        }}>
-                          {STATUS_LABELS[t.status] || t.status}
-                        </span>
-                      </span>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr>
+                        {["이름", "성별", "장애유형", "중증도", "일지 수", "최근 일지", "상태"].map(h => (
+                          <th key={h} className={T.th}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {site.trainees.map(t => (
+                        <tr key={t.id} className={T.trBase}>
+                          <td className={`${T.td} font-black text-slate-900`}>{t.name}</td>
+                          <td className={`${T.td} text-slate-500`}>{t.gender === "M" ? "남" : "여"}</td>
+                          <td className={`${T.td} text-slate-600`}>{t.disabilityType || "-"}</td>
+                          <td className={`${T.td} text-slate-600`}>{t.severity || "-"}</td>
+                          <td className={`${T.td} font-black text-sky-600`}>{t.logCount}건</td>
+                          <td className={`${T.td} text-xs text-slate-400`}>{t.lastLogDate || "-"}</td>
+                          <td className={T.td}>
+                            <span className={`${T.badge} ${STATUS_CLS[t.status] || "bg-slate-100 text-slate-500"}`}>
+                              {STATUS_LABELS[t.status] || t.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
@@ -168,29 +141,3 @@ export default function TraineesPage() {
     </div>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page: {},
-  header: { marginBottom: 16 },
-  title: { fontSize: 20, fontWeight: 800, color: "#111", margin: "0 0 4px" },
-  subtitle: { fontSize: 13, color: "#888", margin: 0 },
-  summaryGrid: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 20 },
-  summaryCard: { backgroundColor: "#fff", borderRadius: 12, padding: 16, textAlign: "center", boxShadow: "0 1px 6px rgba(0,0,0,0.06)" },
-  summaryNum: { fontSize: 28, fontWeight: 800, margin: "0 0 4px" },
-  summaryLabel: { fontSize: 13, color: "#888", margin: 0 },
-  searchRow: { marginBottom: 16 },
-  searchInput: { width: "100%", maxWidth: 400, height: 40, border: "1px solid #ddd", borderRadius: 8, padding: "0 14px", fontSize: 14, outline: "none" },
-  siteList: { display: "flex", flexDirection: "column", gap: 12 },
-  siteCard: { backgroundColor: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.06)" },
-  siteHeader: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", border: "none", backgroundColor: "#f8f9ff", cursor: "pointer", textAlign: "left" as const },
-  siteInfo: { display: "flex", flexDirection: "column", gap: 2 },
-  siteName: { fontSize: 15, fontWeight: 700, color: "#333" },
-  coachName: { fontSize: 13, color: "#888" },
-  siteRight: { display: "flex", alignItems: "center", gap: 12 },
-  traineeCount: { fontSize: 14, fontWeight: 700, color: "#5865F2" },
-  chevron: { color: "#888", fontSize: 12 },
-  traineeList: { padding: "0 20px 12px" },
-  tableHeader: { display: "flex", padding: "10px 12px", fontSize: 12, fontWeight: 700, color: "#888", borderBottom: "1px solid #eee", marginBottom: 4 },
-  traineeRow: { display: "flex", alignItems: "center", padding: "10px 12px", fontSize: 14, color: "#333", borderBottom: "1px solid #f5f5f5" },
-  empty: { textAlign: "center", color: "#aaa", padding: "40px 0" },
-};

@@ -1,16 +1,23 @@
 "use client";
-// app/worker/site/register/page.tsx
-// 직무지도 현장 등록/수정 페이지
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  ChevronLeft,
+  MapPin,
+  Navigation,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 
 // ─── 타입 ──────────────────────────────────────────────
 interface Trainee {
   id: string;
   name: string;
   gender: "남" | "여";
-  birthDate: string;   // YYYYMMDD
+  birthDate: string;
   phoneNumber: string;
   guardianPhoneNumber: string;
 }
@@ -41,9 +48,7 @@ function SiteRegisterPageInner() {
   const router = useRouter();
   const params = useSearchParams();
   const isEdit = params.get("mode") === "edit";
-  const siteId = params.get("siteId");
 
-  // 기본 정보
   const [companyName, setCompanyName] = useState("");
   const [address, setAddress] = useState("");
   const [gps, setGps] = useState<GpsCoords | null>(null);
@@ -51,13 +56,11 @@ function SiteRegisterPageInner() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [showGpsMap, setShowGpsMap] = useState(false);
 
-  // 담당자 정보
   const [agencyName, setAgencyName] = useState("");
   const [managerName, setManagerName] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
   const [managerPhone, setManagerPhone] = useState("");
 
-  // 훈련 기간
   const [noPreTraining, setNoPreTraining] = useState(false);
   const [noFieldTraining, setNoFieldTraining] = useState(false);
   const [preStart, setPreStart] = useState("");
@@ -65,23 +68,19 @@ function SiteRegisterPageInner() {
   const [fieldStart, setFieldStart] = useState("");
   const [fieldEnd, setFieldEnd] = useState("");
 
-  // 훈련생
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [traineeForm, setTraineeForm] = useState<Omit<Trainee, "id">>({
     name: "", gender: "남", birthDate: "", phoneNumber: "", guardianPhoneNumber: "",
   });
 
-  // 주소 검색
   const [addrQuery, setAddrQuery] = useState("");
   const [addrResults, setAddrResults] = useState<any[]>([]);
   const [addrLoading, setAddrLoading] = useState(false);
   const [showAddrSearch, setShowAddrSearch] = useState(false);
 
-  // 제출
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // 현재 위치 GPS 획득
   const getMyGps = useCallback(async () => {
     setGpsLoading(true);
     try {
@@ -100,7 +99,6 @@ function SiteRegisterPageInner() {
     }
   }, []);
 
-  // 주소 검색
   async function searchAddress() {
     if (!addrQuery.trim()) return;
     setAddrLoading(true);
@@ -123,7 +121,6 @@ function SiteRegisterPageInner() {
     setAddrQuery("");
   }
 
-  // 훈련생 추가
   function addTrainee() {
     if (!traineeForm.name.trim()) { alert("훈련생 이름을 입력해주세요."); return; }
     if (!traineeForm.birthDate.replace(/\D/g, "")) { alert("생년월일을 입력해주세요."); return; }
@@ -136,11 +133,9 @@ function SiteRegisterPageInner() {
     setTrainees(prev => prev.filter(t => t.id !== id));
   }
 
-  // 제출
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-
     if (!companyName.trim()) { setError("사업체명을 입력해주세요."); return; }
     if (!address.trim()) { setError("주소를 입력해주세요."); return; }
     if (!gps) { setError("위치(GPS)를 확인해주세요. 주소 검색 후 '현재 위치 확인' 버튼을 눌러주세요."); return; }
@@ -160,24 +155,18 @@ function SiteRegisterPageInner() {
         fieldTrainingStart: noFieldTraining ? null : fieldStart || null,
         fieldTrainingEnd: noFieldTraining ? null : fieldEnd || null,
         trainees: trainees.map(t => ({
-          name: t.name,
-          gender: t.gender,
-          birthDate: t.birthDate,
+          name: t.name, gender: t.gender, birthDate: t.birthDate,
           phoneNumber: t.phoneNumber.replace(/-/g, ""),
           guardianPhoneNumber: t.guardianPhoneNumber.replace(/-/g, "") || null,
         })),
       };
-
-      // userId는 API에서 세션으로 가져오거나, worker API 경유
       const res = await fetch("/api/worker/site/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-
       if (!data.success) { setError(data.message || "등록에 실패했습니다."); return; }
-
       router.replace("/worker/home");
     } catch {
       setError("서버와 연결할 수 없습니다.");
@@ -188,54 +177,73 @@ function SiteRegisterPageInner() {
 
   const dist = gps && currentGps ? calcDistance(gps.lat, gps.lon, currentGps.lat, currentGps.lon) : null;
 
+  const inputCls = "h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100 disabled:text-slate-400";
+  const labelCls = "mb-2 block text-xs font-black uppercase tracking-wide text-slate-500";
+
   return (
-    <div style={s.page}>
-      <div style={s.container}>
+    <div className="min-h-dvh bg-slate-50">
+      <div className="mx-auto max-w-md pb-10">
+
         {/* 헤더 */}
-        <div style={s.header}>
-          <button onClick={() => router.back()} style={s.backBtn}>←</button>
-          <h1 style={s.title}>{isEdit ? "직무지도 Site 수정" : "현장 등록"}</h1>
-        </div>
+        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-slate-100 bg-white px-4 py-4">
+          <button
+            onClick={() => router.back()}
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition active:scale-95"
+          >
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <h1 className="text-base font-black text-slate-900">
+            {isEdit ? "현장 수정" : "현장 등록"}
+          </h1>
+        </header>
 
         {isEdit && (
-          <div style={s.editNotice}>
+          <div className="mx-4 mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold leading-relaxed text-amber-700">
             수정 모드에서는 주소/사업체명 변경이 불가합니다. 변경이 필요하면 관리자 승인 절차로 요청해 주세요.
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="space-y-3 px-4 pt-3">
 
           {/* ① 현장 기본 정보 */}
-          <div style={s.section}>
-            <p style={s.sectionTitle}>1. 직무지도 Site 현장 등록</p>
+          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+            <p className={labelCls}>1. 직무지도 현장 정보</p>
 
-            <div style={s.field}>
-              <label style={s.label}>주소 *</label>
+            <div className="mb-4">
+              <label className="mb-2 block text-xs font-black text-slate-700">주소 *</label>
               {!isEdit ? (
                 <>
-                  <div style={s.row}>
-                    <div style={{ ...s.inputBox, flex: 1, color: address ? "#333" : "#aaa" }}>
+                  <div className="flex gap-2">
+                    <div className="flex min-h-12 flex-1 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-500">
                       {address || "주소를 검색해주세요"}
                     </div>
-                    <button type="button" style={s.smBtn} onClick={() => setShowAddrSearch(true)}>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddrSearch(true)}
+                      className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700 transition active:scale-95"
+                    >
+                      <Search className="h-3.5 w-3.5" aria-hidden="true" />
                       검색
                     </button>
                   </div>
                   {gps && (
-                    <p style={s.gpsInfo}>
+                    <p className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-slate-400">
+                      <MapPin className="h-3 w-3" aria-hidden="true" />
                       GPS: {gps.lat.toFixed(6)}, {gps.lon.toFixed(6)}
                     </p>
                   )}
                 </>
               ) : (
-                <div style={s.inputBox}>{address}</div>
+                <div className="flex min-h-12 items-center rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-500">
+                  {address}
+                </div>
               )}
             </div>
 
-            <div style={s.field}>
-              <label style={s.label}>근무 사업체명 *</label>
+            <div className="mb-4">
+              <label className="mb-2 block text-xs font-black text-slate-700">근무 사업체명 *</label>
               <input
-                style={s.input}
+                className={inputCls}
                 value={companyName}
                 onChange={e => setCompanyName(e.target.value)}
                 placeholder="예: 서울시청"
@@ -244,34 +252,41 @@ function SiteRegisterPageInner() {
               />
             </div>
 
-            {/* GPS 현재 위치 확인 */}
-            <button type="button" style={s.gpsBtn} onClick={getMyGps} disabled={gpsLoading}>
-              🗺️ {gpsLoading ? "위치 확인 중..." : "현재 위치 확인"}
+            <button
+              type="button"
+              onClick={getMyGps}
+              disabled={gpsLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-3 text-sm font-black text-slate-700 transition active:scale-[0.97] disabled:opacity-60"
+            >
+              <Navigation className="h-4 w-4" aria-hidden="true" />
+              {gpsLoading ? "위치 확인 중..." : "현재 위치 확인"}
             </button>
 
             {showGpsMap && currentGps && gps && (
-              <div style={s.gpsCard}>
-                <div style={s.gpsRow}>
-                  <span style={{ color: "#e53935" }}>📍 지정 위치:</span>
-                  <span>{gps.lat.toFixed(6)}, {gps.lon.toFixed(6)}</span>
+              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-1.5 flex justify-between text-xs font-semibold">
+                  <span className="text-rose-500">지정 위치</span>
+                  <span className="text-slate-700">{gps.lat.toFixed(6)}, {gps.lon.toFixed(6)}</span>
                 </div>
-                <div style={s.gpsRow}>
-                  <span style={{ color: "#2e7d32" }}>📍 현재 위치:</span>
-                  <span>{currentGps.lat.toFixed(6)}, {currentGps.lon.toFixed(6)}</span>
+                <div className="mb-1.5 flex justify-between text-xs font-semibold">
+                  <span className="text-emerald-600">현재 위치</span>
+                  <span className="text-slate-700">{currentGps.lat.toFixed(6)}, {currentGps.lon.toFixed(6)}</span>
                 </div>
-                <div style={s.gpsRow}>
-                  <span>오차 범위:</span>
-                  <span style={{ fontWeight: 700, color: dist! > 100 ? "#e53935" : "#2e7d32" }}>
-                    {dist}m
-                  </span>
+                <div className="mb-2 flex justify-between text-xs font-semibold">
+                  <span className="text-slate-500">오차 범위</span>
+                  <span className={`font-black ${dist! > 100 ? "text-rose-500" : "text-emerald-600"}`}>{dist}m</span>
                 </div>
-                <p style={{ fontSize: 12, color: "#888", margin: "8px 0 0" }}>
-                  지정 위치 대비 100m 이내이면 자동 확정되고, 100m를 초과하면 관리자 승인이 필요합니다.
+                <p className="mb-3 text-[11px] font-semibold leading-relaxed text-slate-400">
+                  100m 이내이면 자동 확정, 100m 초과이면 관리자 승인이 필요합니다.
                 </p>
-                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                  <button type="button" style={{ ...s.smBtn, flex: 1 }} onClick={() => setShowGpsMap(false)}>취소</button>
-                  <button type="button" style={{ ...s.smBtn, flex: 1, backgroundColor: "#2563eb", color: "#fff" }}
-                    onClick={() => { if (!gps) setGps(currentGps); setShowGpsMap(false); }}>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setShowGpsMap(false)}
+                    className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-black text-slate-600 transition active:scale-95">
+                    취소
+                  </button>
+                  <button type="button"
+                    onClick={() => { if (!gps) setGps(currentGps); setShowGpsMap(false); }}
+                    className="flex-1 rounded-xl bg-slate-950 py-2.5 text-xs font-black text-white transition active:scale-95">
                     확인
                   </button>
                 </div>
@@ -280,188 +295,243 @@ function SiteRegisterPageInner() {
           </div>
 
           {/* ② 담당자 정보 */}
-          <div style={s.section}>
-            <p style={s.sectionTitle}>2. 담당자 정보</p>
-            <div style={s.field}>
-              <label style={s.label}>주관 기관명</label>
-              <input style={s.input} value={agencyName} onChange={e => setAgencyName(e.target.value)} placeholder="예: 다음미래" />
-            </div>
-            <div style={s.field}>
-              <label style={s.label}>담당자명 *</label>
-              <input style={s.input} value={managerName} onChange={e => setManagerName(e.target.value)} placeholder="홍길동" required />
-            </div>
-            <div style={s.field}>
-              <label style={s.label}>담당자 이메일 *</label>
-              <input style={s.input} type="email" value={managerEmail} onChange={e => setManagerEmail(e.target.value)} placeholder="example@email.com" required />
-            </div>
-            <div style={s.field}>
-              <label style={s.label}>담당자 전화번호</label>
-              <input style={s.input} type="tel" value={managerPhone} onChange={e => setManagerPhone(e.target.value)} placeholder="01012345678" />
+          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+            <p className={labelCls}>2. 담당자 정보</p>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-2 block text-xs font-black text-slate-700">주관 기관명</label>
+                <input className={inputCls} value={agencyName} onChange={e => setAgencyName(e.target.value)} placeholder="예: 다음미래" />
+              </div>
+              <div>
+                <label className="mb-2 block text-xs font-black text-slate-700">담당자명 *</label>
+                <input className={inputCls} value={managerName} onChange={e => setManagerName(e.target.value)} placeholder="홍길동" required />
+              </div>
+              <div>
+                <label className="mb-2 block text-xs font-black text-slate-700">담당자 이메일 *</label>
+                <input className={inputCls} type="email" value={managerEmail} onChange={e => setManagerEmail(e.target.value)} placeholder="example@email.com" required />
+              </div>
+              <div>
+                <label className="mb-2 block text-xs font-black text-slate-700">담당자 전화번호</label>
+                <input className={inputCls} type="tel" value={managerPhone} onChange={e => setManagerPhone(e.target.value)} placeholder="01012345678" />
+              </div>
             </div>
           </div>
 
           {/* ③ 훈련 기간 */}
-          <div style={s.section}>
-            <p style={s.sectionTitle}>3. 훈련 기간 설정</p>
+          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+            <p className={labelCls}>3. 훈련 기간 설정</p>
 
-            <div style={s.toggleRow}>
-              <span style={s.label}>사전 훈련기간</span>
-              <label style={s.toggle}>
-                <input type="checkbox" checked={noPreTraining} onChange={e => setNoPreTraining(e.target.checked)} style={{ display: "none" }} />
-                <span style={{ ...s.toggleTrack, backgroundColor: noPreTraining ? "#2563eb" : "#ccc" }}>
-                  <span style={{ ...s.toggleThumb, transform: noPreTraining ? "translateX(18px)" : "none" }} />
-                </span>
-                <span style={{ fontSize: 13, color: "#888" }}>없음</span>
-              </label>
-            </div>
-            {!noPreTraining && (
-              <div style={s.dateRow}>
-                <input style={s.dateInput} type="date" value={preStart} onChange={e => setPreStart(e.target.value)} />
-                <span style={s.dateSep}>~</span>
-                <input style={s.dateInput} type="date" value={preEnd} onChange={e => setPreEnd(e.target.value)} />
+            <div className="mb-4">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-black text-slate-700">사전 훈련기간</span>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input type="checkbox" className="sr-only" checked={noPreTraining} onChange={e => setNoPreTraining(e.target.checked)} />
+                  <div className={`relative h-5 w-9 rounded-full transition-colors ${noPreTraining ? "bg-sky-500" : "bg-slate-300"}`}>
+                    <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${noPreTraining ? "translate-x-4" : "translate-x-0.5"}`} />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500">없음</span>
+                </label>
               </div>
-            )}
+              {!noPreTraining && (
+                <div className="flex items-center gap-2">
+                  <input className="h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" type="date" value={preStart} onChange={e => setPreStart(e.target.value)} />
+                  <span className="text-xs font-semibold text-slate-400">~</span>
+                  <input className="h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" type="date" value={preEnd} onChange={e => setPreEnd(e.target.value)} />
+                </div>
+              )}
+            </div>
 
-            <div style={{ ...s.toggleRow, marginTop: 12 }}>
-              <span style={s.label}>현장 훈련기간</span>
-              <label style={s.toggle}>
-                <input type="checkbox" checked={noFieldTraining} onChange={e => setNoFieldTraining(e.target.checked)} style={{ display: "none" }} />
-                <span style={{ ...s.toggleTrack, backgroundColor: noFieldTraining ? "#2563eb" : "#ccc" }}>
-                  <span style={{ ...s.toggleThumb, transform: noFieldTraining ? "translateX(18px)" : "none" }} />
-                </span>
-                <span style={{ fontSize: 13, color: "#888" }}>없음</span>
-              </label>
-            </div>
-            {!noFieldTraining && (
-              <div style={s.dateRow}>
-                <input style={s.dateInput} type="date" value={fieldStart} onChange={e => setFieldStart(e.target.value)} />
-                <span style={s.dateSep}>~</span>
-                <input style={s.dateInput} type="date" value={fieldEnd} onChange={e => setFieldEnd(e.target.value)} />
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-black text-slate-700">현장 훈련기간</span>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input type="checkbox" className="sr-only" checked={noFieldTraining} onChange={e => setNoFieldTraining(e.target.checked)} />
+                  <div className={`relative h-5 w-9 rounded-full transition-colors ${noFieldTraining ? "bg-sky-500" : "bg-slate-300"}`}>
+                    <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${noFieldTraining ? "translate-x-4" : "translate-x-0.5"}`} />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500">없음</span>
+                </label>
               </div>
-            )}
+              {!noFieldTraining && (
+                <div className="flex items-center gap-2">
+                  <input className="h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" type="date" value={fieldStart} onChange={e => setFieldStart(e.target.value)} />
+                  <span className="text-xs font-semibold text-slate-400">~</span>
+                  <input className="h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" type="date" value={fieldEnd} onChange={e => setFieldEnd(e.target.value)} />
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* ④ 안내 (근무형태는 관리자가 설정) */}
-          <div style={{ ...s.section, backgroundColor: "#f0f9ff", borderColor: "#bae6fd" }}>
-            <p style={{ fontSize: 13, color: "#0369a1", margin: 0, lineHeight: 1.6 }}>
+          {/* ④ 근무 형태 */}
+          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+            <p className={labelCls}>4. 근무 형태</p>
+            <p className="text-xs font-semibold leading-relaxed text-slate-500">
               근무 형태(오전/오후/전일)와 출퇴근 지도 여부는 에이전시 관리자가 설정합니다.
-              현장 등록 후 관리자에게 확인하세요.
             </p>
           </div>
 
           {/* ⑤ 훈련생 관리 */}
-          <div style={s.section}>
-            <p style={s.sectionTitle}>5. 훈련생 관리</p>
+          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+            <p className={labelCls}>5. 훈련생 관리</p>
 
-            <div style={s.traineeForm}>
-              <div style={s.traineeRow}>
+            <div className="mb-4 space-y-2.5">
+              <div className="flex gap-2">
                 <input
-                  style={{ ...s.input, flex: 2 }}
+                  className="h-12 flex-[2] rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400"
                   placeholder="성명 *"
                   value={traineeForm.name}
                   onChange={e => setTraineeForm(f => ({ ...f, name: e.target.value }))}
                 />
-                <div style={s.genderBtns}>
+                <div className="flex gap-1">
                   {(["남", "여"] as const).map(g => (
-                    <button key={g} type="button"
-                      style={{ ...s.genderBtn, ...(traineeForm.gender === g ? s.genderActive : {}) }}
-                      onClick={() => setTraineeForm(f => ({ ...f, gender: g }))}>
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setTraineeForm(f => ({ ...f, gender: g }))}
+                      className={`h-12 w-12 rounded-xl border text-sm font-black transition active:scale-95 ${
+                        traineeForm.gender === g
+                          ? "border-slate-950 bg-slate-950 text-white"
+                          : "border-slate-200 bg-slate-50 text-slate-500"
+                      }`}
+                    >
                       {g}
                     </button>
                   ))}
                 </div>
               </div>
               <input
-                style={s.input}
+                className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400"
                 placeholder="생년월일 (YYYY.MM.DD) *"
                 value={formatBirth(traineeForm.birthDate)}
                 onChange={e => setTraineeForm(f => ({ ...f, birthDate: e.target.value.replace(/\D/g, "") }))}
                 inputMode="numeric"
               />
               <input
-                style={s.input}
+                className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400"
                 placeholder="전화번호 *"
                 value={traineeForm.phoneNumber}
                 onChange={e => setTraineeForm(f => ({ ...f, phoneNumber: e.target.value }))}
                 type="tel"
               />
               <input
-                style={s.input}
+                className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400"
                 placeholder="보호자 전화 (선택)"
                 value={traineeForm.guardianPhoneNumber}
                 onChange={e => setTraineeForm(f => ({ ...f, guardianPhoneNumber: e.target.value }))}
                 type="tel"
               />
-              <button type="button" style={s.addTraineeBtn} onClick={addTrainee}>
-                + 훈련생 추가
+              <button
+                type="button"
+                onClick={addTrainee}
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-700 text-sm font-black text-white transition active:scale-[0.97]"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                훈련생 추가
               </button>
             </div>
 
-            {trainees.map(t => (
-              <div key={t.id} style={s.traineeItem}>
-                <div>
-                  <span style={{ fontWeight: 600 }}>{t.name}({t.gender})</span>
-                  <span style={{ color: "#888", fontSize: 12, marginLeft: 8 }}>
-                    {t.birthDate.slice(0, 4)}.{t.birthDate.slice(4, 6)}.{t.birthDate.slice(6)} | {t.phoneNumber}
-                  </span>
-                  {t.guardianPhoneNumber && (
-                    <p style={{ fontSize: 12, color: "#aaa", margin: "2px 0 0" }}>보호자: {t.guardianPhoneNumber}</p>
-                  )}
+            <div className="space-y-2">
+              {trainees.map(t => (
+                <div key={t.id} className="flex items-start justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
+                  <div>
+                    <p className="text-sm font-black text-slate-900">{t.name} ({t.gender})</p>
+                    <p className="mt-0.5 text-xs font-semibold text-slate-400">
+                      {t.birthDate.slice(0, 4)}.{t.birthDate.slice(4, 6)}.{t.birthDate.slice(6)} | {t.phoneNumber}
+                    </p>
+                    {t.guardianPhoneNumber && (
+                      <p className="mt-0.5 text-xs font-semibold text-slate-400">보호자: {t.guardianPhoneNumber}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeTrainee(t.id)}
+                    className="ml-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-rose-400 transition hover:bg-rose-50"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </div>
-                <button type="button" style={s.removeBtn} onClick={() => removeTrainee(t.id)}>🗑️</button>
-              </div>
-            ))}
+              ))}
+              {trainees.length === 0 && (
+                <p className="py-4 text-center text-xs font-semibold text-slate-400">추가된 훈련생이 없습니다.</p>
+              )}
+            </div>
           </div>
 
-          {error && <p style={s.error}>{error}</p>}
+          {error && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-center text-sm font-semibold text-rose-700">
+              {error}
+            </div>
+          )}
 
           <button
             type="submit"
-            style={{ ...s.submitBtn, opacity: loading ? 0.7 : 1 }}
             disabled={loading}
+            className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-slate-950 text-base font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-[0.97] disabled:opacity-70"
           >
             {loading ? "저장 중..." : isEdit ? "수정 완료" : "등록 완료"}
           </button>
+
         </form>
       </div>
 
-      {/* 주소 검색 모달 */}
+      {/* 주소 검색 모달 (바텀 시트) */}
       {showAddrSearch && (
-        <div style={s.modalOverlay}>
-          <div style={s.modal}>
-            <div style={s.modalHeader}>
-              <span style={s.modalTitle}>주소 검색</span>
-              <button style={s.closeBtn} onClick={() => setShowAddrSearch(false)}>✕</button>
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-slate-950/50"
+          onClick={() => setShowAddrSearch(false)}
+        >
+          <div
+            className="mt-auto max-h-[80dvh] w-full rounded-t-3xl bg-white flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <span className="text-base font-black text-slate-900">주소 검색</span>
+              <button
+                onClick={() => setShowAddrSearch(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
-            <div style={s.searchRow}>
+
+            <div className="flex gap-2 px-4 py-3">
               <input
-                style={{ ...s.input, flex: 1 }}
+                className="h-11 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
                 placeholder="도로명, 건물명, 지번 검색"
                 value={addrQuery}
                 onChange={e => setAddrQuery(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && searchAddress()}
                 autoFocus
               />
-              <button style={s.smBtn} onClick={searchAddress} disabled={addrLoading}>
+              <button
+                onClick={searchAddress}
+                disabled={addrLoading}
+                className="flex items-center gap-1.5 rounded-xl bg-slate-950 px-4 text-sm font-black text-white transition active:scale-95 disabled:opacity-60"
+              >
+                <Search className="h-4 w-4" aria-hidden="true" />
                 {addrLoading ? "..." : "검색"}
               </button>
             </div>
-            <div style={s.resultList}>
-              {addrResults.length === 0 && (
-                <p style={{ color: "#aaa", textAlign: "center", padding: 20, fontSize: 14 }}>
-                  검색 결과가 없습니다.
-                </p>
-              )}
-              {addrResults.map((item, i) => (
-                <button key={i} style={s.resultItem} onClick={() => selectAddress(item)}>
-                  <span style={{ fontSize: 14, color: "#333" }}>{item.addressName || item.address_name}</span>
-                  {item.roadAddress?.addressName && (
-                    <span style={{ fontSize: 12, color: "#2563eb", marginTop: 2, display: "block" }}>
-                      {item.roadAddress.addressName}
+
+            <div className="flex-1 overflow-y-auto">
+              {addrResults.length === 0 ? (
+                <p className="py-8 text-center text-sm font-semibold text-slate-400">검색 결과가 없습니다.</p>
+              ) : (
+                addrResults.map((item, i) => (
+                  <button
+                    key={i}
+                    onClick={() => selectAddress(item)}
+                    className="flex w-full flex-col border-b border-slate-50 px-5 py-3.5 text-left transition hover:bg-slate-50 active:bg-slate-100"
+                  >
+                    <span className="text-sm font-semibold text-slate-800">
+                      {item.addressName || item.address_name}
                     </span>
-                  )}
-                </button>
-              ))}
+                    {item.roadAddress?.addressName && (
+                      <span className="mt-0.5 text-xs font-semibold text-sky-600">{item.roadAddress.addressName}</span>
+                    )}
+                  </button>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -470,7 +540,6 @@ function SiteRegisterPageInner() {
   );
 }
 
-
 export default function SiteRegisterPage() {
   return (
     <Suspense>
@@ -478,60 +547,3 @@ export default function SiteRegisterPage() {
     </Suspense>
   );
 }
-// ─── 스타일 ──────────────────────────────────────────────
-const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", backgroundColor: "#f9fafb" },
-  container: { maxWidth: 480, margin: "0 auto", padding: "16px 16px 60px" },
-  header: { display: "flex", alignItems: "center", gap: 12, marginBottom: 16 },
-  backBtn: { background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#374151", padding: "4px 8px", fontWeight: 700 },
-  title: { fontSize: 20, fontWeight: 700, color: "#111827", margin: 0 },
-  editNotice: { backgroundColor: "#fefce8", color: "#92400e", fontSize: 13, padding: "10px 14px", borderRadius: 10, marginBottom: 16, lineHeight: 1.5, border: "1px solid #fde68a" },
-
-  section: { backgroundColor: "#fff", borderRadius: 14, padding: "18px 16px", marginBottom: 10, border: "1px solid #f3f4f6" },
-  sectionTitle: { fontSize: 14, fontWeight: 700, color: "#374151", margin: "0 0 14px", textTransform: "uppercase" as const, letterSpacing: "0.5px" },
-  field: { marginBottom: 16 },
-  label: { fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 },
-  input: { width: "100%", height: 46, border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 15, color: "#111827", backgroundColor: "#fafafa", outline: "none", padding: "0 12px", boxSizing: "border-box" as const, fontFamily: "inherit" },
-  inputBox: { padding: "12px", backgroundColor: "#f9fafb", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 14, color: "#374151", minHeight: 46, display: "flex", alignItems: "center" },
-  row: { display: "flex", gap: 8, alignItems: "center" },
-  smBtn: { padding: "10px 14px", backgroundColor: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" as const },
-  gpsInfo: { fontSize: 11, color: "#9ca3af", margin: "6px 0 0" },
-  gpsBtn: { width: "100%", padding: "12px", backgroundColor: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 },
-  gpsCard: { backgroundColor: "#f9fafb", borderRadius: 10, padding: 14, marginTop: 10, border: "1px solid #e5e7eb" },
-  gpsRow: { display: "flex", justifyContent: "space-between", fontSize: 13, color: "#374151", marginBottom: 6 },
-
-  toggleRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  toggle: { display: "flex", alignItems: "center", gap: 6, cursor: "pointer" },
-  toggleTrack: { width: 36, height: 20, borderRadius: 10, position: "relative" as const, transition: "background 0.2s", display: "inline-block", flexShrink: 0 },
-  toggleThumb: { position: "absolute" as const, top: 2, left: 2, width: 16, height: 16, backgroundColor: "#fff", borderRadius: "50%", transition: "transform 0.2s" },
-  dateRow: { display: "flex", alignItems: "center", gap: 8, marginTop: 8 },
-  dateInput: { flex: 1, height: 42, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 10px", fontSize: 14, color: "#111827", outline: "none", background: "#fafafa" },
-  dateSep: { color: "#9ca3af", fontWeight: 500 },
-
-  workTypeRow: { display: "flex", gap: 8, marginBottom: 12 },
-  workTypeBtn: { flex: 1, padding: "11px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 14, cursor: "pointer", backgroundColor: "#fafafa", color: "#6b7280", fontWeight: 600 },
-  workTypeActive: { backgroundColor: "#111827", color: "#fff", border: "1px solid #111827" },
-  checkRow: { display: "flex", alignItems: "center", cursor: "pointer" },
-
-  traineeForm: { display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 },
-  traineeRow: { display: "flex", gap: 8, alignItems: "flex-end" },
-  genderBtns: { display: "flex", gap: 4, flexShrink: 0 },
-  genderBtn: { width: 42, height: 42, border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", backgroundColor: "#fafafa", color: "#6b7280" },
-  genderActive: { backgroundColor: "#111827", color: "#fff", border: "1px solid #111827" },
-  addTraineeBtn: { width: "100%", padding: "13px", backgroundColor: "#374151", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" },
-  traineeItem: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "12px 14px", backgroundColor: "#f9fafb", borderRadius: 10, marginBottom: 8, border: "1px solid #f3f4f6" },
-  removeBtn: { background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#dc2626", padding: 4 },
-
-  error: { color: "#dc2626", fontSize: 13, backgroundColor: "#fef2f2", padding: "12px 16px", borderRadius: 10, margin: "12px 0", textAlign: "center" as const, border: "1px solid #fecaca" },
-  submitBtn: { width: "100%", padding: "16px", backgroundColor: "#111827", color: "#fff", fontSize: 16, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer", marginTop: 8 },
-
-  // 모달
-  modalOverlay: { position: "fixed" as const, inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", flexDirection: "column" as const },
-  modal: { backgroundColor: "#fff", borderRadius: "20px 20px 0 0", marginTop: "auto", maxHeight: "80dvh", display: "flex", flexDirection: "column" as const },
-  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #f3f4f6" },
-  modalTitle: { fontSize: 16, fontWeight: 700, color: "#111827" },
-  closeBtn: { background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" },
-  searchRow: { display: "flex", gap: 8, padding: "12px 16px" },
-  resultList: { overflowY: "auto" as const, flex: 1 },
-  resultItem: { width: "100%", textAlign: "left" as const, padding: "14px 20px", border: "none", borderBottom: "1px solid #f9fafb", backgroundColor: "transparent", cursor: "pointer" },
-};

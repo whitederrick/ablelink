@@ -2,6 +2,7 @@
 
 import { useSearchParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { ArrowRight, Building2, Lock, User } from "lucide-react";
 
 export default function LoginClient() {
   const sp = useSearchParams();
@@ -37,136 +38,68 @@ export default function LoginClient() {
   }
 
   return (
-    <div style={s.page}>
-      <div style={s.card}>
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-5 py-8">
+      <div className="w-full max-w-sm">
         {/* 로고 */}
-        <div style={s.logoWrap}>
-          <div style={s.logoText}>
-            <span style={{ color: "#111827" }}>Able</span>
-            <span style={{ color: "#ef4444" }}> Link</span>
+        <div className="mb-10 text-center">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-950 shadow-lg shadow-slate-950/20">
+            <Building2 className="h-8 w-8 text-sky-400" aria-hidden="true" />
           </div>
-          <p style={s.logoSub}>에이전시 운영 플랫폼</p>
+          <h1 className="text-2xl font-black tracking-tight text-slate-950">AbleLink</h1>
+          <p className="mt-1 text-sm font-semibold text-slate-500">에이전시 운영 플랫폼</p>
         </div>
 
         {/* 폼 */}
-        <form onSubmit={onSubmit} style={s.form}>
-          <div style={s.fieldGroup}>
-            <label style={s.label}>아이디</label>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <label className="mb-2 flex items-center gap-1.5 text-sm font-black text-slate-700">
+              <User className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+              아이디
+            </label>
             <input
               value={loginId}
               onChange={e => setLoginId(e.target.value)}
               placeholder="아이디를 입력하세요"
               autoComplete="username"
-              style={s.input}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
             />
           </div>
 
-          <div style={s.fieldGroup}>
-            <label style={s.label}>비밀번호</label>
+          <div>
+            <label className="mb-2 flex items-center gap-1.5 text-sm font-black text-slate-700">
+              <Lock className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+              비밀번호
+            </label>
             <input
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="비밀번호를 입력하세요"
               type="password"
               autoComplete="current-password"
-              style={s.input}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
             />
           </div>
 
           {error && (
-            <div style={s.error}>{error}</div>
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+              {error}
+            </div>
           )}
 
-          <button type="submit" disabled={loading} style={s.btn}>
-            {loading ? "로그인 중..." : "로그인"}
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 text-base font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-[0.97] disabled:opacity-70"
+          >
+            {loading ? "로그인 중..." : (
+              <>
+                로그인
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </>
+            )}
           </button>
         </form>
       </div>
-    </div>
+    </main>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f7f8fa",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 400,
-    background: "#fff",
-    borderRadius: 16,
-    padding: "40px 36px",
-    border: "1px solid #f0f0f0",
-    boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
-  },
-  logoWrap: {
-    marginBottom: 32,
-    textAlign: "center",
-  },
-  logoText: {
-    fontSize: 32,
-    fontWeight: 900,
-    fontFamily: "'Arial Black', 'Helvetica Neue', sans-serif",
-    letterSpacing: "-0.5px",
-    lineHeight: 1,
-    marginBottom: 6,
-  },
-  logoSub: {
-    fontSize: 13,
-    color: "#9ca3af",
-    margin: 0,
-  },
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-  fieldGroup: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#374151",
-  },
-  input: {
-    width: "100%",
-    padding: "10px 14px",
-    border: "1px solid #e5e7eb",
-    borderRadius: 9,
-    fontSize: 14,
-    color: "#111827",
-    outline: "none",
-    background: "#fafafa",
-    fontFamily: "inherit",
-    boxSizing: "border-box",
-  },
-  error: {
-    padding: "10px 14px",
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
-    borderRadius: 8,
-    fontSize: 13,
-    color: "#dc2626",
-  },
-  btn: {
-    width: "100%",
-    padding: "12px",
-    background: "#111827",
-    color: "#fff",
-    border: "none",
-    borderRadius: 9,
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-    marginTop: 4,
-    letterSpacing: "-0.2px",
-  },
-};

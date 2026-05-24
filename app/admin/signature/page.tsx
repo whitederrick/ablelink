@@ -1,31 +1,30 @@
 "use client";
-// app/admin/signature/page.tsx
-// 에이전시 관리자 서명 등록
 
 import { useEffect, useRef, useState } from "react";
+import { T } from "../_styles";
 
 async function resizeSignature(src: HTMLCanvasElement, w: number, h: number): Promise<Blob> {
   const off = document.createElement("canvas");
   off.width = w; off.height = h;
   const ctx = off.getContext("2d")!;
   ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 230, 100);
-  const pad = 20, scale = Math.min((w-pad*2)/src.width, (h-pad*2)/src.height);
-  ctx.drawImage(src, (w-src.width*scale)/2, (h-src.height*scale)/2, src.width*scale, src.height*scale);
+  const pad = 20, scale = Math.min((w - pad * 2) / src.width, (h - pad * 2) / src.height);
+  ctx.drawImage(src, (w - src.width * scale) / 2, (h - src.height * scale) / 2, src.width * scale, src.height * scale);
   return new Promise<Blob>((res, rej) => off.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95));
 }
 
 export default function AdminSignaturePage() {
   const [savedUrl,    setSavedUrl]    = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
-  const [mode,    setMode]    = useState<"view"|"draw">("view");
+  const [mode,    setMode]    = useState<"view" | "draw">("view");
   const [drawing, setDrawing] = useState(false);
   const [saving,  setSaving]  = useState(false);
   const [toast,   setToast]   = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const lastPos   = useRef<{x:number;y:number}|null>(null);
+  const lastPos   = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    fetch("/api/admin/signature").then(r=>r.json()).then(d=>{
+    fetch("/api/admin/signature").then(r => r.json()).then(d => {
       if (d.success) { setSavedUrl(d.signatureUrl); setDisplayName(d.displayName); }
     });
   }, []);
@@ -84,81 +83,71 @@ export default function AdminSignaturePage() {
   function flash(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000); }
 
   return (
-    <div>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827" }}>내 서명 관리</h1>
-        <p style={{ margin: "4px 0 0", fontSize: 13, color: "#9ca3af" }}>
+    <div className="space-y-4">
+      <div>
+        <h1 className={T.pageTitle}>내 서명 관리</h1>
+        <p className={T.pageSub}>
           {displayName && `${displayName}님 · `}등록 서명은 문서의 <strong>(위탁기관/공단) 담당자</strong> 서명란에 자동 삽입됩니다.
         </p>
       </div>
 
-      <div style={s.card}>
-        <p style={s.sectionTitle}>등록된 서명</p>
+      <div className={T.card}>
+        <p className="mb-3 text-sm font-black text-slate-900">등록된 서명</p>
 
         {mode === "view" && (savedUrl ? (
           <>
-            <div style={s.previewBox}>
-              <img src={savedUrl} alt="서명" style={{ maxHeight: 100, maxWidth: "100%", objectFit: "contain" }} />
+            <div className="flex min-h-[120px] items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-5">
+              <img src={savedUrl} alt="서명" className="max-h-[100px] max-w-full object-contain" />
             </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-              <button onClick={() => setMode("draw")} style={s.btnPrimary}>다시 등록</button>
-              <button onClick={del} style={s.btnDanger}>삭제</button>
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => setMode("draw")} className={T.btnPrimary}>다시 등록</button>
+              <button onClick={del} className={T.btnDanger}>삭제</button>
             </div>
           </>
         ) : (
-          <div style={{ textAlign: "center", padding: "28px 0" }}>
-            <p style={{ fontSize: 40, margin: "0 0 10px" }}>✍️</p>
-            <p style={{ color: "#9ca3af", fontSize: 14, marginBottom: 18 }}>등록된 서명이 없습니다.</p>
-            <button onClick={() => setMode("draw")} style={s.btnPrimary}>서명 등록하기</button>
+          <div className="py-8 text-center">
+            <p className="mb-1 text-3xl">✍️</p>
+            <p className="mb-5 text-sm font-semibold text-slate-400">등록된 서명이 없습니다.</p>
+            <button onClick={() => setMode("draw")} className={T.btnPrimary}>서명 등록하기</button>
           </div>
         ))}
 
         {mode === "draw" && (
           <>
-            <div style={s.canvasWrap}>
-              <canvas ref={canvasRef} style={s.canvasStyle}
+            <div className="relative mb-3 max-w-[230px] overflow-hidden rounded-xl border-2 border-slate-950 bg-slate-50">
+              <canvas ref={canvasRef}
+                className="block w-full cursor-crosshair"
+                style={{ height: "120px", touchAction: "none" }}
                 onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd} onMouseLeave={onEnd}
                 onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd} />
-              <p style={s.hint}>✍️ 패드 전체에 꽉 차게 서명해 주세요</p>
+              <p className="pointer-events-none absolute bottom-2 right-2 text-[11px] text-slate-300">✍️ 패드 전체에 꽉 차게 서명해 주세요</p>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={clear} style={s.btnSecondary}>지우기</button>
-              <button onClick={save} disabled={saving} style={{ ...s.btnPrimary, opacity: saving ? 0.7 : 1 }}>
+            <div className="flex gap-2">
+              <button onClick={clear} className={T.btnSecondary}>지우기</button>
+              <button onClick={save} disabled={saving} className={T.btnPrimary}>
                 {saving ? "저장 중..." : "저장"}
               </button>
-              <button onClick={() => setMode("view")} style={s.btnSecondary}>취소</button>
+              <button onClick={() => setMode("view")} className={T.btnSecondary}>취소</button>
             </div>
           </>
         )}
       </div>
 
-      <div style={{ ...s.card, marginTop: 12 }}>
-        <p style={s.sectionTitle}>서명 사용 안내</p>
-        <ul style={{ margin: 0, padding: "0 0 0 18px", fontSize: 13, color: "#6b7280", lineHeight: 2.0 }}>
-          <li><strong>(위탁기관/공단) 담당자</strong> → 현재 로그인한 에이전시 관리자 서명 자동 삽입</li>
-          <li style={{ color: "#ef4444", fontWeight: 600 }}>⚠️ 서명 패드 전체에 꽉 차게 서명하셔야 문서에 적정 크기로 표시됩니다</li>
-          <li><strong>직무지도원</strong> → 직무지도원이 앱에서 등록한 서명 자동 삽입</li>
-          <li><strong>사업체 담당자</strong> → 문서 생성 화면에서 QR코드/링크로 현장 즉석 서명</li>
+      <div className={T.card}>
+        <p className="mb-3 text-sm font-black text-slate-900">서명 사용 안내</p>
+        <ul className="space-y-1.5 pl-5 text-sm font-semibold text-slate-500" style={{ listStyleType: "disc" }}>
+          <li><strong className="text-slate-700">(위탁기관/공단) 담당자</strong> → 현재 로그인한 에이전시 관리자 서명 자동 삽입</li>
+          <li className="font-semibold text-rose-500">⚠️ 서명 패드 전체에 꽉 차게 서명하셔야 문서에 적정 크기로 표시됩니다</li>
+          <li><strong className="text-slate-700">직무지도원</strong> → 직무지도원이 앱에서 등록한 서명 자동 삽입</li>
+          <li><strong className="text-slate-700">사업체 담당자</strong> → 문서 생성 화면에서 QR코드/링크로 현장 즉석 서명</li>
         </ul>
       </div>
 
       {toast && (
-        <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: "#111827", color: "#fff", padding: "11px 20px", borderRadius: 10, fontSize: 14, fontWeight: 600, zIndex: 2000 }}>
+        <div className="fixed bottom-6 left-1/2 z-[2000] -translate-x-1/2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-2xl">
           {toast}
         </div>
       )}
     </div>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  card:         { background: "#fff", border: "1px solid #f0f0f0", borderRadius: 12, padding: "18px 20px" },
-  sectionTitle: { fontSize: 14, fontWeight: 700, color: "#111827", margin: "0 0 12px" },
-  previewBox:   { backgroundColor: "#f9fafb", borderRadius: 12, padding: 20, border: "2px dashed #e5e7eb", minHeight: 120, display: "flex", alignItems: "center", justifyContent: "center" },
-  canvasWrap:   { position: "relative", backgroundColor: "#f8f9ff", borderRadius: 8, border: "2px solid #374151", overflow: "hidden", marginBottom: 12, maxWidth: 230 },
-  canvasStyle:  { display: "block", width: "100%", maxWidth: "600px", height: "120px", touchAction: "none", cursor: "crosshair" },
-  hint:         { position: "absolute", bottom: 8, right: 12, fontSize: 11, color: "#d1d5db", margin: 0, pointerEvents: "none" },
-  btnPrimary:   { padding: "9px 18px", background: "#111827", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  btnSecondary: { padding: "9px 14px", background: "#fff", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, cursor: "pointer" },
-  btnDanger:    { padding: "9px 14px", background: "#fff", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 8, fontSize: 13, cursor: "pointer" },
-};

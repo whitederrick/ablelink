@@ -1,9 +1,22 @@
 "use client";
-// app/worker/home/HomeClient.tsx
-// 직무지도원 메인화면 — Phase 2 UX 개선
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Bell,
+  CalendarDays,
+  ChevronRight,
+  CircleDollarSign,
+  ClipboardList,
+  FileText,
+  Home,
+  LogOut,
+  MapPin,
+  PenLine,
+  Sparkles,
+  User,
+  X,
+} from "lucide-react";
 import type { WorkerPayload } from "../_lib/session";
 
 // ─── 타입 ───────────────────────────────────────────────
@@ -79,17 +92,25 @@ function nowDateStr(): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 (${weekdays[d.getDay()]})`;
 }
 
-// ─── 근무형태 → 출퇴근 시각 ─────────────────────────────────
-function getWorkTimes(workType: string | null, customStart?: string | null, customEnd?: string | null): { clockIn: string; clockOut: string } | null {
+function getWorkTimes(
+  workType: string | null,
+  customStart?: string | null,
+  customEnd?: string | null,
+): { clockIn: string; clockOut: string } | null {
   if (workType === "AM")       return { clockIn: "09:00", clockOut: "12:00" };
   if (workType === "PM")       return { clockIn: "13:00", clockOut: "17:00" };
   if (workType === "FULL_DAY") return { clockIn: "09:00", clockOut: "18:00" };
-  if (workType === "CUSTOM" && customStart && customEnd) return { clockIn: customStart, clockOut: customEnd };
+  if (workType === "CUSTOM" && customStart && customEnd)
+    return { clockIn: customStart, clockOut: customEnd };
   return null;
 }
 
-// ─── 알람 스케줄러 ───────────────────────────────────────────
-function scheduleAlarm(targetHHMM: string, alertMinutes: number, message: string, alreadyFired: Set<string>): void {
+function scheduleAlarm(
+  targetHHMM: string,
+  alertMinutes: number,
+  message: string,
+  alreadyFired: Set<string>,
+): void {
   if (alertMinutes === 0) return;
   const key = `${targetHHMM}-${message}`;
   if (alreadyFired.has(key)) return;
@@ -98,10 +119,9 @@ function scheduleAlarm(targetHHMM: string, alertMinutes: number, message: string
   const target = new Date(now);
   target.setHours(h, m - alertMinutes, 0, 0);
   const diff = target.getTime() - now.getTime();
-  if (diff < 0 || diff > 60 * 60 * 1000) return; // 1시간 이내만
+  if (diff < 0 || diff > 60 * 60 * 1000) return;
   alreadyFired.add(key);
   setTimeout(() => {
-    // SW를 통해 알림 표시 (백그라운드에서도 동작)
     const sw = navigator.serviceWorker?.controller;
     if (sw) {
       sw.postMessage({ type: "SHOW_ALARM", body: message });
@@ -111,7 +131,6 @@ function scheduleAlarm(targetHHMM: string, alertMinutes: number, message: string
   }, diff);
 }
 
-// ─── GPS 획득 ────────────────────────────────────────────
 async function getCurrentPosition(): Promise<GeolocationCoordinates> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
@@ -128,10 +147,51 @@ async function getCurrentPosition(): Promise<GeolocationCoordinates> {
         };
         reject(new Error(msgs[err.code] || "위치 오류가 발생했습니다."));
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     );
   });
 }
+
+// ─── 상태별 설정 ─────────────────────────────────────────
+const STATUS_CONFIG: Record<
+  AttendanceStatus,
+  { label: string; badge: string; card: string; title: string; btn: string }
+> = {
+  BEFORE:  {
+    label: "출근 전",
+    badge: "bg-slate-100 text-slate-500",
+    card:  "bg-white border-slate-200",
+    title: "오늘도 좋은 하루 되세요",
+    btn:   "bg-slate-950 text-white shadow-lg shadow-slate-950/20",
+  },
+  WORKING: {
+    label: "근무 중",
+    badge: "bg-emerald-100 text-emerald-600",
+    card:  "bg-emerald-50 border-emerald-200",
+    title: "열심히 일하고 계시네요!",
+    btn:   "bg-rose-500 text-white shadow-lg shadow-rose-500/20",
+  },
+  DONE: {
+    label: "마감 중",
+    badge: "bg-amber-100 text-amber-600",
+    card:  "bg-amber-50 border-amber-200",
+    title: "수고하셨습니다",
+    btn:   "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20",
+  },
+  CLOSED: {
+    label: "퇴근 완료",
+    badge: "bg-slate-100 text-slate-400",
+    card:  "bg-slate-50 border-slate-200",
+    title: "오늘 하루도 고생하셨습니다",
+    btn:   "bg-slate-200 text-slate-400 cursor-not-allowed",
+  },
+};
+
+const WORK_TYPE_LABEL: Record<string, string> = {
+  AM:       "오전 09:00 – 12:00",
+  PM:       "오후 13:00 – 17:00",
+  FULL_DAY: "전일 09:00 – 18:00",
+};
 
 // ─── 메인 컴포넌트 ───────────────────────────────────────
 export default function HomeClient({ session }: { session: WorkerPayload }) {
@@ -156,13 +216,11 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
   const [showProfile, setShowProfile] = useState(false);
   const profileRef = useRef<HTMLButtonElement>(null);
 
-  // 알람 설정
   const [clockInAlert,  setClockInAlert]  = useState(3);
   const [clockOutAlert, setClockOutAlert] = useState(3);
   const [showAlarmSettings, setShowAlarmSettings] = useState(false);
   const alarmFiredRef = useRef<Set<string>>(new Set());
 
-  // 알람 설정 로드
   useEffect(() => {
     fetch("/api/worker/notification")
       .then(r => r.json())
@@ -175,7 +233,6 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
       .catch(() => {});
   }, []);
 
-  // 알람 스케줄링
   useEffect(() => {
     if (!homeData) return;
     const times = getWorkTimes(homeData.workType, homeData.customWorkStart, homeData.customWorkEnd);
@@ -194,13 +251,11 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
     }).catch(() => {});
   }
 
-  // 시계
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // 토스트 자동 닫기
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 3000);
@@ -210,7 +265,6 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
   const showToast = (msg: string, type: "success" | "error" | "info" = "info") =>
     setToast({ msg, type });
 
-  // 홈 데이터 로드
   const fetchHome = useCallback(async () => {
     try {
       const res = await fetch(`/api/home/${session.userId}`, { cache: "no-store" });
@@ -258,11 +312,10 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
     fetchHome();
   }, [fetchHome]);
 
-  // GPS 기반 출퇴근 공통 로직
   async function doAttendance(
     endpoint: string,
     extraPayload: Record<string, any> = {},
-    confirmOutOfRange = false
+    confirmOutOfRange = false,
   ): Promise<boolean> {
     setActionLoading(true);
     try {
@@ -398,125 +451,140 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
     router.replace("/worker/login");
   }
 
-  // ─── 렌더 ──────────────────────────────────────────────
+  // ─── 로딩 ──────────────────────────────────────────────
   if (loading) {
     return (
-      <div style={s.center}>
-        <div style={s.spinner} />
-        <p style={{ color: "#9ca3af", marginTop: 12, fontSize: 14 }}>불러오는 중...</p>
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-slate-50">
+        <div className="h-9 w-9 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-900" />
+        <p className="mt-3 text-sm font-semibold text-slate-400">불러오는 중...</p>
       </div>
     );
   }
 
   const pad2 = (n: number) => String(n).padStart(2, "0");
   const timeStr = `${pad2(currentTime.getHours())}:${pad2(currentTime.getMinutes())}`;
-  const secStr = pad2(currentTime.getSeconds());
-
-  const STATUS_CONFIG: Record<AttendanceStatus, {
-    label: string; badgeBg: string; badgeColor: string;
-    cardBg: string; cardBorder: string; title: string;
-  }> = {
-    BEFORE:  { label: "출근 전",  badgeBg: "#f3f4f6", badgeColor: "#6b7280", cardBg: "#fff", cardBorder: "#e5e7eb", title: "오늘도 좋은 하루 되세요" },
-    WORKING: { label: "근무 중",  badgeBg: "#dcfce7", badgeColor: "#16a34a", cardBg: "#f0fdf4", cardBorder: "#86efac", title: "열심히 일하고 계시네요!" },
-    DONE:    { label: "마감 중",  badgeBg: "#fef3c7", badgeColor: "#d97706", cardBg: "#fffbeb", cardBorder: "#fde68a", title: "수고하셨습니다" },
-    CLOSED:  { label: "퇴근 완료", badgeBg: "#f3f4f6", badgeColor: "#9ca3af", cardBg: "#fafafa", cardBorder: "#e5e7eb", title: "오늘 하루도 고생하셨습니다" },
-  };
+  const secStr  = pad2(currentTime.getSeconds());
 
   const cfg = STATUS_CONFIG[status];
   const startStr = formatHHMM(homeData?.workStartTime ?? null);
-  const endStr = formatHHMM(homeData?.workEndTime ?? null);
+  const endStr   = formatHHMM(homeData?.workEndTime ?? null);
 
-  // 출퇴근 버튼 스타일
-  const btnStyle: Record<AttendanceStatus, React.CSSProperties> = {
-    BEFORE:  { background: "#111827", color: "#fff" },
-    WORKING: { background: "#dc2626", color: "#fff" },
-    DONE:    { background: "#16a34a", color: "#fff" },
-    CLOSED:  { background: "#d1d5db", color: "#9ca3af", cursor: "not-allowed" },
-  };
+  const workTypeLabel = homeData?.workType
+    ? (WORK_TYPE_LABEL[homeData.workType] ?? `${homeData.customWorkStart}–${homeData.customWorkEnd}`)
+    : null;
+
+  const NAV_ITEMS = [
+    { icon: Home,           label: "홈",      href: "/worker/home" },
+    { icon: CalendarDays,   label: "캘린더",  href: "/worker/calendar" },
+    { icon: PenLine,        label: "전자서명", href: "/worker/signature" },
+    { icon: FileText,       label: "문서",    href: "/worker/docs" },
+    { icon: CircleDollarSign, label: "히스토리", href: "/worker/history" },
+  ];
 
   return (
-    <div style={s.page}>
-      <div style={s.container}>
+    <div className="min-h-dvh bg-slate-50">
+      {/* ── 헤더 ── */}
+      <header className="bg-slate-950 px-5 pb-5 pt-safe-top text-white">
+        <div className="mx-auto max-w-md">
+          <div className="flex items-center justify-between py-4">
+            {/* 로고 + 현장 */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xl font-black tracking-tight text-white">AbleLink</span>
+              {homeData?.siteName && (
+                <button
+                  onClick={() => router.push("/worker/site")}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-300"
+                >
+                  <MapPin className="h-3 w-3 text-sky-400" aria-hidden="true" />
+                  {homeData.siteName}
+                </button>
+              )}
+            </div>
 
-        {/* ── 헤더 ── */}
-        <div style={s.header}>
-          <div style={s.headerLeft}>
-            <span style={s.logoText}>
-              <span style={{ color: "#111827" }}>Able</span>
-              <span style={{ color: "#ef4444" }}>Link</span>
-            </span>
-            {homeData?.siteName && (
-              <button onClick={() => router.push("/worker/site")} style={s.siteBadge}>
-                📍 {homeData.siteName}
+            {/* 프로필 */}
+            <div className="relative">
+              <button
+                ref={profileRef}
+                onClick={() => setShowProfile(v => !v)}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-800 text-slate-300 transition active:scale-95"
+                aria-label="프로필 메뉴"
+              >
+                <User className="h-5 w-5" aria-hidden="true" />
               </button>
-            )}
+              {showProfile && (
+                <div className="absolute right-0 top-12 z-50 min-w-[140px] rounded-2xl border border-slate-100 bg-white p-2 shadow-xl shadow-slate-950/10">
+                  <p className="border-b border-slate-100 px-3 pb-2 pt-1 text-xs font-semibold text-slate-400">
+                    {session.userName}님
+                  </p>
+                  <button
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    onClick={() => { setShowProfile(false); router.push("/worker/profile"); }}
+                  >
+                    <User className="h-4 w-4 text-slate-400" />
+                    정보수정
+                  </button>
+                  <button
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-rose-500 transition hover:bg-rose-50"
+                    onClick={handleLogout}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    로그아웃
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-          <div style={{ position: "relative" }}>
-            <button
-              ref={profileRef}
-              onClick={() => setShowProfile(v => !v)}
-              style={s.profileBtn}
-              aria-label="프로필 메뉴"
-            >
-              <span style={{ fontSize: 18 }}>👤</span>
-            </button>
-            {showProfile && (
-              <div style={s.profileMenu}>
-                <div style={s.profileName}>{session.userName}님</div>
-                <button style={s.menuItem} onClick={() => { setShowProfile(false); router.push("/worker/profile"); }}>
-                  정보수정
-                </button>
-                <button style={{ ...s.menuItem, color: "#ef4444" }} onClick={handleLogout}>
-                  로그아웃
-                </button>
-              </div>
-            )}
+
+          {/* 날짜 + 상태 */}
+          <div className="flex items-center justify-between pb-1">
+            <span className="text-base font-bold text-slate-300">{nowDateStr()}</span>
+            <span className={`rounded-full px-3 py-1 text-xs font-black ${cfg.badge}`}>
+              {cfg.label}
+            </span>
           </div>
         </div>
+      </header>
 
-        {/* ── 날짜 + 상태 ── */}
-        <div style={s.dateRow}>
-          <span style={s.dateText}>{nowDateStr()}</span>
-          <span style={{ ...s.statusBadge, background: cfg.badgeBg, color: cfg.badgeColor }}>
-            {cfg.label}
-          </span>
-        </div>
+      {/* ── 컨텐츠 ── */}
+      <div className="mx-auto max-w-md px-4 pb-28 pt-4 space-y-4">
 
-        {/* ── 출퇴근 카드 ── */}
-        <div style={{ ...s.card, background: cfg.cardBg, borderColor: cfg.cardBorder }}>
-          <p style={s.cardTitle}>{cfg.title}</p>
+        {/* 출퇴근 카드 */}
+        <div className={`rounded-3xl border p-5 ${cfg.card}`}>
+          <p className="mb-4 text-center text-sm font-semibold text-slate-500">{cfg.title}</p>
 
           {/* 시간 표시 */}
-          <div style={s.clockWrap}>
+          <div className="mb-5 flex items-baseline justify-center gap-1">
             {status === "BEFORE" && (
               <>
-                <span style={s.clockTime}>{timeStr}</span>
-                <span style={s.clockSec}>{secStr}</span>
+                <span className="font-black tabular-nums text-[52px] leading-none tracking-tight text-slate-950">
+                  {timeStr}
+                </span>
+                <span className="text-2xl font-semibold text-slate-400">{secStr}</span>
               </>
             )}
             {status === "WORKING" && (
-              <div style={s.timePair}>
-                <div style={s.timeBlock}>
-                  <span style={s.timeBlockLabel}>출근</span>
-                  <span style={s.timeBlockValue}>{startStr}</span>
+              <div className="flex items-center gap-6">
+                <div className="text-center">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">출근</p>
+                  <p className="text-3xl font-black tabular-nums tracking-tight text-slate-900">{startStr}</p>
                 </div>
-                <span style={s.timeSep}>/</span>
-                <div style={s.timeBlock}>
-                  <span style={s.timeBlockLabel}>현재</span>
-                  <span style={{ ...s.timeBlockValue, color: "#16a34a" }}>{timeStr}</span>
+                <span className="text-xl font-light text-slate-300">/</span>
+                <div className="text-center">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">현재</p>
+                  <p className="text-3xl font-black tabular-nums tracking-tight text-emerald-600">{timeStr}</p>
                 </div>
               </div>
             )}
             {(status === "DONE" || status === "CLOSED") && (
-              <div style={s.timePair}>
-                <div style={s.timeBlock}>
-                  <span style={s.timeBlockLabel}>출근</span>
-                  <span style={s.timeBlockValue}>{startStr}</span>
+              <div className="flex items-center gap-6">
+                <div className="text-center">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">출근</p>
+                  <p className="text-3xl font-black tabular-nums tracking-tight text-slate-900">{startStr}</p>
                 </div>
-                <span style={s.timeSep}>–</span>
-                <div style={s.timeBlock}>
-                  <span style={s.timeBlockLabel}>퇴근</span>
-                  <span style={s.timeBlockValue}>{endStr}</span>
+                <span className="text-xl font-light text-slate-300">–</span>
+                <div className="text-center">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">퇴근</p>
+                  <p className="text-3xl font-black tabular-nums tracking-tight text-slate-900">{endStr}</p>
                 </div>
               </div>
             )}
@@ -525,18 +593,18 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
           {/* 액션 버튼 */}
           {status === "BEFORE" && (
             <button
-              style={{ ...s.actionBtn, ...btnStyle.BEFORE, opacity: actionLoading ? 0.7 : 1 }}
               onClick={handleClockIn}
               disabled={actionLoading}
+              className={`w-full min-h-14 rounded-2xl text-base font-black transition active:scale-[0.97] disabled:opacity-70 ${cfg.btn}`}
             >
               {actionLoading ? "위치 확인 중..." : "출근하기"}
             </button>
           )}
           {status === "WORKING" && (
             <button
-              style={{ ...s.actionBtn, ...btnStyle.WORKING, opacity: actionLoading ? 0.7 : 1 }}
               onClick={handleClockOut}
               disabled={actionLoading}
+              className={`w-full min-h-14 rounded-2xl text-base font-black transition active:scale-[0.97] disabled:opacity-70 ${cfg.btn}`}
             >
               {actionLoading ? "처리 중..." : "퇴근하기"}
             </button>
@@ -544,43 +612,80 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
           {status === "DONE" && (
             <>
               <button
-                style={{ ...s.actionBtn, ...btnStyle.DONE, opacity: actionLoading ? 0.7 : 1 }}
                 onClick={handleReconfirm}
                 disabled={actionLoading}
+                className={`w-full min-h-14 rounded-2xl text-base font-black transition active:scale-[0.97] disabled:opacity-70 ${cfg.btn}`}
               >
                 {actionLoading ? "처리 중..." : "퇴근 시간 재확인"}
               </button>
-              <p style={{ fontSize: 12, color: "#d97706", margin: "10px 0 0", textAlign: "center" as const }}>
-                ⏱ 퇴근 후 60분이 지나면 자동으로 확정됩니다
+              <p className="mt-2.5 text-center text-xs font-semibold text-amber-600">
+                퇴근 후 60분이 지나면 자동으로 확정됩니다
               </p>
             </>
           )}
           {status === "CLOSED" && (
-            <button style={{ ...s.actionBtn, ...btnStyle.CLOSED }} disabled>
+            <button disabled className={`w-full min-h-14 rounded-2xl text-base font-black ${cfg.btn}`}>
               업무 종료
             </button>
           )}
         </div>
 
-        {/* ── 훈련생 목록 ── */}
-        {homeData?.trainees && homeData.trainees.length > 0 && (
-          <div style={s.section}>
-            <div style={s.sectionHeader}>
-              <span style={s.sectionTitle}>담당 훈련생</span>
-              <span style={s.sectionCount}>{homeData.trainees.length}명</span>
+        {/* 근무형태 + 알람 */}
+        {homeData?.siteName && homeData.workType && (
+          <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-wide text-sky-600">근무형태</p>
+                <p className="mt-0.5 text-sm font-black text-sky-900">{workTypeLabel}</p>
+                {homeData.workType !== "FULL_DAY" && (
+                  <p className="mt-0.5 text-[11px] font-semibold text-sky-600">
+                    {homeData.commuteGuidanceIncluded
+                      ? "출퇴근 지도 포함 (+60분) · 휴게 지도 포함 (+30분)"
+                      : "휴게 지도 포함 (+30분)"}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setShowAlarmSettings(v => !v)}
+                className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-100 text-sky-600 transition active:scale-95"
+                title="알람 설정"
+              >
+                <Bell className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
-            <div style={s.traineeList}>
+            {showAlarmSettings && (
+              <AlarmSettingsPanel
+                clockInAlert={clockInAlert}
+                clockOutAlert={clockOutAlert}
+                onSave={saveAlarmSettings}
+              />
+            )}
+          </div>
+        )}
+
+        {/* 훈련생 목록 */}
+        {homeData?.trainees && homeData.trainees.length > 0 && (
+          <div>
+            <div className="mb-3 flex items-center justify-between px-1">
+              <span className="text-sm font-black text-slate-800">담당 훈련생</span>
+              <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-black text-white">
+                {homeData.trainees.length}명
+              </span>
+            </div>
+            <div className="space-y-2.5">
               {homeData.trainees.map(t => (
-                <div key={t.id} style={s.traineeCard}>
-                  <div style={s.traineeAvatar}>
-                    {t.gender === "M" ? "👨" : "👩"}
+                <div
+                  key={t.id}
+                  className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm"
+                >
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-sm font-black text-slate-600">
+                    {t.name.slice(0, 1)}
                   </div>
-                  <div style={s.traineeInfo}>
-                    <p style={s.traineeName}>{t.name}</p>
-                    <p style={s.traineeGender}>{t.gender === "M" ? "남성" : "여성"}</p>
+                  <div className="flex-1">
+                    <p className="text-sm font-black text-slate-900">{t.name}</p>
+                    <p className="text-xs font-semibold text-slate-400">{t.gender === "M" ? "남성" : "여성"}</p>
                   </div>
                   <button
-                    style={s.logBtn}
                     onClick={() => {
                       const aid = homeData?.attendanceId ?? "";
                       const trainingType = homeData?.trainingType || "FIELD";
@@ -592,7 +697,9 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
                       });
                       router.push(`/worker/worklog?${params.toString()}`);
                     }}
+                    className="flex items-center gap-1 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white transition active:scale-95"
                   >
+                    <ClipboardList className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
                     일지 작성
                   </button>
                 </div>
@@ -603,90 +710,81 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
 
         {/* 현장 없을 때 */}
         {!homeData?.siteName && (
-          <div style={s.noSite}>
-            <span style={{ fontSize: 40, display: "block", marginBottom: 12 }}>🏢</span>
-            <p style={s.noSiteText}>배정된 현장이 없습니다.</p>
-            <button style={s.noSiteBtn} onClick={() => router.push("/worker/site/register")}>
+          <div className="rounded-3xl border border-slate-100 bg-white py-12 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
+              <MapPin className="h-7 w-7 text-slate-400" aria-hidden="true" />
+            </div>
+            <p className="mb-5 text-sm font-semibold text-slate-500">배정된 현장이 없습니다.</p>
+            <button
+              onClick={() => router.push("/worker/site/register")}
+              className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-95"
+            >
               현장 등록하기
             </button>
           </div>
         )}
 
-        {/* 근무형태 정보 */}
-        {homeData?.siteName && homeData.workType && (
-          <div style={{ margin: "0 0 10px", padding: "12px 16px", background: "#f0f9ff", borderRadius: 12, border: "1px solid #bae6fd", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <p style={{ fontSize: 11, color: "#0369a1", margin: "0 0 2px", fontWeight: 600 }}>근무형태</p>
-              <p style={{ fontSize: 14, color: "#0c4a6e", margin: 0, fontWeight: 700 }}>
-                {{ AM: "오전 09:00~12:00", PM: "오후 13:00~17:00", FULL_DAY: "전일 09:00~18:00", CUSTOM: `${homeData.customWorkStart}~${homeData.customWorkEnd}` }[homeData.workType] ?? homeData.workType}
-              </p>
-              {homeData.workType !== "FULL_DAY" && (
-                <p style={{ fontSize: 11, color: "#0369a1", margin: "2px 0 0" }}>
-                  {homeData.commuteGuidanceIncluded ? "출퇴근 지도 포함 (+60분) · 휴게 지도 포함 (+30분)" : "휴게 지도 포함 (+30분)"}
-                </p>
-              )}
-            </div>
-            <button
-              onClick={() => setShowAlarmSettings(v => !v)}
-              style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", padding: 4 }}
-              title="알람 설정"
-            >
-              🔔
-            </button>
-          </div>
-        )}
-
-        {/* 알람 설정 패널 */}
-        {showAlarmSettings && (
-          <AlarmSettingsPanel
-            clockInAlert={clockInAlert}
-            clockOutAlert={clockOutAlert}
-            onSave={saveAlarmSettings}
-          />
-        )}
-
         {/* PREMIUM 배너 */}
         {homeData?.siteName && (
-          <div style={s.subscribeBanner} onClick={() => router.push("/worker/subscribe")}>
-            <div style={s.bannerIcon}>🎁</div>
-            <div style={s.bannerBody}>
-              <p style={s.bannerTitle}>AI 기능 & PDF 자동 생성</p>
-              <p style={s.bannerDesc}>음성 일지 작성, PDF 자동 발송 등 PREMIUM 기능</p>
+          <button
+            onClick={() => router.push("/worker/subscribe")}
+            className="flex w-full items-center gap-3 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3.5 text-left transition active:scale-[0.98]"
+          >
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-sky-100">
+              <Sparkles className="h-5 w-5 text-sky-500" aria-hidden="true" />
             </div>
-            <span style={s.bannerArrow}>›</span>
-          </div>
+            <div className="flex-1">
+              <p className="text-sm font-black text-sky-900">AI 기능 &amp; PDF 자동 생성</p>
+              <p className="text-xs font-semibold text-sky-600">음성 일지 작성, PDF 자동 발송 등 PREMIUM 기능</p>
+            </div>
+            <ChevronRight className="h-4 w-4 flex-shrink-0 text-sky-400" aria-hidden="true" />
+          </button>
         )}
-
       </div>
 
       {/* ── 다이얼로그 ── */}
       {dialog && (
-        <div style={s.overlay}>
-          <div style={s.dialogBox}>
-            <p style={s.dialogTitle}>{dialog.title}</p>
-            <p style={s.dialogMsg}>{dialog.msg}</p>
-            {/* 3버튼(재확인/최종마감/취소)일 때 세로 스택 */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-5">
+          <div className="w-full max-w-xs rounded-3xl bg-white p-6 shadow-2xl">
+            <p className="mb-2 text-base font-black text-slate-900">{dialog.title}</p>
+            <p className="mb-5 whitespace-pre-line text-sm font-semibold leading-6 text-slate-500">
+              {dialog.msg}
+            </p>
             {dialog.onDismiss ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <button style={{ ...s.dialogBtn, ...s.dialogBtnPrimary, width: "100%" }} onClick={dialog.onConfirm}>
+              <div className="space-y-2">
+                <button
+                  className="w-full min-h-12 rounded-2xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97]"
+                  onClick={dialog.onConfirm}
+                >
                   {dialog.confirmLabel ?? "확인"}
                 </button>
-                <button style={{ ...s.dialogBtn, ...s.dialogBtnDanger, width: "100%" }} onClick={dialog.onCancel}>
+                <button
+                  className="w-full min-h-12 rounded-2xl bg-rose-500 text-sm font-black text-white transition active:scale-[0.97]"
+                  onClick={dialog.onCancel}
+                >
                   {dialog.cancelLabel ?? "최종마감"}
                 </button>
-                <button style={{ ...s.dialogBtn, ...s.dialogBtnCancel, width: "100%" }} onClick={dialog.onDismiss}>
+                <button
+                  className="w-full min-h-12 rounded-2xl bg-slate-100 text-sm font-black text-slate-600 transition active:scale-[0.97]"
+                  onClick={dialog.onDismiss}
+                >
                   {dialog.dismissLabel ?? "취소"}
                 </button>
               </div>
             ) : (
-              <div style={s.dialogBtns}>
+              <div className="flex gap-2">
                 {dialog.onCancel && (
-                  <button style={{ ...s.dialogBtn, ...s.dialogBtnCancel }} onClick={dialog.onCancel}>
+                  <button
+                    className="flex-1 min-h-12 rounded-2xl bg-slate-100 text-sm font-black text-slate-600 transition active:scale-[0.97]"
+                    onClick={dialog.onCancel}
+                  >
                     {dialog.cancelLabel ?? "취소"}
                   </button>
                 )}
                 <button
-                  style={{ ...s.dialogBtn, ...(dialog.variant === "danger" ? s.dialogBtnDanger : s.dialogBtnPrimary) }}
+                  className={`flex-1 min-h-12 rounded-2xl text-sm font-black text-white transition active:scale-[0.97] ${
+                    dialog.variant === "danger" ? "bg-rose-500" : "bg-slate-950"
+                  }`}
                   onClick={dialog.onConfirm}
                 >
                   {dialog.confirmLabel ?? "확인"}
@@ -699,51 +797,53 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
 
       {/* ── 토스트 ── */}
       {toast && (
-        <div style={{
-          ...s.toast,
-          backgroundColor:
-            toast.type === "success" ? "#16a34a" :
-            toast.type === "error" ? "#dc2626" : "#111827",
-        }}>
+        <div
+          className={`fixed bottom-24 left-1/2 z-50 -translate-x-1/2 max-w-[90vw] rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg ${
+            toast.type === "success" ? "bg-emerald-500" :
+            toast.type === "error"   ? "bg-rose-500"    : "bg-slate-900"
+          }`}
+        >
           {toast.msg}
         </div>
       )}
 
       {/* ── 하단 네비게이션 ── */}
-      <nav style={s.bottomNav}>
-        <button style={s.navItem} onClick={() => router.push("/worker/home")}>
-          <span style={{ ...s.navIcon, color: "#111827" }}>🏠</span>
-          <span style={{ ...s.navLabel, color: "#111827", fontWeight: 700 }}>홈</span>
-        </button>
-        <button style={s.navItem} onClick={() => router.push("/worker/calendar")}>
-          <span style={s.navIcon}>📅</span>
-          <span style={s.navLabel}>캘린더</span>
-        </button>
-        <button style={s.navItem} onClick={() => router.push("/worker/signature")}>
-          <span style={s.navIcon}>✍️</span>
-          <span style={s.navLabel}>전자서명</span>
-        </button>
-        <button style={s.navItem} onClick={() => router.push("/worker/docs")}>
-          <span style={s.navIcon}>📄</span>
-          <span style={s.navLabel}>문서</span>
-        </button>
-        <button style={s.navItem} onClick={() => router.push("/worker/history")}>
-          <span style={s.navIcon}>💰</span>
-          <span style={s.navLabel}>히스토리</span>
-        </button>
+      <nav className="fixed bottom-0 left-1/2 z-40 flex w-full max-w-md -translate-x-1/2 border-t border-slate-100 bg-white pb-safe-bottom">
+        {NAV_ITEMS.map(({ icon: Icon, label, href }) => {
+          const isActive = typeof window !== "undefined" && window.location.pathname === href;
+          return (
+            <button
+              key={href}
+              onClick={() => router.push(href)}
+              className="flex flex-1 flex-col items-center justify-center gap-1 py-3"
+            >
+              <Icon
+                className={`h-5 w-5 ${isActive ? "text-slate-950" : "text-slate-400"}`}
+                aria-hidden="true"
+              />
+              <span className={`text-[10px] font-black ${isActive ? "text-slate-950" : "text-slate-400"}`}>
+                {label}
+              </span>
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
 }
 
 // ─── 알람 설정 패널 ──────────────────────────────────────────
-function AlarmSettingsPanel({ clockInAlert, clockOutAlert, onSave }: {
+function AlarmSettingsPanel({
+  clockInAlert,
+  clockOutAlert,
+  onSave,
+}: {
   clockInAlert: number;
   clockOutAlert: number;
   onSave: (inMin: number, outMin: number) => void;
 }) {
   const [permission, setPermission] = useState<NotificationPermission>(
-    typeof Notification !== "undefined" ? Notification.permission : "default"
+    typeof Notification !== "undefined" ? Notification.permission : "default",
   );
 
   async function requestPermission() {
@@ -757,21 +857,25 @@ function AlarmSettingsPanel({ clockInAlert, clockOutAlert, onSave }: {
       (window.navigator as any).standalone === true);
 
   return (
-    <div style={{ margin: "0 0 10px", padding: "16px", background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-      <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", margin: "0 0 12px" }}>출퇴근 알람 설정</p>
+    <div className="mt-3 rounded-2xl border border-sky-200 bg-white p-4">
+      <p className="mb-3 text-xs font-black text-slate-800">출퇴근 알람 설정</p>
 
       {[
-        { label: "출근 알람", value: clockInAlert, set: (v: number) => onSave(v, clockOutAlert) },
+        { label: "출근 알람", value: clockInAlert,  set: (v: number) => onSave(v, clockOutAlert) },
         { label: "퇴근 알람", value: clockOutAlert, set: (v: number) => onSave(clockInAlert, v) },
       ].map(({ label, value, set }) => (
-        <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <span style={{ fontSize: 13, color: "#374151" }}>{label}</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div key={label} className="mb-2.5 flex items-center justify-between">
+          <span className="text-xs font-semibold text-slate-600">{label}</span>
+          <div className="flex gap-1.5">
             {[0, 1, 3, 5, 10].map(m => (
               <button
                 key={m}
                 onClick={() => set(m)}
-                style={{ padding: "4px 8px", border: "1px solid " + (value === m ? "#2563eb" : "#e5e7eb"), borderRadius: 6, background: value === m ? "#eff6ff" : "#fff", color: value === m ? "#1d4ed8" : "#374151", fontSize: 12, fontWeight: value === m ? 700 : 400, cursor: "pointer" }}
+                className={`rounded-lg px-2.5 py-1 text-xs font-black transition ${
+                  value === m
+                    ? "bg-sky-500 text-white"
+                    : "border border-slate-200 bg-white text-slate-500"
+                }`}
               >
                 {m === 0 ? "끄기" : `${m}분`}
               </button>
@@ -780,120 +884,33 @@ function AlarmSettingsPanel({ clockInAlert, clockOutAlert, onSave }: {
         </div>
       ))}
 
-      {/* 알림 권한 상태 */}
-      <div style={{ marginTop: 12, padding: "10px 12px", background: "#f9fafb", borderRadius: 8, border: "1px solid #f3f4f6" }}>
+      <div className="mt-3 rounded-xl bg-slate-50 p-3">
         {permission === "granted" ? (
-          <p style={{ fontSize: 12, color: "#16a34a", margin: 0 }}>
-            ✓ 알림 권한이 허용되어 있습니다{isStandalone ? " · 앱 모드로 실행 중" : ""}
+          <p className="text-[11px] font-semibold text-emerald-600">
+            알림 권한이 허용되어 있습니다{isStandalone ? " · 앱 모드" : ""}
           </p>
         ) : permission === "denied" ? (
           <div>
-            <p style={{ fontSize: 12, color: "#dc2626", margin: "0 0 6px" }}>✕ 알림 권한이 차단되어 있습니다</p>
-            <p style={{ fontSize: 11, color: "#9ca3af", margin: 0 }}>브라우저 설정 → 사이트 설정 → 알림에서 허용해주세요</p>
+            <p className="text-[11px] font-semibold text-rose-600">알림 권한이 차단되어 있습니다</p>
+            <p className="mt-1 text-[10px] text-slate-400">브라우저 설정 → 사이트 설정 → 알림에서 허용해주세요</p>
           </div>
         ) : (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <p style={{ fontSize: 12, color: "#d97706", margin: 0 }}>알림 권한이 필요합니다</p>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-amber-600">알림 권한이 필요합니다</p>
             <button
               onClick={requestPermission}
-              style={{ padding: "5px 12px", background: "#111827", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-            >권한 허용</button>
+              className="rounded-lg bg-slate-900 px-3 py-1 text-[11px] font-black text-white"
+            >
+              권한 허용
+            </button>
           </div>
         )}
         {!isStandalone && permission === "granted" && (
-          <p style={{ fontSize: 11, color: "#9ca3af", margin: "6px 0 0" }}>
-            💡 앱을 홈 화면에 설치하면 백그라운드에서도 알림을 받을 수 있습니다
+          <p className="mt-1.5 text-[10px] text-slate-400">
+            앱을 홈 화면에 설치하면 백그라운드에서도 알림을 받을 수 있습니다
           </p>
         )}
       </div>
     </div>
   );
 }
-
-// ─── 스타일 ──────────────────────────────────────────────
-const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", backgroundColor: "#f9fafb" },
-  container: { maxWidth: "480px", margin: "0 auto", padding: "16px 16px 90px" },
-  center: { minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" },
-  spinner: { width: 36, height: 36, border: "3px solid #e5e7eb", borderTop: "3px solid #111827", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-
-  // 헤더
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, paddingTop: 4 },
-  headerLeft: { display: "flex", flexDirection: "column", gap: 6 },
-  logoText: { fontSize: 20, fontWeight: 800, letterSpacing: "-0.5px" },
-  siteBadge: { display: "inline-flex", alignItems: "center", gap: 4, background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 20, padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  profileBtn: { width: 40, height: 40, borderRadius: "50%", background: "#f3f4f6", border: "1px solid #e5e7eb", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
-  profileMenu: { position: "absolute", right: 0, top: 48, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.10)", zIndex: 100, minWidth: 140 },
-  profileName: { padding: "8px 12px 8px", fontSize: 12, color: "#9ca3af", fontWeight: 600, borderBottom: "1px solid #f3f4f6", marginBottom: 4 },
-  menuItem: { display: "block", width: "100%", padding: "10px 12px", border: "none", background: "transparent", fontSize: 14, fontWeight: 600, cursor: "pointer", textAlign: "left", borderRadius: 8, color: "#374151" },
-
-  // 날짜/상태
-  dateRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  dateText: { fontSize: 17, fontWeight: 700, color: "#111827" },
-  statusBadge: { padding: "5px 12px", borderRadius: 20, fontSize: 13, fontWeight: 600 },
-
-  // 카드
-  card: { borderRadius: 20, padding: "24px 20px", textAlign: "center", marginBottom: 20, border: "1.5px solid" },
-  cardTitle: { fontSize: 13, fontWeight: 500, color: "#6b7280", margin: "0 0 20px" },
-
-  // 시간 표시
-  clockWrap: { display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4, marginBottom: 24 },
-  clockTime: { fontSize: 52, fontWeight: 800, color: "#111827", fontVariantNumeric: "tabular-nums", letterSpacing: "-2px" },
-  clockSec: { fontSize: 24, fontWeight: 600, color: "#9ca3af", letterSpacing: "-1px" },
-  timePair: { display: "flex", alignItems: "center", gap: 20, justifyContent: "center" },
-  timeBlock: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4 },
-  timeBlockLabel: { fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px" },
-  timeBlockValue: { fontSize: 32, fontWeight: 800, color: "#111827", letterSpacing: "-1px", fontVariantNumeric: "tabular-nums" },
-  timeSep: { fontSize: 20, color: "#d1d5db", fontWeight: 300, marginTop: 12 },
-
-  // 버튼
-  actionBtn: { width: "100%", padding: "15px", fontSize: 16, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer", transition: "opacity 0.2s" },
-
-  // 섹션
-  section: { marginBottom: 16 },
-  sectionHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, padding: "0 2px" },
-  sectionTitle: { fontSize: 15, fontWeight: 700, color: "#374151" },
-  sectionCount: { fontSize: 13, color: "#9ca3af", fontWeight: 600 },
-
-  // 훈련생
-  traineeList: { display: "flex", flexDirection: "column", gap: 8 },
-  traineeCard: { display: "flex", alignItems: "center", gap: 12, background: "#fff", borderRadius: 14, padding: "14px 16px", border: "1px solid #f3f4f6" },
-  traineeAvatar: { width: 40, height: 40, borderRadius: "50%", background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 },
-  traineeInfo: { flex: 1 },
-  traineeName: { fontSize: 15, fontWeight: 700, color: "#111827", margin: "0 0 2px" },
-  traineeGender: { fontSize: 12, color: "#9ca3af", margin: 0 },
-  logBtn: { background: "#111827", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 },
-
-  // 현장 없음
-  noSite: { textAlign: "center", padding: "40px 0" },
-  noSiteText: { color: "#9ca3af", fontSize: 15, marginBottom: 20 },
-  noSiteBtn: { padding: "13px 28px", background: "#111827", color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: "pointer" },
-
-  // 배너
-  subscribeBanner: { display: "flex", alignItems: "center", gap: 12, background: "#fff", borderRadius: 14, padding: "14px 16px", marginTop: 8, cursor: "pointer", border: "1px solid #e5e7eb" },
-  bannerIcon: { fontSize: 24, flexShrink: 0 },
-  bannerBody: { flex: 1 },
-  bannerTitle: { fontSize: 13, fontWeight: 700, color: "#111827", margin: "0 0 2px" },
-  bannerDesc: { fontSize: 12, color: "#9ca3af", margin: 0 },
-  bannerArrow: { fontSize: 20, color: "#9ca3af", flexShrink: 0 },
-
-  // 다이얼로그
-  overlay: { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.50)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 },
-  dialogBox: { backgroundColor: "#fff", borderRadius: 16, padding: "24px 20px", maxWidth: 320, width: "100%", boxShadow: "0 16px 48px rgba(0,0,0,0.20)" },
-  dialogTitle: { fontSize: 16, fontWeight: 700, color: "#111827", margin: "0 0 10px" },
-  dialogMsg: { fontSize: 14, color: "#6b7280", lineHeight: 1.7, margin: "0 0 20px", whiteSpace: "pre-line" },
-  dialogBtns: { display: "flex", gap: 8 },
-  dialogBtn: { flex: 1, padding: "11px", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" },
-  dialogBtnPrimary: { background: "#111827", color: "#fff" },
-  dialogBtnDanger: { background: "#dc2626", color: "#fff" },
-  dialogBtnCancel: { background: "#f3f4f6", color: "#374151" },
-
-  // 하단 네비게이션
-  bottomNav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, backgroundColor: "#fff", borderTop: "1px solid #f3f4f6", display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom)" },
-  navItem: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: "10px 0", border: "none", backgroundColor: "transparent", cursor: "pointer" },
-  navIcon: { fontSize: 22 },
-  navLabel: { fontSize: 11, color: "#9ca3af", fontWeight: 500 },
-
-  // 토스트
-  toast: { position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", color: "#fff", padding: "11px 20px", borderRadius: 10, fontSize: 14, fontWeight: 600, boxShadow: "0 4px 16px rgba(0,0,0,0.2)", zIndex: 2000, whiteSpace: "nowrap", maxWidth: "90vw", textAlign: "center" },
-};

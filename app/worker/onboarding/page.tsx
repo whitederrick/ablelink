@@ -1,9 +1,8 @@
 "use client";
-// app/worker/onboarding/page.tsx
-// 직무지도원 최초 로그인 온보딩 — 아이디 확정 + 비밀번호 변경 강제
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowRight, CheckCircle2, KeyRound, Lock, Mail, Phone } from "lucide-react";
 
 type Step = "choose-id" | "verify-email" | "set-password";
 
@@ -15,17 +14,13 @@ export default function OnboardingPage() {
 
   const [step, setStep] = useState<Step>("choose-id");
 
-  // 이메일 입력
   const [email, setEmail] = useState("");
   const [emailSending, setEmailSending] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
 
-  // 인증 코드
   const [code, setCode] = useState("");
   const [verifying, setVerifying] = useState(false);
-  const [confirmedLoginId, setConfirmedLoginId] = useState(""); // "" = 아직 미확정
+  const [confirmedLoginId, setConfirmedLoginId] = useState("");
 
-  // 비밀번호
   const [pw, setPw] = useState("");
   const [pwConfirm, setPwConfirm] = useState("");
   const [saving, setSaving] = useState(false);
@@ -45,13 +40,11 @@ export default function OnboardingPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
-  // ── 전화번호를 아이디로 유지 ──────────────────────────────────────
   async function handleConfirmPhone() {
     setConfirmedLoginId(currentLoginId);
     setStep("set-password");
   }
 
-  // ── 이메일 인증 요청 ──────────────────────────────────────────────
   async function handleRequestEmail() {
     setError("");
     setEmailSending(true);
@@ -63,7 +56,6 @@ export default function OnboardingPage() {
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
-      setEmailSent(true);
       setStep("verify-email");
     } catch (e: any) {
       setError(e.message || "이메일 발송에 실패했습니다.");
@@ -72,7 +64,6 @@ export default function OnboardingPage() {
     }
   }
 
-  // ── 이메일 인증 코드 확인 ─────────────────────────────────────────
   async function handleVerifyEmail() {
     setError("");
     setVerifying(true);
@@ -93,7 +84,6 @@ export default function OnboardingPage() {
     }
   }
 
-  // ── 비밀번호 변경 + 완료 ─────────────────────────────────────────
   async function handleSetPassword() {
     setError("");
     if (pw.length < 8) { setError("비밀번호는 8자 이상이어야 합니다."); return; }
@@ -117,203 +107,211 @@ export default function OnboardingPage() {
 
   if (loading) {
     return (
-      <div style={s.center}>
-        <div style={s.spinner} />
+      <div className="flex min-h-dvh items-center justify-center bg-slate-50">
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
       </div>
     );
   }
 
+  const inputCls = "h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100";
+
+  const STEPS = [
+    { key: "choose-id",    label: "아이디 선택" },
+    { key: "set-password", label: "비밀번호 설정" },
+  ];
+  const stepIndex = step === "set-password" ? 1 : 0;
+
   return (
-    <div style={s.page}>
-      <div style={s.card}>
+    <main className="flex min-h-dvh items-center justify-center bg-slate-50 px-5 py-8">
+      <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-xl shadow-slate-950/10">
+
         {/* 헤더 */}
-        <div style={s.header}>
-          <p style={{ fontSize: 13, opacity: 0.8, margin: "0 0 6px" }}>환영합니다, {userName}님</p>
-          <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>AbleLink 초기 설정</h1>
-          <p style={{ fontSize: 13, opacity: 0.75, margin: "8px 0 0", lineHeight: 1.6 }}>
+        <div className="bg-slate-950 px-6 py-7 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+            <KeyRound className="h-6 w-6 text-sky-400" aria-hidden="true" />
+          </div>
+          <p className="mb-1 text-xs font-semibold text-slate-400">환영합니다, {userName}님</p>
+          <h1 className="text-xl font-black text-white">AbleLink 초기 설정</h1>
+          <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-400">
             아이디와 비밀번호를 설정하면 서비스를 이용하실 수 있습니다.
           </p>
         </div>
 
-        {/* 진행 단계 표시 */}
-        <div style={s.steps}>
-          {[
-            { key: "choose-id",    label: "아이디 선택" },
-            { key: "set-password", label: "비밀번호 설정" },
-          ].map((st, i) => {
-            const done = (st.key === "choose-id" && step === "set-password") ||
-                         (st.key === "verify-email" && step === "set-password");
-            const active = step === st.key || (st.key === "choose-id" && step === "verify-email");
+        {/* 스텝 인디케이터 */}
+        <div className="flex items-center justify-center gap-3 border-b border-slate-100 px-6 py-3">
+          {STEPS.map((st, i) => {
+            const isDone = i < stepIndex;
+            const isActive = i === stepIndex;
             return (
-              <div key={st.key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {i > 0 && <div style={{ width: 24, height: 1, background: "#e5e7eb" }} />}
-                <div style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  color: done ? "#16a34a" : active ? "#2563eb" : "#9ca3af",
-                }}>
-                  <div style={{
-                    width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700,
-                    background: done ? "#dcfce7" : active ? "#eff6ff" : "#f3f4f6",
-                    color: done ? "#16a34a" : active ? "#2563eb" : "#9ca3af",
-                    border: `1.5px solid ${done ? "#86efac" : active ? "#93c5fd" : "#e5e7eb"}`,
-                  }}>
-                    {done ? "✓" : i + 1}
+              <div key={st.key} className="flex items-center gap-2">
+                {i > 0 && <div className="h-px w-6 bg-slate-200" />}
+                <div className={`flex items-center gap-1.5 text-xs font-black ${
+                  isDone ? "text-emerald-600" : isActive ? "text-sky-600" : "text-slate-400"
+                }`}>
+                  <div className={`flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-black ${
+                    isDone ? "border-emerald-300 bg-emerald-50 text-emerald-600"
+                      : isActive ? "border-sky-300 bg-sky-50 text-sky-600"
+                      : "border-slate-200 bg-slate-50 text-slate-400"
+                  }`}>
+                    {isDone ? "✓" : i + 1}
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: active || done ? 600 : 400 }}>{st.label}</span>
+                  {st.label}
                 </div>
               </div>
             );
           })}
         </div>
 
-        <div style={s.body}>
-          {/* ── STEP 1: 아이디 선택 ── */}
-          {(step === "choose-id" || step === "verify-email") && (
-            <>
-              {step === "choose-id" && (
-                <>
-                  <p style={s.desc}>사용하실 아이디를 선택해 주세요.</p>
+        {/* 바디 */}
+        <div className="space-y-4 px-6 py-6">
 
-                  {/* 전화번호 유지 */}
-                  <div style={s.optionBox}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div>
-                        <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", margin: "0 0 4px" }}>전화번호로 사용</p>
-                        <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>{currentLoginId}</p>
-                        <p style={{ fontSize: 11, color: "#9ca3af", margin: "4px 0 0" }}>추가 인증 없이 바로 사용 가능합니다.</p>
-                      </div>
-                      <button onClick={handleConfirmPhone} style={s.btnPrimary}>선택</button>
+          {/* STEP 1: 아이디 선택 */}
+          {step === "choose-id" && (
+            <>
+              <p className="text-sm font-semibold leading-relaxed text-slate-500">사용하실 아이디를 선택해 주세요.</p>
+
+              {/* 전화번호 유지 */}
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100">
+                      <Phone className="h-4 w-4 text-slate-500" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-900">전화번호로 사용</p>
+                      <p className="mt-0.5 text-sm font-semibold text-slate-600">{currentLoginId}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-400">추가 인증 없이 바로 사용 가능합니다.</p>
                     </div>
                   </div>
+                  <button
+                    onClick={handleConfirmPhone}
+                    className="flex-shrink-0 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition active:scale-95"
+                  >
+                    선택
+                  </button>
+                </div>
+              </div>
 
-                  <div style={{ textAlign: "center", color: "#d1d5db", fontSize: 12, margin: "12px 0" }}>또는</div>
+              <div className="text-center text-xs font-semibold text-slate-400">또는</div>
 
-                  {/* 이메일로 변경 */}
-                  <div style={s.optionBox}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", margin: "0 0 10px" }}>이메일로 변경</p>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={e => { setEmail(e.target.value); setError(""); }}
-                      placeholder="example@email.com"
-                      style={s.input}
-                    />
-                    {error && <p style={s.error}>{error}</p>}
-                    <button
-                      onClick={handleRequestEmail}
-                      disabled={!email || emailSending}
-                      style={{ ...s.btnOutline, marginTop: 10, opacity: email && !emailSending ? 1 : 0.5 }}
-                    >
-                      {emailSending ? "발송 중..." : "인증 코드 받기"}
-                    </button>
+              {/* 이메일로 변경 */}
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100">
+                    <Mail className="h-4 w-4 text-slate-500" aria-hidden="true" />
                   </div>
-                </>
-              )}
-
-              {step === "verify-email" && (
-                <>
-                  <p style={s.desc}>
-                    <strong>{email}</strong>으로 인증 코드를 발송했습니다.<br />
-                    받으신 6자리 코드를 입력해 주세요. (10분 유효)
-                  </p>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={code}
-                    onChange={e => { setCode(e.target.value.replace(/\D/g, "")); setError(""); }}
-                    placeholder="123456"
-                    style={{ ...s.input, textAlign: "center", letterSpacing: 8, fontSize: 20, fontWeight: 700 }}
-                  />
-                  {error && <p style={s.error}>{error}</p>}
-                  <button
-                    onClick={handleVerifyEmail}
-                    disabled={code.length !== 6 || verifying}
-                    style={{ ...s.btnPrimary, width: "100%", marginTop: 12, opacity: code.length === 6 && !verifying ? 1 : 0.5 }}
-                  >
-                    {verifying ? "확인 중..." : "인증 확인"}
-                  </button>
-                  <button
-                    onClick={() => { setStep("choose-id"); setCode(""); setError(""); setEmailSent(false); }}
-                    style={{ ...s.btnText, marginTop: 10 }}
-                  >
-                    다시 입력하기
-                  </button>
-                </>
-              )}
+                  <p className="text-sm font-black text-slate-900">이메일로 변경</p>
+                </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); setError(""); }}
+                  placeholder="example@email.com"
+                  className={inputCls}
+                />
+                {error && <p className="mt-2 text-xs font-semibold text-rose-600">{error}</p>}
+                <button
+                  onClick={handleRequestEmail}
+                  disabled={!email || emailSending}
+                  className="mt-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-sky-500 text-sm font-black text-sky-600 transition active:scale-[0.97] disabled:opacity-50"
+                >
+                  {emailSending ? "발송 중..." : "인증 코드 받기"}
+                </button>
+              </div>
             </>
           )}
 
-          {/* ── STEP 2: 비밀번호 설정 ── */}
+          {/* STEP 1b: 이메일 인증 코드 */}
+          {step === "verify-email" && (
+            <>
+              <p className="text-sm font-semibold leading-relaxed text-slate-500">
+                <strong className="font-black text-slate-800">{email}</strong>으로 인증 코드를 발송했습니다.<br />
+                받으신 6자리 코드를 입력해 주세요. (10분 유효)
+              </p>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={code}
+                onChange={e => { setCode(e.target.value.replace(/\D/g, "")); setError(""); }}
+                placeholder="123456"
+                className="h-14 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-center text-2xl font-black tracking-[10px] text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+              />
+              {error && <p className="text-xs font-semibold text-rose-600">{error}</p>}
+              <button
+                onClick={handleVerifyEmail}
+                disabled={code.length !== 6 || verifying}
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97] disabled:opacity-50"
+              >
+                {verifying ? "확인 중..." : <><CheckCircle2 className="h-4 w-4" /> 인증 확인</>}
+              </button>
+              <button
+                onClick={() => { setStep("choose-id"); setCode(""); setError(""); }}
+                className="w-full py-2 text-xs font-semibold text-slate-400 transition hover:text-slate-600"
+              >
+                다시 입력하기
+              </button>
+            </>
+          )}
+
+          {/* STEP 2: 비밀번호 설정 */}
           {step === "set-password" && (
             <>
-              <div style={{ padding: "10px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, marginBottom: 20, fontSize: 13 }}>
-                <p style={{ margin: 0, color: "#15803d" }}>
-                  ✓ 아이디가 확정되었습니다: <strong>{confirmedLoginId}</strong>
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-500" aria-hidden="true" />
+                <p className="text-xs font-black text-emerald-700">
+                  아이디 확정: <span className="font-black">{confirmedLoginId}</span>
                 </p>
               </div>
 
-              <p style={s.desc}>앞으로 사용하실 비밀번호를 설정해 주세요. (8자 이상)</p>
+              <p className="text-sm font-semibold leading-relaxed text-slate-500">앞으로 사용하실 비밀번호를 설정해 주세요. (8자 이상)</p>
 
-              <div style={{ marginBottom: 14 }}>
-                <label style={s.label}>새 비밀번호</label>
-                <input
-                  type="password"
-                  value={pw}
-                  onChange={e => { setPw(e.target.value); setError(""); }}
-                  placeholder="8자 이상 입력"
-                  style={s.input}
-                />
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <label style={s.label}>비밀번호 확인</label>
-                <input
-                  type="password"
-                  value={pwConfirm}
-                  onChange={e => { setPwConfirm(e.target.value); setError(""); }}
-                  placeholder="비밀번호를 다시 입력"
-                  style={s.input}
-                />
-                {pwConfirm && pw !== pwConfirm && (
-                  <p style={{ fontSize: 11, color: "#dc2626", margin: "4px 0 0" }}>비밀번호가 일치하지 않습니다.</p>
-                )}
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-2 block text-xs font-black text-slate-700">새 비밀번호</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                    <input
+                      type="password"
+                      value={pw}
+                      onChange={e => { setPw(e.target.value); setError(""); }}
+                      placeholder="8자 이상 입력"
+                      className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs font-black text-slate-700">비밀번호 확인</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                    <input
+                      type="password"
+                      value={pwConfirm}
+                      onChange={e => { setPwConfirm(e.target.value); setError(""); }}
+                      placeholder="비밀번호를 다시 입력"
+                      className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+                    />
+                  </div>
+                  {pwConfirm && pw !== pwConfirm && (
+                    <p className="mt-1.5 text-xs font-semibold text-rose-600">비밀번호가 일치하지 않습니다.</p>
+                  )}
+                </div>
               </div>
 
-              {error && <p style={s.error}>{error}</p>}
+              {error && <p className="text-xs font-semibold text-rose-600">{error}</p>}
 
               <button
                 onClick={handleSetPassword}
                 disabled={pw.length < 8 || pw !== pwConfirm || saving}
-                style={{
-                  ...s.btnPrimary,
-                  width: "100%",
-                  opacity: pw.length >= 8 && pw === pwConfirm && !saving ? 1 : 0.5,
-                }}
+                className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-[0.97] disabled:opacity-50"
               >
-                {saving ? "저장 중..." : "완료 — 서비스 시작하기"}
+                {saving ? "저장 중..." : <><ArrowRight className="h-4 w-4" /> 완료 — 서비스 시작하기</>}
               </button>
             </>
           )}
+
         </div>
       </div>
-    </div>
+    </main>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page:      { minHeight: "100dvh", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" },
-  card:      { width: "100%", maxWidth: 440, background: "#fff", borderRadius: 20, boxShadow: "0 8px 32px rgba(0,0,0,0.10)", overflow: "hidden" },
-  center:    { minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" },
-  spinner:   { width: 28, height: 28, border: "2.5px solid #e5e7eb", borderTop: "2.5px solid #2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-  header:    { background: "linear-gradient(135deg, #1e3a8a, #2563eb)", color: "#fff", padding: "28px 24px 20px", textAlign: "center" as const },
-  steps:     { display: "flex", justifyContent: "center", alignItems: "center", gap: 4, padding: "16px 24px", borderBottom: "1px solid #f3f4f6" },
-  body:      { padding: "20px 24px 28px" },
-  desc:      { fontSize: 13, color: "#6b7280", lineHeight: 1.7, margin: "0 0 18px" },
-  optionBox: { border: "1px solid #e5e7eb", borderRadius: 12, padding: "16px", marginBottom: 0 },
-  input:     { width: "100%", height: 44, border: "1px solid #e5e7eb", borderRadius: 10, padding: "0 14px", fontSize: 14, boxSizing: "border-box" as const, outline: "none" },
-  label:     { display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 },
-  error:     { fontSize: 12, color: "#dc2626", margin: "6px 0 0" },
-  btnPrimary: { padding: "11px 20px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer" },
-  btnOutline: { width: "100%", padding: "11px", background: "#fff", color: "#2563eb", border: "1px solid #2563eb", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  btnText:   { display: "block", width: "100%", padding: "8px", background: "none", border: "none", color: "#9ca3af", fontSize: 12, cursor: "pointer", textAlign: "center" as const },
-};

@@ -1,10 +1,9 @@
 "use client";
-// app/worker/subscribe/success/page.tsx
-// 토스페이먼츠 빌링키 발급 성공 콜백 → 서버에서 결제 처리
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { CheckCircle2, XCircle } from "lucide-react";
 
 function SuccessContent() {
   const router = useRouter();
@@ -24,7 +23,6 @@ function SuccessContent() {
       return;
     }
 
-    // 서버에서 빌링키 발급 + 결제 처리
     fetch("/api/payments/billing", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -34,7 +32,7 @@ function SuccessContent() {
       .then(data => {
         if (data.success) {
           setStatus("success");
-          setMessage(`구독이 시작되었습니다!\n다음 결제일: ${new Date(data.nextBillingAt).toLocaleDateString("ko-KR")}`);
+          setMessage(`다음 결제일: ${new Date(data.nextBillingAt).toLocaleDateString("ko-KR")}`);
           setTimeout(() => router.replace("/worker/home"), 2500);
         } else {
           setStatus("error");
@@ -48,28 +46,39 @@ function SuccessContent() {
   }, []);
 
   return (
-    <div style={s.page}>
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-5 bg-slate-50 px-6 py-10">
       {status === "loading" && (
         <>
-          <div style={s.spinner} />
-          <p style={s.text}>결제 처리 중입니다...</p>
+          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
+          <p className="text-sm font-semibold text-slate-500">결제 처리 중입니다...</p>
         </>
       )}
+
       {status === "success" && (
-        <>
-          <span style={s.icon}>🎉</span>
-          <p style={s.successText}>구독 완료!</p>
-          <p style={s.text}>{message}</p>
-          <p style={s.subText}>잠시 후 홈으로 이동합니다.</p>
-        </>
+        <div className="w-full max-w-sm rounded-3xl border border-slate-100 bg-white p-8 text-center shadow-xl shadow-slate-950/10">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-50">
+            <CheckCircle2 className="h-8 w-8 text-emerald-500" aria-hidden="true" />
+          </div>
+          <h1 className="text-xl font-black text-slate-900">구독 완료!</h1>
+          <p className="mt-2 text-sm font-semibold text-slate-500 whitespace-pre-line">{message}</p>
+          <p className="mt-3 text-xs font-semibold text-slate-400">잠시 후 홈으로 이동합니다.</p>
+        </div>
       )}
+
       {status === "error" && (
-        <>
-          <span style={s.icon}>❌</span>
-          <p style={s.errorText}>결제 실패</p>
-          <p style={s.text}>{message}</p>
-          <button style={s.btn} onClick={() => router.back()}>다시 시도</button>
-        </>
+        <div className="w-full max-w-sm rounded-3xl border border-slate-100 bg-white p-8 text-center shadow-xl shadow-slate-950/10">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-rose-50">
+            <XCircle className="h-8 w-8 text-rose-500" aria-hidden="true" />
+          </div>
+          <h1 className="text-xl font-black text-slate-900">결제 실패</h1>
+          <p className="mt-2 text-sm font-semibold text-slate-500">{message}</p>
+          <button
+            onClick={() => router.back()}
+            className="mt-6 min-h-12 w-full rounded-2xl bg-slate-950 text-sm font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-[0.97]"
+          >
+            다시 시도
+          </button>
+        </div>
       )}
     </div>
   );
@@ -77,19 +86,12 @@ function SuccessContent() {
 
 export default function SuccessPage() {
   return (
-    <Suspense fallback={<div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" }}>로딩 중...</div>}>
+    <Suspense fallback={
+      <div className="flex min-h-dvh items-center justify-center bg-slate-50 text-sm font-semibold text-slate-400">
+        로딩 중...
+      </div>
+    }>
       <SuccessContent />
     </Suspense>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 24, backgroundColor: "#f8f9ff" },
-  spinner: { width: 44, height: 44, border: "4px solid #e0e5ff", borderTop: "4px solid #5865F2", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-  icon: { fontSize: 56 },
-  text: { fontSize: 15, color: "#555", textAlign: "center", whiteSpace: "pre-line", margin: 0 },
-  subText: { fontSize: 13, color: "#aaa", margin: 0 },
-  successText: { fontSize: 22, fontWeight: 800, color: "#2e7d32", margin: 0 },
-  errorText: { fontSize: 22, fontWeight: 800, color: "#e53935", margin: 0 },
-  btn: { padding: "14px 32px", backgroundColor: "#5865F2", color: "#fff", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: "pointer" },
-};

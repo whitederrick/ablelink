@@ -1,9 +1,17 @@
 "use client";
-// app/worker/worklog/page.tsx
-// 업무일지 작성 — Phase 2 UX 개선
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  Home,
+  Info,
+  Loader2,
+  Mic,
+  Square,
+} from "lucide-react";
 
 // ─── 타입 ─────────────────────────────────────────────────
 type Attendance = "출석" | "결석" | "지각" | "조퇴";
@@ -52,21 +60,16 @@ function defaultTimes(workType: string, customStart?: string | null, customEnd?:
   if (workType === "CUSTOM" && customStart && customEnd) {
     return { workStart: customStart, workEnd: customEnd, trainStart: customStart, trainEnd: customEnd };
   }
-  // FULL_DAY 기본
   return { workStart: "09:00", workEnd: "18:00", trainStart: "09:00", trainEnd: "17:00" };
 }
 
 // 근무형태별 출퇴근/휴게 지도 기본값 계산
 function resolveGuidance(workType: string, commuteGuidanceIncluded: boolean): { commute: boolean; breakTime: boolean } {
   if (workType === "FULL_DAY") return { commute: false, breakTime: false };
-  // AM/PM/CUSTOM: 관리자가 설정한 commuteGuidanceIncluded 적용, 휴게시간 지도는 항상 ON
   return { commute: commuteGuidanceIncluded, breakTime: true };
 }
 
 // ─── 시계 다이얼 피커 ────────────────────────────────────
-// iOS/안드로이드 기본 시계 선택 UI와 동일한 방식:
-// 시 선택 → 자동으로 분 선택으로 전환, 모두 동일한 원형 다이얼
-
 function ClockPicker({ value, onChange, onClose, label }: {
   value: string; onChange: (v: string) => void; onClose: () => void; label?: string;
 }) {
@@ -100,14 +103,12 @@ function ClockPicker({ value, onChange, onClose, label }: {
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, SIZE, SIZE);
 
-    // 배경 원
     ctx.fillStyle = "#f3f4f6";
     ctx.beginPath();
     ctx.arc(CX, CY, SIZE / 2 - 1, 0, Math.PI * 2);
     ctx.fill();
 
     if (mode === "hour") {
-      // 바깥(1~12), 안쪽(0/13~23)
       const outer = Array.from({length:12}, (_, i) => ({ val: i===0?12:i, idx:i }));
       const inner = Array.from({length:12}, (_, i) => ({ val: i===0?0:i+12, idx:i }));
       const isOuter = hour >= 1 && hour <= 12;
@@ -117,14 +118,12 @@ function ClockPicker({ value, onChange, onClose, label }: {
       const hx = CX + Math.cos(ang)*handR;
       const hy = CY + Math.sin(ang)*handR;
 
-      // 핸드
       ctx.strokeStyle="#111827"; ctx.lineWidth=2;
       ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(hx,hy); ctx.stroke();
       ctx.fillStyle="#111827";
       ctx.beginPath(); ctx.arc(CX,CY,5,0,Math.PI*2); ctx.fill();
       ctx.beginPath(); ctx.arc(hx,hy,20,0,Math.PI*2); ctx.fill();
 
-      // 바깥 숫자
       outer.forEach(({val,idx}) => {
         const a=(idx/12)*Math.PI*2-Math.PI/2;
         const nx=CX+Math.cos(a)*R_OUTER, ny=CY+Math.sin(a)*R_OUTER;
@@ -135,7 +134,6 @@ function ClockPicker({ value, onChange, onClose, label }: {
         ctx.fillText(String(val),nx,ny);
       });
 
-      // 안쪽 숫자
       inner.forEach(({val,idx}) => {
         const a=(idx/12)*Math.PI*2-Math.PI/2;
         const nx=CX+Math.cos(a)*R_INNER, ny=CY+Math.sin(a)*R_INNER;
@@ -148,7 +146,6 @@ function ClockPicker({ value, onChange, onClose, label }: {
       });
 
     } else {
-      // 분 다이얼: 5분 단위 12개
       const mins=Array.from({length:12},(_,i)=>i*5);
       const selIdx=Math.round(minute/5)%12;
       const ang=(selIdx/12)*Math.PI*2-Math.PI/2;
@@ -171,7 +168,6 @@ function ClockPicker({ value, onChange, onClose, label }: {
         ctx.fillText(String(val).padStart(2,"0"),nx,ny);
       });
 
-      // 5분 단위 아닌 경우 중앙에 현재 분 표시
       if(minute%5!==0){
         ctx.font="600 14px -apple-system,sans-serif";
         ctx.fillStyle="#6b7280";
@@ -212,13 +208,11 @@ function ClockPicker({ value, onChange, onClose, label }: {
   return (
     <div style={cp.overlay} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={cp.modal}>
-        {/* 헤더 */}
         <div style={cp.header}>
           <span style={cp.title}>{label??"시간 선택"}</span>
           <button onClick={onClose} style={cp.closeBtn}>✕</button>
         </div>
 
-        {/* 시:분 수동 입력 디스플레이 */}
         <div style={cp.display}>
           <div style={cp.digitWrap}>
             <span style={cp.unit}>시</span>
@@ -243,12 +237,10 @@ function ClockPicker({ value, onChange, onClose, label }: {
           </div>
         </div>
 
-        {/* 모드 힌트 */}
         <p style={cp.hint}>
           {mode==="hour" ? "시를 선택하면 분으로 이동합니다" : "분을 선택하세요"}
         </p>
 
-        {/* 시계 다이얼 */}
         <div style={{display:"flex",justifyContent:"center",padding:"4px 0 16px"}}>
           <canvas
             ref={canvasRef}
@@ -258,7 +250,6 @@ function ClockPicker({ value, onChange, onClose, label }: {
           />
         </div>
 
-        {/* 확인 */}
         <div style={{padding:"0 20px 20px"}}>
           <button
             onClick={()=>{onChange(`${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`);onClose();}}
@@ -270,6 +261,7 @@ function ClockPicker({ value, onChange, onClose, label }: {
   );
 }
 
+// cp 스타일 객체: 캔버스 좌표 계산에 사용되므로 유지
 const cp: Record<string, React.CSSProperties> = {
   overlay:   {position:"fixed",inset:0,background:"rgba(0,0,0,0.50)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:20},
   modal:     {background:"#fff",borderRadius:20,width:"100%",maxWidth:320,boxShadow:"0 20px 60px rgba(0,0,0,0.20)"},
@@ -293,17 +285,33 @@ function TimeInput({ value, onChange, label }: {
   const [hh, mm] = value.split(":");
   return (
     <>
-      <div style={{display:"flex",flexDirection:"column" as const,alignItems:"center",gap:6}}>
-        {label && <span style={{fontSize:11,color:"#9ca3af",fontWeight:600,textTransform:"uppercase" as const,letterSpacing:"0.5px"}}>{label}</span>}
+      <div className="flex flex-col items-center gap-1.5">
+        {label && (
+          <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">{label}</span>
+        )}
         <button
-          onClick={()=>setOpen(true)}
-          style={{background:"#f3f4f6",border:"1px solid #e5e7eb",borderRadius:10,padding:"10px 14px",fontSize:22,fontWeight:800,color:"#111827",cursor:"pointer",fontVariantNumeric:"tabular-nums",letterSpacing:"-0.5px",minWidth:82,textAlign:"center" as const}}
-        >{hh}:{mm}</button>
+          onClick={() => setOpen(true)}
+          className="min-w-[82px] rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-center text-[22px] font-black tabular-nums text-slate-900 transition active:scale-95"
+        >
+          {hh}:{mm}
+        </button>
       </div>
-      {open && <ClockPicker value={value} onChange={v=>{onChange(v);setOpen(false);}} onClose={()=>setOpen(false)} label={label} />}
+      {open && (
+        <ClockPicker value={value} onChange={v => { onChange(v); setOpen(false); }} onClose={() => setOpen(false)} label={label} />
+      )}
     </>
   );
 }
+
+// ─── 출결 색상 ─────────────────────────────────────────
+const ATTENDANCE_ACTIVE: Record<Attendance, string> = {
+  출석: "bg-slate-950 text-white border-slate-950",
+  결석: "bg-rose-500 text-white border-rose-500",
+  지각: "bg-amber-500 text-white border-amber-500",
+  조퇴: "bg-violet-500 text-white border-violet-500",
+};
+const ATTENDANCE_INACTIVE = "bg-slate-50 text-slate-500 border-slate-200";
+
 // ─── 메인 컴포넌트 ─────────────────────────────────────────
 function WorklogForm() {
   const router = useRouter();
@@ -346,13 +354,11 @@ function WorklogForm() {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
 
-  // localStorage 자동저장 — 키: attendanceId + traineeId 조합
   const draftKey = `worklog_draft_${attendanceId || "noatt"}_${traineeId || "not"}`;
   const [draftRestored, setDraftRestored] = useState(false);
 
   const premium = isPremium(siteInfo.agencyPlanType, siteInfo.trialEndsAt);
 
-  // attendanceId 없으면 오늘 출근 기록에서 자동 조회
   const [resolvedAttendanceId, setResolvedAttendanceId] = useState(attendanceId);
 
   useEffect(() => {
@@ -361,17 +367,14 @@ function WorklogForm() {
       .then(d => {
         if (d.success && d.data) {
           setSiteInfo(d.data);
-          // attendanceId 없으면 오늘 출근 기록 ID 사용
           if (!attendanceId && d.data.attendanceId) {
             setResolvedAttendanceId(d.data.attendanceId);
           }
-          // workType에서 기본 근무/훈련 시간 자동 적용
           const times = defaultTimes(d.data.workType ?? "FULL_DAY", d.data.customWorkStart, d.data.customWorkEnd);
           setWorkStart(times.workStart);
           setWorkEnd(times.workEnd);
           setTrainStart(times.trainStart);
           setTrainEnd(times.trainEnd);
-          // 연장 기본 시간도 workEnd 기준으로 설정
           setExtraStart(times.workEnd);
           setExtraEnd(
             times.workEnd === "18:00" ? "19:00" :
@@ -389,18 +392,13 @@ function WorklogForm() {
     setIsBreakGuide(breakTime);
   }, [siteInfo.workType, siteInfo.commuteGuidanceIncluded]);
 
-  // 마운트 시 draft 복원
   useEffect(() => {
     try {
       const saved = localStorage.getItem(draftKey);
-      if (saved) {
-        setContent(saved);
-        setDraftRestored(true);
-      }
+      if (saved) { setContent(saved); setDraftRestored(true); }
     } catch {}
   }, [draftKey]);
 
-  // content 변경 시 자동저장
   useEffect(() => {
     if (!content) return;
     try { localStorage.setItem(draftKey, content); } catch {}
@@ -435,9 +433,7 @@ function WorklogForm() {
       mediaRef.current = recorder;
       setIsRecording(true);
       setRecordingSec(0);
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingSec(s => s + 1);
-      }, 1000);
+      recordingTimerRef.current = setInterval(() => { setRecordingSec(s => s + 1); }, 1000);
     } catch {
       alert("마이크 권한이 필요합니다. 브라우저 설정에서 마이크를 허용해주세요.");
     }
@@ -446,16 +442,12 @@ function WorklogForm() {
   function stopRecording() {
     mediaRef.current?.stop();
     setIsRecording(false);
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
+    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
     setRecordingSec(0);
   }
 
   async function sendAudioToGroq(blob: Blob, mimeType: string) {
     setAiLoading(true);
-    // 기존 content는 유지 (AI 변환 완료 후 교체)
     try {
       const formData = new FormData();
       const ext = mimeType.includes("mp4") ? "mp4" : "webm";
@@ -482,14 +474,9 @@ function WorklogForm() {
     try {
       const res = await fetch(`/api/worker/logs/prev?traineeId=${traineeId}`);
       const data = await res.json();
-      if (data.success && data.content) {
-        setContent(data.content);
-      } else {
-        alert("이전 일지 내용이 없습니다.");
-      }
-    } catch {
-      alert("불러오기에 실패했습니다.");
-    }
+      if (data.success && data.content) { setContent(data.content); }
+      else { alert("이전 일지 내용이 없습니다."); }
+    } catch { alert("불러오기에 실패했습니다."); }
   }
 
   async function handleSave(isComplete: boolean) {
@@ -527,17 +514,23 @@ function WorklogForm() {
 
   if (saved) {
     return (
-      <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, background: "#f9fafb", padding: 24 }}>
-        <span style={{ fontSize: 56 }}>✅</span>
-        <p style={{ fontSize: 18, fontWeight: 700, color: "#16a34a", margin: 0 }}>일지가 저장되었습니다.</p>
-        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-          <button onClick={() => router.push("/worker/home")}
-            style={{ padding: "12px 24px", background: "#111827", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-            🏠 홈으로
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-slate-50 p-6">
+        <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-100">
+          <CheckCircle2 className="h-9 w-9 text-emerald-500" aria-hidden="true" />
+        </div>
+        <p className="text-lg font-black text-emerald-600">일지가 저장되었습니다.</p>
+        <div className="mt-2 flex gap-3">
+          <button
+            onClick={() => router.push("/worker/home")}
+            className="flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white"
+          >
+            <Home className="h-4 w-4" aria-hidden="true" /> 홈으로
           </button>
-          <button onClick={() => router.push("/worker/calendar")}
-            style={{ padding: "12px 24px", background: "#fff", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-            📅 캘린더
+          <button
+            onClick={() => router.push("/worker/calendar")}
+            className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700"
+          >
+            <CalendarDays className="h-4 w-4" aria-hidden="true" /> 캘린더
           </button>
         </div>
       </div>
@@ -545,63 +538,69 @@ function WorklogForm() {
   }
 
   const ATTENDANCE_OPTIONS: Attendance[] = ["출석", "결석", "지각", "조퇴"];
-  const ATTENDANCE_COLORS: Record<Attendance, string> = {
-    출석: "#111827", 결석: "#dc2626", 지각: "#d97706", 조퇴: "#7c3aed",
-  };
+
+  const RATING_TASK_LABELS = ["매우 못함", "못함", "보통", "잘함", "매우 잘함"];
+  const RATING_RATE_LABELS = ["25%↓", "25%↑", "50%↑", "75%↑", "100%"];
 
   return (
-    <div style={s.page}>
-      {/* ─ 헤더 ─ */}
-      <div style={s.header}>
-        <button onClick={() => router.back()} style={s.closeBtn}>←</button>
-        <div style={s.headerCenter}>
-          <span style={s.headerTitle}>
+    <div className="min-h-dvh bg-slate-50">
+      {/* 헤더 */}
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-4">
+        <button
+          onClick={() => router.back()}
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition active:scale-95"
+        >
+          <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-base font-black text-slate-900">
             {trainingType === "ADAPTATION" ? "적응지도 일지" : "훈련 일지"}
           </span>
-          <span style={s.headerSub}>{traineeName} 훈련생</span>
+          <span className="text-xs font-semibold text-slate-400">{traineeName} 훈련생</span>
         </div>
-        <button onClick={() => handleSave(true)} style={s.doneBtn} disabled={saving}>
+        <button
+          onClick={() => handleSave(true)}
+          disabled={saving}
+          className="rounded-xl bg-slate-950 px-3 py-1.5 text-sm font-black text-white transition active:scale-95 disabled:opacity-60"
+        >
           {saving ? "저장중" : "완료"}
         </button>
-      </div>
+      </header>
 
-      <div style={s.container}>
+      <div className="mx-auto max-w-md space-y-3 px-4 py-3 pb-10">
 
-        {/* ─ 날짜 ─ */}
-        <div style={s.card}>
-          <div style={s.cardRow}>
-            <span style={s.cardLabel}>날짜</span>
+        {/* 날짜 */}
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-black text-slate-700">날짜</span>
             <input
               type="date"
               value={logDate}
               onChange={e => setLogDate(e.target.value)}
-              style={s.dateInput}
+              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400"
             />
           </div>
         </div>
 
-        {/* ─ 현장 유형 배지 ─ */}
-        <div style={s.infoBadge}>
-          <span style={s.infoIcon}>ℹ️</span>
-          <span style={s.infoText}>
+        {/* 현장 유형 배지 */}
+        <div className="flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2.5">
+          <Info className="h-4 w-4 flex-shrink-0 text-sky-500" aria-hidden="true" />
+          <span className="text-xs font-black text-sky-700">
             {isMulti ? "1:多" : "1:1"} 지도 현장 &nbsp;·&nbsp; {siteInfo.traineeCount}명 &nbsp;·&nbsp; {siteInfo.workType}
           </span>
         </div>
 
-        {/* ─ 출석 상태 ─ */}
-        <div style={s.card}>
-          <span style={s.cardLabel}>출결</span>
-          <div style={s.attendanceRow}>
+        {/* 출결 */}
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <p className="mb-3 text-sm font-black text-slate-700">출결</p>
+          <div className="flex gap-2">
             {ATTENDANCE_OPTIONS.map(a => (
               <button
                 key={a}
                 onClick={() => setAttendance(a)}
-                style={{
-                  ...s.attendanceBtn,
-                  background: attendance === a ? ATTENDANCE_COLORS[a] : "#f9fafb",
-                  color: attendance === a ? "#fff" : "#6b7280",
-                  border: attendance === a ? `1.5px solid ${ATTENDANCE_COLORS[a]}` : "1.5px solid #e5e7eb",
-                }}
+                className={`flex-1 rounded-xl border py-2.5 text-sm font-black transition active:scale-95 ${
+                  attendance === a ? ATTENDANCE_ACTIVE[a] : ATTENDANCE_INACTIVE
+                }`}
               >
                 {a}
               </button>
@@ -609,33 +608,33 @@ function WorklogForm() {
           </div>
         </div>
 
-        {/* ─ 근무 시간 ─ */}
-        <div style={s.card}>
-          <div style={{ ...s.cardRow, marginBottom: 16 }}>
-            <span style={s.cardLabel}>근무 시간</span>
-            <span style={s.timeHours}>{diffHours(workStart, workEnd)}H</span>
+        {/* 근무 시간 */}
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <span className="text-sm font-black text-slate-700">근무 시간</span>
+            <span className="text-xl font-black tabular-nums text-slate-900">{diffHours(workStart, workEnd)}H</span>
           </div>
-          <div style={s.timeInputRow}>
+          <div className="flex items-center justify-center gap-5">
             <TimeInput value={workStart} onChange={setWorkStart} label="시작" />
-            <span style={s.timeSep}>—</span>
+            <span className="mt-4 text-lg font-light text-slate-300">—</span>
             <TimeInput value={workEnd} onChange={setWorkEnd} label="종료" />
           </div>
         </div>
 
-        {/* ─ 훈련 시간 ─ */}
-        <div style={s.card}>
-          <div style={{ ...s.cardRow, marginBottom: 16 }}>
-            <span style={s.cardLabel}>훈련 시간</span>
-            <span style={s.timeHours}>{core}H</span>
+        {/* 훈련 시간 */}
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <span className="text-sm font-black text-slate-700">훈련 시간</span>
+            <span className="text-xl font-black tabular-nums text-slate-900">{core}H</span>
           </div>
-          <div style={s.timeInputRow}>
+          <div className="flex items-center justify-center gap-5">
             <TimeInput value={trainStart} onChange={setTrainStart} label="시작" />
-            <span style={s.timeSep}>—</span>
+            <span className="mt-4 text-lg font-light text-slate-300">—</span>
             <TimeInput value={trainEnd} onChange={setTrainEnd} label="종료" />
           </div>
 
-          {/* 체크박스 — 출퇴근/휴게 지도는 관리자가 설정한 값으로 고정 */}
-          <div style={s.checks}>
+          {/* 체크박스 */}
+          <div className="mt-4 flex flex-wrap gap-4 border-t border-slate-100 pt-4">
             {(() => {
               const { commute: fixedCommute, breakTime: fixedBreak } = resolveGuidance(siteInfo.workType, siteInfo.commuteGuidanceIncluded);
               const isFullDay = siteInfo.workType === "FULL_DAY";
@@ -644,15 +643,16 @@ function WorklogForm() {
                 { label: "휴게시간 지도", val: isBreakGuide, set: setIsBreakGuide, fixed: true, adminSet: fixedBreak },
                 { label: "연장 지도", val: isExtraGuide, set: setIsExtraGuide, fixed: isFullDay, adminSet: false },
               ].map(({ label, val, set, fixed, adminSet }) => (
-                <label key={label} style={{ ...s.checkItem, opacity: fixed ? 0.6 : 1 }}>
+                <label key={label} className={`flex cursor-pointer items-center gap-2 ${fixed ? "opacity-60" : ""}`}>
                   <input
                     type="checkbox"
                     checked={fixed ? adminSet : val}
                     onChange={e => !fixed && set(e.target.checked)}
                     disabled={fixed}
-                    style={{ accentColor: "#111827", width: 17, height: 17, cursor: fixed ? "not-allowed" : "pointer" }}
+                    className="h-4 w-4 accent-slate-950"
+                    style={{ cursor: fixed ? "not-allowed" : "pointer" }}
                   />
-                  <span style={{ fontSize: 14, color: "#374151" }}>
+                  <span className="text-sm font-semibold text-slate-700">
                     {label}{fixed ? " (관리자 설정)" : ""}
                   </span>
                 </label>
@@ -662,95 +662,126 @@ function WorklogForm() {
 
           {/* 연장 시간 */}
           {isExtraGuide && (
-            <div style={s.extraTimeBox}>
-              <div style={{ ...s.cardRow, marginBottom: 12 }}>
-                <span style={{ ...s.cardLabel, color: "#dc2626" }}>연장 시간</span>
-                <span style={{ ...s.timeHours, color: "#dc2626" }}>{extra}H</span>
+            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-sm font-black text-rose-600">연장 시간</span>
+                <span className="text-lg font-black tabular-nums text-rose-600">{extra}H</span>
               </div>
-              <div style={s.timeInputRow}>
+              <div className="flex items-center justify-center gap-5">
                 <TimeInput value={extraStart} onChange={setExtraStart} label="시작" />
-                <span style={s.timeSep}>—</span>
+                <span className="mt-4 text-lg font-light text-slate-300">—</span>
                 <TimeInput value={extraEnd} onChange={setExtraEnd} label="종료" />
               </div>
             </div>
           )}
         </div>
 
-        {/* ─ 평가 ─ */}
-        <div style={s.card}>
-          <div style={{ marginBottom: 20 }}>
-            <p style={s.cardLabel}>과제 수행 평가</p>
-            <div style={s.ratingRow}>
+        {/* 평가 */}
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <div className="mb-4">
+            <p className="mb-3 text-sm font-black text-slate-700">과제 수행 평가</p>
+            <div className="flex gap-1.5">
               {[1, 2, 3, 4, 5].map(n => (
-                <button key={n} type="button" onClick={() => setTaskScore(n)}
-                  style={{ ...s.ratingBtn, background: taskScore === n ? "#111827" : "#f9fafb", color: taskScore === n ? "#fff" : "#6b7280", border: taskScore === n ? "1.5px solid #111827" : "1.5px solid #e5e7eb" }}>
-                  <span style={{ fontSize: 16, fontWeight: 700 }}>{n}</span>
-                  <span style={s.ratingLabel}>{["매우 못함", "못함", "보통", "잘함", "매우 잘함"][n - 1]}</span>
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setTaskScore(n)}
+                  className={`flex flex-1 flex-col items-center gap-1.5 rounded-xl border py-2.5 transition active:scale-95 ${
+                    taskScore === n
+                      ? "border-slate-950 bg-slate-950 text-white"
+                      : "border-slate-200 bg-slate-50 text-slate-500"
+                  }`}
+                >
+                  <span className="text-base font-black">{n}</span>
+                  <span className="text-center text-[9px] font-semibold leading-tight">{RATING_TASK_LABELS[n - 1]}</span>
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <p style={s.cardLabel}>과제 수행률</p>
-            <div style={s.ratingRow}>
+            <p className="mb-3 text-sm font-black text-slate-700">과제 수행률</p>
+            <div className="flex gap-1.5">
               {[1, 2, 3, 4, 5].map(n => (
-                <button key={n} type="button" onClick={() => setCompletionRate(n)}
-                  style={{ ...s.ratingBtn, background: completionRate === n ? "#111827" : "#f9fafb", color: completionRate === n ? "#fff" : "#6b7280", border: completionRate === n ? "1.5px solid #111827" : "1.5px solid #e5e7eb" }}>
-                  <span style={{ fontSize: 16, fontWeight: 700 }}>{n}</span>
-                  <span style={s.ratingLabel}>{["25%↓", "25%↑", "50%↑", "75%↑", "100%"][n - 1]}</span>
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setCompletionRate(n)}
+                  className={`flex flex-1 flex-col items-center gap-1.5 rounded-xl border py-2.5 transition active:scale-95 ${
+                    completionRate === n
+                      ? "border-slate-950 bg-slate-950 text-white"
+                      : "border-slate-200 bg-slate-50 text-slate-500"
+                  }`}
+                >
+                  <span className="text-base font-black">{n}</span>
+                  <span className="text-center text-[9px] font-semibold leading-tight">{RATING_RATE_LABELS[n - 1]}</span>
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        {/* ─ 지도 내용 ─ */}
-        <div style={s.card}>
-          <div style={s.contentHeader}>
-            <span style={s.cardLabel}>지도 내용</span>
-            <div style={s.contentBtns}>
+        {/* 지도 내용 */}
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-black text-slate-700">지도 내용</span>
+            <div className="flex gap-2">
               <button
                 type="button"
-                style={{
-                  ...s.voiceBtn,
-                  background: isRecording ? "#dc2626" : "#111827",
-                  opacity: aiLoading ? 0.7 : 1,
-                }}
                 onClick={isRecording ? stopRecording : startRecording}
                 disabled={aiLoading}
+                className={`relative flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black text-white transition active:scale-95 disabled:opacity-70 ${
+                  isRecording ? "bg-rose-500" : "bg-slate-950"
+                }`}
               >
-                {aiLoading ? "⏳ AI 변환 중..." : isRecording ? "⏹ 중지" : "🎤 음성입력"}
-                {!premium && <span style={s.premiumTag}>PRO</span>}
+                {aiLoading ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> AI 변환 중...</>
+                ) : isRecording ? (
+                  <><Square className="h-3.5 w-3.5" aria-hidden="true" /> 중지</>
+                ) : (
+                  <><Mic className="h-3.5 w-3.5" aria-hidden="true" /> 음성입력</>
+                )}
+                {!premium && (
+                  <span className="ml-1 rounded bg-white/20 px-1 py-px text-[9px] font-black">PRO</span>
+                )}
               </button>
-              <button type="button" style={s.prevBtn} onClick={loadPrevContent}>
+              <button
+                type="button"
+                onClick={loadPrevContent}
+                className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 transition active:scale-95"
+              >
                 전일내용
               </button>
             </div>
           </div>
 
           {isRecording && (
-            <div style={s.recordingIndicator}>
-              <span style={s.recordingDot} />
-              <span style={{ fontSize: 13, color: "#dc2626", fontWeight: 600 }}>
+            <div className="mb-2 flex items-center gap-2 py-2">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500" />
+              <span className="text-xs font-black text-rose-600">
                 녹음 중 {recordingSec}초 — 중지하려면 다시 누르세요
               </span>
             </div>
           )}
           {aiLoading && (
-            <div style={s.recordingIndicator}>
-              <span style={{ fontSize: 13, color: "#6b7280" }}>🤖 AI가 일지를 작성 중입니다...</span>
+            <div className="mb-2 py-2">
+              <span className="text-xs font-semibold text-slate-500">AI가 일지를 작성 중입니다...</span>
             </div>
           )}
 
           {draftRestored && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px", marginBottom: 8 }}>
-              <span style={{ fontSize: 12, color: "#d97706", fontWeight: 600 }}>📋 이전에 작성 중이던 내용을 불러왔습니다.</span>
-              <button onClick={() => { setContent(""); setDraftRestored(false); try { localStorage.removeItem(draftKey); } catch {} }}
-                style={{ fontSize: 11, color: "#9ca3af", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>지우기</button>
+            <div className="mb-2 flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+              <span className="text-xs font-semibold text-amber-600">이전에 작성 중이던 내용을 불러왔습니다.</span>
+              <button
+                onClick={() => { setContent(""); setDraftRestored(false); try { localStorage.removeItem(draftKey); } catch {} }}
+                className="text-xs font-semibold text-slate-400 transition hover:text-slate-600"
+              >
+                지우기
+              </button>
             </div>
           )}
+
           <textarea
-            style={s.textarea}
+            className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold leading-relaxed text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
             placeholder="지도 내용을 입력하세요."
             value={content}
             onChange={e => setContent(e.target.value)}
@@ -758,38 +789,43 @@ function WorklogForm() {
           />
         </div>
 
-        {/* ─ 공단 인정 시간 요약 ─ */}
-        <div style={s.summaryBox}>
-          <p style={s.summaryTitle}>공단 인정 시간</p>
+        {/* 공단 인정 시간 요약 */}
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <p className="mb-3 text-sm font-black text-slate-700">공단 인정 시간</p>
           {[
-            { label: "1:1 지도 시간", value: `${isMulti ? "0.0" : (core + extra).toFixed(1)} H` },
-            { label: "1:多 지도 시간", value: `${isMulti ? (core + extra).toFixed(1) : "0.0"} H` },
-            { label: "1:1 연장 지도", value: `${!isMulti && isExtraGuide ? extra.toFixed(1) : "0.0"} H`, red: true },
-            { label: "1:多 연장 지도", value: `${isMulti && isExtraGuide ? extra.toFixed(1) : "0.0"} H`, red: true },
-            { label: "출퇴근/휴게 인정", value: `${bonus.toFixed(1)} H` },
+            { label: "1:1 지도 시간",   value: `${isMulti ? "0.0" : (core + extra).toFixed(1)} H`, red: false },
+            { label: "1:多 지도 시간",  value: `${isMulti ? (core + extra).toFixed(1) : "0.0"} H`, red: false },
+            { label: "1:1 연장 지도",   value: `${!isMulti && isExtraGuide ? extra.toFixed(1) : "0.0"} H`, red: true },
+            { label: "1:多 연장 지도",  value: `${isMulti && isExtraGuide ? extra.toFixed(1) : "0.0"} H`, red: true },
+            { label: "출퇴근/휴게 인정", value: `${bonus.toFixed(1)} H`, red: false },
           ].map(row => (
-            <div key={row.label} style={s.summaryRow}>
-              <span style={{ ...s.summaryLabel, color: (row as any).red ? "#dc2626" : "#6b7280" }}>{row.label}</span>
-              <span style={{ ...s.summaryValue, color: (row as any).red ? "#dc2626" : "#374151" }}>{row.value}</span>
+            <div key={row.label} className="mb-2 flex justify-between">
+              <span className={`text-sm font-semibold ${row.red ? "text-rose-500" : "text-slate-500"}`}>{row.label}</span>
+              <span className={`text-sm font-black tabular-nums ${row.red ? "text-rose-500" : "text-slate-800"}`}>{row.value}</span>
             </div>
           ))}
-          <div style={s.divider} />
-          <div style={s.summaryRow}>
-            <span style={s.totalLabel}>합계</span>
-            <span style={s.totalValue}>{recognized.total.toFixed(1)} H</span>
+          <div className="my-2.5 h-px bg-slate-100" />
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-black text-slate-900">합계</span>
+            <span className="text-xl font-black tabular-nums text-slate-900">{recognized.total.toFixed(1)} H</span>
           </div>
         </div>
 
-        {error && <p style={s.error}>{error}</p>}
+        {error && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-center text-sm font-semibold text-rose-700">
+            {error}
+          </div>
+        )}
 
-        {/* ─ 임시저장 ─ */}
+        {/* 임시저장 */}
         <button
-          style={{ ...s.tempSaveBtn, opacity: saving ? 0.7 : 1 }}
           onClick={() => handleSave(false)}
           disabled={saving}
+          className="min-h-12 w-full rounded-2xl bg-slate-700 text-base font-black text-white transition active:scale-[0.97] disabled:opacity-70"
         >
           임시저장
         </button>
+
       </div>
     </div>
   );
@@ -797,79 +833,12 @@ function WorklogForm() {
 
 export default function WorklogPage() {
   return (
-    <Suspense fallback={<div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f9fafb" }}>로딩 중...</div>}>
+    <Suspense fallback={
+      <div className="flex min-h-dvh items-center justify-center bg-slate-50 text-sm font-semibold text-slate-400">
+        로딩 중...
+      </div>
+    }>
       <WorklogForm />
     </Suspense>
   );
 }
-
-// ─── 스타일 ────────────────────────────────────────────────
-const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", backgroundColor: "#f9fafb" },
-  container: { maxWidth: 480, margin: "0 auto", padding: "12px 16px 80px" },
-
-  // 헤더
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid #f3f4f6", backgroundColor: "#fff", position: "sticky", top: 0, zIndex: 10 },
-  closeBtn: { background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#374151", width: 36, fontWeight: 700 },
-  headerCenter: { display: "flex", flexDirection: "column", alignItems: "center", gap: 2 },
-  headerTitle: { fontSize: 16, fontWeight: 700, color: "#111827" },
-  headerSub: { fontSize: 12, color: "#9ca3af", fontWeight: 500 },
-  doneBtn: { background: "none", border: "none", color: "#111827", fontSize: 15, fontWeight: 700, cursor: "pointer", padding: "0 4px" },
-
-  // 카드
-  card: { backgroundColor: "#fff", borderRadius: 14, padding: "16px", marginBottom: 10, border: "1px solid #f3f4f6" },
-  cardRow: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  cardLabel: { fontSize: 14, fontWeight: 700, color: "#374151", margin: "0 0 12px" },
-
-  // 날짜
-  dateInput: { border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 15, fontWeight: 600, color: "#111827", padding: "8px 12px", outline: "none", background: "#f9fafb", cursor: "pointer" },
-
-  // 배지
-  infoBadge: { display: "flex", alignItems: "center", gap: 8, background: "#f0f9ff", borderRadius: 10, padding: "10px 14px", marginBottom: 10, border: "1px solid #bae6fd" },
-  infoIcon: { fontSize: 14, flexShrink: 0 },
-  infoText: { fontSize: 13, color: "#0369a1", fontWeight: 600 },
-
-  // 출결
-  attendanceRow: { display: "flex", gap: 8, marginTop: 4 },
-  attendanceBtn: { flex: 1, padding: "10px 0", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", transition: "all 0.15s" },
-
-  // 시간
-  timeHours: { fontSize: 20, fontWeight: 800, color: "#111827" },
-  timeInputRow: { display: "flex", alignItems: "center", justifyContent: "center", gap: 20 },
-  timeSep: { fontSize: 18, color: "#d1d5db", fontWeight: 300, marginTop: 14 },
-
-  // 체크박스
-  checks: { display: "flex", flexWrap: "wrap", gap: 14, marginTop: 16, paddingTop: 16, borderTop: "1px solid #f3f4f6" },
-  checkItem: { display: "flex", alignItems: "center", gap: 7, cursor: "pointer" },
-
-  // 연장
-  extraTimeBox: { background: "#fff5f5", borderRadius: 10, padding: "14px", marginTop: 14, border: "1px solid #fecaca" },
-
-  // 평가
-  ratingRow: { display: "flex", gap: 6 },
-  ratingBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "10px 4px", borderRadius: 10, cursor: "pointer", fontSize: 14 },
-  ratingLabel: { fontSize: 9, fontWeight: 500, textAlign: "center" as const, lineHeight: 1.2 },
-
-  // 지도 내용
-  contentHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  contentBtns: { display: "flex", gap: 6 },
-  voiceBtn: { display: "flex", alignItems: "center", gap: 4, padding: "7px 11px", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", position: "relative" as const },
-  premiumTag: { fontSize: 9, background: "rgba(255,255,255,0.25)", padding: "1px 4px", borderRadius: 4 },
-  prevBtn: { padding: "7px 11px", background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" },
-  recordingIndicator: { display: "flex", alignItems: "center", gap: 8, padding: "10px 0", marginBottom: 4 },
-  recordingDot: { width: 8, height: 8, borderRadius: "50%", background: "#dc2626", animation: "pulse 1s infinite" },
-  textarea: { width: "100%", border: "1px solid #e5e7eb", borderRadius: 10, padding: "12px", fontSize: 14, color: "#374151", background: "#f9fafb", outline: "none", resize: "vertical" as const, boxSizing: "border-box" as const, fontFamily: "inherit", lineHeight: 1.7 },
-
-  // 요약
-  summaryBox: { background: "#fff", borderRadius: 14, padding: "16px", marginBottom: 10, border: "1px solid #f3f4f6" },
-  summaryTitle: { fontSize: 14, fontWeight: 700, color: "#374151", margin: "0 0 12px" },
-  summaryRow: { display: "flex", justifyContent: "space-between", marginBottom: 8 },
-  summaryLabel: { fontSize: 13 },
-  summaryValue: { fontSize: 13, fontWeight: 600 },
-  divider: { height: 1, background: "#f3f4f6", margin: "10px 0" },
-  totalLabel: { fontSize: 15, fontWeight: 700, color: "#111827" },
-  totalValue: { fontSize: 20, fontWeight: 800, color: "#111827" },
-
-  error: { color: "#dc2626", fontSize: 13, background: "#fef2f2", padding: "12px 16px", borderRadius: 10, marginBottom: 12, textAlign: "center" as const, border: "1px solid #fecaca" },
-  tempSaveBtn: { width: "100%", padding: 14, background: "#374151", color: "#fff", fontSize: 15, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer", marginTop: 4 },
-};

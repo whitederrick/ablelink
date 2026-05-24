@@ -1,9 +1,18 @@
 "use client";
-// app/worker/calendar/page.tsx
-// 월별 출근/일지 현황 캘린더
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  AlertTriangle,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  CircleDollarSign,
+  FileText,
+  Home,
+  PenLine,
+  X,
+} from "lucide-react";
 
 // ─── 타입 ──────────────────────────────────────────────
 type DayStatus = "GREEN" | "ORANGE" | "RED" | "NONE";
@@ -32,7 +41,6 @@ interface CalendarData {
   trainingType: "PRE" | "FIELD" | "ADAPTATION";
 }
 
-// ─── 유틸 ──────────────────────────────────────────────
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 function formatHHMM(iso: string | null): string {
@@ -45,7 +53,6 @@ function dateKey(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-// ─── 상태별 스타일 ──────────────────────────────────────
 const STATUS_STYLE: Record<DayStatus | "NONE", { bg: string; color: string; label: string }> = {
   GREEN:  { bg: "#f0fdf4", color: "#16a34a", label: "완료" },
   ORANGE: { bg: "#fffbeb", color: "#d97706", label: "일지미작성" },
@@ -53,7 +60,14 @@ const STATUS_STYLE: Record<DayStatus | "NONE", { bg: string; color: string; labe
   NONE:   { bg: "transparent", color: "#9ca3af", label: "" },
 };
 
-// ─── 메인 컴포넌트 ──────────────────────────────────────
+const NAV_ITEMS = [
+  { icon: Home,             label: "홈",      href: "/worker/home" },
+  { icon: CalendarDays,     label: "캘린더",  href: "/worker/calendar" },
+  { icon: PenLine,          label: "전자서명", href: "/worker/signature" },
+  { icon: FileText,         label: "문서",    href: "/worker/docs" },
+  { icon: CircleDollarSign, label: "히스토리", href: "/worker/history" },
+];
+
 export default function CalendarPage() {
   const router = useRouter();
   const today = new Date();
@@ -81,7 +95,6 @@ export default function CalendarPage() {
     fetchCalendar();
   }, [fetchCalendar]);
 
-  // 이전/다음 달
   function prevMonth() {
     if (month === 1) { setYear(y => y - 1); setMonth(12); }
     else setMonth(m => m - 1);
@@ -91,90 +104,97 @@ export default function CalendarPage() {
     else setMonth(m => m + 1);
   }
 
-  // 캘린더 날짜 배열 생성
-  const firstDay = new Date(year, month - 1, 1).getDay(); // 0=일
+  const firstDay = new Date(year, month - 1, 1).getDay();
   const lastDate = new Date(year, month, 0).getDate();
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
     ...Array.from({ length: lastDate }, (_, i) => i + 1),
   ];
-  // 6주 맞추기
   while (cells.length % 7 !== 0) cells.push(null);
 
   const todayKey = dateKey(today.getFullYear(), today.getMonth() + 1, today.getDate());
   const isCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1;
 
   return (
-    <div style={s.page}>
-      <div style={s.container}>
+    <div className="min-h-dvh bg-slate-50">
+      <div className="mx-auto max-w-md pb-24">
 
         {/* 헤더 */}
-        <div style={s.header}>
-          <button onClick={() => router.back()} style={s.backBtn}>←</button>
-          <h1 style={s.title}>근무 현황</h1>
-          <div style={{ width: 36 }} />
-        </div>
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-4">
+          <button
+            onClick={() => router.back()}
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition active:scale-95"
+          >
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <h1 className="text-base font-black text-slate-900">근무 현황</h1>
+          <div className="w-9" />
+        </header>
 
-        {/* 현장명 */}
         {data?.siteName && (
-          <p style={s.siteName}>📍 {data.siteName}</p>
+          <p className="mt-3 text-center text-sm font-black text-sky-600">
+            {data.siteName}
+          </p>
         )}
 
-        {/* 월 네비게이션 */}
-        <div style={s.monthNav}>
-          <button style={s.navBtn} onClick={prevMonth}>‹</button>
-          <span style={s.monthLabel}>{year}년 {month}월</span>
+        {/* 월 네비 */}
+        <div className="flex items-center justify-between px-5 py-4">
           <button
-            style={{ ...s.navBtn, opacity: isCurrentMonth ? 0.3 : 1 }}
+            onClick={prevMonth}
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-600 transition active:scale-95"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <span className="text-xl font-black text-slate-900">{year}년 {month}월</span>
+          <button
             onClick={nextMonth}
             disabled={isCurrentMonth}
-          >›</button>
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-600 transition active:scale-95 disabled:opacity-30"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
         </div>
 
-        {/* 요약 통계 */}
+        {/* 통계 */}
         {data && (
-          <div style={s.summary}>
-            <div style={s.summaryItem}>
-              <span style={s.summaryNum}>{data.totalWorkDays}</span>
-              <span style={s.summaryLabel}>출근일</span>
-            </div>
-            <div style={s.summaryDivider} />
-            <div style={s.summaryItem}>
-              <span style={{ ...s.summaryNum, color: "#16a34a" }}>{data.totalGreenDays}</span>
-              <span style={{ ...s.summaryLabel, color: "#16a34a" }}>완료</span>
-            </div>
-            <div style={s.summaryDivider} />
-            <div style={s.summaryItem}>
-              <span style={{ ...s.summaryNum, color: data.totalOrangeDays > 0 ? "#d97706" : "#9ca3af" }}>{data.totalOrangeDays}</span>
-              <span style={{ ...s.summaryLabel, color: data.totalOrangeDays > 0 ? "#d97706" : "#9ca3af" }}>일지미작성</span>
-            </div>
-            <div style={s.summaryDivider} />
-            <div style={s.summaryItem}>
-              <span style={{ ...s.summaryNum, color: (data.totalRedDays ?? 0) > 0 ? "#e11d48" : "#9ca3af" }}>{data.totalRedDays ?? 0}</span>
-              <span style={{ ...s.summaryLabel, color: (data.totalRedDays ?? 0) > 0 ? "#e11d48" : "#9ca3af" }}>미출근</span>
-            </div>
+          <div className="mx-4 mb-4 flex rounded-2xl border border-slate-100 bg-white py-4 shadow-sm">
+            {[
+              { num: data.totalWorkDays,   label: "출근일",     color: "text-slate-900" },
+              { num: data.totalGreenDays,  label: "완료",       color: "text-emerald-600" },
+              { num: data.totalOrangeDays, label: "일지미작성", color: data.totalOrangeDays > 0 ? "text-amber-500" : "text-slate-300" },
+              { num: data.totalRedDays ?? 0, label: "미출근",   color: (data.totalRedDays ?? 0) > 0 ? "text-rose-500" : "text-slate-300" },
+            ].map(({ num, label, color }, i, arr) => (
+              <div key={label} className={`flex flex-1 flex-col items-center gap-1 ${i < arr.length - 1 ? "border-r border-slate-100" : ""}`}>
+                <span className={`text-2xl font-black tabular-nums ${color}`}>{num}</span>
+                <span className="text-[11px] font-semibold text-slate-400">{label}</span>
+              </div>
+            ))}
           </div>
         )}
 
         {/* 요일 헤더 */}
-        <div style={s.weekRow}>
+        <div className="grid grid-cols-7 px-4 mb-1">
           {WEEKDAYS.map((d, i) => (
-            <div key={d} style={{
-              ...s.weekDay,
-              color: i === 0 ? "#e53935" : i === 6 ? "#1565c0" : "#888",
-            }}>{d}</div>
+            <div
+              key={d}
+              className={`py-1 text-center text-xs font-black ${
+                i === 0 ? "text-rose-500" : i === 6 ? "text-blue-600" : "text-slate-400"
+              }`}
+            >
+              {d}
+            </div>
           ))}
         </div>
 
         {/* 캘린더 그리드 */}
         {loading ? (
-          <div style={s.loadingBox}>
-            <div style={s.spinner} />
+          <div className="flex justify-center py-10">
+            <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-sky-500" />
           </div>
         ) : (
-          <div style={s.grid}>
+          <div className="grid grid-cols-7 gap-1 px-4">
             {cells.map((day, idx) => {
-              if (!day) return <div key={idx} style={s.emptyCell} />;
+              if (!day) return <div key={idx} className="aspect-square" />;
 
               const key = dateKey(year, month, day);
               const dayData = data?.days[key];
@@ -186,31 +206,30 @@ export default function CalendarPage() {
               return (
                 <button
                   key={idx}
-                  style={{
-                    ...s.cell,
-                    backgroundColor: st.bg,
-                    opacity: status === "NONE" && !isToday ? 0.5 : 1,
-                    outline: isToday ? "2px solid #2563eb" : "none",
-                    outlineOffset: -2,
-                  }}
+                  style={{ backgroundColor: st.bg }}
+                  className={`aspect-square flex flex-col items-center justify-center gap-0.5 rounded-xl border transition active:scale-95 ${
+                    isToday ? "border-sky-400" : "border-transparent"
+                  } ${!dayData ? "opacity-40 cursor-default" : "cursor-pointer"}`}
                   onClick={() => dayData && setSelectedDay({ day, data: dayData })}
                   disabled={!dayData}
                 >
-                  <span style={{
-                    ...s.dayNum,
-                    color: isToday ? "#2563eb"
-                      : isWeekend ? (idx % 7 === 0 ? "#e53935" : "#1565c0")
-                      : "#333",
-                    fontWeight: isToday ? 700 : 400,
-                  }}>
+                  <span
+                    className={`text-sm font-black leading-none ${
+                      isToday ? "text-sky-600"
+                        : isWeekend ? (idx % 7 === 0 ? "text-rose-500" : "text-blue-600")
+                        : "text-slate-700"
+                    }`}
+                  >
                     {day}
-                    {isToday && <span style={s.todayDot}>•</span>}
                   </span>
                   {status !== "NONE" && (
-                    <span style={{ ...s.statusDot, backgroundColor: st.color }} />
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: st.color }}
+                    />
                   )}
                   {status === "GREEN" && (
-                    <span style={s.checkMark}>✓</span>
+                    <span className="text-[9px] font-black text-emerald-500">✓</span>
                   )}
                 </button>
               );
@@ -219,97 +238,107 @@ export default function CalendarPage() {
         )}
 
         {/* 범례 */}
-        <div style={s.legend}>
+        <div className="flex justify-center gap-5 py-4">
           {(["GREEN", "ORANGE", "RED"] as DayStatus[]).map(st => (
-            <div key={st} style={s.legendItem}>
-              <span style={{ ...s.legendDot, backgroundColor: STATUS_STYLE[st].color }} />
-              <span style={s.legendLabel}>{STATUS_STYLE[st].label}</span>
+            <div key={st} className="flex items-center gap-1.5">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: STATUS_STYLE[st].color }}
+              />
+              <span className="text-xs font-semibold text-slate-500">{STATUS_STYLE[st].label}</span>
             </div>
           ))}
         </div>
 
         {/* 일지 미작성 안내 */}
         {data && data.totalOrangeDays > 0 && (
-          <div style={s.warningBox}>
-            <span style={s.warningIcon}>⚠️</span>
+          <div className="mx-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500" aria-hidden="true" />
             <div>
-              <p style={s.warningTitle}>일지 미작성 {data.totalOrangeDays}일이 있어요</p>
-              <p style={s.warningDesc}>주황색 날짜를 눌러 일지를 작성해주세요.</p>
+              <p className="text-sm font-black text-amber-700">일지 미작성 {data.totalOrangeDays}일이 있어요</p>
+              <p className="mt-0.5 text-xs font-semibold text-amber-600">주황색 날짜를 눌러 일지를 작성해주세요.</p>
             </div>
           </div>
         )}
-
       </div>
 
-      {/* ── 하단 네비게이션 ── */}
-      <nav style={s.bottomNav}>
-        <button style={s.navItem} onClick={() => router.push("/worker/home")}>
-          <span style={s.navIcon}>🏠</span>
-          <span style={s.navLabel}>홈</span>
-        </button>
-        <button style={s.navItem} onClick={() => router.push("/worker/calendar")}>
-          <span style={{ ...s.navIcon, color: "#2563eb" }}>📅</span>
-          <span style={{ ...s.navLabel, color: "#2563eb" }}>캘린더</span>
-        </button>
-        <button style={s.navItem} onClick={() => router.push("/worker/signature")}>
-          <span style={s.navIcon}>✍️</span>
-          <span style={s.navLabel}>전자서명</span>
-        </button>
-        <button style={s.navItem} onClick={() => router.push("/worker/docs")}>
-          <span style={s.navIcon}>📄</span>
-          <span style={s.navLabel}>문서</span>
-        </button>
-        <button style={s.navItem} onClick={() => router.push("/worker/history")}>
-          <span style={s.navIcon}>💰</span>
-          <span style={s.navLabel}>히스토리</span>
-        </button>
+      {/* 하단 네비게이션 */}
+      <nav className="fixed bottom-0 left-1/2 z-40 flex w-full max-w-md -translate-x-1/2 border-t border-slate-100 bg-white pb-safe-bottom">
+        {NAV_ITEMS.map(({ icon: Icon, label, href }) => {
+          const isActive = typeof window !== "undefined" && window.location.pathname === href;
+          return (
+            <button
+              key={href}
+              onClick={() => router.push(href)}
+              className="flex flex-1 flex-col items-center justify-center gap-1 py-3"
+            >
+              <Icon className={`h-5 w-5 ${isActive ? "text-slate-950" : "text-slate-400"}`} aria-hidden="true" />
+              <span className={`text-[10px] font-black ${isActive ? "text-slate-950" : "text-slate-400"}`}>{label}</span>
+            </button>
+          );
+        })}
       </nav>
 
       {/* 날짜 상세 모달 */}
       {selectedDay && (
-        <div style={s.overlay} onClick={() => setSelectedDay(null)}>
-          <div style={s.modal} onClick={e => e.stopPropagation()}>
-            <div style={s.modalHeader}>
-              <span style={s.modalTitle}>{month}월 {selectedDay.day}일</span>
-              <button style={s.closeBtn} onClick={() => setSelectedDay(null)}>✕</button>
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50"
+          onClick={() => setSelectedDay(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-white px-5 pb-10 pt-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center justify-between">
+              <span className="text-lg font-black text-slate-900">{month}월 {selectedDay.day}일</span>
+              <button
+                onClick={() => setSelectedDay(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
 
-            <div style={s.modalBody}>
-              <div style={{
-                ...s.statusBadge,
-                backgroundColor: STATUS_STYLE[selectedDay.data.status].bg,
-                color: STATUS_STYLE[selectedDay.data.status].color,
-              }}>
+            <div className="space-y-3">
+              <div
+                className="rounded-2xl px-4 py-3 text-center text-sm font-black"
+                style={{
+                  backgroundColor: STATUS_STYLE[selectedDay.data.status].bg,
+                  color: STATUS_STYLE[selectedDay.data.status].color,
+                }}
+              >
                 {selectedDay.data.status === "GREEN" ? "✓ 일지 완료"
                   : selectedDay.data.status === "ORANGE" ? "⚠ 일지 미작성"
                   : "✗ 미출근"}
               </div>
 
               {selectedDay.data.startTime ? (
-                <div style={s.timeRow}>
-                  <span style={s.timeLabel}>출근</span>
-                  <span style={s.timeValue}>{formatHHMM(selectedDay.data.startTime)}</span>
-                  <span style={s.timeLabel}>퇴근</span>
-                  <span style={s.timeValue}>{formatHHMM(selectedDay.data.endTime)}</span>
+                <div className="flex items-center justify-center gap-4">
+                  <div className="text-center">
+                    <p className="text-xs font-semibold text-slate-400">출근</p>
+                    <p className="text-xl font-black text-slate-900">{formatHHMM(selectedDay.data.startTime)}</p>
+                  </div>
+                  <span className="text-slate-300">–</span>
+                  <div className="text-center">
+                    <p className="text-xs font-semibold text-slate-400">퇴근</p>
+                    <p className="text-xl font-black text-slate-900">{formatHHMM(selectedDay.data.endTime)}</p>
+                  </div>
                 </div>
               ) : (
-                <p style={{ textAlign: "center", fontSize: 13, color: "#9ca3af", margin: 0 }}>
-                  출근 기록이 없습니다.
-                </p>
+                <p className="text-center text-sm font-semibold text-slate-400">출근 기록이 없습니다.</p>
               )}
 
               {selectedDay.data.traineeCount > 0 && (
-                <p style={s.logInfo}>
+                <p className="text-center text-sm font-semibold text-slate-500">
                   일지 {selectedDay.data.logCount}/{selectedDay.data.traineeCount}명 완료
                 </p>
               )}
 
               {selectedDay.data.status === "ORANGE" && (
                 <button
-                  style={s.writeBtn}
+                  className="w-full min-h-14 rounded-2xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97]"
                   onClick={() => {
                     setSelectedDay(null);
-                    // attendanceId가 있으면 worklog로 직접 이동 (home 거치지 않음)
                     const aid = selectedDay.data.attendanceId;
                     const tt  = data?.trainingType || "FIELD";
                     if (aid) {
@@ -330,67 +359,3 @@ export default function CalendarPage() {
     </div>
   );
 }
-
-// ─── 스타일 ──────────────────────────────────────────────
-const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", backgroundColor: "#f7f8fa" },
-  bottomNav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, backgroundColor: "#fff", borderTop: "1px solid #eee", display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom)" },
-  navItem: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: "10px 0", border: "none", backgroundColor: "transparent", cursor: "pointer" },
-  navIcon: { fontSize: 22 },
-  navLabel: { fontSize: 11, color: "#888", fontWeight: 500 },
-  container: { maxWidth: 480, margin: "0 auto", padding: "0 0 90px" },
-
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", backgroundColor: "#fff", borderBottom: "1px solid #eee", position: "sticky", top: 0, zIndex: 10 },
-  backBtn: { background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#333", width: 36 },
-  title: { fontSize: 18, fontWeight: 700, color: "#333", margin: 0 },
-
-  siteName: { fontSize: 14, color: "#2563eb", fontWeight: 600, textAlign: "center", margin: "12px 0 0", padding: "0 16px" },
-
-  monthNav: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px" },
-  navBtn: { background: "none", border: "none", fontSize: 28, cursor: "pointer", color: "#333", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center" },
-  monthLabel: { fontSize: 20, fontWeight: 700, color: "#333" },
-
-  summary: { display: "flex", backgroundColor: "#fff", margin: "0 16px 16px", borderRadius: 16, padding: "18px 16px", border: "1px solid #f3f4f6" },
-  summaryItem: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 },
-  summaryNum: { fontSize: 28, fontWeight: 800, color: "#111827", letterSpacing: "-1px" },
-  summaryLabel: { fontSize: 12, color: "#9ca3af", fontWeight: 600 },
-  summaryDivider: { width: 1, backgroundColor: "#f3f4f6", margin: "0 4px" },
-
-  weekRow: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", padding: "0 16px", marginBottom: 4 },
-  weekDay: { textAlign: "center", fontSize: 13, fontWeight: 600, padding: "4px 0" },
-
-  grid: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, padding: "0 16px" },
-  emptyCell: { aspectRatio: "1", borderRadius: 10 },
-  cell: { aspectRatio: "1", borderRadius: 10, border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, position: "relative", transition: "transform 0.1s" },
-  dayNum: { fontSize: 15, lineHeight: 1 },
-  todayDot: { color: "#2563eb", fontSize: 10, marginLeft: 1 },
-  statusDot: { width: 6, height: 6, borderRadius: "50%" },
-  checkMark: { fontSize: 10, color: "#16a34a", fontWeight: 700 },
-
-  loadingBox: { display: "flex", justifyContent: "center", padding: "40px 0" },
-  spinner: { width: 32, height: 32, border: "3px solid #e5e7eb", borderTop: "3px solid #2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-
-  legend: { display: "flex", justifyContent: "center", gap: 20, padding: "16px 0", marginTop: 8 },
-  legendItem: { display: "flex", alignItems: "center", gap: 6 },
-  legendDot: { width: 10, height: 10, borderRadius: "50%" },
-  legendLabel: { fontSize: 12, color: "#666" },
-
-  warningBox: { display: "flex", alignItems: "flex-start", gap: 10, margin: "12px 16px 0", backgroundColor: "#fff8e1", padding: "14px", borderRadius: 12, border: "1px solid #ffe082" },
-  warningIcon: { fontSize: 20, flexShrink: 0 },
-  warningTitle: { fontSize: 14, fontWeight: 700, color: "#d97706", margin: "0 0 2px" },
-  warningDesc: { fontSize: 12, color: "#888", margin: 0 },
-
-  // 모달
-  overlay: { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 1000 },
-  modal: { backgroundColor: "#fff", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, padding: "24px 20px 40px" },
-  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: 700, color: "#333" },
-  closeBtn: { background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#888" },
-  modalBody: { display: "flex", flexDirection: "column", gap: 14 },
-  statusBadge: { padding: "10px 16px", borderRadius: 10, fontSize: 15, fontWeight: 700, textAlign: "center" },
-  timeRow: { display: "flex", alignItems: "center", gap: 12, justifyContent: "center" },
-  timeLabel: { fontSize: 13, color: "#888" },
-  timeValue: { fontSize: 20, fontWeight: 700, color: "#333" },
-  logInfo: { textAlign: "center", fontSize: 14, color: "#666", margin: 0 },
-  writeBtn: { width: "100%", padding: "14px", backgroundColor: "#2563eb", color: "#fff", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: "pointer" },
-};

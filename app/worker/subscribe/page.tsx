@@ -1,10 +1,9 @@
 "use client";
-// app/worker/subscribe/page.tsx
-// 에이전시 구독 결제 페이지 (토스페이먼츠)
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
+import { Check, ChevronLeft, CreditCard, Gift, Shield, Sparkles } from "lucide-react";
 
 const PLANS = [
   {
@@ -21,7 +20,6 @@ const PLANS = [
       "전자서명",
       "이메일 자동 발송",
     ],
-    color: "#2563eb",
     recommended: false,
   },
   {
@@ -37,7 +35,6 @@ const PLANS = [
       "정산/급여 리포트",
       "우선 고객 지원",
     ],
-    color: "#1565c0",
     recommended: true,
   },
   {
@@ -53,7 +50,6 @@ const PLANS = [
       "전담 고객 지원",
       "맞춤 기능 개발 협의",
     ],
-    color: "#2e7d32",
     recommended: false,
   },
 ];
@@ -74,7 +70,6 @@ export default function SubscribePage() {
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
 
   useEffect(() => {
-    // 현재 에이전시 구독 현황 조회
     fetch("/api/worker/site/current")
       .then(r => r.json())
       .then(d => {
@@ -100,7 +95,6 @@ export default function SubscribePage() {
     try {
       const clientKey = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || "";
       const tossPayments = window.TossPayments(clientKey);
-
       const customerKey = `agency_${agencyId}`;
 
       await tossPayments.requestBillingAuth("카드", {
@@ -140,146 +134,135 @@ export default function SubscribePage() {
 
   return (
     <>
-      <Script
-        src="https://js.tosspayments.com/v1/payment"
-        onLoad={() => setTossLoaded(true)}
-      />
+      <Script src="https://js.tosspayments.com/v1/payment" onLoad={() => setTossLoaded(true)} />
 
-      <div style={s.page}>
-        <div style={s.container}>
-          {/* 헤더 */}
-          <div style={s.header}>
-            <button onClick={() => router.back()} style={s.backBtn}>←</button>
-            <h1 style={s.title}>구독 플랜</h1>
-            <div style={{ width: 36 }} />
-          </div>
+      <div className="min-h-dvh bg-slate-50 pb-10">
+        {/* 헤더 */}
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-4">
+          <button
+            onClick={() => router.back()}
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition active:scale-95"
+          >
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <h1 className="text-base font-black text-slate-900">구독 플랜</h1>
+          <div className="w-9" />
+        </header>
 
-          {/* 현재 상태 */}
-          <div style={s.currentBox}>
-            {isTrial && trialEndsAt && (
-              <div style={s.trialBanner}>
-                <p style={s.trialTitle}>🎁 무료 체험 중</p>
-                <p style={s.trialDesc}>
+        <div className="mx-auto max-w-md space-y-3 px-4 py-4">
+
+          {/* 현재 상태 배너 */}
+          {isTrial && trialEndsAt && (
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <Gift className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-black text-amber-700">무료 체험 중</p>
+                <p className="mt-1 text-xs font-semibold leading-relaxed text-amber-600">
                   {new Date(trialEndsAt).toLocaleDateString("ko-KR")}까지 PREMIUM 기능을 무료로 사용 중이에요.
                   만료 전에 구독을 시작하시면 끊김 없이 사용할 수 있어요.
                 </p>
               </div>
-            )}
-            {isPaid && (
-              <div style={s.paidBanner}>
-                <p style={s.paidTitle}>
-                  ✅ 현재 구독 중: {PLANS.find(p => p.id === currentPlan)?.name || currentPlan}
+            </div>
+          )}
+
+          {isPaid && (
+            <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex items-center gap-2">
+                <Check className="h-5 w-5 text-emerald-500" aria-hidden="true" />
+                <p className="text-sm font-black text-emerald-700">
+                  현재 구독 중: {PLANS.find(p => p.id === currentPlan)?.name || currentPlan}
                 </p>
-                <button style={s.cancelBtn} onClick={handleCancel}>
-                  구독 해지
-                </button>
               </div>
-            )}
-            {!isTrial && !isPaid && (
-              <div style={s.freeBanner}>
-                <p style={s.freeTitle}>현재 무료 플랜</p>
-                <p style={s.freeDesc}>구독하시면 AI 음성 일지, PDF 자동 생성, 전자서명 등 PREMIUM 기능을 사용할 수 있어요.</p>
+              <button
+                onClick={handleCancel}
+                className="rounded-xl border border-rose-300 bg-white px-3 py-1.5 text-xs font-black text-rose-600 transition active:scale-95"
+              >
+                해지
+              </button>
+            </div>
+          )}
+
+          {!isTrial && !isPaid && (
+            <div className="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4">
+              <Sparkles className="mt-0.5 h-5 w-5 flex-shrink-0 text-sky-500" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-black text-sky-700">현재 무료 플랜</p>
+                <p className="mt-1 text-xs font-semibold leading-relaxed text-sky-600">
+                  구독하시면 AI 음성 일지, PDF 자동 생성, 전자서명 등 PREMIUM 기능을 사용할 수 있어요.
+                </p>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* 플랜 카드 */}
-          <div style={s.plansGrid}>
-            {PLANS.map(plan => {
-              const isCurrentPlan = currentPlan === plan.id;
-              return (
-                <div key={plan.id} style={{
-                  ...s.planCard,
-                  borderColor: plan.recommended ? plan.color : "#eee",
-                  borderWidth: plan.recommended ? 2 : 1,
-                }}>
-                  {plan.recommended && (
-                    <div style={{ ...s.recommendBadge, backgroundColor: plan.color }}>
-                      추천
-                    </div>
-                  )}
-                  <p style={{ ...s.planName, color: plan.color }}>{plan.name}</p>
-                  <p style={s.planPrice}>
-                    <span style={s.planPriceNum}>{plan.price.toLocaleString()}</span>
-                    <span style={s.planPriceUnit}>원/월</span>
-                  </p>
-                  <p style={s.planCapacity}>
-                    직무지도원 {plan.maxCoaches === 0 ? "무제한" : `최대 ${plan.maxCoaches}명`} ·
-                    현장 {plan.maxSites === 0 ? "무제한" : `최대 ${plan.maxSites}개`}
-                  </p>
-
-                  <div style={s.planFeatures}>
-                    {plan.features.map((f, i) => (
-                      <div key={i} style={s.planFeatureItem}>
-                        <span style={{ color: plan.color }}>✓</span>
-                        <span>{f}</span>
-                      </div>
-                    ))}
+          {PLANS.map(plan => {
+            const isCurrentPlan = currentPlan === plan.id;
+            return (
+              <div
+                key={plan.id}
+                className={`relative rounded-2xl border-2 bg-white p-5 ${
+                  plan.recommended ? "border-slate-950" : "border-slate-100"
+                }`}
+              >
+                {plan.recommended && (
+                  <div className="absolute -top-3 right-4 rounded-full bg-slate-950 px-3 py-0.5 text-[11px] font-black text-white">
+                    추천
                   </div>
+                )}
 
-                  <button
-                    style={{
-                      ...s.subscribeBtn,
-                      backgroundColor: isCurrentPlan ? "#f0f0f0" : plan.color,
-                      color: isCurrentPlan ? "#888" : "#fff",
-                      cursor: isCurrentPlan ? "default" : "pointer",
-                      opacity: loading ? 0.7 : 1,
-                    }}
-                    onClick={() => !isCurrentPlan && handleSubscribe(plan.id)}
-                    disabled={isCurrentPlan || loading}
-                  >
-                    {isCurrentPlan ? "현재 플랜" : loading ? "처리 중..." : "구독 시작"}
-                  </button>
+                <p className={`text-lg font-black ${plan.recommended ? "text-slate-950" : "text-slate-700"}`}>
+                  {plan.name}
+                </p>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span className="text-3xl font-black text-slate-900">{plan.price.toLocaleString()}</span>
+                  <span className="text-sm font-semibold text-slate-400">원/월</span>
                 </div>
-              );
-            })}
-          </div>
+                <p className="mt-1 text-xs font-semibold text-slate-400">
+                  직무지도원 {plan.maxCoaches === 0 ? "무제한" : `최대 ${plan.maxCoaches}명`} ·
+                  현장 {plan.maxSites === 0 ? "무제한" : `최대 ${plan.maxSites}개`}
+                </p>
+
+                <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
+                  {plan.features.map((f, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Check className="h-3.5 w-3.5 flex-shrink-0 text-slate-950" aria-hidden="true" />
+                      <span className="text-sm font-semibold text-slate-700">{f}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => !isCurrentPlan && handleSubscribe(plan.id)}
+                  disabled={isCurrentPlan || loading}
+                  className={`mt-4 min-h-12 w-full rounded-xl text-sm font-black transition active:scale-[0.97] disabled:opacity-60 ${
+                    isCurrentPlan
+                      ? "bg-slate-100 text-slate-400"
+                      : "bg-slate-950 text-white shadow-lg shadow-slate-950/20"
+                  }`}
+                >
+                  {isCurrentPlan ? "현재 플랜" : loading ? "처리 중..." : "구독 시작"}
+                </button>
+              </div>
+            );
+          })}
 
           {/* 안내 */}
-          <div style={s.notice}>
-            <p style={s.noticeText}>
-              💳 카드 등록 후 매월 자동 결제됩니다.<br />
-              🔒 결제 정보는 토스페이먼츠를 통해 안전하게 처리됩니다.<br />
-              ❓ 문의사항이 있으시면 able-link.co.kr로 연락해주세요.
+          <div className="rounded-2xl border border-slate-100 bg-white p-4 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+              <CreditCard className="h-4 w-4 flex-shrink-0 text-slate-400" aria-hidden="true" />
+              카드 등록 후 매월 자동 결제됩니다.
+            </div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+              <Shield className="h-4 w-4 flex-shrink-0 text-slate-400" aria-hidden="true" />
+              결제 정보는 토스페이먼츠를 통해 안전하게 처리됩니다.
+            </div>
+            <p className="text-xs font-semibold text-slate-400 pl-6">
+              문의: able-link.co.kr
             </p>
           </div>
+
         </div>
       </div>
     </>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", backgroundColor: "#f9fafb" },
-  container: { maxWidth: 480, margin: "0 auto", padding: "0 0 40px" },
-
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", backgroundColor: "#fff", borderBottom: "1px solid #eee", position: "sticky", top: 0, zIndex: 10 },
-  backBtn: { background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#333", width: 36 },
-  title: { fontSize: 18, fontWeight: 700, color: "#333", margin: 0 },
-
-  currentBox: { margin: "12px 16px 0" },
-  trialBanner: { backgroundColor: "#fff8e1", borderRadius: 12, padding: "14px 16px", border: "1px solid #ffe082" },
-  trialTitle: { fontSize: 15, fontWeight: 700, color: "#f57c00", margin: "0 0 4px" },
-  trialDesc: { fontSize: 13, color: "#666", margin: 0, lineHeight: 1.6 },
-  paidBanner: { backgroundColor: "#e8f5e9", borderRadius: 12, padding: "14px 16px", border: "1px solid #a5d6a7", display: "flex", justifyContent: "space-between", alignItems: "center" },
-  paidTitle: { fontSize: 14, fontWeight: 700, color: "#2e7d32", margin: 0 },
-  cancelBtn: { padding: "6px 14px", backgroundColor: "#fff", border: "1.5px solid #e53935", borderRadius: 8, color: "#e53935", fontSize: 13, fontWeight: 700, cursor: "pointer" },
-  freeBanner: { backgroundColor: "#f0f2ff", borderRadius: 12, padding: "14px 16px", border: "1px solid #c7ceff" },
-  freeTitle: { fontSize: 14, fontWeight: 700, color: "#2563eb", margin: "0 0 4px" },
-  freeDesc: { fontSize: 13, color: "#666", margin: 0, lineHeight: 1.6 },
-
-  plansGrid: { display: "flex", flexDirection: "column", gap: 12, margin: "16px 16px 0" },
-  planCard: { backgroundColor: "#fff", borderRadius: 16, padding: "20px", border: "1px solid #eee", position: "relative" },
-  recommendBadge: { position: "absolute", top: -10, right: 16, color: "#fff", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 10 },
-  planName: { fontSize: 18, fontWeight: 800, margin: "0 0 4px" },
-  planPrice: { margin: "0 0 4px", display: "flex", alignItems: "baseline", gap: 2 },
-  planPriceNum: { fontSize: 28, fontWeight: 800, color: "#333" },
-  planPriceUnit: { fontSize: 14, color: "#888" },
-  planCapacity: { fontSize: 12, color: "#888", margin: "0 0 14px" },
-  planFeatures: { display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 },
-  planFeatureItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#444" },
-  subscribeBtn: { width: "100%", padding: "13px", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, transition: "opacity 0.2s" },
-
-  notice: { margin: "16px 16px 0", padding: "14px 16px", backgroundColor: "#f9fafb", borderRadius: 12 },
-  noticeText: { fontSize: 13, color: "#888", margin: 0, lineHeight: 1.8 },
-};

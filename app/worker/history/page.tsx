@@ -1,13 +1,20 @@
 "use client";
-// app/worker/history/page.tsx
-// 직무지도원 — 근무 히스토리 + 급여명세 탭
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  CalendarDays,
+  ChevronLeft,
+  CircleDollarSign,
+  FileText,
+  Home,
+  MapPin,
+  PenLine,
+  RefreshCw,
+} from "lucide-react";
 
 type Tab = "history" | "payroll";
 
-// ── 히스토리 타입 ────────────────────────────────────────
 interface HistoryItem {
   id: string; workDate: string; siteName: string;
   serviceStep: string | null;
@@ -19,7 +26,6 @@ interface HistoryItem {
 }
 interface HistoryStats { total: number; workedDays: number; totalMinutes: number; issueCount: number; }
 
-// ── 급여 타입 ──────────────────────────────────────────
 interface PayrollItem {
   id: string; runId: string; yearMonth: string; agencyName: string;
   finalizedAt: string | null;
@@ -27,7 +33,6 @@ interface PayrollItem {
   workedDays: number; workedMinutes: number; breakdown: any;
 }
 
-// ── 유틸 ───────────────────────────────────────────────
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function defaultYM() {
   const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
@@ -46,29 +51,32 @@ function comma(n: number) { return Math.round(n).toLocaleString("ko-KR"); }
 const stepLabel: Record<string, string> = {
   PRE_TRAINING: "사전훈련", FIELD_TRAINING: "현장훈련", ADAPTATION: "적응지도",
 };
-const logBadge: Record<string, { bg: string; color: string; label: string }> = {
-  NONE:  { bg: "#f3f4f6", color: "#9ca3af", label: "미작성" },
-  DRAFT: { bg: "#fffbeb", color: "#d97706", label: "임시저장" },
-  DONE:  { bg: "#f0fdf4", color: "#16a34a", label: "완료" },
+const logBadge: Record<string, { classes: string; label: string }> = {
+  NONE:  { classes: "bg-slate-100 text-slate-400",    label: "미작성" },
+  DRAFT: { classes: "bg-amber-100 text-amber-600",    label: "임시저장" },
+  DONE:  { classes: "bg-emerald-100 text-emerald-600", label: "완료" },
 };
 const payTypeLabel: Record<string, string> = { MONTHLY: "월급", DAILY: "일급", HOURLY: "시급" };
+
+const NAV_ITEMS = [
+  { icon: Home,             label: "홈",      href: "/worker/home" },
+  { icon: CalendarDays,     label: "캘린더",  href: "/worker/calendar" },
+  { icon: PenLine,          label: "전자서명", href: "/worker/signature" },
+  { icon: FileText,         label: "문서",    href: "/worker/docs" },
+  { icon: CircleDollarSign, label: "히스토리", href: "/worker/history" },
+];
 
 export default function HistoryPage() {
   const router = useRouter();
   const [tab, setTab]             = useState<Tab>("history");
-
-  // ── 히스토리 상태
   const [yearMonth, setYearMonth] = useState(defaultYM());
   const [items,     setItems]     = useState<HistoryItem[]>([]);
   const [stats,     setStats]     = useState<HistoryStats | null>(null);
   const [loading,   setLoading]   = useState(false);
-
-  // ── 급여 상태
   const [payItems,    setPayItems]    = useState<PayrollItem[]>([]);
   const [loadingPay,  setLoadingPay]  = useState(false);
   const [selectedPay, setSelectedPay] = useState<PayrollItem | null>(null);
 
-  // ── 히스토리 로드
   async function loadHistory() {
     setLoading(true);
     try {
@@ -78,7 +86,6 @@ export default function HistoryPage() {
     } finally { setLoading(false); }
   }
 
-  // ── 급여명세 로드
   async function loadPayroll() {
     setLoadingPay(true);
     try {
@@ -97,80 +104,66 @@ export default function HistoryPage() {
     if (tab === "history") loadHistory();
   }, [yearMonth]);
 
-  // ── 급여명세 상세 뷰
+  // ── 급여명세 상세
   if (selectedPay) {
     const b = selectedPay.breakdown as any;
     return (
-      <div style={s.page}>
-        <div style={s.header}>
-          <button onClick={() => setSelectedPay(null)} style={s.backBtn}>←</button>
-          <h1 style={s.title}>{selectedPay.yearMonth} 급여명세</h1>
-          <div style={{ width: 36 }} />
-        </div>
-        <div style={{ padding: "20px 16px" }}>
-          {/* 에이전시 */}
-          <div style={s.infoCard}>
-            <div style={s.infoRow}>
-              <span style={s.infoLabel}>소속 에이전시</span>
-              <span style={s.infoValue}>{selectedPay.agencyName}</span>
-            </div>
-            <div style={s.infoRow}>
-              <span style={s.infoLabel}>지급 기간</span>
-              <span style={s.infoValue}>{selectedPay.yearMonth}</span>
-            </div>
-            <div style={s.infoRow}>
-              <span style={s.infoLabel}>확정일</span>
-              <span style={s.infoValue}>{selectedPay.finalizedAt ? new Date(selectedPay.finalizedAt).toLocaleDateString("ko-KR") : "-"}</span>
-            </div>
+      <div className="min-h-dvh bg-slate-50">
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-4">
+          <button
+            onClick={() => setSelectedPay(null)}
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition active:scale-95"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <h1 className="text-base font-black text-slate-900">{selectedPay.yearMonth} 급여명세</h1>
+          <div className="w-9" />
+        </header>
+
+        <div className="mx-auto max-w-md space-y-4 p-4">
+          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+            {[
+              { label: "소속 에이전시", value: selectedPay.agencyName },
+              { label: "지급 기간",    value: selectedPay.yearMonth },
+              { label: "확정일",      value: selectedPay.finalizedAt ? new Date(selectedPay.finalizedAt).toLocaleDateString("ko-KR") : "-" },
+            ].map(({ label, value }) => (
+              <div key={label} className="flex items-center justify-between border-b border-slate-50 py-2.5 last:border-0">
+                <span className="text-sm font-semibold text-slate-400">{label}</span>
+                <span className="text-sm font-bold text-slate-900">{value}</span>
+              </div>
+            ))}
           </div>
 
-          {/* 근무 요약 */}
-          <div style={s.sectionTitle}>근무 현황</div>
-          <div style={s.infoCard}>
-            <div style={s.infoRow}>
-              <span style={s.infoLabel}>근무 일수</span>
-              <span style={s.infoValue}>{selectedPay.workedDays}일</span>
-            </div>
-            <div style={s.infoRow}>
-              <span style={s.infoLabel}>총 근무 시간</span>
-              <span style={s.infoValue}>{fmtMin(selectedPay.workedMinutes)}</span>
-            </div>
-            {b?.payType && (
-              <div style={s.infoRow}>
-                <span style={s.infoLabel}>급여 유형</span>
-                <span style={s.infoValue}>{payTypeLabel[b.payType] || b.payType}</span>
+          <p className="text-xs font-black uppercase tracking-wide text-slate-400">근무 현황</p>
+          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+            {[
+              { label: "근무 일수",     value: `${selectedPay.workedDays}일` },
+              { label: "총 근무 시간",  value: fmtMin(selectedPay.workedMinutes) },
+              ...(b?.payType ? [{ label: "급여 유형", value: payTypeLabel[b.payType] || b.payType }] : []),
+              ...(b?.hourlyRate ? [{ label: "시급", value: `${comma(b.hourlyRate)}원` }] : []),
+              ...(b?.dailyRate  ? [{ label: "일급", value: `${comma(b.dailyRate)}원` }] : []),
+            ].map(({ label, value }) => (
+              <div key={label} className="flex items-center justify-between border-b border-slate-50 py-2.5 last:border-0">
+                <span className="text-sm font-semibold text-slate-400">{label}</span>
+                <span className="text-sm font-bold text-slate-900">{value}</span>
               </div>
-            )}
-            {b?.hourlyRate && (
-              <div style={s.infoRow}>
-                <span style={s.infoLabel}>시급</span>
-                <span style={s.infoValue}>{comma(b.hourlyRate)}원</span>
-              </div>
-            )}
-            {b?.dailyRate && (
-              <div style={s.infoRow}>
-                <span style={s.infoLabel}>일급</span>
-                <span style={s.infoValue}>{comma(b.dailyRate)}원</span>
-              </div>
-            )}
+            ))}
           </div>
 
-          {/* 지급 내역 */}
-          <div style={s.sectionTitle}>지급 내역</div>
-          <div style={s.payCard}>
-            <div style={s.payRow}>
-              <span style={s.payLabel}>지급액</span>
-              <span style={{ ...s.payValue, color: "#2563eb" }}>{comma(selectedPay.grossPay)}원</span>
+          <p className="text-xs font-black uppercase tracking-wide text-slate-400">지급 내역</p>
+          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm font-semibold text-slate-500">지급액</span>
+              <span className="text-sm font-bold text-sky-600">{comma(selectedPay.grossPay)}원</span>
             </div>
-            <div style={{ height: 1, background: "#f0f0f0", margin: "10px 0" }} />
-            <div style={s.payRow}>
-              <span style={s.payLabel}>공제액 (사업소득세 3.3%)</span>
-              <span style={{ ...s.payValue, color: "#dc2626" }}>-{comma(selectedPay.totalDeduction)}원</span>
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm font-semibold text-slate-500">공제액 (사업소득세 3.3%)</span>
+              <span className="text-sm font-bold text-rose-500">-{comma(selectedPay.totalDeduction)}원</span>
             </div>
-            <div style={{ height: 1, background: "#111827", margin: "10px 0" }} />
-            <div style={s.payRow}>
-              <span style={{ ...s.payLabel, fontWeight: 700, color: "#111827", fontSize: 15 }}>실지급액</span>
-              <span style={{ ...s.payValue, color: "#16a34a", fontSize: 20, fontWeight: 800 }}>{comma(selectedPay.netPay)}원</span>
+            <div className="my-2 border-t border-slate-900" />
+            <div className="flex items-center justify-between py-2">
+              <span className="text-base font-black text-slate-900">실지급액</span>
+              <span className="text-xl font-black text-emerald-600">{comma(selectedPay.netPay)}원</span>
             </div>
           </div>
         </div>
@@ -178,98 +171,126 @@ export default function HistoryPage() {
     );
   }
 
-  // ── 메인 뷰
   return (
-    <div style={s.page}>
+    <div className="min-h-dvh bg-slate-50">
       {/* 헤더 */}
-      <div style={s.header}>
-        <button onClick={() => router.back()} style={s.backBtn}>←</button>
-        <h1 style={s.title}>히스토리</h1>
-        <div style={{ width: 36 }} />
-      </div>
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-4">
+        <button
+          onClick={() => router.back()}
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition active:scale-95"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <h1 className="text-base font-black text-slate-900">히스토리</h1>
+        <div className="w-9" />
+      </header>
 
       {/* 탭 */}
-      <div style={s.tabRow}>
-        <button onClick={() => setTab("history")}
-          style={{ ...s.tabBtn, ...(tab === "history" ? s.tabActive : {}) }}>근무 히스토리</button>
-        <button onClick={() => setTab("payroll")}
-          style={{ ...s.tabBtn, ...(tab === "payroll" ? s.tabActive : {}) }}>급여명세</button>
+      <div className="flex border-b border-slate-100 bg-white">
+        {[
+          { id: "history" as Tab, label: "근무 히스토리" },
+          { id: "payroll" as Tab, label: "급여명세" },
+        ].map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`flex-1 py-3.5 text-sm font-black transition border-b-2 ${
+              tab === id
+                ? "border-slate-950 text-slate-950"
+                : "border-transparent text-slate-400"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* ── 히스토리 탭 ─────────────────────────────────── */}
+      {/* ── 히스토리 탭 ── */}
       {tab === "history" && (
-        <div style={{ padding: "16px 16px 80px" }}>
+        <div className="mx-auto max-w-md px-4 pb-28 pt-4 space-y-4">
           {/* 월 선택 */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)}
-              style={{ flex: 1, height: 42, border: "1px solid #e5e7eb", borderRadius: 10, padding: "0 12px", fontSize: 14, outline: "none", background: "#fff" }} />
-            <button onClick={loadHistory} style={s.refreshBtn}>새로고침</button>
+          <div className="flex gap-2">
+            <input
+              type="month"
+              value={yearMonth}
+              onChange={e => setYearMonth(e.target.value)}
+              className="h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+            />
+            <button
+              onClick={loadHistory}
+              className="flex h-11 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 transition active:scale-95"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
           </div>
 
-          {/* 통계 카드 */}
+          {/* 통계 */}
           {stats && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 16 }}>
+            <div className="grid grid-cols-2 gap-2.5">
               {[
-                { label: "근무 일수", value: `${stats.workedDays}일`, color: "#2563eb" },
-                { label: "총 근무 시간", value: fmtMin(stats.totalMinutes), color: "#16a34a" },
-                { label: "전체 기록", value: `${stats.total}건`, color: "#374151" },
-                { label: "이슈", value: `${stats.issueCount}건`, color: stats.issueCount > 0 ? "#dc2626" : "#9ca3af" },
-              ].map((c, i) => (
-                <div key={i} style={s.statCard}>
-                  <p style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 800, color: c.color }}>{c.value}</p>
-                  <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{c.label}</p>
+                { label: "근무 일수",   value: `${stats.workedDays}일`,     color: "text-sky-600" },
+                { label: "총 근무 시간", value: fmtMin(stats.totalMinutes), color: "text-emerald-600" },
+                { label: "전체 기록",   value: `${stats.total}건`,         color: "text-slate-700" },
+                { label: "이슈",       value: `${stats.issueCount}건`,     color: stats.issueCount > 0 ? "text-rose-500" : "text-slate-300" },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="rounded-2xl border border-slate-100 bg-white p-4 text-center shadow-sm">
+                  <p className={`mb-1 text-xl font-black ${color}`}>{value}</p>
+                  <p className="text-xs font-semibold text-slate-400">{label}</p>
                 </div>
               ))}
             </div>
           )}
 
           {loading ? (
-            <div style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>로딩 중...</div>
+            <div className="flex justify-center py-10">
+              <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-sky-500" />
+            </div>
           ) : items.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 40 }}>
-              <p style={{ color: "#9ca3af", fontSize: 14 }}>해당 월에 근무 기록이 없습니다.</p>
+            <div className="rounded-3xl border border-slate-100 bg-white py-12 text-center">
+              <p className="text-sm font-semibold text-slate-400">해당 월에 근무 기록이 없습니다.</p>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div className="space-y-2.5">
               {items.map(item => (
-                <div key={item.id} style={s.historyCard}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                    <div>
-                      <span style={{ fontWeight: 700, color: "#111827", fontSize: 15 }}>{item.workDate}</span>
+                <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <div className="mb-2 flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-black text-slate-900">{item.workDate}</span>
                       {item.serviceStep && (
-                        <span style={{ marginLeft: 8, fontSize: 11, color: "#6b7280", background: "#f3f4f6", borderRadius: 4, padding: "1px 6px" }}>
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
                           {stepLabel[item.serviceStep] ?? item.serviceStep}
                         </span>
                       )}
                     </div>
-                    <span style={{ ...logBadge[item.logStatus], ...s.badge }}>
+                    <span className={`rounded-lg px-2.5 py-1 text-[11px] font-black ${logBadge[item.logStatus].classes}`}>
                       {logBadge[item.logStatus].label}
                     </span>
                   </div>
 
-                  <p style={{ margin: "0 0 6px", fontSize: 13, color: "#6b7280" }}>📍 {item.siteName}</p>
+                  <p className="mb-2 flex items-center gap-1 text-xs font-semibold text-slate-400">
+                    <MapPin className="h-3 w-3" />
+                    {item.siteName}
+                  </p>
 
-                  <div style={{ display: "flex", gap: 16, fontSize: 13, color: "#374151" }}>
-                    <span>출근 <b>{fmtTime(item.startTime)}</b></span>
-                    <span>퇴근 <b>{fmtTime(item.endTime)}</b></span>
-                    {item.workedMinutes > 0 && (
-                      <span style={{ color: "#6b7280" }}>{fmtMin(item.workedMinutes)}</span>
-                    )}
+                  <div className="flex gap-4 text-xs text-slate-600">
+                    <span>출근 <strong>{fmtTime(item.startTime)}</strong></span>
+                    <span>퇴근 <strong>{fmtTime(item.endTime)}</strong></span>
+                    {item.workedMinutes > 0 && <span className="text-slate-400">{fmtMin(item.workedMinutes)}</span>}
                   </div>
 
                   {(item.isGpsModified || item.hasIssue) && (
-                    <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
                       {item.isGpsModified && (
-                        <span style={{ fontSize: 11, color: "#ea580c", background: "#fff7ed", borderRadius: 4, padding: "2px 7px" }}>⚠ GPS 이탈</span>
+                        <span className="rounded-lg bg-orange-50 px-2 py-0.5 text-[11px] font-bold text-orange-600">GPS 이탈</span>
                       )}
                       {item.hasIssue && (
-                        <span style={{ fontSize: 11, color: "#dc2626", background: "#fef2f2", borderRadius: 4, padding: "2px 7px" }}>근태 이슈</span>
+                        <span className="rounded-lg bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-600">근태 이슈</span>
                       )}
                     </div>
                   )}
 
                   {!item.isFinalClosed && item.startTime && (
-                    <p style={{ margin: "6px 0 0", fontSize: 11, color: "#d97706" }}>⏳ 미확정</p>
+                    <p className="mt-1.5 text-[11px] font-semibold text-amber-600">미확정</p>
                   )}
                 </div>
               ))}
@@ -278,32 +299,37 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {/* ── 급여명세 탭 ──────────────────────────────────── */}
+      {/* ── 급여명세 탭 ── */}
       {tab === "payroll" && (
-        <div style={{ padding: "16px 16px 80px" }}>
+        <div className="mx-auto max-w-md px-4 pb-28 pt-4">
           {loadingPay ? (
-            <div style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>로딩 중...</div>
+            <div className="flex justify-center py-10">
+              <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-sky-500" />
+            </div>
           ) : payItems.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 40 }}>
-              <p style={{ color: "#9ca3af", fontSize: 14 }}>확정된 급여명세가 없습니다.</p>
-              <p style={{ color: "#d1d5db", fontSize: 12, marginTop: 4 }}>에이전시에서 급여를 확정하면 여기서 확인할 수 있어요.</p>
+            <div className="rounded-3xl border border-slate-100 bg-white py-12 text-center">
+              <p className="text-sm font-semibold text-slate-400">확정된 급여명세가 없습니다.</p>
+              <p className="mt-1 text-xs font-semibold text-slate-300">에이전시에서 급여를 확정하면 여기서 확인할 수 있어요.</p>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div className="space-y-2.5">
               {payItems.map(item => (
-                <button key={item.id} onClick={() => setSelectedPay(item)}
-                  style={{ ...s.payListCard, textAlign: "left", cursor: "pointer" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedPay(item)}
+                  className="w-full rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm transition active:scale-[0.98]"
+                >
+                  <div className="flex items-center justify-between">
                     <div>
-                      <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 15, color: "#111827" }}>{item.yearMonth}</p>
-                      <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{item.agencyName} · {item.workedDays}일 근무</p>
+                      <p className="text-sm font-black text-slate-900">{item.yearMonth}</p>
+                      <p className="mt-0.5 text-xs font-semibold text-slate-400">{item.agencyName} · {item.workedDays}일 근무</p>
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <p style={{ margin: "0 0 2px", fontWeight: 800, fontSize: 18, color: "#16a34a" }}>{comma(item.netPay)}원</p>
-                      <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>실지급</p>
+                    <div className="text-right">
+                      <p className="text-lg font-black text-emerald-600">{comma(item.netPay)}원</p>
+                      <p className="mt-0.5 text-[11px] font-semibold text-slate-400">실지급</p>
                     </div>
                   </div>
-                  <div style={{ marginTop: 8, display: "flex", gap: 12, fontSize: 12, color: "#6b7280" }}>
+                  <div className="mt-2.5 flex gap-3 text-xs font-semibold text-slate-400">
                     <span>지급액 {comma(item.grossPay)}원</span>
                     <span>공제 -{comma(item.totalDeduction)}원</span>
                   </div>
@@ -313,30 +339,19 @@ export default function HistoryPage() {
           )}
         </div>
       )}
+
+      {/* 하단 네비게이션 */}
+      <nav className="fixed bottom-0 left-1/2 z-40 flex w-full max-w-md -translate-x-1/2 border-t border-slate-100 bg-white pb-safe-bottom">
+        {NAV_ITEMS.map(({ icon: Icon, label, href }) => {
+          const isActive = typeof window !== "undefined" && window.location.pathname === href;
+          return (
+            <button key={href} onClick={() => router.push(href)} className="flex flex-1 flex-col items-center justify-center gap-1 py-3">
+              <Icon className={`h-5 w-5 ${isActive ? "text-slate-950" : "text-slate-400"}`} />
+              <span className={`text-[10px] font-black ${isActive ? "text-slate-950" : "text-slate-400"}`}>{label}</span>
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100dvh", background: "#f7f8fa", fontFamily: "-apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", background: "#fff", borderBottom: "1px solid #f0f0f0", position: "sticky", top: 0, zIndex: 10 },
-  backBtn: { background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#333", width: 36 },
-  title: { fontSize: 17, fontWeight: 700, color: "#111827", margin: 0 },
-  tabRow: { display: "flex", background: "#fff", borderBottom: "1px solid #f0f0f0" },
-  tabBtn: { flex: 1, padding: "13px 0", border: "none", background: "none", fontSize: 14, fontWeight: 500, color: "#9ca3af", cursor: "pointer", borderBottom: "2px solid transparent" },
-  tabActive: { color: "#111827", fontWeight: 700, borderBottom: "2px solid #111827" },
-  refreshBtn: { padding: "0 14px", height: 42, background: "#f3f4f6", border: "none", borderRadius: 10, fontSize: 13, cursor: "pointer", color: "#374151", whiteSpace: "nowrap" as const },
-  statCard: { background: "#fff", borderRadius: 12, padding: "14px 16px", textAlign: "center" as const, border: "1px solid #f0f0f0" },
-  historyCard: { background: "#fff", borderRadius: 12, padding: "14px 16px", border: "1px solid #f0f0f0" },
-  badge: { display: "inline-flex", alignItems: "center", padding: "3px 9px", borderRadius: 6, fontSize: 11, fontWeight: 600 },
-  payListCard: { background: "#fff", borderRadius: 12, padding: "16px", border: "1px solid #f0f0f0", width: "100%" },
-  infoCard: { background: "#f9fafb", borderRadius: 12, padding: "16px", marginBottom: 16, border: "1px solid #f0f0f0" },
-  infoRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #f0f0f0" },
-  infoLabel: { fontSize: 13, color: "#6b7280" },
-  infoValue: { fontSize: 13, color: "#111827", fontWeight: 600 },
-  sectionTitle: { fontSize: 13, fontWeight: 700, color: "#374151", margin: "0 0 8px" },
-  payCard: { background: "#fff", borderRadius: 12, padding: "18px 20px", marginBottom: 16, border: "1px solid #f0f0f0" },
-  payRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" },
-  payLabel: { fontSize: 14, color: "#6b7280" },
-  payValue: { fontSize: 16, fontWeight: 700 },
-};

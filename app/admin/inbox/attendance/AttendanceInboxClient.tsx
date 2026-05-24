@@ -283,22 +283,14 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      style={{
-        padding: "5px 12px",
-        borderRadius: 20,
-        border: active
-          ? "1px solid #3b82f6"
+      className={[
+        "whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold transition",
+        active
+          ? "border-sky-500 bg-sky-500 text-white"
           : tone === "danger"
-          ? "1px solid #fecaca"
-          : "1px solid #e5e7eb",
-        background: active ? "#3b82f6" : "#fff",
-        color: active ? "#fff" : tone === "danger" ? "#dc2626" : "#374151",
-        fontSize: 12,
-        fontWeight: 500,
-        cursor: "pointer",
-        transition: "all 0.15s",
-        whiteSpace: "nowrap" as const,
-      }}
+          ? "border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+      ].join(" ")}
     >
       {children}
     </button>
@@ -309,7 +301,7 @@ function SectionTitle({ title, note }: { title: string; note?: string }) {
   return (
     <div className="flex items-baseline gap-2">
       <div className="text-sm font-semibold">{title}</div>
-      {note ? <div className="text-xs text-gray-400">※ {note}</div> : null}
+      {note ? <div className="text-xs text-slate-400">※ {note}</div> : null}
     </div>
   );
 }
@@ -551,30 +543,30 @@ export default function AttendanceInboxClient() {
     <div className="pb-6">
       {/* ===== Header ===== */}
       <div className="mb-5 flex items-baseline gap-3">
-        <div className="text-lg font-700 text-gray-900" style={{fontWeight:700,fontSize:18,color:"#111827",letterSpacing:"-0.3px"}}>근태 인박스</div>
-        <div className="text-sm text-gray-400">※ 근태 관련 이슈를 파악하고, 근태 이슈 발생 사유를 확인합니다.</div>
+        <div className="text-lg font-black text-slate-900" style={{letterSpacing:"-0.3px"}}>근태 인박스</div>
+        <div className="text-sm font-semibold text-slate-400">※ 근태 관련 이슈를 파악하고, 근태 이슈 발생 사유를 확인합니다.</div>
       </div>
 
       {/* ===== Top Filter Bar (시안 구조) ===== */}
-      <div className="mb-5 rounded-xl border border-gray-100 bg-white p-4">
+      <div className="mb-5 rounded-xl border border-slate-100 bg-white p-4">
         <div className="grid grid-cols-12 gap-3">
           {/* 통합 검색 */}
           <div className="col-span-12 lg:col-span-6">
-            <label className="mb-1 block text-sm font-medium text-black/70">통합 검색</label>
+            <label className="mb-1 block text-sm font-semibold text-slate-700">통합 검색</label>
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="직무지도원명 / Site명 / 날짜(예: 2/3, 2026-02-03)"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400"
             />
           </div>
 
           {/* 기간 조회 */}
           <div className="col-span-12 lg:col-span-6">
             <div className="mb-1 flex items-center justify-between">
-              <label className="block text-sm font-medium text-black/70">기간 조회</label>
-              <span className="ml-auto text-xs text-black/50">
-                선택: <span className="font-medium text-red-700">{periodLabel}</span>
+              <label className="block text-sm font-semibold text-slate-700">기간 조회</label>
+              <span className="ml-auto text-xs text-slate-400">
+                선택: <span className="font-semibold text-rose-700">{periodLabel}</span>
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -603,7 +595,7 @@ export default function AttendanceInboxClient() {
                   disabled={period !== "CUSTOM"}
                   className={cx("rounded-xl border px-3 py-2 text-sm", period !== "CUSTOM" ? "opacity-40" : "")}
                 />
-                <span className="text-black/60">~</span>
+                <span className="text-slate-500">~</span>
                 <input
                   type="date"
                   value={customTo}
@@ -617,7 +609,7 @@ export default function AttendanceInboxClient() {
 
           {/* 이슈 필터 (단일) */}
           <div className="col-span-12 lg:col-span-6">
-            <label className="mb-1 block text-sm font-medium text-black/70">이슈 필터(단일 선택)</label>
+            <label className="mb-1 block text-sm font-semibold text-slate-700">이슈 필터(단일 선택)</label>
             <div className="flex flex-wrap gap-2">
               <Chip active={issue === "ALL"} onClick={() => setIssue("ALL")}>
                 전체
@@ -639,7 +631,7 @@ export default function AttendanceInboxClient() {
 
           {/* 처리 상태 (복수) */}
           <div className="col-span-12 lg:col-span-6">
-            <label className="mb-1 block text-sm font-medium text-black/70">처리 상태(복수 선택)</label>
+            <label className="mb-1 block text-sm font-semibold text-slate-700">처리 상태(복수 선택)</label>
             <div className="flex flex-wrap gap-2">
               <Chip active={statuses.includes("ADMIN_UNCONFIRMED")} onClick={() => toggleStatus("ADMIN_UNCONFIRMED")}>
                 {STATUS_LABEL.ADMIN_UNCONFIRMED}
@@ -671,19 +663,19 @@ export default function AttendanceInboxClient() {
       <div className="grid grid-cols-12 gap-4">
         {/* Left list */}
         <div className="col-span-12 lg:col-span-6 xl:col-span-6">
-          <div className="rounded-xl border border-gray-100 bg-white">
+          <div className="rounded-xl border border-slate-100 bg-white">
             <div className="flex items-center justify-between border-b border-gray-50 px-4 py-3">
               <div className="flex items-baseline gap-2">
-                <div className="text-sm font-semibold text-gray-800">목록 조회</div>
-                <div className="text-sm text-blue-600 ml-1">{loading ? "불러오는 중…" : `(총 ${items.length}건)`}</div>
+                <div className="text-sm font-semibold text-slate-800">목록 조회</div>
+                <div className="text-sm ml-1 text-sky-600">{loading ? "불러오는 중…" : `(총 ${items.length}건)`}</div>
               </div>
-              <div className="text-xs text-gray-400">정렬: 날짜 최신순</div>
+              <div className="text-xs text-slate-400">정렬: 날짜 최신순</div>
             </div>
 
             <div className="p-2">
               <div className="space-y-1 p-2">
                 {pageItems.length === 0 ? (
-                  <div className="rounded-xl border p-6 text-sm text-black/60">조건에 해당하는 항목이 없습니다.</div>
+                  <div className="rounded-xl border p-6 text-sm text-slate-500">조건에 해당하는 항목이 없습니다.</div>
                 ) : (
                   pageItems.map((it) => {
                     const active = it.id === selectedId;
@@ -695,17 +687,17 @@ export default function AttendanceInboxClient() {
                         type="button"
                         onClick={() => setSelectedId(it.id)}
                         className={cx(
-                          "w-full rounded-lg border border-gray-100 px-4 py-3 text-left transition",
-                          active ? "border-blue-200 bg-blue-50" : "hover:bg-gray-50"
+                          "w-full rounded-lg border border-slate-100 px-4 py-3 text-left transition",
+                          active ? "border-sky-200 bg-sky-50" : "hover:bg-slate-50"
                         )}
                       >
                         <div className="mb-0 flex items-start gap-3">
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-semibold">
-                              {it.coachName} <span className="text-black/40 font-normal">·</span>{" "}
-                              <span className="font-normal text-black/70">{it.siteName}</span>
+                              {it.coachName} <span className="text-slate-300 font-normal">·</span>{" "}
+                              <span className="font-normal text-slate-700">{it.siteName}</span>
                             </div>
-                            <div className="mt-0.5 text-xs text-black/70">
+                            <div className="mt-0.5 text-xs text-slate-700">
                               {fmtYmdDots(it.workDate)} · 출근 {fmtTime(it.clockInAt)} / 퇴근 {fmtTime(it.clockOutAt)}
                             </div>
                           </div>
@@ -722,7 +714,7 @@ export default function AttendanceInboxClient() {
                                   </span>
                                 ))}
                                 {rest > 0 ? (
-                                  <span className="inline-flex items-center rounded-full bg-black/10 px-2 py-0.5 text-xs font-semibold text-black/70">
+                                  <span className="inline-flex items-center rounded-full bg-black/10 px-2 py-0.5 text-xs font-semibold text-slate-700">
                                     +{rest}
                                   </span>
                                 ) : null}
@@ -730,24 +722,13 @@ export default function AttendanceInboxClient() {
                             ) : null}
                           </div>
 
-                          <span
-                            style={{
-                              flexShrink: 0,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              padding: "5px 12px",
-                              borderRadius: 8,
-                              fontSize: 11,
-                              fontWeight: 600,
-                              color: "#fff",
-                              whiteSpace: "nowrap",
-                              background: it.status === "ADMIN_RESOLVED" ? "#16a34a"
-                                : it.status === "COACH_REPLIED" ? "#2563eb"
-                                : it.status === "COACH_REASON_MISSING" ? "#dc2626"
-                                : "#374151",
-                            }}
-                          >
+                          <span className={[
+                            "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 py-1 text-[11px] font-semibold text-white",
+                            it.status === "ADMIN_RESOLVED" ? "bg-emerald-600"
+                              : it.status === "COACH_REPLIED" ? "bg-sky-600"
+                              : it.status === "COACH_REASON_MISSING" ? "bg-rose-600"
+                              : "bg-slate-600",
+                          ].join(" ")}>
                             {STATUS_LABEL[it.status]}
                           </span>
                         </div>
@@ -759,7 +740,7 @@ export default function AttendanceInboxClient() {
 
               {/* pagination */}
               <div className="mt-3 flex items-center justify-between px-1">
-                <div className="text-xs text-gray-400">
+                <div className="text-xs text-slate-400">
                   페이지 {page} / {totalPages}
                 </div>
                 <div className="flex items-center gap-1">
@@ -775,7 +756,7 @@ export default function AttendanceInboxClient() {
                       key={p}
                       className={cx(
                         "rounded-lg border px-2 py-1 text-xs",
-                        p === page ? "bg-blue-600 text-white border-blue-600" : "hover:bg-gray-50"
+                        p === page ? "bg-slate-950 text-white border-slate-950" : "hover:bg-slate-50"
                       )}
                       onClick={() => setPage(p)}
                     >
@@ -797,27 +778,27 @@ export default function AttendanceInboxClient() {
 
         {/* Right detail */}
         <div className="col-span-12 lg:col-span-6 xl:col-span-6">
-          <div className="rounded-xl border border-gray-100 bg-white p-5">
+          <div className="rounded-xl border border-slate-100 bg-white p-5">
             {!selected ? (
-              <div className="rounded-xl border p-6 text-sm text-black/60">좌측 목록에서 항목을 선택하세요.</div>
+              <div className="rounded-xl border p-6 text-sm text-slate-500">좌측 목록에서 항목을 선택하세요.</div>
             ) : (
               <>
                 {/* 상세 헤더 */}
                 <div className="mb-3">
                   <div className="mb-1 flex items-baseline justify-between">
                     <div className="text-base font-semibold">상세 내용 조회</div>
-                    <div className="text-xs text-black/50">최근 업데이트: {new Date(selected.updatedAt).toLocaleString()}</div>
+                    <div className="text-xs text-slate-400">최근 업데이트: {new Date(selected.updatedAt).toLocaleString()}</div>
                   </div>
-                  <div className="text-xs text-gray-400">※ 이슈를 확인하고, 직무지도원으로부터 사유를 확인합니다.</div>
+                  <div className="text-xs text-slate-400">※ 이슈를 확인하고, 직무지도원으로부터 사유를 확인합니다.</div>
 
                   <div className="mt-3 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-lg font-semibold">
                         {selected.coachName}{" "}
-                        <span className="text-black/40 font-normal">·</span>{" "}
-                        <span className="font-normal text-black/70">{selected.siteName}</span>
+                        <span className="text-slate-300 font-normal">·</span>{" "}
+                        <span className="font-normal text-slate-700">{selected.siteName}</span>
                       </div>
-                      <div className="mt-1 text-sm text-black/70">{fmtYmdDots(selected.workDate)}</div>
+                      <div className="mt-1 text-sm text-slate-700">{fmtYmdDots(selected.workDate)}</div>
 
                       {/* 배지(목록과 동일 규칙/순서) */}
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -833,7 +814,13 @@ export default function AttendanceInboxClient() {
                     </div>
 
                     <div className="shrink-0">
-                      <div style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, color: "#fff", background: selected.status === "ADMIN_RESOLVED" ? "#16a34a" : selected.status === "COACH_REPLIED" ? "#2563eb" : selected.status === "COACH_REASON_MISSING" ? "#dc2626" : "#374151" }}>
+                      <div className={[
+                        "whitespace-nowrap rounded-xl px-4 py-1.5 text-xs font-semibold text-white",
+                        selected.status === "ADMIN_RESOLVED" ? "bg-emerald-600"
+                          : selected.status === "COACH_REPLIED" ? "bg-sky-600"
+                          : selected.status === "COACH_REASON_MISSING" ? "bg-rose-600"
+                          : "bg-slate-600",
+                      ].join(" ")}>
                         {STATUS_LABEL[selected.status]}
                       </div>
                     </div>
@@ -841,22 +828,22 @@ export default function AttendanceInboxClient() {
                 </div>
 
                 {/* KPI */}
-                <div className="mb-4 rounded-xl bg-gray-50 p-4 border border-gray-100">
+                <div className="mb-4 rounded-xl bg-slate-50 p-4 border border-slate-100">
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <div className="text-xs text-gray-400">출근</div>
+                      <div className="text-xs text-slate-400">출근</div>
                       <div className="font-semibold">{fmtTime(selected.clockInAt)}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-400">퇴근</div>
+                      <div className="text-xs text-slate-400">퇴근</div>
                       <div className="font-semibold">{fmtTime(selected.clockOutAt)}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-400">기준거리</div>
+                      <div className="text-xs text-slate-400">기준거리</div>
                       <div className="font-semibold">{selected.rangeM ?? "-"}m</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-400">거리(출근)</div>
+                      <div className="text-xs text-slate-400">거리(출근)</div>
                       <div className="font-semibold">{selected.startDistanceM ?? "-"}m</div>
                     </div>
                   </div>
@@ -867,7 +854,7 @@ export default function AttendanceInboxClient() {
                   {actions?.showRequestReason ? (
                     <button
                       onClick={actionRequestReason}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                      className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
                     >
                       사유 등록 요청
                     </button>
@@ -877,13 +864,13 @@ export default function AttendanceInboxClient() {
                     <>
                       <button
                         onClick={actionRequestSupplement}
-                        className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                       >
                         보완 요청
                       </button>
                       <button
                         onClick={actionResolve}
-                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                        className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
                       >
                         처리 완료
                       </button>
@@ -896,15 +883,15 @@ export default function AttendanceInboxClient() {
                   <SectionTitle title="타임 라인" note="사유 요청/사유 등록/종결 처리 흐름" />
                   <div className="mt-2 space-y-2">
                     {selected.timeline.length === 0 ? (
-                      <div className="rounded-xl border p-4 text-sm text-black/60">타임라인 항목이 없습니다.</div>
+                      <div className="rounded-xl border p-4 text-sm text-slate-500">타임라인 항목이 없습니다.</div>
                     ) : (
                       selected.timeline.map((ev) => (
                         <div key={ev.id} className="rounded-xl border p-3">
                           <div className="flex items-baseline justify-between">
                             <div className="text-sm font-semibold">{ev.label}</div>
-                            <div className="text-xs text-black/50">{new Date(ev.at).toLocaleString()}</div>
+                            <div className="text-xs text-slate-400">{new Date(ev.at).toLocaleString()}</div>
                           </div>
-                          {ev.detail ? <div className="mt-1 text-sm text-black/70 whitespace-pre-wrap">{ev.detail}</div> : null}
+                          {ev.detail ? <div className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">{ev.detail}</div> : null}
                         </div>
                       ))
                     )}
@@ -920,18 +907,18 @@ export default function AttendanceInboxClient() {
                       onChange={(e) =>
                         updateSelected((it) => ({ ...it, adminMemo: e.target.value, updatedAt: new Date().toISOString() }))
                       }
-                      className="h-14 flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                      className="h-14 flex-1 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400"
                       placeholder="운영 메모를 입력하세요"
                     />
                     <button
                       onClick={saveAdminMemo}
                       disabled={savingMemo}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                      className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
                     >
                       메모 저장
                     </button>
                   </div>
-                  <div className="mt-1 text-xs text-black/50">마지막 갱신: {new Date(selected.updatedAt).toLocaleString()}</div>
+                  <div className="mt-1 text-xs text-slate-400">마지막 갱신: {new Date(selected.updatedAt).toLocaleString()}</div>
                 </div>
               </>
             )}
@@ -941,30 +928,30 @@ export default function AttendanceInboxClient() {
 
       {/* modal (prototype) */}
       {modal.type !== "NONE" ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-6">
-          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-6">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-7 shadow-2xl shadow-slate-950/20">
             <div className="mb-2 flex items-center justify-between">
               <div className="text-sm font-semibold">
                 {modal.type === "REQUEST_REASON" ? "사유 등록 요청" : "보완 요청"}
               </div>
-              <button className="text-sm text-black/60 hover:text-black" onClick={() => setModal({ type: "NONE" })}>
+              <button className="text-sm text-slate-500 hover:text-slate-900" onClick={() => setModal({ type: "NONE" })}>
                 닫기
               </button>
             </div>
             <textarea
               value={modal.draft}
               onChange={(e) => setModal({ ...modal, draft: e.target.value } as any)}
-              className="h-64 w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+              className="h-64 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400"
             />
             <div className="mt-3 flex justify-end gap-2">
               <button
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 onClick={() => setModal({ type: "NONE" })}
               >
                 취소
               </button>
               <button
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
                 onClick={async () => {
                   if (!selected) return;
 

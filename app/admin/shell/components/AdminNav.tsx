@@ -1,9 +1,10 @@
 "use client";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type NavItem = { href: string; label: string; };
-type NavGroup = { title: string; items: NavItem[]; };
+type NavItem  = { href: string; label: string };
+type NavGroup = { title: string; items: NavItem[] };
 
 const groups: NavGroup[] = [
   {
@@ -24,11 +25,11 @@ const groups: NavGroup[] = [
   {
     title: "배정/운영",
     items: [
-      { href: "/admin/attendances",       label: "근태 현황" },
-      { href: "/admin/inbox/attendance",  label: "GPS 승인 대기" },
-      { href: "/admin/contracts",         label: "근로계약서" },
-      { href: "/admin/documents",         label: "문서 운영" },
-      { href: "/admin/docs",              label: "문서 조회" },
+      { href: "/admin/attendances",      label: "근태 현황" },
+      { href: "/admin/inbox/attendance", label: "GPS 승인 대기" },
+      { href: "/admin/contracts",        label: "근로계약서" },
+      { href: "/admin/documents",        label: "문서 운영" },
+      { href: "/admin/docs",             label: "문서 조회" },
     ],
   },
   {
@@ -47,131 +48,50 @@ export default function AdminNav() {
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 
   return (
-    <aside style={s.aside}>
+    <aside className="flex w-[220px] flex-shrink-0 flex-col bg-slate-950 px-3 pb-8 pt-7">
       {/* 로고 */}
-      <Link href="/admin" style={{ textDecoration: "none" }}>
-        <div style={s.logoWrap}>
-          <div style={s.logoText}>
-            <span style={s.logoAble}>Able</span><span style={s.logoLink}> Link</span>
-          </div>
-          <div style={s.logoSub}>에이전시 운영 플랫폼</div>
-        </div>
+      <Link href="/admin" className="mb-6 block px-3 no-underline">
+        <span className="text-[22px] font-black tracking-tight text-white">AbleLink</span>
+        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+          Agency Platform
+        </p>
       </Link>
 
-      <div style={s.divider} />
+      <div className="mb-5 h-px bg-slate-800" />
 
-      {/* 네비 */}
-      <nav style={s.nav}>
+      {/* 네비 그룹 */}
+      <nav className="flex flex-col gap-6">
         {groups.map(g => (
-          <div key={g.title} style={s.group}>
-            <div style={s.groupTitle}>{g.title}</div>
-            {g.items.map(item => {
-              const active = isActive(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  style={{ ...s.navItem, ...(active ? s.navItemActive : {}) }}
-                >
-                  <span style={{ ...s.navBar, ...(active ? s.navBarActive : {}) }} />
-                  <span style={s.navLabel}>{item.label}</span>
-                </Link>
-              );
-            })}
+          <div key={g.title}>
+            <p className="mb-1.5 px-3 text-[10px] font-black uppercase tracking-widest text-slate-600">
+              {g.title}
+            </p>
+            <div className="space-y-0.5">
+              {g.items.map(item => {
+                const active = isActive(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm no-underline transition ${
+                      active
+                        ? "bg-white/10 font-black text-white"
+                        : "font-semibold text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+                        active ? "bg-sky-400" : "bg-slate-700"
+                      }`}
+                    />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         ))}
       </nav>
     </aside>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  aside: {
-    width: 220,
-    minHeight: "100vh",
-    background: "#111318",
-    display: "flex",
-    flexDirection: "column",
-    flexShrink: 0,
-    padding: "28px 0 32px",
-  },
-  logoWrap: {
-    padding: "0 22px",
-    marginBottom: 24,
-  },
-  logoText: {
-    fontSize: 22,
-    fontWeight: 900,
-    fontFamily: "'Arial Black', 'Helvetica Neue', sans-serif",
-    letterSpacing: "-0.5px",
-    lineHeight: 1.1,
-  },
-  logoAble: {
-    color: "#ffffff",
-  },
-  logoLink: {
-    color: "#ef4444",
-  },
-  logoSub: {
-    fontSize: 10,
-    color: "rgba(255,255,255,0.3)",
-    marginTop: 4,
-    letterSpacing: "0.5px",
-  },
-  divider: {
-    height: 1,
-    background: "rgba(255,255,255,0.06)",
-    margin: "0 22px 22px",
-  },
-  nav: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 24,
-    padding: "0 12px",
-  },
-  group: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-  },
-  groupTitle: {
-    fontSize: 10,
-    color: "rgba(255,255,255,0.28)",
-    letterSpacing: "1px",
-    textTransform: "uppercase" as const,
-    marginBottom: 6,
-    paddingLeft: 12,
-    fontWeight: 700,
-  },
-  navItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    textDecoration: "none",
-    color: "rgba(255,255,255,0.5)",
-    padding: "9px 12px",
-    borderRadius: 8,
-    fontSize: 14,
-    fontWeight: 400,
-    transition: "all 0.15s",
-    letterSpacing: "-0.1px",
-  },
-  navItemActive: {
-    background: "rgba(255,255,255,0.08)",
-    color: "#ffffff",
-    fontWeight: 600,
-  },
-  navBar: {
-    width: 3,
-    height: 14,
-    borderRadius: 2,
-    background: "rgba(255,255,255,0.12)",
-    flexShrink: 0,
-  },
-  navBarActive: {
-    background: "#ef4444",
-  },
-  navLabel: {
-    lineHeight: 1,
-  },
-};

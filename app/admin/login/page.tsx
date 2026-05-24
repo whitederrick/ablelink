@@ -7,7 +7,7 @@ import LoginClient from "./LoginClient";
 
 export default function AdminLoginPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 24 }}>Loading...</div>}>
+    <Suspense fallback={<div className="p-6 text-sm text-slate-400">Loading...</div>}>
       <LoginClient />
     </Suspense>
   );

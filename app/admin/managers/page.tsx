@@ -1,78 +1,49 @@
-// app/admin/managers/page.tsx
-// 담당자(기관 매니저) 관리 페이지 (정식 /api/admin/managers CRUD)
-
 "use client";
-import { sharedStyles } from "../_styles";
 
 import { useEffect, useMemo, useState } from "react";
+import { T } from "../_styles";
+import { X } from "lucide-react";
 
 type ManagerItem = {
-  id: string;
-  agencyId: string | null;
-  agencyName: string | null;
-  name: string;
-  email: string; // ✅ email은 스키마상 필수
-  phoneNumber: string | null;
+  id: string; agencyId: string | null; agencyName: string | null;
+  name: string; email: string; phoneNumber: string | null;
 };
-
-type ListResponse =
-  | { success: true; page: number; pageSize: number; total: number; items: ManagerItem[] }
-  | { success: false; message?: string };
-
-type ItemResponse =
-  | { success: true; item?: ManagerItem }
-  | { success: true } // DELETE
-  | { success: false; message?: string };
-
 type FormState = {
-  id?: string;
-  name: string;
-  email: string; // ✅ UI에서도 필수로 관리
-  phoneNumber: string;
-  // ADMIN일 때만 의미 있음 (AGENCY는 토큰으로 자동 지정)
-  agencyId?: string;
-  agencyName?: string;
+  id?: string; name: string; email: string; phoneNumber: string;
+  agencyId?: string; agencyName?: string;
 };
 
-function isAdminRole(sessionRole?: string | null) {
-  return String(sessionRole || "").toUpperCase() === "ADMIN";
+function isAdminRole(r?: string | null) { return String(r || "").toUpperCase() === "ADMIN"; }
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className={T.label}>{label}</label>
+      {children}
+    </div>
+  );
 }
 
 export default function AdminManagersPage() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
-
+  const pageSize = 20;
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<ManagerItem[]>([]);
   const [total, setTotal] = useState(0);
-
-  // 세션 role을 UI 분기용으로만 사용(표시/ADMIN 입력필드 노출)
   const [sessionRole, setSessionRole] = useState<string | null>(null);
-
-  // 모달/폼
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>({
-    name: "",
-    email: "",
-    phoneNumber: "",
-    agencyId: "",
-    agencyName: "",
-  });
-
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
+  const [form, setForm] = useState<FormState>({ name: "", email: "", phoneNumber: "", agencyId: "", agencyName: "" });
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total]);
 
   async function fetchSessionRole() {
     try {
-      const res = await fetch("/api/admin/auth/me", { method: "GET", cache: "no-store" });
+      const res = await fetch("/api/admin/auth/me", { cache: "no-store" });
       const data = await res.json();
-      if (data?.success && data?.session?.role) setSessionRole(String(data.session.role));
-      else setSessionRole(null);
-    } catch {
-      setSessionRole(null);
-    }
+      setSessionRole(data?.success ? String(data.session?.role || "") : null);
+    } catch { setSessionRole(null); }
   }
 
   async function fetchList(nextPage?: number) {
@@ -82,466 +53,190 @@ export default function AdminManagersPage() {
       if (q.trim()) sp.set("q", q.trim());
       sp.set("page", String(nextPage ?? page));
       sp.set("pageSize", String(pageSize));
-
-      const res = await fetch(`/api/admin/managers?${sp.toString()}`, { method: "GET", cache: "no-store" });
-      const data = (await res.json()) as ListResponse;
-
-      if (!data.success) throw new Error(data.message || "FAILED");
-
-      setItems(data.items || []);
-      setTotal(Number(data.total || 0));
-    } catch (e) {
-      console.error(e);
-      setItems([]);
-      setTotal(0);
-      alert("담당자 목록 조회에 실패했습니다.");
-    } finally {
-      setLoading(false);
-    }
+      const res = await fetch(`/api/admin/managers?${sp}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      setItems(data.items || []); setTotal(data.total || 0);
+    } catch { setItems([]); setTotal(0); alert("담당자 목록 조회에 실패했습니다."); }
+    finally { setLoading(false); }
   }
 
-  useEffect(() => {
-    fetchSessionRole();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    fetchList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
-
-  function onSearch() {
-    setPage(1);
-    fetchList(1);
-  }
-
-  function openCreate() {
-    setForm({
-      name: "",
-      email: "",
-      phoneNumber: "",
-      agencyId: "",
-      agencyName: "",
-    });
-    setModalOpen(true);
-  }
+  useEffect(() => { fetchSessionRole(); }, []);
+  useEffect(() => { fetchList(); }, [page]);
 
   async function openEdit(id: string) {
-    // 목록 row를 그대로 써도 되지만, 안전하게 상세 GET(추후 확장 대비)
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/managers/${id}`, { method: "GET", cache: "no-store" });
-      const data = (await res.json()) as ItemResponse;
-      if (!data.success || !("item" in data) || !data.item) throw new Error((data as any).message || "FAILED");
-
+      const res = await fetch(`/api/admin/managers/${id}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!data.success || !data.item) throw new Error(data.message);
       const it = data.item;
-      setForm({
-        id: it.id,
-        name: it.name || "",
-        email: it.email || "", // ✅ email 필수(방어적으로 빈문자)
-        phoneNumber: it.phoneNumber || "",
-        agencyId: it.agencyId || "",
-        agencyName: it.agencyName || "",
-      });
+      setForm({ id: it.id, name: it.name || "", email: it.email || "", phoneNumber: it.phoneNumber || "", agencyId: it.agencyId || "", agencyName: it.agencyName || "" });
       setModalOpen(true);
-    } catch (e) {
-      console.error(e);
-      alert("담당자 정보를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function closeModal() {
-    if (saving) return;
-    setModalOpen(false);
-  }
-
-  function validateForm() {
-    const name = (form.name || "").trim();
-    if (!name) return "담당자명을 입력해 주세요.";
-
-    // ✅ email 필수 (API/스키마 정합)
-    const email = (form.email || "").trim();
-    if (!email) return "이메일을 입력해 주세요.";
-
-    // ADMIN일 때 agency 지정은 정책에 따라 필수로 둘 수도 있음.
-    // 현재 UI는 기존 정책 유지: ADMIN은 agencyId 또는 agencyName 중 하나 필요
-    if (isAdminRole(sessionRole)) {
-      const agencyId = String(form.agencyId || "").trim();
-      const agencyName = String(form.agencyName || "").trim();
-      if (!agencyId && !agencyName) return "ADMIN은 agencyId 또는 agencyName 중 하나를 입력해야 합니다.";
-      if (agencyId && !/^\d+$/.test(agencyId)) return "agencyId는 숫자만 가능합니다.";
-    }
-
-    return null;
+    } catch { alert("담당자 정보를 불러오지 못했습니다."); }
+    finally { setLoading(false); }
   }
 
   async function save() {
     if (saving) return;
-
-    const msg = validateForm();
-    if (msg) {
-      alert(msg);
-      return;
+    const name = form.name.trim(), email = form.email.trim();
+    if (!name) return alert("담당자명을 입력해 주세요.");
+    if (!email) return alert("이메일을 입력해 주세요.");
+    if (isAdminRole(sessionRole)) {
+      const agId = String(form.agencyId || "").trim(), agName = String(form.agencyName || "").trim();
+      if (!agId && !agName) return alert("ADMIN은 agencyId 또는 agencyName 중 하나를 입력해야 합니다.");
+      if (agId && !/^\d+$/.test(agId)) return alert("agencyId는 숫자만 가능합니다.");
     }
-
     setSaving(true);
     try {
-      const payload: any = {
-        name: String(form.name || "").trim(),
-        email: String(form.email || "").trim(), // ✅ null 금지
-        phoneNumber: form.phoneNumber.trim() ? form.phoneNumber.trim() : null,
-      };
-
+      const payload: any = { name, email, phoneNumber: form.phoneNumber.trim() || null };
       if (isAdminRole(sessionRole)) {
-        const agencyId = String(form.agencyId || "").trim();
-        const agencyName = String(form.agencyName || "").trim();
-        if (agencyId) payload.agencyId = agencyId;
-        else if (agencyName) payload.agencyName = agencyName;
+        const agId = String(form.agencyId || "").trim(), agName = String(form.agencyName || "").trim();
+        if (agId) payload.agencyId = agId; else if (agName) payload.agencyName = agName;
       }
-
-      const isEdit = !!form.id;
-      const url = isEdit ? `/api/admin/managers/${form.id}` : "/api/admin/managers";
-      const method = isEdit ? "PATCH" : "POST";
-
-      const res = await fetch(url, {
-        method,
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const res = await fetch(form.id ? `/api/admin/managers/${form.id}` : "/api/admin/managers", {
+        method: form.id ? "PATCH" : "POST", cache: "no-store",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
-
-      const data = (await res.json()) as ItemResponse;
-      if (!data.success) throw new Error(data.message || "FAILED");
-
-      setModalOpen(false);
-
-      // 목록 리프레시
-      await fetchList(1);
-      setPage(1);
-    } catch (e) {
-      console.error(e);
-      alert("저장에 실패했습니다.");
-    } finally {
-      setSaving(false);
-    }
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      setModalOpen(false); await fetchList(1); setPage(1);
+    } catch { alert("저장에 실패했습니다."); }
+    finally { setSaving(false); }
   }
 
   async function remove(id: string) {
-    if (deletingId) return;
-    if (!confirm("정말 삭제하시겠습니까?")) return;
-
+    if (deletingId || !confirm("정말 삭제하시겠습니까?")) return;
     setDeletingId(id);
     try {
       const res = await fetch(`/api/admin/managers/${id}`, { method: "DELETE", cache: "no-store" });
-      const data = (await res.json()) as ItemResponse;
-      if (!data.success) throw new Error(data.message || "FAILED");
-
-      // 페이지 조정: 마지막 아이템 삭제 시 이전 페이지로
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
       const nextTotal = Math.max(0, total - 1);
-      const nextTotalPages = Math.max(1, Math.ceil(nextTotal / pageSize));
-      const nextPage = Math.min(page, nextTotalPages);
-
-      setTotal(nextTotal);
-      setPage(nextPage);
-      await fetchList(nextPage);
-    } catch (e) {
-      console.error(e);
-      alert("삭제에 실패했습니다.");
-    } finally {
-      setDeletingId(null);
-    }
+      const nextPage = Math.min(page, Math.max(1, Math.ceil(nextTotal / pageSize)));
+      setTotal(nextTotal); setPage(nextPage); await fetchList(nextPage);
+    } catch { alert("삭제에 실패했습니다."); }
+    finally { setDeletingId(null); }
   }
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827", letterSpacing: "-0.3px" }}>담당자(기관) 관리</h1>
-        <button
-          onClick={openCreate}
-          style={{ padding: "9px 18px", border: "none", borderRadius: 8, background: "#2563eb", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 13 }}
-        >
-          + 신규 등록
-        </button>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h1 className={T.pageTitle}>담당자(기관) 관리</h1>
+        <button onClick={() => { setForm({ name: "", email: "", phoneNumber: "", agencyId: "", agencyName: "" }); setModalOpen(true); }}
+          className={T.btnPrimary}>+ 신규 등록</button>
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && onSearch()}
-          placeholder="담당자명/메일/전화/기관 검색"
-          style={{ flex: 1, height: 38, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 12px", fontSize: 13, outline: "none", background: "#fff" }}
-        />
-        <button onClick={onSearch} style={{ padding: "0 16px", height: 38, border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff", color: "#374151", fontWeight: 500, cursor: "pointer", fontSize: 13 }}>
-          검색
-        </button>
+      <div className="flex gap-2">
+        <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && (setPage(1), fetchList(1))}
+          placeholder="담당자명/메일/전화/기관 검색" className={`flex-1 ${T.input}`} />
+        <button onClick={() => { setPage(1); fetchList(1); }} className={T.btnSecondary}>검색</button>
       </div>
 
-      <div style={{ marginBottom: 12, fontSize: 13, color: "#9ca3af" }}>
-        총 {total}건 (page {page} / {totalPages})
-      </div>
+      <p className="text-sm font-semibold text-slate-400">총 {total}건 (page {page} / {totalPages})</p>
 
-      <div style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 12, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className={T.tableWrap}>
+        <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th style={th}>ID</th>
-              <th style={th}>담당자명</th>
-              <th style={th}>이메일</th>
-              <th style={th}>전화</th>
-              <th style={th}>기관</th>
-              <th style={th}>작업</th>
+              {["ID", "담당자명", "이메일", "전화", "기관", "작업"].map(h => <th key={h} className={T.th}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td style={td} colSpan={6}>
-                  로딩 중...
-                </td>
-              </tr>
+              <tr><td colSpan={6} className={T.tdCenter}>로딩 중...</td></tr>
             ) : items.length === 0 ? (
-              <tr>
-                <td style={td} colSpan={6}>
-                  데이터가 없습니다.
+              <tr><td colSpan={6} className={T.tdCenter}>데이터가 없습니다.</td></tr>
+            ) : items.map(it => (
+              <tr key={it.id} className={T.trBase}>
+                <td className={`${T.td} text-xs text-slate-400`}>{it.id}</td>
+                <td className={T.td}>
+                  <button onClick={() => openEdit(it.id)} className="font-black text-slate-900 underline transition hover:text-sky-600">
+                    {it.name}
+                  </button>
+                </td>
+                <td className={`${T.td} text-slate-600`}>{it.email}</td>
+                <td className={`${T.td} text-slate-500`}>{it.phoneNumber ?? "-"}</td>
+                <td className={T.td}>
+                  <div className="font-semibold text-slate-700">{it.agencyName ?? "-"}</div>
+                  <div className="text-xs text-slate-400">{it.agencyId ?? "-"}</div>
+                </td>
+                <td className={T.td}>
+                  <div className="flex gap-2">
+                    <button onClick={() => openEdit(it.id)} className={T.btnSecondary}>수정</button>
+                    <button onClick={() => remove(it.id)} disabled={deletingId === it.id} className={T.btnDanger}>
+                      {deletingId === it.id ? "삭제 중..." : "삭제"}
+                    </button>
+                  </div>
                 </td>
               </tr>
-            ) : (
-              items.map((it) => (
-                <tr key={it.id}>
-                  <td style={td}>{it.id}</td>
-                  <td style={td}>
-                    <button
-                      onClick={() => openEdit(it.id)}
-                      style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer" }}
-                      title="수정"
-                    >
-                      <span style={{ textDecoration: "underline" }}>{it.name}</span>
-                    </button>
-                  </td>
-                  <td style={td}>{it.email}</td>
-                  <td style={td}>{it.phoneNumber ?? "-"}</td>
-                  <td style={td}>
-                    <div>{it.agencyName ?? "-"}</div>
-                    <div style={{ fontSize: 12, color: "#666" }}>{it.agencyId ?? "-"}</div>
-                  </td>
-                  <td style={td}>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        onClick={() => openEdit(it.id)}
-                        style={{ padding: "5px 12px", border: "1px solid #e5e7eb", borderRadius: 7, background: "#fff", fontSize: 12, cursor: "pointer" }}
-                      >
-                        수정
-                      </button>
-                      <button
-                        onClick={() => remove(it.id)}
-                        disabled={deletingId === it.id}
-                        style={{ padding: "5px 12px", border: "1px solid #fecaca", borderRadius: 7, background: "#fff", color: "#dc2626", fontSize: 12, cursor: "pointer", opacity: deletingId === it.id ? 0.6 : 1 }}
-                      >
-                        {deletingId === it.id ? "삭제 중..." : "삭제"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>
 
-      <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center" }}>
-        <button
-          disabled={page <= 1}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          style={{ padding: "8px 16px", border: "1.5px solid #eee", borderRadius: 8, background: "#fff", cursor: "pointer", opacity: page <= 1 ? 0.4 : 1, fontWeight: 600 }}
-        >
-          이전
-        </button>
-        <span style={{ fontSize: 13, color: "#888" }}>{page} / {totalPages}</span>
-        <button
-          disabled={page >= totalPages}
-          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          style={{ padding: "8px 16px", border: "1.5px solid #eee", borderRadius: 8, background: "#fff", cursor: "pointer", opacity: page >= totalPages ? 0.4 : 1, fontWeight: 600 }}
-        >
-          다음
-        </button>
+      <div className="flex items-center gap-3">
+        <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}
+          className={`${T.btnSecondary} disabled:opacity-40`}>이전</button>
+        <span className="text-sm font-semibold text-slate-400">{page} / {totalPages}</span>
+        <button disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+          className={`${T.btnSecondary} disabled:opacity-40`}>다음</button>
       </div>
 
-      {/* ===== Modal ===== */}
-      {modalOpen ? (
-        <div style={overlay} onClick={closeModal}>
-          <div style={modal} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
+      {modalOpen && (
+        <div className={T.modalOverlay} onClick={() => !saving && setModalOpen(false)}>
+          <div className={T.modalContent} onClick={e => e.stopPropagation()}>
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-base font-black text-slate-900">
                 {form.id ? "담당자 수정" : "담당자 신규 등록"}
               </h2>
-              <button onClick={closeModal} disabled={saving} style={xBtn}>
-                ✕
+              <button onClick={() => !saving && setModalOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:bg-slate-50">
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
 
-            <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+            <div className="space-y-3">
               <Field label="담당자명 *">
-                <input
-                  value={form.name}
-                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="예) 홍길동"
-                  style={input}
-                />
+                <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  placeholder="예) 홍길동" className={`w-full ${T.input}`} />
               </Field>
-
               <Field label="이메일 *">
-                <input
-                  value={form.email}
-                  onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                  placeholder="예) manager@agency.com"
-                  style={input}
-                />
+                <input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                  placeholder="예) manager@agency.com" className={`w-full ${T.input}`} />
               </Field>
-
               <Field label="전화">
-                <input
-                  value={form.phoneNumber}
-                  onChange={(e) => setForm((p) => ({ ...p, phoneNumber: e.target.value }))}
-                  placeholder="예) 01012345678"
-                  style={input}
-                />
+                <input value={form.phoneNumber} onChange={e => setForm(p => ({ ...p, phoneNumber: e.target.value }))}
+                  placeholder="예) 01012345678" className={`w-full ${T.input}`} />
               </Field>
 
               {isAdminRole(sessionRole) ? (
-                <div style={{ padding: 10, border: "1px dashed #d1d5db", borderRadius: 10, background: "#fafafa" }}>
-                  <div style={{ fontSize: 12, color: "#374151", marginBottom: 8 }}>
-                    ADMIN 전용: agencyId 또는 agencyName 중 하나 입력
-                  </div>
-
+                <div className="space-y-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
+                  <p className="text-xs font-black text-slate-700">ADMIN 전용: agencyId 또는 agencyName 중 하나 입력</p>
                   <Field label="agencyId">
-                    <input
-                      value={form.agencyId || ""}
-                      onChange={(e) => setForm((p) => ({ ...p, agencyId: e.target.value }))}
-                      placeholder="숫자 ID"
-                      style={input}
-                    />
+                    <input value={form.agencyId || ""} onChange={e => setForm(p => ({ ...p, agencyId: e.target.value }))}
+                      placeholder="숫자 ID" className={`w-full ${T.input}`} />
                   </Field>
-
                   <Field label="agencyName">
-                    <input
-                      value={form.agencyName || ""}
-                      onChange={(e) => setForm((p) => ({ ...p, agencyName: e.target.value }))}
-                      placeholder="기관명"
-                      style={input}
-                    />
+                    <input value={form.agencyName || ""} onChange={e => setForm(p => ({ ...p, agencyName: e.target.value }))}
+                      placeholder="기관명" className={`w-full ${T.input}`} />
                   </Field>
-
-                  <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>
-                    주의: 둘 다 입력하면 agencyId가 우선 적용됩니다.
-                  </div>
+                  <p className="text-xs font-semibold text-slate-400">둘 다 입력하면 agencyId가 우선 적용됩니다.</p>
                 </div>
               ) : (
-                <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  AGENCY 계정은 토큰 기반으로 기관이 자동 지정됩니다.
-                </div>
+                <p className="text-xs font-semibold text-slate-400">AGENCY 계정은 토큰 기반으로 기관이 자동 지정됩니다.</p>
               )}
             </div>
 
-            <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={closeModal} disabled={saving} style={btnSecondary}>
-                취소
-              </button>
-              <button onClick={save} disabled={saving} style={btnPrimary}>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => !saving && setModalOpen(false)} disabled={saving} className={T.btnSecondary}>취소</button>
+              <button onClick={save} disabled={saving} className={T.btnPrimary}>
                 {saving ? "저장 중..." : "저장"}
               </button>
             </div>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: "grid", gap: 6 }}>
-      <div style={{ fontSize: 12, color: "#374151", fontWeight: 700 }}>{label}</div>
-      {children}
-    </label>
-  );
-}
-
-const th: React.CSSProperties = {
-  textAlign: "left",
-  padding: "10px 16px",
-  fontSize: 11,
-  fontWeight: 600,
-  color: "#9ca3af",
-  borderBottom: "1px solid #f0f0f0",
-  whiteSpace: "nowrap",
-  letterSpacing: "0.3px",
-  textTransform: "uppercase",
-  background: "#fafafa",
-};
-
-const td: React.CSSProperties = {
-  padding: "12px 16px",
-  fontSize: 13,
-  color: "#374151",
-  borderBottom: "1px solid #f9f9f9",
-  verticalAlign: "middle",
-};
-
-const overlay: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.38)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 16,
-  zIndex: 9999,
-};
-
-const modal: React.CSSProperties = {
-  width: "min(720px, 100%)",
-  background: "#fff",
-  borderRadius: 14,
-  border: "1px solid #e5e7eb",
-  padding: 16,
-  boxShadow: "0 20px 50px rgba(0,0,0,0.15)",
-};
-
-const input: React.CSSProperties = {
-  padding: "10px 12px",
-  border: "1px solid #d1d5db",
-  borderRadius: 10,
-  fontSize: 13,
-  outline: "none",
-};
-
-const btnPrimary: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "1px solid #111827",
-  background: "#111827",
-  color: "#fff",
-  fontSize: 13,
-  cursor: "pointer",
-};
-
-const btnSecondary: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "1px solid #d1d5db",
-  background: "#fff",
-  fontSize: 13,
-  cursor: "pointer",
-};
-
-const xBtn: React.CSSProperties = {
-  width: 32,
-  height: 32,
-  borderRadius: 10,
-  border: "1px solid #e5e7eb",
-  background: "#fff",
-  cursor: "pointer",
-};

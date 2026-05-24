@@ -1,6 +1,7 @@
 "use client";
-import { useRouter } from "next/navigation";
+
 import { useState } from "react";
+import { LogOut } from "lucide-react";
 
 type SessionInfo = {
   role: "ADMIN" | "GOV" | "AGENCY" | string;
@@ -15,7 +16,6 @@ export default function AdminTopbar({
   session?: SessionInfo;
   onLoggedOut: () => void;
 }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   async function logout() {
@@ -31,62 +31,26 @@ export default function AdminTopbar({
   }
 
   return (
-    <header style={s.header}>
-      {/* 좌측: 기관명만 */}
-      <div style={s.left}>
+    <header className="flex h-[52px] flex-shrink-0 items-center justify-between border-b border-slate-100 bg-white px-7">
+      <div className="flex items-center gap-2">
         {session?.agencyName && (
-          <span style={s.agencyName}>{session.agencyName}</span>
+          <span className="text-sm font-black text-slate-900">{session.agencyName}</span>
         )}
         {session?.loginId && (
-          <span style={s.loginId}>{session.loginId}</span>
+          <span className="rounded-full border border-slate-100 bg-slate-50 px-2.5 py-0.5 text-xs font-semibold text-slate-400">
+            {session.loginId}
+          </span>
         )}
       </div>
 
-      {/* 우측: 로그아웃 */}
-      <button onClick={logout} disabled={loading} style={s.logoutBtn}>
+      <button
+        onClick={logout}
+        disabled={loading}
+        className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:bg-slate-50 disabled:opacity-60"
+      >
+        <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
         {loading ? "로그아웃 중..." : "로그아웃"}
       </button>
     </header>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  header: {
-    height: 52,
-    background: "#ffffff",
-    borderBottom: "1px solid #f0f0f0",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "0 28px",
-    flexShrink: 0,
-  },
-  left: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-  },
-  agencyName: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: "#111827",
-  },
-  loginId: {
-    fontSize: 12,
-    color: "#9ca3af",
-    background: "#f9fafb",
-    padding: "2px 8px",
-    borderRadius: 20,
-    border: "1px solid #f0f0f0",
-  },
-  logoutBtn: {
-    padding: "6px 14px",
-    border: "1px solid #e5e7eb",
-    borderRadius: 7,
-    background: "#fff",
-    cursor: "pointer",
-    fontSize: 12,
-    color: "#6b7280",
-    fontWeight: 500,
-  },
-};

@@ -1,6 +1,3 @@
-// app/worker/layout.tsx
-// 직무지도원 웹 레이아웃 - 모바일 최적화 + PWA 지원
-
 import type { Metadata, Viewport } from "next";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 
@@ -28,20 +25,12 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#111827",
+  themeColor: "#0f172a",
 };
 
 export default function WorkerLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif" }}>
-      <style>{`
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; padding: 0; background: #f7f8fa; }
-        button { font-family: inherit; }
-        input { font-family: inherit; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-      `}</style>
+    <div>
       {children}
       <PWAInstallPrompt />
     </div>

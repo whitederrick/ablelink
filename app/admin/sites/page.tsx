@@ -1,29 +1,21 @@
 "use client";
 import Link from "next/link";
-import { sharedStyles } from "../_styles";
+import { T } from "../_styles";
 import { useEffect, useMemo, useState } from "react";
 
 type SiteItem = {
-  id: string;
-  companyName: string;
-  address: string;
-  detailAddress: string | null;
-  agencyName: string | null;
-  managerName: string | null;
-  managerEmail: string | null;
-  managerPhone: string | null;
-  basePointConfirmed: boolean;
-  basePointApprovalStatus: string;
-  isActive: boolean;
-  allowanceRange?: number;
+  id: string; companyName: string; address: string; detailAddress: string | null;
+  agencyName: string | null; managerName: string | null; managerEmail: string | null;
+  managerPhone: string | null; basePointConfirmed: boolean;
+  basePointApprovalStatus: string; isActive: boolean; allowanceRange?: number;
 };
 
-const APPROVAL_LABEL: Record<string, { label: string; color: string; bg: string }> = {
-  ORIGINAL_SET:           { label: "미확정",      color: "#6b7280", bg: "#f9fafb" },
-  COACH_PROPOSED:         { label: "제안됨",      color: "#d97706", bg: "#fffbeb" },
-  APPROVED:               { label: "승인",        color: "#16a34a", bg: "#f0fdf4" },
-  REJECTED:               { label: "반려",        color: "#dc2626", bg: "#fef2f2" },
-  CORRECTION_REQUESTED:   { label: "수정요청",    color: "#2563eb", bg: "#eff6ff" },
+const APPROVAL_CLS: Record<string, { label: string; cls: string }> = {
+  ORIGINAL_SET:         { label: "미확정",   cls: "bg-slate-100 text-slate-500" },
+  COACH_PROPOSED:       { label: "제안됨",   cls: "bg-amber-50 text-amber-600" },
+  APPROVED:             { label: "승인",     cls: "bg-emerald-50 text-emerald-600" },
+  REJECTED:             { label: "반려",     cls: "bg-rose-50 text-rose-600" },
+  CORRECTION_REQUESTED: { label: "수정요청", cls: "bg-sky-50 text-sky-600" },
 };
 
 export default function AdminSitesPage() {
@@ -55,75 +47,67 @@ export default function AdminSitesPage() {
   useEffect(() => { fetchList(page); }, [page]);
 
   function onSearch() {
-    if (page !== 1) setPage(1);
-    else fetchList(1);
+    if (page !== 1) setPage(1); else fetchList(1);
   }
 
   return (
-    <div>
-      {/* 헤더 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 style={T.pageTitle}>Site 관리</h1>
-          <p style={T.pageSub}>총 {total}건 · page {page} / {totalPages}</p>
+          <h1 className={T.pageTitle}>Site 관리</h1>
+          <p className={T.pageSub}>총 {total}건 · page {page} / {totalPages}</p>
         </div>
         <Link href="/admin/sites/new">
-          <button style={T.btnPrimary}>신규 등록</button>
+          <button className={T.btnPrimary}>신규 등록</button>
         </Link>
       </div>
 
-      {/* 검색 */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <div className="flex gap-2">
         <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && onSearch()}
-          placeholder="사업체명/주소/담당자명/메일/전화/기관 검색" style={T.input} />
-        <button onClick={onSearch} style={T.btnSecondary}>검색</button>
+          placeholder="사업체명/주소/담당자명/메일/전화/기관 검색" className={`flex-1 ${T.input}`} />
+        <button onClick={onSearch} className={T.btnSecondary}>검색</button>
       </div>
 
-      {/* 테이블 */}
-      <div style={T.tableWrap}>
-        <table style={T.table}>
+      <div className={T.tableWrap}>
+        <table className="w-full border-collapse">
           <thead>
-            <tr>
-              {["ID", "사업체명", "주소", "담당자", "기관", "GPS 범위", "기준점", "상태"].map(h => (
-                <th key={h} style={T.th}>{h}</th>
-              ))}
-            </tr>
+            <tr>{["ID", "사업체명", "주소", "담당자", "기관", "GPS 범위", "기준점", "상태"].map(h => (
+              <th key={h} className={T.th}>{h}</th>
+            ))}</tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} style={T.tdCenter}>로딩 중...</td></tr>
+              <tr><td colSpan={8} className={T.tdCenter}>로딩 중...</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={8} style={T.tdCenter}>데이터가 없습니다.</td></tr>
+              <tr><td colSpan={8} className={T.tdCenter}>데이터가 없습니다.</td></tr>
             ) : items.map(it => {
-              const approval = APPROVAL_LABEL[it.basePointApprovalStatus] || APPROVAL_LABEL.ORIGINAL_SET;
+              const approval = APPROVAL_CLS[it.basePointApprovalStatus] || APPROVAL_CLS.ORIGINAL_SET;
               return (
-                <tr key={it.id} style={T.tr}>
-                  <td style={{ ...T.td, color: "#9ca3af", fontSize: 12 }}>{it.id}</td>
-                  <td style={T.td}>
-                    <Link href={`/admin/sites/${it.id}`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600 }}>
+                <tr key={it.id} className={T.trBase}>
+                  <td className={`${T.td} text-xs text-slate-400`}>{it.id}</td>
+                  <td className={T.td}>
+                    <Link href={`/admin/sites/${it.id}`} className="font-black text-sky-600 hover:underline">
                       {it.companyName}
                     </Link>
                   </td>
-                  <td style={T.td}>
-                    <div style={{ fontSize: 13 }}>{it.address}</div>
-                    {it.detailAddress && <div style={{ fontSize: 12, color: "#9ca3af" }}>{it.detailAddress}</div>}
+                  <td className={T.td}>
+                    <div className="text-slate-700">{it.address}</div>
+                    {it.detailAddress && <div className="text-xs text-slate-400">{it.detailAddress}</div>}
                   </td>
-                  <td style={T.td}>
-                    <div style={{ fontSize: 13 }}>{it.managerName || "-"}</div>
-                    {it.managerEmail && <div style={{ fontSize: 12, color: "#9ca3af" }}>{it.managerEmail}</div>}
-                    {it.managerPhone && <div style={{ fontSize: 12, color: "#9ca3af" }}>{it.managerPhone}</div>}
+                  <td className={T.td}>
+                    <div className="text-slate-700">{it.managerName || "-"}</div>
+                    {it.managerEmail && <div className="text-xs text-slate-400">{it.managerEmail}</div>}
+                    {it.managerPhone && <div className="text-xs text-slate-400">{it.managerPhone}</div>}
                   </td>
-                  <td style={T.td}><span style={{ fontSize: 12, color: "#6b7280" }}>{it.agencyName || "-"}</span></td>
-                  <td style={T.td}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#2563eb" }}>{it.allowanceRange ?? 100}m</span>
-                  </td>
-                  <td style={T.td}>
-                    <span style={{ fontSize: 12, color: it.basePointConfirmed ? "#16a34a" : "#9ca3af" }}>
+                  <td className={`${T.td} text-sm text-slate-500`}>{it.agencyName || "-"}</td>
+                  <td className={`${T.td} font-black text-sky-600`}>{it.allowanceRange ?? 100}m</td>
+                  <td className={T.td}>
+                    <span className={`text-sm font-semibold ${it.basePointConfirmed ? "text-emerald-600" : "text-slate-400"}`}>
                       {it.basePointConfirmed ? "확정" : "미확정"}
                     </span>
                   </td>
-                  <td style={T.td}>
-                    <span style={{ ...T.badge, background: approval.bg, color: approval.color }}>{approval.label}</span>
+                  <td className={T.td}>
+                    <span className={`${T.badge} ${approval.cls}`}>{approval.label}</span>
                   </td>
                 </tr>
               );
@@ -132,13 +116,13 @@ export default function AdminSitesPage() {
         </table>
       </div>
 
-      {/* 페이지네이션 */}
-      <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-        <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ ...T.btnSecondary, opacity: page <= 1 ? 0.4 : 1 }}>이전</button>
-        <button disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} style={{ ...T.btnSecondary, opacity: page >= totalPages ? 0.4 : 1 }}>다음</button>
+      <div className="flex items-center gap-3">
+        <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}
+          className={`${T.btnSecondary} disabled:opacity-40`}>이전</button>
+        <span className="text-sm font-semibold text-slate-400">{page} / {totalPages}</span>
+        <button disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+          className={`${T.btnSecondary} disabled:opacity-40`}>다음</button>
       </div>
     </div>
   );
 }
-
-const T = sharedStyles();

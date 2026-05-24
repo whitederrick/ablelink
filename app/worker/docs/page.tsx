@@ -1,9 +1,28 @@
 "use client";
-// app/worker/docs/page.tsx
-// 문서 발송 — 훈련생 선택 + 사업체담당자 즉석 서명 요청 + PDF 발송
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  BarChart2,
+  BookOpen,
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  CircleDollarSign,
+  ClipboardList,
+  Clock,
+  Copy,
+  Download,
+  ExternalLink,
+  FileText,
+  Home,
+  Mail,
+  MapPin,
+  PenLine,
+  Send,
+  TrendingUp,
+  User,
+} from "lucide-react";
 
 interface SiteInfo {
   companyName: string;
@@ -14,11 +33,19 @@ interface SiteInfo {
 }
 
 const DOC_TYPES = [
-  { id: "ATTENDANCE_SHEET",      label: "출근부",          icon: "📋", desc: "월별 출퇴근 기록",          needsTrainee: false },
-  { id: "TRAINING_DAILY_LOG",    label: "훈련일지",         icon: "📝", desc: "지원고용 훈련일지",          needsTrainee: true  },
-  { id: "TRAINEE_FINAL_EVAL",    label: "훈련생 종합평가",  icon: "📊", desc: "훈련생 종합 평가기록부",      needsTrainee: true  },
-  { id: "ADAPTATION_DAILY_LOG",  label: "적응지도 일지",    icon: "📄", desc: "취업 후 적응지도 일지",       needsTrainee: true  },
-  { id: "ADAPTATION_FINAL_EVAL", label: "적응지도 종합평가",icon: "📈", desc: "적응지도 종합 평가기록부",    needsTrainee: true  },
+  { id: "ATTENDANCE_SHEET",      label: "출근부",          Icon: ClipboardList, desc: "월별 출퇴근 기록",        needsTrainee: false },
+  { id: "TRAINING_DAILY_LOG",    label: "훈련일지",         Icon: BookOpen,      desc: "지원고용 훈련일지",        needsTrainee: true  },
+  { id: "TRAINEE_FINAL_EVAL",    label: "훈련생 종합평가",  Icon: BarChart2,     desc: "훈련생 종합 평가기록부",    needsTrainee: true  },
+  { id: "ADAPTATION_DAILY_LOG",  label: "적응지도 일지",    Icon: FileText,      desc: "취업 후 적응지도 일지",     needsTrainee: true  },
+  { id: "ADAPTATION_FINAL_EVAL", label: "적응지도 종합평가",Icon: TrendingUp,    desc: "적응지도 종합 평가기록부",  needsTrainee: true  },
+];
+
+const NAV_ITEMS = [
+  { icon: Home,             label: "홈",      href: "/worker/home" },
+  { icon: CalendarDays,     label: "캘린더",  href: "/worker/calendar" },
+  { icon: PenLine,          label: "전자서명", href: "/worker/signature" },
+  { icon: FileText,         label: "문서",    href: "/worker/docs" },
+  { icon: CircleDollarSign, label: "히스토리", href: "/worker/history" },
 ];
 
 export default function DocsPage() {
@@ -31,12 +58,12 @@ export default function DocsPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; msg: string; pdfBase64?: string; fileName?: string } | null>(null);
 
-  // 사업체담당자 서명 요청
   const [signToken, setSignToken]           = useState<string | null>(null);
   const [signUrl, setSignUrl]               = useState<string | null>(null);
   const [signRequesting, setSignRequesting] = useState(false);
   const [signStatus, setSignStatus]         = useState<"none"|"pending"|"done">("none");
   const [signatureUrl, setSignatureUrl]     = useState<string | null>(null);
+  const [copied, setCopied]                 = useState(false);
 
   useEffect(() => {
     const now = new Date();
@@ -63,13 +90,11 @@ export default function DocsPage() {
     });
   }, []);
 
-  // 문서 바꾸면 서명 상태 초기화
   function selectDoc(id: string) {
     setSelectedDoc(id); setResult(null);
     setSignToken(null); setSignUrl(null); setSignStatus("none"); setSignatureUrl(null);
   }
 
-  // 사업체담당자 서명 링크 발급
   async function requestCompanySign() {
     setSignRequesting(true);
     try {
@@ -84,9 +109,7 @@ export default function DocsPage() {
       const d = await res.json();
       if (d.success) {
         setSignToken(d.token); setSignUrl(d.signUrl); setSignStatus("pending");
-        // 클립보드 복사
         try { await navigator.clipboard.writeText(d.signUrl); } catch {}
-        // 폴링 시작
         pollSignature(d.token);
       } else {
         alert(d.message || "링크 생성 실패");
@@ -94,7 +117,6 @@ export default function DocsPage() {
     } finally { setSignRequesting(false); }
   }
 
-  // 서명 완료 폴링 (10초 간격 × 36회 = 6분)
   function pollSignature(token: string) {
     let count = 0;
     const iv = setInterval(async () => {
@@ -108,7 +130,6 @@ export default function DocsPage() {
     }, 10000);
   }
 
-  // PDF 발송
   async function handleSend() {
     if (!siteInfo?.managerEmail) { alert("에이전시 담당자 이메일이 등록되지 않았습니다."); return; }
     const needsTrainee = DOC_TYPES.find(d => d.id === selectedDoc)?.needsTrainee;
@@ -141,31 +162,50 @@ export default function DocsPage() {
     URL.revokeObjectURL(url);
   }
 
+  async function copySignUrl() {
+    if (!signUrl) return;
+    try { await navigator.clipboard.writeText(signUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
+  }
+
   const needsTrainee = DOC_TYPES.find(d => d.id === selectedDoc)?.needsTrainee ?? false;
   const selectedLabel = DOC_TYPES.find(d => d.id === selectedDoc)?.label || "문서";
 
   return (
-    <div style={s.page}>
-      <div style={s.container}>
+    <div className="min-h-dvh bg-slate-50">
+      <div className="mx-auto max-w-md pb-24">
 
         {/* 헤더 */}
-        <div style={s.header}>
-          <button onClick={() => router.back()} style={s.backBtn}>←</button>
-          <h1 style={s.title}>문서 발송</h1>
-          <button onClick={() => router.push("/worker/docs/view")} style={s.subBtn}>조회</button>
-        </div>
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-4">
+          <button
+            onClick={() => router.back()}
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition active:scale-95"
+          >
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <h1 className="text-base font-black text-slate-900">문서 발송</h1>
+          <button
+            onClick={() => router.push("/worker/docs/view")}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition active:scale-95"
+          >
+            조회
+          </button>
+        </header>
 
         {/* 현장 + 수신자 */}
         {siteInfo && (
-          <div style={s.infoCard}>
-            <div style={s.infoRow}>
-              <span style={s.infoLabel}>현장</span>
-              <span style={s.infoValue}>📍 {siteInfo.companyName}</span>
+          <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4">
+            <div className="flex items-center justify-between py-1">
+              <span className="flex-shrink-0 text-xs font-semibold text-slate-400">현장</span>
+              <span className="flex items-center gap-1 text-right text-sm font-semibold text-slate-800">
+                <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
+                {siteInfo.companyName}
+              </span>
             </div>
-            <div style={s.infoDivider} />
-            <div style={s.infoRow}>
-              <span style={s.infoLabel}>수신자</span>
-              <span style={s.infoValue}>
+            <div className="my-2 h-px bg-slate-50" />
+            <div className="flex items-center justify-between py-1">
+              <span className="flex-shrink-0 text-xs font-semibold text-slate-400">수신자</span>
+              <span className="flex items-center gap-1 text-right text-sm font-semibold text-slate-800">
+                <Mail className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
                 {siteInfo.managerName} ({siteInfo.managerEmail || "이메일 미등록"})
               </span>
             </div>
@@ -173,209 +213,234 @@ export default function DocsPage() {
         )}
 
         {/* 문서 종류 */}
-        <div style={s.section}>
-          <p style={s.sectionTitle}>문서 종류</p>
-          <div style={s.docList}>
-            {DOC_TYPES.map(doc => (
-              <button key={doc.id}
-                style={{ ...s.docItem, ...(selectedDoc === doc.id ? s.docItemActive : {}) }}
-                onClick={() => selectDoc(doc.id)}>
-                <span style={{ fontSize: 22, flexShrink: 0 }}>{doc.icon}</span>
-                <div style={{ flex: 1, textAlign: "left" as const }}>
-                  <p style={{ ...s.docLabel, color: selectedDoc === doc.id ? "#fff" : "#111827" }}>{doc.label}</p>
-                  <p style={{ ...s.docDesc, color: selectedDoc === doc.id ? "rgba(255,255,255,0.7)" : "#9ca3af" }}>{doc.desc}</p>
-                </div>
-                {selectedDoc === doc.id && <span style={{ color: "#fff", fontWeight: 700 }}>✓</span>}
-              </button>
-            ))}
+        <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4">
+          <p className="mb-3 text-sm font-black text-slate-700">문서 종류</p>
+          <div className="flex flex-col gap-2">
+            {DOC_TYPES.map(({ id, label, Icon, desc }) => {
+              const isActive = selectedDoc === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => selectDoc(id)}
+                  className={`flex items-center gap-3 rounded-xl border p-3.5 text-left transition active:scale-[0.98] ${
+                    isActive
+                      ? "border-slate-950 bg-slate-950"
+                      : "border-slate-200 bg-slate-50 hover:border-slate-300"
+                  }`}
+                >
+                  <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${isActive ? "bg-white/15" : "bg-white"}`}>
+                    <Icon className={`h-5 w-5 ${isActive ? "text-white" : "text-slate-500"}`} aria-hidden="true" />
+                  </div>
+                  <div className="flex-1">
+                    <p className={`text-sm font-black leading-none ${isActive ? "text-white" : "text-slate-900"}`}>{label}</p>
+                    <p className={`mt-1 text-xs font-semibold ${isActive ? "text-white/60" : "text-slate-400"}`}>{desc}</p>
+                  </div>
+                  {isActive && <Check className="h-4 w-4 flex-shrink-0 text-white" aria-hidden="true" />}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* 훈련생 선택 (해당 문서만) */}
+        {/* 훈련생 선택 */}
         {needsTrainee && (
-          <div style={s.section}>
-            <p style={s.sectionTitle}>훈련생 선택</p>
+          <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4">
+            <p className="mb-3 text-sm font-black text-slate-700">훈련생 선택</p>
             {siteInfo?.trainees && siteInfo.trainees.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {siteInfo.trainees.map(t => (
-                  <button key={t.id} onClick={() => setSelectedTraineeId(t.id)}
-                    style={{ ...s.traineeBtn, ...(selectedTraineeId === t.id ? s.traineeBtnActive : {}) }}>
-                    <span style={{ fontSize: 18 }}>{t.gender === "M" ? "👨" : "👩"}</span>
-                    <span style={{ fontSize: 15, fontWeight: 600, color: selectedTraineeId === t.id ? "#fff" : "#111827" }}>{t.name}</span>
-                    {selectedTraineeId === t.id && <span style={{ marginLeft: "auto", color: "#fff" }}>✓</span>}
-                  </button>
-                ))}
+              <div className="flex flex-col gap-2">
+                {siteInfo.trainees.map(t => {
+                  const isActive = selectedTraineeId === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setSelectedTraineeId(t.id)}
+                      className={`flex items-center gap-3 rounded-xl border p-3.5 transition active:scale-[0.98] ${
+                        isActive
+                          ? "border-slate-950 bg-slate-950"
+                          : "border-slate-200 bg-slate-50 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${isActive ? "bg-white/15" : "bg-slate-100"}`}>
+                        <User className={`h-4 w-4 ${isActive ? "text-white" : "text-slate-500"}`} aria-hidden="true" />
+                      </div>
+                      <span className={`flex-1 text-left text-sm font-black ${isActive ? "text-white" : "text-slate-900"}`}>{t.name}</span>
+                      {isActive && <Check className="h-4 w-4 flex-shrink-0 text-white" aria-hidden="true" />}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
-              <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>담당 훈련생이 없습니다.</p>
+              <p className="text-sm font-semibold text-slate-400">담당 훈련생이 없습니다.</p>
             )}
           </div>
         )}
 
-        {/* 평가 점수 입력 (종합평가 문서일 때) */}
+        {/* 평가 점수 입력 */}
         {(selectedDoc === "TRAINEE_FINAL_EVAL" || selectedDoc === "ADAPTATION_FINAL_EVAL") && selectedTraineeId && (
-          <div style={s.section}>
+          <div className="mx-4 mt-3">
             <button
               onClick={() => {
                 const evalType = selectedDoc === "TRAINEE_FINAL_EVAL" ? "TRAINING" : "ADAPTATION";
                 const t = siteInfo?.trainees?.find((t: any) => t.id === selectedTraineeId);
                 router.push(`/worker/evaluation?traineeId=${selectedTraineeId}&traineeName=${encodeURIComponent(t?.name||"")}&evalType=${evalType}&periodStart=${periodStart}&periodEnd=${periodEnd}`);
               }}
-              style={{ width:"100%", padding:"13px", background:"#f0fdf4", color:"#16a34a", border:"1.5px solid #bbf7d0", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer" }}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 py-3.5 text-sm font-black text-emerald-700 transition active:scale-[0.97]"
             >
-              ✏️ 평가 점수 입력하기
+              <PenLine className="h-4 w-4" aria-hidden="true" />
+              평가 점수 입력하기
             </button>
           </div>
         )}
 
-        {/* 기간 */}
-        <div style={s.section}>
-          <p style={s.sectionTitle}>기간 설정</p>
-          <div style={s.dateRow}>
-            <input type="date" value={periodStart} onChange={e => { setPeriodStart(e.target.value); setResult(null); }} style={s.dateInput} />
-            <span style={{ color: "#9ca3af" }}>~</span>
-            <input type="date" value={periodEnd} onChange={e => { setPeriodEnd(e.target.value); setResult(null); }} style={s.dateInput} />
+        {/* 기간 설정 */}
+        <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4">
+          <p className="mb-3 text-sm font-black text-slate-700">기간 설정</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={periodStart}
+              onChange={e => { setPeriodStart(e.target.value); setResult(null); }}
+              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            />
+            <span className="text-sm font-semibold text-slate-400">~</span>
+            <input
+              type="date"
+              value={periodEnd}
+              onChange={e => { setPeriodEnd(e.target.value); setResult(null); }}
+              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+            />
           </div>
         </div>
 
         {/* 사업체담당자 서명 요청 */}
-        <div style={s.section}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <p style={s.sectionTitle}>사업체담당자 서명</p>
-            {signStatus === "done" && <span style={s.signedBadge}>✓ 서명 완료</span>}
+        <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-black text-slate-700">사업체담당자 서명</p>
+            {signStatus === "done" && (
+              <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-black text-emerald-600">
+                <Check className="h-3 w-3" aria-hidden="true" /> 서명 완료
+              </span>
+            )}
           </div>
 
           {signStatus === "none" && (
-            <button onClick={requestCompanySign} disabled={signRequesting} style={s.signReqBtn}>
-              {signRequesting ? "링크 생성 중..." : "📱 서명 요청 링크 생성"}
+            <button
+              onClick={requestCompanySign}
+              disabled={signRequesting}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97] disabled:opacity-60"
+            >
+              {signRequesting ? (
+                <><Clock className="h-4 w-4 animate-spin" aria-hidden="true" /> 링크 생성 중...</>
+              ) : (
+                <><Send className="h-4 w-4" aria-hidden="true" /> 서명 요청 링크 생성</>
+              )}
             </button>
           )}
 
           {signStatus === "pending" && signUrl && (
-            <div style={s.signPendingBox}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#374151", margin: "0 0 8px" }}>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="mb-2 text-xs font-black text-slate-700">
                 아래 링크를 사업체 담당자에게 전달하세요
               </p>
-              <div style={s.signUrlBox}>
-                <span style={{ fontSize: 12, color: "#374151", wordBreak: "break-all" as const }}>{signUrl}</span>
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <p className="break-all text-xs font-semibold text-slate-600">{signUrl}</p>
               </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button onClick={async () => { await navigator.clipboard.writeText(signUrl!); alert("링크가 복사되었습니다."); }} style={s.copyBtn}>
-                  복사
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={copySignUrl}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-black text-slate-700 transition active:scale-[0.97]"
+                >
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  {copied ? "복사됨!" : "복사"}
                 </button>
-                <button onClick={() => window.open(signUrl!, "_blank")} style={s.copyBtn}>
+                <button
+                  onClick={() => window.open(signUrl!, "_blank")}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-black text-slate-700 transition active:scale-[0.97]"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                   QR 미리보기
                 </button>
               </div>
-              <p style={{ fontSize: 12, color: "#9ca3af", margin: "10px 0 0" }}>
-                ⏳ 서명 완료를 기다리는 중... (자동 감지)
+              <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate-400">
+                <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                서명 완료를 기다리는 중... (자동 감지)
               </p>
             </div>
           )}
 
-          {signStatus === "done" && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#f0fdf4", borderRadius: 10, border: "1px solid #86efac" }}>
-              <img src={signatureUrl!} alt="서명" style={{ height: 40, objectFit: "contain" }} />
-              <span style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>서명이 문서에 포함됩니다.</span>
+          {signStatus === "done" && signatureUrl && (
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <img src={signatureUrl} alt="서명" className="h-10 object-contain" />
+              <span className="text-xs font-black text-emerald-700">서명이 문서에 포함됩니다.</span>
             </div>
           )}
 
-          <p style={{ fontSize: 12, color: "#9ca3af", margin: "8px 0 0", lineHeight: 1.6 }}>
+          <p className="mt-3 text-xs font-semibold leading-relaxed text-slate-400">
             서명 없이 발송하면 서명란이 빈칸으로 출력됩니다.
           </p>
         </div>
 
         {/* 결과 */}
         {result && (
-          <div style={{ ...s.resultBox, backgroundColor: result.success ? "#f0fdf4" : "#fef2f2", borderColor: result.success ? "#86efac" : "#fecaca" }}>
-            <p style={{ ...s.resultMsg, color: result.success ? "#16a34a" : "#dc2626" }}>
-              {result.success ? "✅ " : "❌ "}{result.msg}
+          <div className={`mx-4 mt-3 rounded-2xl border p-4 ${
+            result.success
+              ? "border-emerald-200 bg-emerald-50"
+              : "border-rose-200 bg-rose-50"
+          }`}>
+            <p className={`text-sm font-black leading-relaxed ${result.success ? "text-emerald-700" : "text-rose-700"}`}>
+              {result.msg}
             </p>
             {result.success && result.pdfBase64 && (
-              <button style={s.downloadBtn} onClick={handleDownload}>📥 PDF 다운로드 (사본)</button>
+              <button
+                onClick={handleDownload}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 text-sm font-black text-white transition active:scale-[0.97]"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                PDF 다운로드 (사본)
+              </button>
             )}
           </div>
         )}
 
         {/* 발송 버튼 */}
-        <button style={{ ...s.sendBtn, opacity: loading ? 0.7 : 1 }} onClick={handleSend} disabled={loading}>
-          {loading ? "⏳ PDF 생성 및 발송 중..." : `📧 ${selectedLabel} 발송`}
+        <button
+          onClick={handleSend}
+          disabled={loading}
+          className="mx-4 mt-4 flex min-h-14 w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-2xl bg-slate-950 text-base font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-[0.97] disabled:opacity-70"
+        >
+          {loading ? (
+            <><Clock className="h-5 w-5 animate-spin" aria-hidden="true" /> PDF 생성 및 발송 중...</>
+          ) : (
+            <><Mail className="h-5 w-5" aria-hidden="true" /> {selectedLabel} 발송</>
+          )}
         </button>
 
-        <div style={s.noteBox}>
-          <p style={s.noteText}>
-            PDF가 자동 생성되어 에이전시 담당자에게 발송됩니다.<br/>
+        {/* 안내 */}
+        <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4 text-center">
+          <p className="text-xs font-semibold leading-relaxed text-slate-400">
+            PDF가 자동 생성되어 에이전시 담당자에게 발송됩니다.<br />
             직무지도원 서명은 등록된 서명이 자동 삽입됩니다.
           </p>
         </div>
 
       </div>
 
-      {/* 네비게이션 */}
-      <nav style={s.bottomNav}>
-        <button style={s.navItem} onClick={() => router.push("/worker/home")}>
-          <span style={s.navIcon}>🏠</span><span style={s.navLabel}>홈</span>
-        </button>
-        <button style={s.navItem} onClick={() => router.push("/worker/calendar")}>
-          <span style={s.navIcon}>📅</span><span style={s.navLabel}>캘린더</span>
-        </button>
-        <button style={s.navItem} onClick={() => router.push("/worker/signature")}>
-          <span style={s.navIcon}>✍️</span><span style={s.navLabel}>전자서명</span>
-        </button>
-        <button style={s.navItem} onClick={() => router.push("/worker/docs")}>
-          <span style={{ ...s.navIcon, color: "#111827" }}>📄</span>
-          <span style={{ ...s.navLabel, color: "#111827", fontWeight: 700 }}>문서</span>
-        </button>
+      {/* 하단 네비게이션 */}
+      <nav className="fixed bottom-0 left-1/2 z-40 flex w-full max-w-md -translate-x-1/2 border-t border-slate-100 bg-white pb-safe-bottom">
+        {NAV_ITEMS.map(({ icon: Icon, label, href }) => {
+          const isActive = typeof window !== "undefined" && window.location.pathname === href;
+          return (
+            <button
+              key={href}
+              onClick={() => router.push(href)}
+              className="flex flex-1 flex-col items-center justify-center gap-1 py-3"
+            >
+              <Icon className={`h-5 w-5 ${isActive ? "text-slate-950" : "text-slate-400"}`} aria-hidden="true" />
+              <span className={`text-[10px] font-black ${isActive ? "text-slate-950" : "text-slate-400"}`}>{label}</span>
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page:       { minHeight: "100dvh", backgroundColor: "#f9fafb" },
-  container:  { maxWidth: 480, margin: "0 auto", padding: "0 0 100px" },
-  header:     { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", backgroundColor: "#fff", borderBottom: "1px solid #f3f4f6", position: "sticky", top: 0, zIndex: 10 },
-  backBtn:    { background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#374151", width: 36, fontWeight: 700 },
-  title:      { fontSize: 17, fontWeight: 700, color: "#111827", margin: 0 },
-  subBtn:     { background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" },
-
-  infoCard:   { margin: "12px 16px 0", backgroundColor: "#fff", borderRadius: 14, padding: "14px 16px", border: "1px solid #f3f4f6" },
-  infoRow:    { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0" },
-  infoLabel:  { fontSize: 13, color: "#9ca3af", fontWeight: 600, flexShrink: 0, marginRight: 12 },
-  infoValue:  { fontSize: 13, fontWeight: 600, color: "#111827", textAlign: "right" as const },
-  infoDivider:{ height: 1, backgroundColor: "#f9fafb", margin: "8px 0" },
-
-  section:      { backgroundColor: "#fff", margin: "12px 16px 0", borderRadius: 14, padding: "16px", border: "1px solid #f3f4f6" },
-  sectionTitle: { fontSize: 14, fontWeight: 700, color: "#374151", margin: "0 0 12px" },
-
-  docList:     { display: "flex", flexDirection: "column", gap: 8 },
-  docItem:     { display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", border: "1.5px solid #e5e7eb", borderRadius: 12, backgroundColor: "#fafafa", cursor: "pointer" },
-  docItemActive:{ border: "1.5px solid #111827", backgroundColor: "#111827" },
-  docLabel:    { fontSize: 14, fontWeight: 700, margin: "0 0 2px" },
-  docDesc:     { fontSize: 12, margin: 0 },
-
-  traineeBtn:       { display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", border: "1.5px solid #e5e7eb", borderRadius: 10, background: "#fafafa", cursor: "pointer" },
-  traineeBtnActive: { border: "1.5px solid #111827", background: "#111827" },
-
-  dateRow:   { display: "flex", alignItems: "center", gap: 8 },
-  dateInput: { flex: 1, height: 42, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 10px", fontSize: 14, color: "#111827", outline: "none", background: "#fafafa" },
-
-  signReqBtn:    { width: "100%", padding: "12px", background: "#374151", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" },
-  signPendingBox:{ background: "#f9fafb", borderRadius: 10, padding: 14, border: "1px solid #e5e7eb" },
-  signUrlBox:    { background: "#fff", borderRadius: 8, padding: "10px 12px", border: "1px solid #e5e7eb", wordBreak: "break-all" as const },
-  signedBadge:   { fontSize: 12, background: "#f0fdf4", color: "#16a34a", border: "1px solid #86efac", borderRadius: 20, padding: "3px 10px", fontWeight: 700 },
-  copyBtn:       { padding: "8px 14px", background: "#fff", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" },
-
-  resultBox:   { margin: "12px 16px 0", padding: "14px 16px", borderRadius: 12, border: "1px solid" },
-  resultMsg:   { fontSize: 14, margin: "0 0 10px", fontWeight: 600, lineHeight: 1.5 },
-  downloadBtn: { width: "100%", padding: "11px", backgroundColor: "#111827", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer" },
-
-  sendBtn: { display: "block", width: "calc(100% - 32px)", margin: "16px 16px 0", padding: "16px", backgroundColor: "#111827", color: "#fff", fontSize: 16, fontWeight: 700, border: "none", borderRadius: 12, cursor: "pointer" },
-  noteBox: { margin: "12px 16px 0", padding: "14px 16px", backgroundColor: "#f9fafb", borderRadius: 12, border: "1px solid #f3f4f6" },
-  noteText:{ fontSize: 13, color: "#6b7280", margin: 0, lineHeight: 1.8, textAlign: "center" as const },
-
-  bottomNav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, backgroundColor: "#fff", borderTop: "1px solid #f3f4f6", display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom)" },
-  navItem:   { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: "10px 0", border: "none", backgroundColor: "transparent", cursor: "pointer" },
-  navIcon:   { fontSize: 22 },
-  navLabel:  { fontSize: 11, color: "#9ca3af", fontWeight: 500 },
-};

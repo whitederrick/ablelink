@@ -1,5 +1,4 @@
 "use client";
-// app/admin/shell/AdminShellClient.tsx
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -43,36 +42,31 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
       }
     })();
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoginPage]);
 
   if (isLoginPage) return <>{children}</>;
 
   if (loading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f9fafb" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ width: 28, height: 28, border: "2.5px solid #e5e7eb", borderTop: "2.5px solid #3b82f6", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-          <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>로딩 중...</p>
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="mx-auto h-7 w-7 animate-spin rounded-full border-[2.5px] border-slate-200 border-t-sky-500" />
+          <p className="mt-3 text-sm font-semibold text-slate-400">로딩 중...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f7f8fa" }}>
+    <div className="flex min-h-screen bg-slate-50">
       <AdminNav />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <div className="flex min-w-0 flex-1 flex-col">
         <AdminTopbar
           session={(session as any)?.session}
           onLoggedOut={() => router.replace("/admin/login")}
         />
-        <main style={{
-          flex: 1,
-          padding: "28px 32px",
-          overflowY: "auto" as const,
-        }}>
+        <main className="flex-1 overflow-y-auto p-7">
           {children}
         </main>
       </div>

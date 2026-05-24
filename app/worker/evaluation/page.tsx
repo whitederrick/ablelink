@@ -1,9 +1,9 @@
 "use client";
-// app/worker/evaluation/page.tsx - 훈련생 종합평가 / 적응지도 평가 점수 입력
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { ChevronLeft } from "lucide-react";
 
 const SECTIONS = [
   { code: "WORK_ATTITUDE", label: "근무태도", items: [
@@ -36,18 +36,16 @@ const SECTIONS = [
   ]},
 ];
 
-const SCORE_LABELS = ["", "불량(1)", "미흡(2)", "보통(3)", "양호(4)", "우수(5)"];
-
 type ScoreRow = { initial: string; final: string };
 type Scores = Record<string, ScoreRow[]>;
 type Comments = Record<string, string>;
 
 function defaultScores(): Scores {
-  return Object.fromEntries(SECTIONS.map(s => [s.code, Array.from({length:5}, () => ({initial:"", final:""})) ]));
+  return Object.fromEntries(SECTIONS.map(s => [s.code, Array.from({length: 5}, () => ({initial: "", final: ""}))]));
 }
 
-function calcTotal(scores: Scores, field: "initial"|"final") {
-  return Object.values(scores).flat().reduce((sum, r) => sum + (parseInt(r[field])||0), 0);
+function calcTotal(scores: Scores, field: "initial" | "final") {
+  return Object.values(scores).flat().reduce((sum, r) => sum + (parseInt(r[field]) || 0), 0);
 }
 
 function EvalInner() {
@@ -55,7 +53,7 @@ function EvalInner() {
   const params = useSearchParams();
   const traineeId   = params.get("traineeId") || "";
   const traineeName = params.get("traineeName") || "훈련생";
-  const evalType    = (params.get("evalType") || "TRAINING") as "TRAINING"|"ADAPTATION";
+  const evalType    = (params.get("evalType") || "TRAINING") as "TRAINING" | "ADAPTATION";
   const periodStart = params.get("periodStart") || "";
   const periodEnd   = params.get("periodEnd")   || "";
 
@@ -82,7 +80,7 @@ function EvalInner() {
       .finally(() => setLoading(false));
   }, [traineeId, evalType, periodStart, periodEnd]);
 
-  const setScore = useCallback((code: string, idx: number, field: "initial"|"final", val: string) => {
+  const setScore = useCallback((code: string, idx: number, field: "initial" | "final", val: string) => {
     setScores(prev => {
       const next = { ...prev, [code]: [...prev[code]] };
       next[code][idx] = { ...next[code][idx], [field]: val };
@@ -108,68 +106,82 @@ function EvalInner() {
     else setToast("저장 실패: " + (d.message || ""));
   }
 
-  if (loading) return <div style={s.center}>불러오는 중...</div>;
+  if (loading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-slate-50">
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
+      </div>
+    );
+  }
 
   return (
-    <div style={s.page}>
-      <div style={s.header}>
-        <button onClick={() => router.back()} style={s.backBtn}>←</button>
+    <div className="min-h-dvh bg-slate-50 pb-20">
+      {/* 헤더 */}
+      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-slate-100 bg-white px-4 py-4">
+        <button
+          onClick={() => router.back()}
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition active:scale-95"
+        >
+          <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+        </button>
         <div>
-          <h1 style={s.title}>{title}</h1>
-          <p style={s.sub}>{traineeName} · {periodStart} ~ {periodEnd}</p>
+          <h1 className="text-base font-black text-slate-900">{title}</h1>
+          <p className="text-xs font-semibold text-slate-400">{traineeName} · {periodStart} ~ {periodEnd}</p>
         </div>
-      </div>
+      </header>
 
-      <div style={s.container}>
-        {/* 점수표 */}
+      <div className="mx-auto max-w-md space-y-3 px-4 py-3">
+
+        {/* 점수 섹션 */}
         {SECTIONS.map(sec => (
-          <div key={sec.code} style={s.card}>
-            <div style={s.secHeader}>
-              <span style={s.secTitle}>{sec.label}</span>
-              <span style={s.secScore}>
-                {label1}: {sec.items.reduce((s,_,i) => s+(parseInt(scores[sec.code]?.[i]?.initial)||0), 0)}점 /
-                {label2}: {sec.items.reduce((s,_,i) => s+(parseInt(scores[sec.code]?.[i]?.final)||0), 0)}점
+          <div key={sec.code} className="rounded-2xl border border-slate-100 bg-white p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-black text-slate-900">{sec.label}</span>
+              <span className="text-xs font-semibold text-slate-400">
+                {label1}: {sec.items.reduce((s, _, i) => s + (parseInt(scores[sec.code]?.[i]?.initial) || 0), 0)}점 /
+                {" "}{label2}: {sec.items.reduce((s, _, i) => s + (parseInt(scores[sec.code]?.[i]?.final) || 0), 0)}점
               </span>
             </div>
 
-            {sec.items.map((item, idx) => (
-              <div key={idx} style={s.itemRow}>
-                <p style={s.itemText}>{idx+1}. {item}</p>
-                <div style={s.scoreRow}>
-                  <div style={s.scoreField}>
-                    <span style={s.scoreLabel}>{label1}</span>
-                    <select
-                      value={scores[sec.code]?.[idx]?.initial || ""}
-                      onChange={e => setScore(sec.code, idx, "initial", e.target.value)}
-                      style={s.select}
-                    >
-                      <option value="">-</option>
-                      {[1,2,3,4,5].map(v => <option key={v} value={v}>{v}점</option>)}
-                    </select>
-                  </div>
-                  <div style={s.scoreField}>
-                    <span style={s.scoreLabel}>{label2}</span>
-                    <select
-                      value={scores[sec.code]?.[idx]?.final || ""}
-                      onChange={e => setScore(sec.code, idx, "final", e.target.value)}
-                      style={s.select}
-                    >
-                      <option value="">-</option>
-                      {[1,2,3,4,5].map(v => <option key={v} value={v}>{v}점</option>)}
-                    </select>
+            <div className="space-y-3">
+              {sec.items.map((item, idx) => (
+                <div key={idx} className="border-b border-slate-50 pb-3 last:border-b-0 last:pb-0">
+                  <p className="mb-2 text-xs font-semibold leading-relaxed text-slate-700">{idx + 1}. {item}</p>
+                  <div className="flex gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-400">{label1}</span>
+                      <select
+                        value={scores[sec.code]?.[idx]?.initial || ""}
+                        onChange={e => setScore(sec.code, idx, "initial", e.target.value)}
+                        className="h-8 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-900 outline-none focus:border-sky-400"
+                      >
+                        <option value="">-</option>
+                        {[1, 2, 3, 4, 5].map(v => <option key={v} value={v}>{v}점</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-400">{label2}</span>
+                      <select
+                        value={scores[sec.code]?.[idx]?.final || ""}
+                        onChange={e => setScore(sec.code, idx, "final", e.target.value)}
+                        className="h-8 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-900 outline-none focus:border-sky-400"
+                      >
+                        <option value="">-</option>
+                        {[1, 2, 3, 4, 5].map(v => <option key={v} value={v}>{v}점</option>)}
+                      </select>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
 
-            {/* 평가소견 */}
-            <div style={{ marginTop: 10 }}>
-              <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>평가소견</p>
+            <div className="mt-3">
+              <p className="mb-1.5 text-xs font-semibold text-slate-400">평가소견</p>
               <textarea
                 value={comments[sec.code] || ""}
                 onChange={e => setComment(sec.code, e.target.value)}
                 placeholder="평가소견을 입력하세요"
-                style={s.textarea}
+                className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-700 outline-none focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
                 rows={3}
               />
             </div>
@@ -177,23 +189,36 @@ function EvalInner() {
         ))}
 
         {/* 총점 */}
-        <div style={s.totalCard}>
-          <span style={s.totalLabel}>총점 (만점 100점)</span>
-          <div style={s.totalScores}>
-            <span style={s.totalScore}>{label1}: <strong>{calcTotal(scores,"initial")}</strong>점</span>
-            <span style={s.totalScore}>{label2}: <strong>{calcTotal(scores,"final")}</strong>점</span>
+        <div className="flex items-center justify-between rounded-2xl bg-slate-950 px-5 py-4">
+          <span className="text-sm font-black text-slate-400">총점 (만점 100점)</span>
+          <div className="flex gap-5">
+            <span className="text-sm font-semibold text-white">
+              {label1}: <strong className="text-lg font-black">{calcTotal(scores, "initial")}</strong>점
+            </span>
+            <span className="text-sm font-semibold text-white">
+              {label2}: <strong className="text-lg font-black">{calcTotal(scores, "final")}</strong>점
+            </span>
           </div>
         </div>
 
-        <p style={s.note}>※ 항목별 점수채점: 우수 5점, 양호 4점, 보통 3점, 미흡 2점, 불량 1점</p>
+        <p className="text-center text-[11px] font-semibold text-slate-400">
+          ※ 항목별 점수채점: 우수 5점, 양호 4점, 보통 3점, 미흡 2점, 불량 1점
+        </p>
 
-        <button onClick={save} disabled={saving || !traineeId} style={s.saveBtn}>
+        <button
+          onClick={save}
+          disabled={saving || !traineeId}
+          className="min-h-14 w-full rounded-2xl bg-slate-950 text-base font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-[0.97] disabled:opacity-60"
+        >
           {saving ? "저장 중..." : "저장"}
         </button>
       </div>
 
+      {/* 토스트 */}
       {toast && (
-        <div style={s.toast}>{toast}</div>
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-lg">
+          {toast}
+        </div>
       )}
     </div>
   );
@@ -201,36 +226,12 @@ function EvalInner() {
 
 export default function EvalPage() {
   return (
-    <Suspense fallback={<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100dvh"}}>로딩 중...</div>}>
+    <Suspense fallback={
+      <div className="flex min-h-dvh items-center justify-center bg-slate-50 text-sm font-semibold text-slate-400">
+        로딩 중...
+      </div>
+    }>
       <EvalInner />
     </Suspense>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page:       { minHeight:"100dvh", background:"#f9fafb", paddingBottom:80 },
-  header:     { display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background:"#fff", borderBottom:"1px solid #f3f4f6", position:"sticky", top:0, zIndex:10 },
-  backBtn:    { background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#374151", fontWeight:700 },
-  title:      { fontSize:16, fontWeight:700, color:"#111827", margin:0 },
-  sub:        { fontSize:12, color:"#9ca3af", margin:"2px 0 0" },
-  container:  { maxWidth:480, margin:"0 auto", padding:"16px 16px 20px" },
-  card:       { background:"#fff", borderRadius:12, padding:"14px 16px", marginBottom:12, border:"1px solid #f0f0f0" },
-  secHeader:  { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 },
-  secTitle:   { fontSize:14, fontWeight:700, color:"#111827" },
-  secScore:   { fontSize:12, color:"#6b7280" },
-  itemRow:    { marginBottom:10, paddingBottom:10, borderBottom:"1px solid #f9fafb" },
-  itemText:   { fontSize:13, color:"#374151", margin:"0 0 6px", lineHeight:1.5 },
-  scoreRow:   { display:"flex", gap:12 },
-  scoreField: { display:"flex", alignItems:"center", gap:6 },
-  scoreLabel: { fontSize:12, color:"#6b7280", whiteSpace:"nowrap" },
-  select:     { height:34, border:"1px solid #e5e7eb", borderRadius:6, fontSize:13, padding:"0 6px", color:"#111827", background:"#fff" },
-  textarea:   { width:"100%", border:"1px solid #e5e7eb", borderRadius:8, padding:"8px 10px", fontSize:13, color:"#374151", resize:"vertical", boxSizing:"border-box" },
-  totalCard:  { background:"#111827", borderRadius:12, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 },
-  totalLabel: { fontSize:13, color:"#9ca3af", fontWeight:600 },
-  totalScores:{ display:"flex", gap:16 },
-  totalScore: { fontSize:14, color:"#fff" },
-  note:       { fontSize:11, color:"#9ca3af", textAlign:"center", margin:"0 0 16px" },
-  saveBtn:    { width:"100%", padding:"14px", background:"#111827", color:"#fff", border:"none", borderRadius:12, fontSize:15, fontWeight:700, cursor:"pointer" },
-  toast:      { position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", background:"#111827", color:"#fff", padding:"11px 20px", borderRadius:10, fontSize:14, fontWeight:600, zIndex:2000 },
-  center:     { display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100dvh" },
-};
