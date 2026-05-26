@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { T } from "../_styles";
-import { List, Map as MapIcon, CalendarDays } from "lucide-react";
+import { List, Map as MapIcon, CalendarDays, Download } from "lucide-react";
 
 const AttendanceMap = dynamic(() => import("./AttendanceMap"), { ssr: false });
 
@@ -141,6 +141,41 @@ export default function AttendancesPage() {
   const [items, setItems] = useState<AttendanceItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [csvLoading, setCsvLoading] = useState(false);
+
+  async function downloadCsv(type: "attendance" | "logs") {
+    setCsvLoading(true);
+    try {
+      const [y, m] = yearMonth.split("-").map(Number);
+      const from = `${yearMonth}-01`;
+      const to = `${yearMonth}-${pad2(new Date(y, m, 0).getDate())}`;
+      const params = new URLSearchParams({ type, from, to });
+      const res = await fetch(`/api/admin/export/csv?${params}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const msg = data?.message || res.statusText;
+        if (res.status === 403 || msg?.includes("플랜")) {
+          alert("이 기능은 현재 플랜에서 제한됩니다. 보관기간 내 데이터만 다운로드됩니다.");
+        } else {
+          alert("다운로드 실패: " + msg);
+        }
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const cd = res.headers.get("content-disposition") ?? "";
+      const match = cd.match(/filename\*=UTF-8''(.+)/);
+      a.download = match ? decodeURIComponent(match[1]) : `export_${yearMonth}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("다운로드 중 오류가 발생했습니다.");
+    } finally {
+      setCsvLoading(false);
+    }
+  }
 
   async function fetchData() {
     setLoading(true);
@@ -194,6 +229,24 @@ export default function AttendancesPage() {
           placeholder="직무지도원 이름 / 현장명 검색"
           className={`flex-1 ${T.input}`} />
         <button onClick={fetchData} className={T.btnSecondary}>검색</button>
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => downloadCsv("attendance")}
+            disabled={csvLoading}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            근태 CSV
+          </button>
+          <button
+            onClick={() => downloadCsv("logs")}
+            disabled={csvLoading}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            일지 CSV
+          </button>
+        </div>
         <div className="ml-auto flex gap-1.5">
           {VIEW_TABS.map(({ mode, label, Icon }) => (
             <button key={mode} onClick={() => setViewMode(mode)}

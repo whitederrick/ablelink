@@ -346,6 +346,7 @@ function WorklogForm() {
   const [isRecording, setIsRecording] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [recordingSec, setRecordingSec] = useState(0);
+  const [sentenceCount, setSentenceCount] = useState(2);
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -454,6 +455,7 @@ function WorklogForm() {
       formData.append("audio", blob, `recording.${ext}`);
       formData.append("traineeName", traineeName);
       formData.append("taskScore", String(taskScore));
+      formData.append("sentenceCount", String(sentenceCount));
       const res = await fetch("/api/worker/ai/voice-to-log", { method: "POST", body: formData });
       const data = await res.json();
       if (data.success && data.content) {
@@ -724,7 +726,24 @@ function WorklogForm() {
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm font-black text-slate-700">지도 내용</span>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              {/* 문장 수 선택 */}
+              <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+                {[2, 3, 4].map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setSentenceCount(n)}
+                    className={`px-2.5 py-1.5 text-xs font-black transition ${
+                      sentenceCount === n
+                        ? "bg-slate-950 text-white"
+                        : "bg-white text-slate-400"
+                    }`}
+                  >
+                    {n}문
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 onClick={isRecording ? stopRecording : startRecording}

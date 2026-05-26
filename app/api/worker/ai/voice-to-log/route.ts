@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
     const audioBlob = formData.get("audio") as Blob | null;
     const traineeName = (formData.get("traineeName") as string) || "훈련생";
     const taskScore = Number(formData.get("taskScore") ?? 3);
+    const sentenceCount = Math.min(4, Math.max(2, Number(formData.get("sentenceCount") ?? 2)));
 
     if (!audioBlob || audioBlob.size === 0) {
       return NextResponse.json({ success: false, message: "음성 파일이 없습니다." }, { status: 400 });
@@ -105,11 +106,11 @@ export async function POST(request: NextRequest) {
 
     const prompt = `당신은 장애인 직무지도원의 업무일지 작성을 돕는 전문 어시스턴트입니다.
 
-아래 발화 내용을 업무일지 문장 정확히 2개로 변환하세요.
+아래 발화 내용을 업무일지 문장 정확히 ${sentenceCount}개로 변환하세요.
 
 조건:
 - 훈련생: ${traineeName} / 수행 평가: ${scoreLabel}
-- 반드시 2문장만 출력 (3문장 이상 금지)
+- 반드시 ${sentenceCount}문장만 출력 (${sentenceCount + 1}문장 이상 금지)
 - 문장당 25~35자 내외로 간결하게
 - 1인칭 서술, 핵심 내용만
 - 설명·인사말·따옴표 없이 일지 내용만 출력

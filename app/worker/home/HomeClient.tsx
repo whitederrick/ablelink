@@ -10,6 +10,7 @@ import {
   ClipboardList,
   FileText,
   Home,
+  Layers,
   LogOut,
   MapPin,
   PenLine,
@@ -722,6 +723,23 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
               현장 등록하기
             </button>
           </div>
+        )}
+
+        {/* AI 일괄 일지 작성 버튼 */}
+        {homeData?.siteName && (
+          <button
+            onClick={() => router.push("/worker/worklog/batch")}
+            className="flex w-full items-center gap-3 rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3.5 text-left transition active:scale-[0.98]"
+          >
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-violet-100">
+              <Layers className="h-5 w-5 text-violet-600" aria-hidden="true" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-black text-violet-900">AI 일지 일괄 작성</p>
+              <p className="text-xs font-semibold text-violet-500">음성 1번으로 여러 날짜 일지를 한번에 작성</p>
+            </div>
+            <ChevronRight className="h-4 w-4 flex-shrink-0 text-violet-400" aria-hidden="true" />
+          </button>
         )}
 
         {/* PREMIUM 배너 */}

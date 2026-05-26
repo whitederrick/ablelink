@@ -6,10 +6,11 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import { getKrHolidays } from "@/app/api/worker/holidays/route";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
-type DayStatus = "GREEN" | "ORANGE" | "RED" | "NONE";
+type DayStatus = "GREEN" | "ORANGE" | "RED" | "NONE" | "HOLIDAY";
 
 function calcStatus(opts: {
   hasStart: boolean;
@@ -63,6 +64,17 @@ export async function GET(request: NextRequest) {
       orderBy: { workDate: "asc" },
     });
 
+    // 휴무일 조회 (공휴일 + 사이트별 커스텀)
+    const nationalHolidays = getKrHolidays(year, month);
+    const customHolidayRows = assignment
+      ? await prisma.siteHoliday.findMany({
+          where: { assignmentId: assignment.id, date: { gte: startDate, lte: endDate } },
+          select: { date: true, reason: true },
+        })
+      : [];
+    const customHolidays: Record<string, string> = {};
+    for (const r of customHolidayRows) customHolidays[r.date] = r.reason ?? "휴무";
+
     // 훈련생 수
     const traineeCount = assignment
       ? await prisma.trainee.count({
@@ -83,6 +95,7 @@ export async function GET(request: NextRequest) {
       isFinalClosed: boolean;
       logCount: number;
       traineeCount: number;
+      holidayName?: string;
     };
     const dayMap: Record<string, DayEntry> = {};
 
@@ -107,6 +120,26 @@ export async function GET(request: NextRequest) {
       };
     }
 
+    // 공휴일 + 커스텀 휴무일 처리
+    const allHolidays = { ...nationalHolidays, ...customHolidays };
+    for (const [date, name] of Object.entries(allHolidays)) {
+      if (date >= startDate && date <= endDate && !dayMap[date]) {
+        dayMap[date] = {
+          status: "HOLIDAY",
+          attendanceId: "",
+          startTime: null,
+          endTime: null,
+          isFinalClosed: false,
+          logCount: 0,
+          traineeCount,
+          holidayName: name,
+        };
+      } else if (dayMap[date]) {
+        // 출근 기록이 있어도 휴무일 이름은 표시
+        (dayMap[date] as any).holidayName = name;
+      }
+    }
+
     // 배정 기간 내 + 오늘 이전 날짜 중 출근 기록 없는 날 → RED
     if (assignment) {
       const assignStart = assignment.startDate.toISOString().slice(0, 10);
@@ -123,8 +156,8 @@ export async function GET(request: NextRequest) {
       const end = new Date(redTo   + "T00:00:00");
       while (cur <= end) {
         const key = cur.toISOString().slice(0, 10);
-        // 해당 월 범위 내이고 아직 dayMap에 없는 날짜만 RED로
-        if (key >= startDate && key <= endDate && !dayMap[key]) {
+        // 해당 월 범위 내이고 아직 dayMap에 없는 날짜만 RED로 (휴무일 제외)
+        if (key >= startDate && key <= endDate && !dayMap[key] && !allHolidays[key]) {
           dayMap[key] = {
             status:        "RED",
             attendanceId:  "",
@@ -145,6 +178,8 @@ export async function GET(request: NextRequest) {
     const totalOrangeDays = allDays.filter(d => d.status === "ORANGE").length;
     const totalRedDays    = allDays.filter(d => d.status === "RED").length;
 
+    const totalHolidayDays = Object.values(dayMap).filter(d => d.status === "HOLIDAY").length;
+
     return NextResponse.json({
       success: true,
       data: {
@@ -155,10 +190,13 @@ export async function GET(request: NextRequest) {
         trainingType: assignment?.serviceStep === "PRE_TRAINING" ? "PRE"
           : assignment?.serviceStep === "ADAPTATION" ? "ADAPTATION" : "FIELD",
         days: dayMap,
+        holidays: allHolidays,
+        customHolidays,
         totalWorkDays,
         totalGreenDays,
         totalOrangeDays,
         totalRedDays,
+        totalHolidayDays,
       },
     });
   } catch (error: any) {

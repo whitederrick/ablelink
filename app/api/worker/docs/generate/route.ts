@@ -67,10 +67,7 @@ export async function POST(request: NextRequest) {
 
     const assignment = await prisma.siteAssignment.findFirst({
       where: { userId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] } },
-      include: {
-        site: true,
-        assignedByAdmin: { select: { signatureUrl: true, displayName: true } },
-      },
+      include: { site: true },
       orderBy: { assignedAt: "desc" },
     });
 
@@ -94,28 +91,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── 관리자(govAgent) 서명 ──────────────────────────────
-    let adminForSign = assignment.assignedByAdmin as any;
-    if (!adminForSign && assignment.agencyId) {
-      adminForSign = await prisma.adminUser.findFirst({
-        where: { agencyId: assignment.agencyId, isActive: true },
-        select: { signatureUrl: true, displayName: true },
-        orderBy: { id: "asc" },
-      });
-    }
-
-    // 서명 이미지 base64 변환 (Playwright가 외부 URL 못 읽는 경우 대비)
-    const [coachImg, govImg, companyImg] = await Promise.all([
+    // 에이전시 관리자 서명은 관리자가 명시적으로 서명 후 첨부 — 여기서는 자동 삽입 안 함
+    const [coachImg, companyImg] = await Promise.all([
       toBase64DataUri(user?.signatureUrl),
-      toBase64DataUri(adminForSign?.signatureUrl),
       toBase64DataUri(companyManagerSignatureUrl),
     ]);
 
     const sigs = {
-      coach:          { name: user?.userName || "",           imageUrl: coachImg },
-      govAgent:       { name: adminForSign?.displayName || "", imageUrl: govImg },
-      companyManager: { name: companyManagerSignerName,        imageUrl: companyImg },
-      agencyAgent:    { name: adminForSign?.displayName || "", imageUrl: govImg },
+      coach:          { name: user?.userName || "",        imageUrl: coachImg },
+      govAgent:       { name: "",                          imageUrl: undefined as string | undefined },
+      companyManager: { name: companyManagerSignerName,    imageUrl: companyImg },
+      agencyAgent:    { name: "",                          imageUrl: undefined as string | undefined },
     };
 
     // ── 문서별 payload 빌드 ──────────────────────────────────

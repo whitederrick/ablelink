@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   BarChart2,
   BookOpen,
@@ -11,15 +11,14 @@ import {
   CircleDollarSign,
   ClipboardList,
   Clock,
-  Copy,
   Download,
-  ExternalLink,
   FileText,
   Home,
   Mail,
   MapPin,
   PenLine,
   Send,
+  Smartphone,
   TrendingUp,
   User,
 } from "lucide-react";
@@ -48,8 +47,12 @@ const NAV_ITEMS = [
   { icon: CircleDollarSign, label: "히스토리", href: "/worker/history" },
 ];
 
-export default function DocsPage() {
+// 사업체 담당자 서명이 필요한 문서 타입
+const NEEDS_MANAGER_SIGN = new Set(["ATTENDANCE_SHEET", "TRAINING_DAILY_LOG"]);
+
+function DocsContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [siteInfo, setSiteInfo] = useState<SiteInfo | null>(null);
   const [selectedDoc, setSelectedDoc] = useState("ATTENDANCE_SHEET");
   const [selectedTraineeId, setSelectedTraineeId] = useState("");
@@ -58,12 +61,8 @@ export default function DocsPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; msg: string; pdfBase64?: string; fileName?: string } | null>(null);
 
-  const [signToken, setSignToken]           = useState<string | null>(null);
-  const [signUrl, setSignUrl]               = useState<string | null>(null);
-  const [signRequesting, setSignRequesting] = useState(false);
-  const [signStatus, setSignStatus]         = useState<"none"|"pending"|"done">("none");
-  const [signatureUrl, setSignatureUrl]     = useState<string | null>(null);
-  const [copied, setCopied]                 = useState(false);
+  const [signToken, setSignToken]   = useState<string | null>(null);
+  const [signStatus, setSignStatus] = useState<"none"|"done">("none");
 
   useEffect(() => {
     const now = new Date();
@@ -72,6 +71,14 @@ export default function DocsPage() {
     const last = new Date(y, now.getMonth() + 1, 0).getDate();
     setPeriodStart(`${y}-${m}-01`);
     setPeriodEnd(`${y}-${m}-${String(last).padStart(2, "0")}`);
+
+    // 인-퍼슨 서명 완료 후 돌아왔을 때 토큰 읽기
+    const tok = searchParams.get("signToken");
+    const done = searchParams.get("signDone");
+    if (tok && done === "1") {
+      setSignToken(tok);
+      setSignStatus("done");
+    }
   }, []);
 
   useEffect(() => {
@@ -91,43 +98,15 @@ export default function DocsPage() {
   }, []);
 
   function selectDoc(id: string) {
-    setSelectedDoc(id); setResult(null);
-    setSignToken(null); setSignUrl(null); setSignStatus("none"); setSignatureUrl(null);
+    setSelectedDoc(id);
+    setResult(null);
+    setSignToken(null);
+    setSignStatus("none");
   }
 
-  async function requestCompanySign() {
-    setSignRequesting(true);
-    try {
-      const res = await fetch("/api/worker/docs/sign-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          docType: selectedDoc, periodStart, periodEnd,
-          signRole: "company_manager", signerName: "사업체 담당자",
-        }),
-      });
-      const d = await res.json();
-      if (d.success) {
-        setSignToken(d.token); setSignUrl(d.signUrl); setSignStatus("pending");
-        try { await navigator.clipboard.writeText(d.signUrl); } catch {}
-        pollSignature(d.token);
-      } else {
-        alert(d.message || "링크 생성 실패");
-      }
-    } finally { setSignRequesting(false); }
-  }
-
-  function pollSignature(token: string) {
-    let count = 0;
-    const iv = setInterval(async () => {
-      count++;
-      const d = await fetch(`/api/worker/docs/sign-token?token=${token}`).then(r => r.json());
-      if (d.signed && d.signatureUrl) {
-        clearInterval(iv);
-        setSignStatus("done"); setSignatureUrl(d.signatureUrl);
-      }
-      if (count >= 36) clearInterval(iv);
-    }, 10000);
+  function openInPersonSign() {
+    const params = new URLSearchParams({ dt: selectedDoc, ps: periodStart, pe: periodEnd });
+    router.push(`/worker/docs/manager-sign?${params}`);
   }
 
   async function handleSend() {
@@ -162,13 +141,9 @@ export default function DocsPage() {
     URL.revokeObjectURL(url);
   }
 
-  async function copySignUrl() {
-    if (!signUrl) return;
-    try { await navigator.clipboard.writeText(signUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
-  }
-
-  const needsTrainee = DOC_TYPES.find(d => d.id === selectedDoc)?.needsTrainee ?? false;
-  const selectedLabel = DOC_TYPES.find(d => d.id === selectedDoc)?.label || "문서";
+  const needsTrainee    = DOC_TYPES.find(d => d.id === selectedDoc)?.needsTrainee ?? false;
+  const selectedLabel   = DOC_TYPES.find(d => d.id === selectedDoc)?.label || "문서";
+  const needsManagerSign = NEEDS_MANAGER_SIGN.has(selectedDoc);
 
   return (
     <div className="min-h-dvh bg-slate-50">
@@ -312,7 +287,8 @@ export default function DocsPage() {
           </div>
         </div>
 
-        {/* 사업체담당자 서명 요청 */}
+        {/* 사업체담당자 서명 (해당 문서만 표시) */}
+        {needsManagerSign && (
         <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-black text-slate-700">사업체담당자 서명</p>
@@ -325,53 +301,26 @@ export default function DocsPage() {
 
           {signStatus === "none" && (
             <button
-              onClick={requestCompanySign}
-              disabled={signRequesting}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97] disabled:opacity-60"
+              onClick={openInPersonSign}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97]"
             >
-              {signRequesting ? (
-                <><Clock className="h-4 w-4 animate-spin" aria-hidden="true" /> 링크 생성 중...</>
-              ) : (
-                <><Send className="h-4 w-4" aria-hidden="true" /> 서명 요청 링크 생성</>
-              )}
+              <Smartphone className="h-4 w-4" aria-hidden="true" />
+              담당자에게 폰 건네기 (직접 서명)
             </button>
           )}
 
-          {signStatus === "pending" && signUrl && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="mb-2 text-xs font-black text-slate-700">
-                아래 링크를 사업체 담당자에게 전달하세요
-              </p>
-              <div className="rounded-lg border border-slate-200 bg-white p-3">
-                <p className="break-all text-xs font-semibold text-slate-600">{signUrl}</p>
+          {signStatus === "done" && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                <Check className="h-4 w-4 text-emerald-600" />
+                <span className="text-xs font-black text-emerald-700">서명이 문서에 포함됩니다.</span>
               </div>
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={copySignUrl}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-black text-slate-700 transition active:scale-[0.97]"
-                >
-                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                  {copied ? "복사됨!" : "복사"}
-                </button>
-                <button
-                  onClick={() => window.open(signUrl!, "_blank")}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-black text-slate-700 transition active:scale-[0.97]"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                  QR 미리보기
-                </button>
-              </div>
-              <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate-400">
-                <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                서명 완료를 기다리는 중... (자동 감지)
-              </p>
-            </div>
-          )}
-
-          {signStatus === "done" && signatureUrl && (
-            <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-              <img src={signatureUrl} alt="서명" className="h-10 object-contain" />
-              <span className="text-xs font-black text-emerald-700">서명이 문서에 포함됩니다.</span>
+              <button
+                onClick={() => { setSignToken(null); setSignStatus("none"); }}
+                className="w-full text-xs font-semibold text-slate-400 underline"
+              >
+                다시 서명 받기
+              </button>
             </div>
           )}
 
@@ -379,6 +328,7 @@ export default function DocsPage() {
             서명 없이 발송하면 서명란이 빈칸으로 출력됩니다.
           </p>
         </div>
+        )}
 
         {/* 결과 */}
         {result && (
@@ -442,5 +392,17 @@ export default function DocsPage() {
         })}
       </nav>
     </div>
+  );
+}
+
+export default function DocsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-dvh items-center justify-center bg-slate-50">
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
+      </div>
+    }>
+      <DocsContent />
+    </Suspense>
   );
 }
