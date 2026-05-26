@@ -152,7 +152,7 @@ function ManagerSignContent() {
       </div>
 
       {/* 서명 캔버스 */}
-      <div className="mx-5 flex-1 overflow-hidden rounded-2xl border-2 border-slate-950 bg-white">
+      <div className="mx-5 overflow-hidden rounded-2xl border-2 border-slate-950 bg-white" style={{ height: "280px" }}>
         <canvas
           ref={canvasRef}
           className="block h-full w-full cursor-crosshair touch-none"

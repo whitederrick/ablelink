@@ -110,12 +110,12 @@ function DocsContent() {
   }
 
   async function handleSend() {
-    if (!siteInfo?.managerEmail) { alert("에이전시 담당자 이메일이 등록되지 않았습니다."); return; }
     const needsTrainee = DOC_TYPES.find(d => d.id === selectedDoc)?.needsTrainee;
     if (needsTrainee && !selectedTraineeId) { alert("훈련생을 선택해주세요."); return; }
 
     setLoading(true); setResult(null);
     try {
+      const hasEmail = !!siteInfo?.managerEmail;
       const res = await fetch("/api/worker/docs/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -123,7 +123,7 @@ function DocsContent() {
           docType: selectedDoc, periodStart, periodEnd,
           traineeId: selectedTraineeId || undefined,
           companyManagerSignToken: signToken || undefined,
-          sendEmail: true, toEmail: siteInfo.managerEmail,
+          sendEmail: hasEmail, toEmail: siteInfo?.managerEmail || undefined,
         }),
       });
       const data = await res.json();

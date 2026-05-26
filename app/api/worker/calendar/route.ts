@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
-import { getKrHolidays } from "@/app/api/worker/holidays/route";
+import { getKrHolidays } from "@/lib/krHolidays";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 

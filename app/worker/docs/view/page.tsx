@@ -10,16 +10,12 @@ import {
   ChevronLeft,
   CircleDollarSign,
   ClipboardList,
-  Clock,
-  Copy,
   ExternalLink,
   FileText,
   Home,
   PenLine,
-  Send,
   TrendingUp,
   User,
-  X,
 } from "lucide-react";
 
 type DocType =
@@ -68,8 +64,6 @@ function defaultPeriod() {
 function DocsViewInner() {
   const router = useRouter();
   const def = defaultPeriod();
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
-
   const [docType,         setDocType]         = useState<DocType>("attendance-sheet");
   const [periodStart,     setPeriodStart]     = useState(def.start);
   const [periodEnd,       setPeriodEnd]       = useState(def.end);
@@ -77,13 +71,6 @@ function DocsViewInner() {
   const [trainees,        setTrainees]        = useState<{id: string; name: string; gender: string}[]>([]);
   const [mode,            setMode]            = useState<"select" | "view">("select");
   const [iframeKey,       setIframeKey]       = useState(0);
-  const [copied,          setCopied]          = useState(false);
-
-  const [signToken,      setSignToken]      = useState("");
-  const [signUrl,        setSignUrl]        = useState("");
-  const [signStatus,     setSignStatus]     = useState<"none" | "pending" | "done">("none");
-  const [signImageUrl,   setSignImageUrl]   = useState("");
-  const [signRequesting, setSignRequesting] = useState(false);
 
   const needsTrainee = DOC_GROUPS.flatMap(g => g.docs).find(d => d.id === docType)?.needsTrainee ?? false;
 
@@ -92,51 +79,18 @@ function DocsViewInner() {
       if (d.success && d.data?.trainees)
         setTrainees(d.data.trainees.map((t: any) => ({ id: String(t.id), name: t.name, gender: t.gender || "M" })));
     });
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
-  function resetSign() {
-    if (pollRef.current) clearInterval(pollRef.current);
-    setSignToken(""); setSignUrl(""); setSignStatus("none"); setSignImageUrl("");
-  }
-
   function selectDoc(id: DocType) {
-    setDocType(id); setSelectedTrainee(""); resetSign();
+    setDocType(id); setSelectedTrainee("");
   }
 
   function previewUrl() {
     const p = new URLSearchParams({
       docType, periodStart, periodEnd,
       ...(selectedTrainee ? { traineeId: selectedTrainee } : {}),
-      ...(signToken       ? { signToken }                  : {}),
     });
     return `/api/worker/docs/preview?${p.toString()}`;
-  }
-
-  async function requestCompanySign() {
-    setSignRequesting(true);
-    try {
-      const res = await fetch("/api/worker/docs/sign-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ docType, periodStart, periodEnd, signRole: "company_manager", signerName: "사업체 담당자" }),
-      });
-      const d = await res.json();
-      if (!d.success) { alert(d.message || "링크 생성 실패"); return; }
-      setSignToken(d.token); setSignUrl(d.signUrl); setSignStatus("pending");
-      try { await navigator.clipboard.writeText(d.signUrl); } catch {}
-      pollRef.current = setInterval(async () => {
-        const pd = await fetch(`/api/worker/docs/sign-token?token=${d.token}`).then(r => r.json());
-        if (pd.signed && pd.signatureUrl) {
-          clearInterval(pollRef.current!);
-          setSignStatus("done"); setSignImageUrl(pd.signatureUrl);
-        }
-      }, 10000);
-    } finally { setSignRequesting(false); }
-  }
-
-  async function copySignUrl() {
-    try { await navigator.clipboard.writeText(signUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
   }
 
   function handleView() {
@@ -282,79 +236,16 @@ function DocsViewInner() {
             <div className="flex items-center gap-2">
               <input
                 type="date" value={periodStart}
-                onChange={e => { setPeriodStart(e.target.value); resetSign(); }}
+                onChange={e => setPeriodStart(e.target.value)}
                 className="h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400"
               />
               <span className="text-sm font-semibold text-slate-400">~</span>
               <input
                 type="date" value={periodEnd}
-                onChange={e => { setPeriodEnd(e.target.value); resetSign(); }}
+                onChange={e => setPeriodEnd(e.target.value)}
                 className="h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400"
               />
             </div>
-          </div>
-
-          {/* 사업체담당자 서명 요청 */}
-          <div className="rounded-2xl border border-slate-100 bg-white p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-black text-slate-700">사업체담당자 서명</p>
-              {signStatus === "done" && (
-                <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-black text-emerald-600">
-                  <Check className="h-3 w-3" aria-hidden="true" /> 서명완료
-                </span>
-              )}
-            </div>
-
-            {signStatus === "none" && (
-              <button
-                onClick={requestCompanySign}
-                disabled={signRequesting}
-                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97] disabled:opacity-60"
-              >
-                {signRequesting ? (
-                  <><Clock className="h-4 w-4 animate-spin" aria-hidden="true" /> 링크 생성 중...</>
-                ) : (
-                  <><Send className="h-4 w-4" aria-hidden="true" /> 서명 요청 링크 생성</>
-                )}
-              </button>
-            )}
-
-            {signStatus === "pending" && signUrl && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="mb-2 text-xs font-black text-slate-700">아래 링크를 사업체 담당자에게 전달하세요</p>
-                <div className="rounded-lg border border-slate-200 bg-white p-2.5">
-                  <p className="break-all text-xs font-semibold text-slate-600">{signUrl}</p>
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <button onClick={copySignUrl}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2 text-xs font-black text-slate-700 transition active:scale-95">
-                    <Copy className="h-3.5 w-3.5" aria-hidden="true" />{copied ? "복사됨!" : "복사"}
-                  </button>
-                  <button onClick={() => window.open(signUrl, "_blank")}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white py-2 text-xs font-black text-slate-700 transition active:scale-95">
-                    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />새 탭
-                  </button>
-                  <button onClick={resetSign}
-                    className="flex items-center justify-center rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-500 transition active:scale-95">
-                    <X className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                </div>
-                <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-400">
-                  <Clock className="h-3.5 w-3.5" aria-hidden="true" /> 서명 완료 자동 감지 중...
-                </p>
-              </div>
-            )}
-
-            {signStatus === "done" && signImageUrl && (
-              <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                <img src={signImageUrl} alt="서명" className="h-9 object-contain" />
-                <span className="text-xs font-black text-emerald-700">서명이 문서에 포함됩니다.</span>
-              </div>
-            )}
-
-            <p className="mt-3 text-xs font-semibold leading-relaxed text-slate-400">
-              서명 없이 조회하면 "(서명 또는 인)" 표시로 출력됩니다.
-            </p>
           </div>
 
           {/* 조회 버튼 */}

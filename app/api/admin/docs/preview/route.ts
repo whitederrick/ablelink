@@ -60,14 +60,29 @@ export async function GET(request: NextRequest) {
         orderBy: { id:"asc" },
       });
     }
-    const [coachImg, govImg] = await Promise.all([
+    // 사업체 담당자 인-퍼슨 서명 조회 (가장 최근 완료된 토큰)
+    const managerToken = await prisma.siteSignToken.findFirst({
+      where: {
+        assignmentId: assignment.id,
+        docType,
+        periodStart,
+        periodEnd,
+        signRole: "company_manager",
+        usedAt: { not: null },
+      },
+      orderBy: { usedAt: "desc" },
+    });
+
+    const [coachImg, govImg, companyImg] = await Promise.all([
       toBase64DataUri(user?.signatureUrl),
       toBase64DataUri(adminForSign?.signatureUrl),
+      toBase64DataUri(managerToken?.signatureUrl),
     ]);
     const sigs = {
-      coach:       { name: user?.userName||"",            imageUrl: coachImg },
-      govAgent:    { name: adminForSign?.displayName||"", imageUrl: govImg },
-      agencyAgent: { name: adminForSign?.displayName||"", imageUrl: govImg },
+      coach:          { name: user?.userName||"",               imageUrl: coachImg },
+      govAgent:       { name: adminForSign?.displayName||"",    imageUrl: govImg },
+      agencyAgent:    { name: adminForSign?.displayName||"",    imageUrl: govImg },
+      companyManager: { name: managerToken?.signerName||"",     imageUrl: companyImg },
     };
 
     const site = assignment.site;
@@ -93,7 +108,7 @@ export async function GET(request: NextRequest) {
         totalDays:entries.length, totalHours, weeklyHolidayCount:0, monthlyLeaveCount:0,
         allowanceTotalWon:"0", oneToOneHours:totalHours-oneToMany, oneToManyHours:oneToMany,
         otOneToOneHours:0, otOneToManyHours:0, entries,
-        signatures:{ govAgent:sigs.govAgent, companyManager:{name:"",imageUrl:undefined}, coach:sigs.coach },
+        signatures:{ govAgent:sigs.govAgent, companyManager:sigs.companyManager, coach:sigs.coach },
       };
     } else if (docType === "TRAINING_DAILY_LOG") {
       const tid = traineeId ? BigInt(traineeId) : null;
@@ -110,7 +125,7 @@ export async function GET(request: NextRequest) {
           attendanceStatus:l.evaluation||"출석", trainingTime:`${Number(l.totalRecognizedTime)}H`,
           guidanceFlag:"Y", task:l.tasks[0]?.taskName||"",
           taskLevelMeasured:scoreLabel(l.tasks[0]?.performanceScore), evalGuidance:l.content||"" })),
-        signatures:{ govAgent:sigs.govAgent, companyManager:{name:"",imageUrl:undefined}, coach:sigs.coach },
+        signatures:{ govAgent:sigs.govAgent, companyManager:sigs.companyManager, coach:sigs.coach },
       };
     } else if (docType === "ADAPTATION_DAILY_LOG") {
       const tid = traineeId ? BigInt(traineeId) : null;
