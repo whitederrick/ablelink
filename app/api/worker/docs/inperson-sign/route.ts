@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { checkPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "crypto";
 
@@ -17,6 +18,10 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getWorkerSessionFromReq(request);
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
+
+    const userId = BigInt(session.userId);
+    const planCheck = await checkPlanAccess(userId, "SITE_MANAGER_SIGN");
+    if (!planCheck.allowed) return NextResponse.json({ success: false, message: planCheck.message }, { status: 403 });
 
     const formData = await request.formData();
     const imageBlob = formData.get("signature") as Blob | null;
@@ -32,7 +37,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "문서 정보가 누락되었습니다." }, { status: 400 });
     }
 
-    const userId = BigInt(session.userId);
     const assignment = await prisma.siteAssignment.findFirst({
       where: { userId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
       orderBy: { assignedAt: "desc" },
