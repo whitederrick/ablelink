@@ -52,6 +52,7 @@ export default function AdminDocsPage() {
   const [sendResult,    setSendResult]    = useState<{ success: boolean; msg: string } | null>(null);
   const [signing,       setSigning]       = useState(false);
   const [signResult,    setSignResult]    = useState<{ success: boolean; msg: string } | null>(null);
+  const [auditLoading,  setAuditLoading]  = useState(false);
 
   useEffect(() => {
     setLoadingCoaches(true);
@@ -137,6 +138,28 @@ export default function AdminDocsPage() {
   }
 
   const docLabel = DOC_GROUPS.flatMap(g => g.docs).find(d => d.id === docType)?.label || "문서";
+
+  async function handleAuditDownload() {
+    if (!selectedCoach) { alert("직무지도원을 선택해주세요."); return; }
+    setAuditLoading(true);
+    try {
+      const p = new URLSearchParams({ coachUserId: selectedCoach, periodStart, periodEnd });
+      const res = await fetch(`/api/admin/audit-package?${p.toString()}`);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.message || "다운로드 실패");
+        return;
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition") || "";
+      const nameMatch = cd.match(/filename\*?=(?:UTF-8'')?(.+)/i);
+      const filename  = nameMatch ? decodeURIComponent(nameMatch[1].replace(/"/g, "")) : "감사서류.zip";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("서버 연결 실패"); }
+    finally { setAuditLoading(false); }
+  }
 
   if (mode === "view") {
     return (
@@ -275,6 +298,23 @@ export default function AdminDocsPage() {
       <button onClick={handleView} className={`w-full py-4 text-base ${T.btnPrimary}`}>
         📄 {docLabel} 조회
       </button>
+
+      {/* 감사 대응 서류 패키지 */}
+      {selectedCoach && (
+        <div className={`${T.card} border-amber-100 bg-amber-50`}>
+          <p className="mb-1 text-sm font-black text-amber-900">감사 대응 서류 패키지 (STANDARD+)</p>
+          <p className="mb-3 text-xs font-semibold text-amber-700">
+            위 기간의 모든 문서(출근부 + 훈련생별 훈련일지·종합평가·적응지도)를 ZIP으로 일괄 다운로드합니다.
+          </p>
+          <button
+            onClick={handleAuditDownload}
+            disabled={auditLoading}
+            className="w-full rounded-xl bg-amber-600 py-3 text-sm font-black text-white transition hover:bg-amber-700 disabled:opacity-60"
+          >
+            {auditLoading ? "생성 중... (잠시 기다려주세요)" : "📦 전체 서류 ZIP 다운로드"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
