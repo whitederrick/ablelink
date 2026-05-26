@@ -1,7 +1,13 @@
 // lib/email.ts — AWS SES 이메일 발송 유틸
 import { SESClient, SendRawEmailCommand } from "@aws-sdk/client-ses";
 
-const ses = new SESClient({ region: process.env.AWS_REGION || "ap-northeast-2" });
+const ses = new SESClient({
+  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || "ap-northeast-2",
+  credentials: {
+    accessKeyId:     process.env.AWS_SES_ACCESS_KEY     || process.env.AWS_ACCESS_KEY_ID     || "",
+    secretAccessKey: process.env.AWS_SES_SECRET_KEY     || process.env.AWS_SECRET_ACCESS_KEY || "",
+  },
+});
 
 export async function sendEmailWithPdf(opts: {
   from: string;
