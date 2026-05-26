@@ -91,6 +91,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 명시적 토큰 없을 때 같은 기간의 최근 서명 자동 조회
+    if (!companyManagerSignatureUrl) {
+      const recentToken = await prisma.siteSignToken.findFirst({
+        where: {
+          assignmentId: assignment.id,
+          periodStart:  start,
+          periodEnd:    end,
+          signRole:     "company_manager",
+          usedAt:       { not: null },
+        },
+        orderBy: { usedAt: "desc" },
+      });
+      if (recentToken) {
+        companyManagerSignatureUrl = recentToken.signatureUrl;
+        companyManagerSignerName   = recentToken.signerName || "";
+      }
+    }
+
     // 에이전시 관리자 서명은 관리자가 명시적으로 서명 후 첨부 — 여기서는 자동 삽입 안 함
     const [coachImg, companyImg] = await Promise.all([
       toBase64DataUri(user?.signatureUrl),

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   BarChart2,
   BookOpen,
@@ -47,22 +47,30 @@ const NAV_ITEMS = [
   { icon: CircleDollarSign, label: "히스토리", href: "/worker/history" },
 ];
 
-// 사업체 담당자 서명이 필요한 문서 타입
 const NEEDS_MANAGER_SIGN = new Set(["ATTENDANCE_SHEET", "TRAINING_DAILY_LOG"]);
+
+type DocState = {
+  checked: boolean;
+  traineeId: string;
+  loading: boolean;
+  result: { success: boolean; msg: string; pdfBase64?: string; fileName?: string } | null;
+};
 
 function DocsContent() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+
   const [siteInfo, setSiteInfo] = useState<SiteInfo | null>(null);
-  const [selectedDoc, setSelectedDoc] = useState("ATTENDANCE_SHEET");
-  const [selectedTraineeId, setSelectedTraineeId] = useState("");
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; msg: string; pdfBase64?: string; fileName?: string } | null>(null);
+  const [signToken, setSignToken] = useState<string | null>(null);
+  const [signStatus, setSignStatus] = useState<"none" | "done">("none");
+  const [bulkLoading, setBulkLoading] = useState(false);
 
-  const [signToken, setSignToken]   = useState<string | null>(null);
-  const [signStatus, setSignStatus] = useState<"none"|"done">("none");
+  const [docStates, setDocStates] = useState<Record<string, DocState>>(
+    () => Object.fromEntries(DOC_TYPES.map(d => [d.id, { checked: false, traineeId: "", loading: false, result: null }]))
+  );
 
   useEffect(() => {
     const now = new Date();
@@ -72,7 +80,6 @@ function DocsContent() {
     setPeriodStart(`${y}-${m}-01`);
     setPeriodEnd(`${y}-${m}-${String(last).padStart(2, "0")}`);
 
-    // 인-퍼슨 서명 완료 후 돌아왔을 때 토큰 읽기
     const tok = searchParams.get("signToken");
     const done = searchParams.get("signDone");
     if (tok && done === "1") {
@@ -97,53 +104,99 @@ function DocsContent() {
     });
   }, []);
 
-  function selectDoc(id: string) {
-    setSelectedDoc(id);
-    setResult(null);
-    setSignToken(null);
-    setSignStatus("none");
+  function toggleDoc(id: string) {
+    setDocStates(prev => ({
+      ...prev,
+      [id]: { ...prev[id], checked: !prev[id].checked, result: null },
+    }));
+  }
+
+  function setTrainee(docId: string, traineeId: string) {
+    setDocStates(prev => ({
+      ...prev,
+      [docId]: { ...prev[docId], traineeId },
+    }));
   }
 
   function openInPersonSign() {
-    const params = new URLSearchParams({ dt: selectedDoc, ps: periodStart, pe: periodEnd });
-    router.push(`/worker/docs/manager-sign?${params}`);
+    const firstSignDoc = DOC_TYPES.find(d => NEEDS_MANAGER_SIGN.has(d.id) && docStates[d.id].checked);
+    const docType = firstSignDoc?.id || "ATTENDANCE_SHEET";
+    router.push(`/worker/docs/manager-sign?dt=${docType}&ps=${periodStart}&pe=${periodEnd}`);
   }
 
-  async function handleSend() {
-    const needsTrainee = DOC_TYPES.find(d => d.id === selectedDoc)?.needsTrainee;
-    if (needsTrainee && !selectedTraineeId) { alert("훈련생을 선택해주세요."); return; }
+  async function sendDoc(docId: string): Promise<void> {
+    const docInfo = DOC_TYPES.find(d => d.id === docId)!;
+    const state = docStates[docId];
+    if (docInfo.needsTrainee && !state.traineeId) {
+      alert(`${docInfo.label}: 훈련생을 선택해주세요.`);
+      return;
+    }
 
-    setLoading(true); setResult(null);
+    setDocStates(prev => ({ ...prev, [docId]: { ...prev[docId], loading: true, result: null } }));
     try {
-      const hasEmail = !!siteInfo?.managerEmail;
       const res = await fetch("/api/worker/docs/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          docType: selectedDoc, periodStart, periodEnd,
-          traineeId: selectedTraineeId || undefined,
+          docType: docId,
+          periodStart,
+          periodEnd,
+          traineeId: state.traineeId || undefined,
           companyManagerSignToken: signToken || undefined,
-          sendEmail: hasEmail, toEmail: siteInfo?.managerEmail || undefined,
+          sendEmail: !!siteInfo?.managerEmail,
+          toEmail: siteInfo?.managerEmail || undefined,
         }),
       });
       const data = await res.json();
-      if (!data.success) { setResult({ success: false, msg: data.message || "오류가 발생했습니다." }); return; }
-      setResult({ success: true, msg: data.message, pdfBase64: data.pdfBase64, fileName: data.fileName });
-    } catch { setResult({ success: false, msg: "서버와 연결할 수 없습니다." }); }
-    finally { setLoading(false); }
+      setDocStates(prev => ({
+        ...prev,
+        [docId]: {
+          ...prev[docId],
+          loading: false,
+          result: data.success
+            ? { success: true, msg: data.message, pdfBase64: data.pdfBase64, fileName: data.fileName }
+            : { success: false, msg: data.message || "오류가 발생했습니다." },
+        },
+      }));
+    } catch {
+      setDocStates(prev => ({
+        ...prev,
+        [docId]: { ...prev[docId], loading: false, result: { success: false, msg: "서버와 연결할 수 없습니다." } },
+      }));
+    }
   }
 
-  function handleDownload() {
-    if (!result?.pdfBase64 || !result?.fileName) return;
-    const blob = new Blob([Uint8Array.from(atob(result.pdfBase64), c => c.charCodeAt(0))], { type: "application/pdf" });
+  async function handleBulkSend() {
+    const checkedDocs = DOC_TYPES.filter(d => docStates[d.id].checked);
+    if (checkedDocs.length === 0) { alert("발송할 문서를 선택해주세요."); return; }
+    for (const doc of checkedDocs) {
+      if (doc.needsTrainee && !docStates[doc.id].traineeId) {
+        alert(`${doc.label}: 훈련생을 선택해주세요.`);
+        return;
+      }
+    }
+    setBulkLoading(true);
+    for (const doc of checkedDocs) {
+      await sendDoc(doc.id);
+    }
+    setBulkLoading(false);
+  }
+
+  function handleDownload(docId: string) {
+    const r = docStates[docId].result;
+    if (!r?.pdfBase64 || !r?.fileName) return;
+    const blob = new Blob([Uint8Array.from(atob(r.pdfBase64), c => c.charCodeAt(0))], { type: "application/pdf" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = result.fileName; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = r.fileName; a.click();
     URL.revokeObjectURL(url);
   }
 
-  const needsTrainee    = DOC_TYPES.find(d => d.id === selectedDoc)?.needsTrainee ?? false;
-  const selectedLabel   = DOC_TYPES.find(d => d.id === selectedDoc)?.label || "문서";
-  const needsManagerSign = NEEDS_MANAGER_SIGN.has(selectedDoc);
+  const checkedCount = DOC_TYPES.filter(d => docStates[d.id].checked).length;
+  const needsManagerSignChecked = DOC_TYPES.some(d => NEEDS_MANAGER_SIGN.has(d.id) && docStates[d.id].checked);
+  const singleDoc = checkedCount === 1 ? DOC_TYPES.find(d => docStates[d.id].checked) : null;
+  const mainBtnLabel = singleDoc
+    ? `${singleDoc.label} 발송`
+    : `선택 문서 일괄 발송 (${checkedCount}개)`;
 
   return (
     <div className="min-h-dvh bg-slate-50">
@@ -187,86 +240,6 @@ function DocsContent() {
           </div>
         )}
 
-        {/* 문서 종류 */}
-        <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4">
-          <p className="mb-3 text-sm font-black text-slate-700">문서 종류</p>
-          <div className="flex flex-col gap-2">
-            {DOC_TYPES.map(({ id, label, Icon, desc }) => {
-              const isActive = selectedDoc === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => selectDoc(id)}
-                  className={`flex items-center gap-3 rounded-xl border p-3.5 text-left transition active:scale-[0.98] ${
-                    isActive
-                      ? "border-slate-950 bg-slate-950"
-                      : "border-slate-200 bg-slate-50 hover:border-slate-300"
-                  }`}
-                >
-                  <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${isActive ? "bg-white/15" : "bg-white"}`}>
-                    <Icon className={`h-5 w-5 ${isActive ? "text-white" : "text-slate-500"}`} aria-hidden="true" />
-                  </div>
-                  <div className="flex-1">
-                    <p className={`text-sm font-black leading-none ${isActive ? "text-white" : "text-slate-900"}`}>{label}</p>
-                    <p className={`mt-1 text-xs font-semibold ${isActive ? "text-white/60" : "text-slate-400"}`}>{desc}</p>
-                  </div>
-                  {isActive && <Check className="h-4 w-4 flex-shrink-0 text-white" aria-hidden="true" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 훈련생 선택 */}
-        {needsTrainee && (
-          <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4">
-            <p className="mb-3 text-sm font-black text-slate-700">훈련생 선택</p>
-            {siteInfo?.trainees && siteInfo.trainees.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                {siteInfo.trainees.map(t => {
-                  const isActive = selectedTraineeId === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => setSelectedTraineeId(t.id)}
-                      className={`flex items-center gap-3 rounded-xl border p-3.5 transition active:scale-[0.98] ${
-                        isActive
-                          ? "border-slate-950 bg-slate-950"
-                          : "border-slate-200 bg-slate-50 hover:border-slate-300"
-                      }`}
-                    >
-                      <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${isActive ? "bg-white/15" : "bg-slate-100"}`}>
-                        <User className={`h-4 w-4 ${isActive ? "text-white" : "text-slate-500"}`} aria-hidden="true" />
-                      </div>
-                      <span className={`flex-1 text-left text-sm font-black ${isActive ? "text-white" : "text-slate-900"}`}>{t.name}</span>
-                      {isActive && <Check className="h-4 w-4 flex-shrink-0 text-white" aria-hidden="true" />}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-sm font-semibold text-slate-400">담당 훈련생이 없습니다.</p>
-            )}
-          </div>
-        )}
-
-        {/* 평가 점수 입력 */}
-        {(selectedDoc === "TRAINEE_FINAL_EVAL" || selectedDoc === "ADAPTATION_FINAL_EVAL") && selectedTraineeId && (
-          <div className="mx-4 mt-3">
-            <button
-              onClick={() => {
-                const evalType = selectedDoc === "TRAINEE_FINAL_EVAL" ? "TRAINING" : "ADAPTATION";
-                const t = siteInfo?.trainees?.find((t: any) => t.id === selectedTraineeId);
-                router.push(`/worker/evaluation?traineeId=${selectedTraineeId}&traineeName=${encodeURIComponent(t?.name||"")}&evalType=${evalType}&periodStart=${periodStart}&periodEnd=${periodEnd}`);
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 py-3.5 text-sm font-black text-emerald-700 transition active:scale-[0.97]"
-            >
-              <PenLine className="h-4 w-4" aria-hidden="true" />
-              평가 점수 입력하기
-            </button>
-          </div>
-        )}
-
         {/* 기간 설정 */}
         <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4">
           <p className="mb-3 text-sm font-black text-slate-700">기간 설정</p>
@@ -274,96 +247,190 @@ function DocsContent() {
             <input
               type="date"
               value={periodStart}
-              onChange={e => { setPeriodStart(e.target.value); setResult(null); }}
+              onChange={e => setPeriodStart(e.target.value)}
               className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
             />
             <span className="text-sm font-semibold text-slate-400">~</span>
             <input
               type="date"
               value={periodEnd}
-              onChange={e => { setPeriodEnd(e.target.value); setResult(null); }}
+              onChange={e => setPeriodEnd(e.target.value)}
               className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
             />
           </div>
         </div>
 
-        {/* 사업체담당자 서명 (해당 문서만 표시) */}
-        {needsManagerSign && (
+        {/* 사업체담당자 서명 (출근부·훈련일지 선택 시 표시) */}
+        {needsManagerSignChecked && (
+          <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-black text-slate-700">사업체담당자 서명</p>
+              {signStatus === "done" ? (
+                <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-black text-emerald-600">
+                  <Check className="h-3 w-3" aria-hidden="true" /> 서명 완료
+                </span>
+              ) : (
+                <span className="text-xs font-semibold text-slate-400">출근부·훈련일지 적용</span>
+              )}
+            </div>
+            {signStatus === "none" ? (
+              <button
+                onClick={openInPersonSign}
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97]"
+              >
+                <Smartphone className="h-4 w-4" aria-hidden="true" />
+                담당자에게 폰 건네기 (직접 서명)
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                  <Check className="h-4 w-4 text-emerald-600" />
+                  <span className="text-xs font-black text-emerald-700">서명이 문서에 포함됩니다.</span>
+                </div>
+                <button
+                  onClick={() => { setSignToken(null); setSignStatus("none"); }}
+                  className="w-full text-xs font-semibold text-slate-400 underline"
+                >
+                  다시 서명 받기
+                </button>
+              </div>
+            )}
+            <p className="mt-3 text-xs font-semibold leading-relaxed text-slate-400">
+              서명 없이 발송하면 서명란이 빈칸으로 출력됩니다.
+            </p>
+          </div>
+        )}
+
+        {/* 문서 선택 (체크박스 방식) */}
         <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-black text-slate-700">사업체담당자 서명</p>
-            {signStatus === "done" && (
-              <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-black text-emerald-600">
-                <Check className="h-3 w-3" aria-hidden="true" /> 서명 완료
-              </span>
-            )}
+            <p className="text-sm font-black text-slate-700">문서 선택</p>
+            <span className="text-xs font-semibold text-slate-400">
+              {checkedCount > 0 ? `${checkedCount}개 선택됨` : "발송할 문서를 선택하세요"}
+            </span>
           </div>
+          <div className="flex flex-col gap-3">
+            {DOC_TYPES.map(({ id, label, Icon, desc, needsTrainee }) => {
+              const state = docStates[id];
+              const isChecked = state.checked;
+              return (
+                <div key={id} className={`overflow-hidden rounded-xl border transition ${isChecked ? "border-slate-300" : "border-slate-200"}`}>
+                  {/* 문서 헤더 */}
+                  <button
+                    onClick={() => toggleDoc(id)}
+                    className={`flex w-full items-center gap-3 p-3.5 text-left transition active:scale-[0.98] ${isChecked ? "bg-slate-950" : "bg-slate-50 hover:bg-slate-100"}`}
+                  >
+                    <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${isChecked ? "bg-white/15" : "bg-white"}`}>
+                      <Icon className={`h-5 w-5 ${isChecked ? "text-white" : "text-slate-500"}`} aria-hidden="true" />
+                    </div>
+                    <div className="flex-1">
+                      <p className={`text-sm font-black leading-none ${isChecked ? "text-white" : "text-slate-900"}`}>{label}</p>
+                      <p className={`mt-1 text-xs font-semibold ${isChecked ? "text-white/60" : "text-slate-400"}`}>{desc}</p>
+                    </div>
+                    <div className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border-2 transition ${isChecked ? "border-white bg-white" : "border-slate-300"}`}>
+                      {isChecked && <Check className="h-3 w-3 text-slate-950" aria-hidden="true" />}
+                    </div>
+                  </button>
 
-          {signStatus === "none" && (
-            <button
-              onClick={openInPersonSign}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97]"
-            >
-              <Smartphone className="h-4 w-4" aria-hidden="true" />
-              담당자에게 폰 건네기 (직접 서명)
-            </button>
-          )}
+                  {/* 체크 시 세부 설정 영역 */}
+                  {isChecked && (
+                    <div className="bg-white px-3.5 pb-3.5 pt-3">
+                      {/* 훈련생 선택 */}
+                      {needsTrainee && (
+                        <div className="mb-3">
+                          <p className="mb-2 text-xs font-black text-slate-600">
+                            훈련생 선택 <span className="font-semibold text-rose-500">*필수</span>
+                          </p>
+                          {siteInfo?.trainees && siteInfo.trainees.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {siteInfo.trainees.map(t => (
+                                <button
+                                  key={t.id}
+                                  onClick={() => setTrainee(id, state.traineeId === t.id ? "" : t.id)}
+                                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black transition active:scale-95 ${
+                                    state.traineeId === t.id
+                                      ? "border-slate-950 bg-slate-950 text-white"
+                                      : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-400"
+                                  }`}
+                                >
+                                  <User className="h-3 w-3" aria-hidden="true" />
+                                  {t.name}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs font-semibold text-slate-400">담당 훈련생이 없습니다.</p>
+                          )}
+                        </div>
+                      )}
 
-          {signStatus === "done" && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-                <Check className="h-4 w-4 text-emerald-600" />
-                <span className="text-xs font-black text-emerald-700">서명이 문서에 포함됩니다.</span>
-              </div>
-              <button
-                onClick={() => { setSignToken(null); setSignStatus("none"); }}
-                className="w-full text-xs font-semibold text-slate-400 underline"
-              >
-                다시 서명 받기
-              </button>
-            </div>
-          )}
+                      {/* 평가 점수 입력 */}
+                      {(id === "TRAINEE_FINAL_EVAL" || id === "ADAPTATION_FINAL_EVAL") && state.traineeId && (
+                        <button
+                          onClick={() => {
+                            const evalType = id === "TRAINEE_FINAL_EVAL" ? "TRAINING" : "ADAPTATION";
+                            const t = siteInfo?.trainees?.find(t => t.id === state.traineeId);
+                            router.push(`/worker/evaluation?traineeId=${state.traineeId}&traineeName=${encodeURIComponent(t?.name||"")}&evalType=${evalType}&periodStart=${periodStart}&periodEnd=${periodEnd}`);
+                          }}
+                          className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-xs font-black text-emerald-700 transition active:scale-[0.97]"
+                        >
+                          <PenLine className="h-3.5 w-3.5" aria-hidden="true" />
+                          평가 점수 입력하기
+                        </button>
+                      )}
 
-          <p className="mt-3 text-xs font-semibold leading-relaxed text-slate-400">
-            서명 없이 발송하면 서명란이 빈칸으로 출력됩니다.
-          </p>
+                      {/* 발송 결과 */}
+                      {state.result && (
+                        <div className={`mb-3 rounded-xl border p-3 ${state.result.success ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
+                          <p className={`text-xs font-black leading-relaxed ${state.result.success ? "text-emerald-700" : "text-rose-700"}`}>
+                            {state.result.msg}
+                          </p>
+                          {state.result.success && state.result.pdfBase64 && (
+                            <button
+                              onClick={() => handleDownload(id)}
+                              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-slate-950 py-2 text-xs font-black text-white transition active:scale-[0.97]"
+                            >
+                              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                              PDF 다운로드 (사본)
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 개별 발송 버튼 */}
+                      <button
+                        onClick={() => sendDoc(id)}
+                        disabled={state.loading || bulkLoading}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-black text-slate-700 transition active:scale-[0.97] disabled:opacity-50"
+                      >
+                        {state.loading ? (
+                          <><Clock className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> 생성 중...</>
+                        ) : (
+                          <><Send className="h-3.5 w-3.5" aria-hidden="true" /> {label} 개별 발송</>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
-        )}
 
-        {/* 결과 */}
-        {result && (
-          <div className={`mx-4 mt-3 rounded-2xl border p-4 ${
-            result.success
-              ? "border-emerald-200 bg-emerald-50"
-              : "border-rose-200 bg-rose-50"
-          }`}>
-            <p className={`text-sm font-black leading-relaxed ${result.success ? "text-emerald-700" : "text-rose-700"}`}>
-              {result.msg}
-            </p>
-            {result.success && result.pdfBase64 && (
-              <button
-                onClick={handleDownload}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 text-sm font-black text-white transition active:scale-[0.97]"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                PDF 다운로드 (사본)
-              </button>
+        {/* 메인 발송 버튼 */}
+        {checkedCount > 0 && (
+          <button
+            onClick={handleBulkSend}
+            disabled={bulkLoading}
+            className="mx-4 mt-4 flex min-h-14 w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-2xl bg-slate-950 text-base font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-[0.97] disabled:opacity-70"
+          >
+            {bulkLoading ? (
+              <><Clock className="h-5 w-5 animate-spin" aria-hidden="true" /> 발송 중...</>
+            ) : (
+              <><Mail className="h-5 w-5" aria-hidden="true" /> {mainBtnLabel}</>
             )}
-          </div>
+          </button>
         )}
-
-        {/* 발송 버튼 */}
-        <button
-          onClick={handleSend}
-          disabled={loading}
-          className="mx-4 mt-4 flex min-h-14 w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-2xl bg-slate-950 text-base font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-[0.97] disabled:opacity-70"
-        >
-          {loading ? (
-            <><Clock className="h-5 w-5 animate-spin" aria-hidden="true" /> PDF 생성 및 발송 중...</>
-          ) : (
-            <><Mail className="h-5 w-5" aria-hidden="true" /> {selectedLabel} 발송</>
-          )}
-        </button>
 
         {/* 안내 */}
         <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4 text-center">
@@ -378,7 +445,7 @@ function DocsContent() {
       {/* 하단 네비게이션 */}
       <nav className="fixed bottom-0 left-1/2 z-40 flex w-full max-w-md -translate-x-1/2 border-t border-slate-100 bg-white pb-safe-bottom">
         {NAV_ITEMS.map(({ icon: Icon, label, href }) => {
-          const isActive = typeof window !== "undefined" && window.location.pathname === href;
+          const isActive = pathname === href;
           return (
             <button
               key={href}
