@@ -5,6 +5,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendAlimtalk } from "@/lib/kakao";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 
@@ -148,76 +149,40 @@ function generateTempPassword(): string {
 
 // ─── 신규 직무지도원 서명 완료 알림 (임시 비밀번호 발급) ──────────
 async function sendSignedNotificationNew(userId: bigint, phone: string, name: string) {
-  // 환경변수 체크를 먼저 — 발송 불가 시 비밀번호도 변경하지 않음
-  const apiKey = process.env.KAKAO_ALIMTALK_API_KEY;
-  const senderKey = process.env.KAKAO_ALIMTALK_SENDER_KEY;
   const templateCode = process.env.KAKAO_SIGNUP_TEMPLATE_CODE;
   const appUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";
   const loginId = phone.replace(/-/g, "");
 
-  if (!apiKey || !senderKey || !templateCode) {
+  if (!templateCode) {
     console.warn("[contracts sign] KAKAO_SIGNUP_TEMPLATE_CODE 미설정 — 임시 비밀번호 발급 건너뜀");
     return;
   }
 
   const tempPassword = generateTempPassword();
-  await prisma.user.update({
-    where: { id: userId },
-    data: { password: await hash(tempPassword, 10) },
-  });
+  await prisma.user.update({ where: { id: userId }, data: { password: await hash(tempPassword, 10) } });
 
-  const message = `안녕하세요 ${name}님,\n\n근로계약서 서명이 완료되었습니다.\nAbleLink 서비스를 이용하시려면 아래 정보로 로그인해 주세요.\n\n임시 아이디: ${loginId}\n임시 비밀번호: ${tempPassword}\n\n첫 로그인 후 아이디와 비밀번호를 변경해 주세요.\n\n${appUrl}/worker/login`;
-
-  await fetch("https://kakaoapi.aligo.in/akv10/alimtalk/send/", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      apikey: apiKey,
-      userid: process.env.KAKAO_ALIMTALK_USERID || "",
-      senderkey: senderKey,
-      tpl_code: templateCode,
-      sender: process.env.KAKAO_ALIMTALK_SENDER_PHONE || "",
-      receiver_1: phone.replace(/-/g, ""),
-      recvname_1: name,
-      subject_1: "AbleLink 가입 안내",
-      message_1: message,
-      button_1: JSON.stringify({
-        button: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
-      }),
-    }).toString(),
+  await sendAlimtalk({
+    phone, name, templateCode,
+    subject: "AbleLink 가입 안내",
+    message: `안녕하세요 ${name}님,\n\n근로계약서 서명이 완료되었습니다.\nAbleLink 서비스를 이용하시려면 아래 정보로 로그인해 주세요.\n\n임시 아이디: ${loginId}\n임시 비밀번호: ${tempPassword}\n\n첫 로그인 후 아이디와 비밀번호를 변경해 주세요.\n\n${appUrl}/worker/login`,
+    buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
   });
 }
 
 // ─── 기존 직무지도원 서명 완료 알림 ─────────────────────────────
 async function sendSignedNotificationExisting(phone: string, name: string) {
-  const apiKey = process.env.KAKAO_ALIMTALK_API_KEY;
-  const senderKey = process.env.KAKAO_ALIMTALK_SENDER_KEY;
   const templateCode = process.env.KAKAO_CONTRACT_SIGNED_TEMPLATE_CODE;
   const appUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";
 
-  if (!apiKey || !senderKey || !templateCode) {
+  if (!templateCode) {
     console.warn("[contracts sign] KAKAO_CONTRACT_SIGNED_TEMPLATE_CODE 미설정 — 알림 건너뜀");
     return;
   }
 
-  const message = `안녕하세요 ${name}님,\n\n새 근로계약서 서명이 완료되었습니다.\nAbleLink에 기존 아이디로 로그인하여 확인해 주세요.\n\n${appUrl}/worker/login`;
-
-  await fetch("https://kakaoapi.aligo.in/akv10/alimtalk/send/", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      apikey: apiKey,
-      userid: process.env.KAKAO_ALIMTALK_USERID || "",
-      senderkey: senderKey,
-      tpl_code: templateCode,
-      sender: process.env.KAKAO_ALIMTALK_SENDER_PHONE || "",
-      receiver_1: phone.replace(/-/g, ""),
-      recvname_1: name,
-      subject_1: "AbleLink 계약 안내",
-      message_1: message,
-      button_1: JSON.stringify({
-        button: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
-      }),
-    }).toString(),
+  await sendAlimtalk({
+    phone, name, templateCode,
+    subject: "AbleLink 계약 안내",
+    message: `안녕하세요 ${name}님,\n\n새 근로계약서 서명이 완료되었습니다.\nAbleLink에 기존 아이디로 로그인하여 확인해 주세요.\n\n${appUrl}/worker/login`,
+    buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
   });
 }

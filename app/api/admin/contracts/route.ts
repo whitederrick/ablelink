@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
 import { checkAgencyPlanAccess, checkQuota } from "@/lib/planGuard";
+import { sendAlimtalk } from "@/lib/kakao";
 import { randomUUID } from "crypto";
 import { hash } from "bcryptjs";
 
@@ -262,15 +263,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ── 카카오 알림톡 발송 ──────────────────────────────────────────
+// ── 카카오 알림톡: 계약서 서명 요청 ────────────────────────────
 async function sendKakaoAlimtalk(params: { userId: bigint; contractUrl: string; contractId: string }) {
-  const apiKey = process.env.KAKAO_ALIMTALK_API_KEY;
-  const senderKey = process.env.KAKAO_ALIMTALK_SENDER_KEY;
   const templateCode = process.env.KAKAO_CONTRACT_TEMPLATE_CODE;
-
-  if (!apiKey || !senderKey || !templateCode) {
-    throw new Error("카카오 알림톡 설정이 없습니다. 환경변수를 확인하세요.");
-  }
+  if (!templateCode) throw new Error("KAKAO_CONTRACT_TEMPLATE_CODE 미설정");
 
   const user = await prisma.user.findUnique({
     where: { id: params.userId },
@@ -278,27 +274,11 @@ async function sendKakaoAlimtalk(params: { userId: bigint; contractUrl: string; 
   });
   if (!user) throw new Error("사용자를 찾을 수 없습니다.");
 
-  // 알리고 또는 솔라피 API 형식 (실제 사용 API에 맞게 조정 필요)
-  const res = await fetch("https://kakaoapi.aligo.in/akv10/alimtalk/send/", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      apikey: apiKey,
-      userid: process.env.KAKAO_ALIMTALK_USERID || "",
-      senderkey: senderKey,
-      tpl_code: templateCode,
-      sender: process.env.KAKAO_ALIMTALK_SENDER_PHONE || "",
-      receiver_1: user.phoneNumber.replace(/-/g, ""),
-      recvname_1: user.userName,
-      subject_1: "근로계약서 서명 요청",
-      message_1: `안녕하세요 ${user.userName}님,\n\nAbleLink 근로계약서 서명을 요청드립니다.\n아래 링크에서 확인 후 서명해 주세요.\n\n${params.contractUrl}\n\n링크는 7일간 유효합니다.`,
-      button_1: JSON.stringify({
-        button: [{ name: "계약서 서명하기", linkType: "WL", linkMo: params.contractUrl, linkPc: params.contractUrl }],
-      }),
-    }).toString(),
+  await sendAlimtalk({
+    phone: user.phoneNumber, name: user.userName,
+    templateCode,
+    subject: "근로계약서 서명 요청",
+    message: `안녕하세요 ${user.userName}님,\n\nAbleLink 근로계약서 서명을 요청드립니다.\n아래 링크에서 확인 후 서명해 주세요.\n\n${params.contractUrl}\n\n링크는 7일간 유효합니다.`,
+    buttons: [{ name: "계약서 서명하기", linkType: "WL", linkMo: params.contractUrl, linkPc: params.contractUrl }],
   });
-
-  if (!res.ok) throw new Error(`알림톡 API 오류: ${res.status}`);
-  const data = await res.json();
-  if (data.code !== 0) throw new Error(`알림톡 발송 실패: ${data.message}`);
 }
