@@ -12,7 +12,7 @@ import { checkRateLimit } from "@/lib/rateLimit";
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    const rl = checkRateLimit(`admin-login:${ip}`);
+    const rl = await checkRateLimit(`admin-login:${ip}`);
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil((rl.retryAfterMs ?? 0) / 1000);
       return NextResponse.json(

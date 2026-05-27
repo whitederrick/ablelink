@@ -18,7 +18,7 @@ function generateTempPassword(): string {
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    const rl = checkRateLimit(`reset-pw:${ip}`);
+    const rl = await checkRateLimit(`reset-pw:${ip}`);
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil((rl.retryAfterMs ?? 0) / 1000);
       return NextResponse.json(

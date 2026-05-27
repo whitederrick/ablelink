@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     // 🔐 Rate limiting: IP + loginId 조합으로 제한
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
     const rateLimitKey = `login:${ip}:${loginId}`;
-    const rl = checkRateLimit(rateLimitKey);
+    const rl = await checkRateLimit(rateLimitKey);
 
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil((rl.retryAfterMs ?? 0) / 1000);
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     }
 
     // 로그인 성공 → rate limit 초기화
-    resetRateLimit(rateLimitKey);
+    await resetRateLimit(rateLimitKey);
 
     // 활성 배정 조회
     const today = new Date();

@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       const { code } = body;
       // 브루트포스 방지: userId당 5분 내 5회 제한
       const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-      const rl = checkRateLimit(`verify-email:${ip}:${session.userId}`);
+      const rl = await checkRateLimit(`verify-email:${ip}:${session.userId}`);
       if (!rl.allowed) {
         return NextResponse.json(
           { success: false, message: "인증 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요." },
