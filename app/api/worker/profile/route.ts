@@ -80,7 +80,6 @@ export async function PATCH(req: NextRequest) {
     const newToken = await signWorkerToken({
       userId:      updated.id.toString(),
       userName:    updated.userName,
-      phoneNumber: updated.phoneNumber,
       isTemporary: false,
     });
     res.cookies.set({

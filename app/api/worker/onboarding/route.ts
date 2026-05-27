@@ -160,7 +160,6 @@ export async function POST(req: NextRequest) {
       const token = await signWorkerToken({
         userId: String(updated.id),
         userName: updated.userName,
-        phoneNumber: updated.phoneNumber,
         isTemporary: false,
       });
 

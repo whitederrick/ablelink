@@ -96,7 +96,6 @@ export async function POST(request: Request) {
     const token = await signWorkerToken({
       userId: user.id.toString(),
       userName: user.userName,
-      phoneNumber: user.phoneNumber,
       isTemporary: user.isTemporary,
     });
 

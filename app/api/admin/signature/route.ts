@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { requireAdminSession } from "@/lib/adminScope";
 import { prisma } from "@/lib/prisma";
+import { validateSignatureImage } from "@/lib/imageValidation";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -32,10 +33,9 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const imageBlob = formData.get("signature") as Blob | null;
 
-    if (!imageBlob || imageBlob.size === 0)
-      return NextResponse.json({ success: false, message: "서명 이미지가 없습니다." }, { status: 400 });
-    if (imageBlob.size > 500 * 1024)
-      return NextResponse.json({ success: false, message: "서명이 너무 큽니다. (최대 500KB)" }, { status: 400 });
+    const imgCheck = await validateSignatureImage(imageBlob!);
+    if (!imgCheck.valid)
+      return NextResponse.json({ success: false, message: imgCheck.error }, { status: 400 });
 
     // 기존 서명 삭제
     const existing = await prisma.adminUser.findUnique({

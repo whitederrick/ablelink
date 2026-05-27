@@ -8,6 +8,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
+import { validateSignatureImage } from "@/lib/imageValidation";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -46,12 +47,9 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const imageBlob = formData.get("signature") as Blob | null;
 
-    if (!imageBlob || imageBlob.size === 0) {
-      return NextResponse.json({ success: false, message: "서명 이미지가 없습니다." }, { status: 400 });
-    }
-
-    if (imageBlob.size > 500 * 1024) { // 500KB 제한
-      return NextResponse.json({ success: false, message: "서명 이미지가 너무 큽니다. (최대 500KB)" }, { status: 400 });
+    const imgCheck = await validateSignatureImage(imageBlob!);
+    if (!imgCheck.valid) {
+      return NextResponse.json({ success: false, message: imgCheck.error }, { status: 400 });
     }
 
     const userId = session.userId;
