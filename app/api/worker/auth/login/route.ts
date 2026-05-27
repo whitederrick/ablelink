@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyPassword, hashPassword, isHashed } from "@/lib/password";
+import { verifyPassword } from "@/lib/password";
 import { checkRateLimit, resetRateLimit } from "@/lib/rateLimit";
 import { signWorkerToken, WORKER_COOKIE } from "@/app/worker/_lib/session";
 
@@ -63,15 +63,6 @@ export async function POST(request: Request) {
         { success: false, message: "비활성화된 계정입니다. 담당 에이전시에 문의하세요." },
         { status: 403 }
       );
-    }
-
-    // 🔐 평문 비밀번호 자동 해싱 업그레이드 (마이그레이션 기간 한시적)
-    if (!isHashed(user.password)) {
-      const hashed = await hashPassword(password);
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { password: hashed },
-      });
     }
 
     // 로그인 성공 → rate limit 초기화
