@@ -1,7 +1,8 @@
 // app/api/geo/search-address/route.ts
 // Kakao Local: 주소 검색(도로명/지번) + 키워드 검색(건물명/기관명 등) 자동 fallback
 
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -39,8 +40,14 @@ function jsonError(message: string, status = 400, extra?: any) {
   );
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const rl = checkRateLimit(`geo-search:${ip}`);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, message: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
+    }
+
     const url = new URL(request.url);
     const q = (url.searchParams.get("q") || "").trim();
     const sizeRaw = url.searchParams.get("size") || "10";
@@ -175,7 +182,7 @@ export async function GET(request: Request) {
     });
   } catch (e: any) {
     return NextResponse.json(
-      { success: false, message: "서버 오류", details: e?.message ?? String(e) },
+      { success: false, message: "서버 오류" },
       { status: 500 }
     );
   }

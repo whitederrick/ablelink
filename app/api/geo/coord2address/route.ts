@@ -3,7 +3,8 @@
 
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const KAKAO_ENDPOINT = "https://dapi.kakao.com/v2/local/geo/coord2address.json";
 
@@ -44,8 +45,14 @@ function inRange(n: number, min: number, max: number) {
   return n >= min && n <= max;
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const rl = checkRateLimit(`geo-coord:${ip}`);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, message: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
+    }
+
     // [개선] env는 요청 시점에 읽어(환경 반영/디버깅 용이)
     const KAKAO_KEY = process.env.KAKAO_REST_API_KEY;
     if (!KAKAO_KEY) {
@@ -127,6 +134,6 @@ export async function GET(request: Request) {
       // timeout은 504가 더 의미상 적절
       return jsonError("Kakao API timeout", 504);
     }
-    return jsonError("서버 오류", 500, { details: String(e?.message || e) });
+    return jsonError("서버 오류", 500);
   }
 }
