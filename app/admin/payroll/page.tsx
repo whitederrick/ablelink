@@ -4,12 +4,20 @@ import { useEffect, useState } from "react";
 import { T } from "../_styles";
 
 type PayType = "MONTHLY" | "DAILY" | "HOURLY";
+type IncomeType = "BUSINESS" | "EMPLOYMENT";
+type CoachType = "INTERNAL" | "EXTERNAL";
 type RunStatus = "DRAFT" | "FINALIZED";
+type DeductionType = "FIXED" | "PERCENTAGE";
 
 interface Contract {
   id: string; userId: string; userName: string; loginId: string;
-  payType: PayType; baseAmount: number;
+  coachType: CoachType; payType: PayType; baseAmount: number; incomeType: IncomeType;
+  hourlyRate2Plus: number | null; weeklyHolidayPay: number | null;
   effectiveFrom: string; effectiveTo: string | null;
+}
+
+interface Deduction {
+  id: string; name: string; type: DeductionType; amount: number; isActive: boolean;
 }
 
 interface RunSummary {
@@ -30,7 +38,7 @@ interface RunDetail extends RunSummary {
 
 interface Coach { id: string; userName: string; }
 
-function comma(n: number) { return n.toLocaleString("ko-KR"); }
+function comma(n: number) { return Math.round(n).toLocaleString("ko-KR"); }
 function fmtMin(m: number) {
   if (!m) return "-";
   return `${Math.floor(m / 60)}시간 ${m % 60}분`;
@@ -41,8 +49,15 @@ function defaultYM() {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 }
 const payTypeLabel: Record<PayType, string> = { MONTHLY: "월급", DAILY: "일급", HOURLY: "시급" };
+const incomeTypeLabel: Record<IncomeType, string> = { BUSINESS: "사업소득(3.3%)", EMPLOYMENT: "근로소득(4대보험)" };
 
-type Tab = "contracts" | "runs";
+type Tab = "contracts" | "runs" | "deductions";
+
+const initialForm = {
+  userId: "", coachType: "EXTERNAL" as CoachType, payType: "HOURLY" as PayType,
+  baseAmount: "", incomeType: "BUSINESS" as IncomeType,
+  hourlyRate2Plus: "", weeklyHolidayPay: "", effectiveFrom: "", effectiveTo: "",
+};
 
 export default function PayrollPage() {
   const [tab, setTab] = useState<Tab>("contracts");
@@ -51,8 +66,14 @@ export default function PayrollPage() {
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [loadingContracts, setLoadingContracts] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ userId: "", payType: "HOURLY" as PayType, baseAmount: "", effectiveFrom: "", effectiveTo: "" });
+  const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
+
+  const [deductions, setDeductions] = useState<Deduction[]>([]);
+  const [loadingDed, setLoadingDed] = useState(false);
+  const [showDedForm, setShowDedForm] = useState(false);
+  const [dedForm, setDedForm] = useState({ name: "", type: "FIXED" as DeductionType, amount: "" });
+  const [savingDed, setSavingDed] = useState(false);
 
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
@@ -89,9 +110,19 @@ export default function PayrollPage() {
     } finally { setLoadingRuns(false); }
   }
 
+  async function loadDeductions() {
+    setLoadingDed(true);
+    try {
+      const res = await fetch("/api/admin/payroll/deductions");
+      const d = await res.json();
+      if (d.success) setDeductions(d.data);
+    } finally { setLoadingDed(false); }
+  }
+
   useEffect(() => {
     if (tab === "contracts") { loadContracts(); loadCoaches(); }
-    else { loadRuns(); }
+    else if (tab === "runs") loadRuns();
+    else loadDeductions();
   }, [tab]);
 
   async function handleSaveContract() {
@@ -100,14 +131,24 @@ export default function PayrollPage() {
     }
     setSaving(true);
     try {
+      const body: any = {
+        userId: form.userId, coachType: form.coachType, payType: form.payType,
+        baseAmount: Number(form.baseAmount), incomeType: form.incomeType,
+        effectiveFrom: form.effectiveFrom, effectiveTo: form.effectiveTo || null,
+      };
+      if (form.payType === "HOURLY" && form.hourlyRate2Plus) {
+        body.hourlyRate2Plus = Number(form.hourlyRate2Plus);
+      }
+      if (form.weeklyHolidayPay) body.weeklyHolidayPay = Number(form.weeklyHolidayPay);
+
       const res = await fetch("/api/admin/payroll/contracts", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, baseAmount: Number(form.baseAmount) }),
+        body: JSON.stringify(body),
       });
       const d = await res.json();
       if (d.success) {
         setShowForm(false);
-        setForm({ userId: "", payType: "HOURLY", baseAmount: "", effectiveFrom: "", effectiveTo: "" });
+        setForm(initialForm);
         loadContracts();
       } else alert(d.message);
     } finally { setSaving(false); }
@@ -118,6 +159,43 @@ export default function PayrollPage() {
     const res = await fetch(`/api/admin/payroll/contracts/${id}`, { method: "DELETE" });
     const d = await res.json();
     if (d.success) loadContracts(); else alert(d.message);
+  }
+
+  async function handleSaveDeduction() {
+    if (!dedForm.name || !dedForm.amount) { alert("항목명과 금액/비율은 필수입니다."); return; }
+    if (dedForm.type === "PERCENTAGE" && (Number(dedForm.amount) < 0 || Number(dedForm.amount) > 100)) {
+      alert("비율은 0~100 사이로 입력하세요 (예: 1 = 1%)."); return;
+    }
+    setSavingDed(true);
+    try {
+      const amount = dedForm.type === "PERCENTAGE" ? Number(dedForm.amount) / 100 : Number(dedForm.amount);
+      const res = await fetch("/api/admin/payroll/deductions", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: dedForm.name, type: dedForm.type, amount }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        setShowDedForm(false);
+        setDedForm({ name: "", type: "FIXED", amount: "" });
+        loadDeductions();
+      } else alert(d.message);
+    } finally { setSavingDed(false); }
+  }
+
+  async function handleDeleteDeduction(id: string) {
+    if (!confirm("공제 항목을 삭제하시겠습니까?")) return;
+    const res = await fetch(`/api/admin/payroll/deductions/${id}`, { method: "DELETE" });
+    const d = await res.json();
+    if (d.success) loadDeductions(); else alert(d.message);
+  }
+
+  async function toggleDeductionActive(ded: Deduction) {
+    const res = await fetch(`/api/admin/payroll/deductions/${ded.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !ded.isActive }),
+    });
+    const d = await res.json();
+    if (d.success) loadDeductions(); else alert(d.message);
   }
 
   async function handleCalculate() {
@@ -153,10 +231,7 @@ export default function PayrollPage() {
     if (d.success) {
       setSelectedRun(prev => prev ? {
         ...prev,
-        items: prev.items.map(i => i.id === editItem.id ? d.item : i),
-        totalGrossPay: prev.items.map(i => i.id === editItem.id ? d.item : i).reduce((s, i) => s + i.grossPay, 0),
-        totalDeduction: prev.items.map(i => i.id === editItem.id ? d.item : i).reduce((s, i) => s + i.totalDeduction, 0),
-        totalNetPay: prev.items.map(i => i.id === editItem.id ? d.item : i).reduce((s, i) => s + i.netPay, 0),
+        items: prev.items.map((i: RunItem) => i.id === editItem.id ? d.item : i),
       } : null);
       setEditItem(null);
     } else alert(d.message);
@@ -180,6 +255,7 @@ export default function PayrollPage() {
   const TAB_ITEMS: { key: Tab; label: string }[] = [
     { key: "contracts", label: "💰 급여 계약" },
     { key: "runs",      label: "📊 급여 계산" },
+    { key: "deductions", label: "⚙️ 공제 설정" },
   ];
 
   return (
@@ -198,7 +274,7 @@ export default function PayrollPage() {
         </div>
       </div>
 
-      {/* 계약 탭 */}
+      {/* ── 계약 탭 ── */}
       {tab === "contracts" && (
         <div className="space-y-4">
           <div className="flex justify-end">
@@ -219,20 +295,74 @@ export default function PayrollPage() {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className={T.label}>급여 유형</label>
-                  <select value={form.payType} onChange={e => setForm(f => ({ ...f, payType: e.target.value as PayType }))} className={`w-full ${T.select}`}>
-                    <option value="HOURLY">시급</option>
-                    <option value="DAILY">일급</option>
-                    <option value="MONTHLY">월급</option>
+                  <label className={T.label}>직무지도원 유형</label>
+                  <select value={form.coachType} onChange={e => {
+                    const ct = e.target.value as CoachType;
+                    setForm(f => ({
+                      ...f, coachType: ct,
+                      payType: ct === "INTERNAL" ? "DAILY" : (f.payType === "DAILY" ? "HOURLY" : f.payType),
+                      incomeType: ct === "INTERNAL" ? "BUSINESS" : f.incomeType,
+                      hourlyRate2Plus: ct === "INTERNAL" ? "" : f.hourlyRate2Plus,
+                      weeklyHolidayPay: ct === "INTERNAL" ? "" : f.weeklyHolidayPay,
+                    }));
+                  }} className={`w-full ${T.select}`}>
+                    <option value="EXTERNAL">외부 직무지도원</option>
+                    <option value="INTERNAL">내부 직무지도원 (일급 고정)</option>
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className={T.label}>금액 (원)</label>
+                  <label className={T.label}>소득 유형</label>
+                  <select value={form.incomeType} disabled={form.coachType === "INTERNAL"}
+                    onChange={e => setForm(f => ({ ...f, incomeType: e.target.value as IncomeType }))} className={`w-full ${T.select} disabled:opacity-50`}>
+                    <option value="BUSINESS">사업소득 (3.3% 공제)</option>
+                    <option value="EMPLOYMENT">근로소득 (4대보험)</option>
+                  </select>
+                  {form.coachType === "INTERNAL" && (
+                    <p className="text-[11px] font-semibold text-slate-400">※ 내부 직무지도원은 사업소득만 적용</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className={T.label}>급여 유형</label>
+                  <select value={form.payType} disabled={form.coachType === "INTERNAL"}
+                    onChange={e => setForm(f => ({ ...f, payType: e.target.value as PayType }))} className={`w-full ${T.select} disabled:opacity-50`}>
+                    {form.coachType === "EXTERNAL" && <option value="HOURLY">시급</option>}
+                    <option value="DAILY">일급</option>
+                    {form.coachType === "EXTERNAL" && <option value="MONTHLY">월급</option>}
+                  </select>
+                  {form.coachType === "INTERNAL" && (
+                    <p className="text-[11px] font-semibold text-slate-400">※ 내부 직무지도원은 일급만 적용</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className={T.label}>{form.payType === "HOURLY" ? "시급 (원)" : form.payType === "DAILY" ? "일급 (원)" : "월급 (원)"}</label>
                   <input type="number" value={form.baseAmount}
                     onChange={e => setForm(f => ({ ...f, baseAmount: e.target.value }))}
-                    placeholder={form.payType === "HOURLY" ? "예: 12000" : form.payType === "DAILY" ? "예: 96000" : "예: 2200000"}
+                    placeholder={form.payType === "HOURLY" ? "예: 10030 (2025 최저임금)" : form.payType === "DAILY" ? "예: 25000" : "예: 2200000"}
                     className={`w-full ${T.input}`} />
                 </div>
+
+                {form.coachType === "EXTERNAL" && form.payType === "HOURLY" && (
+                  <div className="space-y-1.5">
+                    <label className={T.label}>훈련생 2명 이상 시급 (원)</label>
+                    <input type="number" value={form.hourlyRate2Plus}
+                      onChange={e => setForm(f => ({ ...f, hourlyRate2Plus: e.target.value }))}
+                      placeholder="예: 12036 (최저임금×120%)"
+                      className={`w-full ${T.input}`} />
+                    <p className="text-[11px] font-semibold text-slate-400">※ 공단 기준: 2명 이상 동시 지도 시 최저시급의 120%</p>
+                  </div>
+                )}
+
+                {form.coachType === "EXTERNAL" && (
+                  <div className="space-y-1.5">
+                    <label className={T.label}>주휴수당 (원, 선택)</label>
+                    <input type="number" value={form.weeklyHolidayPay}
+                      onChange={e => setForm(f => ({ ...f, weeklyHolidayPay: e.target.value }))}
+                      placeholder="해당되는 경우만 입력"
+                      className={`w-full ${T.input}`} />
+                    <p className="text-[11px] font-semibold text-slate-400">※ 주 5일 근무 시 법적 주휴수당 (월 급여 계산 시 가산)</p>
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <label className={T.label}>적용 시작일</label>
                   <input type="date" value={form.effectiveFrom} onChange={e => setForm(f => ({ ...f, effectiveFrom: e.target.value }))} className={`w-full ${T.input}`} />
@@ -259,7 +389,7 @@ export default function PayrollPage() {
             <div className={T.tableWrap}>
               <table className="w-full border-collapse">
                 <thead>
-                  <tr>{["직무지도원", "급여 유형", "금액", "적용 기간", ""].map(h => (
+                  <tr>{["직무지도원", "소득/급여유형", "금액", "적용 기간", ""].map(h => (
                     <th key={h} className={T.th}>{h}</th>
                   ))}</tr>
                 </thead>
@@ -271,10 +401,26 @@ export default function PayrollPage() {
                         <div className="text-xs text-slate-400">{c.loginId}</div>
                       </td>
                       <td className={T.td}>
-                        <span className={`${T.badge} bg-sky-50 text-sky-600`}>{payTypeLabel[c.payType]}</span>
+                        <div className="flex flex-wrap gap-1">
+                          <span className={`${T.badge} ${c.coachType === "INTERNAL" ? "bg-amber-50 text-amber-600" : "bg-slate-50 text-slate-600"}`}>
+                            {c.coachType === "INTERNAL" ? "내부" : "외부"}
+                          </span>
+                          <span className={`${T.badge} ${c.incomeType === "EMPLOYMENT" ? "bg-purple-50 text-purple-600" : "bg-sky-50 text-sky-600"}`}>
+                            {c.incomeType === "EMPLOYMENT" ? "근로소득" : "사업소득"}
+                          </span>
+                          <span className={`${T.badge} bg-slate-50 text-slate-600`}>{payTypeLabel[c.payType]}</span>
+                        </div>
                       </td>
-                      <td className={`${T.td} font-black text-slate-900`}>
-                        {comma(c.baseAmount)}원{c.payType === "HOURLY" ? "/시간" : c.payType === "DAILY" ? "/일" : "/월"}
+                      <td className={`${T.td}`}>
+                        <div className="font-black text-slate-900">
+                          {comma(c.baseAmount)}원{c.payType === "HOURLY" ? "/h" : c.payType === "DAILY" ? "/일" : "/월"}
+                        </div>
+                        {c.hourlyRate2Plus != null && (
+                          <div className="text-[11px] text-slate-500">2명+: {comma(c.hourlyRate2Plus)}원/h</div>
+                        )}
+                        {c.weeklyHolidayPay != null && (
+                          <div className="text-[11px] text-slate-500">주휴: +{comma(c.weeklyHolidayPay)}원</div>
+                        )}
                       </td>
                       <td className={`${T.td} text-xs text-slate-500`}>{c.effectiveFrom} ~ {c.effectiveTo || "현재"}</td>
                       <td className={T.td}>
@@ -289,7 +435,96 @@ export default function PayrollPage() {
         </div>
       )}
 
-      {/* 급여 계산 탭 - 목록 */}
+      {/* ── 공제 설정 탭 ── */}
+      {tab === "deductions" && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+            <p className="mb-1 font-black text-slate-900">에이전시 공제 항목</p>
+            <p>기본 공제(사업소득세 3.3% 또는 4대보험)에 추가로 에이전시별 특이한 공제가 있는 경우 등록합니다.</p>
+            <p className="mt-1 text-xs text-slate-400">비율 공제는 소수로 저장됩니다. UI에서는 % 단위로 입력하세요 (예: 1 입력 → 1%).</p>
+          </div>
+
+          <div className="flex justify-end">
+            <button className={T.btnPrimary} onClick={() => setShowDedForm(v => !v)}>
+              {showDedForm ? "취소" : "+ 공제 항목 추가"}
+            </button>
+          </div>
+
+          {showDedForm && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <p className="mb-4 text-sm font-black text-slate-900">공제 항목 등록</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <label className={T.label}>항목명</label>
+                  <input type="text" value={dedForm.name} onChange={e => setDedForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="예: 교통비 공제, 식비 공제" className={`w-full ${T.input}`} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={T.label}>유형</label>
+                  <select value={dedForm.type} onChange={e => setDedForm(f => ({ ...f, type: e.target.value as DeductionType }))} className={`w-full ${T.select}`}>
+                    <option value="FIXED">고정 금액 (원)</option>
+                    <option value="PERCENTAGE">비율 (%)</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className={T.label}>{dedForm.type === "FIXED" ? "금액 (원)" : "비율 (%)"}</label>
+                  <input type="number" value={dedForm.amount} onChange={e => setDedForm(f => ({ ...f, amount: e.target.value }))}
+                    placeholder={dedForm.type === "FIXED" ? "예: 50000" : "예: 1 (= 1%)"}
+                    className={`w-full ${T.input}`} />
+                </div>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button className={T.btnPrimary} onClick={handleSaveDeduction} disabled={savingDed}>
+                  {savingDed ? "저장 중..." : "저장"}
+                </button>
+                <button className={T.btnSecondary} onClick={() => setShowDedForm(false)}>취소</button>
+              </div>
+            </div>
+          )}
+
+          {loadingDed ? (
+            <p className={T.empty}>로딩 중...</p>
+          ) : deductions.length === 0 ? (
+            <div className={T.tableWrap}><p className={T.tdCenter}>등록된 공제 항목이 없습니다.</p></div>
+          ) : (
+            <div className={T.tableWrap}>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>{["항목명", "유형", "금액/비율", "상태", ""].map(h => (
+                    <th key={h} className={T.th}>{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody>
+                  {deductions.map(d => (
+                    <tr key={d.id} className={T.trBase}>
+                      <td className={`${T.td} font-black text-slate-900`}>{d.name}</td>
+                      <td className={T.td}>
+                        <span className={`${T.badge} bg-slate-50 text-slate-600`}>
+                          {d.type === "FIXED" ? "고정" : "비율"}
+                        </span>
+                      </td>
+                      <td className={`${T.td} text-slate-700`}>
+                        {d.type === "FIXED" ? `${comma(d.amount)}원` : `${(d.amount * 100).toFixed(2)}%`}
+                      </td>
+                      <td className={T.td}>
+                        <button onClick={() => toggleDeductionActive(d)}
+                          className={`${T.badge} cursor-pointer border-0 transition hover:opacity-70 ${d.isActive ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"}`}>
+                          {d.isActive ? "활성" : "비활성"}
+                        </button>
+                      </td>
+                      <td className={T.td}>
+                        <button className={T.btnDanger} onClick={() => handleDeleteDeduction(d.id)}>삭제</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 급여 계산 탭 - 목록 ── */}
       {tab === "runs" && !selectedRun && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-5">
@@ -301,7 +536,7 @@ export default function PayrollPage() {
               {calculating ? "계산 중..." : "⚡ 급여 계산"}
             </button>
             <p className="self-center text-xs font-semibold text-slate-400">
-              출퇴근 기록과 급여 계약을 기반으로 자동 계산합니다. 기존 DRAFT는 재계산됩니다.
+              출퇴근 기록·급여 계약·공제 설정을 기반으로 자동 계산합니다.
             </p>
           </div>
 
@@ -341,7 +576,7 @@ export default function PayrollPage() {
         </div>
       )}
 
-      {/* 급여 실행 상세 */}
+      {/* ── 급여 실행 상세 ── */}
       {tab === "runs" && selectedRun && (
         <div className="space-y-4">
           <div className="flex items-center gap-3">
@@ -367,7 +602,7 @@ export default function PayrollPage() {
               { label: "총 실지급액", value: selectedRun.totalNetPay,     cls: "text-emerald-600" },
             ].map((c, i) => (
               <div key={i} className={T.summaryCard}>
-                <p className={`text-xl font-black leading-none ${c.cls}`}>{comma(Math.round(c.value))}원</p>
+                <p className={`text-xl font-black leading-none ${c.cls}`}>{comma(c.value)}원</p>
                 <p className={T.summaryLabel}>{c.label}</p>
               </div>
             ))}
@@ -379,43 +614,60 @@ export default function PayrollPage() {
             <div className={T.tableWrap}>
               <table className="w-full border-collapse">
                 <thead>
-                  <tr>{["직무지도원", "근무일수", "근무시간", "지급액", "공제액(3.3%)", "실지급액", ""].map(h => (
+                  <tr>{["직무지도원", "근무일수", "근무시간", "지급액", "공제액", "실지급액", ""].map(h => (
                     <th key={h} className={T.th}>{h}</th>
                   ))}</tr>
                 </thead>
                 <tbody>
-                  {selectedRun.items.map(item => (
-                    <tr key={item.id} className={T.trBase}>
-                      <td className={T.td}>
-                        <div className="font-black text-slate-900">{item.userName}</div>
-                        <div className="text-xs text-slate-400">{item.loginId}</div>
-                        {(item.breakdown as any)?.payType && (
-                          <div className="mt-0.5 text-[11px] text-slate-500">
-                            {payTypeLabel[(item.breakdown as any).payType as PayType]}
-                            {(item.breakdown as any).hourlyRate && ` ${comma((item.breakdown as any).hourlyRate)}원/h`}
-                            {(item.breakdown as any).dailyRate && ` ${comma((item.breakdown as any).dailyRate)}원/일`}
+                  {selectedRun.items.map(item => {
+                    const bd = item.breakdown as any;
+                    const incType: IncomeType = bd?.incomeType ?? "BUSINESS";
+                    const dedBreakdown: Record<string, number> = bd?.deductionBreakdown ?? {};
+                    return (
+                      <tr key={item.id} className={T.trBase}>
+                        <td className={T.td}>
+                          <div className="font-black text-slate-900">{item.userName}</div>
+                          <div className="text-xs text-slate-400">{item.loginId}</div>
+                          {bd?.payType && (
+                            <div className="mt-0.5 text-[11px] text-slate-500">
+                              <span className={`mr-1 ${T.badge} ${incType === "EMPLOYMENT" ? "bg-purple-50 text-purple-600" : "bg-sky-50 text-sky-600"}`}>
+                                {incType === "EMPLOYMENT" ? "근로소득" : "사업소득"}
+                              </span>
+                              {payTypeLabel[bd.payType as PayType]}
+                              {bd.hourlyRate && ` ${comma(bd.hourlyRate)}원/h`}
+                              {bd.used2PlusRate && ` (2명+ 적용)`}
+                              {bd.dailyRate && ` ${comma(bd.dailyRate)}원/일`}
+                              {bd.weeklyHolidayPay && ` +주휴${comma(bd.weeklyHolidayPay)}원`}
+                            </div>
+                          )}
+                          {bd?.note && (
+                            <div className="mt-0.5 text-[11px] font-semibold text-amber-600">⚠ {bd.note}</div>
+                          )}
+                        </td>
+                        <td className={`${T.td} text-center text-slate-600`}>{item.workedDays}일</td>
+                        <td className={`${T.td} text-center text-slate-600`}>{fmtMin(item.workedMinutes)}</td>
+                        <td className={`${T.td} text-right font-black text-sky-600`}>{comma(item.grossPay)}원</td>
+                        <td className={`${T.td} text-right`}>
+                          <div className="text-rose-600 font-semibold">-{comma(item.totalDeduction)}원</div>
+                          <div className="text-[10px] text-slate-400 space-y-0.5">
+                            {Object.entries(dedBreakdown).map(([k, v]) => (
+                              <div key={k}>{k}: {comma(v)}원</div>
+                            ))}
                           </div>
-                        )}
-                        {(item.breakdown as any)?.note && (
-                          <div className="mt-0.5 text-[11px] font-semibold text-amber-600">⚠ {(item.breakdown as any).note}</div>
-                        )}
-                      </td>
-                      <td className={`${T.td} text-center text-slate-600`}>{item.workedDays}일</td>
-                      <td className={`${T.td} text-center text-slate-600`}>{fmtMin(item.workedMinutes)}</td>
-                      <td className={`${T.td} text-right font-black text-sky-600`}>{comma(Math.round(item.grossPay))}원</td>
-                      <td className={`${T.td} text-right text-rose-600`}>-{comma(Math.round(item.totalDeduction))}원</td>
-                      <td className={`${T.td} text-right font-black text-emerald-600`}>{comma(Math.round(item.netPay))}원</td>
-                      <td className={T.td}>
-                        {selectedRun.status === "DRAFT" && (
-                          <button className={T.btnSecondary} onClick={() => {
-                            setEditItem(item);
-                            setEditGross(String(Math.round(item.grossPay)));
-                            setEditDed(String(Math.round(item.totalDeduction)));
-                          }}>수정</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className={`${T.td} text-right font-black text-emerald-600`}>{comma(item.netPay)}원</td>
+                        <td className={T.td}>
+                          {selectedRun.status === "DRAFT" && (
+                            <button className={T.btnSecondary} onClick={() => {
+                              setEditItem(item);
+                              setEditGross(String(Math.round(item.grossPay)));
+                              setEditDed(String(Math.round(item.totalDeduction)));
+                            }}>수정</button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -429,7 +681,7 @@ export default function PayrollPage() {
         </div>
       )}
 
-      {/* 항목 수정 모달 */}
+      {/* ── 항목 수정 모달 ── */}
       {editItem && (
         <div className={T.modalOverlay} onClick={() => setEditItem(null)}>
           <div className={T.modalContent} onClick={e => e.stopPropagation()}>

@@ -33,8 +33,12 @@ export async function GET(req: NextRequest) {
         userName: c.user.userName,
         loginId: c.user.loginId,
         agencyId: c.agencyId.toString(),
+        coachType: c.coachType,
         payType: c.payType,
         baseAmount: Number(c.baseAmount),
+        incomeType: c.incomeType,
+        hourlyRate2Plus: c.hourlyRate2Plus != null ? Number(c.hourlyRate2Plus) : null,
+        weeklyHolidayPay: c.weeklyHolidayPay != null ? Number(c.weeklyHolidayPay) : null,
         currency: c.currency,
         effectiveFrom: c.effectiveFrom.toISOString().slice(0, 10),
         effectiveTo: c.effectiveTo ? c.effectiveTo.toISOString().slice(0, 10) : null,
@@ -56,13 +60,28 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { userId, payType, baseAmount, effectiveFrom, effectiveTo } = body;
+    const { userId, coachType, payType, baseAmount, effectiveFrom, effectiveTo, incomeType, hourlyRate2Plus, weeklyHolidayPay } = body;
 
     if (!userId || !payType || !baseAmount || !effectiveFrom) {
       return NextResponse.json({ success: false, message: "필수 항목 누락" }, { status: 400 });
     }
+    if (!["INTERNAL", "EXTERNAL"].includes(coachType ?? "EXTERNAL")) {
+      return NextResponse.json({ success: false, message: "coachType 오류" }, { status: 400 });
+    }
     if (!["MONTHLY", "DAILY", "HOURLY"].includes(payType)) {
       return NextResponse.json({ success: false, message: "payType 오류" }, { status: 400 });
+    }
+
+    const resolvedCoachType: "INTERNAL" | "EXTERNAL" = coachType ?? "EXTERNAL";
+
+    // 내부직무지도원 규정 강제: 항상 일급 + 사업소득, 2명+시급/주휴수당 없음
+    const resolvedPayType     = resolvedCoachType === "INTERNAL" ? "DAILY" : payType;
+    const resolvedIncomeType  = resolvedCoachType === "INTERNAL" ? "BUSINESS" : (incomeType ?? "BUSINESS");
+    const resolvedRate2Plus   = resolvedCoachType === "INTERNAL" ? null : (hourlyRate2Plus != null ? hourlyRate2Plus : null);
+    const resolvedHolidayPay  = resolvedCoachType === "INTERNAL" ? null : (weeklyHolidayPay != null ? weeklyHolidayPay : null);
+
+    if (resolvedIncomeType && !["BUSINESS", "EMPLOYMENT"].includes(resolvedIncomeType)) {
+      return NextResponse.json({ success: false, message: "incomeType 오류" }, { status: 400 });
     }
 
     // 기존 유효 계약 종료 처리
@@ -77,9 +96,13 @@ export async function POST(req: NextRequest) {
       data: {
         agencyId,
         userId: BigInt(userId),
-        payType,
+        coachType: resolvedCoachType,
+        payType: resolvedPayType,
         baseAmount,
         currency: "KRW",
+        incomeType: resolvedIncomeType,
+        hourlyRate2Plus: resolvedRate2Plus,
+        weeklyHolidayPay: resolvedHolidayPay,
         effectiveFrom: new Date(effectiveFrom),
         effectiveTo: effectiveTo ? new Date(effectiveTo) : null,
       },

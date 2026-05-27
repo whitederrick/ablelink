@@ -391,6 +391,7 @@ model Agency {
   payrollRuns         PayrollRun[]
   adminUsers          AdminUser[]
   employmentContracts EmploymentContract[]
+  agencyDeductions    AgencyDeduction[]
 
   @@index([planType])
   @@map("agencies")
@@ -736,9 +737,18 @@ model PayContract {
   agencyId BigInt @map("agency_id")
   userId   BigInt @map("user_id")
 
-  payType    PayType @map("pay_type")
-  baseAmount Decimal @map("base_amount")
-  currency   String  @default("KRW")
+  // 내부(소속직원) vs 외부 구분 — 4대보험·주휴수당 적용 여부를 결정
+  coachType  CoachType  @default(EXTERNAL) @map("coach_type")
+  payType    PayType    @map("pay_type")
+  baseAmount Decimal    @map("base_amount")
+  currency   String     @default("KRW")
+  // EXTERNAL에만 적용 (INTERNAL은 항상 BUSINESS)
+  incomeType IncomeType @default(BUSINESS) @map("income_type")
+
+  // EXTERNAL + HOURLY에서만 사용
+  hourlyRate2Plus  Decimal? @map("hourly_rate_2plus")
+  // EXTERNAL에서만 사용 (주 5일 계속 근로 시)
+  weeklyHolidayPay Decimal? @map("weekly_holiday_pay")
 
   effectiveFrom DateTime  @map("effective_from")
   effectiveTo   DateTime? @map("effective_to")
@@ -786,6 +796,32 @@ model PayrollItem {
 
   @@unique([runId, userId])
   @@map("payroll_items")
+}
+
+model AgencyDeduction {
+  id       BigInt        @id @default(autoincrement())
+  agencyId BigInt        @map("agency_id")
+  name     String
+  type     DeductionType
+  amount   Decimal
+  isActive Boolean       @default(true) @map("is_active")
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  agency Agency @relation(fields: [agencyId], references: [id])
+
+  @@index([agencyId, isActive])
+  @@map("agency_deductions")
+}
+
+model InsuranceRates {
+  id                  BigInt  @id @default(autoincrement())
+  year                Int     @unique
+  nationalPension     Decimal @map("national_pension")
+  healthInsurance     Decimal @map("health_insurance")
+  longTermCare        Decimal @map("long_term_care")
+  employmentInsurance Decimal @map("employment_insurance")
+
+  @@map("insurance_rates")
 }
 
 model AttendanceIssue {
@@ -1022,6 +1058,21 @@ enum PayType {
 enum PayrollStatus {
   DRAFT
   FINALIZED
+}
+
+enum IncomeType {
+  BUSINESS   // 사업소득 3.3%
+  EMPLOYMENT // 근로소득 4대보험
+}
+
+enum DeductionType {
+  FIXED      // 고정 금액
+  PERCENTAGE // 비율 (소수, e.g. 0.01 = 1%)
+}
+
+enum CoachType {
+  INTERNAL // 내부직무지도원: 소속직원, 일급 25,000원, 사업소득, 주휴/4대보험 미적용
+  EXTERNAL // 외부직무지도원: 최저시급 이상, 소득유형 선택, 주휴/4대보험 적용 가능
 }
 
 // ------------------------------------------------------

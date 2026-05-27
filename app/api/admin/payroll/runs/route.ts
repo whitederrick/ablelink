@@ -9,7 +9,7 @@ import { requireAdminSession } from "@/lib/adminScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { Decimal } from "@prisma/client/runtime/library";
 
-const DEDUCTION_RATE = 0.033; // 단기 시간제 사업소득세 3.3%
+const BUSINESS_DEDUCTION_RATE = 0.033; // 사업소득세 3.3%
 
 function minutesBetween(start: Date | null, end: Date | null): number {
   if (!start || !end) return 0;
@@ -79,6 +79,17 @@ export async function POST(req: NextRequest) {
     const periodStart = `${yearMonth}-01`;
     const periodEnd = `${yearMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
 
+    // 4대보험 요율 조회 (해당 연도 → 없으면 최근 연도)
+    const insuranceRates = await prisma.insuranceRates.findFirst({
+      where: { year: { lte: y } },
+      orderBy: { year: "desc" },
+    });
+
+    // 에이전시 공제 항목
+    const agencyDeductions = await prisma.agencyDeduction.findMany({
+      where: { agencyId, isActive: true },
+    });
+
     // 이 에이전시의 해당 월 활성 배정에 속한 직무지도원 찾기
     const assignments = await prisma.siteAssignment.findMany({
       where: {
@@ -87,7 +98,7 @@ export async function POST(req: NextRequest) {
         startDate: { lte: new Date(periodEnd + "T23:59:59+09:00") },
         OR: [{ endDate: null }, { endDate: { gte: new Date(periodStart + "T00:00:00+09:00") } }],
       },
-      select: { userId: true },
+      select: { userId: true, siteId: true },
     });
 
     const userIds = [...new Set(assignments.map(a => a.userId))];
@@ -95,7 +106,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "해당 월에 활성 직무지도원이 없습니다." }, { status: 400 });
     }
 
-    // 직무지도원별 계산
+    const periodStartDate = new Date(periodStart + "T00:00:00+09:00");
+    const periodEndDate = new Date(periodEnd + "T23:59:59+09:00");
+
     const itemInputs: {
       userId: bigint;
       grossPay: Decimal;
@@ -107,7 +120,7 @@ export async function POST(req: NextRequest) {
     }[] = [];
 
     for (const userId of userIds) {
-      // 유효 급여 계약 조회
+      // 유효 급여 계약 조회 (incomeType, 2명+ 시급, 주휴수당 포함)
       const contract = await prisma.payContract.findFirst({
         where: {
           agencyId,
@@ -132,14 +145,37 @@ export async function POST(req: NextRequest) {
       const workedDays = attendances.length;
       const workedMinutes = attendances.reduce((s, a) => s + minutesBetween(a.startTime, a.endTime), 0);
 
+      // 훈련생 수 확인 (해당 월 배정 사이트의 활성 훈련생 수)
+      const userSiteIds = assignments.filter(a => a.userId === userId).map(a => a.siteId);
+      const traineeCount = await prisma.traineePlacement.count({
+        where: {
+          siteId: { in: userSiteIds },
+          status: "ACTIVE",
+          startDate: { lte: periodEndDate },
+          OR: [{ endDate: null }, { endDate: { gte: periodStartDate } }],
+        },
+      });
+
       let grossPay = 0;
-      let breakdown: object = { note: "급여 계약 없음", workedDays, workedMinutes };
+      let breakdown: Record<string, unknown> = { note: "급여 계약 없음", workedDays, workedMinutes };
 
       if (contract) {
-        const rate = Number(contract.baseAmount);
+        const use2PlusRate = traineeCount >= 2 && contract.hourlyRate2Plus != null;
+        const rate = use2PlusRate
+          ? Number(contract.hourlyRate2Plus)
+          : Number(contract.baseAmount);
+
         if (contract.payType === "HOURLY") {
           grossPay = Math.round((workedMinutes / 60) * rate);
-          breakdown = { payType: "HOURLY", hourlyRate: rate, workedMinutes, workedHours: +(workedMinutes / 60).toFixed(2), workedDays };
+          breakdown = {
+            payType: "HOURLY",
+            hourlyRate: rate,
+            traineeCount,
+            used2PlusRate: use2PlusRate,
+            workedMinutes,
+            workedHours: +(workedMinutes / 60).toFixed(2),
+            workedDays,
+          };
         } else if (contract.payType === "DAILY") {
           grossPay = workedDays * rate;
           breakdown = { payType: "DAILY", dailyRate: rate, workedDays };
@@ -147,9 +183,49 @@ export async function POST(req: NextRequest) {
           grossPay = rate;
           breakdown = { payType: "MONTHLY", monthlyRate: rate, workedDays };
         }
+
+        // 주휴수당 가산
+        const holidayPay = contract.weeklyHolidayPay ? Number(contract.weeklyHolidayPay) : 0;
+        if (holidayPay > 0) {
+          grossPay += holidayPay;
+          (breakdown as any).weeklyHolidayPay = holidayPay;
+        }
       }
 
-      const totalDeduction = Math.round(grossPay * DEDUCTION_RATE);
+      // 공제 계산
+      let totalDeduction = 0;
+      const deductionBreakdown: Record<string, number> = {};
+      const incomeType = contract?.incomeType ?? "BUSINESS";
+
+      if (incomeType === "BUSINESS") {
+        const d = Math.round(grossPay * BUSINESS_DEDUCTION_RATE);
+        deductionBreakdown["사업소득세(3.3%)"] = d;
+        totalDeduction += d;
+      } else {
+        // 근로소득 4대보험 (근로자 부담분)
+        if (insuranceRates) {
+          const pension = Math.round(grossPay * Number(insuranceRates.nationalPension));
+          const health = Math.round(grossPay * Number(insuranceRates.healthInsurance));
+          const ltc = Math.round(grossPay * Number(insuranceRates.longTermCare));
+          const employ = Math.round(grossPay * Number(insuranceRates.employmentInsurance));
+          deductionBreakdown["국민연금"] = pension;
+          deductionBreakdown["건강보험"] = health;
+          deductionBreakdown["장기요양보험"] = ltc;
+          deductionBreakdown["고용보험"] = employ;
+          totalDeduction += pension + health + ltc + employ;
+        }
+      }
+
+      // 에이전시 커스텀 공제
+      for (const ded of agencyDeductions) {
+        const amount =
+          ded.type === "PERCENTAGE"
+            ? Math.round(grossPay * Number(ded.amount))
+            : Math.round(Number(ded.amount));
+        deductionBreakdown[ded.name] = amount;
+        totalDeduction += amount;
+      }
+
       const netPay = grossPay - totalDeduction;
 
       itemInputs.push({
@@ -159,7 +235,7 @@ export async function POST(req: NextRequest) {
         netPay: new Decimal(netPay),
         workedDays,
         workedMinutes,
-        breakdown,
+        breakdown: { ...breakdown, incomeType, deductionBreakdown },
       });
     }
 
