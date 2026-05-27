@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: result, year, month });
   } catch (e: any) {
-    if (e instanceof Response) throw e;
+    if (e instanceof Response) return e;
     console.error("[trainee-report]", e);
     return NextResponse.json({ success: false, message: e.message || "오류" }, { status: 500 });
   }

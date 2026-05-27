@@ -47,15 +47,14 @@ export async function POST(req: Request) {
     const res = NextResponse.json({ success: true });
 
     let agencyId: string | null = null;
-    if (admin.role === "AGENCY") {
-      const agencyName = String(admin.agencyName || "").trim();
-      if (agencyName) {
-        const agency = await prisma.agency.findUnique({
-          where: { name: agencyName },
-          select: { id: true },
-        });
-        agencyId = agency ? agency.id.toString() : null;
-      }
+    if (admin.agencyId) {
+      agencyId = admin.agencyId.toString();
+    } else if (admin.role === "AGENCY" && admin.agencyName) {
+      const agency = await prisma.agency.findUnique({
+        where: { name: admin.agencyName },
+        select: { id: true },
+      });
+      agencyId = agency ? agency.id.toString() : null;
     }
 
     await attachAdminSessionCookieToResponse(res, {
