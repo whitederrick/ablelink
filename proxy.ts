@@ -5,38 +5,54 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-const ADMIN_COOKIE = process.env.ADMIN_SESSION_COOKIE || "admlink_admin_session";
+const ADMIN_COOKIE  = process.env.ADMIN_SESSION_COOKIE || "admlink_admin_session";
 const WORKER_COOKIE = "ablelink_worker_session";
 
-function getSecretKey() {
-  const secret = process.env.ADMIN_SESSION_SECRET;
-  if (!secret) throw new Error("ADMIN_SESSION_SECRET is not set");
-  return new TextEncoder().encode(secret);
+const ADMIN_AUD  = "ablelink-admin";
+const WORKER_AUD = "ablelink-worker";
+
+function getAdminSecret() {
+  const s = process.env.ADMIN_SESSION_SECRET;
+  if (!s) throw new Error("ADMIN_SESSION_SECRET is not set");
+  return new TextEncoder().encode(s);
 }
 
-async function verifyAdminSession(req: NextRequest) {
+function getWorkerSecret() {
+  const s = process.env.WORKER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET;
+  if (!s) throw new Error("WORKER_SESSION_SECRET not set");
+  return new TextEncoder().encode(s);
+}
+
+// aud 포함 토큰 우선 검증, 구 토큰(aud 없는)은 한시적 폴백
+async function verifyToken(token: string, secret: Uint8Array, aud: string, role: string | string[]): Promise<boolean> {
+  const roles = Array.isArray(role) ? role : [role];
+  let payload: any;
+  try {
+    payload = (await jwtVerify(token, secret, { audience: aud })).payload;
+  } catch {
+    try {
+      payload = (await jwtVerify(token, secret)).payload;
+    } catch {
+      return false;
+    }
+  }
+  return roles.includes(String(payload?.role || ""));
+}
+
+async function verifyAdminSession(req: NextRequest): Promise<boolean> {
   const token = req.cookies.get(ADMIN_COOKIE)?.value;
-  if (!token) return null;
+  if (!token) return false;
   try {
-    const { payload } = await jwtVerify(token, getSecretKey());
-    const role = String((payload as any).role || "");
-    if (!["ADMIN", "GOV", "AGENCY"].includes(role)) return null;
-    return payload;
-  } catch {
-    return null;
-  }
+    return await verifyToken(token, getAdminSecret(), ADMIN_AUD, ["ADMIN", "GOV", "AGENCY"]);
+  } catch { return false; }
 }
 
-async function verifyWorkerSession(req: NextRequest) {
+async function verifyWorkerSession(req: NextRequest): Promise<boolean> {
   const token = req.cookies.get(WORKER_COOKIE)?.value;
-  if (!token) return null;
+  if (!token) return false;
   try {
-    const { payload } = await jwtVerify(token, getSecretKey());
-    if ((payload as any).role !== "COACH") return null;
-    return payload;
-  } catch {
-    return null;
-  }
+    return await verifyToken(token, getWorkerSecret(), WORKER_AUD, "COACH");
+  } catch { return false; }
 }
 
 export async function proxy(req: NextRequest) {
@@ -47,8 +63,7 @@ export async function proxy(req: NextRequest) {
   if (pathname.startsWith("/api/admin/auth/")) return NextResponse.next();
 
   if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
-    const session = await verifyAdminSession(req);
-    if (session) return NextResponse.next();
+    if (await verifyAdminSession(req)) return NextResponse.next();
 
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
@@ -60,16 +75,20 @@ export async function proxy(req: NextRequest) {
   }
 
   // ── 직무지도원 영역 ──────────────────────────────────────────
-  if (pathname.startsWith("/worker/login")) return NextResponse.next();
-  if (pathname.startsWith("/worker/register")) return NextResponse.next();
-  if (pathname.startsWith("/worker/subscribe/success")) return NextResponse.next();
-  if (pathname.startsWith("/worker/subscribe/fail")) return NextResponse.next();
+  const workerPublicPages = [
+    "/worker/login",
+    "/worker/register",
+    "/worker/reset-password",
+    "/worker/subscribe/success",
+    "/worker/subscribe/fail",
+  ];
+  if (workerPublicPages.some(p => pathname.startsWith(p))) return NextResponse.next();
   if (pathname.startsWith("/api/worker/auth/")) return NextResponse.next();
   if (pathname.startsWith("/api/payments/")) return NextResponse.next();
+  if (pathname.startsWith("/api/sign/")) return NextResponse.next();
 
   if (pathname.startsWith("/worker") || pathname.startsWith("/api/worker")) {
-    const session = await verifyWorkerSession(req);
-    if (session) return NextResponse.next();
+    if (await verifyWorkerSession(req)) return NextResponse.next();
 
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
