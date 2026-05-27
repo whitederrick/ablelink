@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 import { sendSms, isSmsReady } from "@/lib/sms";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 function generateTempPassword(): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -16,6 +17,16 @@ function generateTempPassword(): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const rl = checkRateLimit(`reset-pw:${ip}`);
+    if (!rl.allowed) {
+      const retryAfterSec = Math.ceil((rl.retryAfterMs ?? 0) / 1000);
+      return NextResponse.json(
+        { success: false, message: `잠시 후 다시 시도해주세요. (${retryAfterSec}초 후)` },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const phone = String(body?.phone ?? "").replace(/-/g, "").trim();
 
@@ -45,7 +56,8 @@ export async function POST(req: NextRequest) {
         message: `[AbleLink] 임시 비밀번호: ${tempPw}\n로그인 후 반드시 변경해주세요.`,
       });
     } else {
-      console.warn(`[reset-password] SMS 미설정 — 임시 비밀번호: ${tempPw} (userId: ${user.id})`);
+      // SMS 미설정: 비밀번호는 절대 로그에 기록하지 않음
+      console.warn(`[reset-password] SMS 미설정 — userId: ${user.id} 비밀번호 초기화 완료`);
     }
 
     return NextResponse.json({ success: true, message: "등록된 번호로 임시 비밀번호를 발송했습니다." });

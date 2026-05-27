@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     request.headers.get("x-cron-secret") ||
     (request.headers.get("Authorization") || "").replace("Bearer ", "") ||
     new URL(request.url).searchParams.get("secret");
-  if (CRON_SECRET && secret !== CRON_SECRET) {
+  if (!CRON_SECRET || secret !== CRON_SECRET) {
     return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
   }
 

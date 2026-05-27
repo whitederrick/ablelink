@@ -134,7 +134,7 @@ export default function WorkerProfilePage() {
               className={INPUT_CLS} />
             <input type="password" value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
-              placeholder="새 비밀번호 (6자 이상)" autoComplete="new-password"
+              placeholder="새 비밀번호 (8자 이상)" autoComplete="new-password"
               className={INPUT_CLS} />
             <input type="password" value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}

@@ -3,9 +3,10 @@
 
 export const runtime = "nodejs";
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
+import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 
 // ✅ KST 기준 "현재 시각" Date 생성 (서버 TZ와 무관하게 안전하게)
 function getKstNowDate() {
@@ -16,11 +17,22 @@ function getKstNowDate() {
 }
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    const session = await getWorkerSessionFromReq(request);
+    if (!session) {
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
+
     const resolvedParams = await params;
+
+    // 본인 데이터만 접근 가능
+    if (session.userId !== resolvedParams.userId) {
+      return NextResponse.json({ success: false, message: "Forbidden" }, { status: 403 });
+    }
+
     const userId = BigInt(resolvedParams.userId);
 
     // 1. 오늘 날짜 구하기 (YYYY-MM-DD)
@@ -62,8 +74,6 @@ export async function GET(
           where: { id: pendingFinalize.id },
           data: {
             isFinalClosed: true,
-            // finalizedAt은 "마감된 시간"으로 쓸지, "마감 처리된 시각"으로 쓸지 정책 선택이 필요함.
-            // 요구사항이 "마지막 퇴근시간을 마감으로 간주"이므로 endTime을 넣는 방식이 가장 직관적입니다.
             finalizedAt: end ?? kstNow,
           },
         });

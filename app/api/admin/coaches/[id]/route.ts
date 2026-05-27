@@ -19,10 +19,24 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdminSession(req);
+    const scope = await requireAdminSession(req);
 
     const { id } = await params;
     const userId = BigInt(id);
+
+    // AGENCY 역할은 자기 에이전시 소속 직무지도원만 수정 가능
+    if (scope.role === "AGENCY" && scope.agencyId) {
+      const coach = await prisma.user.findFirst({
+        where: {
+          id: userId,
+          assignments: { some: { site: { agencyId: scope.agencyId } } },
+        },
+        select: { id: true },
+      });
+      if (!coach) {
+        return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+      }
+    }
 
     const body = await req.json();
     const { userName, phoneNumber, resetPassword } = body;
@@ -60,6 +74,6 @@ export async function PATCH(
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[admin coaches PATCH]", e);
-    return NextResponse.json({ success: false, message: e.message || "오류" }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

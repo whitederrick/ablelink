@@ -27,13 +27,26 @@ const DOC_LABELS: Record<string, string> = {
   "ADAPTATION_FINAL_EVAL": "적응지도 대상자 종합 평가기록부",
 };
 
+const ALLOWED_IMG_HOST = (() => {
+  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "").hostname; } catch { return ""; }
+})();
+
 async function toBase64DataUri(url?: string | null): Promise<string | undefined> {
   if (!url || !url.startsWith("http")) return url || undefined;
+  // SSRF 방지: Supabase 스토리지 도메인만 허용
+  try {
+    const host = new URL(url).hostname;
+    if (ALLOWED_IMG_HOST && host !== ALLOWED_IMG_HOST) {
+      console.warn("[toBase64DataUri] 허용되지 않은 도메인 차단:", host);
+      return undefined;
+    }
+  } catch { return undefined; }
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return undefined;
     const buf = await res.arrayBuffer();
     const mime = res.headers.get("content-type") || "image/png";
+    if (!mime.startsWith("image/")) return undefined;
     return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
   } catch { return undefined; }
 }

@@ -58,8 +58,8 @@ export async function PATCH(req: NextRequest) {
       }
       const ok = await compare(currentPassword, user.password);
       if (!ok) return NextResponse.json({ success: false, message: "현재 비밀번호가 올바르지 않습니다." }, { status: 400 });
-      if (newPassword.length < 6) {
-        return NextResponse.json({ success: false, message: "비밀번호는 6자 이상이어야 합니다." }, { status: 400 });
+      if (newPassword.length < 8) {
+        return NextResponse.json({ success: false, message: "비밀번호는 8자 이상이어야 합니다." }, { status: 400 });
       }
       updates.password    = await hash(newPassword, 10);
       updates.isTemporary = false;

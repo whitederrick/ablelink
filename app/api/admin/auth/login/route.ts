@@ -3,13 +3,24 @@
 
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { attachAdminSessionCookieToResponse } from "@/lib/adminCookies";
+import { checkRateLimit } from "@/lib/rateLimit";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const rl = checkRateLimit(`admin-login:${ip}`);
+    if (!rl.allowed) {
+      const retryAfterSec = Math.ceil((rl.retryAfterMs ?? 0) / 1000);
+      return NextResponse.json(
+        { success: false, message: `너무 많은 시도가 감지되었습니다. ${retryAfterSec}초 후 다시 시도해주세요.` },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const loginId = String(body?.loginId || "").trim();
     const password = String(body?.password || "");
@@ -69,7 +80,7 @@ export async function POST(req: Request) {
   } catch (e: any) {
     console.error("[ADMIN_LOGIN_ERROR]", e);
     return NextResponse.json(
-      { success: false, message: e?.message || "서버 에러" },
+      { success: false, message: "서버 오류" },
       { status: 500 }
     );
   }

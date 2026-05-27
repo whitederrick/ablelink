@@ -3,12 +3,18 @@
 
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAdminSession } from "@/lib/adminScope";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const scope = await requireAdminSession(req);
+
     const agencies = await prisma.agency.findMany({
+      where: scope.role === "AGENCY" && scope.agencyId
+        ? { id: scope.agencyId }
+        : undefined,
       include: {
         sites: { where: { isActive: true }, select: { id: true } },
         assignments: { where: { status: "ACTIVE" }, select: { id: true } },
@@ -31,8 +37,9 @@ export async function GET() {
     }));
 
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
-    console.error("[admin/subscription]", error);
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    console.error("[admin/subscription]", e);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }
