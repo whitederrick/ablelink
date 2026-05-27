@@ -107,6 +107,13 @@ export default function WorkerLoginPage() {
               회원가입
             </Link>
           </div>
+
+          <div className="flex items-center justify-center gap-2 text-sm">
+            <span className="font-semibold text-slate-500">비밀번호를 잊으셨나요?</span>
+            <Link href="/worker/reset-password" className="font-black text-slate-600">
+              비밀번호 찾기
+            </Link>
+          </div>
         </form>
 
         {/* AI 배너 */}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { T } from "../_styles";
+import { Pencil } from "lucide-react";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM";
 
@@ -154,12 +155,103 @@ function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
   );
 }
 
+// ── 직무지도원 정보 수정 모달 ─────────────────────────────
+function CoachInfoModal({ coach, onClose, onSaved }: {
+  coach: Coach; onClose: () => void; onSaved: (updated: Partial<Coach>) => void;
+}) {
+  const [userName,    setUserName]    = useState(coach.userName);
+  const [phoneNumber, setPhoneNumber] = useState(coach.phoneNumber);
+  const [resetPw,     setResetPw]     = useState(false);
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState("");
+  const [tempPw,      setTempPw]      = useState<string | null>(null);
+
+  async function handleSave() {
+    setSaving(true); setError("");
+    try {
+      const res = await fetch(`/api/admin/coaches/${coach.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          userName:      userName.trim() !== coach.userName ? userName.trim() : undefined,
+          phoneNumber:   phoneNumber !== coach.phoneNumber   ? phoneNumber    : undefined,
+          resetPassword: resetPw,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) { setError(data.message); return; }
+      if (data.tempPassword) { setTempPw(data.tempPassword); return; }
+      onSaved({ userName: userName.trim(), phoneNumber });
+      onClose();
+    } catch { setError("저장에 실패했습니다."); }
+    finally   { setSaving(false); }
+  }
+
+  if (tempPw) {
+    return (
+      <div className={T.modalOverlay}>
+        <div className={T.modalContent}>
+          <h2 className="mb-3 text-base font-black text-slate-900">임시 비밀번호 발급 완료</h2>
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-xs font-semibold text-amber-600 mb-1">{coach.userName}님의 임시 비밀번호</p>
+            <p className="text-2xl font-black tracking-widest text-amber-900">{tempPw}</p>
+          </div>
+          <p className="mb-4 text-xs font-semibold text-slate-500">직무지도원에게 임시 비밀번호를 안내해주세요. 로그인 후 변경 요청됩니다.</p>
+          <button onClick={() => { onSaved({ userName: userName.trim(), phoneNumber }); onClose(); }}
+            className={T.btnPrimary}>확인</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={T.modalOverlay}>
+      <div className={T.modalContent}>
+        <h2 className="mb-1 text-base font-black text-slate-900">직무지도원 정보 수정</h2>
+        <p className="mb-5 text-sm font-semibold text-slate-400">{coach.userName}</p>
+
+        <div className="mb-4">
+          <label className={T.label}>이름</label>
+          <input value={userName} onChange={e => setUserName(e.target.value)} className={T.input} />
+        </div>
+
+        <div className="mb-4">
+          <label className={T.label}>전화번호</label>
+          <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)}
+            placeholder="010-0000-0000" type="tel" className={T.input} />
+        </div>
+
+        <div className="mb-5">
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <input type="checkbox" checked={resetPw} onChange={e => setResetPw(e.target.checked)}
+              className="h-4 w-4 accent-slate-950" />
+            <div>
+              <span className="text-sm font-black text-slate-900">임시 비밀번호 발급</span>
+              <p className="mt-0.5 text-xs font-semibold text-slate-400">새 임시 비밀번호를 생성하여 화면에 표시합니다.</p>
+            </div>
+          </label>
+        </div>
+
+        {error && <p className="mb-3 text-sm font-semibold text-rose-600">{error}</p>}
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className={T.btnSecondary}>취소</button>
+          <button onClick={handleSave} disabled={saving} className={T.btnPrimary}>
+            {saving ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CoachesPage() {
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [total, setTotal] = useState(0);
-  const [editTarget, setEditTarget] = useState<{ coach: Coach; assignment: Assignment } | null>(null);
+  const [editTarget,     setEditTarget]     = useState<{ coach: Coach; assignment: Assignment } | null>(null);
+  const [infoEditTarget, setInfoEditTarget] = useState<Coach | null>(null);
   const [assignmentMap, setAssignmentMap] = useState<Record<string, Assignment>>({});
 
   useEffect(() => {
@@ -218,7 +310,7 @@ export default function CoachesPage() {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              {["이름", "전화번호", "아이디", "현장", "기관", "근무형태", "배정일", "플랜", "상태"].map(h => (
+              {["이름", "전화번호", "아이디", "현장", "기관", "근무형태", "배정일", "플랜", "상태", ""].map(h => (
                 <th key={h} className={T.th}>{h}</th>
               ))}
             </tr>
@@ -261,6 +353,15 @@ export default function CoachesPage() {
                   <td className={T.td}>
                     <span className={`${T.badge} ${status.cls}`}>{status.label}</span>
                   </td>
+                  <td className={T.td} onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={() => setInfoEditTarget(c)}
+                      className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      수정
+                    </button>
+                  </td>
                 </tr>
               );
             })}
@@ -275,6 +376,19 @@ export default function CoachesPage() {
           initial={editTarget.assignment}
           onClose={() => setEditTarget(null)}
           onSaved={updated => setAssignmentMap(prev => ({ ...prev, [updated.id]: updated }))}
+        />
+      )}
+
+      {infoEditTarget && (
+        <CoachInfoModal
+          coach={infoEditTarget}
+          onClose={() => setInfoEditTarget(null)}
+          onSaved={updated => {
+            setCoaches(prev => prev.map(c =>
+              c.id === infoEditTarget.id ? { ...c, ...updated } : c
+            ));
+            setInfoEditTarget(null);
+          }}
         />
       )}
     </div>
