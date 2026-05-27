@@ -99,6 +99,12 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // ── 출퇴근/기준점 API (worker 인증 필요) ────────────────────
+  if (pathname.startsWith("/api/attendance/") || pathname.startsWith("/api/site/basepoint/")) {
+    if (await verifyWorkerSession(req)) return NextResponse.next();
+    return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+  }
+
   return NextResponse.next();
 }
 
@@ -108,5 +114,7 @@ export const config = {
     "/api/admin/:path*",
     "/worker/:path*",
     "/api/worker/:path*",
+    "/api/attendance/:path*",
+    "/api/site/basepoint/:path*",
   ],
 };

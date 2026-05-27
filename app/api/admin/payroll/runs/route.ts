@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;
-    return NextResponse.json({ success: false, message: e.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }
 
@@ -192,6 +192,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;
-    return NextResponse.json({ success: false, message: e.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

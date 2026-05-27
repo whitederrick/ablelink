@@ -57,7 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ runI
     });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;
-    return NextResponse.json({ success: false, message: e.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }
 
@@ -96,7 +96,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
     return NextResponse.json({ success: true, item: itemDto(updated) });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;
-    return NextResponse.json({ success: false, message: e.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }
 
@@ -126,6 +126,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ run
     });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;
-    return NextResponse.json({ success: false, message: e.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

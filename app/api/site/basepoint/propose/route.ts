@@ -6,9 +6,10 @@
 
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { assertValidGps } from "../../_utils";
+import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 
 // Haversine (meters)
 function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -26,13 +27,17 @@ function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) 
   return R * c;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const session = await getWorkerSessionFromReq(request);
+    if (!session) {
+      return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
+    }
+
     const body = await request.json();
 
     const {
       siteId,
-      userId, // 직무지도원 userId (BigInt string 가능)
       proposedLat,
       proposedLon,
       accuracyM, // optional
@@ -40,15 +45,11 @@ export async function POST(request: Request) {
       reason,    // optional (100m 초과/정정요청 사유)
     } = body;
 
+    const userId = session.userId;
+
     if (!siteId) {
       return NextResponse.json(
         { success: false, message: "siteId가 누락되었습니다." },
-        { status: 400 }
-      );
-    }
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, message: "userId가 누락되었습니다." },
         { status: 400 }
       );
     }
@@ -92,6 +93,22 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { success: false, message: "siteId 또는 userId 형식이 올바르지 않습니다." },
         { status: 400 }
+      );
+    }
+
+    // 세션 사용자가 해당 사이트에 배정되어 있는지 확인
+    const assignment = await prisma.siteAssignment.findFirst({
+      where: {
+        userId: userIdBig,
+        siteId: siteIdBig,
+        status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] },
+      },
+      select: { id: true },
+    });
+    if (!assignment) {
+      return NextResponse.json(
+        { success: false, message: "해당 현장에 배정되어 있지 않습니다." },
+        { status: 403 }
       );
     }
 
@@ -213,7 +230,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("basepoint propose error:", error);
     return NextResponse.json(
-      { success: false, message: error?.message || "서버 에러" },
+      { success: false, message: "서버 오류" },
       { status: 500 }
     );
   }

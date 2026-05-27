@@ -53,6 +53,6 @@ export async function GET(request: NextRequest) {
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[admin/docs/trainees]", e);
-    return NextResponse.json({ success: false, message: e.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

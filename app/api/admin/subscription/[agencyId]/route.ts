@@ -13,7 +13,7 @@ export async function PATCH(
   { params }: { params: Promise<{ agencyId: string }> }
 ) {
   try {
-    await requireAdminSession(request);
+    const scope = await requireAdminSession(request);
 
     const { planType } = await request.json();
     const { agencyId: agencyIdStr } = await params;
@@ -24,6 +24,10 @@ export async function PATCH(
     }
 
     const agencyId = BigInt(agencyIdStr);
+
+    if (scope.role === "AGENCY" && scope.agencyId !== agencyId) {
+      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    }
     const limits = PLAN_LIMITS[planType] || { maxCoaches: 0, maxSites: 0 };
     const now = new Date();
 

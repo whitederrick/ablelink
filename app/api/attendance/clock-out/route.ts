@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     const action = finalize ? "FINALIZE" : reconfirm ? "RECONFIRM" : "CLOCK_OUT";
 
     console.log(
-      `[퇴근 요청] action=${action}, User=${session.userId}, lat=${latitude}, lon=${longitude}, 보정여부=${isGpsModified}, 거리예외확인=${confirmOutOfRange}, assignmentId=${inputAssignmentId ?? "auto"}, basePointId=${inputBasePointId ?? "auto"}`
+      `[퇴근 요청] action=${action}, userId=${session.userId}, 보정여부=${isGpsModified}, 거리예외확인=${confirmOutOfRange}, assignmentId=${inputAssignmentId ?? "auto"}, basePointId=${inputBasePointId ?? "auto"}`
     );
 
     if (latitude === undefined || longitude === undefined) {
@@ -331,11 +331,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("퇴근 처리 에러:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: "서버 에러 발생",
-        details: error instanceof Error ? error.message : String(error),
-      },
+      { success: false, message: "서버 오류" },
       { status: 500 }
     );
   }

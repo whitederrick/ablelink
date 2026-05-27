@@ -8,6 +8,10 @@ import { requireAdminSession } from "@/lib/adminScope";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType, type DocumentType } from "@/lib/pdf";
 
+const ALLOWED_IMG_HOST = (() => {
+  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "").hostname; } catch { return ""; }
+})();
+
 function fmtHHMM(d: Date): string {
   const kst = new Date(d.getTime() + 9*3600000);
   return `${String(kst.getUTCHours()).padStart(2,"0")}:${String(kst.getUTCMinutes()).padStart(2,"0")}`;
@@ -20,10 +24,14 @@ function scoreLabel(n?: number|null) {
 async function toBase64DataUri(url?: string|null): Promise<string|undefined> {
   if (!url || !url.startsWith("http")) return url||undefined;
   try {
+    const host = new URL(url).hostname;
+    if (ALLOWED_IMG_HOST && host !== ALLOWED_IMG_HOST) return undefined;
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return undefined;
+    const mime = res.headers.get("content-type") || "image/png";
+    if (!mime.startsWith("image/")) return undefined;
     const buf = await res.arrayBuffer();
-    return `data:${res.headers.get("content-type")||"image/png"};base64,${Buffer.from(buf).toString("base64")}`;
+    return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
   } catch { return undefined; }
 }
 
@@ -182,7 +190,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (e: any) {
-    console.error("[worker/docs/preview]", e);
-    return NextResponse.json({ success:false, message: e.message||"오류" }, { status:500 });
+    console.error("[admin/docs/preview]", e);
+    return NextResponse.json({ success:false, message: "서버 오류" }, { status:500 });
   }
 }

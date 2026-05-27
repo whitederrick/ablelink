@@ -26,6 +26,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ success: true });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;
-    return NextResponse.json({ success: false, message: e.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

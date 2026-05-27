@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     const siteIdBig = toBigIntOrNull(siteId);
 
     console.log(
-      `[출근 요청] userId=${userIdStr}, lat=${latitude}, lon=${longitude}, assignmentId=${assignmentIdBig ?? "auto"}, basePointId=${basePointIdBig ?? "auto"}, confirmOutOfRange=${confirmOutOfRange}`
+      `[출근 요청] userId=${userIdStr}, assignmentId=${assignmentIdBig ?? "auto"}, basePointId=${basePointIdBig ?? "auto"}, confirmOutOfRange=${confirmOutOfRange}`
     );
 
     // [STEP 1] 오늘 중복 출근 체크
@@ -235,11 +235,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("출근 처리 에러:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: "서버 에러 발생",
-        details: error instanceof Error ? error.message : String(error),
-      },
+      { success: false, message: "서버 오류" },
       { status: 500 }
     );
   }
