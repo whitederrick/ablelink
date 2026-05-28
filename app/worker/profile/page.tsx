@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Lock, Mail, Phone, User } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Lock, Mail, Phone, User } from "lucide-react";
 
 const INPUT_CLS = "w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100 disabled:opacity-60";
 
@@ -31,6 +31,12 @@ export default function WorkerProfilePage() {
   const [confirming,   setConfirming]   = useState(false);
   const [emailMsg,     setEmailMsg]     = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
+  // 회원 탈퇴
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletePassword,    setDeletePassword]    = useState("");
+  const [deleting,          setDeleting]          = useState(false);
+  const [deleteMsg,         setDeleteMsg]         = useState("");
+
   const isEmailLoginId = loginId.includes("@");
 
   useEffect(() => {
@@ -46,6 +52,25 @@ export default function WorkerProfilePage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleDelete() {
+    setDeleteMsg("");
+    if (!deletePassword) { setDeleteMsg("비밀번호를 입력해주세요."); return; }
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/worker/profile/delete", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const data = await res.json();
+      if (!data.success) { setDeleteMsg(data.message); return; }
+      router.replace("/worker/login");
+    } catch {
+      setDeleteMsg("오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -298,6 +323,56 @@ export default function WorkerProfilePage() {
                 : "border border-rose-200 bg-rose-50 text-rose-700"
             }`}>
               {emailMsg.text}
+            </div>
+          )}
+        </div>
+
+        {/* 회원 탈퇴 */}
+        <div className="mt-8 mb-10">
+          {!showDeleteConfirm ? (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="w-full py-3 text-center text-sm font-semibold text-slate-400 transition hover:text-rose-500"
+            >
+              회원 탈퇴
+            </button>
+          ) : (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 space-y-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 flex-shrink-0 text-rose-500 mt-0.5" />
+                <div>
+                  <p className="text-sm font-black text-rose-800">정말 탈퇴하시겠습니까?</p>
+                  <p className="mt-1 text-xs font-semibold leading-relaxed text-rose-600">
+                    탈퇴 시 이름·전화번호·서명 등 개인정보가 즉시 삭제됩니다.<br />
+                    출퇴근·업무일지 기록은 소속 에이전시 운영 기록으로 보존됩니다.
+                  </p>
+                </div>
+              </div>
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={e => { setDeletePassword(e.target.value); setDeleteMsg(""); }}
+                placeholder="현재 비밀번호 입력"
+                className="w-full rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-rose-400 focus:ring-4 focus:ring-rose-100"
+              />
+              {deleteMsg && (
+                <p className="text-xs font-semibold text-rose-700">{deleteMsg}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowDeleteConfirm(false); setDeletePassword(""); setDeleteMsg(""); }}
+                  className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting || !deletePassword}
+                  className="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-black text-white transition active:scale-95 disabled:opacity-50"
+                >
+                  {deleting ? "처리 중..." : "탈퇴 확인"}
+                </button>
+              </div>
             </div>
           )}
         </div>

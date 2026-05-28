@@ -1,0 +1,21 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /api/
+Disallow: /worker/home
+Disallow: /worker/profile
+Disallow: /worker/worklog
+Disallow: /worker/history
+Disallow: /worker/docs
+Disallow: /worker/calendar
+Disallow: /worker/site
+Disallow: /worker/onboarding
+Disallow: /worker/subscribe
+
+Allow: /worker/login
+Allow: /worker/signup
+Allow: /worker/invite/
+Allow: /worker/reset-password
+Allow: /terms
+Allow: /privacy
+
+Sitemap: https://able-link.co.kr/sitemap.xml
