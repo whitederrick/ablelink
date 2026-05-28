@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Lock, Phone, Sparkles } from "lucide-react";
+import { ArrowRight, Lock, Sparkles, User } from "lucide-react";
 
 export default function WorkerLoginPage() {
   const router = useRouter();
@@ -52,17 +52,16 @@ export default function WorkerLoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-2 flex items-center gap-1.5 text-sm font-black text-slate-700">
-              <Phone className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-              아이디 (휴대전화번호)
+              <User className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+              아이디 (전화번호 또는 이메일)
             </label>
             <input
-              type="tel"
-              placeholder="01012345678"
+              type="text"
+              placeholder="01012345678 또는 이메일"
               value={loginId}
               onChange={e => setLoginId(e.target.value)}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
               autoComplete="username"
-              inputMode="numeric"
               required
             />
           </div>

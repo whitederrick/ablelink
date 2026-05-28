@@ -1,5 +1,5 @@
 // lib/email.ts — AWS SES 이메일 발송 유틸
-import { SESClient, SendRawEmailCommand } from "@aws-sdk/client-ses";
+import { SESClient, SendRawEmailCommand, SendEmailCommand } from "@aws-sdk/client-ses";
 
 const ses = new SESClient({
   region: process.env.AWS_SES_REGION || process.env.AWS_REGION || "ap-northeast-2",
@@ -44,5 +44,23 @@ export async function sendEmailWithPdf(opts: {
 
   await ses.send(
     new SendRawEmailCommand({ RawMessage: { Data: Buffer.from(raw) } })
+  );
+}
+
+export async function sendSimpleEmail(opts: {
+  to: string;
+  subject: string;
+  text: string;
+}) {
+  const from = process.env.SES_FROM_EMAIL || "noreply@able-link.co.kr";
+  await ses.send(
+    new SendEmailCommand({
+      Source: from,
+      Destination: { ToAddresses: [opts.to] },
+      Message: {
+        Subject: { Data: opts.subject, Charset: "UTF-8" },
+        Body:    { Text: { Data: opts.text, Charset: "UTF-8" } },
+      },
+    })
   );
 }
