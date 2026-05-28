@@ -3,6 +3,19 @@
 import { useEffect, useState } from "react";
 import { T } from "../_styles";
 
+function maskLoginId(id: string) {
+  if (!id) return "";
+  if (id.includes("@")) {
+    const [local, domain] = id.split("@");
+    if (local.length <= 2) return id;
+    return `${local[0]}${"*".repeat(Math.min(local.length - 2, 4))}${local[local.length - 1]}@${domain}`;
+  }
+  const digits = id.replace(/\D/g, "");
+  if (digits.length >= 10)
+    return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
+  return id;
+}
+
 type PayType = "MONTHLY" | "DAILY" | "HOURLY";
 type IncomeType = "BUSINESS" | "EMPLOYMENT";
 type CoachType = "INTERNAL" | "EXTERNAL";
@@ -398,7 +411,7 @@ export default function PayrollPage() {
                     <tr key={c.id} className={T.trBase}>
                       <td className={T.td}>
                         <div className="font-black text-slate-900">{c.userName}</div>
-                        <div className="text-xs text-slate-400">{c.loginId}</div>
+                        <div className="text-xs text-slate-400">{maskLoginId(c.loginId)}</div>
                       </td>
                       <td className={T.td}>
                         <div className="flex flex-wrap gap-1">
@@ -627,7 +640,7 @@ export default function PayrollPage() {
                       <tr key={item.id} className={T.trBase}>
                         <td className={T.td}>
                           <div className="font-black text-slate-900">{item.userName}</div>
-                          <div className="text-xs text-slate-400">{item.loginId}</div>
+                          <div className="text-xs text-slate-400">{maskLoginId(item.loginId)}</div>
                           {bd?.payType && (
                             <div className="mt-0.5 text-[11px] text-slate-500">
                               <span className={`mr-1 ${T.badge} ${incType === "EMPLOYMENT" ? "bg-purple-50 text-purple-600" : "bg-sky-50 text-sky-600"}`}>

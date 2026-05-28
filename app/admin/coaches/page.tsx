@@ -27,6 +27,19 @@ interface Coach {
   activeAssignment: { siteName: string; agencyName: string; startDate: string; assignmentId?: string } | null;
 }
 
+function maskLoginId(id: string) {
+  if (!id) return "";
+  if (id.includes("@")) {
+    const [local, domain] = id.split("@");
+    if (local.length <= 2) return id;
+    return `${local[0]}${"*".repeat(Math.min(local.length - 2, 4))}${local[local.length - 1]}@${domain}`;
+  }
+  const digits = id.replace(/\D/g, "");
+  if (digits.length >= 10)
+    return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
+  return id;
+}
+
 const STATUS_CLS: Record<string, { label: string; cls: string }> = {
   ACTIVE:   { label: "활성",    cls: "bg-emerald-50 text-emerald-600" },
   RESIGNED: { label: "퇴사",    cls: "bg-slate-100 text-slate-500" },
@@ -332,7 +345,7 @@ export default function CoachesPage() {
                   onClick={() => c.activeAssignment && openEdit(c)}>
                   <td className={T.td}><span className="font-black text-slate-900">{c.userName}</span></td>
                   <td className={`${T.td} text-slate-500`}>{c.phoneNumber}</td>
-                  <td className={`${T.td} text-xs text-slate-400`}>{c.loginId}</td>
+                  <td className={`${T.td} text-xs text-slate-400`}>{maskLoginId(c.loginId)}</td>
                   <td className={T.td}>
                     {c.activeAssignment?.siteName
                       ? <span className="text-slate-700">{c.activeAssignment.siteName}</span>
