@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { T } from "../_styles";
-import { Pencil } from "lucide-react";
+import { CheckCircle2, Copy, Pencil, Send } from "lucide-react";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM";
 
@@ -55,6 +55,151 @@ const WORK_TYPE_LABELS: Record<WorkType, string> = {
   FULL_DAY: "전일 (09:00~18:00)",
   CUSTOM:   "직접 입력",
 };
+
+// ── 초대 링크 발송 모달 ───────────────────────────────────
+interface Site { id: string; companyName: string; }
+interface InviteResult { inviteUrl: string; code: string; phoneNumber: string; expiresAt: string; }
+
+function InviteModal({ onClose }: { onClose: () => void }) {
+  const [phone,      setPhone]      = useState("");
+  const [workerName, setWorkerName] = useState("");
+  const [siteId,     setSiteId]     = useState("");
+  const [sites,      setSites]      = useState<Site[]>([]);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState("");
+  const [result,     setResult]     = useState<InviteResult | null>(null);
+  const [copied,     setCopied]     = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/sites?limit=200")
+      .then(r => r.json())
+      .then(d => { if (d.success && Array.isArray(d.data)) setSites(d.data); })
+      .catch(() => {});
+  }, []);
+
+  async function handleSend() {
+    setError(""); setLoading(true);
+    try {
+      const res = await fetch("/api/admin/workers/invite", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: phone.replace(/-/g, "").trim(),
+          workerName: workerName.trim() || undefined,
+          siteId: siteId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) { setError(data.message); return; }
+      setResult(data.invite);
+    } catch { setError("서버와 연결할 수 없습니다."); }
+    finally { setLoading(false); }
+  }
+
+  async function handleCopy(text: string) {
+    await navigator.clipboard.writeText(text).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className={T.modalOverlay}>
+      <div className={T.modalContent}>
+        {!result ? (
+          <>
+            <h2 className="mb-1 text-base font-black text-slate-900">직무지도원 초대</h2>
+            <p className="mb-5 text-sm font-semibold text-slate-400">전화번호로 초대 링크와 인증번호를 문자 발송합니다.</p>
+
+            <div className="mb-4">
+              <label className={T.label}>휴대전화번호 <span className="text-rose-500">*</span></label>
+              <input
+                type="tel" placeholder="01012345678"
+                value={phone} onChange={e => { setPhone(e.target.value); setError(""); }}
+                className={`w-full ${T.input}`}
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className={T.label}>이름 (선택)</label>
+              <input
+                type="text" placeholder="홍길동"
+                value={workerName} onChange={e => setWorkerName(e.target.value)}
+                className={`w-full ${T.input}`}
+              />
+              <p className="mt-1 text-xs font-semibold text-slate-400">입력 시 가입 화면에 이름이 미리 채워집니다.</p>
+            </div>
+
+            <div className="mb-6">
+              <label className={T.label}>배정 현장 (선택)</label>
+              <select value={siteId} onChange={e => setSiteId(e.target.value)} className={`w-full ${T.select}`}>
+                <option value="">현장 미지정</option>
+                {sites.map(s => <option key={s.id} value={s.id}>{s.companyName}</option>)}
+              </select>
+            </div>
+
+            {error && (
+              <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">{error}</div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} className={T.btnSecondary}>취소</button>
+              <button
+                onClick={handleSend}
+                disabled={loading || !phone.replace(/-/g, "").match(/^01[0-9]{8,9}$/)}
+                className={`${T.btnPrimary} flex items-center gap-1.5`}
+              >
+                <Send className="h-3.5 w-3.5" />
+                {loading ? "발송 중..." : "초대 발송"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="font-black text-slate-900">초대 발송 완료</p>
+                <p className="text-xs font-semibold text-slate-400">{result.phoneNumber.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3")} · 24시간 유효</p>
+              </div>
+            </div>
+
+            <div className="mb-3 space-y-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-1 text-xs font-black text-slate-500">인증번호</p>
+                <p className="text-2xl font-black tracking-[8px] text-slate-900">{result.code}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-400">직무지도원에게 구두 또는 문자로 전달해주세요.</p>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-1 text-xs font-black text-slate-500">초대 링크</p>
+                <p className="mb-2 break-all text-xs font-semibold text-sky-600">{result.inviteUrl}</p>
+                <button
+                  onClick={() => handleCopy(result.inviteUrl)}
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  {copied ? "복사됨!" : "링크 복사"}
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+              <p className="text-xs font-semibold text-amber-700">
+                SMS 환경변수(KAKAO_ALIMTALK_*)가 설정된 경우 자동 문자 발송됩니다.
+                미설정 시 위 링크와 인증번호를 직접 전달해주세요.
+              </p>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button onClick={onClose} className={T.btnPrimary}>확인</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
   coach: Coach; assignmentId: string; initial: Assignment;
@@ -265,6 +410,7 @@ export default function CoachesPage() {
   const [total, setTotal] = useState(0);
   const [editTarget,     setEditTarget]     = useState<{ coach: Coach; assignment: Assignment } | null>(null);
   const [infoEditTarget, setInfoEditTarget] = useState<Coach | null>(null);
+  const [showInvite,     setShowInvite]     = useState(false);
   const [assignmentMap, setAssignmentMap] = useState<Record<string, Assignment>>({});
 
   useEffect(() => {
@@ -311,6 +457,13 @@ export default function CoachesPage() {
           <h1 className={T.pageTitle}>직무지도원 관리</h1>
           <p className={T.pageSub}>총 {total}명 · 행 클릭 시 근무형태 설정</p>
         </div>
+        <button
+          onClick={() => setShowInvite(true)}
+          className={`${T.btnPrimary} flex items-center gap-1.5`}
+        >
+          <Send className="h-3.5 w-3.5" />
+          초대 발송
+        </button>
       </div>
 
       <div className="flex gap-2">
@@ -404,6 +557,8 @@ export default function CoachesPage() {
           }}
         />
       )}
+
+      {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
     </div>
   );
 }
