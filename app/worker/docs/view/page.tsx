@@ -25,17 +25,26 @@ type DocType =
   | "adaptation-daily-log"
   | "adaptation-final-eval";
 
-const DOC_GROUPS = [
-  { group: "출퇴근", docs: [
-    { id: "attendance-sheet"      as DocType, label: "출근부",          Icon: ClipboardList, desc: "날짜별 출퇴근 기록",          needsTrainee: false },
+// 출퇴근 그룹 (공통)
+const GROUP_ATTENDANCE = { group: "출퇴근", docs: [
+  { id: "attendance-sheet" as DocType, label: "출근부", Icon: ClipboardList, desc: "날짜별 출퇴근 기록", needsTrainee: false },
+]};
+
+// 지원고용 훈련 세트
+const DOC_GROUPS_TRAINING = [
+  GROUP_ATTENDANCE,
+  { group: "지원고용 훈련 세트", docs: [
+    { id: "training-daily-log"  as DocType, label: "훈련일지",        Icon: BookOpen,  desc: "일별 훈련 기록 (일별 작성)",            needsTrainee: true },
+    { id: "trainee-final-eval"  as DocType, label: "훈련생 종합평가", Icon: BarChart2, desc: "지원고용 훈련생 종합 평가기록부 (종료 시)", needsTrainee: true },
   ]},
-  { group: "훈련", docs: [
-    { id: "training-daily-log"    as DocType, label: "훈련일지",         Icon: BookOpen,      desc: "일자별 지원고용 훈련 기록",    needsTrainee: true  },
-    { id: "trainee-final-eval"    as DocType, label: "훈련생 종합평가",  Icon: BarChart2,     desc: "훈련생별 수행 종합 집계",      needsTrainee: true  },
-  ]},
-  { group: "적응지도", docs: [
-    { id: "adaptation-daily-log"  as DocType, label: "적응지도 일지",    Icon: FileText,      desc: "일자별 취업 후 적응지도 기록", needsTrainee: true  },
-    { id: "adaptation-final-eval" as DocType, label: "적응지도 종합평가",Icon: TrendingUp,    desc: "훈련생별 적응지도 종합 집계",  needsTrainee: true  },
+];
+
+// 취업후 적응지도 세트
+const DOC_GROUPS_ADAPTATION = [
+  GROUP_ATTENDANCE,
+  { group: "취업 후 적응지도 세트", docs: [
+    { id: "adaptation-daily-log"  as DocType, label: "적응지도 일지",    Icon: FileText,   desc: "일별 적응지도 기록 (일별 작성)",              needsTrainee: true },
+    { id: "adaptation-final-eval" as DocType, label: "적응지도 종합평가",Icon: TrendingUp, desc: "취업 후 적응지도 종합 평가기록부 (종료 시)", needsTrainee: true },
   ]},
 ];
 
@@ -69,15 +78,24 @@ function DocsViewInner() {
   const [periodEnd,       setPeriodEnd]       = useState(def.end);
   const [selectedTrainee, setSelectedTrainee] = useState("");
   const [trainees,        setTrainees]        = useState<{id: string; name: string; gender: string}[]>([]);
+  const [trainingType,    setTrainingType]    = useState<"PRE"|"FIELD"|"ADAPTATION">("FIELD");
   const [mode,            setMode]            = useState<"select" | "view">("select");
   const [iframeKey,       setIframeKey]       = useState(0);
+
+  // 서비스 단계에 맞는 DOC_GROUPS
+  const isAdaptation = trainingType === "ADAPTATION";
+  const DOC_GROUPS = isAdaptation ? DOC_GROUPS_ADAPTATION : DOC_GROUPS_TRAINING;
+  const serviceLabel = isAdaptation ? "취업 후 적응지도" : "지원고용 훈련";
 
   const needsTrainee = DOC_GROUPS.flatMap(g => g.docs).find(d => d.id === docType)?.needsTrainee ?? false;
 
   useEffect(() => {
     fetch("/api/worker/site/current").then(r => r.json()).then(d => {
-      if (d.success && d.data?.trainees)
-        setTrainees(d.data.trainees.map((t: any) => ({ id: String(t.id), name: t.name, gender: t.gender || "M" })));
+      if (d.success && d.data) {
+        setTrainingType(d.data.trainingType || "FIELD");
+        if (d.data.trainees)
+          setTrainees(d.data.trainees.map((t: any) => ({ id: String(t.id), name: t.name, gender: t.gender || "M" })));
+      }
     });
   }, []);
 
@@ -168,6 +186,18 @@ function DocsViewInner() {
         </header>
 
         <div className="space-y-4 px-4 py-4">
+
+          {/* 서비스 세트 안내 */}
+          <div className={`rounded-xl border px-4 py-3 ${isAdaptation ? "border-violet-100 bg-violet-50" : "border-sky-100 bg-sky-50"}`}>
+            <p className={`text-xs font-black ${isAdaptation ? "text-violet-700" : "text-sky-700"}`}>
+              현재 서비스: {serviceLabel}
+            </p>
+            <p className={`mt-0.5 text-[11px] font-semibold ${isAdaptation ? "text-violet-500" : "text-sky-500"}`}>
+              {isAdaptation
+                ? "출근부 / 적응지도 일지 / 적응지도 종합평가"
+                : "출근부 / 훈련일지 / 훈련생 종합평가"}
+            </p>
+          </div>
 
           {/* 문서 종류 */}
           {DOC_GROUPS.map(({ group, docs }) => (

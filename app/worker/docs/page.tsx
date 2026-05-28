@@ -29,15 +29,21 @@ interface SiteInfo {
   managerName: string;
   coachName: string;
   trainees: { id: string; name: string; gender: string }[];
+  trainingType: "PRE" | "FIELD" | "ADAPTATION";
 }
 
-const DOC_TYPES = [
-  { id: "ATTENDANCE_SHEET",      label: "출근부",          Icon: ClipboardList, desc: "월별 출퇴근 기록",        needsTrainee: false },
-  { id: "TRAINING_DAILY_LOG",    label: "훈련일지",         Icon: BookOpen,      desc: "지원고용 훈련일지",        needsTrainee: true  },
-  { id: "TRAINEE_FINAL_EVAL",    label: "훈련생 종합평가",  Icon: BarChart2,     desc: "훈련생 종합 평가기록부",    needsTrainee: true  },
-  { id: "ADAPTATION_DAILY_LOG",  label: "적응지도 일지",    Icon: FileText,      desc: "취업 후 적응지도 일지",     needsTrainee: true  },
-  { id: "ADAPTATION_FINAL_EVAL", label: "적응지도 종합평가",Icon: TrendingUp,    desc: "적응지도 종합 평가기록부",  needsTrainee: true  },
+// 전체 문서 목록 (상태 초기화용)
+const ALL_DOC_TYPES = [
+  { id: "ATTENDANCE_SHEET",      label: "출근부",          Icon: ClipboardList, desc: "월별 출퇴근 기록",                       needsTrainee: false },
+  { id: "TRAINING_DAILY_LOG",    label: "훈련일지",         Icon: BookOpen,      desc: "지원고용 훈련일지 (일별 작성)",           needsTrainee: true  },
+  { id: "TRAINEE_FINAL_EVAL",    label: "훈련생 종합평가",  Icon: BarChart2,     desc: "지원고용 훈련생 종합 평가기록부 (종료 시)", needsTrainee: true  },
+  { id: "ADAPTATION_DAILY_LOG",  label: "적응지도 일지",    Icon: FileText,      desc: "취업 후 적응지도 일지 (일별 작성)",       needsTrainee: true  },
+  { id: "ADAPTATION_FINAL_EVAL", label: "적응지도 종합평가",Icon: TrendingUp,    desc: "취업 후 적응지도 종합 평가기록부 (종료 시)", needsTrainee: true  },
 ];
+
+// 서비스 단계별 문서 세트
+const TRAINING_DOC_IDS   = ["ATTENDANCE_SHEET", "TRAINING_DAILY_LOG",   "TRAINEE_FINAL_EVAL"];
+const ADAPTATION_DOC_IDS = ["ATTENDANCE_SHEET", "ADAPTATION_DAILY_LOG", "ADAPTATION_FINAL_EVAL"];
 
 const NAV_ITEMS = [
   { icon: Home,             label: "홈",      href: "/worker/home" },
@@ -69,7 +75,7 @@ function DocsContent() {
   const [bulkLoading, setBulkLoading] = useState(false);
 
   const [docStates, setDocStates] = useState<Record<string, DocState>>(
-    () => Object.fromEntries(DOC_TYPES.map(d => [d.id, { checked: false, traineeId: "", loading: false, result: null }]))
+    () => Object.fromEntries(ALL_DOC_TYPES.map(d => [d.id, { checked: false, traineeId: "", loading: false, result: null }]))
   );
 
   useEffect(() => {
@@ -99,6 +105,7 @@ function DocsContent() {
           trainees: (d.data.trainees || []).map((t: any) => ({
             id: String(t.id), name: t.name, gender: t.gender,
           })),
+          trainingType: d.data.trainingType || "FIELD",
         });
       }
     });
@@ -118,6 +125,12 @@ function DocsContent() {
     }));
   }
 
+  // 현재 서비스 단계에 맞는 문서 세트
+  const isAdaptation = siteInfo?.trainingType === "ADAPTATION";
+  const activeDocIds = isAdaptation ? ADAPTATION_DOC_IDS : TRAINING_DOC_IDS;
+  const DOC_TYPES = ALL_DOC_TYPES.filter(d => activeDocIds.includes(d.id));
+  const serviceLabel = isAdaptation ? "취업 후 적응지도" : "지원고용 훈련";
+
   function openInPersonSign() {
     const firstSignDoc = DOC_TYPES.find(d => NEEDS_MANAGER_SIGN.has(d.id) && docStates[d.id].checked);
     const docType = firstSignDoc?.id || "ATTENDANCE_SHEET";
@@ -125,7 +138,7 @@ function DocsContent() {
   }
 
   async function sendDoc(docId: string): Promise<void> {
-    const docInfo = DOC_TYPES.find(d => d.id === docId)!;
+    const docInfo = ALL_DOC_TYPES.find(d => d.id === docId)!;
     const state = docStates[docId];
     if (docInfo.needsTrainee && !state.traineeId) {
       alert(`${docInfo.label}: 훈련생을 선택해주세요.`);
@@ -167,7 +180,7 @@ function DocsContent() {
   }
 
   async function handleBulkSend() {
-    const checkedDocs = DOC_TYPES.filter(d => docStates[d.id].checked);
+    const checkedDocs = ALL_DOC_TYPES.filter(d => activeDocIds.includes(d.id) && docStates[d.id].checked);
     if (checkedDocs.length === 0) { alert("발송할 문서를 선택해주세요."); return; }
     for (const doc of checkedDocs) {
       if (doc.needsTrainee && !docStates[doc.id].traineeId) {
@@ -193,7 +206,7 @@ function DocsContent() {
 
   const checkedCount = DOC_TYPES.filter(d => docStates[d.id].checked).length;
   const needsManagerSignChecked = DOC_TYPES.some(d => NEEDS_MANAGER_SIGN.has(d.id) && docStates[d.id].checked);
-  const singleDoc = checkedCount === 1 ? DOC_TYPES.find(d => docStates[d.id].checked) : null;
+  const singleDoc = checkedCount === 1 ? ALL_DOC_TYPES.find(d => docStates[d.id].checked) : null;
   const mainBtnLabel = singleDoc
     ? `${singleDoc.label} 발송`
     : `선택 문서 일괄 발송 (${checkedCount}개)`;
@@ -297,6 +310,20 @@ function DocsContent() {
             )}
             <p className="mt-3 text-xs font-semibold leading-relaxed text-slate-400">
               서명 없이 발송하면 서명란이 빈칸으로 출력됩니다.
+            </p>
+          </div>
+        )}
+
+        {/* 서비스 세트 안내 */}
+        {siteInfo && (
+          <div className={`mx-4 mt-3 rounded-xl border px-4 py-3 ${isAdaptation ? "border-violet-100 bg-violet-50" : "border-sky-100 bg-sky-50"}`}>
+            <p className={`text-xs font-black ${isAdaptation ? "text-violet-700" : "text-sky-700"}`}>
+              현재 서비스: <span className="font-black">{serviceLabel}</span>
+            </p>
+            <p className={`mt-0.5 text-[11px] font-semibold ${isAdaptation ? "text-violet-500" : "text-sky-500"}`}>
+              {isAdaptation
+                ? "출근부 · 적응지도 일지 (일별) · 적응지도 종합평가 (종료 시) 3종"
+                : "출근부 · 훈련일지 (일별) · 훈련생 종합평가 (훈련 종료 시) 3종"}
             </p>
           </div>
         )}

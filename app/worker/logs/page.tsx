@@ -66,17 +66,41 @@ export default function LogsPage() {
   const [periodStart, setPeriodStart] = useState(def.start);
   const [periodEnd, setPeriodEnd]     = useState(def.end);
   const [filterType, setFilterType]   = useState<string>("ALL");
+  const [trainingType, setTrainingType] = useState<"PRE"|"FIELD"|"ADAPTATION"|null>(null);
   const [selected, setSelected]       = useState<LogItem | null>(null);
   const [deleting, setDeleting]       = useState(false);
+
+  // 현재 서비스 단계 조회 → 기본 필터 자동 설정
+  useEffect(() => {
+    fetch("/api/worker/site/current").then(r => r.json()).then(d => {
+      if (d.success && d.data?.trainingType) {
+        const tt = d.data.trainingType as "PRE"|"FIELD"|"ADAPTATION";
+        setTrainingType(tt);
+        // 기본 필터: 현재 서비스 단계에 맞게 설정
+        // 훈련(PRE/FIELD) → 전체(훈련세트), 적응 → ADAPTATION
+        if (tt === "ADAPTATION") setFilterType("ADAPTATION");
+        else setFilterType("TRAINING_SET"); // PRE+FIELD 묶음
+      }
+    }).catch(() => {});
+  }, []);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
       const p = new URLSearchParams({ periodStart, periodEnd });
-      if (filterType !== "ALL") p.set("trainingType", filterType);
+      // TRAINING_SET = PRE+FIELD 묶음 조회 (trainingType 필터 미적용 → 서버에서 전체 반환 후 클라이언트 필터)
+      if (filterType === "ADAPTATION") p.set("trainingType", "ADAPTATION");
+      // PRE, FIELD 개별 필터
+      if (filterType === "PRE")   p.set("trainingType", "PRE");
+      if (filterType === "FIELD") p.set("trainingType", "FIELD");
       const res = await fetch(`/api/worker/logs/list?${p.toString()}`);
       const d = await res.json();
-      if (d.success) setLogs(d.logs);
+      if (d.success) {
+        let logs = d.logs;
+        // TRAINING_SET: PRE+FIELD만 보여줌
+        if (filterType === "TRAINING_SET") logs = logs.filter((l: LogItem) => l.trainingType === "PRE" || l.trainingType === "FIELD");
+        setLogs(logs);
+      }
     } catch { /* silent */ } finally { setLoading(false); }
   }, [periodStart, periodEnd, filterType]);
 
@@ -139,19 +163,33 @@ export default function LogsPage() {
               className="h-10 flex-1 rounded-xl border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" />
           </div>
 
-          {/* 유형 필터 */}
+          {/* 유형 필터 — 서비스 단계 기반 */}
           <div className="flex gap-2">
-            {[
-              { val: "ALL",        label: "전체" },
-              { val: "PRE",        label: "사전훈련" },
-              { val: "FIELD",      label: "현장훈련" },
-              { val: "ADAPTATION", label: "적응지도" },
-            ].map(({ val, label }) => (
-              <button key={val} onClick={() => setFilterType(val)}
-                className={`flex-1 rounded-xl border py-2 text-xs font-black transition active:scale-95 ${filterType === val ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-600"}`}>
-                {label}
-              </button>
-            ))}
+            {trainingType === "ADAPTATION" ? (
+              // 적응지도 세트
+              [
+                { val: "ADAPTATION", label: "적응지도 전체" },
+                { val: "ALL",        label: "모든 일지" },
+              ].map(({ val, label }) => (
+                <button key={val} onClick={() => setFilterType(val)}
+                  className={`flex-1 rounded-xl border py-2 text-xs font-black transition active:scale-95 ${filterType === val ? "border-violet-700 bg-violet-700 text-white" : "border-slate-200 bg-white text-slate-600"}`}>
+                  {label}
+                </button>
+              ))
+            ) : (
+              // 지원고용 훈련 세트
+              [
+                { val: "TRAINING_SET", label: "훈련 전체" },
+                { val: "PRE",          label: "사전훈련" },
+                { val: "FIELD",        label: "현장훈련" },
+                { val: "ALL",          label: "모든 일지" },
+              ].map(({ val, label }) => (
+                <button key={val} onClick={() => setFilterType(val)}
+                  className={`flex-1 rounded-xl border py-2 text-xs font-black transition active:scale-95 ${filterType === val ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-600"}`}>
+                  {label}
+                </button>
+              ))
+            )}
           </div>
         </div>
 

@@ -726,11 +726,11 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
                       <p className="text-xs font-semibold text-slate-400">{t.gender === "M" ? "남성" : "여성"}</p>
                     </div>
                     <div className="flex gap-2">
-                      {/* 종합평가 버튼 */}
+                      {/* 종합평가 버튼 (훈련/적응지도 종료 시 작성) */}
                       <button
                         onClick={() => router.push(evalPath)}
                         className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-black text-slate-600 transition active:scale-95"
-                        title="종합 평가기록부"
+                        title={isAdaptation ? "적응지도 종료 시 작성" : "훈련 종료 시 작성"}
                       >
                         <BarChart2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
                         종합평가
