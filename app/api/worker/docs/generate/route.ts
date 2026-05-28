@@ -30,18 +30,25 @@ const DOC_LABELS: Record<string, string> = {
   "ADAPTATION_FINAL_EVAL": "적응지도 대상자 종합 평가기록부",
 };
 
+const ALLOWED_IMG_HOST = (() => {
+  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "").hostname; } catch { return ""; }
+})();
+
 // ── 서명 이미지 URL → base64 변환 ────────────────────────────
 async function toBase64DataUri(url?: string | null): Promise<string | undefined> {
   if (!url || !url.startsWith("http")) return url || undefined;
+  try {
+    const host = new URL(url).hostname;
+    if (ALLOWED_IMG_HOST && host !== ALLOWED_IMG_HOST) return undefined;
+  } catch { return undefined; }
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return undefined;
     const buf = await res.arrayBuffer();
     const mime = res.headers.get("content-type") || "image/png";
+    if (!mime.startsWith("image/")) return undefined;
     return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
-  } catch {
-    return undefined;
-  }
+  } catch { return undefined; }
 }
 
 // ── 메인 핸들러 ───────────────────────────────────────────────
