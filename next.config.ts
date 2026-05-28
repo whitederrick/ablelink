@@ -11,7 +11,8 @@ const securityHeaders = [
   // Referer 정보 최소화 (외부 링크로 전송 시 출처만)
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   // 불필요한 브라우저 기능 비활성화
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self), interest-cohort=()" },
+  // microphone=(self): 동일 출처에서만 마이크 허용 (AI 일지 음성 녹음용)
+  { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=(self), interest-cohort=()" },
   // DNS 프리패치 허용
   { key: "X-DNS-Prefetch-Control", value: "on" },
 ];

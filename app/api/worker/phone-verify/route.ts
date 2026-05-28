@@ -26,11 +26,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: "올바른 휴대전화번호를 입력해주세요." }, { status: 400 });
     }
 
-    // Rate limit: IP당 10분에 5회
+    // Rate limit: IP당 + 전화번호당 각각 제한
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-    const rl = await checkRateLimit(`otp:${ip}`);
-    if (!rl.allowed) {
-      const mins = Math.ceil((rl.retryAfterMs ?? 0) / 60000);
+    const rlIp    = await checkRateLimit(`otp:${ip}`);
+    const rlPhone = await checkRateLimit(`otp-phone:${phone}`);
+    if (!rlIp.allowed || !rlPhone.allowed) {
+      const retryMs = Math.max(rlIp.retryAfterMs ?? 0, rlPhone.retryAfterMs ?? 0);
+      const mins    = Math.ceil(retryMs / 60000);
       return NextResponse.json(
         { success: false, message: `인증번호 요청이 너무 많습니다. ${mins}분 후 다시 시도해주세요.` },
         { status: 429 },

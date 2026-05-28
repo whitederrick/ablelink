@@ -88,7 +88,6 @@ export async function POST(request: NextRequest) {
     }
 
     const transcript = (await groqRes.text()).trim();
-    console.log("[voice-to-log] STT 결과:", transcript);
 
     if (!transcript) {
       return NextResponse.json({ success: false, message: "음성을 인식할 수 없습니다. 다시 시도해주세요." });
@@ -146,7 +145,7 @@ export async function POST(request: NextRequest) {
     const aiContent =
       geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || transcript;
 
-    console.log("[voice-to-log] 변환 완료:", aiContent.slice(0, 50) + "...");
+    console.log("[voice-to-log] 변환 완료");
 
     return NextResponse.json({ success: true, content: aiContent, transcript });
   } catch (error: any) {

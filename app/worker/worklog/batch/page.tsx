@@ -110,8 +110,30 @@ export default function BatchWorklogPage() {
       setIsRecording(true);
       setRecordingSec(0);
       timerRef.current = setInterval(() => setRecordingSec(s => s + 1), 1000);
-    } catch {
-      alert("마이크 권한이 필요합니다. 브라우저 설정에서 마이크를 허용해주세요.");
+    } catch (err: any) {
+      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+        alert(
+          "마이크 접근 권한이 거부되었습니다.\n\n" +
+          "[허용 방법]\n" +
+          "• Chrome / Edge:\n" +
+          "  주소창 왼쪽 자물쇠(🔒) 클릭\n" +
+          "  → 사이트 설정 → 마이크 → 허용\n\n" +
+          "• Safari (iPhone/iPad):\n" +
+          "  설정 앱 → Safari → 마이크 → 허용\n\n" +
+          "• Safari (Mac):\n" +
+          "  Safari 메뉴 → 설정 → 웹사이트 탭\n" +
+          "  → 마이크 → able-link.co.kr → 허용"
+        );
+      } else if (err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError") {
+        alert("마이크 장치를 찾을 수 없습니다.\n마이크가 연결되어 있는지 확인해주세요.");
+      } else {
+        alert(
+          "마이크를 사용할 수 없습니다.\n\n" +
+          "• HTTPS 연결(able-link.co.kr)에서만 사용 가능합니다.\n" +
+          "• 다른 앱이 마이크를 점유하고 있으면 앱을 닫고 다시 시도해주세요.\n" +
+          "• 문제가 계속되면 브라우저를 재시작해주세요."
+        );
+      }
     }
   }
 

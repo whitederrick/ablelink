@@ -83,10 +83,8 @@ export async function GET(request: NextRequest) {
     const addressJson = await addressRes.json().catch(() => null);
 
     if (!addressRes.ok) {
-      // Kakao 자체 에러(권한/서비스 활성화 등)
-      return jsonError("Kakao API 오류(주소검색)", addressRes.status, {
-        kakao: addressJson,
-      });
+      console.error("[geo/search-address] Kakao 주소검색 오류:", addressRes.status, addressJson);
+      return jsonError("주소 검색 서비스에 일시적인 오류가 발생했습니다.", 502);
     }
 
     const addrDocs = Array.isArray(addressJson?.documents)
@@ -143,9 +141,8 @@ export async function GET(request: NextRequest) {
     const keywordJson = await keywordRes.json().catch(() => null);
 
     if (!keywordRes.ok) {
-      return jsonError("Kakao API 오류(키워드검색)", keywordRes.status, {
-        kakao: keywordJson,
-      });
+      console.error("[geo/search-address] Kakao 키워드검색 오류:", keywordRes.status, keywordJson);
+      return jsonError("주소 검색 서비스에 일시적인 오류가 발생했습니다.", 502);
     }
 
     const kwDocs = Array.isArray(keywordJson?.documents)

@@ -33,17 +33,12 @@ export async function POST(req: NextRequest) {
     }
 
     const admin = await prisma.adminUser.findUnique({ where: { loginId } });
-    if (!admin || !admin.isActive) {
+    // 타이밍 공격 방지: 계정 없을 때도 bcrypt 비교 수행 (응답 시간 동일화)
+    const hashToCompare = admin?.passwordHash ?? "$2b$12$invalidhashfortimingattackx";
+    const ok = await bcrypt.compare(password, hashToCompare);
+    if (!admin || !admin.isActive || !ok) {
       return NextResponse.json(
-        { success: false, message: "계정이 없거나 비활성화 상태입니다." },
-        { status: 401 }
-      );
-    }
-
-    const ok = await bcrypt.compare(password, admin.passwordHash);
-    if (!ok) {
-      return NextResponse.json(
-        { success: false, message: "비밀번호가 올바르지 않습니다." },
+        { success: false, message: "아이디 또는 비밀번호가 올바르지 않습니다." },
         { status: 401 }
       );
     }

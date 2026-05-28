@@ -2,7 +2,7 @@
 // app/sign/[token]/page.tsx
 // 사업체담당자 즉석 서명 페이지 (공개 — 스마트폰 접속)
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 
 type Info = {
@@ -17,22 +17,6 @@ const DOC_LABELS: Record<string, string> = {
   "adaptation-daily-log":  "취업 후 적응지도 일지",
   "adaptation-final-eval": "적응지도 종합 평가기록부",
 };
-
-// 서명 이미지를 고정 크기(w x h)로 리사이즈
-async function resizeSignature(src: HTMLCanvasElement, w: number, h: number): Promise<Blob> {
-  const offscreen = document.createElement("canvas");
-  offscreen.width = w; offscreen.height = h;
-  const ctx = offscreen.getContext("2d")!;
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
-  const pad = 20;
-  const scale = Math.min((w - pad*2) / src.width, (h - pad*2) / src.height);
-  const sw = src.width * scale, sh = src.height * scale;
-  ctx.drawImage(src, (w-sw)/2, (h-sh)/2, sw, sh);
-  return new Promise<Blob>((res, rej) => {
-    offscreen.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95);
-  });
-}
-
 
 export default function SignPage() {
   const { token } = useParams<{ token: string }>();
@@ -60,21 +44,29 @@ export default function SignPage() {
       .catch(() => { setPhase("error"); setErrorMsg("서버 연결 실패"); });
   }, [token]);
 
-  // 캔버스 초기화
-  useEffect(() => {
-    if (phase !== "ready") return;
+  const initCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const dpr  = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
+    canvas.width  = rect.width  * dpr;
+    canvas.height = rect.height * dpr;
     const ctx = canvas.getContext("2d")!;
-    canvas.width  = 230;
-    canvas.height = 100;
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, 230, 100);
-    ctx.strokeStyle = "#000000";
-    ctx.lineWidth   = 2.5;
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle   = "#fff";
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth   = 3.5;
     ctx.lineCap     = "round";
     ctx.lineJoin    = "round";
-  }, [phase]);
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "ready") return;
+    const t = setTimeout(initCanvas, 50);
+    return () => clearTimeout(t);
+  }, [phase, initCanvas]);
 
   function getPos(e: React.TouchEvent | React.MouseEvent, canvas: HTMLCanvasElement) {
     const rect = canvas.getBoundingClientRect();
@@ -108,9 +100,10 @@ export default function SignPage() {
 
   function clearCanvas() {
     const canvas = canvasRef.current!;
-    const ctx = canvas.getContext("2d")!;
+    const ctx    = canvas.getContext("2d")!;
+    const rect   = canvas.getBoundingClientRect();
     ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, 230, 100);
+    ctx.fillRect(0, 0, rect.width, rect.height);
   }
 
   async function submit() {
@@ -261,8 +254,8 @@ const s: Record<string, React.CSSProperties> = {
   signLabel:  { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 },
   clearBtn:   { background:"none", border:"1px solid #e5e7eb", borderRadius:6, padding:"5px 12px", fontSize:13, color:"#374151", cursor:"pointer" },
 
-  canvasWrap: { position:"relative", backgroundColor:"#fff", borderRadius:14, border:"2px solid #e5e7eb", overflow:"hidden", marginBottom:14 },
-  canvas:     { display:"block", width:"100%", maxWidth:"230px", height:"100px", touchAction:"none", cursor:"crosshair", border:"2px solid #374151", borderRadius:8, backgroundColor:"#fff" },
+  canvasWrap: { position:"relative", backgroundColor:"#fff", borderRadius:14, border:"2px solid #374151", overflow:"hidden", marginBottom:14 },
+  canvas:     { display:"block", width:"100%", height:"160px", touchAction:"none", cursor:"crosshair", backgroundColor:"#fff" },
   canvasHint: { position:"absolute", bottom:8, right:12, fontSize:11, color:"#d1d5db", margin:0, pointerEvents:"none" },
 
   submitBtn:  { width:"100%", padding:"16px", backgroundColor:"#111827", color:"#fff", border:"none", borderRadius:12, fontSize:16, fontWeight:700, cursor:"pointer", marginBottom:12 },
