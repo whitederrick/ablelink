@@ -25,7 +25,9 @@ export async function GET(req: NextRequest) {
     where: { traineeId: BigInt(traineeId), writerId: BigInt(session.userId), evalType, ...(periodStart ? { periodStart } : {}), ...(periodEnd ? { periodEnd } : {}) },
     orderBy: { createdAt: "desc" },
   });
-  return NextResponse.json({ success: true, evaluation: existing ? { id: existing.id.toString(), scores: existing.scores, comments: existing.comments } : { scores: defaultAllScores(), comments: {} } });
+  return NextResponse.json({ success: true, evaluation: existing
+    ? { id: existing.id.toString(), scores: existing.scores, comments: existing.comments, isConfirmed: existing.isConfirmed }
+    : { scores: defaultAllScores(), comments: {}, isConfirmed: false } });
 }
 
 export async function POST(req: NextRequest) {

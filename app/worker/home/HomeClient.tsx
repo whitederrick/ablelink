@@ -688,6 +688,27 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
           </div>
         )}
 
+        {/* 검토·확정 바로가기 */}
+        {homeData?.siteName && (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <p className="mb-2.5 text-[11px] font-black uppercase tracking-wide text-slate-400">검토·확정</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => router.push("/worker/review/attendance")}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-xs font-black text-slate-700 transition active:scale-95 border border-slate-200"
+              >
+                출근부 확정
+              </button>
+              <button
+                onClick={() => router.push("/worker/review/logs")}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-xs font-black text-slate-700 transition active:scale-95 border border-slate-200"
+              >
+                일지 확정
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 담당 훈련생 목록 */}
         {homeData?.trainees && homeData.trainees.length > 0 && (
           <div>

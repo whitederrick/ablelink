@@ -57,11 +57,13 @@ function TrainingEvalInner() {
   const periodStart = params.get("periodStart") || "";
   const periodEnd   = params.get("periodEnd") || "";
 
-  const [scores, setScores]     = useState<Scores>(defaultScores());
-  const [comments, setComments] = useState<Comments>({});
-  const [saving, setSaving]     = useState(false);
-  const [loading, setLoading]   = useState(true);
-  const [toast, setToast]       = useState("");
+  const [scores, setScores]       = useState<Scores>(defaultScores());
+  const [comments, setComments]   = useState<Comments>({});
+  const [evalId, setEvalId]       = useState<string | null>(null);
+  const [isConfirmed, setIsConfirmed] = useState(false);
+  const [saving, setSaving]       = useState(false);
+  const [loading, setLoading]     = useState(true);
+  const [toast, setToast]         = useState("");
 
   useEffect(() => {
     if (!traineeId) { setLoading(false); return; }
@@ -69,8 +71,10 @@ function TrainingEvalInner() {
       .then(r => r.json())
       .then(d => {
         if (d.success && d.evaluation) {
-          if (d.evaluation.scores)   setScores(d.evaluation.scores as Scores);
-          if (d.evaluation.comments) setComments(d.evaluation.comments as Comments);
+          if (d.evaluation.scores)      setScores(d.evaluation.scores as Scores);
+          if (d.evaluation.comments)    setComments(d.evaluation.comments as Comments);
+          if (d.evaluation.id)          setEvalId(d.evaluation.id);
+          if (d.evaluation.isConfirmed) setIsConfirmed(d.evaluation.isConfirmed);
         }
       })
       .finally(() => setLoading(false));
@@ -98,8 +102,21 @@ function TrainingEvalInner() {
     });
     const d = await res.json();
     setSaving(false);
-    if (d.success) { setToast("저장되었습니다."); setTimeout(() => setToast(""), 2500); }
-    else setToast("저장 실패: " + (d.message || ""));
+    if (d.success) {
+      if (d.id) setEvalId(d.id);
+      setToast("저장되었습니다."); setTimeout(() => setToast(""), 2500);
+    } else setToast("저장 실패: " + (d.message || ""));
+  }
+
+  async function confirm() {
+    if (!evalId) { setToast("먼저 저장해주세요."); return; }
+    if (!window.confirm("평가를 최종 확정하시겠습니까?\n확정 후에는 수정할 수 없습니다.")) return;
+    setSaving(true);
+    const res = await fetch(`/api/worker/evaluation/${evalId}/confirm`, { method: "PATCH" });
+    const d   = await res.json();
+    setSaving(false);
+    if (d.success) { setIsConfirmed(true); setToast("확정되었습니다."); setTimeout(() => setToast(""), 2500); }
+    else setToast(d.message || "확정 실패");
   }
 
   if (loading) return (
@@ -188,10 +205,22 @@ function TrainingEvalInner() {
           </div>
         </div>
 
-        <button onClick={save} disabled={saving || !traineeId}
-          className="min-h-14 w-full rounded-2xl bg-slate-950 text-base font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-[0.97] disabled:opacity-60">
-          {saving ? "저장 중..." : "저장"}
-        </button>
+        {isConfirmed ? (
+          <div className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-base font-black text-white">
+            <CheckCircle2 className="h-5 w-5" />확정 완료
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <button onClick={save} disabled={saving || !traineeId}
+              className="min-h-14 flex-1 rounded-2xl bg-slate-700 text-base font-black text-white transition active:scale-[0.97] disabled:opacity-60">
+              {saving ? "저장 중..." : "저장"}
+            </button>
+            <button onClick={confirm} disabled={saving || !evalId}
+              className="min-h-14 flex-[2] rounded-2xl bg-slate-950 text-base font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-[0.97] disabled:opacity-60">
+              최종 확정
+            </button>
+          </div>
+        )}
       </div>
 
       {toast && (
