@@ -102,7 +102,7 @@ export default function WorkerLoginPage() {
 
           <div className="flex items-center justify-center gap-2 text-sm">
             <span className="font-semibold text-slate-500">계정이 없으신가요?</span>
-            <Link href="/worker/register" className="font-black text-sky-600">
+            <Link href="/worker/signup" className="font-black text-sky-600">
               회원가입
             </Link>
           </div>

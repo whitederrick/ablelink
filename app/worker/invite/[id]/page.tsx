@@ -54,7 +54,17 @@ export default function InvitePage() {
   async function handleVerifyCode() {
     setError("");
     if (code.length !== 6) { setError("6자리 인증번호를 입력해주세요."); return; }
-    setStep("info");
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/worker/invite/${id}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "verify", code }),
+      });
+      const data = await res.json();
+      if (!data.success) { setError(data.message); return; }
+      setStep("info");
+    } catch { setError("서버와 연결할 수 없습니다."); }
+    finally { setSubmitting(false); }
   }
 
   async function handleSubmit() {
@@ -65,6 +75,7 @@ export default function InvitePage() {
       const res = await fetch(`/api/worker/invite/${id}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "signup",
           code, userName: name, password: pw,
           consentTerms, consentPrivacy, consentLocation,
         }),
@@ -72,7 +83,7 @@ export default function InvitePage() {
       const data = await res.json();
       if (!data.success) { setError(data.message); return; }
       setStep("done");
-      setTimeout(() => router.replace("/worker/home"), 2000);
+      setTimeout(() => router.replace(data.hasSite ? "/worker/home" : "/worker/site/register"), 2000);
     } catch { setError("서버와 연결할 수 없습니다."); }
     finally { setSubmitting(false); }
   }
@@ -140,9 +151,9 @@ export default function InvitePage() {
                 placeholder="123456"
                 className="h-14 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-center text-2xl font-black tracking-[10px] text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
               />
-              <button onClick={handleVerifyCode} disabled={code.length !== 6}
+              <button onClick={handleVerifyCode} disabled={submitting || code.length !== 6}
                 className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97] disabled:opacity-50">
-                <CheckCircle2 className="h-4 w-4" /> 다음
+                {submitting ? "확인 중..." : <><CheckCircle2 className="h-4 w-4" /> 다음</>}
               </button>
             </>
           )}

@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendSms } from "@/lib/sms";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const PHONE_RE = /^01[0-9]{8,9}$/;
 const OTP_TTL_MS = 5 * 60 * 1000; // 5분
@@ -23,6 +24,17 @@ export async function POST(request: Request) {
     const phone = String(body?.phoneNumber ?? "").replace(/-/g, "").trim();
     if (!PHONE_RE.test(phone)) {
       return NextResponse.json({ success: false, message: "올바른 휴대전화번호를 입력해주세요." }, { status: 400 });
+    }
+
+    // Rate limit: IP당 10분에 5회
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const rl = await checkRateLimit(`otp:${ip}`);
+    if (!rl.allowed) {
+      const mins = Math.ceil((rl.retryAfterMs ?? 0) / 60000);
+      return NextResponse.json(
+        { success: false, message: `인증번호 요청이 너무 많습니다. ${mins}분 후 다시 시도해주세요.` },
+        { status: 429 },
+      );
     }
 
     // 기존 가입 여부 확인

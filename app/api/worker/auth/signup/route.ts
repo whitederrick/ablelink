@@ -34,8 +34,8 @@ export async function POST(request: Request) {
     if (!verified) {
       return NextResponse.json({ success: false, message: "전화번호 인증을 먼저 완료해주세요." }, { status: 400 });
     }
-    // 10분 이내 인증인지 확인
-    if (Date.now() - verified.createdAt.getTime() > 10 * 60 * 1000) {
+    // OTP TTL(5분) 기준 — phone-verify의 OTP_TTL_MS와 동일하게 유지
+    if (Date.now() - verified.createdAt.getTime() > 5 * 60 * 1000) {
       return NextResponse.json({ success: false, message: "인증이 만료되었습니다. 다시 인증해주세요." }, { status: 400 });
     }
 
