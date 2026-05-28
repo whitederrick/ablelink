@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  BarChart2,
   Bell,
   CalendarDays,
   ChevronRight,
@@ -664,7 +665,30 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
           </div>
         )}
 
-        {/* 훈련생 목록 */}
+        {/* 서비스 단계 표시 */}
+        {homeData?.siteName && homeData.serviceStep && (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">현재 서비스 단계</p>
+                <p className="mt-0.5 text-sm font-black text-slate-900">
+                  {homeData.serviceStep === "PRE_TRAINING" ? "지원고용 — 사전훈련"
+                    : homeData.serviceStep === "FIELD_TRAINING" ? "지원고용 — 현장훈련"
+                    : homeData.serviceStep === "ADAPTATION" ? "취업 후 적응지도"
+                    : homeData.serviceStep}
+                </p>
+              </div>
+              <button
+                onClick={() => router.push("/worker/logs")}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-600 transition active:scale-95"
+              >
+                일지 목록
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 담당 훈련생 목록 */}
         {homeData?.trainees && homeData.trainees.length > 0 && (
           <div>
             <div className="mb-3 flex items-center justify-between px-1">
@@ -674,37 +698,63 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
               </span>
             </div>
             <div className="space-y-2.5">
-              {homeData.trainees.map(t => (
-                <div
-                  key={t.id}
-                  className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm"
-                >
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-sm font-black text-slate-600">
-                    {t.name.slice(0, 1)}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-black text-slate-900">{t.name}</p>
-                    <p className="text-xs font-semibold text-slate-400">{t.gender === "M" ? "남성" : "여성"}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const aid = homeData?.attendanceId ?? "";
-                      const trainingType = homeData?.trainingType || "FIELD";
-                      const params = new URLSearchParams({
-                        traineeId: t.id,
-                        traineeName: t.name,
-                        trainingType,
-                        ...(aid ? { attendanceId: aid } : {}),
-                      });
-                      router.push(`/worker/worklog?${params.toString()}`);
-                    }}
-                    className="flex items-center gap-1 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white transition active:scale-95"
+              {homeData.trainees.map(t => {
+                const aid = homeData?.attendanceId ?? "";
+                const trainingType = homeData?.trainingType || "FIELD";
+                const isAdaptation = trainingType === "ADAPTATION";
+                const now = new Date();
+                const y = now.getFullYear();
+                const mo = String(now.getMonth() + 1).padStart(2, "0");
+                const last = new Date(y, now.getMonth() + 1, 0).getDate();
+                const ps = `${y}-${mo}-01`;
+                const pe = `${y}-${mo}-${String(last).padStart(2, "0")}`;
+                const evalType = isAdaptation ? "ADAPTATION" : "TRAINING";
+                const evalPath = isAdaptation
+                  ? `/worker/evaluation/adaptation?traineeId=${t.id}&traineeName=${encodeURIComponent(t.name)}&periodStart=${ps}&periodEnd=${pe}`
+                  : `/worker/evaluation/training?traineeId=${t.id}&traineeName=${encodeURIComponent(t.name)}&periodStart=${ps}&periodEnd=${pe}`;
+
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm"
                   >
-                    <ClipboardList className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
-                    일지 작성
-                  </button>
-                </div>
-              ))}
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-sm font-black text-slate-600">
+                      {t.name.slice(0, 1)}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-black text-slate-900">{t.name}</p>
+                      <p className="text-xs font-semibold text-slate-400">{t.gender === "M" ? "남성" : "여성"}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      {/* 종합평가 버튼 */}
+                      <button
+                        onClick={() => router.push(evalPath)}
+                        className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-black text-slate-600 transition active:scale-95"
+                        title="종합 평가기록부"
+                      >
+                        <BarChart2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                        종합평가
+                      </button>
+                      {/* 일지 작성 버튼 */}
+                      <button
+                        onClick={() => {
+                          const params = new URLSearchParams({
+                            traineeId: t.id,
+                            traineeName: t.name,
+                            trainingType,
+                            ...(aid ? { attendanceId: aid } : {}),
+                          });
+                          router.push(`/worker/worklog?${params.toString()}`);
+                        }}
+                        className="flex items-center gap-1 rounded-xl bg-slate-950 px-2.5 py-2 text-xs font-black text-white transition active:scale-95"
+                      >
+                        <ClipboardList className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
+                        일지 작성
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

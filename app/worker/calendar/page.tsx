@@ -439,9 +439,10 @@ export default function CalendarPage() {
                     </p>
                   )}
 
-                  {selectedDay.data.status === "ORANGE" && (
+                  <div className="flex gap-2">
+                    {/* 일지 작성 / 추가 작성 */}
                     <button
-                      className="w-full min-h-14 rounded-2xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97]"
+                      className="flex-1 min-h-12 rounded-2xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97]"
                       onClick={() => {
                         setSelectedDay(null);
                         const aid = selectedDay.data.attendanceId;
@@ -454,9 +455,22 @@ export default function CalendarPage() {
                         }
                       }}
                     >
-                      일지 작성하러 가기
+                      {selectedDay.data.status === "ORANGE" ? "일지 작성하기" : "일지 추가 작성"}
                     </button>
-                  )}
+                    {/* 이 날 일지 목록 보기 */}
+                    {selectedDay.data.logCount > 0 && (
+                      <button
+                        className="flex-1 min-h-12 rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-700 transition active:scale-[0.97]"
+                        onClick={() => {
+                          setSelectedDay(null);
+                          const key = dateKey(year, month, selectedDay.day);
+                          router.push(`/worker/logs?periodStart=${key}&periodEnd=${key}`);
+                        }}
+                      >
+                        일지 조회/수정
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
             </div>

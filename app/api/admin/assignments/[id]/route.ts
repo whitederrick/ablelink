@@ -10,11 +10,17 @@ import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
 const VALID_WORK_TYPES = ["AM", "PM", "FULL_DAY", "CUSTOM"] as const;
 type WorkType = typeof VALID_WORK_TYPES[number];
 
+// 기본 근무시간 (관리자 미설정 시)
+const DEFAULT_TIMES: Record<WorkType, { start: string; end: string }> = {
+  AM:       { start: "09:00", end: "13:00" },
+  PM:       { start: "13:00", end: "17:00" },
+  FULL_DAY: { start: "09:00", end: "18:00" },  // 점심 1H 공제 → 8H 인정
+  CUSTOM:   { start: "09:00", end: "18:00" },
+};
+
 function workTimes(wt: WorkType, customStart?: string | null, customEnd?: string | null) {
-  if (wt === "AM")        return { start: "09:00", end: "12:00" };
-  if (wt === "PM")        return { start: "13:00", end: "17:00" };
-  if (wt === "FULL_DAY")  return { start: "09:00", end: "18:00" };
-  return { start: customStart ?? "09:00", end: customEnd ?? "18:00" };
+  const def = DEFAULT_TIMES[wt];
+  return { start: customStart ?? def.start, end: customEnd ?? def.end };
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -37,12 +43,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       : (body.commuteGuidanceIncluded !== false);
 
     const HH_MM = /^\d{2}:\d{2}$/;
-    const customWorkStart = workType === "CUSTOM" ? (body.customWorkStart ?? null) : null;
-    const customWorkEnd   = workType === "CUSTOM" ? (body.customWorkEnd ?? null)   : null;
-    if (workType === "CUSTOM") {
-      if (!customWorkStart || !HH_MM.test(customWorkStart) || !customWorkEnd || !HH_MM.test(customWorkEnd)) {
-        return NextResponse.json({ success: false, message: "CUSTOM 근무시간은 HH:MM 형식으로 입력해주세요." }, { status: 400 });
-      }
+    // 모든 근무형태에서 관리자가 시간을 직접 설정 가능 (미입력 시 기본값 사용)
+    const rawStart = body.customWorkStart ?? null;
+    const rawEnd   = body.customWorkEnd   ?? null;
+    const customWorkStart = (rawStart && HH_MM.test(rawStart)) ? rawStart : null;
+    const customWorkEnd   = (rawEnd   && HH_MM.test(rawEnd))   ? rawEnd   : null;
+    if (workType === "CUSTOM" && (!customWorkStart || !customWorkEnd)) {
+      return NextResponse.json({ success: false, message: "직접입력 근무시간은 HH:MM 형식으로 입력해주세요." }, { status: 400 });
     }
 
     // AGENCY 스코프: 자기 에이전시 배정만 수정 가능

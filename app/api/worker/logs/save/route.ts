@@ -1,7 +1,4 @@
 // app/api/worker/logs/save/route.ts
-// 업무일지 저장 API
-// 🔐 보안: 세션 기반 writerId 주입, planGuard 미적용 (저장 자체는 FREE도 가능)
-
 export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
@@ -18,9 +15,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       traineeId, attendanceId, trainingType,
+      attendance,           // 출결 상태 (출석/결석/지각/조퇴)
       time1on1, timeGroup, extTime1on1, extTimeGroup,
-      totalRecognizedTime, content, taskScore,
-      completionRate, isCompleted,
+      totalRecognizedTime,
+      taskName,             // 수행과제명
+      taskScore,            // 수행정도 1-5
+      measurementTime,      // 측정시간 (e.g. "2.0")
+      specialNotes,         // 특이사항 (ADAPTATION 전용)
+      content,              // 지도사항 / 평가 및 지도사항
+      isCompleted,
     } = body;
 
     if (!traineeId || !attendanceId) {
@@ -29,7 +32,6 @@ export async function POST(request: NextRequest) {
 
     const writerId = BigInt(session.userId);
 
-    // 기존 로그가 있으면 업데이트, 없으면 생성 (upsert 패턴)
     const existing = await prisma.traineeLog.findFirst({
       where: {
         traineeId: BigInt(traineeId),
@@ -48,28 +50,27 @@ export async function POST(request: NextRequest) {
       extTimeGroup: Number(extTimeGroup ?? 0),
       totalRecognizedTime: Number(totalRecognizedTime ?? 0),
       content: content?.trim() || null,
-      evaluation: completionRate ? String(completionRate) : null,
+      evaluation: attendance || "출석",  // 출결 상태 저장 (기존 completionRate 버그 수정)
       isCompleted: isCompleted === true,
     };
 
     let log;
     if (existing) {
-      log = await prisma.traineeLog.update({
-        where: { id: existing.id },
-        data: logData,
-      });
+      log = await prisma.traineeLog.update({ where: { id: existing.id }, data: logData });
     } else {
       log = await prisma.traineeLog.create({ data: logData });
     }
 
-    // 과제 점수 저장 (기존 삭제 후 재생성)
-    if (taskScore) {
-      await prisma.traineeLogTask.deleteMany({ where: { logId: log.id } });
+    // 과제 정보 저장
+    await prisma.traineeLogTask.deleteMany({ where: { logId: log.id } });
+    if (taskScore || taskName) {
       await prisma.traineeLogTask.create({
         data: {
           logId: log.id,
-          taskName: "과제 수행 평가",
-          performanceScore: Number(taskScore),
+          taskName: taskName?.trim() || "수행과제",
+          performanceScore: Number(taskScore) || 3,
+          difficulty: measurementTime ? String(measurementTime).trim() : null,  // 측정시간
+          feedback: specialNotes?.trim() || null,                               // 특이사항
         },
       });
     }
@@ -77,9 +78,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, logId: log.id.toString() });
   } catch (error: any) {
     console.error("[worker/logs/save]", error);
-    return NextResponse.json(
-      { success: false, message: error.message || "서버 오류" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error.message || "서버 오류" }, { status: 500 });
   }
 }

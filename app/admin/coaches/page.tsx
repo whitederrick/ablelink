@@ -50,10 +50,18 @@ const PLAN_CLS: Record<string, { label: string; cls: string }> = {
   PREMIUM: { label: "프리미엄", cls: "bg-violet-50 text-violet-600" },
 };
 const WORK_TYPE_LABELS: Record<WorkType, string> = {
-  AM:       "오전 (09:00~12:00)",
+  AM:       "오전 (09:00~13:00)",
   PM:       "오후 (13:00~17:00)",
   FULL_DAY: "전일 (09:00~18:00)",
   CUSTOM:   "직접 입력",
+};
+
+// 근무형태별 기본 시작/종료 시간
+const WORK_TYPE_DEFAULTS: Record<WorkType, { start: string; end: string }> = {
+  AM:       { start: "09:00", end: "13:00" },
+  PM:       { start: "13:00", end: "17:00" },
+  FULL_DAY: { start: "09:00", end: "18:00" },
+  CUSTOM:   { start: "09:00", end: "18:00" },
 };
 
 // ── 초대 링크 발송 모달 ───────────────────────────────────
@@ -207,12 +215,37 @@ function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
 }) {
   const [workType, setWorkType] = useState<WorkType>(initial.workType ?? "FULL_DAY");
   const [commuteGuidanceIncluded, setCommuteGuidanceIncluded] = useState(initial.commuteGuidanceIncluded ?? true);
-  const [customStart, setCustomStart] = useState(initial.customWorkStart ?? "09:00");
-  const [customEnd, setCustomEnd] = useState(initial.customWorkEnd ?? "18:00");
+  // 관리자가 설정한 실제 시간 (미설정 시 기본값)
+  const [workStart, setWorkStart] = useState(
+    initial.customWorkStart ?? WORK_TYPE_DEFAULTS[initial.workType ?? "FULL_DAY"].start
+  );
+  const [workEnd, setWorkEnd] = useState(
+    initial.customWorkEnd ?? WORK_TYPE_DEFAULTS[initial.workType ?? "FULL_DAY"].end
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const isFullDay = workType === "FULL_DAY";
+
+  // 근무형태 변경 시 기본 시간으로 초기화 (이미 커스텀 값이 있으면 유지)
+  function changeWorkType(wt: WorkType) {
+    setWorkType(wt);
+    const def = WORK_TYPE_DEFAULTS[wt];
+    setWorkStart(def.start);
+    setWorkEnd(def.end);
+  }
+
+  // 총 시간 계산 (표시용)
+  function totalHours() {
+    const [sh, sm] = workStart.split(":").map(Number);
+    const [eh, em] = workEnd.split(":").map(Number);
+    const total = (eh * 60 + em) - (sh * 60 + sm);
+    if (total <= 0) return "0H";
+    const guidance = isFullDay ? total - 60 : total;  // 전일: 점심 1H 공제
+    return isFullDay
+      ? `총 ${(total / 60).toFixed(1)}H (점심 1H 공제 → 인정 ${(guidance / 60).toFixed(1)}H)`
+      : `${(total / 60).toFixed(1)}H`;
+  }
 
   async function handleSave() {
     setSaving(true); setError("");
@@ -223,8 +256,8 @@ function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
         body: JSON.stringify({
           workType,
           commuteGuidanceIncluded: isFullDay ? false : commuteGuidanceIncluded,
-          customWorkStart: workType === "CUSTOM" ? customStart : null,
-          customWorkEnd:   workType === "CUSTOM" ? customEnd   : null,
+          customWorkStart: workStart,
+          customWorkEnd:   workEnd,
         }),
       });
       const data = await res.json();
@@ -232,8 +265,8 @@ function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
       onSaved({
         ...initial, workType,
         commuteGuidanceIncluded: isFullDay ? false : commuteGuidanceIncluded,
-        customWorkStart: workType === "CUSTOM" ? customStart : null,
-        customWorkEnd:   workType === "CUSTOM" ? customEnd   : null,
+        customWorkStart: workStart,
+        customWorkEnd:   workEnd,
       });
       onClose();
     } catch (e: any) {
@@ -247,11 +280,12 @@ function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
         <h2 className="mb-1 text-base font-black text-slate-900">근무형태 설정</h2>
         <p className="mb-5 text-sm font-semibold text-slate-400">{coach.userName} · {coach.activeAssignment?.siteName}</p>
 
+        {/* 근무형태 선택 */}
         <div className="mb-4">
           <label className={T.label}>근무형태</label>
           <div className="grid grid-cols-2 gap-2">
             {(["AM", "PM", "FULL_DAY", "CUSTOM"] as WorkType[]).map(wt => (
-              <button key={wt} type="button" onClick={() => setWorkType(wt)}
+              <button key={wt} type="button" onClick={() => changeWorkType(wt)}
                 className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition active:scale-95 ${
                   workType === wt ? "border-slate-950 bg-slate-950 font-black text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                 }`}>
@@ -261,24 +295,32 @@ function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
           </div>
         </div>
 
-        {workType === "CUSTOM" && (
-          <div className="mb-4">
-            <label className={T.label}>근무 시간</label>
-            <div className="flex items-center gap-2">
-              <input type="time" value={customStart} onChange={e => setCustomStart(e.target.value)}
-                className={`flex-1 ${T.input}`} />
-              <span className="text-slate-400">~</span>
-              <input type="time" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
-                className={`flex-1 ${T.input}`} />
-            </div>
+        {/* 근무 시간 — 모든 유형에서 수정 가능 */}
+        <div className="mb-4">
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className={T.label} style={{ marginBottom: 0 }}>근무 시간</label>
+            <span className="text-xs font-semibold text-slate-400">{totalHours()}</span>
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            <input type="time" value={workStart} onChange={e => setWorkStart(e.target.value)}
+              className={`flex-1 ${T.input}`} />
+            <span className="text-slate-400 font-semibold">~</span>
+            <input type="time" value={workEnd} onChange={e => setWorkEnd(e.target.value)}
+              className={`flex-1 ${T.input}`} />
+          </div>
+          {isFullDay && (
+            <p className="mt-1.5 text-xs font-semibold text-slate-400">
+              전일 근무: 점심시간 1시간이 자동 공제되어 공단 인정시간에서 제외됩니다.
+            </p>
+          )}
+        </div>
 
+        {/* 출퇴근 지도 */}
         <div className="mb-5">
           <label className={T.label}>출퇴근 지도 포함</label>
           {isFullDay ? (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-600">
-              전일 8시간 근무는 법적 한도로 출퇴근 지도를 포함할 수 없습니다.
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-500">
+              전일 근무는 출퇴근 지도를 포함할 수 없습니다.
             </div>
           ) : (
             <>
@@ -288,14 +330,12 @@ function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
                   className="h-4 w-4 accent-slate-950" />
                 <div>
                   <span className="text-sm font-black text-slate-900">출퇴근 지도 포함 (+60분)</span>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-400">출근 30분 + 퇴근 30분 · 기본값: 포함</p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-400">출근 30분 + 퇴근 30분</p>
                 </div>
               </label>
-              {(workType === "AM" || workType === "PM") && (
-                <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50 p-2.5 text-xs font-semibold text-sky-700">
-                  휴게시간 지도(30분)는 4시간 근무 시 항상 포함됩니다.
-                </div>
-              )}
+              <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50 p-2.5 text-xs font-semibold text-sky-700">
+                휴게시간 지도(30분)는 항상 포함됩니다.
+              </div>
             </>
           )}
         </div>

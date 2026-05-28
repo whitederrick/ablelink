@@ -368,14 +368,17 @@ function DocsContent() {
                       {(id === "TRAINEE_FINAL_EVAL" || id === "ADAPTATION_FINAL_EVAL") && state.traineeId && (
                         <button
                           onClick={() => {
-                            const evalType = id === "TRAINEE_FINAL_EVAL" ? "TRAINING" : "ADAPTATION";
+                            const isTraining = id === "TRAINEE_FINAL_EVAL";
                             const t = siteInfo?.trainees?.find(t => t.id === state.traineeId);
-                            router.push(`/worker/evaluation?traineeId=${state.traineeId}&traineeName=${encodeURIComponent(t?.name||"")}&evalType=${evalType}&periodStart=${periodStart}&periodEnd=${periodEnd}`);
+                            const path = isTraining
+                              ? `/worker/evaluation/training?traineeId=${state.traineeId}&traineeName=${encodeURIComponent(t?.name||"")}&periodStart=${periodStart}&periodEnd=${periodEnd}`
+                              : `/worker/evaluation/adaptation?traineeId=${state.traineeId}&traineeName=${encodeURIComponent(t?.name||"")}&periodStart=${periodStart}&periodEnd=${periodEnd}`;
+                            router.push(path);
                           }}
                           className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-xs font-black text-emerald-700 transition active:scale-[0.97]"
                         >
                           <PenLine className="h-3.5 w-3.5" aria-hidden="true" />
-                          평가 점수 입력하기
+                          {id === "TRAINEE_FINAL_EVAL" ? "훈련생 종합평가 입력" : "적응지도 종합평가 입력"}
                         </button>
                       )}
 
