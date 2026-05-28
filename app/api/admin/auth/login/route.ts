@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
     // ✅ 응답에 세션 쿠키를 부착 (NextResponse.cookies 사용)
     // - AGENCY role인 경우, agencyName으로 Agency.id를 조회해 agencyId를 토큰에 같이 실어줍니다.
-    const res = NextResponse.json({ success: true });
+    const res = NextResponse.json({ success: true, role: admin.role });
 
     let agencyId: string | null = null;
     if (admin.agencyId) {

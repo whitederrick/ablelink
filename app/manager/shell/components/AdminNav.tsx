@@ -10,24 +10,36 @@ const groups: NavGroup[] = [
   {
     title: "개요",
     items: [
-      { href: "/admin", label: "시스템 대시보드" },
+      { href: "/manager", label: "대시보드" },
     ],
   },
   {
-    title: "에이전시 관리",
+    title: "현장/인원",
     items: [
-      { href: "/admin/agencies",     label: "에이전시 목록" },
-      { href: "/admin/subscription", label: "구독 관리" },
-      { href: "/admin/admins",       label: "운영자 계정" },
+      { href: "/manager/sites",    label: "현장(Site) 관리" },
+      { href: "/manager/coaches",  label: "직무지도원 관리" },
+      { href: "/manager/trainees", label: "훈련생 현황" },
+      { href: "/manager/managers", label: "담당자 관리" },
     ],
   },
   {
-    title: "전체 현황",
+    title: "근태/문서",
     items: [
-      { href: "/admin/sites",       label: "전체 현장" },
-      { href: "/admin/coaches",     label: "전체 직무지도원" },
-      { href: "/admin/attendances", label: "전체 근태" },
-      { href: "/admin/reports",     label: "전체 리포트" },
+      { href: "/manager/attendances",              label: "근태 현황" },
+      { href: "/manager/inbox/attendance",         label: "GPS 승인 대기" },
+      { href: "/manager/attendance-edit-requests", label: "출근부 수정 요청" },
+      { href: "/manager/contracts",                label: "근로계약서" },
+      { href: "/manager/documents",                label: "문서 운영" },
+      { href: "/manager/docs",                     label: "문서 조회" },
+      { href: "/manager/review",                   label: "확정 현황" },
+      { href: "/manager/reports",                  label: "진척도 리포트" },
+    ],
+  },
+  {
+    title: "정산",
+    items: [
+      { href: "/manager/payroll",   label: "급여 관리" },
+      { href: "/manager/signature", label: "내 서명" },
     ],
   },
 ];
@@ -35,14 +47,14 @@ const groups: NavGroup[] = [
 export default function AdminNav() {
   const pathname = usePathname();
   const isActive = (href: string) =>
-    href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+    href === "/manager" ? pathname === "/manager" : pathname.startsWith(href);
 
   return (
     <aside className="flex w-[220px] flex-shrink-0 flex-col bg-slate-950 px-3 pb-8 pt-7">
-      <Link href="/admin" className="mb-6 block px-3 no-underline">
+      <Link href="/manager" className="mb-6 block px-3 no-underline">
         <span className="text-[22px] font-black tracking-tight text-white">AbleLink</span>
-        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-emerald-500">
-          System Admin
+        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+          Agency Manager
         </p>
       </Link>
 
@@ -62,7 +74,7 @@ export default function AdminNav() {
                     className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm no-underline transition ${
                       active ? "bg-white/10 font-black text-white" : "font-semibold text-slate-400 hover:bg-white/5 hover:text-slate-200"
                     }`}>
-                    <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${active ? "bg-emerald-400" : "bg-slate-700"}`} />
+                    <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${active ? "bg-sky-400" : "bg-slate-700"}`} />
                     {item.label}
                   </Link>
                 );

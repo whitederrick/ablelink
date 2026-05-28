@@ -22,7 +22,7 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<MeResponse | null>(null);
 
-  const isLoginPage = pathname === "/admin/login" || pathname === "/manager/login";
+  const isLoginPage = pathname === "/manager/login";
 
   useEffect(() => {
     if (isLoginPage) { setLoading(false); return; }
@@ -33,10 +33,10 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
         const res = await fetch("/api/admin/auth/me", { method: "GET", cache: "no-store" });
         const data = (await res.json()) as MeResponse;
         if (cancelled) return;
-        if (!data || (data as any).success !== true) { router.replace("/admin/login"); return; }
+        if (!data || (data as any).success !== true) { router.replace("/manager/login"); return; }
         setSession(data);
       } catch {
-        router.replace("/admin/login");
+        router.replace("/manager/login");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -64,7 +64,7 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
       <div className="flex min-w-0 flex-1 flex-col">
         <AdminTopbar
           session={(session as any)?.session}
-          onLoggedOut={() => router.replace("/admin/login")}
+          onLoggedOut={() => router.replace("/manager/login")}
         />
         <main className="flex-1 overflow-y-auto p-7">
           {children}
