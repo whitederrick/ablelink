@@ -9,6 +9,27 @@ import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { getWorkerSessionFromReq, WORKER_COOKIE } from "@/app/worker/_lib/session";
 
+const SUPABASE_URL        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const BUCKET = "signatures";
+
+function extractStoragePath(url: string): string | null {
+  const marker = `/object/public/${BUCKET}/`;
+  const idx = url.indexOf(marker);
+  return idx === -1 ? null : url.slice(idx + marker.length);
+}
+
+async function deleteStorageFile(path: string): Promise<void> {
+  try {
+    await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+    });
+  } catch {
+    // 스토리지 삭제 실패는 non-fatal — 익명화는 계속 진행
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getWorkerSessionFromReq(request);
@@ -20,12 +41,18 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: BigInt(session.userId) },
-      select: { id: true, password: true, status: true },
+      select: { id: true, password: true, status: true, signatureUrl: true },
     });
     if (!user) return NextResponse.json({ success: false, message: "사용자를 찾을 수 없습니다." }, { status: 404 });
 
     const valid = await verifyPassword(password, user.password);
     if (!valid) return NextResponse.json({ success: false, message: "비밀번호가 올바르지 않습니다." }, { status: 400 });
+
+    // Supabase Storage 서명 이미지 실제 삭제 (개인정보보호)
+    if (user.signatureUrl) {
+      const path = extractStoragePath(user.signatureUrl);
+      if (path) await deleteStorageFile(path);
+    }
 
     const anonymousId = `deleted_${user.id}_${Date.now()}`;
 

@@ -109,6 +109,7 @@ export async function GET(req: Request) {
 
     const rows = await prisma.dailyAttendance.findMany({
       where,
+      take: 300,
       orderBy: [{ workDate: "desc" }, { id: "desc" }],
       select: {
         id: true,

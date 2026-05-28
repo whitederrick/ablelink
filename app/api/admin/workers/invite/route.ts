@@ -22,7 +22,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const phoneNumber = String(body?.phoneNumber ?? "").replace(/-/g, "").trim();
     const workerName  = String(body?.workerName  ?? "").trim() || null;
-    const siteId      = body?.siteId ? BigInt(body.siteId) : null;
+    const siteIdRaw   = body?.siteId != null ? String(body.siteId).trim() : "";
+    const siteId      = siteIdRaw && /^\d+$/.test(siteIdRaw) ? BigInt(siteIdRaw) : null;
 
     if (!PHONE_RE.test(phoneNumber)) {
       return NextResponse.json({ success: false, message: "올바른 휴대전화번호를 입력해주세요." }, { status: 400 });

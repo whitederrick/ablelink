@@ -44,50 +44,57 @@ export async function GET(req: NextRequest) {
       return true;
     });
 
-    // 각 유저별 통계를 병렬 조회
-    const rows = await Promise.all(
-      users.map(async ({ user, site }) => {
-        const uid = user.id;
+    if (users.length === 0) return NextResponse.json({ success: true, yearMonth, rows: [] });
 
-        const [attTotal, attConfirmed, logTotal, logConfirmed, evalTotal, evalConfirmed] =
-          await Promise.all([
-            // 출근부 전체 (해당 월 출근 기록)
-            prisma.dailyAttendance.count({
-              where: { userId: uid, workDate: { gte: dateFrom, lte: dateTo }, startTime: { not: null } },
-            }),
-            // 출근부 확정
-            prisma.dailyAttendance.count({
-              where: { userId: uid, workDate: { gte: dateFrom, lte: dateTo }, isFinalClosed: true },
-            }),
-            // 일지 전체
-            prisma.traineeLog.count({
-              where: { writerId: uid, attendance: { workDate: { gte: dateFrom, lte: dateTo } } },
-            }),
-            // 일지 확정
-            prisma.traineeLog.count({
-              where: { writerId: uid, isCompleted: true, attendance: { workDate: { gte: dateFrom, lte: dateTo } } },
-            }),
-            // 평가 전체
-            prisma.traineeEvaluation.count({
-              where: { writerId: uid, periodStart: { gte: dateFrom }, periodEnd: { lte: dateTo } },
-            }),
-            // 평가 확정
-            prisma.traineeEvaluation.count({
-              where: { writerId: uid, isConfirmed: true, periodStart: { gte: dateFrom }, periodEnd: { lte: dateTo } },
-            }),
-          ]);
+    const uids = users.map(u => u.user.id);
 
-        return {
-          userId:       uid.toString(),
-          userName:     user.userName,
-          phoneNumber:  user.phoneNumber,
-          siteName:     site?.companyName ?? "-",
-          attendance:   { total: attTotal,  confirmed: attConfirmed },
-          logs:         { total: logTotal,  confirmed: logConfirmed },
-          evaluations:  { total: evalTotal, confirmed: evalConfirmed },
-        };
-      })
-    );
+    // N×6 쿼리 → 3쿼리 병렬 조회 후 메모리 집계
+    const [attRows, logRows, evalRows] = await Promise.all([
+      prisma.dailyAttendance.findMany({
+        where: { userId: { in: uids }, workDate: { gte: dateFrom, lte: dateTo }, startTime: { not: null } },
+        select: { userId: true, isFinalClosed: true },
+      }),
+      prisma.traineeLog.findMany({
+        where: { writerId: { in: uids }, attendance: { workDate: { gte: dateFrom, lte: dateTo } } },
+        select: { writerId: true, isCompleted: true },
+      }),
+      prisma.traineeEvaluation.findMany({
+        where: { writerId: { in: uids }, periodStart: { gte: dateFrom }, periodEnd: { lte: dateTo } },
+        select: { writerId: true, isConfirmed: true },
+      }),
+    ]);
+
+    // 메모리에서 userId별 카운트 집계
+    type Counts = { total: number; confirmed: number };
+    function makeCounts(ids: bigint[]): Map<string, Counts> {
+      return new Map(ids.map(id => [id.toString(), { total: 0, confirmed: 0 }]));
+    }
+    const attMap  = makeCounts(uids);
+    const logMap  = makeCounts(uids);
+    const evalMap = makeCounts(uids);
+
+    for (const r of attRows) {
+      const c = attMap.get(r.userId.toString());
+      if (c) { c.total++; if (r.isFinalClosed) c.confirmed++; }
+    }
+    for (const r of logRows) {
+      const c = logMap.get(r.writerId.toString());
+      if (c) { c.total++; if (r.isCompleted) c.confirmed++; }
+    }
+    for (const r of evalRows) {
+      const c = evalMap.get(r.writerId.toString());
+      if (c) { c.total++; if (r.isConfirmed) c.confirmed++; }
+    }
+
+    const rows = users.map(({ user, site }) => ({
+      userId:      user.id.toString(),
+      userName:    user.userName,
+      phoneNumber: user.phoneNumber,
+      siteName:    site?.companyName ?? "-",
+      attendance:  attMap.get(user.id.toString())  ?? { total: 0, confirmed: 0 },
+      logs:        logMap.get(user.id.toString())   ?? { total: 0, confirmed: 0 },
+      evaluations: evalMap.get(user.id.toString())  ?? { total: 0, confirmed: 0 },
+    }));
 
     return NextResponse.json({ success: true, yearMonth, rows });
   } catch (e: any) {

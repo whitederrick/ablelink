@@ -40,9 +40,10 @@ export async function GET(req: Request) {
           attendanceIssue: { select: { id: true, status: true, issueTypes: true } },
         },
       }),
-      // 2. 미확인 근태
+      // 2. 미확인 근태 (최근 50건)
       prisma.attendanceIssue.findMany({
         where: { status: "OPEN", dailyAttendance: { assignment: { ...agencyFilter } } },
+        take: 50,
         select: {
           id: true, issueTypes: true, createdAt: true,
           dailyAttendance: {
@@ -55,9 +56,10 @@ export async function GET(req: Request) {
         },
         orderBy: { createdAt: "desc" },
       }),
-      // 3. 보고서 현황
+      // 3. 보고서 현황 (최근 50건)
       prisma.documentRun.findMany({
         where: { status: "OPEN", ...(scope.role === "AGENCY" && scope.agencyId ? { agencyId: scope.agencyId } : {}) },
+        take: 50,
         select: {
           id: true, docType: true, dueAt: true, currentVersionId: true,
           coach: { select: { userName: true } },
