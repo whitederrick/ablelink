@@ -3,14 +3,17 @@
 
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAdminSession } from "@/lib/adminScope";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // 활성 배정된 Site별 훈련생 현황
+    const scope = await requireAdminSession(request);
+
+    // 활성 배정된 Site별 훈련생 현황 (AGENCY 관리자는 자기 에이전시만)
     const assignments = await prisma.siteAssignment.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
       include: {
         site: {
           include: {
