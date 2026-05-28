@@ -9,13 +9,13 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdminSession(request);
+    const scope = await requireAdminSession(request);
     const { searchParams } = new URL(request.url);
     const coachUserId = searchParams.get("coachUserId") ?? "";
     if (!coachUserId) return NextResponse.json({ success:false }, { status:400 });
 
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId: BigInt(coachUserId), status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] } },
+      where: { userId: BigInt(coachUserId), status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] }, ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
       include: {
         site: {
           include: {
