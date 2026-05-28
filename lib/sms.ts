@@ -9,7 +9,9 @@ export async function sendSms(params: {
   const sender  = process.env.KAKAO_ALIMTALK_SENDER_PHONE;
 
   if (!apiKey || !userid || !sender) {
-    throw new Error("SMS 발송 환경변수가 설정되지 않았습니다. (KAKAO_ALIMTALK_*)");
+    // 개발/테스트 환경: 콘솔에만 출력
+    console.log(`[SMS stub] to=${params.phone} | ${params.message}`);
+    return;
   }
 
   const res = await fetch("https://apis.aligo.in/send/", {

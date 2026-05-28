@@ -44,6 +44,11 @@ model User {
   verifyCode          String?   @map("verify_code")
   verifyCodeExpiresAt DateTime? @map("verify_code_expires_at")
 
+  // 약관 동의 이력
+  consentTermsAt    DateTime? @map("consent_terms_at")
+  consentPrivacyAt  DateTime? @map("consent_privacy_at")
+  consentLocationAt DateTime? @map("consent_location_at")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   attendances DailyAttendance[]
@@ -137,6 +142,7 @@ model Site {
   agency        Agency?        @relation(fields: [agencyId], references: [id])
   agencyManager AgencyManager? @relation(fields: [managerId], references: [id])
   DocumentRun   DocumentRun[]
+  workerInvites WorkerInvite[]
 
   @@index([agencyId, isActive])
   @@index([siteSourceType, isVerified])
@@ -392,6 +398,7 @@ model Agency {
   adminUsers          AdminUser[]
   employmentContracts EmploymentContract[]
   agencyDeductions    AgencyDeduction[]
+  workerInvites       WorkerInvite[]
 
   @@index([planType])
   @@map("agencies")
@@ -436,6 +443,7 @@ model AdminUser {
   DocumentVersion         DocumentVersion[]
   DocumentSubmissionLog   DocumentSubmissionLog[]
   attendanceIssueEvents   AttendanceIssueEvent[]  @relation("AttendanceIssueEventAdminActor")
+  workerInvites           WorkerInvite[]
 
   @@index([role])
   @@index([agencyId])
@@ -1117,4 +1125,46 @@ model TraineeEvaluation {
 
   @@index([traineeId, evalType])
   @@map("trainee_evaluations")
+}
+
+// ------------------------------------------------------
+// 11. 전화번호 OTP 인증 (Phone Verification)
+// ------------------------------------------------------
+
+model PhoneVerification {
+  id          BigInt   @id @default(autoincrement())
+  phoneNumber String   @map("phone_number")
+  code        String   @map("code")
+  expiresAt   DateTime @map("expires_at")
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([phoneNumber])
+  @@map("phone_verifications")
+}
+
+// ------------------------------------------------------
+// 12. 직무지도원 초대 링크 (Worker Invite)
+// ------------------------------------------------------
+
+model WorkerInvite {
+  id               BigInt    @id @default(autoincrement())
+  agencyId         BigInt    @map("agency_id")
+  siteId           BigInt?   @map("site_id")
+  phoneNumber      String    @map("phone_number")
+  workerName       String?   @map("worker_name")
+  code             String    @map("code")
+  expiresAt        DateTime  @map("expires_at")
+  usedAt           DateTime? @map("used_at")
+  usedByUserId     BigInt?   @map("used_by_user_id")
+  createdByAdminId BigInt    @map("created_by_admin_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  agency  Agency    @relation(fields: [agencyId], references: [id])
+  site    Site?     @relation(fields: [siteId], references: [id])
+  creator AdminUser @relation(fields: [createdByAdminId], references: [id])
+
+  @@index([code])
+  @@index([agencyId])
+  @@map("worker_invites")
 }
