@@ -73,14 +73,15 @@ export async function PATCH(
     if (!log) return NextResponse.json({ success: false, message: "일지를 찾을 수 없습니다." }, { status: 404 });
     if (log.writerId.toString() !== session.userId)
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
-    if (log.isCompleted)
-      return NextResponse.json({ success: false, message: "확정된 일지는 수정할 수 없습니다." }, { status: 409 });
-
     const body = await request.json().catch(() => ({}));
     if (typeof body.content !== "string")
       return NextResponse.json({ success: false, message: "content 필드가 필요합니다." }, { status: 400 });
 
-    await prisma.traineeLog.update({ where: { id: BigInt(id) }, data: { content: body.content } });
+    // 확정된 일지 수정 시 자동 확정 취소 후 저장
+    await prisma.traineeLog.update({
+      where: { id: BigInt(id) },
+      data: { content: body.content, isCompleted: false },
+    });
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

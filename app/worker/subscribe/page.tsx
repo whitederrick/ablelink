@@ -9,7 +9,7 @@ const PLANS = [
   {
     id: "STARTER",
     name: "스타터",
-    price: 30000,
+    price: 50000,
     maxCoaches: 5,
     maxSites: 5,
     features: [
@@ -25,7 +25,7 @@ const PLANS = [
   {
     id: "STANDARD",
     name: "스탠다드",
-    price: 80000,
+    price: 90000,
     maxCoaches: 20,
     maxSites: 20,
     features: [

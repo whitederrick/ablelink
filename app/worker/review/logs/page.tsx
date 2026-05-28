@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ChevronLeft, CheckCircle2, ChevronLeft as ChevronLeftSm, ChevronRight, PenLine,
+  ChevronLeft, CheckCircle2, ChevronLeft as ChevronLeftSm, ChevronRight,
+  ChevronDown, ChevronUp, PenLine, RotateCcw,
 } from "lucide-react";
 
 type LogItem = {
@@ -31,6 +32,11 @@ function nowYM() {
   const d = new Date();
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 }
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr + "T00:00:00");
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${d.getMonth() + 1}/${d.getDate()} (${weekdays[d.getDay()]})`;
+}
 
 export default function LogReviewPage() {
   const router = useRouter();
@@ -53,7 +59,17 @@ export default function LogReviewPage() {
     const dateTo   = `${yearMonth}-${new Date(y, m, 0).getDate().toString().padStart(2, "0")}`;
     fetch(`/api/worker/logs/list?periodStart=${dateFrom}&periodEnd=${dateTo}`)
       .then(r => r.json())
-      .then(d => { if (d.success) setLogs(d.logs); })
+      .then(d => {
+        if (d.success) {
+          // 날짜 내림차순 → 같은 날짜 내 훈련생 이름 오름차순
+          const sorted = [...d.logs].sort((a: LogItem, b: LogItem) => {
+            const dateDiff = b.workDate.localeCompare(a.workDate);
+            if (dateDiff !== 0) return dateDiff;
+            return a.traineeName.localeCompare(b.traineeName, "ko");
+          });
+          setLogs(sorted);
+        }
+      })
       .finally(() => setLoading(false));
   }, [yearMonth]);
 
@@ -83,6 +99,21 @@ export default function LogReviewPage() {
     else showToast(data.message || "확정 실패");
   }
 
+  async function unconfirmOne(id: string) {
+    setSaving(true);
+    const res = await fetch(`/api/worker/logs/${id}/confirm`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unconfirm: true }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (data.success) {
+      showToast("확정이 취소되었습니다. 수정 후 다시 확정해주세요.");
+      load();
+    } else showToast(data.message || "확정 취소 실패");
+  }
+
   async function saveAndConfirm(id: string) {
     setSaving(true);
     await saveContent(id, editContent);
@@ -99,7 +130,7 @@ export default function LogReviewPage() {
   async function confirmMonth() {
     const unconfirmed = logs.filter(l => !l.isCompleted);
     if (unconfirmed.length === 0) { showToast("확정할 일지가 없습니다."); return; }
-    if (!confirm(`미확정 ${unconfirmed.length}건을 일괄 확정하시겠습니까?\n확정 후에는 수정할 수 없습니다.`)) return;
+    if (!confirm(`미확정 ${unconfirmed.length}건을 일괄 확정하시겠습니까?\n확정 후에도 개별 수정이 가능합니다.`)) return;
     setBatchSaving(true);
     const res  = await fetch("/api/worker/logs/confirm-month", {
       method: "POST",
@@ -181,21 +212,36 @@ export default function LogReviewPage() {
                   {/* 헤더 행 */}
                   <div className="flex items-center gap-3 px-4 py-3">
                     <div className="flex-1 min-w-0">
+                      {/* 날짜 + 훈련생 이름 (둘 다 강조) */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-black text-slate-900">{log.traineeName}</span>
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                        <span className="text-base font-black text-slate-900">
+                          {formatDate(log.workDate)}
+                        </span>
+                        <span className="text-sm font-black text-slate-700">{log.traineeName}</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
                           {TRAINING_LABELS[log.trainingType] ?? log.trainingType}
                         </span>
                       </div>
                       <p className="mt-0.5 text-xs font-semibold text-slate-400">
-                        {log.workDate} · {log.totalTime}h · {log.attendance}
+                        {log.totalTime}h · {log.attendance}
+                        {log.taskName ? ` · ${log.taskName}` : ""}
                       </p>
                     </div>
                     <div className="flex flex-shrink-0 items-center gap-1.5">
                       {log.isCompleted ? (
-                        <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-600">
-                          <CheckCircle2 className="h-3 w-3" />확정
-                        </span>
+                        <>
+                          <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-600">
+                            <CheckCircle2 className="h-3 w-3" />확정
+                          </span>
+                          <button
+                            onClick={() => unconfirmOne(log.id)}
+                            disabled={saving}
+                            title="확정 취소 후 수정"
+                            className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-semibold text-slate-500 active:scale-95 disabled:opacity-60"
+                          >
+                            <RotateCcw className="h-3 w-3" />재수정
+                          </button>
+                        </>
                       ) : (
                         <>
                           <button onClick={() => { setEditId(log.id); setEditContent(log.content); setExpandId(log.id); }}
@@ -208,9 +254,15 @@ export default function LogReviewPage() {
                           </button>
                         </>
                       )}
-                      <button onClick={() => setExpandId(expanded ? null : log.id)}
-                        className="ml-1 text-xs font-semibold text-slate-400 active:scale-95">
-                        {expanded ? "닫기" : "내용"}
+                      {/* 내용 펼치기 버튼 */}
+                      <button
+                        onClick={() => setExpandId(expanded ? null : log.id)}
+                        className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] font-semibold text-slate-500 active:scale-95"
+                      >
+                        내용
+                        {expanded
+                          ? <ChevronUp className="h-3 w-3" />
+                          : <ChevronDown className="h-3 w-3" />}
                       </button>
                     </div>
                   </div>
@@ -236,7 +288,7 @@ export default function LogReviewPage() {
                               await saveContent(log.id, editContent);
                               setSaving(false);
                               setEditId(null);
-                              showToast("저장되었습니다.");
+                              showToast("저장되었습니다. (미확정 상태로 변경됨)");
                               load();
                             }} disabled={saving}
                               className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-black text-white active:scale-95 disabled:opacity-60">
@@ -258,6 +310,18 @@ export default function LogReviewPage() {
                           <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
                             {log.content || <span className="text-slate-400">내용 없음</span>}
                           </p>
+                          {!log.isCompleted && (
+                            <div className="mt-3 flex justify-end gap-2">
+                              <button onClick={() => { setEditId(log.id); setEditContent(log.content); }}
+                                className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 active:scale-95">
+                                <PenLine className="h-3 w-3" />수정
+                              </button>
+                              <button onClick={() => confirmOne(log.id)} disabled={saving}
+                                className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-black text-white active:scale-95 disabled:opacity-60">
+                                확정
+                              </button>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
@@ -271,8 +335,8 @@ export default function LogReviewPage() {
         <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
           <p className="text-xs font-semibold leading-relaxed text-slate-500">
             · 확정 전 일지 내용을 수정할 수 있습니다.<br />
-            · 확정된 일지는 PDF 생성 시 사용됩니다.<br />
-            · 확정 후에는 수정이 불가합니다.
+            · 확정된 일지도 &apos;재수정&apos; 버튼으로 수정 가능합니다.<br />
+            · 확정된 일지는 PDF 생성 시 사용됩니다.
           </p>
         </div>
       </div>

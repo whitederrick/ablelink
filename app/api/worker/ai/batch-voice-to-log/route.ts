@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
     const audioBlob = formData.get("audio") as Blob | null;
     const dateFrom  = (formData.get("dateFrom")  as string || "").trim();
     const dateTo    = (formData.get("dateTo")    as string || "").trim();
+    const workingDatesJson = (formData.get("workingDates") as string || "");
     const traineesJson = (formData.get("trainees") as string || "[]");
     const sentenceCount = Math.min(4, Math.max(2, Number(formData.get("sentenceCount") ?? 2)));
 
@@ -74,7 +75,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "훈련생을 1명 이상 선택해주세요." }, { status: 400 });
     }
 
-    const dates = datesBetween(dateFrom, dateTo);
+    // 클라이언트가 주말 제외 날짜 목록을 보내면 그대로 사용, 아니면 서버에서 주말 제외 계산
+    let dates: string[];
+    if (workingDatesJson) {
+      try { dates = JSON.parse(workingDatesJson); } catch { dates = []; }
+    } else {
+      // 서버 측 주말 필터링 (fallback)
+      dates = datesBetween(dateFrom, dateTo).filter(d => {
+        const dow = new Date(d + "T00:00:00").getDay();
+        return dow !== 0 && dow !== 6;
+      });
+    }
     if (dates.length === 0 || dates.length > 31) {
       return NextResponse.json({ success: false, message: "날짜 범위는 1~31일이어야 합니다." }, { status: 400 });
     }

@@ -305,11 +305,21 @@ function WorklogForm() {
         if (!attendanceId && d.data.attendanceId) setResolvedAttendanceId(d.data.attendanceId);
         const t = adminTimes(d.data.workType, d.data.customWorkStart, d.data.customWorkEnd);
         setGuideTimes(t);
-        setExtraStart(t.workEnd);  // 연장지도는 정규 근무 종료 후부터
+        setExtraStart(t.workEnd);
         setExtraEnd(t.workEnd === "18:00" ? "19:00" : t.workEnd === "13:00" ? "14:00" : t.workEnd === "17:00" ? "18:00" : "19:00");
         const g = adminGuidance(d.data.workType, d.data.commuteGuidanceIncluded ?? false);
         setIsCommuteGuide(g.commute);
         setIsBreakGuide(g.breakTime);
+        // 측정 시간 자동 입력 (수정 모드가 아닐 때만)
+        if (!logId && !measurementTime) {
+          const wt = d.data.workType;
+          if (wt === "FULL_DAY") setMeasurementTime("8");
+          else if (wt === "AM" || wt === "PM") setMeasurementTime("4");
+          else if (wt === "CUSTOM" && d.data.customWorkStart && d.data.customWorkEnd) {
+            const hrs = diffHours(d.data.customWorkStart, d.data.customWorkEnd);
+            if (hrs > 0) setMeasurementTime(String(hrs));
+          }
+        }
       }
     }).catch(() => {});
   }, []);

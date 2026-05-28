@@ -53,6 +53,8 @@ export default function BatchWorklogPage() {
   const [expanded, setExpanded]   = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone]           = useState(false);
+  const [aiMsgIdx, setAiMsgIdx]   = useState(0);
+  const aiMsgTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 공통 시간 (간소화 — 기본값)
   const [time1on1, setTime1on1]   = useState(3);
@@ -146,12 +148,23 @@ export default function BatchWorklogPage() {
 
   async function sendAudio(blob: Blob, mimeType: string) {
     setAiLoading(true);
+    setAiMsgIdx(0);
+    aiMsgTimer.current = setInterval(() => {
+      setAiMsgIdx(prev => (prev + 1) % AI_LOADING_MESSAGES.length);
+    }, 3000);
     try {
+      const workingDays = getWorkingDays(dateFrom, dateTo);
+      if (workingDays.length === 0) {
+        alert("선택한 기간에 근무일(월~금)이 없습니다.");
+        return;
+      }
       const formData = new FormData();
       const ext = mimeType.includes("mp4") ? "mp4" : "webm";
       formData.append("audio", blob, `recording.${ext}`);
-      formData.append("dateFrom", dateFrom);
-      formData.append("dateTo",   dateTo);
+      // 주말 제외한 근무일 목록 전달
+      formData.append("workingDates", JSON.stringify(workingDays));
+      formData.append("dateFrom", workingDays[0]);
+      formData.append("dateTo",   workingDays[workingDays.length - 1]);
       formData.append("sentenceCount", String(sentenceCount));
       formData.append("trainees", JSON.stringify(
         trainees.filter(t => selectedTrainees.has(t.id)).map(t => ({ id: t.id, name: t.name }))
@@ -165,6 +178,7 @@ export default function BatchWorklogPage() {
       alert("AI 변환 중 오류가 발생했습니다.");
     } finally {
       setAiLoading(false);
+      if (aiMsgTimer.current) { clearInterval(aiMsgTimer.current); aiMsgTimer.current = null; }
     }
   }
 
@@ -199,13 +213,41 @@ export default function BatchWorklogPage() {
     }
   }
 
-  // ── 날짜 범위 내 날짜 수 ─────────────────────────────────────
+  // ── 날짜 범위 내 근무일(월~금) 날짜 목록 ────────────────────
+  function getWorkingDays(from: string, to: string): string[] {
+    const result: string[] = [];
+    const cur = new Date(from + "T00:00:00");
+    const end = new Date(to   + "T00:00:00");
+    while (cur <= end) {
+      const dow = cur.getDay(); // 0=일, 6=토
+      if (dow !== 0 && dow !== 6) {
+        result.push(cur.toISOString().slice(0, 10));
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    return result;
+  }
+
   function dayCount() {
     const from = new Date(dateFrom + "T00:00:00");
     const to   = new Date(dateTo   + "T00:00:00");
     const diff = Math.round((to.getTime() - from.getTime()) / 86400000) + 1;
     return Math.max(0, Math.min(31, diff));
   }
+
+  function workingDayCount() {
+    return getWorkingDays(dateFrom, dateTo).length;
+  }
+
+  const AI_LOADING_MESSAGES = [
+    "AI가 열심히 일지를 작성 중입니다...",
+    "훈련생별로 내용을 분석하고 있어요. 잠시만 기다려주세요 😊",
+    "일지가 많을수록 시간이 조금 걸립니다. 거의 다 됐어요!",
+    "음성 내용을 꼼꼼하게 읽고 있습니다...",
+    "조금만 더 기다려주세요. 곧 완성됩니다!",
+    "AI가 최선을 다해 작성 중입니다 💪",
+    "잠시만요, 마무리 단계입니다...",
+  ];
 
   // ── 완료 화면 ────────────────────────────────────────────────
   if (done) {
@@ -304,7 +346,15 @@ export default function BatchWorklogPage() {
                 </div>
               </div>
               {dayCount() > 0 && (
-                <p className="text-xs font-semibold text-slate-400">총 {dayCount()}일 선택됨</p>
+                <div className="rounded-xl bg-slate-50 px-3 py-2">
+                  <p className="text-xs font-semibold text-slate-700">
+                    근무일 <span className="text-slate-950 font-black">{workingDayCount()}일</span>
+                    {dayCount() - workingDayCount() > 0 && (
+                      <span className="text-slate-400 ml-1">(주말 {dayCount() - workingDayCount()}일 제외)</span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-slate-400">토요일·일요일은 자동으로 제외됩니다</p>
+                </div>
               )}
             </div>
 
@@ -390,13 +440,13 @@ export default function BatchWorklogPage() {
 
             <button
               onClick={() => {
-                if (dayCount() === 0) { alert("날짜 범위를 확인해주세요."); return; }
+                if (workingDayCount() === 0) { alert("선택한 기간에 근무일(월~금)이 없습니다.\n날짜 범위를 다시 선택해주세요."); return; }
                 if (selectedTrainees.size === 0) { alert("훈련생을 1명 이상 선택해주세요."); return; }
                 setStep(2);
               }}
               className="w-full rounded-2xl bg-slate-950 py-4 text-base font-black text-white active:scale-[0.98]"
             >
-              다음 — 음성 녹음
+              다음 — 음성 녹음 ({workingDayCount()}일 × {selectedTrainees.size}명)
             </button>
           </>
         )}
@@ -419,10 +469,15 @@ export default function BatchWorklogPage() {
             <div className="rounded-2xl bg-white p-6 shadow-sm flex flex-col items-center gap-5">
               {aiLoading ? (
                 <>
-                  <Loader2 className="h-12 w-12 animate-spin text-slate-400" />
-                  <p className="text-sm font-semibold text-slate-500">AI가 일지를 작성 중입니다...</p>
-                  <p className="text-xs text-slate-400">
-                    {dayCount()}일 × {selectedTrainees.size}명 = {dayCount() * selectedTrainees.size}개 일지 생성 중
+                  <Loader2 className="h-12 w-12 animate-spin text-violet-500" />
+                  <p className="text-sm font-black text-slate-700 text-center px-4">
+                    {AI_LOADING_MESSAGES[aiMsgIdx]}
+                  </p>
+                  <p className="text-xs text-slate-400 text-center">
+                    {workingDayCount()}일 × {selectedTrainees.size}명 = {workingDayCount() * selectedTrainees.size}개 일지 작성 중
+                  </p>
+                  <p className="text-[10px] text-slate-300 text-center">
+                    일지가 많을수록 시간이 걸릴 수 있습니다. 화면을 닫지 마세요.
                   </p>
                 </>
               ) : (

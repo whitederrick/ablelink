@@ -48,6 +48,17 @@ export async function GET(
     const AUTO_FINALIZE_MINUTES = Number(process.env.AUTO_FINALIZE_MINUTES ?? 60); // 기본 60분 후 자동 확정
     const kstNow = getKstNowDate();
 
+    // 이전 날짜의 미종료 WORKING 기록 자동 처리 (출근 후 앱 종료 케이스)
+    const staleWorking = await prisma.dailyAttendance.findFirst({
+      where: { userId, status: 'WORKING', workDate: { lt: today } },
+    });
+    if (staleWorking) {
+      await prisma.dailyAttendance.update({
+        where: { id: staleWorking.id },
+        data: { status: 'DONE', isFinalClosed: true, finalizedAt: kstNow },
+      });
+    }
+
     const pendingFinalize = await prisma.dailyAttendance.findFirst({
       where: {
         userId,

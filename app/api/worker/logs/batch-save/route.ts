@@ -60,13 +60,19 @@ export async function POST(request: NextRequest) {
       if (existing) {
         dateToAttendanceId.set(date, existing.id);
       } else {
+        // 오늘 날짜는 clock-in 없이 생성 불가 — 스킵
+        const todayKST = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+        if (date >= todayKST) continue;
+
+        // 과거 날짜: 소급 입력 → DONE + 최종확정 상태로 생성
         const created = await prisma.dailyAttendance.create({
           data: {
             userId: writerId,
             siteId,
             assignmentId: assignId,
             workDate: date,
-            status: WorkStatus.WORKING,
+            status: WorkStatus.DONE,
+            isFinalClosed: true,
           },
           select: { id: true },
         });

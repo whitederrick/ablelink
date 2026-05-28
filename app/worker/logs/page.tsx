@@ -65,26 +65,27 @@ export default function LogsPage() {
   const [loading, setLoading]   = useState(true);
   const [periodStart, setPeriodStart] = useState(def.start);
   const [periodEnd, setPeriodEnd]     = useState(def.end);
-  const [filterType, setFilterType]   = useState<string>("ALL");
+  const [filterType, setFilterType]   = useState<string>("");
   const [trainingType, setTrainingType] = useState<"PRE"|"FIELD"|"ADAPTATION"|null>(null);
   const [selected, setSelected]       = useState<LogItem | null>(null);
   const [deleting, setDeleting]       = useState(false);
 
-  // 현재 서비스 단계 조회 → 기본 필터 자동 설정
+  // 현재 서비스 단계 조회 → 기본 필터 자동 설정 (로드 전까지 fetch 보류)
   useEffect(() => {
     fetch("/api/worker/site/current").then(r => r.json()).then(d => {
       if (d.success && d.data?.trainingType) {
         const tt = d.data.trainingType as "PRE"|"FIELD"|"ADAPTATION";
         setTrainingType(tt);
-        // 기본 필터: 현재 서비스 단계에 맞게 설정
-        // 훈련(PRE/FIELD) → 전체(훈련세트), 적응 → ADAPTATION
         if (tt === "ADAPTATION") setFilterType("ADAPTATION");
-        else setFilterType("TRAINING_SET"); // PRE+FIELD 묶음
+        else setFilterType("TRAINING_SET");
+      } else {
+        setFilterType("TRAINING_SET");
       }
-    }).catch(() => {});
+    }).catch(() => { setFilterType("TRAINING_SET"); });
   }, []);
 
   const fetchLogs = useCallback(async () => {
+    if (!filterType) return; // trainingType 로드 전 fetch 방지
     setLoading(true);
     try {
       const p = new URLSearchParams({ periodStart, periodEnd });
@@ -222,7 +223,7 @@ export default function LogsPage() {
                             {TYPE_LABEL[log.trainingType]}
                           </span>
                           {log.isCompleted
-                            ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-600">완료</span>
+                            ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-600">확정</span>
                             : <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-600">임시저장</span>}
                         </div>
                         <div className="flex items-center gap-3 text-xs font-semibold text-slate-400">
