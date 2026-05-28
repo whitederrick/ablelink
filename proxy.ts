@@ -78,12 +78,17 @@ export async function proxy(req: NextRequest) {
   const workerPublicPages = [
     "/worker/login",
     "/worker/register",
+    "/worker/signup",
+    "/worker/invite/",
     "/worker/reset-password",
     "/worker/subscribe/success",
     "/worker/subscribe/fail",
   ];
   if (workerPublicPages.some(p => pathname.startsWith(p))) return NextResponse.next();
   if (pathname.startsWith("/api/worker/auth/")) return NextResponse.next();
+  if (pathname.startsWith("/api/worker/phone-verify")) return NextResponse.next();
+  if (pathname.startsWith("/api/worker/invite/")) return NextResponse.next();
+  if (pathname.startsWith("/api/worker/contracts")) return NextResponse.next(); // 토큰 기반 계약서 서명 (비로그인)
   if (pathname.startsWith("/api/payments/")) return NextResponse.next();
   if (pathname.startsWith("/api/sign/")) return NextResponse.next();
 
