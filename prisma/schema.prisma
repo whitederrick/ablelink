@@ -64,7 +64,8 @@ model User {
   DocumentVersion         DocumentVersion[]
   DocumentSubmissionLog   DocumentSubmissionLog[]
 
-  attendanceIssueEvents AttendanceIssueEvent[] @relation("AttendanceIssueEventActor")
+  attendanceIssueEvents  AttendanceIssueEvent[]  @relation("AttendanceIssueEventActor")
+  attendanceEditRequests AttendanceEditRequest[]
 
   evaluations         TraineeEvaluation[]
   employmentContracts EmploymentContract[]
@@ -302,7 +303,8 @@ model DailyAttendance {
   withinRange    Boolean? @map("within_range")
   rangeM         Int?     @map("range_m")
 
-  attendanceIssue AttendanceIssue?
+  attendanceIssue  AttendanceIssue?
+  editRequests     AttendanceEditRequest[]
 
   isGpsModified Boolean    @default(false) @map("is_gps_modified")
   status        WorkStatus @default(WORKING)
@@ -882,6 +884,31 @@ model AttendanceIssueEvent {
 }
 
 // ------------------------------------------------------
+// 7b. 출근부 수정 요청 (직무지도원 → 에이전시 관리자 승인)
+// ------------------------------------------------------
+
+model AttendanceEditRequest {
+  id           BigInt   @id @default(autoincrement())
+  attendanceId BigInt   @map("attendance_id")
+  userId       BigInt   @map("user_id")
+  reason       String
+  proposedStart String? @map("proposed_start") // HH:MM
+  proposedEnd   String? @map("proposed_end")   // HH:MM
+  status        AttendanceEditReqStatus @default(PENDING)
+  adminNote     String? @map("admin_note")
+  reviewedAt    DateTime? @map("reviewed_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  attendance DailyAttendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id])
+
+  @@index([attendanceId, status])
+  @@index([userId, status])
+  @@map("attendance_edit_requests")
+}
+
+// ------------------------------------------------------
 // 8. Enums
 // ------------------------------------------------------
 
@@ -986,6 +1013,12 @@ enum BasePointSourceType {
   ADDRESS
   DEVICE
   MANUAL
+}
+
+enum AttendanceEditReqStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum AttendanceIssueStatus {

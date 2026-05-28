@@ -2,7 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, CheckCircle2, Clock, AlertTriangle, ChevronLeft as ChevronLeftSm, ChevronRight } from "lucide-react";
+import {
+  ChevronLeft, CheckCircle2, Clock, AlertTriangle,
+  ChevronLeft as ChevronLeftSm, ChevronRight,
+  PenLine, X, Loader2,
+} from "lucide-react";
 
 type AttRec = {
   id: string;
@@ -12,6 +16,17 @@ type AttRec = {
   isFinalClosed: boolean;
   isGpsModified: boolean;
   status: string;
+};
+
+type EditReq = {
+  id: string;
+  attendanceId: string;
+  reason: string;
+  proposedStart: string | null;
+  proposedEnd: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  adminNote: string | null;
+  createdAt: string;
 };
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -38,22 +53,33 @@ export default function AttendanceReviewPage() {
   const router = useRouter();
   const [yearMonth, setYearMonth]   = useState(nowYM());
   const [records, setRecords]       = useState<AttRec[]>([]);
+  const [editReqs, setEditReqs]     = useState<EditReq[]>([]);
   const [loading, setLoading]       = useState(false);
-  const [editId, setEditId]         = useState<string | null>(null);
-  const [editStart, setEditStart]   = useState("");
-  const [editEnd, setEditEnd]       = useState("");
-  const [saving, setSaving]         = useState(false);
   const [batchSaving, setBatchSaving] = useState(false);
   const [toast, setToast]           = useState("");
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 2500); };
+  // 수정 요청 모달 상태
+  const [reqModal, setReqModal] = useState<{
+    rec: AttRec;
+    proposedStart: string;
+    proposedEnd: string;
+    reason: string;
+    submitting: boolean;
+  } | null>(null);
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch(`/api/worker/attendance/monthly?yearMonth=${yearMonth}`)
-      .then(r => r.json())
-      .then(d => { if (d.success) setRecords(d.records); })
-      .finally(() => setLoading(false));
+    const [y, m] = yearMonth.split("-").map(Number);
+    const last = new Date(y, m, 0).getDate();
+    Promise.all([
+      fetch(`/api/worker/attendance/monthly?yearMonth=${yearMonth}`).then(r => r.json()),
+      fetch(`/api/worker/attendance/edit-request`).then(r => r.json()),
+    ]).then(([attRes, reqRes]) => {
+      if (attRes.success) setRecords(attRes.records);
+      if (reqRes.success) setEditReqs(reqRes.requests);
+    }).finally(() => setLoading(false));
   }, [yearMonth]);
 
   useEffect(() => { load(); }, [load]);
@@ -64,38 +90,21 @@ export default function AttendanceReviewPage() {
     setYearMonth(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`);
   }
 
-  function openEdit(rec: AttRec) {
-    if (rec.isFinalClosed) return;
-    setEditId(rec.id);
-    setEditStart(rec.startTime);
-    setEditEnd(rec.endTime);
-  }
-
-  async function confirmOne(id: string, startTime?: string, endTime?: string) {
-    setSaving(true);
-    const body: any = {};
-    if (startTime) body.startTime = startTime;
-    if (endTime)   body.endTime   = endTime;
-    const res  = await fetch(`/api/worker/attendance/${id}/confirm`, {
+  async function confirmOne(id: string) {
+    const res = await fetch(`/api/worker/attendance/${id}/confirm`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({}),
     });
     const data = await res.json();
-    setSaving(false);
-    if (data.success) {
-      setEditId(null);
-      showToast("확정되었습니다.");
-      load();
-    } else {
-      showToast(data.message || "확정 실패");
-    }
+    if (data.success) { showToast("확정되었습니다."); load(); }
+    else showToast(data.message || "확정 실패");
   }
 
   async function confirmMonth() {
     const unconfirmed = records.filter(r => !r.isFinalClosed && r.startTime);
     if (unconfirmed.length === 0) { showToast("확정할 기록이 없습니다."); return; }
-    if (!confirm(`미확정 ${unconfirmed.length}건을 일괄 확정하시겠습니까?\n확정 후에는 수정할 수 없습니다.`)) return;
+    if (!confirm(`미확정 ${unconfirmed.length}건을 일괄 확정하시겠습니까?`)) return;
     setBatchSaving(true);
     const res  = await fetch("/api/worker/attendance/confirm-month", {
       method: "POST",
@@ -108,9 +117,36 @@ export default function AttendanceReviewPage() {
     else showToast(data.message || "일괄 확정 실패");
   }
 
+  async function submitEditReq() {
+    if (!reqModal) return;
+    if (!reqModal.reason.trim()) { showToast("수정 사유를 입력해주세요."); return; }
+    setReqModal(m => m ? { ...m, submitting: true } : null);
+    const res = await fetch("/api/worker/attendance/edit-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        attendanceId: reqModal.rec.id,
+        reason:       reqModal.reason.trim(),
+        proposedStart: reqModal.proposedStart || null,
+        proposedEnd:   reqModal.proposedEnd   || null,
+      }),
+    });
+    const data = await res.json();
+    setReqModal(null);
+    if (data.success) { showToast(data.message); load(); }
+    else showToast(data.message || "요청 실패");
+  }
+
+  // 해당 출근 기록의 최근 수정 요청 찾기
+  function getReq(attendanceId: string): EditReq | undefined {
+    return editReqs.filter(r => r.attendanceId === attendanceId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  }
+
   const confirmed   = records.filter(r => r.isFinalClosed).length;
   const unconfirmed = records.filter(r => !r.isFinalClosed && r.startTime).length;
   const absent      = records.filter(r => !r.startTime).length;
+  const pendingReqs = editReqs.filter(r => r.status === "PENDING").length;
 
   return (
     <div className="min-h-dvh bg-slate-50 pb-24">
@@ -121,6 +157,11 @@ export default function AttendanceReviewPage() {
           <ChevronLeft className="h-5 w-5" />
         </button>
         <h1 className="flex-1 text-base font-black text-slate-900">출근부 검토·확정</h1>
+        {pendingReqs > 0 && (
+          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-700">
+            승인 대기 {pendingReqs}
+          </span>
+        )}
       </header>
 
       <div className="mx-auto max-w-md space-y-3 px-4 py-4">
@@ -151,7 +192,7 @@ export default function AttendanceReviewPage() {
           ))}
         </div>
 
-        {/* 일괄 확정 버튼 */}
+        {/* 일괄 확정 */}
         {unconfirmed > 0 && (
           <button onClick={confirmMonth} disabled={batchSaving}
             className="w-full rounded-2xl bg-slate-950 py-4 text-sm font-black text-white active:scale-[0.98] disabled:opacity-60">
@@ -173,8 +214,8 @@ export default function AttendanceReviewPage() {
             {records.map(rec => {
               const dow    = dayOfWeek(rec.workDate);
               const isWeek = dow === "토" || dow === "일";
-              const isEdit = editId === rec.id;
               const hours  = calcHours(rec.startTime, rec.endTime);
+              const req    = getReq(rec.id);
 
               return (
                 <div key={rec.id}
@@ -195,60 +236,83 @@ export default function AttendanceReviewPage() {
                     {/* 시간 */}
                     <div className="flex-1">
                       {rec.startTime ? (
-                        isEdit ? (
-                          <div className="flex items-center gap-2">
-                            <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
-                              className="h-8 w-24 rounded-lg border border-slate-200 px-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" />
-                            <span className="text-xs text-slate-400">~</span>
-                            <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
-                              className="h-8 w-24 rounded-lg border border-slate-200 px-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" />
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
-                            <span className="text-sm font-semibold text-slate-700">
-                              {rec.startTime} ~ {rec.endTime || "퇴근 전"}
-                            </span>
-                            {hours !== "-" && (
-                              <span className="text-xs font-semibold text-slate-400">({hours})</span>
-                            )}
-                          </div>
-                        )
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+                          <span className="text-sm font-semibold text-slate-700">
+                            {rec.startTime} ~ {rec.endTime || "퇴근 전"}
+                          </span>
+                          {hours !== "-" && (
+                            <span className="text-xs font-semibold text-slate-400">({hours})</span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-sm font-semibold text-slate-400">미출근</span>
                       )}
                       {rec.isGpsModified && (
                         <div className="mt-1 flex items-center gap-1">
                           <AlertTriangle className="h-3 w-3 text-amber-500" />
-                          <span className="text-[11px] font-semibold text-amber-600">GPS 수동 조정</span>
+                          <span className="text-[11px] font-semibold text-amber-600">GPS 수동 조정됨</span>
+                        </div>
+                      )}
+                      {/* 수정 요청 상태 표시 */}
+                      {req && (
+                        <div className={`mt-1 rounded-lg px-2 py-1 text-[11px] font-semibold inline-flex items-center gap-1 ${
+                          req.status === "PENDING"  ? "bg-amber-50 text-amber-700" :
+                          req.status === "APPROVED" ? "bg-emerald-50 text-emerald-700" :
+                                                      "bg-rose-50 text-rose-700"
+                        }`}>
+                          {req.status === "PENDING"  && "⏳ 수정 승인 대기 중"}
+                          {req.status === "APPROVED" && "✓ 수정 승인됨"}
+                          {req.status === "REJECTED" && "✗ 수정 반려됨"}
+                          {req.adminNote && <span className="text-[10px] opacity-70">— {req.adminNote}</span>}
                         </div>
                       )}
                     </div>
 
-                    {/* 상태/버튼 */}
-                    <div className="flex-shrink-0">
+                    {/* 버튼 */}
+                    <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
                       {rec.isFinalClosed ? (
-                        <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-600">
-                          <CheckCircle2 className="h-3 w-3" />확정
-                        </span>
+                        <>
+                          <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-600">
+                            <CheckCircle2 className="h-3 w-3" />확정
+                          </span>
+                          {/* 확정 후에도 수정 요청 가능 */}
+                          {(!req || req.status === "REJECTED") && (
+                            <button
+                              onClick={() => setReqModal({
+                                rec,
+                                proposedStart: rec.startTime || "",
+                                proposedEnd:   rec.endTime   || "",
+                                reason: "",
+                                submitting: false,
+                              })}
+                              className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500 active:scale-95"
+                            >
+                              <PenLine className="h-3 w-3" />수정 요청
+                            </button>
+                          )}
+                        </>
                       ) : rec.startTime ? (
-                        isEdit ? (
-                          <div className="flex gap-1.5">
-                            <button onClick={() => setEditId(null)}
-                              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-500 active:scale-95">
-                              취소
-                            </button>
-                            <button onClick={() => confirmOne(rec.id, editStart, editEnd)} disabled={saving}
-                              className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-black text-white active:scale-95 disabled:opacity-60">
-                              {saving ? "..." : "확정"}
-                            </button>
-                          </div>
-                        ) : (
-                          <button onClick={() => openEdit(rec)}
-                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 active:scale-95">
-                            수정·확정
+                        <div className="flex flex-col items-end gap-1.5">
+                          <button onClick={() => confirmOne(rec.id)}
+                            className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-black text-white active:scale-95">
+                            확정
                           </button>
-                        )
+                          {(!req || req.status === "REJECTED") && (
+                            <button
+                              onClick={() => setReqModal({
+                                rec,
+                                proposedStart: rec.startTime || "",
+                                proposedEnd:   rec.endTime   || "",
+                                reason: "",
+                                submitting: false,
+                              })}
+                              className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-semibold text-slate-600 active:scale-95"
+                            >
+                              <PenLine className="h-3 w-3" />수정 요청
+                            </button>
+                          )}
+                        </div>
                       ) : null}
                     </div>
                   </div>
@@ -261,16 +325,85 @@ export default function AttendanceReviewPage() {
         {/* 안내 */}
         <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
           <p className="text-xs font-semibold leading-relaxed text-slate-500">
-            · 확정 전 출퇴근 시간을 수정할 수 있습니다.<br />
-            · 확정 후에는 수정이 불가합니다.<br />
-            · 미확정 기록은 익일 자정에 자동 확정됩니다.
+            · 출근·퇴근 시간 수정이 필요하면 &apos;수정 요청&apos; 버튼을 눌러주세요.<br />
+            · 수정 요청은 에이전시 관리자 승인 후 반영됩니다.<br />
+            · GPS 자동 입력 기록도 수정 요청을 통해서만 변경 가능합니다.
           </p>
         </div>
       </div>
 
+      {/* 수정 요청 모달 */}
+      {reqModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 px-0"
+          onClick={e => { if (e.target === e.currentTarget) setReqModal(null); }}>
+          <div className="w-full max-w-md rounded-t-3xl bg-white px-5 pb-10 pt-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-black text-slate-900">출근부 수정 요청</h2>
+              <button onClick={() => setReqModal(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mb-1 text-xs font-semibold text-slate-500">
+              {reqModal.rec.workDate} ({dayOfWeek(reqModal.rec.workDate)}요일)
+            </div>
+            <div className="mb-4 text-xs text-slate-400">
+              현재: {reqModal.rec.startTime || "미출근"} ~ {reqModal.rec.endTime || "미퇴근"}
+            </div>
+
+            <div className="space-y-4">
+              {/* 제안 시간 */}
+              <div>
+                <p className="mb-2 text-sm font-black text-slate-700">수정 후 시간</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-[11px] font-semibold text-slate-500">출근 시간</label>
+                    <input type="time" value={reqModal.proposedStart}
+                      onChange={e => setReqModal(m => m ? { ...m, proposedStart: e.target.value } : null)}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" />
+                  </div>
+                  <span className="mt-5 text-slate-400">~</span>
+                  <div className="flex-1">
+                    <label className="mb-1 block text-[11px] font-semibold text-slate-500">퇴근 시간</label>
+                    <input type="time" value={reqModal.proposedEnd}
+                      onChange={e => setReqModal(m => m ? { ...m, proposedEnd: e.target.value } : null)}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* 수정 사유 */}
+              <div>
+                <p className="mb-2 text-sm font-black text-slate-700">수정 사유 <span className="text-rose-500">*</span></p>
+                <textarea
+                  value={reqModal.reason}
+                  onChange={e => setReqModal(m => m ? { ...m, reason: e.target.value } : null)}
+                  placeholder="수정이 필요한 이유를 구체적으로 입력해주세요. (예: 단말기 오류로 출근 시간이 잘못 기록됨)"
+                  rows={3}
+                  className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-700 outline-none placeholder:font-normal placeholder:text-slate-400 focus:border-sky-400 focus:bg-white"
+                />
+              </div>
+
+              <button
+                onClick={submitEditReq}
+                disabled={reqModal.submitting || !reqModal.reason.trim()}
+                className="w-full rounded-2xl bg-slate-950 py-4 text-sm font-black text-white active:scale-[0.98] disabled:opacity-60"
+              >
+                {reqModal.submitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />제출 중...
+                  </span>
+                ) : "수정 요청 제출"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 토스트 */}
       {toast && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg z-50">
           {toast}
         </div>
       )}
