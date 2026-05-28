@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data, total: data.reduce((s, d) => s + d.trainees.length, 0) });
   } catch (error: any) {
+    if (error instanceof Response) return error;
     console.error("[admin/trainees/summary]", error);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
