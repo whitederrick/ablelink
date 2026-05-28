@@ -222,6 +222,9 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
   const [clockOutAlert, setClockOutAlert] = useState(3);
   const [showAlarmSettings, setShowAlarmSettings] = useState(false);
   const alarmFiredRef = useRef<Set<string>>(new Set());
+  const [unreadNotices,  setUnreadNotices]  = useState(0);
+  const [showNotices,    setShowNotices]    = useState(false);
+  const [notices,        setNotices]        = useState<{id:string;title:string;body:string;type:string;yearMonth:string|null;read:boolean;createdAt:string}[]>([]);
 
   useEffect(() => {
     fetch("/api/worker/notification")
@@ -234,6 +237,24 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetch("/api/worker/notices")
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          setNotices(d.notices);
+          setUnreadNotices(d.unreadCount);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function markAllRead() {
+    await fetch("/api/worker/notices/read", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+    setUnreadNotices(0);
+    setNotices(prev => prev.map(n => ({ ...n, read: true })));
+  }
 
   useEffect(() => {
     if (!homeData) return;
@@ -503,7 +524,46 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
               )}
             </div>
 
-            {/* 프로필 */}
+            {/* 알림 + 프로필 */}
+            <div className="flex items-center gap-2">
+              {/* 알림 배지 */}
+              <div className="relative">
+                <button
+                  onClick={() => { setShowNotices(v => !v); if (unreadNotices > 0) markAllRead(); }}
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-800 text-slate-300 transition active:scale-95"
+                  aria-label="알림"
+                >
+                  <Bell className="h-5 w-5" aria-hidden="true" />
+                  {unreadNotices > 0 && (
+                    <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white">
+                      {unreadNotices > 9 ? "9+" : unreadNotices}
+                    </span>
+                  )}
+                </button>
+                {showNotices && (
+                  <div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-slate-100 bg-white shadow-xl shadow-slate-950/10">
+                    <div className="border-b border-slate-100 px-4 py-3">
+                      <p className="text-sm font-black text-slate-900">알림</p>
+                    </div>
+                    {notices.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm font-semibold text-slate-400">알림이 없습니다.</div>
+                    ) : (
+                      <div className="max-h-80 divide-y divide-slate-50 overflow-y-auto">
+                        {notices.map(n => (
+                          <div key={n.id} className={`px-4 py-3 ${n.read ? "" : "bg-rose-50"}`}>
+                            <p className={`text-xs font-black ${n.type === "REJECT" ? "text-rose-600" : "text-slate-700"}`}>
+                              {n.title}
+                            </p>
+                            <p className="mt-0.5 text-xs font-semibold text-slate-500">{n.body}</p>
+                            <p className="mt-1 text-[10px] text-slate-300">{new Date(n.createdAt).toLocaleDateString("ko-KR")}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
             <div className="relative">
               <button
                 ref={profileRef}
@@ -535,6 +595,7 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
                 </div>
               )}
             </div>
+            </div> {/* 알림+프로필 flex wrap 닫기 */}
           </div>
 
           {/* 날짜 + 상태 */}

@@ -416,13 +416,24 @@ function DocsContent() {
                             {state.result.msg}
                           </p>
                           {state.result.success && state.result.pdfBase64 && (
-                            <button
-                              onClick={() => handleDownload(id)}
-                              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-slate-950 py-2 text-xs font-black text-white transition active:scale-[0.97]"
-                            >
-                              <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                              PDF 다운로드 (사본)
-                            </button>
+                            <div className="mt-2 space-y-2">
+                              <button
+                                onClick={() => handleDownload(id)}
+                                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-slate-950 py-2 text-xs font-black text-white transition active:scale-[0.97]"
+                              >
+                                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                                PDF 다운로드 (사본)
+                              </button>
+                              <object
+                                data={`data:application/pdf;base64,${state.result.pdfBase64}`}
+                                type="application/pdf"
+                                className="h-96 w-full rounded-lg border border-slate-200"
+                              >
+                                <p className="p-3 text-xs text-slate-400">
+                                  브라우저에서 PDF 미리보기를 지원하지 않습니다. 위 다운로드 버튼을 이용해 주세요.
+                                </p>
+                              </object>
+                            </div>
                           )}
                         </div>
                       )}

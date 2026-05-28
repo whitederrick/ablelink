@@ -211,6 +211,8 @@ export async function POST(request: NextRequest) {
         where: { traineeId: BigInt(traineeId), writerId: userId, evalType: "TRAINING" },
         orderBy: { updatedAt: "desc" },
       });
+      if (!ev) return NextResponse.json({ success: false, message: "종합평가를 먼저 작성해주세요." }, { status: 400 });
+      if (!ev.isConfirmed) return NextResponse.json({ success: false, message: "종합평가를 최종 확정한 후 PDF를 생성할 수 있습니다.\n평가 페이지에서 '최종 확정' 버튼을 눌러주세요.", evalNotConfirmed: true }, { status: 400 });
 
       payload = {
         traineeName: trainee?.name || "",
@@ -264,6 +266,8 @@ export async function POST(request: NextRequest) {
         where: { traineeId: BigInt(traineeId), writerId: userId, evalType: "ADAPTATION" },
         orderBy: { updatedAt: "desc" },
       });
+      if (!ev) return NextResponse.json({ success: false, message: "종합평가를 먼저 작성해주세요." }, { status: 400 });
+      if (!ev.isConfirmed) return NextResponse.json({ success: false, message: "종합평가를 최종 확정한 후 PDF를 생성할 수 있습니다.\n평가 페이지에서 '최종 확정' 버튼을 눌러주세요.", evalNotConfirmed: true }, { status: 400 });
 
       payload = {
         traineeName: trainee?.name || "",

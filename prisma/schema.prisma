@@ -70,6 +70,7 @@ model User {
   employmentContracts EmploymentContract[]
 
   notificationSettings UserNotificationSetting?
+  notices              WorkerNotice[]
 
   @@map("users")
 }
@@ -1169,4 +1170,27 @@ model WorkerInvite {
   @@index([code])
   @@index([agencyId])
   @@map("worker_invites")
+}
+
+// ------------------------------------------------------
+// 13. 직무지도원 알림 (Worker Notice)
+// 관리자가 직무지도원에게 보내는 반려/안내 메시지
+// ------------------------------------------------------
+
+model WorkerNotice {
+  id        BigInt    @id @default(autoincrement())
+  userId    BigInt    @map("user_id")
+  agencyId  BigInt    @map("agency_id")
+  title     String
+  body      String
+  type      String    @default("INFO") // INFO | WARN | REJECT
+  yearMonth String?   @map("year_month") // 관련 기간 (YYYY-MM)
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([agencyId])
+  @@map("worker_notices")
 }

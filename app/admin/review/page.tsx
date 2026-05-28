@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
 
 type ReviewRow = {
   userId: string;
@@ -31,10 +31,43 @@ function ProgressBadge({ confirmed, total }: { confirmed: number; total: number 
   );
 }
 
+type RejectModal = { userId: string; userName: string } | null;
+
 export default function AdminReviewPage() {
-  const [yearMonth, setYearMonth] = useState(nowYM());
-  const [rows, setRows]           = useState<ReviewRow[]>([]);
-  const [loading, setLoading]     = useState(false);
+  const [yearMonth, setYearMonth]   = useState(nowYM());
+  const [rows, setRows]             = useState<ReviewRow[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [rejectModal, setRejectModal] = useState<RejectModal>(null);
+  const [rejectMsg, setRejectMsg]   = useState("");
+  const [sending, setSending]       = useState(false);
+  const [toast, setToast]           = useState("");
+
+  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 2500); }
+
+  async function sendReject() {
+    if (!rejectModal || !rejectMsg.trim()) return;
+    setSending(true);
+    const res  = await fetch("/api/admin/notices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId:    rejectModal.userId,
+        title:     `[반려] ${yearMonth} 기록 수정 요청`,
+        body:      rejectMsg.trim(),
+        type:      "REJECT",
+        yearMonth,
+      }),
+    });
+    const data = await res.json();
+    setSending(false);
+    if (data.success) {
+      setRejectModal(null);
+      setRejectMsg("");
+      showToast(`${rejectModal.userName}에게 반려 알림을 발송했습니다.`);
+    } else {
+      showToast(data.message || "발송 실패");
+    }
+  }
 
   function changeMonth(delta: number) {
     const [y, m] = yearMonth.split("-").map(Number);
@@ -118,6 +151,7 @@ export default function AdminReviewPage() {
                 <th className="px-4 py-3 text-center text-xs font-black text-slate-500">일지</th>
                 <th className="px-4 py-3 text-center text-xs font-black text-slate-500">종합평가</th>
                 <th className="px-4 py-3 text-center text-xs font-black text-slate-500">상태</th>
+                <th className="px-4 py-3 text-center text-xs font-black text-slate-500">반려</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -144,12 +178,18 @@ export default function AdminReviewPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`rounded-full px-2.5 py-1 text-xs font-black ${
-                        allDone
-                          ? "bg-emerald-50 text-emerald-600"
-                          : "bg-amber-50 text-amber-600"
+                        allDone ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
                       }`}>
                         {allDone ? "완료" : "미완료"}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => { setRejectModal({ userId: r.userId, userName: r.userName }); setRejectMsg(""); }}
+                        className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-black text-rose-600 hover:bg-rose-100 active:scale-95"
+                      >
+                        <AlertTriangle className="h-3 w-3" />반려
+                      </button>
                     </td>
                   </tr>
                 );
@@ -166,6 +206,42 @@ export default function AdminReviewPage() {
           · 확정/전체 형식으로 표시됩니다.
         </p>
       </div>
+
+      {/* 반려 모달 */}
+      {rejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="mb-1 text-base font-black text-slate-900">반려 알림 발송</h3>
+            <p className="mb-4 text-sm font-semibold text-slate-400">
+              {rejectModal.userName}에게 수정 요청 메시지를 보냅니다. ({yearMonth})
+            </p>
+            <textarea
+              value={rejectMsg}
+              onChange={e => setRejectMsg(e.target.value)}
+              placeholder="수정이 필요한 내용을 입력하세요 (예: 5월 3일 퇴근 시간 누락)"
+              rows={4}
+              className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-700 outline-none focus:border-rose-400 focus:bg-white focus:ring-2 focus:ring-rose-100"
+            />
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => setRejectModal(null)}
+                className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-black text-slate-500 hover:bg-slate-50">
+                취소
+              </button>
+              <button onClick={sendReject} disabled={sending || !rejectMsg.trim()}
+                className="flex-[2] rounded-xl bg-rose-600 py-3 text-sm font-black text-white hover:bg-rose-700 disabled:opacity-60">
+                {sending ? "발송 중..." : "반려 알림 발송"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 토스트 */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

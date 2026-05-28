@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import ServiceWorkerRegistrar from "./_components/ServiceWorkerRegistrar";
+import { Analytics } from "@vercel/analytics/react";
 
 export const metadata: Metadata = {
   title: "AbleLink",
@@ -17,6 +18,7 @@ export default function RootLayout({
       <body className="antialiased">
         <ServiceWorkerRegistrar />
         {children}
+        <Analytics />
       </body>
     </html>
   );
