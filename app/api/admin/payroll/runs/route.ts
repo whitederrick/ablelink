@@ -79,27 +79,28 @@ export async function POST(req: NextRequest) {
     const periodStart = `${yearMonth}-01`;
     const periodEnd = `${yearMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
 
-    // 4대보험 요율 조회 (해당 연도 → 없으면 최근 연도)
-    const insuranceRates = await prisma.insuranceRates.findFirst({
-      where: { year: { lte: y } },
-      orderBy: { year: "desc" },
-    });
-
-    // 에이전시 공제 항목
-    const agencyDeductions = await prisma.agencyDeduction.findMany({
-      where: { agencyId, isActive: true },
-    });
-
-    // 이 에이전시의 해당 월 활성 배정에 속한 직무지도원 찾기
-    const assignments = await prisma.siteAssignment.findMany({
-      where: {
-        agencyId,
-        status: "ACTIVE",
-        startDate: { lte: new Date(periodEnd + "T23:59:59+09:00") },
-        OR: [{ endDate: null }, { endDate: { gte: new Date(periodStart + "T00:00:00+09:00") } }],
-      },
-      select: { userId: true, siteId: true },
-    });
+    // 3개 쿼리 병렬 실행
+    const [insuranceRates, agencyDeductions, assignments] = await Promise.all([
+      // 4대보험 요율 조회 (해당 연도 → 없으면 최근 연도)
+      prisma.insuranceRates.findFirst({
+        where: { year: { lte: y } },
+        orderBy: { year: "desc" },
+      }),
+      // 에이전시 공제 항목
+      prisma.agencyDeduction.findMany({
+        where: { agencyId, isActive: true },
+      }),
+      // 이 에이전시의 해당 월 활성 배정에 속한 직무지도원 찾기
+      prisma.siteAssignment.findMany({
+        where: {
+          agencyId,
+          status: "ACTIVE",
+          startDate: { lte: new Date(periodEnd + "T23:59:59+09:00") },
+          OR: [{ endDate: null }, { endDate: { gte: new Date(periodStart + "T00:00:00+09:00") } }],
+        },
+        select: { userId: true, siteId: true },
+      }),
+    ]);
 
     const userIds = [...new Set(assignments.map(a => a.userId))];
     if (userIds.length === 0) {
@@ -119,42 +120,39 @@ export async function POST(req: NextRequest) {
       breakdown: object;
     }[] = [];
 
-    for (const userId of userIds) {
-      // 유효 급여 계약 조회 (incomeType, 2명+ 시급, 주휴수당 포함)
-      const contract = await prisma.payContract.findFirst({
-        where: {
-          agencyId,
-          userId,
-          effectiveFrom: { lte: new Date(periodStart) },
-          OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date(periodEnd) } }],
-        },
-        orderBy: { effectiveFrom: "desc" },
-      });
+    // 유저별 3개 쿼리를 모든 유저에 걸쳐 동시 실행
+    const userDataList = await Promise.all(userIds.map(async (userId) => {
+      const userSiteIds = assignments.filter(a => a.userId === userId).map(a => a.siteId);
+      const [contract, attendances, traineeCount] = await Promise.all([
+        // 유효 급여 계약 조회
+        prisma.payContract.findFirst({
+          where: {
+            agencyId, userId,
+            effectiveFrom: { lte: new Date(periodStart) },
+            OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date(periodEnd) } }],
+          },
+          orderBy: { effectiveFrom: "desc" },
+        }),
+        // 출근 기록 조회
+        prisma.dailyAttendance.findMany({
+          where: { userId, workDate: { gte: periodStart, lte: periodEnd }, isFinalClosed: true, assignment: { agencyId } },
+          select: { workDate: true, startTime: true, endTime: true },
+        }),
+        // 훈련생 수
+        prisma.traineePlacement.count({
+          where: {
+            siteId: { in: userSiteIds }, status: "ACTIVE",
+            startDate: { lte: periodEndDate },
+            OR: [{ endDate: null }, { endDate: { gte: periodStartDate } }],
+          },
+        }),
+      ]);
+      return { userId, contract, attendances, traineeCount };
+    }));
 
-      // 출근 기록 조회
-      const attendances = await prisma.dailyAttendance.findMany({
-        where: {
-          userId,
-          workDate: { gte: periodStart, lte: periodEnd },
-          isFinalClosed: true,
-          assignment: { agencyId },
-        },
-        select: { workDate: true, startTime: true, endTime: true },
-      });
-
+    for (const { userId, contract, attendances, traineeCount } of userDataList) {
       const workedDays = attendances.length;
       const workedMinutes = attendances.reduce((s, a) => s + minutesBetween(a.startTime, a.endTime), 0);
-
-      // 훈련생 수 확인 (해당 월 배정 사이트의 활성 훈련생 수)
-      const userSiteIds = assignments.filter(a => a.userId === userId).map(a => a.siteId);
-      const traineeCount = await prisma.traineePlacement.count({
-        where: {
-          siteId: { in: userSiteIds },
-          status: "ACTIVE",
-          startDate: { lte: periodEndDate },
-          OR: [{ endDate: null }, { endDate: { gte: periodStartDate } }],
-        },
-      });
 
       let grossPay = 0;
       let breakdown: Record<string, unknown> = { note: "급여 계약 없음", workedDays, workedMinutes };

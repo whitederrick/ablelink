@@ -18,104 +18,79 @@ export async function GET(req: Request) {
     const todayStr = today.toISOString().slice(0, 10);
     const now = new Date();
 
-    // ── 1. 오늘 출근 현황 ─────────────────────────────────────────
-    const todayAttendances = await prisma.dailyAttendance.findMany({
-      where: {
-        workDate: todayStr,
-        assignment: { ...agencyFilter },
-      },
-      select: {
-        id: true,
-        startTime: true,
-        endTime: true,
-        isFinalClosed: true,
-        isGpsModified: true,
-        user: { select: { userName: true } },
-        site: { select: { companyName: true } },
-        logs: { select: { isCompleted: true } },
-        attendanceIssue: { select: { id: true, status: true, issueTypes: true } },
-      },
-    });
+    const in5Days = new Date(today); in5Days.setDate(in5Days.getDate() + 5);
+    const in10Days = new Date(today); in10Days.setDate(in10Days.getDate() + 10);
+
+    // ── 5개 쿼리 병렬 실행 ────────────────────────────────────────
+    const [
+      todayAttendances,
+      unconfirmedIssues,
+      docRunsOpen,
+      endingSoonAssignments,
+      allActiveSites,
+    ] = await Promise.all([
+      // 1. 오늘 출근 현황
+      prisma.dailyAttendance.findMany({
+        where: { workDate: todayStr, assignment: { ...agencyFilter } },
+        select: {
+          id: true, startTime: true, endTime: true, isFinalClosed: true, isGpsModified: true,
+          user: { select: { userName: true } },
+          site: { select: { companyName: true } },
+          logs: { select: { isCompleted: true } },
+          attendanceIssue: { select: { id: true, status: true, issueTypes: true } },
+        },
+      }),
+      // 2. 미확인 근태
+      prisma.attendanceIssue.findMany({
+        where: { status: "OPEN", dailyAttendance: { assignment: { ...agencyFilter } } },
+        select: {
+          id: true, issueTypes: true, createdAt: true,
+          dailyAttendance: {
+            select: {
+              workDate: true,
+              user: { select: { userName: true } },
+              site: { select: { companyName: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      // 3. 보고서 현황
+      prisma.documentRun.findMany({
+        where: { status: "OPEN", ...(scope.role === "AGENCY" && scope.agencyId ? { agencyId: scope.agencyId } : {}) },
+        select: {
+          id: true, docType: true, dueAt: true, currentVersionId: true,
+          coach: { select: { userName: true } },
+          site: { select: { companyName: true } },
+        },
+      }),
+      // 4. 배정 종료 임박
+      prisma.siteAssignment.findMany({
+        where: { status: "ACTIVE", endDate: { gte: today, lte: in10Days }, ...agencyFilter },
+        select: {
+          id: true, endDate: true, serviceStep: true,
+          user: { select: { userName: true } },
+          site: { select: { companyName: true } },
+        },
+        orderBy: { endDate: "asc" },
+      }),
+      // 5. 미배정 Site
+      prisma.site.findMany({
+        where: { isActive: true, ...(scope.role === "AGENCY" && scope.agencyId ? { agencyId: scope.agencyId } : {}) },
+        select: {
+          id: true, companyName: true,
+          assignments: { where: { status: "ACTIVE" }, select: { id: true } },
+        },
+      }),
+    ]);
 
     const todayWorking = todayAttendances.filter(a => a.startTime && !a.isFinalClosed).length;
     const todayDone = todayAttendances.filter(a => a.isFinalClosed).length;
     const logDoneCount = todayAttendances.filter(a => a.logs.length > 0 && a.logs.every(l => l.isCompleted)).length;
     const logPendingCount = todayAttendances.filter(a => !a.logs.every(l => l.isCompleted) || a.logs.length === 0).length;
-
-    // ── 2. 미확인 근태 ────────────────────────────────────────────
-    const unconfirmedIssues = await prisma.attendanceIssue.findMany({
-      where: {
-        status: "OPEN",
-        dailyAttendance: { assignment: { ...agencyFilter } },
-      },
-      select: {
-        id: true,
-        issueTypes: true,
-        createdAt: true,
-        dailyAttendance: {
-          select: {
-            workDate: true,
-            user: { select: { userName: true } },
-            site: { select: { companyName: true } },
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    // ── 3. 보고서 현황 ────────────────────────────────────────────
-    const docRunsOpen = await prisma.documentRun.findMany({
-      where: {
-        status: "OPEN",
-        ...(scope.role === "AGENCY" && scope.agencyId ? { agencyId: scope.agencyId } : {}),
-      },
-      select: {
-        id: true,
-        docType: true,
-        dueAt: true,
-        currentVersionId: true,
-        coach: { select: { userName: true } },
-        site: { select: { companyName: true } },
-      },
-    });
-
     const docPendingSubmit = docRunsOpen.filter(r => !r.currentVersionId && r.dueAt > now).length;
     const docOverdue = docRunsOpen.filter(r => !r.currentVersionId && r.dueAt <= now).length;
-
-    // ── 4. 배정 종료 임박 ─────────────────────────────────────────
-    const in5Days = new Date(today); in5Days.setDate(in5Days.getDate() + 5);
-    const in10Days = new Date(today); in10Days.setDate(in10Days.getDate() + 10);
-
-    const endingSoonAssignments = await prisma.siteAssignment.findMany({
-      where: {
-        status: "ACTIVE",
-        endDate: { gte: today, lte: in10Days },
-        ...agencyFilter,
-      },
-      select: {
-        id: true,
-        endDate: true,
-        serviceStep: true,
-        user: { select: { userName: true } },
-        site: { select: { companyName: true } },
-      },
-      orderBy: { endDate: "asc" },
-    });
-
     const endingIn5 = endingSoonAssignments.filter(a => a.endDate && a.endDate <= in5Days).length;
-
-    // ── 5. 미배정 Site ────────────────────────────────────────────
-    const allActiveSites = await prisma.site.findMany({
-      where: {
-        isActive: true,
-        ...(scope.role === "AGENCY" && scope.agencyId ? { agencyId: scope.agencyId } : {}),
-      },
-      select: {
-        id: true,
-        companyName: true,
-        assignments: { where: { status: "ACTIVE" }, select: { id: true } },
-      },
-    });
     const unassignedSites = allActiveSites.filter(s => s.assignments.length === 0);
 
     // ── 6. 운영 리스크 알림 ───────────────────────────────────────

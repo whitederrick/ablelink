@@ -133,22 +133,36 @@ export async function GET(request: NextRequest) {
       zip.file("출근부.pdf", buf);
     }
 
-    // 2) 훈련생별 문서
-    for (const trainee of trainees) {
+    // 2) 훈련생별 문서 — DB 쿼리를 모든 훈련생에 걸쳐 병렬 실행
+    await Promise.all(trainees.map(async (trainee) => {
       const tid    = trainee.id;
       const folder = zip.folder(safeFilename(`훈련생_${trainee.name}`))!;
 
-      // 훈련일지
-      {
-        const logs = await prisma.traineeLog.findMany({
+      // 4개 쿼리 병렬
+      const [trainingLogs, trainingEv, adaptLogs, adaptEv] = await Promise.all([
+        prisma.traineeLog.findMany({
           where: { writerId: userId, traineeId: tid, trainingType: { in: ["PRE", "FIELD"] }, attendance: { workDate: { gte: start, lte: end } } },
           include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
-        });
+        }),
+        prisma.traineeEvaluation.findFirst({
+          where: { traineeId: tid, writerId: userId, evalType: "TRAINING" }, orderBy: { updatedAt: "desc" },
+        }),
+        prisma.traineeLog.findMany({
+          where: { writerId: userId, traineeId: tid, trainingType: "ADAPTATION", attendance: { workDate: { gte: start, lte: end } } },
+          include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
+        }),
+        prisma.traineeEvaluation.findFirst({
+          where: { traineeId: tid, writerId: userId, evalType: "ADAPTATION" }, orderBy: { updatedAt: "desc" },
+        }),
+      ]);
+
+      // 훈련일지
+      {
         const payload = {
           traineeName: trainee.name, companyName: site.companyName,
           periodPreText:   fmtPeriod(assignment.stepStart?.toISOString().slice(0, 10) || start, start),
           periodFieldText: fmtPeriod(start, end),
-          rows: logs.map(l => ({
+          rows: trainingLogs.map(l => ({
             section: l.trainingType === "PRE" ? "PRE" : "FIELD",
             date: l.attendance.workDate,
             attendanceStatus: l.evaluation || "출석",
@@ -165,14 +179,11 @@ export async function GET(request: NextRequest) {
 
       // 훈련생 종합평가
       {
-        const ev = await prisma.traineeEvaluation.findFirst({
-          where: { traineeId: tid, writerId: userId, evalType: "TRAINING" }, orderBy: { updatedAt: "desc" },
-        });
         const payload = {
           traineeName: trainee.name, companyName: site.companyName,
           preTrainingStart: assignment.stepStart?.toISOString().slice(0, 10) || start,
           preTrainingEnd: start, fieldTrainingStart: start, fieldTrainingEnd: end,
-          scores: (ev?.scores as any) || {}, comments: (ev?.comments as any) || {},
+          scores: (trainingEv?.scores as any) || {}, comments: (trainingEv?.comments as any) || {},
           signatures: { coach: sigs.coach, agencyAgent: sigs.agencyAgent },
         };
         const buf = await renderPdfToBuffer({ documentType: "TRAINEE_FINAL_EVAL" as DocumentType, payload });
@@ -181,13 +192,9 @@ export async function GET(request: NextRequest) {
 
       // 적응지도 일지
       {
-        const logs = await prisma.traineeLog.findMany({
-          where: { writerId: userId, traineeId: tid, trainingType: "ADAPTATION", attendance: { workDate: { gte: start, lte: end } } },
-          include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
-        });
         const payload = {
           traineeName: trainee.name, companyName: site.companyName, periodStart: start, periodEnd: end,
-          entries: logs.map(l => ({
+          entries: adaptLogs.map(l => ({
             dateISO: l.attendance.workDate, attendance: l.evaluation || "출석",
             workTime: "", guidance: "Y", task: l.tasks[0]?.taskName || "",
             performanceLabel: scoreLabel(l.tasks[0]?.performanceScore),
@@ -201,19 +208,16 @@ export async function GET(request: NextRequest) {
 
       // 적응지도 종합평가
       {
-        const ev = await prisma.traineeEvaluation.findFirst({
-          where: { traineeId: tid, writerId: userId, evalType: "ADAPTATION" }, orderBy: { updatedAt: "desc" },
-        });
         const payload = {
           traineeName: trainee.name, companyName: site.companyName,
           periodStart: start, periodEnd: end,
-          scores: (ev?.scores as any) || {}, comments: (ev?.comments as any) || {},
+          scores: (adaptEv?.scores as any) || {}, comments: (adaptEv?.comments as any) || {},
           signatures: { coach: sigs.coach, agencyAgent: sigs.agencyAgent },
         };
         const buf = await renderPdfToBuffer({ documentType: "ADAPTATION_FINAL_EVAL" as DocumentType, payload });
         folder.file("적응지도_종합평가.pdf", buf);
       }
-    }
+    }));
 
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 
