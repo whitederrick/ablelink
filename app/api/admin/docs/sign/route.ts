@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       select: { userName: true, phoneNumber: true, signatureUrl: true, loginId: true },
     });
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      where: { userId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
       include: { site: true },
       orderBy: { assignedAt: "desc" },
     });

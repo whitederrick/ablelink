@@ -37,7 +37,7 @@ async function toBase64DataUri(url?: string|null): Promise<string|undefined> {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdminSession(request);
+    const scope = await requireAdminSession(request);
 
     const { searchParams } = new URL(request.url);
     const docType    = normalizeDocType(searchParams.get("docType"));
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
       select: { userName:true, phoneNumber:true, signatureUrl:true, loginId:true },
     });
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] } },
+      where: { userId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] }, ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
       include: { site:true, assignedByAdmin:{ select:{ signatureUrl:true, displayName:true } } },
       orderBy: { assignedAt:"desc" },
     });

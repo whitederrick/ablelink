@@ -448,7 +448,7 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
 
   async function handleLogout() {
     setShowProfile(false);
-    await fetch("/api/worker/auth/logout", { method: "POST" });
+    try { await fetch("/api/worker/auth/logout", { method: "POST" }); } catch { /* 세션 쿠키는 만료됨 */ }
     router.replace("/worker/login");
   }
 
