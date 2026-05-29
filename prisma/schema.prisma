@@ -382,6 +382,9 @@ model Agency {
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
 
+  // 사업자등록번호 or 고유번호 (10자리)
+  businessNumber String? @unique @map("business_number")
+
   // ✅ 구독 관리
   planType   AgencyPlanType @default(FREE) @map("plan_type")
   maxCoaches Int            @default(0) @map("max_coaches") // 0 = 무제한(PRO)
@@ -398,18 +401,20 @@ model Agency {
   nextBillingAt   DateTime? @map("next_billing_at") // 다음 결제일
   subscribedAt    DateTime? @map("subscribed_at") // 최초 구독 전환일
 
-  managers            AgencyManager[]
-  managerAccounts     Manager[]
-  apiCallLogs         ApiCallLog[]
-  sites               Site[]
-  assignments         SiteAssignment[]
-  payContracts        PayContract[]
-  payrollRuns         PayrollRun[]
-  employmentContracts EmploymentContract[]
-  agencyDeductions    AgencyDeduction[]
-  workerInvites       WorkerInvite[]
-  supportTickets      SupportTicket[]
-  holidayRequests     SiteHolidayRequest[]
+  managers              AgencyManager[]
+  managerAccounts       Manager[]
+  apiCallLogs           ApiCallLog[]
+  sites                 Site[]
+  assignments           SiteAssignment[]
+  payContracts          PayContract[]
+  payrollRuns           PayrollRun[]
+  employmentContracts   EmploymentContract[]
+  agencyDeductions      AgencyDeduction[]
+  workerInvites         WorkerInvite[]
+  supportTickets        SupportTicket[]
+  holidayRequests       SiteHolidayRequest[]
+  managerSignupRequests ManagerSignupRequest[]
+  managerInvites        ManagerInvite[]
 
   @@index([planType])
   @@map("agencies")
@@ -439,9 +444,11 @@ model Admin {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  systemAuditLogs  SystemAuditLog[]
-  announcements    SystemAnnouncement[]
-  repliedTickets   SupportTicket[]  @relation("TicketReplier")
+  systemAuditLogs      SystemAuditLog[]
+  announcements        SystemAnnouncement[]
+  repliedTickets       SupportTicket[]        @relation("TicketReplier")
+  signupRequestReviews ManagerSignupRequest[] @relation("SignupRequestReviewer")
+  managerInvites       ManagerInvite[]        @relation("ManagerInviteCreator")
 
   @@map("admins")
 }
@@ -470,6 +477,8 @@ model Manager {
   workerInvites           WorkerInvite[]
   holidayRequests         SiteHolidayRequest[]
   authoredTickets         SupportTicket[]         @relation("TicketAuthor")
+  signupRequest           ManagerSignupRequest?   @relation("SignupRequestManager")
+  managerInvite           ManagerInvite?          @relation("ManagerInviteUser")
 
   @@index([agencyId])
   @@map("managers")
@@ -1359,6 +1368,64 @@ model WorkerInvite {
   @@index([code])
   @@index([agencyId])
   @@map("worker_invites")
+}
+
+// ------------------------------------------------------
+// 14. 에이전시 관리자 자체 가입 신청 (Manager Signup Request)
+// ------------------------------------------------------
+
+enum ManagerSignupStatus {
+  PENDING  // 검토 대기
+  APPROVED // 승인
+  REJECTED // 반려
+}
+
+model ManagerSignupRequest {
+  id                 BigInt              @id @default(autoincrement())
+  agencyName         String              @map("agency_name")
+  businessNumber     String              @map("business_number")
+  businessNumberType String              @default("BUSINESS") @map("business_number_type") // BUSINESS | NONPROFIT
+  documentUrl        String?             @map("document_url")
+  loginId            String              @unique @map("login_id")
+  passwordHash       String              @map("password_hash")
+  displayName        String?             @map("display_name")
+  phoneNumber        String?             @map("phone_number")
+  status             ManagerSignupStatus @default(PENDING)
+  ntsVerified        Boolean             @default(false) @map("nts_verified")
+  ntsBusinessName    String?             @map("nts_business_name")
+  reviewNote         String?             @map("review_note")
+  reviewedAt         DateTime?           @map("reviewed_at")
+  reviewedById       BigInt?             @map("reviewed_by_id")
+  agencyId           BigInt?             @map("agency_id")
+  managerId          BigInt?             @unique @map("manager_id")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  reviewer Admin?   @relation("SignupRequestReviewer", fields: [reviewedById], references: [id])
+  agency   Agency?  @relation(fields: [agencyId], references: [id])
+  manager  Manager? @relation("SignupRequestManager", fields: [managerId], references: [id])
+
+  @@map("manager_signup_requests")
+}
+
+// 운영자 발급 관리자 초대 (영업/온보딩용)
+model ManagerInvite {
+  id          BigInt    @id @default(autoincrement())
+  agencyId    BigInt    @map("agency_id")
+  code        String    @unique
+  email       String?
+  expiresAt   DateTime  @map("expires_at")
+  usedAt      DateTime? @map("used_at")
+  managerId   BigInt?   @unique @map("manager_id")
+  createdById BigInt?   @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  agency    Agency   @relation(fields: [agencyId], references: [id])
+  createdBy Admin?   @relation("ManagerInviteCreator", fields: [createdById], references: [id])
+  manager   Manager? @relation("ManagerInviteUser", fields: [managerId], references: [id])
+
+  @@index([agencyId])
+  @@map("manager_invites")
 }
 
 // ------------------------------------------------------
