@@ -666,6 +666,96 @@ curl -s -b "$WORKER_COOKIE" -X PATCH "$BASE/api/worker/profile" \
   -H "Content-Type: application/json" -d '{"userName":"김지도"}' > /dev/null
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+section "21. 직무지도원 초대 링크 가입 시나리오"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 1단계: 매니저 → 초대 생성
+INVITE_PHONE="01011112222"
+INVITE_RESP=$(curl -s -b "$MANAGER_COOKIE" \
+  -X POST "$BASE/api/admin/workers/invite" \
+  -H "Content-Type: application/json" \
+  -d "{\"phoneNumber\":\"$INVITE_PHONE\",\"workerName\":\"초대테스트\",\"siteId\":\"2\"}")
+
+if echo "$INVITE_RESP" | grep -q '"success":true'; then
+  pass "매니저: 초대 링크 생성"
+  INVITE_ID=$(echo "$INVITE_RESP"   | grep -o '"id":"[0-9]*"'   | head -1 | grep -o '[0-9]*')
+  INVITE_CODE=$(echo "$INVITE_RESP" | grep -o '"code":"[0-9]*"' | head -1 | grep -o '[0-9]*')
+  [ -z "$INVITE_ID"   ] && INVITE_ID=$(echo   "$INVITE_RESP" | grep -o '"id":[0-9]*'   | head -1 | cut -d: -f2)
+  [ -z "$INVITE_CODE" ] && INVITE_CODE=$(echo "$INVITE_RESP" | grep -o '"code":[0-9]*' | head -1 | cut -d: -f2)
+else
+  fail "매니저: 초대 링크 생성" "success:true" "$INVITE_RESP"
+  INVITE_ID=""; INVITE_CODE=""
+fi
+
+if [ -n "$INVITE_ID" ] && [ -n "$INVITE_CODE" ]; then
+  # 2단계: 초대 링크 정보 조회 (직무지도원 앱에서 링크 클릭 시)
+  INVITE_INFO=$(curl -s "$BASE/api/worker/invite/$INVITE_ID")
+  if echo "$INVITE_INFO" | grep -q '"agencyName"'; then
+    pass "직무지도원: 초대 링크 정보 조회"
+  else
+    fail "직무지도원: 초대 링크 정보 조회" "agencyName 포함" "$INVITE_INFO"
+  fi
+
+  # 3단계: 코드 검증 (action: verify)
+  assert "직무지도원: 초대 코드 검증" "200" '"success":true' "" \
+    -X POST "$BASE/api/worker/invite/$INVITE_ID" \
+    -H "Content-Type: application/json" \
+    -d "{\"action\":\"verify\",\"code\":\"$INVITE_CODE\"}"
+
+  # 4단계: 틀린 코드 검증 → 400
+  assert "직무지도원: 잘못된 초대 코드 → 400" "400" '"success":false' "" \
+    -X POST "$BASE/api/worker/invite/$INVITE_ID" \
+    -H "Content-Type: application/json" \
+    -d '{"action":"verify","code":"000000"}'
+
+  # 5단계: 약관 미동의 가입 → 400
+  assert "직무지도원: 초대 가입 약관 미동의 → 400" "400" '"success":false' "" \
+    -X POST "$BASE/api/worker/invite/$INVITE_ID" \
+    -H "Content-Type: application/json" \
+    -d "{\"action\":\"signup\",\"code\":\"$INVITE_CODE\",\"userName\":\"초대테스트\",\"password\":\"test1234!\",\"consentTerms\":false,\"consentPrivacy\":false}"
+
+  # 6단계: 초대 코드로 정상 가입 (action: signup)
+  INVITE_COOKIE=$(mktemp)
+  SIGNUP_RESP=$(curl -s -c "$INVITE_COOKIE" \
+    -X POST "$BASE/api/worker/invite/$INVITE_ID" \
+    -H "Content-Type: application/json" \
+    -d "{\"action\":\"signup\",\"code\":\"$INVITE_CODE\",\"userName\":\"초대테스트\",\"password\":\"test1234!\",\"consentTerms\":true,\"consentPrivacy\":true,\"consentLocation\":true}")
+
+  if echo "$SIGNUP_RESP" | grep -q '"success":true'; then
+    pass "직무지도원: 초대 코드로 가입 완료"
+  else
+    fail "직무지도원: 초대 코드로 가입" "success:true" "$SIGNUP_RESP"
+  fi
+
+  # 7단계: 가입 후 자동 로그인(세션 쿠키) 확인
+  if grep -q "ablelink_worker_session" "$INVITE_COOKIE" 2>/dev/null; then
+    pass "초대 가입 후 세션 쿠키 자동 발급"
+  else
+    fail "초대 가입 후 세션 쿠키" "ablelink_worker_session 쿠키" "쿠키 없음"
+  fi
+
+  # 8단계: 이미 사용된 링크로 재가입 시도 → 410
+  assert "초대 링크 재사용 → 410" "410" '"success":false' "" \
+    -X POST "$BASE/api/worker/invite/$INVITE_ID" \
+    -H "Content-Type: application/json" \
+    -d "{\"action\":\"signup\",\"code\":\"$INVITE_CODE\",\"userName\":\"재시도\",\"password\":\"test1234!\",\"consentTerms\":true,\"consentPrivacy\":true}"
+
+  # 9단계: 사이트 자동 배정 확인 (siteId 지정했으면 hasSite:true)
+  if echo "$SIGNUP_RESP" | grep -q '"hasSite":true'; then
+    pass "초대 가입 시 사이트 자동 배정 확인"
+  else
+    fail "초대 가입 사이트 자동 배정" '"hasSite":true' "$SIGNUP_RESP"
+  fi
+
+  rm -f "$INVITE_COOKIE"
+else
+  skip "초대 ID/코드 없음 — 초대 가입 시나리오 스킵"
+fi
+
+# 존재하지 않는 초대 → 404
+assert "존재하지 않는 초대 링크 → 404" "404" '"success":false' "" \
+  "$BASE/api/worker/invite/999999"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 결과 요약
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TOTAL=$((PASS + FAIL))
