@@ -170,7 +170,7 @@ section "4. API 미인증 → 401"
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 for ep in \
   "/api/admin/dashboard" \
-  "/api/admin/coaches" \
+  "/api/admin/workers" \
   "/api/admin/sites" \
   "/api/admin/assignments" \
   "/api/admin/attendances" \
@@ -250,10 +250,10 @@ else
 fi
 
 # 비밀번호 리셋 응답에 임시 비밀번호 미포함 (HIGH-4 수정 검증)
-COACH_ID=$(curl -s -b "$MANAGER_COOKIE" "$BASE/api/admin/coaches" | grep -o '"id":"[0-9]*"' | head -1 | grep -o '[0-9]*')
-if [ -n "$COACH_ID" ]; then
+WORKER_ID=$(curl -s -b "$MANAGER_COOKIE" "$BASE/api/admin/workers" | grep -o '"id":"[0-9]*"' | head -1 | grep -o '[0-9]*')
+if [ -n "$WORKER_ID" ]; then
   RESET_RESP=$(curl -s -b "$MANAGER_COOKIE" \
-    -X PATCH "$BASE/api/admin/coaches/$COACH_ID" \
+    -X PATCH "$BASE/api/admin/workers/$WORKER_ID" \
     -H "Content-Type: application/json" \
     -d '{"resetPassword":true}')
   # 핵심: 응답에 tempPassword가 포함되면 안 됨 (성공 여부와 무관)
@@ -330,7 +330,7 @@ assert "system/billing" "200" '"billing"' "$ADMIN_COOKIE" "$BASE/api/admin/syste
 assert "system/billing isActive 포함" "200" '"isActive"' "$ADMIN_COOKIE" "$BASE/api/admin/system/billing"
 assert "system/usage" "200" '"success":true' "$ADMIN_COOKIE" "$BASE/api/admin/system/usage?yearMonth=2026-05"
 assert "system/announcements 목록" "200" '"announcements"' "$ADMIN_COOKIE" "$BASE/api/admin/system/announcements"
-assert "system/coaches" "200" '"success":true' "$ADMIN_COOKIE" "$BASE/api/admin/system/coaches"
+assert "system/workers" "200" '"success":true' "$ADMIN_COOKIE" "$BASE/api/admin/system/workers"
 assert "system/sites" "200" '"success":true' "$ADMIN_COOKIE" "$BASE/api/admin/system/sites"
 assert "system/logs" "200" '"success":true' "$ADMIN_COOKIE" "$BASE/api/admin/system/logs"
 assert "system/admins" "200" '"success":true' "$ADMIN_COOKIE" "$BASE/api/admin/system/admins"
@@ -350,7 +350,7 @@ assert "system/agencies/9999/detail → 404" "404" '"success":false' "$ADMIN_COO
 section "9. 에이전시 관리자 핵심 API"
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 assert "manager dashboard" "200" '"success":true' "$MANAGER_COOKIE" "$BASE/api/admin/dashboard"
-assert "manager coaches" "200" '"data"' "$MANAGER_COOKIE" "$BASE/api/admin/coaches"
+assert "manager workers" "200" '"data"' "$MANAGER_COOKIE" "$BASE/api/admin/workers"
 assert "manager sites" "200" '"items"' "$MANAGER_COOKIE" "$BASE/api/admin/sites"
 assert "manager assignments" "200" '"success":true' "$MANAGER_COOKIE" "$BASE/api/admin/assignments"
 assert "manager attendances" "200" '"success":true' "$MANAGER_COOKIE" "$BASE/api/admin/attendances?yearMonth=2026-05"
