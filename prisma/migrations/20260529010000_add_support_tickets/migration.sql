@@ -25,5 +25,5 @@ CREATE INDEX "support_tickets_status_created_at_idx" ON "support_tickets"("statu
 
 -- AddForeignKey
 ALTER TABLE "support_tickets" ADD CONSTRAINT "support_tickets_agency_id_fkey" FOREIGN KEY ("agency_id") REFERENCES "agencies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "support_tickets" ADD CONSTRAINT "support_tickets_admin_id_fkey" FOREIGN KEY ("admin_id") REFERENCES "admin_users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "support_tickets" ADD CONSTRAINT "support_tickets_replied_by_fkey" FOREIGN KEY ("replied_by") REFERENCES "admin_users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "support_tickets" ADD CONSTRAINT "support_tickets_admin_id_fkey" FOREIGN KEY ("admin_id") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "support_tickets" ADD CONSTRAINT "support_tickets_replied_by_fkey" FOREIGN KEY ("replied_by") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;

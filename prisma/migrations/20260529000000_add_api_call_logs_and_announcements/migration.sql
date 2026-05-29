@@ -34,4 +34,4 @@ CREATE INDEX "system_announcements_created_at_idx" ON "system_announcements"("cr
 -- AddForeignKey
 ALTER TABLE "api_call_logs" ADD CONSTRAINT "api_call_logs_agency_id_fkey" FOREIGN KEY ("agency_id") REFERENCES "agencies"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "api_call_logs" ADD CONSTRAINT "api_call_logs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "system_announcements" ADD CONSTRAINT "system_announcements_admin_id_fkey" FOREIGN KEY ("admin_id") REFERENCES "admin_users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "system_announcements" ADD CONSTRAINT "system_announcements_admin_id_fkey" FOREIGN KEY ("admin_id") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
