@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertTriangle, Lock, LockOpen } from "lucide-react";
 
 type ReviewRow = {
   userId: string;
@@ -11,6 +11,8 @@ type ReviewRow = {
   attendance:  { total: number; confirmed: number };
   logs:        { total: number; confirmed: number };
   evaluations: { total: number; confirmed: number };
+  isManagerFinalLocked: boolean;
+  managerFinalAt: string | null;
 };
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
@@ -41,6 +43,7 @@ export default function AdminReviewPage() {
   const [rejectMsg, setRejectMsg]   = useState("");
   const [sending, setSending]       = useState(false);
   const [toast, setToast]           = useState("");
+  const [locking, setLocking]       = useState<string | null>(null);
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 2500); }
 
@@ -88,6 +91,31 @@ export default function AdminReviewPage() {
     r.logs.confirmed >= r.logs.total &&
     (r.evaluations.total === 0 || r.evaluations.confirmed >= r.evaluations.total)
   ).length;
+
+  async function toggleLock(r: ReviewRow) {
+    setLocking(r.userId);
+    const method = r.isManagerFinalLocked ? "DELETE" : "POST";
+    const res    = await fetch("/api/admin/final-lock", {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: r.userId, yearMonth }),
+    });
+    const data = await res.json();
+    setLocking(null);
+    if (data.success) {
+      showToast(r.isManagerFinalLocked
+        ? `${r.userName} 잠금이 해제되었습니다.`
+        : `${r.userName} ${yearMonth} 출근기록이 최종 확정되었습니다.`);
+      // 목록 새로고침
+      setLoading(true);
+      fetch(`/api/admin/review?yearMonth=${yearMonth}`)
+        .then(res => res.json())
+        .then(d => { if (d.success) setRows(d.rows); })
+        .finally(() => setLoading(false));
+    } else {
+      showToast(data.message ?? "처리 실패");
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -152,6 +180,7 @@ export default function AdminReviewPage() {
                 <th className="px-4 py-3 text-center text-xs font-black text-slate-500">종합평가</th>
                 <th className="px-4 py-3 text-center text-xs font-black text-slate-500">상태</th>
                 <th className="px-4 py-3 text-center text-xs font-black text-slate-500">반려</th>
+                <th className="px-4 py-3 text-center text-xs font-black text-slate-500">최종 확정</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -186,10 +215,41 @@ export default function AdminReviewPage() {
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => { setRejectModal({ userId: r.userId, userName: r.userName }); setRejectMsg(""); }}
-                        className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-black text-rose-600 hover:bg-rose-100 active:scale-95"
+                        disabled={r.isManagerFinalLocked}
+                        className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-black text-rose-600 hover:bg-rose-100 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         <AlertTriangle className="h-3 w-3" />반려
                       </button>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {r.isManagerFinalLocked ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-black text-white">
+                            <Lock className="h-3 w-3" />잠김
+                          </span>
+                          {r.managerFinalAt && (
+                            <span className="text-[10px] text-slate-400">
+                              {new Date(r.managerFinalAt).toLocaleDateString("ko-KR")}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => toggleLock(r)}
+                            disabled={locking === r.userId}
+                            className="mt-0.5 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-50 active:scale-95 disabled:opacity-50"
+                          >
+                            <LockOpen className="inline h-3 w-3 mr-0.5" />해제
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => toggleLock(r)}
+                          disabled={locking === r.userId || r.attendance.total === 0}
+                          className="flex items-center gap-1 rounded-lg border border-slate-900 bg-slate-900 px-2.5 py-1.5 text-xs font-black text-white hover:bg-slate-700 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <Lock className="h-3 w-3" />
+                          {locking === r.userId ? "처리 중..." : "최종 확정"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -203,7 +263,8 @@ export default function AdminReviewPage() {
         <p className="text-xs font-semibold leading-relaxed text-slate-500">
           · 직무지도원이 직접 확정한 기록만 집계됩니다.<br />
           · 출근부 미확정은 익일 자정에 자동 확정 처리됩니다.<br />
-          · 확정/전체 형식으로 표시됩니다.
+          · 확정/전체 형식으로 표시됩니다.<br />
+          · <strong>최종 확정</strong>: 잠금 후 직무지도원이 해당 월 출근기록을 수정할 수 없습니다.
         </p>
       </div>
 

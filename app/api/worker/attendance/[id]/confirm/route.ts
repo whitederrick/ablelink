@@ -23,13 +23,15 @@ export async function PATCH(
     const { id } = await params;
     const record = await prisma.dailyAttendance.findUnique({
       where: { id: BigInt(id) },
-      select: { id: true, userId: true, workDate: true, isFinalClosed: true, startTime: true, endTime: true },
+      select: { id: true, userId: true, workDate: true, isFinalClosed: true, isManagerFinalClosed: true, startTime: true, endTime: true },
     });
 
     if (!record)
       return NextResponse.json({ success: false, message: "기록을 찾을 수 없습니다." }, { status: 404 });
     if (record.userId.toString() !== session.userId)
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    if (record.isManagerFinalClosed)
+      return NextResponse.json({ success: false, message: "에이전시 관리자가 최종 확정한 기록입니다. 수정이 불가합니다." }, { status: 409 });
     if (record.isFinalClosed)
       return NextResponse.json({ success: false, message: "이미 확정된 기록입니다." }, { status: 409 });
 

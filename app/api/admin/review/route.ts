@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     const [attRows, logRows, evalRows] = await Promise.all([
       prisma.dailyAttendance.findMany({
         where: { userId: { in: uids }, workDate: { gte: dateFrom, lte: dateTo }, startTime: { not: null } },
-        select: { userId: true, isFinalClosed: true },
+        select: { userId: true, isFinalClosed: true, isManagerFinalClosed: true, managerFinalAt: true },
       }),
       prisma.traineeLog.findMany({
         where: { writerId: { in: uids }, attendance: { workDate: { gte: dateFrom, lte: dateTo } } },
@@ -69,13 +69,22 @@ export async function GET(req: NextRequest) {
     function makeCounts(ids: bigint[]): Map<string, Counts> {
       return new Map(ids.map(id => [id.toString(), { total: 0, confirmed: 0 }]));
     }
-    const attMap  = makeCounts(uids);
-    const logMap  = makeCounts(uids);
-    const evalMap = makeCounts(uids);
+    const attMap     = makeCounts(uids);
+    const logMap     = makeCounts(uids);
+    const evalMap    = makeCounts(uids);
+    // 잠금 상태: userId → { locked: boolean; managerFinalAt: Date|null }
+    const lockMap    = new Map<string, { locked: boolean; managerFinalAt: Date | null }>(
+      uids.map(id => [id.toString(), { locked: false, managerFinalAt: null }])
+    );
 
     for (const r of attRows) {
-      const c = attMap.get(r.userId.toString());
+      const uid = r.userId.toString();
+      const c = attMap.get(uid);
       if (c) { c.total++; if (r.isFinalClosed) c.confirmed++; }
+      // 한 건이라도 isManagerFinalClosed=true면 해당 월 잠김으로 간주
+      if (r.isManagerFinalClosed) {
+        lockMap.set(uid, { locked: true, managerFinalAt: r.managerFinalAt ?? null });
+      }
     }
     for (const r of logRows) {
       const c = logMap.get(r.writerId.toString());
@@ -86,15 +95,21 @@ export async function GET(req: NextRequest) {
       if (c) { c.total++; if (r.isConfirmed) c.confirmed++; }
     }
 
-    const rows = users.map(({ user, site }) => ({
-      userId:      user.id.toString(),
-      userName:    user.userName,
-      phoneNumber: user.phoneNumber,
-      siteName:    site?.companyName ?? "-",
-      attendance:  attMap.get(user.id.toString())  ?? { total: 0, confirmed: 0 },
-      logs:        logMap.get(user.id.toString())   ?? { total: 0, confirmed: 0 },
-      evaluations: evalMap.get(user.id.toString())  ?? { total: 0, confirmed: 0 },
-    }));
+    const rows = users.map(({ user, site }) => {
+      const uid  = user.id.toString();
+      const lock = lockMap.get(uid) ?? { locked: false, managerFinalAt: null };
+      return {
+        userId:             uid,
+        userName:           user.userName,
+        phoneNumber:        user.phoneNumber,
+        siteName:           site?.companyName ?? "-",
+        attendance:         attMap.get(uid)  ?? { total: 0, confirmed: 0 },
+        logs:               logMap.get(uid)  ?? { total: 0, confirmed: 0 },
+        evaluations:        evalMap.get(uid) ?? { total: 0, confirmed: 0 },
+        isManagerFinalLocked: lock.locked,
+        managerFinalAt:       lock.managerFinalAt?.toISOString() ?? null,
+      };
+    });
 
     return NextResponse.json({ success: true, yearMonth, rows });
   } catch (e: any) {

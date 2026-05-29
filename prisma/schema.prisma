@@ -307,10 +307,13 @@ model DailyAttendance {
   attendanceIssue  AttendanceIssue?
   editRequests     AttendanceEditRequest[]
 
-  isGpsModified Boolean    @default(false) @map("is_gps_modified")
-  status        WorkStatus @default(WORKING)
-  isFinalClosed Boolean    @default(false) @map("is_final_closed")
-  finalizedAt   DateTime?  @map("finalized_at") @db.Timestamp(6)
+  isGpsModified        Boolean    @default(false) @map("is_gps_modified")
+  status               WorkStatus @default(WORKING)
+  isFinalClosed        Boolean    @default(false) @map("is_final_closed")
+  finalizedAt          DateTime?  @map("finalized_at") @db.Timestamp(6)
+  isManagerFinalClosed Boolean    @default(false) @map("is_manager_final_closed")
+  managerFinalAt       DateTime?  @map("manager_final_at")
+  managerFinalBy       BigInt?    @map("manager_final_by")
 
   site Site @relation(fields: [siteId], references: [id])
   user User @relation(fields: [userId], references: [id])
