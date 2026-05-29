@@ -161,6 +161,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, page, pageSize, total, items: rows.map(toItem) });
   } catch (e: any) {
+    if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
     return NextResponse.json({ success: false, message: msg }, { status: errToStatus(msg) });
   }
@@ -245,6 +246,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, item: toItem(created) });
   } catch (e: any) {
+    if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
     return NextResponse.json({ success: false, message: msg }, { status: errToStatus(msg) });
   }
