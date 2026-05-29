@@ -39,6 +39,13 @@ export async function GET(request: NextRequest) {
     const site = assignment.site;
     const agency = assignment.agency;
 
+    // 오늘 출근 기록 조회
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const todayAttendance = await prisma.dailyAttendance.findFirst({
+      where: { userId, assignmentId: assignment.id, workDate: todayStr },
+      orderBy: { id: "desc" },
+    });
+
     // 직무지도원 정보 조회
     const user = await prisma.worker.findUnique({
       where: { id: userId },
@@ -81,8 +88,7 @@ export async function GET(request: NextRequest) {
         managerPhone: manager?.phoneNumber ?? "",
         fieldTrainingStart: assignment.startDate?.toISOString() ?? null,
         fieldTrainingEnd: assignment.endDate?.toISOString() ?? null,
-        // 오늘 출근 기록 ID (worklog에서 attendanceId 없을 때 사용)
-        attendanceId: null, // home API에서 처리
+        attendanceId: todayAttendance?.id?.toString() ?? null,
         // 훈련 단계
         trainingType: (assignment as any)?.serviceStep === "PRE_TRAINING"
           ? "PRE" : (assignment as any)?.serviceStep === "ADAPTATION"

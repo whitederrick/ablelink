@@ -426,6 +426,10 @@ function WorklogForm() {
 
   async function handleSave(isComplete: boolean) {
     setError("");
+    if (!resolvedAttendanceId) {
+      setError("출근 체크인 후 일지를 작성할 수 있습니다.");
+      return;
+    }
     const dow = new Date(logDate + "T00:00:00").getDay();
     const isWeekend = dow === 0 || dow === 6;
     if (isWeekend && !weekendReason.trim()) {
