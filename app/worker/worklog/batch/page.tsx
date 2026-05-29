@@ -38,7 +38,7 @@ export default function BatchWorklogPage() {
   const [dateFrom, setDateFrom]             = useState(today);
   const [dateTo,   setDateTo]               = useState(today);
   const [selectedTrainees, setSelectedTrainees] = useState<Set<string>>(new Set());
-  // 공휴일 + 커스텀 휴무일 (date → 이름)
+  // 공휴일 + 커스텀 휴무일 중 근무 미인정 날짜 (date → 이름)
   const [holidays, setHolidays]             = useState<Record<string, string>>({});
 
   // STEP 2: 녹음
@@ -102,7 +102,15 @@ export default function BatchWorklogPage() {
           const res = await fetch(`/api/worker/holidays?year=${year}&month=${month}`);
           const data = await res.json();
           if (data.success) {
-            Object.assign(merged, data.national ?? {}, data.custom ?? {});
+            // 국가공휴일은 항상 제외
+            Object.assign(merged, data.national ?? {});
+            // 커스텀 휴무일: countAsWorkday=true면 근무 인정 → 제외 목록에서 빼기
+            const detail = data.customDetail ?? {};
+            for (const [date, info] of Object.entries(detail)) {
+              if (!(info as any).countAsWorkday) {
+                merged[date] = (info as any).reason ?? "휴무";
+              }
+            }
           }
         }
         setHolidays(merged);

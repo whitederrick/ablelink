@@ -633,11 +633,12 @@ model Submission {
 
 // 사이트별 휴무일 (직무지도원이 등록)
 model SiteHoliday {
-  id           BigInt   @id @default(autoincrement())
-  assignmentId BigInt   @map("assignment_id")
-  date         String   @map("date") // YYYY-MM-DD
-  reason       String?  @map("reason")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id             BigInt   @id @default(autoincrement())
+  assignmentId   BigInt   @map("assignment_id")
+  date           String   @map("date") // YYYY-MM-DD
+  reason         String?  @map("reason")
+  countAsWorkday Boolean  @default(false) @map("count_as_workday") // true면 근무 인정
+  createdAt      DateTime @default(now()) @map("created_at")
 
   assignment SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
 

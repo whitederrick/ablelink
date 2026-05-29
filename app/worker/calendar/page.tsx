@@ -89,6 +89,7 @@ export default function CalendarPage() {
   const [holidaySheet, setHolidaySheet] = useState(false);
   const [newHolidayDate, setNewHolidayDate] = useState("");
   const [newHolidayReason, setNewHolidayReason] = useState("");
+  const [newHolidayCountAsWork, setNewHolidayCountAsWork] = useState(false);
   const [savingHoliday, setSavingHoliday] = useState(false);
 
   const fetchCalendar = useCallback(async () => {
@@ -130,7 +131,7 @@ export default function CalendarPage() {
       const res = await fetch("/api/worker/holidays", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: newHolidayDate, reason: newHolidayReason.trim() || undefined }),
+        body: JSON.stringify({ date: newHolidayDate, reason: newHolidayReason.trim() || undefined, countAsWorkday: newHolidayCountAsWork }),
       });
       const d = await res.json();
       if (d.success) {
@@ -522,6 +523,18 @@ export default function CalendarPage() {
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 outline-none placeholder:font-normal placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
                 />
               </div>
+              <label className="flex items-center gap-2.5 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={newHolidayCountAsWork}
+                  onChange={e => setNewHolidayCountAsWork(e.target.checked)}
+                  className="h-4 w-4 rounded accent-emerald-600"
+                />
+                <div>
+                  <p className="text-sm font-black text-slate-700">근무 인정 (에이전시 정책)</p>
+                  <p className="text-[11px] font-semibold text-slate-400">체크 시 배치 일지 작성의 근무일 수에 포함됩니다</p>
+                </div>
+              </label>
               <button
                 onClick={addHoliday}
                 disabled={savingHoliday || !newHolidayDate}

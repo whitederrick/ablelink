@@ -23,16 +23,24 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    title: "근태/문서",
+    title: "근태/일지",
     items: [
       { href: "/manager/attendances",              label: "근태 현황" },
+      { href: "/manager/calendar",                 label: "근태 캘린더" },
       { href: "/manager/inbox/attendance",         label: "GPS 승인 대기" },
       { href: "/manager/attendance-edit-requests", label: "출근부 수정 요청" },
-      { href: "/manager/contracts",                label: "근로계약서" },
-      { href: "/manager/documents",                label: "문서 운영" },
-      { href: "/manager/docs",                     label: "문서 조회" },
-      { href: "/manager/review",                   label: "확정 현황" },
-      { href: "/manager/reports",                  label: "진척도 리포트" },
+      { href: "/manager/logs",                     label: "일지 내용 열람" },
+    ],
+  },
+  {
+    title: "문서/소통",
+    items: [
+      { href: "/manager/contracts",  label: "근로계약서" },
+      { href: "/manager/documents",  label: "문서 운영" },
+      { href: "/manager/docs",       label: "문서 조회" },
+      { href: "/manager/review",     label: "확정 현황" },
+      { href: "/manager/reports",    label: "진척도 리포트" },
+      { href: "/manager/notices",    label: "공지 발송" },
     ],
   },
   {
