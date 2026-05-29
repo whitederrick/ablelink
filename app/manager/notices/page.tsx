@@ -22,7 +22,7 @@ export default function NoticesPage() {
 
   // 발송 폼
   const [targetAll, setTargetAll] = useState(true);
-  const [selectedCoaches, setSelectedCoaches] = useState<Set<string>>(new Set());
+  const [selectedWorkers, setSelectedWorkers] = useState<Set<string>>(new Set());
   const [title, setTitle]   = useState("");
   const [body, setBody]     = useState("");
   const [type, setType]     = useState("INFO");
@@ -45,7 +45,7 @@ export default function NoticesPage() {
   async function send() {
     if(!title.trim()||!body.trim()){showToast("제목과 내용을 입력해주세요.");return;}
     setSending(true);
-    const userIds = targetAll ? undefined : [...selectedCoaches];
+    const userIds = targetAll ? undefined : [...selectedWorkers];
     const res = await fetch("/api/admin/notices",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
@@ -55,7 +55,7 @@ export default function NoticesPage() {
     setSending(false);
     if(data.success){
       showToast(`${data.sent}명에게 공지를 발송했습니다.`);
-      setTitle(""); setBody(""); setType("INFO"); setSelectedCoaches(new Set());
+      setTitle(""); setBody(""); setType("INFO"); setSelectedWorkers(new Set());
       loadNotices();
     } else showToast(data.message||"발송 실패");
   }
@@ -94,11 +94,11 @@ export default function NoticesPage() {
                 {workers.map(c=>(
                   <label key={c.id} className="flex items-center gap-2.5 cursor-pointer rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
                     <input type="checkbox"
-                      checked={selectedCoaches.has(c.id)}
+                      checked={selectedWorkers.has(c.id)}
                       onChange={e=>{
-                        const next = new Set(selectedCoaches);
+                        const next = new Set(selectedWorkers);
                         e.target.checked ? next.add(c.id) : next.delete(c.id);
-                        setSelectedCoaches(next);
+                        setSelectedWorkers(next);
                       }}
                       className="h-4 w-4 accent-slate-950"/>
                     <span className="text-sm font-semibold text-slate-800">{c.userName}</span>

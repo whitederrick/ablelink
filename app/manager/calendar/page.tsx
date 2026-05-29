@@ -29,7 +29,7 @@ export default function ManagerCalendarPage() {
         if(d.success) {
           const list = d.data?.map((c:any)=>({id:c.id,userName:c.userName,siteName:c.currentSiteName??c.siteName??""}))||[];
           setWorkers(list);
-          if(list.length>0) setSelectedCoach(list[0]);
+          if(list.length>0) setSelectedWorker(list[0]);
         }
       }).catch(()=>{});
   },[]);
@@ -90,7 +90,7 @@ export default function ManagerCalendarPage() {
         <p className="mt-0.5 text-sm text-slate-500">직무지도원별 월간 출근 현황</p></div>
 
       <div className="mb-4 flex items-center gap-3 flex-wrap">
-        <select value={selectedWorker?.id??""} onChange={e=>{const c=workers.find(x=>x.id===e.target.value);setSelectedCoach(c??null);}}
+        <select value={selectedWorker?.id??""} onChange={e=>{const c=workers.find(x=>x.id===e.target.value);setSelectedWorker(c??null);}}
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400 min-w-[160px]">
           {workers.map(c=><option key={c.id} value={c.id}>{c.userName}</option>)}
         </select>

@@ -38,7 +38,7 @@ function defaultPeriod() {
 export default function AdminDocsPage() {
   const def = defaultPeriod();
   const [workers, setWorkers]       = useState<Worker[]>([]);
-  const [selectedWorker, setSelectedCoach] = useState("");
+  const [selectedWorker, setSelectedWorker] = useState("");
   const [docType,       setDocType]       = useState<DocType>("attendance-sheet");
   const [traineeId,     setTraineeId]     = useState("");
   const [periodStart,   setPeriodStart]   = useState(def.start);
@@ -228,7 +228,7 @@ export default function AdminDocsPage() {
         ) : (
           <div className="flex flex-col gap-2">
             {workers.map(c => (
-              <button key={c.userId} onClick={() => { setSelectedCoach(c.userId); setTraineeId(""); }}
+              <button key={c.userId} onClick={() => { setSelectedWorker(c.userId); setTraineeId(""); }}
                 className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left transition active:scale-95 ${
                   selectedWorker === c.userId ? "border-slate-950 bg-slate-950" : "border-slate-200 bg-slate-50 hover:bg-slate-100"
                 }`}>
