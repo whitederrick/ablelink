@@ -368,6 +368,171 @@ if [ $GOT_429 -eq 1 ]; then pass "OTP rate limit → 429 발생 확인"
 else fail "OTP rate limit" "429 발생" "15회 요청에도 429 없음"; fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+section "11. 보안 수정 검증 (2026-05-29)"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# [ISSUE-05] BigInt 비정상 ID → 400 (500 아님)
+assert "[보안] 잘못된 ID(abc) → 400" "400" '"success":false' "" \
+  "$BASE/api/admin/system/agencies/abc/detail"
+
+assert "[보안] 소수점 ID(1.5) → 400" "400" '"success":false' "" \
+  "$BASE/api/admin/system/agencies/1.5/detail"
+
+assert "[보안] 빈 경로 ID → 400 or 404" "" "" "" \
+  "$BASE/api/admin/support/abc"
+
+# [ISSUE-06] 로그인 응답에 phoneNumber 없음
+WORKER_LOGIN_RESP=$(curl -s \
+  -X POST "$BASE/api/worker/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"loginId":"worker01","password":"worker1234!"}')
+if echo "$WORKER_LOGIN_RESP" | grep -q '"phoneNumber"'; then
+  fail "[보안] 로그인 응답 phoneNumber 미포함" "phoneNumber 없음" "phoneNumber 포함됨"
+else
+  pass "[보안] 로그인 응답 phoneNumber 미포함 확인"
+fi
+
+# 신규 API 미인증 → 401 확인
+for ep in \
+  "/api/admin/support" \
+  "/api/admin/holiday-requests" \
+  "/api/admin/final-lock" \
+  "/api/admin/system/billing" \
+  "/api/admin/system/usage" \
+  "/api/admin/system/announcements" \
+  "/api/worker/holiday-requests"; do
+  assert_not "$ep 미인증 → 401 (500 아님)" "401" '"message":"서버 오류"' "" "$BASE$ep"
+done
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+section "12. 지원 요청 채널 API"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 관리자 재로그인 (AGENCY 계정 필요 — 에이전시 관리자 계정으로 테스트)
+AGENCY_COOKIE=$(mktemp)
+trap "rm -f $AGENCY_COOKIE" EXIT
+curl -s -c "$AGENCY_COOKIE" \
+  -X POST "$BASE/api/admin/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"loginId":"manager01","password":"manager1234!"}' > /dev/null
+
+# AGENCY 계정으로 지원 요청 목록 조회
+assert "[지원요청] 목록 조회 → 200" "200" '"success":true' "$AGENCY_COOKIE" \
+  "$BASE/api/admin/support"
+
+# 빈 제목으로 요청 생성 → 400
+assert "[지원요청] 빈 제목 → 400" "400" '"success":false' "$AGENCY_COOKIE" \
+  -X POST "$BASE/api/admin/support" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"","body":"내용","category":"GENERAL"}'
+
+# ADMIN 계정으로 전체 목록 조회
+assert "[지원요청] ADMIN 전체 목록 → 200" "200" '"success":true' "$ADMIN_COOKIE" \
+  "$BASE/api/admin/support"
+
+# 없는 ID 조회 → 404 (500 아님)
+assert "[지원요청] 없는 ID 404" "404" '"success":false' "$ADMIN_COOKIE" \
+  "$BASE/api/admin/support/999999999"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+section "13. 시스템 운영자 전용 API"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+assert "[시스템] billing → 200" "200" '"success":true' "$ADMIN_COOKIE" \
+  "$BASE/api/admin/system/billing"
+
+assert "[시스템] billing → billing 배열" "200" '"billing"' "$ADMIN_COOKIE" \
+  "$BASE/api/admin/system/billing"
+
+assert "[시스템] usage → 200" "200" '"success":true' "$ADMIN_COOKIE" \
+  "$BASE/api/admin/system/usage?yearMonth=2026-05"
+
+assert "[시스템] announcements 목록 → 200" "200" '"success":true' "$ADMIN_COOKIE" \
+  "$BASE/api/admin/system/announcements"
+
+assert "[시스템] agencies 목록 → 200" "200" '"success":true' "$ADMIN_COOKIE" \
+  "$BASE/api/admin/system/agencies"
+
+# AGENCY 계정이 ADMIN 전용 API 호출 → 403
+assert "[시스템] AGENCY→billing 접근 → 403" "403" '"success":false' "$AGENCY_COOKIE" \
+  "$BASE/api/admin/system/billing"
+
+assert "[시스템] AGENCY→usage 접근 → 403" "403" '"success":false' "$AGENCY_COOKIE" \
+  "$BASE/api/admin/system/usage"
+
+assert "[시스템] AGENCY→announcements 접근 → 403" "403" '"success":false' "$AGENCY_COOKIE" \
+  "$BASE/api/admin/system/announcements"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+section "14. 커스텀 휴무일 변경 요청 API"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 에이전시 관리자: 이번 달 휴무일 목록 조회
+assert "[휴무요청] 목록 조회 → 200" "200" '"success":true' "$AGENCY_COOKIE" \
+  "$BASE/api/admin/holiday-requests?yearMonth=2026-05"
+
+# 잘못된 yearMonth 형식 → 400
+assert "[휴무요청] 잘못된 yearMonth → 400" "400" '"success":false' "$AGENCY_COOKIE" \
+  "$BASE/api/admin/holiday-requests?yearMonth=2026-5"
+
+# 없는 holidayId로 요청 → 404 or 403
+HR_CODE=$(curl -s -o /dev/null -w "%{http_code}" -b "$AGENCY_COOKIE" \
+  -X POST "$BASE/api/admin/holiday-requests" \
+  -H "Content-Type: application/json" \
+  -d '{"holidayId":"999999999","requestType":"DELETE"}')
+if [[ "$HR_CODE" == "403" || "$HR_CODE" == "404" ]]; then
+  pass "[휴무요청] 없는 holidayId → 403/404 ($HR_CODE)"
+else
+  fail "[휴무요청] 없는 holidayId → 403/404" "403 또는 404" "$HR_CODE"
+fi
+
+# worker: PENDING 요청 목록 → 200
+curl -s -c "$WORKER_COOKIE" \
+  -X POST "$BASE/api/worker/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"loginId":"worker01","password":"worker1234!"}' > /dev/null
+assert "[휴무요청] worker PENDING 조회 → 200" "200" '"success":true' "$WORKER_COOKIE" \
+  "$BASE/api/worker/holiday-requests"
+
+# worker: 잘못된 ID → 400
+assert "[휴무요청] 잘못된 requestId → 400" "400" '"success":false' "$WORKER_COOKIE" \
+  -X PATCH "$BASE/api/worker/holiday-requests/abc" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"accept"}'
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+section "15. 매니저 최종 확정 API"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# AGENCY: 없는 userId → 403
+LOCK_CODE=$(curl -s -o /dev/null -w "%{http_code}" -b "$AGENCY_COOKIE" \
+  -X POST "$BASE/api/admin/final-lock" \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"999999999","yearMonth":"2026-05"}')
+if [[ "$LOCK_CODE" == "403" ]]; then
+  pass "[최종확정] 소속 아닌 userId → 403"
+else
+  fail "[최종확정] 소속 아닌 userId → 403" "403" "$LOCK_CODE"
+fi
+
+# yearMonth 형식 오류 → 400
+LOCK_FMT=$(curl -s -o /dev/null -w "%{http_code}" -b "$AGENCY_COOKIE" \
+  -X POST "$BASE/api/admin/final-lock" \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"1","yearMonth":"2026-5"}')
+if [[ "$LOCK_FMT" == "400" ]]; then
+  pass "[최종확정] 잘못된 yearMonth → 400"
+else
+  fail "[최종확정] 잘못된 yearMonth → 400" "400" "$LOCK_FMT"
+fi
+
+# ADMIN 계정이 final-lock → 403 (AGENCY만 가능)
+assert "[최종확정] ADMIN→final-lock → 403" "403" '"success":false' "$ADMIN_COOKIE" \
+  -X POST "$BASE/api/admin/final-lock" \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"1","yearMonth":"2026-05"}'
+
+# review API → isManagerFinalLocked 포함 확인
+assert "[최종확정] review → isManagerFinalLocked 포함" "200" '"isManagerFinalLocked"' "$AGENCY_COOKIE" \
+  "$BASE/api/admin/review?yearMonth=2026-05"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 결과 요약
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TOTAL=$((PASS + FAIL))

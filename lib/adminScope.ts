@@ -5,7 +5,9 @@ import "server-only";
 
 /** URL 파라미터나 body의 id 문자열을 BigInt로 안전하게 변환. 실패 시 null 반환 */
 export function parseBigInt(value: unknown): bigint | null {
-  try { return BigInt(String(value)); } catch { return null; }
+  const s = String(value ?? "").trim();
+  if (!s || !/^-?\d+$/.test(s)) return null;
+  try { return BigInt(s); } catch { return null; }
 }
 
 import { NextResponse } from "next/server";

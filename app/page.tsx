@@ -54,13 +54,13 @@ export default function LandingPage() {
           </Link>
 
           <Link
-            href="/admin/login"
+            href="/manager/login"
             className="flex min-h-[4.5rem] items-center justify-between rounded-3xl border border-slate-200 bg-white px-5 text-slate-900 shadow-sm transition active:scale-[0.98]"
           >
             <span className="flex items-center gap-3">
               <Building2 className="h-5 w-5 text-sky-500" aria-hidden="true" />
               <span>
-                <span className="block text-sm font-black">에이전시</span>
+                <span className="block text-sm font-black">에이전시 관리자</span>
                 <span className="block text-xs font-semibold text-slate-400">운영·통계·문서 관리</span>
               </span>
             </span>
