@@ -756,6 +756,170 @@ assert "존재하지 않는 초대 링크 → 404" "404" '"success":false' "" \
   "$BASE/api/worker/invite/999999"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+section "22. 에이전시 관리자 가입 시나리오 (Option A: 자체 신청)"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TS=$(date +%s)
+BNO_TEST="${TS}"          # 10자리 타임스탬프 → 사업자번호로 사용
+LOGIN_TEST="mgr${TS}"     # 고유 loginId
+
+# 1) 기관명 누락 → 400
+assert "관리자 가입: 기관명 누락 → 400" "400" '"success":false' "" \
+  -X POST "$BASE/api/manager/auth/signup" \
+  -H "Content-Type: application/json" \
+  -d '{"businessNumber":"1234567890","loginId":"testmgr","password":"test1234!"}'
+
+# 2) 잘못된 사업자번호(9자리) → 400
+assert "관리자 가입: 잘못된 사업자번호 → 400" "400" '"success":false' "" \
+  -X POST "$BASE/api/manager/auth/signup" \
+  -H "Content-Type: application/json" \
+  -d '{"agencyName":"테스트기관","businessNumber":"123456789","loginId":"testmgr","password":"test1234!"}'
+
+# 3) 짧은 비밀번호(7자) → 400
+assert "관리자 가입: 짧은 비밀번호 → 400" "400" '"success":false' "" \
+  -X POST "$BASE/api/manager/auth/signup" \
+  -H "Content-Type: application/json" \
+  -d '{"agencyName":"테스트기관","businessNumber":"1234567890","loginId":"testmgr","password":"short1"}'
+
+# 4) 정상 가입 신청
+MGR_SIGNUP_RESP=$(curl -s \
+  -X POST "$BASE/api/manager/auth/signup" \
+  -H "Content-Type: application/json" \
+  -d "{\"agencyName\":\"테스트기관_${TS}\",\"businessNumber\":\"${BNO_TEST}\",\"loginId\":\"${LOGIN_TEST}\",\"password\":\"test1234!\",\"displayName\":\"홍길동\"}")
+
+if echo "$MGR_SIGNUP_RESP" | grep -q '"success":true'; then
+  pass "관리자 자체 가입 신청 (Option A)"
+  MGR_REQUEST_ID=$(extract "$MGR_SIGNUP_RESP" "requestId")
+else
+  fail "관리자 자체 가입 신청" "success:true" "$MGR_SIGNUP_RESP"
+  MGR_REQUEST_ID=""
+fi
+
+# 5) 중복 loginId → 409
+assert "관리자 가입: 중복 loginId → 409" "409" '"success":false' "" \
+  -X POST "$BASE/api/manager/auth/signup" \
+  -H "Content-Type: application/json" \
+  -d "{\"agencyName\":\"다른기관\",\"businessNumber\":\"0000000001\",\"loginId\":\"${LOGIN_TEST}\",\"password\":\"test1234!\"}"
+
+# 6) 신청 상태 조회 → PENDING
+STATUS_RESP=$(curl -s "$BASE/api/manager/auth/signup?loginId=${LOGIN_TEST}")
+if echo "$STATUS_RESP" | grep -q '"status":"PENDING"'; then
+  pass "관리자 가입 신청 상태 조회 (PENDING)"
+else
+  fail "관리자 가입 신청 상태 조회" '"status":"PENDING"' "$STATUS_RESP"
+fi
+
+# 7) 없는 loginId 상태 조회 → 404
+assert "관리자 가입 상태: 없는 loginId → 404" "404" '"success":false' "" \
+  "$BASE/api/manager/auth/signup?loginId=nonexistent_xyz_9999"
+
+# 8) 운영자: 가입 신청 목록 조회
+assert "운영자: 관리자 가입 신청 목록 조회" "200" '"success":true' "$ADMIN_COOKIE" \
+  "$BASE/api/admin/system/manager-signup-requests"
+
+if [ -n "$MGR_REQUEST_ID" ]; then
+  # 9) 운영자: 신청 상세 조회
+  assert "운영자: 관리자 가입 신청 상세 조회" "200" '"success":true' "$ADMIN_COOKIE" \
+    "$BASE/api/admin/system/manager-signup-requests/$MGR_REQUEST_ID"
+
+  # 10) 운영자: 반려 처리
+  REJECT_RESP=$(curl -s -b "$ADMIN_COOKIE" \
+    -X PATCH "$BASE/api/admin/system/manager-signup-requests/$MGR_REQUEST_ID" \
+    -H "Content-Type: application/json" \
+    -d '{"action":"reject","reviewNote":"서류 미비"}')
+  if echo "$REJECT_RESP" | grep -q '"success":true'; then
+    pass "운영자: 관리자 가입 신청 반려"
+  else
+    fail "운영자: 관리자 가입 신청 반려" "success:true" "$REJECT_RESP"
+  fi
+
+  # 11) 반려 후 상태 확인 → REJECTED
+  STATUS2=$(curl -s "$BASE/api/manager/auth/signup?loginId=${LOGIN_TEST}")
+  if echo "$STATUS2" | grep -q '"status":"REJECTED"'; then
+    pass "관리자 가입 반려 후 상태 확인"
+  else
+    fail "관리자 가입 반려 후 상태 확인" '"status":"REJECTED"' "$STATUS2"
+  fi
+
+  # 12) 이미 처리된 신청 재처리 → 409
+  assert "운영자: 이미 처리된 신청 재처리 → 409" "409" '"success":false' "$ADMIN_COOKIE" \
+    -X PATCH "$BASE/api/admin/system/manager-signup-requests/$MGR_REQUEST_ID" \
+    -H "Content-Type: application/json" \
+    -d '{"action":"reject"}'
+else
+  skip "requestId 없음 — 상세/반려 테스트 스킵"
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+section "22b. 에이전시 관리자 초대 코드 가입 (Option B)"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# 1) 운영자: 에이전시(id=3)에 관리자 초대 코드 발급
+MGR_INVITE_RESP=$(curl -s -b "$ADMIN_COOKIE" \
+  -X POST "$BASE/api/admin/system/agencies/3/manager-invite" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"invite@example.com"}')
+
+if echo "$MGR_INVITE_RESP" | grep -q '"success":true'; then
+  pass "운영자: 관리자 초대 코드 발급"
+  MGR_INVITE_CODE=$(extract "$MGR_INVITE_RESP" "code")
+else
+  fail "운영자: 관리자 초대 코드 발급" "success:true" "$MGR_INVITE_RESP"
+  MGR_INVITE_CODE=""
+fi
+
+# 2) 없는 초대 코드 → 410
+assert "관리자 초대: 없는 코드 → 410" "410" '"success":false' "" \
+  "$BASE/api/manager/invite/00000000-0000-0000-0000-000000000000"
+
+if [ -n "$MGR_INVITE_CODE" ]; then
+  # 3) 초대 정보 조회 → agencyName 포함
+  INVITE_INFO_RESP=$(curl -s "$BASE/api/manager/invite/$MGR_INVITE_CODE")
+  if echo "$INVITE_INFO_RESP" | grep -q '"agencyName"'; then
+    pass "관리자 초대: 초대 정보 조회"
+  else
+    fail "관리자 초대: 초대 정보 조회" "agencyName 포함" "$INVITE_INFO_RESP"
+  fi
+
+  # 4) 짧은 비밀번호로 가입 → 400
+  assert "관리자 초대 가입: 짧은 비밀번호 → 400" "400" '"success":false' "" \
+    -X POST "$BASE/api/manager/invite/$MGR_INVITE_CODE" \
+    -H "Content-Type: application/json" \
+    -d '{"loginId":"mgrinvite","password":"short"}'
+
+  # 5) 정상 가입
+  MGR_INVITE_COOKIE=$(mktemp)
+  MGR_LOGIN_INVITE="mgrinv${TS}"
+  INVITE_SIGNUP=$(curl -s -c "$MGR_INVITE_COOKIE" \
+    -X POST "$BASE/api/manager/invite/$MGR_INVITE_CODE" \
+    -H "Content-Type: application/json" \
+    -d "{\"loginId\":\"${MGR_LOGIN_INVITE}\",\"password\":\"test1234!\",\"displayName\":\"초대관리자\"}")
+
+  if echo "$INVITE_SIGNUP" | grep -q '"success":true'; then
+    pass "관리자 초대 코드로 가입 완료"
+  else
+    fail "관리자 초대 코드로 가입" "success:true" "$INVITE_SIGNUP"
+  fi
+
+  # 6) 세션 쿠키 자동 발급 확인
+  if grep -q "admlink_manager_session" "$MGR_INVITE_COOKIE" 2>/dev/null; then
+    pass "관리자 초대 가입 후 세션 쿠키 자동 발급"
+  else
+    fail "관리자 초대 가입 세션 쿠키" "admlink_manager_session 쿠키" "쿠키 없음"
+  fi
+
+  # 7) 초대 코드 재사용 → 410
+  assert "관리자 초대 코드 재사용 → 410" "410" '"success":false' "" \
+    -X POST "$BASE/api/manager/invite/$MGR_INVITE_CODE" \
+    -H "Content-Type: application/json" \
+    -d '{"loginId":"mgrinvite2","password":"test1234!"}'
+
+  rm -f "$MGR_INVITE_COOKIE"
+else
+  skip "초대 코드 없음 — 초대 가입 시나리오 스킵"
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 결과 요약
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TOTAL=$((PASS + FAIL))

@@ -16,8 +16,9 @@ const groups: NavGroup[] = [
   {
     title: "에이전시 관리",
     items: [
-      { href: "/admin/agencies",     label: "에이전시 목록·생성" },
-      { href: "/admin/admins",       label: "운영자 계정 관리" },
+      { href: "/admin/agencies",                 label: "에이전시 목록·생성" },
+      { href: "/admin/manager-signup-requests",  label: "관리자 가입 신청" },
+      { href: "/admin/admins",                   label: "운영자 계정 관리" },
     ],
   },
   {

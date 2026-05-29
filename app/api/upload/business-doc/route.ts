@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
 
     // 버킷이 없으면 생성 시도 (이미 있으면 무시)
     const { error: bucketError } = await supabase.storage.createBucket(BUCKET_NAME, {
-      public: false,
+      public: true,
     });
     // 이미 존재하는 경우 에러가 발생하지만 무시
     if (bucketError && !bucketError.message.includes("already exists")) {

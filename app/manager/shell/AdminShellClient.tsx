@@ -22,10 +22,13 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<MeResponse | null>(null);
 
-  const isLoginPage = pathname === "/manager/login";
+  const isPublicPage =
+    pathname === "/manager/login" ||
+    pathname.startsWith("/manager/signup") ||
+    pathname.startsWith("/manager/invite");
 
   useEffect(() => {
-    if (isLoginPage) { setLoading(false); return; }
+    if (isPublicPage) { setLoading(false); return; }
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -43,9 +46,9 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoginPage]);
+  }, [isPublicPage]);
 
-  if (isLoginPage) return <>{children}</>;
+  if (isPublicPage) return <>{children}</>;
 
   if (loading) {
     return (
