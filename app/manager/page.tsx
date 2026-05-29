@@ -142,6 +142,7 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [popup, setPopup] = useState<null | "attendance_gps" | "attendance_time" | "doc_pending" | "doc_overdue" | "assign_ending" | "unassigned_site">(null);
+  const [pendingEditReqs, setPendingEditReqs] = useState(0);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -156,6 +157,13 @@ export default function AdminDashboardPage() {
     const t = setInterval(fetchDashboard, 3 * 60 * 1000);
     return () => clearInterval(t);
   }, [fetchDashboard]);
+
+  useEffect(() => {
+    fetch("/api/admin/attendance-edit-requests")
+      .then(r => r.json())
+      .then(d => { if (d.success) setPendingEditReqs(d.requests.filter((r: any) => r.status === "PENDING").length); })
+      .catch(() => {});
+  }, []);
 
   if (loading) return (
     <div className="flex min-h-[400px] flex-col items-center justify-center gap-3">
@@ -183,6 +191,7 @@ export default function AdminDashboardPage() {
     { label: "배정 종료 임박",  value: s?.endingIn5 ?? 0,           unit: "명", urgent: (s?.endingIn5 ?? 0) > 0, onClick: undefined, sub: `D-10: ${s?.endingIn10 ?? 0}명` },
     { label: "일지 미완료",     value: s?.logPendingCount ?? 0,     unit: "건", urgent: (s?.logPendingCount ?? 0) > 0, onClick: undefined, sub: `완료: ${s?.logDoneCount ?? 0}건` },
     { label: "미배정 Site",     value: s?.unassignedSiteCount ?? 0, unit: "건", urgent: (s?.unassignedSiteCount ?? 0) > 0, onClick: () => router.push("/manager/sites") },
+    { label: "출근부 수정 요청", value: pendingEditReqs,             unit: "건", urgent: pendingEditReqs > 0, onClick: () => router.push("/manager/attendance-edit-requests") },
   ];
 
   return (
@@ -203,7 +212,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* 요약 카드 7종 */}
-      <div className="grid grid-cols-7 gap-2.5">
+      <div className="grid grid-cols-8 gap-2.5">
         {SUMMARY_CARDS.map((card, i) => (
           <button
             key={i}

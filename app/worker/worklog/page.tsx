@@ -275,6 +275,7 @@ function WorklogForm() {
   const [measurementTime, setMeasurementTime] = useState("");
   const [content, setContent] = useState("");
   const [specialNotes, setSpecialNotes] = useState("");  // 적응지도 전용
+  const [weekendReason, setWeekendReason] = useState("");  // 주말 작성 사유
 
   // AI 음성
   const [isRecording, setIsRecording] = useState(false);
@@ -425,6 +426,16 @@ function WorklogForm() {
 
   async function handleSave(isComplete: boolean) {
     setError("");
+    const dow = new Date(logDate + "T00:00:00").getDay();
+    const isWeekend = dow === 0 || dow === 6;
+    if (isWeekend && !weekendReason.trim()) {
+      setError("주말 일지는 작성 사유가 필요합니다.");
+      return;
+    }
+    // 주말 사유를 content 앞에 첨부
+    const finalContent = isWeekend && weekendReason.trim()
+      ? `[주말 작성 사유: ${weekendReason.trim()}]\n\n${content}`
+      : content;
     setSaving(true);
     try {
       const res = await fetch("/api/worker/logs/save", {
@@ -444,7 +455,7 @@ function WorklogForm() {
           taskScore,
           measurementTime,
           specialNotes: isAdaptation ? specialNotes : "",
-          content,
+          content: finalContent,
           isCompleted: isComplete,
         }),
       });
@@ -516,12 +527,36 @@ function WorklogForm() {
         )}
 
         {/* 날짜 */}
-        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+        <div className={`rounded-2xl border p-4 ${(() => { const d = new Date(logDate + "T00:00:00"); const dow = d.getDay(); return (dow === 0 || dow === 6) ? "border-amber-200 bg-amber-50" : "border-slate-100 bg-white"; })()}`}>
           <div className="flex items-center justify-between">
             <span className="text-sm font-black text-slate-700">날짜</span>
             <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)}
               className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" />
           </div>
+          {(() => {
+            const d = new Date(logDate + "T00:00:00");
+            const dow = d.getDay();
+            const dayName = ["일","월","화","수","목","금","토"][dow];
+            if (dow === 0 || dow === 6) {
+              return (
+                <div className="mt-2 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                  <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
+                  <div>
+                    <p className="text-xs font-black text-amber-800">{dayName}요일 (주말)에 일지를 작성합니다</p>
+                    <p className="text-[11px] font-semibold text-amber-700">주말 일지는 에이전시 관리자에게 통보됩니다. 작성 사유를 기재해주세요.</p>
+                    <input
+                      type="text"
+                      value={weekendReason}
+                      onChange={e => setWeekendReason(e.target.value)}
+                      placeholder="예: 훈련생 특별 지도 필요, 행사 참여 등"
+                      className="mt-2 w-full rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-amber-400"
+                    />
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
 
         {/* 출결 */}

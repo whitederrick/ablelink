@@ -86,7 +86,7 @@ export default function AdminSitesPage() {
                 <tr key={it.id} className={T.trBase}>
                   <td className={`${T.td} text-xs text-slate-400`}>{it.id}</td>
                   <td className={T.td}>
-                    <Link href={`/admin/sites/${it.id}`} className="font-black text-sky-600 hover:underline">
+                    <Link href={`/manager/sites/${it.id}`} className="font-black text-sky-600 hover:underline">
                       {it.companyName}
                     </Link>
                   </td>
