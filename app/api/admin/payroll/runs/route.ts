@@ -62,13 +62,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "yearMonth 형식 오류 (YYYY-MM)" }, { status: 400 });
     }
 
-    // 기존 DRAFT 있으면 삭제 후 재계산
+    // 기존 DRAFT 있으면 삭제 후 재계산 (트랜잭션으로 원자적 처리)
     const existing = await prisma.payrollRun.findUnique({ where: { agencyId_yearMonth: { agencyId, yearMonth } } });
     if (existing?.status === "FINALIZED") {
       return NextResponse.json({ success: false, message: "이미 확정된 급여입니다. 수정할 수 없습니다." }, { status: 409 });
-    }
-    if (existing) {
-      await prisma.payrollRun.delete({ where: { id: existing.id } });
     }
 
     const [y, m] = yearMonth.split("-").map(Number);
@@ -233,14 +230,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const run = await prisma.payrollRun.create({
-      data: {
-        agencyId,
-        yearMonth,
-        status: "DRAFT",
-        items: { create: itemInputs },
-      },
-      include: { items: { include: { user: { select: { id: true, userName: true } } } } },
+    const run = await prisma.$transaction(async (tx) => {
+      if (existing) await tx.payrollRun.delete({ where: { id: existing.id } });
+      return tx.payrollRun.create({
+        data: { agencyId, yearMonth, status: "DRAFT", items: { create: itemInputs } },
+        include: { items: { include: { user: { select: { id: true, userName: true } } } } },
+      });
     });
 
     return NextResponse.json({

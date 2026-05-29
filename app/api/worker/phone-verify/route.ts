@@ -5,6 +5,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
+import { randomInt } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendSms } from "@/lib/sms";
 import { checkRateLimit } from "@/lib/rateLimit";
@@ -13,7 +14,7 @@ const PHONE_RE = /^01[0-9]{8,9}$/;
 const OTP_TTL_MS = 5 * 60 * 1000; // 5분
 
 function randomCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(randomInt(100000, 1000000));
 }
 
 export async function POST(request: Request) {

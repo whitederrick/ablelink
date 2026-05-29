@@ -20,7 +20,7 @@ export async function logAudit(params: {
         ipAddress: params.ipAddress ?? null,
       },
     });
-  } catch {
-    // 감사 로그 실패가 메인 작업을 막지 않도록
+  } catch (err) {
+    console.error("[auditLog] write failed:", err);
   }
 }

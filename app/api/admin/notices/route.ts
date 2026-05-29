@@ -5,6 +5,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { parseBigInt } from "@/lib/adminScope";
 
 export async function GET(req: NextRequest) {
   try {
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     // userIds가 없으면 소속 전체 직무지도원에게 발송
     let targetIds: bigint[] = [];
     if (Array.isArray(userIds) && userIds.length > 0) {
-      targetIds = userIds.map((id: string) => BigInt(id));
+      targetIds = userIds.map((id: unknown) => parseBigInt(id)).filter((id): id is bigint => id !== null);
     } else {
       const assignments = await prisma.siteAssignment.findMany({
         where: { agencyId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },

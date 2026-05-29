@@ -82,8 +82,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
       return NextResponse.json({ success: false, message: "금액 오류" }, { status: 400 });
     }
 
+    // IDOR 방지: itemId가 실제 이 run 소속인지 검증
+    const itemIdBig = BigInt(itemId);
+    const existingItem = await prisma.payrollItem.findUnique({
+      where: { id: itemIdBig },
+      select: { runId: true },
+    });
+    if (!existingItem || existingItem.runId !== run.id) {
+      return NextResponse.json({ success: false, message: "접근 불가" }, { status: 403 });
+    }
+
     const updated = await prisma.payrollItem.update({
-      where: { id: BigInt(itemId) },
+      where: { id: itemIdBig },
       data: {
         grossPay: new Decimal(gp),
         totalDeduction: new Decimal(td),

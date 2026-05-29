@@ -3,6 +3,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
+import { randomInt } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { sendSms } from "@/lib/sms";
@@ -11,7 +12,7 @@ const PHONE_RE = /^01[0-9]{8,9}$/;
 const INVITE_TTL_MS = 24 * 60 * 60 * 1000; // 24시간
 
 function randomCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(randomInt(100000, 1000000));
 }
 
 export async function POST(request: NextRequest) {

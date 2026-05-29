@@ -4,6 +4,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
+import { randomInt } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { sendSimpleEmail } from "@/lib/email";
@@ -34,8 +35,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: "이미 사용 중인 이메일 주소입니다." }, { status: 409 });
   }
 
-  // 6자리 인증 코드 생성
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  // 6자리 인증 코드 생성 (암호학적으로 안전한 난수)
+  const code = String(randomInt(100000, 1000000));
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10분
 
   await prisma.worker.update({
@@ -55,11 +56,10 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     console.error("[email-change/request] SES 오류:", e);
-    // SES 샌드박스 환경에서는 발송 실패 허용 (개발 환경 대응)
     if (process.env.NODE_ENV === "production") {
       return NextResponse.json({ success: false, message: "이메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요." }, { status: 500 });
     }
-    console.warn("[email-change/request] 개발 환경 — 인증 코드:", code);
+    // 개발 환경: 발송 실패 허용 (코드는 로그에 출력하지 않음)
   }
 
   return NextResponse.json({ success: true, message: "인증 코드를 발송했습니다. 이메일을 확인해주세요." });

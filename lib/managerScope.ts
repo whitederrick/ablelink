@@ -4,6 +4,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { readManagerSessionFromRequest } from "@/lib/managerCookies";
+import { readAdminSessionFromRequest } from "@/lib/adminCookies";
 import { parseBigInt } from "@/lib/adminScope";
 
 export type ManagerScope = {
@@ -34,9 +35,11 @@ export type DualSession =
   | { kind: "manager"; managerId: bigint; agencyId: bigint; loginId: string };
 
 export async function requireAdminOrManagerSession(req: Request): Promise<DualSession> {
-  // Manager 쿠키 먼저 시도
-  const { readManagerSessionFromRequest: readMgr } = await import("@/lib/managerCookies");
-  const mgr = await readMgr(req);
+  const [mgr, adm] = await Promise.all([
+    readManagerSessionFromRequest(req),
+    readAdminSessionFromRequest(req),
+  ]);
+
   if (mgr) {
     const managerId = parseBigInt(mgr.sub);
     const agencyId  = parseBigInt(mgr.agencyId);
@@ -44,9 +47,6 @@ export async function requireAdminOrManagerSession(req: Request): Promise<DualSe
       return { kind: "manager", managerId, agencyId, loginId: mgr.loginId };
   }
 
-  // Admin 쿠키 시도
-  const { readAdminSessionFromRequest: readAdm } = await import("@/lib/adminCookies");
-  const adm = await readAdm(req);
   if (adm) {
     const adminId = parseBigInt(adm.sub);
     if (adminId) return { kind: "admin", adminId, loginId: String(adm.loginId) };

@@ -68,7 +68,8 @@ export async function PATCH(
 
     await prisma.worker.update({ where: { id: userId }, data: updates });
 
-    return NextResponse.json({ success: true, ...(tempPassword ? { tempPassword } : {}) });
+    // 임시 비밀번호는 응답에 포함하지 않음 — SMS/카카오 알림으로만 전달
+    return NextResponse.json({ success: true, passwordReset: !!tempPassword });
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[admin coaches PATCH]", e);
