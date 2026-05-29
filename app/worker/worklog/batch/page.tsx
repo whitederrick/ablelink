@@ -38,6 +38,8 @@ export default function BatchWorklogPage() {
   const [dateFrom, setDateFrom]             = useState(today);
   const [dateTo,   setDateTo]               = useState(today);
   const [selectedTrainees, setSelectedTrainees] = useState<Set<string>>(new Set());
+  // 공휴일 + 커스텀 휴무일 (date → 이름)
+  const [holidays, setHolidays]             = useState<Record<string, string>>({});
 
   // STEP 2: 녹음
   const [step, setStep]             = useState<1 | 2 | 3>(1);
@@ -70,7 +72,6 @@ export default function BatchWorklogPage() {
         const d = data.data;
         setAssignmentId(d.assignmentId);
         setTrainees(d.trainees ?? []);
-        // STARTER+ 확인
         const ok = ["STARTER", "STANDARD", "PRO"].includes(d.agencyPlanType ?? "") ||
           (d.agencyPlanType === "TRIAL" && d.trialEndsAt && new Date(d.trialEndsAt) > new Date());
         setPlanOk(ok);
@@ -81,6 +82,33 @@ export default function BatchWorklogPage() {
       }
     })();
   }, []);
+
+  // ── 날짜 범위가 바뀌면 공휴일+커스텀 휴무일 재조회 ──────────
+  useEffect(() => {
+    if (!dateFrom || !dateTo) return;
+    (async () => {
+      try {
+        // 날짜 범위의 연-월 조합 추출 (여러 달 걸칠 수 있음)
+        const months: { year: number; month: number }[] = [];
+        const cur = new Date(dateFrom + "T00:00:00");
+        const end = new Date(dateTo   + "T00:00:00");
+        while (cur <= end) {
+          const y = cur.getFullYear(), m = cur.getMonth() + 1;
+          if (!months.find(x => x.year === y && x.month === m)) months.push({ year: y, month: m });
+          cur.setMonth(cur.getMonth() + 1);
+        }
+        const merged: Record<string, string> = {};
+        for (const { year, month } of months) {
+          const res = await fetch(`/api/worker/holidays?year=${year}&month=${month}`);
+          const data = await res.json();
+          if (data.success) {
+            Object.assign(merged, data.national ?? {}, data.custom ?? {});
+          }
+        }
+        setHolidays(merged);
+      } catch { /* silent */ }
+    })();
+  }, [dateFrom, dateTo]);
 
   // ── 훈련생 토글 ─────────────────────────────────────────────
   function toggleTrainee(id: string) {
@@ -213,15 +241,16 @@ export default function BatchWorklogPage() {
     }
   }
 
-  // ── 날짜 범위 내 근무일(월~금) 날짜 목록 ────────────────────
+  // ── 날짜 범위 내 근무일(월~금, 공휴일/커스텀 휴무 제외) ─────
   function getWorkingDays(from: string, to: string): string[] {
     const result: string[] = [];
     const cur = new Date(from + "T00:00:00");
     const end = new Date(to   + "T00:00:00");
     while (cur <= end) {
-      const dow = cur.getDay(); // 0=일, 6=토
-      if (dow !== 0 && dow !== 6) {
-        result.push(cur.toISOString().slice(0, 10));
+      const dow  = cur.getDay();
+      const date = cur.toISOString().slice(0, 10);
+      if (dow !== 0 && dow !== 6 && !holidays[date]) {
+        result.push(date);
       }
       cur.setDate(cur.getDate() + 1);
     }
@@ -237,6 +266,19 @@ export default function BatchWorklogPage() {
 
   function workingDayCount() {
     return getWorkingDays(dateFrom, dateTo).length;
+  }
+
+  function holidayCount() {
+    let cnt = 0;
+    const cur = new Date(dateFrom + "T00:00:00");
+    const end = new Date(dateTo   + "T00:00:00");
+    while (cur <= end) {
+      const dow  = cur.getDay();
+      const date = cur.toISOString().slice(0, 10);
+      if (dow !== 0 && dow !== 6 && holidays[date]) cnt++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return cnt;
   }
 
   const AI_LOADING_MESSAGES = [
@@ -350,10 +392,15 @@ export default function BatchWorklogPage() {
                   <p className="text-xs font-semibold text-slate-700">
                     근무일 <span className="text-slate-950 font-black">{workingDayCount()}일</span>
                     {dayCount() - workingDayCount() > 0 && (
-                      <span className="text-slate-400 ml-1">(주말 {dayCount() - workingDayCount()}일 제외)</span>
+                      <span className="text-slate-400 ml-1">
+                        (제외: 주말 {dayCount() - workingDayCount() - holidayCount()}일
+                        {holidayCount() > 0 && `, 공휴일·휴무 ${holidayCount()}일`})
+                      </span>
                     )}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-slate-400">토요일·일요일은 자동으로 제외됩니다</p>
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    주말·공휴일·등록된 현장 휴무일은 자동으로 제외됩니다
+                  </p>
                 </div>
               )}
             </div>
