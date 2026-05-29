@@ -405,6 +405,7 @@ model Agency {
   employmentContracts EmploymentContract[]
   agencyDeductions    AgencyDeduction[]
   workerInvites       WorkerInvite[]
+  supportTickets      SupportTicket[]
 
   @@index([planType])
   @@map("agencies")
@@ -452,6 +453,8 @@ model AdminUser {
   workerInvites           WorkerInvite[]
   systemAuditLogs         SystemAuditLog[]
   announcements           SystemAnnouncement[]
+  authoredTickets         SupportTicket[]     @relation("TicketAuthor")
+  repliedTickets          SupportTicket[]     @relation("TicketReplier")
 
   @@index([role])
   @@index([agencyId])
@@ -1128,6 +1131,39 @@ enum DocumentType {
   POST_EMPLOY_ADAPT_LOG
   ADAPTATION_COMPREHENSIVE_EVAL
   CHECKLIST
+}
+
+// ------------------------------------------------------
+// 지원 요청 채널 (에이전시 관리자 → 시스템 운영자)
+// ------------------------------------------------------
+
+enum SupportTicketStatus {
+  OPEN
+  REPLIED
+  CLOSED
+}
+
+model SupportTicket {
+  id         BigInt               @id @default(autoincrement())
+  agencyId   BigInt               @map("agency_id")
+  adminId    BigInt?              @map("admin_id")     // 작성한 에이전시 관리자
+  category   String               @default("GENERAL")  // GENERAL | DATA_FIX | BILLING | OTHER
+  title      String
+  body       String
+  status     SupportTicketStatus  @default(OPEN)
+  reply      String?
+  repliedBy  BigInt?              @map("replied_by")   // 회신한 시스템 운영자
+  repliedAt  DateTime?            @map("replied_at")
+  createdAt  DateTime             @default(now()) @map("created_at")
+  updatedAt  DateTime             @updatedAt @map("updated_at")
+
+  agency  Agency     @relation(fields: [agencyId],  references: [id])
+  admin   AdminUser? @relation("TicketAuthor",  fields: [adminId],   references: [id])
+  replier AdminUser? @relation("TicketReplier", fields: [repliedBy], references: [id])
+
+  @@index([agencyId, status])
+  @@index([status, createdAt])
+  @@map("support_tickets")
 }
 
 enum DocumentStage {

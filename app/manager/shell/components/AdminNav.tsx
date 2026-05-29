@@ -50,6 +50,12 @@ const groups: NavGroup[] = [
       { href: "/manager/signature", label: "내 서명" },
     ],
   },
+  {
+    title: "고객 지원",
+    items: [
+      { href: "/manager/support", label: "운영자 문의" },
+    ],
+  },
 ];
 
 export default function AdminNav() {
