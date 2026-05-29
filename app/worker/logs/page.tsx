@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BarChart2, CalendarDays, ChevronLeft, ChevronRight,
-  CircleDollarSign, ClipboardList, FileText, Home,
+  CircleDollarSign, ClipboardList, FileText, FileWarning, Home,
   PenLine, Trash2, X,
 } from "lucide-react";
 
@@ -151,7 +151,11 @@ export default function LogsPage() {
             <ChevronLeft className="h-5 w-5" />
           </button>
           <h1 className="text-base font-black text-slate-900">일지 목록</h1>
-          <div className="w-9" />
+          <button onClick={() => router.push("/worker/logs/missing")}
+            className="flex items-center gap-1 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-black text-amber-700 transition active:scale-95">
+            <FileWarning className="h-3.5 w-3.5" />
+            미작성
+          </button>
         </header>
 
         {/* 기간 + 필터 */}
