@@ -253,6 +253,8 @@ function WorklogForm() {
   const trainingLabel = trainingType === "PRE" ? "사전훈련" : trainingType === "FIELD" ? "현장훈련" : "적응지도";
 
   const [siteInfo, setSiteInfo] = useState<SiteInfo>({ workType: "FULL_DAY", traineeCount: 1, commuteGuidanceIncluded: false });
+  const [siteId, setSiteId] = useState("");
+  const [assignmentId, setAssignmentId] = useState("");
   const [resolvedAttendanceId, setResolvedAttendanceId] = useState(attendanceId);
 
   // 관리자 설정 시간 (읽기 전용)
@@ -303,6 +305,8 @@ function WorklogForm() {
     fetch("/api/worker/site/current").then(r => r.json()).then(d => {
       if (d.success && d.data) {
         setSiteInfo(d.data);
+        if (d.data.siteId) setSiteId(d.data.siteId);
+        if (d.data.assignmentId) setAssignmentId(d.data.assignmentId);
         if (!attendanceId && d.data.attendanceId) setResolvedAttendanceId(d.data.attendanceId);
         const t = adminTimes(d.data.workType, d.data.customWorkStart, d.data.customWorkEnd);
         setGuideTimes(t);
@@ -426,10 +430,6 @@ function WorklogForm() {
 
   async function handleSave(isComplete: boolean) {
     setError("");
-    if (!resolvedAttendanceId) {
-      setError("출근 체크인 후 일지를 작성할 수 있습니다.");
-      return;
-    }
     const dow = new Date(logDate + "T00:00:00").getDay();
     const isWeekend = dow === 0 || dow === 6;
     if (isWeekend && !weekendReason.trim()) {
@@ -447,7 +447,7 @@ function WorklogForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           traineeId,
-          attendanceId: resolvedAttendanceId,
+          attendanceId: resolvedAttendanceId || undefined,
           trainingType,
           attendance,
           time1on1: isMulti ? 0 : core + extra,
@@ -461,6 +461,9 @@ function WorklogForm() {
           specialNotes: isAdaptation ? specialNotes : "",
           content: finalContent,
           isCompleted: isComplete,
+          logDate,
+          siteId: siteId || undefined,
+          assignmentId: assignmentId || undefined,
         }),
       });
       const data = await res.json();
@@ -534,8 +537,10 @@ function WorklogForm() {
         <div className={`rounded-2xl border p-4 ${(() => { const d = new Date(logDate + "T00:00:00"); const dow = d.getDay(); return (dow === 0 || dow === 6) ? "border-amber-200 bg-amber-50" : "border-slate-100 bg-white"; })()}`}>
           <div className="flex items-center justify-between">
             <span className="text-sm font-black text-slate-700">날짜</span>
-            <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" />
+            <input type="date" value={logDate}
+              onChange={e => { if (!attendanceId) setLogDate(e.target.value); }}
+              readOnly={!!attendanceId}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold text-slate-900 outline-none ${attendanceId ? "border-slate-100 bg-slate-100 text-slate-400 cursor-not-allowed" : "border-slate-200 bg-slate-50 focus:border-sky-400"}`} />
           </div>
           {(() => {
             const d = new Date(logDate + "T00:00:00");

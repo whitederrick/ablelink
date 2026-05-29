@@ -15,33 +15,65 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       traineeId, attendanceId, trainingType,
-      attendance,           // 출결 상태 (출석/결석/지각/조퇴)
+      attendance,
       time1on1, timeGroup, extTime1on1, extTimeGroup,
       totalRecognizedTime,
-      taskName,             // 수행과제명
-      taskScore,            // 수행정도 1-5
-      measurementTime,      // 측정시간 (e.g. "2.0")
-      specialNotes,         // 특이사항 (ADAPTATION 전용)
-      content,              // 지도사항 / 평가 및 지도사항
+      taskName,
+      taskScore,
+      measurementTime,
+      specialNotes,
+      content,
       isCompleted,
+      logDate,    // attendanceId 없을 때 날짜 기준 조회/생성용
+      siteId,     // 출근 기록 자동 생성 시 필요
+      assignmentId: assignmentIdFromBody,
     } = body;
 
-    if (!traineeId || !attendanceId) {
-      return NextResponse.json({ success: false, message: "traineeId, attendanceId는 필수입니다." }, { status: 400 });
+    if (!traineeId) {
+      return NextResponse.json({ success: false, message: "traineeId는 필수입니다." }, { status: 400 });
     }
 
     const writerId = BigInt(session.userId);
 
+    // attendanceId 해석: 직접 전달받거나, logDate 기준으로 조회/생성
+    let resolvedAttendanceId: bigint;
+    if (attendanceId) {
+      resolvedAttendanceId = BigInt(attendanceId);
+    } else {
+      const workDate = logDate || new Date().toISOString().slice(0, 10);
+      const existing = await prisma.dailyAttendance.findFirst({
+        where: { userId: writerId, workDate },
+        orderBy: { id: "desc" },
+      });
+      if (existing) {
+        resolvedAttendanceId = existing.id;
+      } else {
+        // 출근 기록 없으면 자동 생성 (현장 배정 기반)
+        if (!siteId || !assignmentIdFromBody) {
+          return NextResponse.json({ success: false, message: "출근 기록이 없습니다. 출근 체크인 후 일지를 작성해주세요." }, { status: 400 });
+        }
+        const created = await prisma.dailyAttendance.create({
+          data: {
+            userId: writerId,
+            siteId: BigInt(siteId),
+            assignmentId: BigInt(assignmentIdFromBody),
+            workDate,
+          },
+        });
+        resolvedAttendanceId = created.id;
+      }
+    }
+
     const existing = await prisma.traineeLog.findFirst({
       where: {
         traineeId: BigInt(traineeId),
-        attendanceId: BigInt(attendanceId),
+        attendanceId: resolvedAttendanceId,
       },
     });
 
     const logData = {
       traineeId: BigInt(traineeId),
-      attendanceId: BigInt(attendanceId),
+      attendanceId: resolvedAttendanceId,
       writerId,
       trainingType: trainingType || "FIELD",
       time1on1: Number(time1on1 ?? 0),
