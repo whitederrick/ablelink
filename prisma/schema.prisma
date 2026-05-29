@@ -406,6 +406,7 @@ model Agency {
   agencyDeductions    AgencyDeduction[]
   workerInvites       WorkerInvite[]
   supportTickets      SupportTicket[]
+  holidayRequests     SiteHolidayRequest[]
 
   @@index([planType])
   @@map("agencies")
@@ -453,8 +454,9 @@ model AdminUser {
   workerInvites           WorkerInvite[]
   systemAuditLogs         SystemAuditLog[]
   announcements           SystemAnnouncement[]
-  authoredTickets         SupportTicket[]     @relation("TicketAuthor")
-  repliedTickets          SupportTicket[]     @relation("TicketReplier")
+  authoredTickets         SupportTicket[]        @relation("TicketAuthor")
+  repliedTickets          SupportTicket[]        @relation("TicketReplier")
+  holidayRequests         SiteHolidayRequest[]
 
   @@index([role])
   @@index([agencyId])
@@ -647,7 +649,8 @@ model SiteHoliday {
   countAsWorkday Boolean  @default(false) @map("count_as_workday") // true면 근무 인정
   createdAt      DateTime @default(now()) @map("created_at")
 
-  assignment SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignment SiteAssignment      @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  requests   SiteHolidayRequest[]
 
   @@unique([assignmentId, date])
   @@index([assignmentId])
@@ -1131,6 +1134,42 @@ enum DocumentType {
   POST_EMPLOY_ADAPT_LOG
   ADAPTATION_COMPREHENSIVE_EVAL
   CHECKLIST
+}
+
+// ------------------------------------------------------
+// 커스텀 휴무일 변경 요청 (에이전시 → 직무지도원 합의)
+// ------------------------------------------------------
+
+enum HolidayRequestType {
+  DELETE         // 삭제 요청
+  CHANGE_WORKDAY // countAsWorkday 변경 요청
+}
+
+enum HolidayRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model SiteHolidayRequest {
+  id                     BigInt               @id @default(autoincrement())
+  holidayId              BigInt               @map("holiday_id")
+  agencyId               BigInt               @map("agency_id")
+  adminId                BigInt?              @map("admin_id")
+  requestType            HolidayRequestType   @map("request_type")
+  proposedCountAsWorkday Boolean?             @map("proposed_count_as_workday")
+  reason                 String?
+  status                 HolidayRequestStatus @default(PENDING)
+  createdAt              DateTime             @default(now()) @map("created_at")
+  updatedAt              DateTime             @updatedAt @map("updated_at")
+
+  holiday SiteHoliday @relation(fields: [holidayId], references: [id], onDelete: Cascade)
+  agency  Agency      @relation(fields: [agencyId],  references: [id])
+  admin   AdminUser?  @relation(fields: [adminId],   references: [id])
+
+  @@index([holidayId, status])
+  @@index([agencyId, status])
+  @@map("site_holiday_requests")
 }
 
 // ------------------------------------------------------

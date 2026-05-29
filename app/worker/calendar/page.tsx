@@ -75,6 +75,13 @@ const NAV_ITEMS = [
   { icon: CircleDollarSign, label: "히스토리", href: "/worker/history" },
 ];
 
+type HolidayReqItem = {
+  id: string; requestType: "DELETE" | "CHANGE_WORKDAY";
+  proposedCountAsWorkday: boolean | null; reason: string | null;
+  agencyName: string; date: string;
+  currentCountAsWorkday: boolean;
+};
+
 export default function CalendarPage() {
   const router = useRouter();
   const today = new Date();
@@ -84,6 +91,40 @@ export default function CalendarPage() {
   const [data, setData] = useState<CalendarData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<{ day: number; data: DayData } | null>(null);
+
+  // 에이전시 변경 요청
+  const [pendingReqs, setPendingReqs] = useState<HolidayReqItem[]>([]);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+
+  async function fetchPendingRequests() {
+    try {
+      const res = await fetch("/api/worker/holiday-requests");
+      const d = await res.json();
+      if (d.success) setPendingReqs(d.requests);
+    } catch { /* silent */ }
+  }
+
+  async function respondRequest(id: string, action: "accept" | "reject") {
+    setRespondingId(id);
+    try {
+      const res = await fetch(`/api/worker/holiday-requests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        fetchPendingRequests();
+        fetchCalendar();
+      } else {
+        alert(d.message || "처리 실패");
+      }
+    } catch {
+      alert("서버 오류");
+    } finally {
+      setRespondingId(null);
+    }
+  }
 
   // 휴무 등록 시트
   const [holidaySheet, setHolidaySheet] = useState(false);
@@ -107,6 +148,7 @@ export default function CalendarPage() {
 
   useEffect(() => {
     fetchCalendar();
+    fetchPendingRequests();
   }, [fetchCalendar]);
 
   // 월 이동 시 기본 휴무일 날짜 초기화
@@ -200,6 +242,53 @@ export default function CalendarPage() {
           <p className="mt-3 text-center text-sm font-black text-sky-600">
             {data.siteName}
           </p>
+        )}
+
+        {/* 에이전시 휴무일 변경 요청 배너 */}
+        {pendingReqs.length > 0 && (
+          <div className="mx-4 mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <p className="mb-2 text-sm font-black text-amber-800">
+              에이전시 변경 요청 {pendingReqs.length}건 — 확인이 필요합니다
+            </p>
+            <div className="space-y-2">
+              {pendingReqs.map(req => (
+                <div key={req.id} className="rounded-xl bg-white border border-amber-100 p-3">
+                  <div className="mb-2">
+                    <p className="text-sm font-black text-slate-900">
+                      {req.date}
+                      <span className="ml-2 text-xs font-semibold text-amber-600">
+                        {req.requestType === "DELETE" ? "삭제 요청" : "근무인정 변경 요청"}
+                      </span>
+                    </p>
+                    {req.requestType === "CHANGE_WORKDAY" && (
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {req.currentCountAsWorkday ? "근무 인정" : "미인정"} →{" "}
+                        <span className="font-semibold">{req.proposedCountAsWorkday ? "근무 인정" : "미인정"}</span>
+                      </p>
+                    )}
+                    {req.reason && <p className="mt-0.5 text-xs text-slate-400">사유: {req.reason}</p>}
+                    <p className="mt-0.5 text-[11px] text-slate-400">{req.agencyName}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => respondRequest(req.id, "reject")}
+                      disabled={respondingId === req.id}
+                      className="flex flex-1 items-center justify-center gap-1 rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-600 active:scale-95 disabled:opacity-50"
+                    >
+                      거절
+                    </button>
+                    <button
+                      onClick={() => respondRequest(req.id, "accept")}
+                      disabled={respondingId === req.id}
+                      className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-slate-950 py-2 text-xs font-black text-white active:scale-95 disabled:opacity-50"
+                    >
+                      수락
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* 월 네비 */}

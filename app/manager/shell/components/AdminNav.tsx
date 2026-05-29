@@ -29,6 +29,7 @@ const groups: NavGroup[] = [
       { href: "/manager/calendar",                 label: "근태 캘린더" },
       { href: "/manager/inbox/attendance",         label: "GPS 승인 대기" },
       { href: "/manager/attendance-edit-requests", label: "출근부 수정 요청" },
+      { href: "/manager/holiday-requests",         label: "커스텀 휴무일 관리" },
       { href: "/manager/logs",                     label: "일지 내용 열람" },
     ],
   },
