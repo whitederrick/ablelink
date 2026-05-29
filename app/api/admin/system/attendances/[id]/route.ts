@@ -12,7 +12,6 @@ export async function PATCH(
 ) {
   try {
     const scope = await requireAdminSession(req);
-    if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const { id } = await params;
     const body = await req.json();
@@ -46,7 +45,7 @@ export async function PATCH(
     await prisma.dailyAttendance.update({ where: { id: attendance.id }, data: updateData });
 
     await logAudit({
-      adminId: scope.userId,
+      adminId: scope.adminId,
       action:  "ATTENDANCE_CORRECTED",
       target:  `DailyAttendance:${attendance.id}`,
       detail:  {

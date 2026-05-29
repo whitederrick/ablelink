@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const password = String(body?.password ?? "");
     if (!password) return NextResponse.json({ success: false, message: "비밀번호를 입력해주세요." }, { status: 400 });
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.worker.findUnique({
       where: { id: BigInt(session.userId) },
       select: { id: true, password: true, status: true, signatureUrl: true },
     });
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const anonymousId = `deleted_${user.id}_${Date.now()}`;
 
     // PII 익명화 (출퇴근·일지 기록은 에이전시 운영 기록으로 보존)
-    await prisma.user.update({
+    await prisma.worker.update({
       where: { id: user.id },
       data: {
         loginId:        anonymousId,

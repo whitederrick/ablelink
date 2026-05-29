@@ -5,12 +5,12 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   try {
-    const scope = await requireAdminSession(request);
+    const scope = await requireManagerSession(request);
     const { searchParams } = new URL(request.url);
     const coachUserId = searchParams.get("coachUserId") ?? "";
     if (!coachUserId) return NextResponse.json({ success: false, message: "coachUserId 필요" }, { status: 400 });
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     // 직무지도원의 현장 배정
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] }, ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
+      where: { userId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] }, agencyId: scope.agencyId },
       select: { siteId: true },
       orderBy: { assignedAt: "desc" },
     });

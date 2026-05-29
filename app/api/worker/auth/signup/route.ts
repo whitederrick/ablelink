@@ -40,13 +40,13 @@ export async function POST(request: Request) {
     }
 
     // 중복 확인
-    const existing = await prisma.user.findUnique({ where: { loginId: phone } });
+    const existing = await prisma.worker.findUnique({ where: { loginId: phone } });
     if (existing) return NextResponse.json({ success: false, message: "이미 가입된 전화번호입니다." }, { status: 409 });
 
     const now = new Date();
     const hashed = await hashPassword(password);
 
-    const user = await prisma.user.create({
+    const user = await prisma.worker.create({
       data: {
         loginId:          phone,
         password:         hashed,

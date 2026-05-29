@@ -4,7 +4,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer } from "@/lib/pdf";
 import { sendEmailWithPdf } from "@/lib/email";
@@ -53,7 +53,7 @@ async function toBase64DataUri(url?: string | null): Promise<string | undefined>
 
 export async function POST(request: NextRequest) {
   try {
-    const scope = await requireAdminSession(request);
+    const scope = await requireManagerSession(request);
     const body = await request.json();
     const { coachUserId, docType, periodStart, periodEnd, traineeId, toEmail } = body;
 
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     const userId = BigInt(coachUserId);
     const start = periodStart, end = periodEnd;
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.worker.findUnique({
       where: { id: userId },
       select: { userName:true, phoneNumber:true, signatureUrl:true, loginId:true },
     });
@@ -72,24 +72,24 @@ export async function POST(request: NextRequest) {
       where: { userId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] }, ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
       include: {
         site: true,
-        assignedByAdmin: { select: { signatureUrl:true, displayName:true } },
+        assignedByManager: { select: { signatureUrl:true, displayName:true } },
       },
       orderBy: { assignedAt: "desc" },
     });
     if (!assignment?.site)
       return NextResponse.json({ success:false, message:"배정된 현장 없음" }, { status:404 });
 
-    let adminForSign: any = assignment.assignedByAdmin;
+    let adminForSign: any = assignment.assignedByManager;
     if (!adminForSign) {
-      adminForSign = await prisma.adminUser.findUnique({
-        where: { id: scope.userId },
-        select: { signatureUrl:true, displayName:true } as any,
+      adminForSign = await prisma.manager.findUnique({
+        where: { id: scope.managerId },
+        select: { signatureUrl:true, displayName:true },
       });
     }
     if (!adminForSign && assignment.agencyId) {
-      adminForSign = await prisma.adminUser.findFirst({
+      adminForSign = await prisma.manager.findFirst({
         where: { agencyId: assignment.agencyId, isActive: true },
-        select: { signatureUrl:true, displayName:true } as any,
+        select: { signatureUrl:true, displayName:true },
         orderBy: { id: "asc" },
       });
     }

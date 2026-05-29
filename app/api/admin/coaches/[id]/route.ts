@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 
@@ -19,23 +19,21 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
 
     const { id } = await params;
     const userId = BigInt(id);
 
-    // AGENCY 역할은 자기 에이전시 소속 직무지도원만 수정 가능
-    if (scope.role === "AGENCY" && scope.agencyId) {
-      const coach = await prisma.user.findFirst({
-        where: {
-          id: userId,
-          assignments: { some: { site: { agencyId: scope.agencyId } } },
-        },
-        select: { id: true },
-      });
-      if (!coach) {
-        return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
-      }
+    // 자기 에이전시 소속 직무지도원만 수정 가능
+    const coach = await prisma.worker.findFirst({
+      where: {
+        id: userId,
+        assignments: { some: { site: { agencyId: scope.agencyId } } },
+      },
+      select: { id: true },
+    });
+    if (!coach) {
+      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
 
     const body = await req.json();
@@ -50,7 +48,7 @@ export async function PATCH(
       if (!/^01[0-9]{8,9}$/.test(cleaned)) {
         return NextResponse.json({ success: false, message: "올바른 전화번호 형식이 아닙니다." }, { status: 400 });
       }
-      const dup = await prisma.user.findFirst({
+      const dup = await prisma.worker.findFirst({
         where: { phoneNumber: { in: [phoneNumber, cleaned] }, id: { not: userId } },
       });
       if (dup) return NextResponse.json({ success: false, message: "이미 사용 중인 전화번호입니다." }, { status: 409 });
@@ -68,7 +66,7 @@ export async function PATCH(
       return NextResponse.json({ success: false, message: "변경할 내용이 없습니다." }, { status: 400 });
     }
 
-    await prisma.user.update({ where: { id: userId }, data: updates });
+    await prisma.worker.update({ where: { id: userId }, data: updates });
 
     return NextResponse.json({ success: true, ...(tempPassword ? { tempPassword } : {}) });
   } catch (e: any) {

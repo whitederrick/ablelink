@@ -4,18 +4,18 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   try {
-    const scope = await requireAdminSession(request);
+    const scope = await requireManagerSession(request);
     const { searchParams } = new URL(request.url);
     const coachUserId = searchParams.get("coachUserId") ?? "";
     if (!coachUserId) return NextResponse.json({ success:false }, { status:400 });
 
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId: BigInt(coachUserId), status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] }, ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
+      where: { userId: BigInt(coachUserId), status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] }, agencyId: scope.agencyId },
       include: {
         site: {
           include: {

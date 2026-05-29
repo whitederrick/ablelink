@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: "이미 서명이 완료된 계약서입니다." }, { status: 409 });
   }
 
-  const user = await prisma.user.findUnique({
+  const user = await prisma.worker.findUnique({
     where: { id: contract.userId },
     select: { userName: true, phoneNumber: true, isTemporary: true },
   });
@@ -159,7 +159,7 @@ async function sendSignedNotificationNew(userId: bigint, phone: string, name: st
   }
 
   const tempPassword = generateTempPassword();
-  await prisma.user.update({ where: { id: userId }, data: { password: await hash(tempPassword, 12) } });
+  await prisma.worker.update({ where: { id: userId }, data: { password: await hash(tempPassword, 12) } });
 
   await sendAlimtalk({
     phone, name, templateCode,

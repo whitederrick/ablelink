@@ -4,7 +4,8 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope, parseBigInt } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
+import { parseBigInt } from "@/lib/adminScope";
 
 function dateRange(yearMonth: string) {
   const [y, m] = yearMonth.split("-").map(Number);
@@ -16,9 +17,8 @@ function dateRange(yearMonth: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const scope    = await requireAdminSession(req);
-    if (scope.role !== "AGENCY") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
-    const agencyId = requireAgencyScope(scope);
+    const scope    = await requireManagerSession(req);
+    const agencyId = scope.agencyId;
 
     const { userId, yearMonth } = await req.json();
     if (!userId || !yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth))
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       data: {
         isManagerFinalClosed: true,
         managerFinalAt:       now,
-        managerFinalBy:       scope.userId,
+        managerFinalBy:       scope.managerId,
       },
     });
 
@@ -73,9 +73,8 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const scope    = await requireAdminSession(req);
-    if (scope.role !== "AGENCY") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
-    const agencyId = requireAgencyScope(scope);
+    const scope    = await requireManagerSession(req);
+    const agencyId = scope.agencyId;
 
     const { userId, yearMonth } = await req.json();
     if (!userId || !yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth))

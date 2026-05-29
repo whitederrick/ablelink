@@ -7,7 +7,6 @@ import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const scope = await requireAdminSession(req);
-    if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const { id } = await params;
     const agencyId = parseBigInt(id);
@@ -18,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!agency) return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
 
     const [managers, sites, coaches, logCount, attCount, apiUsage] = await Promise.all([
-      prisma.adminUser.findMany({ where: { agencyId }, select: { id: true, loginId: true, displayName: true, isActive: true, lastLoginAt: true } }),
+      prisma.manager.findMany({ where: { agencyId }, select: { id: true, loginId: true, displayName: true, isActive: true, lastLoginAt: true } }),
       prisma.site.findMany({
         where: { agencyId },
         include: { trainees: { where: { status: "TRAINING" }, select: { id: true } } },

@@ -7,7 +7,6 @@ import { requireAdminSession } from "@/lib/adminScope";
 export async function GET(req: Request) {
   try {
     const scope = await requireAdminSession(req);
-    if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const announcements = await prisma.systemAnnouncement.findMany({
       include: { admin: { select: { loginId: true, displayName: true } } },
@@ -36,7 +35,6 @@ export async function GET(req: Request) {
 export async function POST(req: NextRequest) {
   try {
     const scope = await requireAdminSession(req);
-    if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const { title, body, type = "INFO" } = await req.json();
     if (!title?.trim() || !body?.trim())
@@ -64,7 +62,7 @@ export async function POST(req: NextRequest) {
         title: title.trim(),
         body:  body.trim(),
         type:  noticeType,
-        adminId: scope.userId,
+        adminId: scope.adminId,
         sentCount: targets.length,
       },
     });

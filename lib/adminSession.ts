@@ -1,22 +1,15 @@
 // lib/adminSession.ts
-// 관리자 세션 토큰(JWT) 발급/검증 유틸을 제공합니다.
+// 시스템 운영자(AdminUser) 전용 JWT 세션
 
 import { SignJWT, jwtVerify } from "jose";
 
 export type AdminSessionPayload = {
-  sub: string; // adminUserId
-  role: "ADMIN" | "GOV" | "AGENCY";
+  sub:     string; // AdminUser.id
   loginId: string;
-  agencyId?: string | null;
-  agencyName?: string | null;
 };
 
-export const ADMIN_SESSION_COOKIE_NAME: string =
-  process.env.ADMIN_SESSION_COOKIE ?? "admlink_admin_session";
-
-export const ADMIN_SESSION_MAX_AGE_SEC: number = Number(
-  process.env.ADMIN_SESSION_MAX_AGE_SEC || "604800"
-); // default 7d
+export const ADMIN_SESSION_COOKIE_NAME = process.env.ADMIN_SESSION_COOKIE ?? "admlink_admin_session";
+export const ADMIN_SESSION_MAX_AGE_SEC = Number(process.env.ADMIN_SESSION_MAX_AGE_SEC || "604800");
 
 const ADMIN_TOKEN_AUD = "ablelink-admin";
 
@@ -26,44 +19,25 @@ function getSecretKey() {
   return new TextEncoder().encode(secret);
 }
 
-export async function signAdminSessionToken(payload: AdminSessionPayload) {
-  const secretKey = getSecretKey();
-  return await new SignJWT(payload)
+export async function signAdminSessionToken(payload: AdminSessionPayload): Promise<string> {
+  return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setAudience(ADMIN_TOKEN_AUD)
     .setIssuedAt()
     .setExpirationTime(`${ADMIN_SESSION_MAX_AGE_SEC}s`)
-    .sign(secretKey);
+    .sign(getSecretKey());
 }
 
 export async function verifyAdminSessionToken(
   token: string
 ): Promise<AdminSessionPayload | null> {
-  const secretKey = getSecretKey();
-  let payload: any;
-
   try {
-    const result = await jwtVerify(token, secretKey, { audience: ADMIN_TOKEN_AUD });
-    payload = result.payload;
+    const { payload } = await jwtVerify(token, getSecretKey(), { audience: ADMIN_TOKEN_AUD });
+    const sub     = String(payload.sub ?? "");
+    const loginId = String((payload as any).loginId ?? "");
+    if (!sub || !loginId) return null;
+    return { sub, loginId };
   } catch {
     return null;
   }
-
-  const sub = String(payload.sub || "");
-  const role = String(payload.role || "");
-  const loginId = String(payload.loginId || "");
-
-  const agencyIdRaw = payload.agencyId ?? null;
-  const agencyNameRaw = payload.agencyName ?? null;
-
-  const agencyId = agencyIdRaw == null || agencyIdRaw === "" ? null : String(agencyIdRaw);
-  const agencyName = agencyNameRaw == null || agencyNameRaw === "" ? null : String(agencyNameRaw);
-
-  if (!sub || !role || !loginId) return null;
-  if (!["ADMIN", "GOV", "AGENCY"].includes(role)) return null;
-
-  // AGENCY role이면 agencyId 필수
-  if (role === "AGENCY" && !agencyId) return null;
-
-  return { sub, role: role as any, loginId, agencyId, agencyName };
 }

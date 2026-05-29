@@ -5,11 +5,11 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function GET(request: NextRequest) {
   try {
-    const scope = await requireAdminSession(request);
+    const scope = await requireManagerSession(request);
 
     // 활성 배정된 Site별 훈련생 현황 (AGENCY 관리자는 자기 에이전시만)
     const assignments = await prisma.siteAssignment.findMany({

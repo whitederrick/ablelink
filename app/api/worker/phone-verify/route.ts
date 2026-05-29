@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     }
 
     // 기존 가입 여부 확인
-    const existing = await prisma.user.findUnique({ where: { loginId: phone } });
+    const existing = await prisma.worker.findUnique({ where: { loginId: phone } });
     if (existing) {
       return NextResponse.json({ success: false, message: "이미 가입된 전화번호입니다." }, { status: 409 });
     }

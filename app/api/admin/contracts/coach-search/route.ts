@@ -5,11 +5,11 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") ?? "").trim();
 
@@ -17,12 +17,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, items: [] });
     }
 
-    const contractFilter =
-      scope.role === "AGENCY"
-        ? { some: { agencyId: requireAgencyScope(scope) } }
-        : { some: {} };
+    const contractFilter = { some: { agencyId: scope.agencyId } };
 
-    const users = await prisma.user.findMany({
+    const users = await prisma.worker.findMany({
       where: {
         AND: [
           { employmentContracts: contractFilter },

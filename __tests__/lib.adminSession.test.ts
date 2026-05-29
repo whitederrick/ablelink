@@ -14,10 +14,7 @@ beforeAll(() => {
 
 const basePayload: AdminSessionPayload = {
   sub: "1",
-  role: "AGENCY",
-  loginId: "testmanager",
-  agencyId: "42",
-  agencyName: "테스트 에이전시",
+  loginId: "sysadmin",
 };
 
 describe("signAdminSessionToken / verifyAdminSessionToken", () => {
@@ -27,16 +24,7 @@ describe("signAdminSessionToken / verifyAdminSessionToken", () => {
 
     expect(result).not.toBeNull();
     expect(result!.sub).toBe("1");
-    expect(result!.role).toBe("AGENCY");
-    expect(result!.loginId).toBe("testmanager");
-    expect(result!.agencyId).toBe("42");
-  });
-
-  it("ADMIN 역할 토큰 검증", async () => {
-    const token = await signAdminSessionToken({ sub: "99", role: "ADMIN", loginId: "sysadmin", agencyId: null });
-    const result = await verifyAdminSessionToken(token);
-    expect(result!.role).toBe("ADMIN");
-    expect(result!.agencyId).toBeNull();
+    expect(result!.loginId).toBe("sysadmin");
   });
 
   it("잘못된 서명 → null 반환", async () => {
@@ -48,7 +36,7 @@ describe("signAdminSessionToken / verifyAdminSessionToken", () => {
 
   it("만료된 토큰 → null 반환", async () => {
     const key = new TextEncoder().encode(SECRET);
-    const expired = await new SignJWT({ ...basePayload, role: "AGENCY" })
+    const expired = await new SignJWT({ ...basePayload })
       .setProtectedHeader({ alg: "HS256" })
       .setAudience("ablelink-admin")
       .setIssuedAt()
@@ -60,21 +48,20 @@ describe("signAdminSessionToken / verifyAdminSessionToken", () => {
 
   it("[보안] audience 없는 구 토큰 → null 반환 (fallback 제거 확인)", async () => {
     const key = new TextEncoder().encode(SECRET);
-    // audience 없이 서명된 토큰 (구 버전 토큰 시뮬레이션)
     const oldToken = await new SignJWT({ ...basePayload })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
       .setExpirationTime("7d")
       .sign(key);
     const result = await verifyAdminSessionToken(oldToken);
-    expect(result).toBeNull(); // fallback 제거 후 반드시 null
+    expect(result).toBeNull();
   });
 
   it("[보안] 다른 audience → null 반환", async () => {
     const key = new TextEncoder().encode(SECRET);
     const wrongAud = await new SignJWT({ ...basePayload })
       .setProtectedHeader({ alg: "HS256" })
-      .setAudience("ablelink-worker") // 잘못된 audience
+      .setAudience("ablelink-worker")
       .setIssuedAt()
       .setExpirationTime("7d")
       .sign(key);
@@ -82,27 +69,15 @@ describe("signAdminSessionToken / verifyAdminSessionToken", () => {
     expect(result).toBeNull();
   });
 
-  it("[보안] role 필드 없는 토큰 → null 반환", async () => {
+  it("[보안] sub 없는 토큰 → null 반환", async () => {
     const key = new TextEncoder().encode(SECRET);
-    const noRole = await new SignJWT({ sub: "1", loginId: "test" })
+    const noSub = await new SignJWT({ loginId: "test" })
       .setProtectedHeader({ alg: "HS256" })
       .setAudience("ablelink-admin")
       .setIssuedAt()
       .setExpirationTime("7d")
       .sign(key);
-    const result = await verifyAdminSessionToken(noRole);
-    expect(result).toBeNull();
-  });
-
-  it("[보안] AGENCY role에 agencyId 없으면 → null 반환", async () => {
-    const key = new TextEncoder().encode(SECRET);
-    const noAgencyId = await new SignJWT({ sub: "1", role: "AGENCY", loginId: "test" })
-      .setProtectedHeader({ alg: "HS256" })
-      .setAudience("ablelink-admin")
-      .setIssuedAt()
-      .setExpirationTime("7d")
-      .sign(key);
-    const result = await verifyAdminSessionToken(noAgencyId);
+    const result = await verifyAdminSessionToken(noSub);
     expect(result).toBeNull();
   });
 });

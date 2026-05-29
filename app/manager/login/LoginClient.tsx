@@ -17,7 +17,7 @@ export default function LoginClient() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/auth/login", {
+      const res = await fetch("/api/manager/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ loginId, password }),
@@ -27,12 +27,7 @@ export default function LoginClient() {
         setError(data?.message || "아이디 또는 비밀번호를 확인해주세요.");
         return;
       }
-      // 역할에 따라 분기
-      if (data.role === "ADMIN") {
-        router.replace("/admin");
-      } else {
-        router.replace("/manager");
-      }
+      router.replace("/manager");
     } catch {
       setError("네트워크 오류가 발생했습니다.");
     } finally {

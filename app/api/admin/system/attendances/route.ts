@@ -7,7 +7,6 @@ import { requireAdminSession } from "@/lib/adminScope";
 export async function GET(req: NextRequest) {
   try {
     const scope = await requireAdminSession(req);
-    if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const { searchParams } = new URL(req.url);
     const q        = searchParams.get("q")?.trim() ?? "";

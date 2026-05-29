@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { Decimal } from "@prisma/client/runtime/library";
 
 function itemDto(i: any) {
@@ -25,7 +25,7 @@ function itemDto(i: any) {
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { runId } = await params;
     const run = await prisma.payrollRun.findUnique({
       where: { id: BigInt(runId) },
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ runI
 // PATCH: 항목 수동 수정 (grossPay, totalDeduction 재입력)
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { runId } = await params;
     const run = await prisma.payrollRun.findUnique({ where: { id: BigInt(runId) } });
     if (!run) return NextResponse.json({ success: false, message: "없음" }, { status: 404 });
@@ -103,7 +103,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
 // POST: 확정
 export async function POST(req: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { runId } = await params;
     const run = await prisma.payrollRun.findUnique({ where: { id: BigInt(runId) } });
     if (!run) return NextResponse.json({ success: false, message: "없음" }, { status: 404 });

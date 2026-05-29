@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     }
 
     // 중복 확인
-    const existing = await prisma.user.findUnique({ where: { loginId } });
+    const existing = await prisma.worker.findUnique({ where: { loginId } });
     if (existing) {
       return NextResponse.json(
         { success: false, message: "이미 가입된 전화번호입니다." },
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     // 🔐 bcrypt 해싱
     const hashed = await hashPassword(password);
 
-    const newUser = await prisma.user.create({
+    const newUser = await prisma.worker.create({
       data: {
         loginId,
         password: hashed,

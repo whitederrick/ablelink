@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const TOSS_API = "https://api.tosspayments.com/v1";
@@ -31,7 +31,7 @@ function tossAuth() {
 
 export async function POST(request: NextRequest) {
   try {
-    const scope = await requireAdminSession(request);
+    const scope = await requireManagerSession(request);
 
     const body = await request.json();
     const { agencyId, planType, authKey, customerKey } = body;
@@ -43,11 +43,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // AGENCY 역할은 자기 에이전시만 구독 변경 가능
-    if (scope.role === "AGENCY" && scope.agencyId) {
-      if (scope.agencyId !== BigInt(agencyId)) {
-        return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
-      }
+    // 자기 에이전시만 구독 변경 가능
+    if (scope.agencyId !== BigInt(agencyId)) {
+      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
 
     if (!PLAN_PRICES[planType]) {

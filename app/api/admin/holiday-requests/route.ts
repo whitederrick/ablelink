@@ -4,13 +4,12 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
-    if (scope.role !== "AGENCY") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
-    const agencyId = requireAgencyScope(scope);
+    const scope = await requireManagerSession(req);
+    const agencyId = scope.agencyId;
 
     const { searchParams } = new URL(req.url);
     const ym = searchParams.get("yearMonth") ?? new Date().toISOString().slice(0, 7);
@@ -72,9 +71,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
-    if (scope.role !== "AGENCY") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
-    const agencyId = requireAgencyScope(scope);
+    const scope = await requireManagerSession(req);
+    const agencyId = scope.agencyId;
 
     const { holidayId, requestType, proposedCountAsWorkday, reason } = await req.json();
     if (!holidayId || !["DELETE", "CHANGE_WORKDAY"].includes(requestType))
@@ -102,7 +100,7 @@ export async function POST(req: NextRequest) {
       data: {
         holidayId:             BigInt(holidayId),
         agencyId,
-        adminId:               scope.userId,
+        managerId: scope.managerId,
         requestType,
         proposedCountAsWorkday: requestType === "CHANGE_WORKDAY" ? Boolean(proposedCountAsWorkday) : null,
         reason:                reason?.trim() || null,

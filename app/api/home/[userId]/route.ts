@@ -93,7 +93,7 @@ export async function GET(
     // =========================================================
 
     // 2. 유저 정보, 현장 정보 및 '오늘의 출근 기록' 조회
-    const userWithData = await prisma.user.findUnique({
+    const userWithData = await prisma.worker.findUnique({
       where: { id: userId },
       include: {
         assignments: {

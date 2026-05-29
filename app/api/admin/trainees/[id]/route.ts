@@ -3,15 +3,15 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const scope    = await requireAdminSession(req);
-    const agencyId = requireAgencyScope(scope);
+    const scope    = await requireManagerSession(req);
+    const agencyId = scope.agencyId;
 
     const { id } = await params;
     const body = await req.json();

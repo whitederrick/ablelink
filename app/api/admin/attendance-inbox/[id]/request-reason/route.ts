@@ -2,14 +2,11 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const scope = await requireAdminSession(req);
-    if (scope.role === "AGENCY" && !scope.agencyId) {
-      return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
-    }
+    const scope = await requireManagerSession(req);
 
     const { id } = await params;
     if (!/^\d+$/.test(id)) {
@@ -39,8 +36,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           create: [
             {
               type: "REASON_REQUESTED",
-              actorRole: "ADMIN",
-              actorAdminId: scope.userId,
+              actorRole: "MANAGER",
+              actorManagerId: scope.managerId,
               message,
             },
           ],
@@ -53,8 +50,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           create: [
             {
               type: "REASON_REQUESTED",
-              actorRole: "ADMIN",
-              actorAdminId: scope.userId,
+              actorRole: "MANAGER",
+              actorManagerId: scope.managerId,
               message,
             },
           ],

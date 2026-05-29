@@ -44,11 +44,11 @@ export async function POST(req: NextRequest) {
     }
 
     const user = isEmail
-      ? await prisma.user.findUnique({
+      ? await prisma.worker.findUnique({
           where: { loginId: raw },
           select: { id: true, userName: true, phoneNumber: true, loginId: true, status: true },
         })
-      : await prisma.user.findFirst({
+      : await prisma.worker.findFirst({
           where: { phoneNumber: { in: [phone, phone.replace(/^(\d{3})(\d{3,4})(\d{4})$/, "$1-$2-$3")] } },
           select: { id: true, userName: true, phoneNumber: true, loginId: true, status: true },
         });
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     }
 
     const tempPw = generateTempPassword();
-    await prisma.user.update({
+    await prisma.worker.update({
       where: { id: user.id },
       data: { password: await hash(tempPw, 12), isTemporary: true },
     });

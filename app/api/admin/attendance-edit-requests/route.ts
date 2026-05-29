@@ -3,21 +3,18 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function GET(req: Request) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
 
     const where: any = {};
 
-    if (scope.role === "AGENCY") {
-      if (!scope.agencyId) return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
-      // 소속 에이전시의 배정된 직무지도원만
-      where.attendance = {
-        assignment: { agencyId: scope.agencyId },
-      };
-    }
+    // 소속 에이전시의 배정된 직무지도원만
+    where.attendance = {
+      assignment: { agencyId: scope.agencyId },
+    };
 
     const requests = await prisma.attendanceEditRequest.findMany({
       where,

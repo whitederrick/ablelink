@@ -5,7 +5,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { prisma } from "@/lib/prisma";
 import { validateSignatureImage } from "@/lib/imageValidation";
 
@@ -15,12 +15,12 @@ const BUCKET = "signatures";
 
 export async function GET(request: NextRequest) {
   try {
-    const scope = await requireAdminSession(request);
-    const admin = await prisma.adminUser.findUnique({
-      where: { id: scope.userId },
-      select: { signatureUrl: true, displayName: true } as any,
+    const scope = await requireManagerSession(request);
+    const manager = await prisma.manager.findUnique({
+      where: { id: scope.managerId },
+      select: { signatureUrl: true, displayName: true },
     });
-    return NextResponse.json({ success: true, signatureUrl: (admin as any)?.signatureUrl ?? null, displayName: (admin as any)?.displayName });
+    return NextResponse.json({ success: true, signatureUrl: manager?.signatureUrl ?? null, displayName: manager?.displayName });
   } catch (e: any) {
     if (e instanceof Response) return e;
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const scope = await requireAdminSession(request);
+    const scope = await requireManagerSession(request);
     const formData = await request.formData();
     const imageBlob = formData.get("signature") as Blob | null;
 
@@ -38,16 +38,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: imgCheck.error }, { status: 400 });
 
     // 기존 서명 삭제
-    const existing = await prisma.adminUser.findUnique({
-      where: { id: scope.userId },
-      select: { signatureUrl: true } as any,
+    const existing = await prisma.manager.findUnique({
+      where: { id: scope.managerId },
+      select: { signatureUrl: true },
     });
-    if ((existing as any)?.signatureUrl) {
-      const oldPath = extractPath((existing as any).signatureUrl);
+    if (existing?.signatureUrl) {
+      const oldPath = extractPath(existing.signatureUrl);
       if (oldPath) await deleteStorage(oldPath);
     }
 
-    const fileName = `admin/${scope.userId}/signature_${Date.now()}.png`;
+    const fileName = `admin/${scope.managerId}/signature_${Date.now()}.png`;
     const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${fileName}`, {
       method: "POST",
       headers: {
@@ -64,9 +64,9 @@ export async function POST(request: NextRequest) {
     }
 
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
-    await prisma.adminUser.update({
-      where: { id: scope.userId },
-      data: { signatureUrl: publicUrl } as any,
+    await prisma.manager.update({
+      where: { id: scope.managerId },
+      data: { signatureUrl: publicUrl },
     });
 
     return NextResponse.json({ success: true, signatureUrl: publicUrl });
@@ -78,18 +78,18 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const scope = await requireAdminSession(request);
-    const admin = await prisma.adminUser.findUnique({
-      where: { id: scope.userId },
-      select: { signatureUrl: true } as any,
+    const scope = await requireManagerSession(request);
+    const manager = await prisma.manager.findUnique({
+      where: { id: scope.managerId },
+      select: { signatureUrl: true },
     });
-    if ((admin as any)?.signatureUrl) {
-      const path = extractPath((admin as any).signatureUrl);
+    if (manager?.signatureUrl) {
+      const path = extractPath(manager.signatureUrl);
       if (path) await deleteStorage(path);
     }
-    await prisma.adminUser.update({
-      where: { id: scope.userId },
-      data: { signatureUrl: null } as any,
+    await prisma.manager.update({
+      where: { id: scope.managerId },
+      data: { signatureUrl: null },
     });
     return NextResponse.json({ success: true });
   } catch (e: any) {

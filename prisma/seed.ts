@@ -24,28 +24,26 @@ async function main() {
   console.log("✅ 에이전시:", agency.name, "(id:", agency.id.toString(), ")");
 
   // ─── 2. 시스템 운영자 계정 (ADMIN role) ────────────────────
-  const admin = await prisma.adminUser.upsert({
+  const admin = await prisma.admin.upsert({
     where: { loginId: "admin" },
     update: {},
     create: {
       loginId: "admin",
       passwordHash: await hash("admin1234!"),
       displayName: "시스템 운영자",
-      role: "ADMIN",
       isActive: true,
     },
   });
   console.log("✅ 시스템 운영자:", admin.loginId, "/ PW: admin1234!");
 
-  // ─── 3. 에이전시 관리자 계정 (AGENCY role) ─────────────────
-  const manager = await prisma.adminUser.upsert({
+  // ─── 3. 에이전시 관리자 계정 ────────────────────────────────
+  const manager = await prisma.manager.upsert({
     where: { loginId: "manager01" },
     update: {},
     create: {
       loginId: "manager01",
       passwordHash: await hash("Manager1234!"),
       displayName: "김매니저",
-      role: "AGENCY",
       agencyId: agency.id,
       isActive: true,
     },
@@ -53,7 +51,7 @@ async function main() {
   console.log("✅ 에이전시 관리자:", manager.loginId, "/ PW: Manager1234!");
 
   // ─── 4. 직무지도원 계정 ────────────────────────────────────
-  const worker = await prisma.user.upsert({
+  const worker = await prisma.worker.upsert({
     where: { loginId: "worker01" },
     update: {},
     create: {
@@ -92,7 +90,7 @@ async function main() {
       userId: worker.id,
       siteId: site.id,
       agencyId: agency.id,
-      assignedByAdminId: manager.id,
+      assignedByManagerId: manager.id,
       status: "ACTIVE",
       serviceStep: "FIELD_TRAINING",
       attendanceMode: "APP_GPS",

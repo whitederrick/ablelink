@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 // KST "HH:MM" + workDate "YYYY-MM-DD" → UTC Date
 function kstToUTC(hhMM: string, workDate: string): Date | null {
@@ -17,8 +17,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const scope    = await requireAdminSession(req);
-    const agencyId = requireAgencyScope(scope);
+    const scope    = await requireManagerSession(req);
+    const agencyId = scope.agencyId;
 
     const { id } = await params;
     if (!/^\d+$/.test(id))

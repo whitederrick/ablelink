@@ -5,20 +5,16 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function GET(req: Request) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
 
-    let agencyId: bigint | null = null;
-    if (scope.role === "AGENCY") {
-      agencyId = requireAgencyScope(scope);
-    }
+    const agencyId = scope.agencyId;
 
-    // ADMIN이면 전체 agency / managers, AGENCY면 해당 agency만
     const agencies = await prisma.agency.findMany({
-      ...(agencyId ? { where: { id: agencyId } } : {}),
+      where: { id: agencyId },
       orderBy: { id: "asc" },
       select: { id: true, name: true },
     });

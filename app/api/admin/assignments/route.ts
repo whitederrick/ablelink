@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -33,7 +33,7 @@ function toItem(r: any) {
     droppedAt: r.droppedAt?.toISOString?.() ?? r.droppedAt ?? null,
     endedAt: r.endedAt?.toISOString?.() ?? r.endedAt ?? null,
     statusReason: r.statusReason ?? null,
-    assignedByAdminId: r.assignedByAdminId != null ? String(r.assignedByAdminId) : null,
+    assignedByManagerId: r.assignedByManagerId != null ? String(r.assignedByManagerId) : null,
     workType: r.workType ?? "FULL_DAY",
     commuteGuidanceIncluded: r.commuteGuidanceIncluded ?? true,
     customWorkStart: r.customWorkStart ?? null,
@@ -63,7 +63,7 @@ function toItem(r: any) {
 // - 필터: siteId, userId, status
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
 
     const { searchParams } = new URL(req.url);
     const siteIdStr = (searchParams.get("siteId") || "").trim();
@@ -81,11 +81,8 @@ export async function GET(req: NextRequest) {
     }
     if (status) where.status = status;
 
-    // AGENCY 스코프: 해당 agency의 site에 속한 assignment만
-    if (scope.role === "AGENCY") {
-      const agencyId = requireAgencyScope(scope);
-      where.site = { agencyId };
-    }
+    // 해당 agency의 site에 속한 assignment만
+    where.site = { agencyId: scope.agencyId };
 
     const rows = await prisma.siteAssignment.findMany({
       where,
@@ -104,7 +101,7 @@ export async function GET(req: NextRequest) {
         droppedAt: true,
         endedAt: true,
         statusReason: true,
-        assignedByAdminId: true,
+        assignedByManagerId: true,
         site: { select: { id: true, companyName: true, address: true, agencyId: true } },
         user: {
           select: { id: true, userName: true, loginId: true, phoneNumber: true, role: true, status: true },
@@ -128,7 +125,7 @@ export async function GET(req: NextRequest) {
 // body: { siteId, userId, isMainCoach?, memo? }
 export async function POST(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
 
     const body = await req.json();
     const siteIdStr = String(body.siteId ?? "").trim();
@@ -140,29 +137,19 @@ export async function POST(req: NextRequest) {
     const siteId = BigInt(siteIdStr);
     const userId = BigInt(userIdStr);
 
-    // AGENCY 스코프: 배정하려는 site가 내 agency 소속인지 검증
-    if (scope.role === "AGENCY") {
-      const myAgencyId = requireAgencyScope(scope);
-      const site = await prisma.site.findUnique({
-        where: { id: siteId },
-        select: { agencyId: true, isActive: true },
-      });
-      if (!site) throw new Error("NOT_FOUND");
-      if (!site.isActive) throw new Error("VALIDATION:siteInactive");
-      if (site.agencyId == null) throw new Error("FORBIDDEN");
-      if (site.agencyId !== myAgencyId) throw new Error("FORBIDDEN");
-    } else {
-      // ADMIN도 site 존재만 확인
-      const site = await prisma.site.findUnique({
-        where: { id: siteId },
-        select: { isActive: true },
-      });
-      if (!site) throw new Error("NOT_FOUND");
-      if (!site.isActive) throw new Error("VALIDATION:siteInactive");
-    }
+    // 배정하려는 site가 내 agency 소속인지 검증
+    const myAgencyId = scope.agencyId;
+    const site = await prisma.site.findUnique({
+      where: { id: siteId },
+      select: { agencyId: true, isActive: true },
+    });
+    if (!site) throw new Error("NOT_FOUND");
+    if (!site.isActive) throw new Error("VALIDATION:siteInactive");
+    if (site.agencyId == null) throw new Error("FORBIDDEN");
+    if (site.agencyId !== myAgencyId) throw new Error("FORBIDDEN");
 
     // 배정 대상 user 존재 확인
-    const user = await prisma.user.findUnique({
+    const user = await prisma.worker.findUnique({
       where: { id: userId },
       select: { status: true },
     });
@@ -188,7 +175,7 @@ export async function POST(req: NextRequest) {
     const customWorkStart = workType === "CUSTOM" ? (body.customWorkStart ?? null) : null;
     const customWorkEnd   = workType === "CUSTOM" ? (body.customWorkEnd ?? null) : null;
 
-    const assignedByAdminId = scope.userId;
+    const assignedByManagerId = scope.managerId;
 
     const created = await prisma.siteAssignment.create({
       data: {
@@ -199,7 +186,7 @@ export async function POST(req: NextRequest) {
         assignedAt: new Date(),
         startDate: body.startDate ? new Date(body.startDate) : new Date(),
         endDate: body.endDate ? new Date(body.endDate) : null,
-        assignedByAdminId,
+        assignedByManagerId,
         statusReason: memo,
         workType,
         commuteGuidanceIncluded,
@@ -219,7 +206,7 @@ export async function POST(req: NextRequest) {
         droppedAt: true,
         endedAt: true,
         statusReason: true,
-        assignedByAdminId: true,
+        assignedByManagerId: true,
         site: { select: { id: true, companyName: true, address: true, agencyId: true } },
         user: {
           select: { id: true, userName: true, loginId: true, phoneNumber: true, role: true, status: true },

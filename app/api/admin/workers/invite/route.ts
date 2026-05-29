@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { sendSms } from "@/lib/sms";
 
 const PHONE_RE = /^01[0-9]{8,9}$/;
@@ -16,8 +16,8 @@ function randomCode() {
 
 export async function POST(request: NextRequest) {
   try {
-    const scope = await requireAdminSession(request);
-    const agencyId = requireAgencyScope(scope);
+    const scope = await requireManagerSession(request);
+    const agencyId = scope.agencyId;
 
     const body = await request.json();
     const phoneNumber = String(body?.phoneNumber ?? "").replace(/-/g, "").trim();
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 이미 가입된 계정인지 확인
-    const existing = await prisma.user.findUnique({ where: { loginId: phoneNumber } });
+    const existing = await prisma.worker.findUnique({ where: { loginId: phoneNumber } });
     if (existing) {
       return NextResponse.json({ success: false, message: "이미 가입된 직무지도원입니다." }, { status: 409 });
     }
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
         workerName,
         code,
         expiresAt,
-        createdByAdminId: scope.userId,
+        createdByManagerId: scope.managerId,
       },
       include: { agency: { select: { name: true } } },
     });

@@ -4,7 +4,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { sendEmailWithPdf } from "@/lib/email";
@@ -48,7 +48,7 @@ const DOC_LABELS: Record<string, string> = {
 
 export async function POST(request: NextRequest) {
   try {
-    const scope = await requireAdminSession(request);
+    const scope = await requireManagerSession(request);
     const body = await request.json();
     const { coachUserId, docType: rawDocType, periodStart, periodEnd, traineeId, toEmail } = body;
 
@@ -60,19 +60,19 @@ export async function POST(request: NextRequest) {
     const start = periodStart, end = periodEnd;
 
     // 서명하는 관리자 본인의 서명 이미지 사용
-    const admin = await prisma.adminUser.findUnique({
-      where: { id: scope.userId },
+    const admin = await prisma.manager.findUnique({
+      where: { id: scope.managerId },
       select: { signatureUrl: true, displayName: true },
     });
     if (!admin?.signatureUrl)
       return NextResponse.json({ success: false, message: "관리자 서명이 등록되지 않았습니다. 서명 설정에서 먼저 서명을 등록해주세요." }, { status: 400 });
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.worker.findUnique({
       where: { id: userId },
       select: { userName: true, phoneNumber: true, signatureUrl: true, loginId: true },
     });
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
+      where: { userId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, agencyId: scope.agencyId },
       include: { site: true },
       orderBy: { assignedAt: "desc" },
     });

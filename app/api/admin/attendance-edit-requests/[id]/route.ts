@@ -3,14 +3,14 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { id } = await params;
     const body = await req.json();
     const { action, adminNote } = body; // action: "approve" | "reject"
@@ -33,12 +33,10 @@ export async function PATCH(
       return NextResponse.json({ success: false, message: "이미 처리된 요청입니다." }, { status: 409 });
     }
 
-    // AGENCY 역할이면 소속 에이전시 소속인지 확인
-    if (scope.role === "AGENCY" && scope.agencyId) {
-      const siteAgencyId = request.attendance.site?.agencyId;
-      if (!siteAgencyId || siteAgencyId !== scope.agencyId) {
-        return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
-      }
+    // 소속 에이전시 소속인지 확인
+    const siteAgencyId = request.attendance.site?.agencyId;
+    if (!siteAgencyId || siteAgencyId !== scope.agencyId) {
+      return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
     }
 
     const now = new Date();

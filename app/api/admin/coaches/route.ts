@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { AssignStatus, UserRole, Prisma } from "@prisma/client";
 
 function parseIntSafe(v: string | null, fallback: number) {
@@ -31,7 +31,7 @@ function errToStatus(msg: string) {
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
 
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") || "").trim();
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
       toDt = kstEnd(to);
     }
 
-    const where: Prisma.UserWhereInput = {
+    const where: Prisma.WorkerWhereInput = {
       role: UserRole.COACH,
       ...(q
         ? {
@@ -65,10 +65,10 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    // ✅ AGENCY 스코프: 기간 오버랩 + site.agencyId 기반으로 코치 노출 제한
-    // - User-Agency 직접 FK가 없으므로 SiteAssignment로 스코프 결정
-    if (scope.role === "AGENCY") {
-      const agencyId = requireAgencyScope(scope);
+    // 기간 오버랩 + site.agencyId 기반으로 코치 노출 제한
+    // User-Agency 직접 FK가 없으므로 SiteAssignment로 스코프 결정
+    {
+      const agencyId = scope.agencyId;
 
       // assignment 기간 필터(선택)
       const assignmentWhere: Prisma.SiteAssignmentWhereInput = {
@@ -82,15 +82,15 @@ export async function GET(req: NextRequest) {
         ];
       }
 
-      // ✅ 핵심: 배정의 site가 agencyId인 것만
+      // 배정의 site가 agencyId인 것만
       assignmentWhere.site = { is: { agencyId } };
 
       where.assignments = { some: assignmentWhere };
     }
 
     const [total, rows] = await Promise.all([
-      prisma.user.count({ where }),
-      prisma.user.findMany({
+      prisma.worker.count({ where }),
+      prisma.worker.findMany({
         where,
         orderBy: { id: "desc" },
         skip: (page - 1) * pageSize,

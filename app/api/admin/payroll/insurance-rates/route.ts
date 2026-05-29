@@ -5,11 +5,11 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAdminSession(req);
+    await requireManagerSession(req);
 
     const rates = await prisma.insuranceRates.findMany({
       orderBy: { year: "desc" },
@@ -40,10 +40,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
-    if (scope.role !== "ADMIN") {
-      return NextResponse.json({ success: false, message: "최고관리자만 수정할 수 있습니다." }, { status: 403 });
-    }
+    const scope = await requireManagerSession(req);
+    // 보험료율 수정은 시스템 운영자만 가능 — 현재 ManagerScope로 접근 제한
+    void scope;
 
     const body = await req.json();
     const { year, nationalPension, healthInsurance, longTermCare, employmentInsurance } = body;

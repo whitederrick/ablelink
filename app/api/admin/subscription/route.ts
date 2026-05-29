@@ -5,16 +5,14 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
 
     const agencies = await prisma.agency.findMany({
-      where: scope.role === "AGENCY" && scope.agencyId
-        ? { id: scope.agencyId }
-        : undefined,
+      where: { id: scope.agencyId },
       include: {
         sites: { where: { isActive: true }, select: { id: true } },
         assignments: { where: { status: "ACTIVE" }, select: { id: true } },

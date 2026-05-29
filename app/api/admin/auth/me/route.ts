@@ -1,6 +1,3 @@
-// app/api/admin/auth/me/route.ts
-// 관리자 정보 조회 API 핸들러입니다.
-
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -12,11 +9,9 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       session: {
-        sub: scope.userId.toString(),
-        role: scope.role,
+        sub:     scope.adminId.toString(),
+        role:    "ADMIN",
         loginId: scope.loginId,
-        agencyId: scope.agencyId ? scope.agencyId.toString() : null,
-        agencyName: scope.agencyName,
       },
     });
   } catch (e: any) {

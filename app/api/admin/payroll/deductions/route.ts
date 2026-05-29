@@ -5,11 +5,11 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const agencyId = scope.agencyId;
     if (!agencyId) {
       return NextResponse.json({ success: false, message: "에이전시 정보 없음" }, { status: 403 });
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const agencyId = scope.agencyId;
     if (!agencyId) {
       return NextResponse.json({ success: false, message: "에이전시 정보 없음" }, { status: 403 });

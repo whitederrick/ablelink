@@ -24,7 +24,7 @@ async function getSession(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession(req);
-    const user = await prisma.user.findUnique({
+    const user = await prisma.worker.findUnique({
       where: { id: BigInt(session.userId) },
       select: { loginId: true, userName: true, phoneNumber: true, isTemporary: true },
     });
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "올바른 이메일 주소를 입력하세요." }, { status: 400 });
       }
 
-      const conflict = await prisma.user.findFirst({ where: { loginId: email, id: { not: userId } } });
+      const conflict = await prisma.worker.findFirst({ where: { loginId: email, id: { not: userId } } });
       if (conflict) {
         return NextResponse.json({ success: false, message: "이미 사용 중인 이메일입니다." }, { status: 409 });
       }
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       const code = String(randomInt(100000, 999999));
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10분
 
-      await prisma.user.update({
+      await prisma.worker.update({
         where: { id: userId },
         data: { pendingLoginId: email, verifyCode: code, verifyCodeExpiresAt: expiresAt },
       });
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
           { status: 429 }
         );
       }
-      const user = await prisma.user.findUnique({
+      const user = await prisma.worker.findUnique({
         where: { id: userId },
         select: { pendingLoginId: true, verifyCode: true, verifyCodeExpiresAt: true },
       });
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
 
       // 인증 성공 — loginId 변경 (비밀번호 변경은 다음 단계)
       try {
-        await prisma.user.update({
+        await prisma.worker.update({
           where: { id: userId },
           data: {
             loginId: user.pendingLoginId,
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "비밀번호가 일치하지 않습니다." }, { status: 400 });
       }
 
-      const updated = await prisma.user.update({
+      const updated = await prisma.worker.update({
         where: { id: userId },
         data: {
           password: await hash(newPassword, 12),

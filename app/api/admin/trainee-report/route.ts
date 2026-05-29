@@ -5,7 +5,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 
@@ -13,8 +13,8 @@ function pad2(n: number) { return String(n).padStart(2, "0"); }
 
 export async function GET(request: NextRequest) {
   try {
-    const scope    = await requireAdminSession(request);
-    const agencyId = requireAgencyScope(scope);
+    const scope    = await requireManagerSession(request);
+    const agencyId = scope.agencyId;
 
     const planCheck = await checkAgencyPlanAccess(agencyId, "TRAINEE_REPORT");
     if (!planCheck.allowed) {

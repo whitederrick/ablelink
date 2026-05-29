@@ -30,7 +30,7 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
     (async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/admin/auth/me", { method: "GET", cache: "no-store" });
+        const res = await fetch("/api/manager/auth/me", { method: "GET", cache: "no-store" });
         const data = (await res.json()) as MeResponse;
         if (cancelled) return;
         if (!data || (data as any).success !== true) { router.replace("/manager/login"); return; }

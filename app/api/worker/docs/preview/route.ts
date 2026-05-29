@@ -41,22 +41,22 @@ export async function GET(request: NextRequest) {
     if (!docType) return NextResponse.json({ success:false, message:"docType 필요" }, { status:400 });
 
     const userId = BigInt(session.userId);
-    const user = await prisma.user.findUnique({
+    const user = await prisma.worker.findUnique({
       where: { id: userId },
       select: { userName:true, phoneNumber:true, signatureUrl:true, loginId:true },
     });
     const assignment = await prisma.siteAssignment.findFirst({
       where: { userId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] } },
-      include: { site:true, assignedByAdmin:{ select:{ signatureUrl:true, displayName:true } } },
+      include: { site:true, assignedByManager:{ select:{ signatureUrl:true, displayName:true } } },
       orderBy: { assignedAt:"desc" },
     });
     if (!assignment?.site) return NextResponse.json({ success:false, message:"배정된 현장이 없습니다." }, { status:400 });
 
-    let adminForSign: any = assignment.assignedByAdmin;
+    let adminForSign: any = assignment.assignedByManager;
     if (!adminForSign && assignment.agencyId) {
-      adminForSign = await prisma.adminUser.findFirst({
+      adminForSign = await prisma.manager.findFirst({
         where: { agencyId: assignment.agencyId, isActive:true },
-        select: { signatureUrl:true, displayName:true } as any,
+        select: { signatureUrl:true, displayName:true },
         orderBy: { id:"asc" },
       });
     }

@@ -3,26 +3,8 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { readAdminSessionFromRequest } from "@/lib/adminCookies";
+import { requireManagerSession, type ManagerScope } from "@/lib/managerScope";
 import { Prisma, DocumentType, DocumentRunStatus } from "@prisma/client";
-
-type AdminSession = {
-  sub: string; // adminUserId
-  role: "ADMIN" | "GOV" | "AGENCY";
-  loginId: string;
-  agencyName?: string | null;
-};
-
-async function getSessionOrThrow(req: Request): Promise<AdminSession> {
-  const s = await readAdminSessionFromRequest(req);
-  if (!s) throw new Error("UNAUTHORIZED");
-  return {
-    sub: String(s.sub),
-    role: s.role,
-    loginId: s.loginId,
-    agencyName: s.agencyName ?? null,
-  };
-}
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -60,15 +42,6 @@ function addDays(date: Date, days: number) {
   return d;
 }
 
-async function resolveAgencyIdByNameOrThrow(agencyName: string): Promise<bigint> {
-  const a = await prisma.agency.findUnique({
-    where: { name: agencyName },
-    select: { id: true },
-  });
-  if (!a) throw new Error("VALIDATION:agencyName");
-  return a.id;
-}
-
 function toItem(r: any) {
   return {
     id: String(r.id),
@@ -100,10 +73,7 @@ function toItem(r: any) {
 // query: docType, status, assignmentId, siteId, coachUserId, from, to, page, pageSize
 export async function GET(req: NextRequest) {
   try {
-    const session = await getSessionOrThrow(req);
-
-    // 정책: GOV는 아직 차단(AGENCY 우선 흐름)
-    if (session.role !== "AGENCY" && session.role !== "ADMIN") throw new Error("FORBIDDEN");
+    const scope = await requireManagerSession(req);
 
     const { searchParams } = new URL(req.url);
 
@@ -158,12 +128,8 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    // ✅ AGENCY 스코프: assignment.site.agencyId 기준 (정식)
-    if (session.role === "AGENCY") {
-      if (!session.agencyName) throw new Error("FORBIDDEN");
-      const agencyId = await resolveAgencyIdByNameOrThrow(session.agencyName);
-      where.assignment = { is: { site: { is: { agencyId } } } };
-    }
+    // 소속 에이전시 스코프 강제
+    where.agencyId = scope.agencyId;
 
     const [total, rows] = await Promise.all([
       prisma.documentRun.count({ where }),
@@ -205,10 +171,7 @@ export async function GET(req: NextRequest) {
 // - openAt 미지정 시 dueAt-7 (D-7 오픈 정책)
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSessionOrThrow(req);
-
-    // 정책: GOV는 아직 차단(AGENCY 우선 흐름)
-    if (session.role !== "AGENCY" && session.role !== "ADMIN") throw new Error("FORBIDDEN");
+    const scope = await requireManagerSession(req);
 
     const body = await req.json();
 
@@ -243,12 +206,8 @@ export async function POST(req: NextRequest) {
     });
     if (!assignment) throw new Error("NOT_FOUND");
 
-    // ✅ AGENCY 스코프 강제
-    if (session.role === "AGENCY") {
-      if (!session.agencyName) throw new Error("FORBIDDEN");
-      const myAgencyId = await resolveAgencyIdByNameOrThrow(session.agencyName);
-      if (assignment.site.agencyId == null || assignment.site.agencyId !== myAgencyId) throw new Error("FORBIDDEN");
-    }
+    // 소속 에이전시 스코프 강제
+    if (assignment.site.agencyId == null || assignment.site.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
 
     const created = await prisma.documentRun.create({
       data: {

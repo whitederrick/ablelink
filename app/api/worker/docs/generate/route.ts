@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     if (!docType) return NextResponse.json({ success: false, message: "문서 종류를 선택해주세요." }, { status: 400 });
 
     // ── 기본 데이터 조회 ────────────────────────────────────
-    const user = await prisma.user.findUnique({
+    const user = await prisma.worker.findUnique({
       where: { id: userId },
       select: { userName: true, phoneNumber: true, signatureUrl: true, loginId: true },
     });

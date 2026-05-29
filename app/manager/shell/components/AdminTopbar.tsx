@@ -22,7 +22,7 @@ export default function AdminTopbar({
     if (loading) return;
     setLoading(true);
     try {
-      await fetch("/api/admin/auth/logout", { method: "POST", cache: "no-store" });
+      await fetch("/api/manager/auth/logout", { method: "POST", cache: "no-store" });
     } catch {}
     finally {
       onLoggedOut();

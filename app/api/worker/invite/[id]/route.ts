@@ -75,14 +75,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (invite.expiresAt < new Date()) return NextResponse.json({ success: false, message: "만료된 초대 링크입니다." }, { status: 410 });
     if (invite.code !== code)          return NextResponse.json({ success: false, message: "인증번호가 올바르지 않습니다." }, { status: 400 });
 
-    const existing = await prisma.user.findUnique({ where: { loginId: invite.phoneNumber } });
+    const existing = await prisma.worker.findUnique({ where: { loginId: invite.phoneNumber } });
     if (existing) return NextResponse.json({ success: false, message: "이미 가입된 전화번호입니다." }, { status: 409 });
 
     const now = new Date();
     const hashed = await hashPassword(password);
 
     const user = await prisma.$transaction(async (tx) => {
-      const newUser = await tx.user.create({
+      const newUser = await tx.worker.create({
         data: {
           loginId:           invite.phoneNumber,
           password:          hashed,

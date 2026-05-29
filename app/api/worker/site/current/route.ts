@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     const agency = assignment.agency;
 
     // 직무지도원 정보 조회
-    const user = await prisma.user.findUnique({
+    const user = await prisma.worker.findUnique({
       where: { id: userId },
       select: { userName: true, phoneNumber: true, signatureUrl: true },
     });

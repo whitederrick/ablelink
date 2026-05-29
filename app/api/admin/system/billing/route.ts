@@ -7,14 +7,13 @@ import { requireAdminSession } from "@/lib/adminScope";
 export async function GET(req: Request) {
   try {
     const scope = await requireAdminSession(req);
-    if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const agencies = await prisma.agency.findMany({
       select: {
         id: true, name: true, planType: true, isActive: true,
         maxCoaches: true, maxSites: true,
         trialEndsAt: true, nextBillingAt: true, subscribedAt: true, tossBillingKey: true,
-        _count: { select: { adminUsers: true, sites: true } },
+        _count: { select: { managerAccounts: true, sites: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -41,7 +40,7 @@ export async function GET(req: Request) {
           isTrialExpired,
           isBillingOverdue,
           hasBillingKey:   !!a.tossBillingKey,
-          managerCount:    a._count.adminUsers,
+          managerCount:    a._count.managerAccounts,
           siteCount:       a._count.sites,
         };
       }),

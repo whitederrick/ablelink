@@ -6,14 +6,14 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ agencyId: string }> }
 ) {
   try {
-    const scope = await requireAdminSession(request);
+    const scope = await requireManagerSession(request);
 
     const { planType } = await request.json();
     const { agencyId: agencyIdStr } = await params;
@@ -25,7 +25,7 @@ export async function PATCH(
 
     const agencyId = BigInt(agencyIdStr);
 
-    if (scope.role === "AGENCY" && scope.agencyId !== agencyId) {
+    if (scope.agencyId !== agencyId) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
     const limits = PLAN_LIMITS[planType] || { maxCoaches: 0, maxSites: 0 };

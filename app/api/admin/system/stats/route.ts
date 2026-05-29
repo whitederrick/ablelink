@@ -7,14 +7,11 @@ import { requireAdminSession } from "@/lib/adminScope";
 
 export async function GET(req: Request) {
   try {
-    const scope = await requireAdminSession(req);
-    if (scope.role !== "ADMIN") {
-      return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
-    }
+    await requireAdminSession(req);
 
     const [agencyCount, coachCount, siteCount, traineeCount, subCount] = await Promise.all([
       prisma.agency.count(),
-      prisma.user.count(),
+      prisma.worker.count(),
       prisma.site.count(),
       prisma.trainee.count({ where: { status: "TRAINING" } }),
       prisma.agency.count({ where: { planType: { in: ["STARTER", "STANDARD", "PRO"] } } }),

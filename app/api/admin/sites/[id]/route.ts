@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -49,16 +49,8 @@ function toRow(r: any) {
   };
 }
 
-async function assertAgencyAccess(
-  scope: { role: string },
-  myAgencyId: bigint | null,
-  siteAgencyId: bigint | null
-) {
-  if (scope.role === "AGENCY") {
-    if (!myAgencyId) throw new Error("FORBIDDEN");
-    if (siteAgencyId == null) throw new Error("FORBIDDEN");
-    if (siteAgencyId !== myAgencyId) throw new Error("FORBIDDEN");
-  }
+function assertAgencyAccess(agencyId: bigint, siteAgencyId: bigint | null) {
+  if (siteAgencyId == null || siteAgencyId !== agencyId) throw new Error("FORBIDDEN");
 }
 
 export async function GET(
@@ -66,7 +58,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { id } = await params;
 
     const idStr = String(id ?? "").trim();
@@ -97,8 +89,7 @@ export async function GET(
     });
     if (!site) throw new Error("NOT_FOUND");
 
-    const myAgencyId = scope.role === "AGENCY" ? requireAgencyScope(scope) : null;
-    await assertAgencyAccess(scope, myAgencyId, site.agencyId);
+    assertAgencyAccess(scope.agencyId, site.agencyId);
 
     return NextResponse.json({ success: true, item: toRow(site) });
   } catch (e: any) {
@@ -116,7 +107,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { id } = await params;
 
     const idStr = String(id ?? "").trim();
@@ -129,8 +120,7 @@ export async function PATCH(
     });
     if (!existing) throw new Error("NOT_FOUND");
 
-    const myAgencyId = scope.role === "AGENCY" ? requireAgencyScope(scope) : null;
-    await assertAgencyAccess(scope, myAgencyId, existing.agencyId);
+    assertAgencyAccess(scope.agencyId, existing.agencyId);
 
     const body = await req.json();
 
@@ -189,16 +179,12 @@ export async function PATCH(
 
       data.agencyManager = { connect: { id: managerId } };
 
-      // AGENCY면 manager가 내 agency 소속인지 검증(보수적으로)
-      if (scope.role === "AGENCY") {
-        const m = await prisma.agencyManager.findUnique({
-          where: { id: managerId },
-          select: { agencyId: true },
-        });
-        if (!m) throw new Error("VALIDATION:managerId");
-        if (!myAgencyId) throw new Error("FORBIDDEN");
-        if (m.agencyId !== myAgencyId) throw new Error("FORBIDDEN");
-      }
+      const m = await prisma.agencyManager.findUnique({
+        where: { id: managerId },
+        select: { agencyId: true },
+      });
+      if (!m) throw new Error("VALIDATION:managerId");
+      if (m.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
     }
 
     const updated = await prisma.site.update({
@@ -240,7 +226,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { id } = await params;
 
     const idStr = String(id ?? "").trim();
@@ -253,8 +239,7 @@ export async function DELETE(
     });
     if (!existing) throw new Error("NOT_FOUND");
 
-    const myAgencyId = scope.role === "AGENCY" ? requireAgencyScope(scope) : null;
-    await assertAgencyAccess(scope, myAgencyId, existing.agencyId);
+    assertAgencyAccess(scope.agencyId, existing.agencyId);
 
     await prisma.site.delete({ where: { id: siteId } });
     return NextResponse.json({ success: true });

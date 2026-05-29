@@ -23,7 +23,7 @@ model CommonCode {
   @@map("common_codes")
 }
 
-model User {
+model Worker {
   id          BigInt     @id @default(autoincrement())
   loginId     String     @unique @map("login_id")
   password    String
@@ -74,7 +74,7 @@ model User {
   notificationSettings UserNotificationSetting?
   notices              WorkerNotice[]
 
-  @@map("users")
+  @@map("workers")
 }
 
 // ------------------------------------------------------
@@ -208,8 +208,8 @@ model SiteAssignment {
   droppedAt   DateTime? @map("dropped_at")
   endedAt     DateTime? @map("ended_at")
 
-  assignedByAdminId BigInt?    @map("assigned_by_admin_id")
-  assignedByAdmin   AdminUser? @relation(fields: [assignedByAdminId], references: [id])
+  assignedByManagerId BigInt?      @map("assigned_by_manager_id")
+  assignedByManager   Manager? @relation(fields: [assignedByManagerId], references: [id])
   statusReason      String?    @map("status_reason")
 
   // ✅ 배정 주체 에이전시 명시 (멀티 에이전시 대응)
@@ -219,7 +219,7 @@ model SiteAssignment {
   isMainCoach Boolean @default(true) @map("is_main_coach")
 
   site Site @relation(fields: [siteId], references: [id])
-  user User @relation(fields: [userId], references: [id])
+  user Worker @relation(fields: [userId], references: [id])
 
   attendances        DailyAttendance[]
   submissionRequests SubmissionRequest[]
@@ -316,7 +316,7 @@ model DailyAttendance {
   managerFinalBy       BigInt?    @map("manager_final_by")
 
   site Site @relation(fields: [siteId], references: [id])
-  user User @relation(fields: [userId], references: [id])
+  user Worker @relation(fields: [userId], references: [id])
 
   assignment SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   basePoint  SiteBasePoint? @relation(fields: [basePointId], references: [id])
@@ -350,7 +350,7 @@ model TraineeLog {
   tasks      TraineeLogTask[]
   attendance DailyAttendance  @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
   trainee    Trainee          @relation(fields: [traineeId], references: [id])
-  writer     User             @relation(fields: [writerId], references: [id])
+  writer     Worker           @relation(fields: [writerId], references: [id])
 
   @@index([traineeId])
   @@index([writerId])
@@ -399,12 +399,12 @@ model Agency {
   subscribedAt    DateTime? @map("subscribed_at") // 최초 구독 전환일
 
   managers            AgencyManager[]
+  managerAccounts     Manager[]
   apiCallLogs         ApiCallLog[]
   sites               Site[]
   assignments         SiteAssignment[]
   payContracts        PayContract[]
   payrollRuns         PayrollRun[]
-  adminUsers          AdminUser[]
   employmentContracts EmploymentContract[]
   agencyDeductions    AgencyDeduction[]
   workerInvites       WorkerInvite[]
@@ -428,42 +428,51 @@ model AgencyManager {
   @@map("agency_managers")
 }
 
-model AdminUser {
+// 시스템 운영자 (Ablelink 내부 직원만, ADMIN 역할 전용)
+model Admin {
   id           BigInt    @id @default(autoincrement())
-  loginId      String    @unique
-  passwordHash String
-  role         AdminRole @default(ADMIN)
-  displayName  String?
+  loginId      String    @unique @map("login_id")
+  passwordHash String    @map("password_hash")
+  displayName  String?   @map("display_name")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  // ✅ (구멍 #1 해결) agencyName만으로 스코프 잡는 방식은 403/오염의 원인
-  // - agencyId FK를 정식으로 두고, agencyName은 표시/레거시로 optional 유지
-  agencyId BigInt? @map("agency_id")
-  agency   Agency? @relation(fields: [agencyId], references: [id])
+  systemAuditLogs  SystemAuditLog[]
+  announcements    SystemAnnouncement[]
+  repliedTickets   SupportTicket[]  @relation("TicketReplier")
 
-  agencyName   String? // legacy/표시용
-  signatureUrl String? @map("signature_url") // 서명 이미지 URL (위탁기관/공단 담당자 서명용)
+  @@map("admins")
+}
 
-  isActive    Boolean   @default(true)
-  lastLoginAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+// 에이전시 관리자 (고객사 담당자, agencyId 필수)
+model Manager {
+  id           BigInt    @id @default(autoincrement())
+  loginId      String    @unique @map("login_id")
+  passwordHash String    @map("password_hash")
+  displayName  String?   @map("display_name")
+  agencyId     BigInt    @map("agency_id")
+  signatureUrl String?   @map("signature_url")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  agency Agency @relation(fields: [agencyId], references: [id])
 
   assignedSiteAssignments SiteAssignment[]
   submissionRequests      SubmissionRequest[]
-  confirmedSiteBasePoints SiteBasePoint[]         @relation("AdminConfirmedBasePoints")
-  DocumentVersion         DocumentVersion[]
-  DocumentSubmissionLog   DocumentSubmissionLog[]
-  attendanceIssueEvents   AttendanceIssueEvent[]  @relation("AttendanceIssueEventAdminActor")
+  confirmedSiteBasePoints SiteBasePoint[]         @relation("ManagerConfirmedBasePoints")
+  documentVersions        DocumentVersion[]
+  documentSubmissionLogs  DocumentSubmissionLog[]
+  attendanceIssueEvents   AttendanceIssueEvent[]  @relation("AttendanceIssueEventManagerActor")
   workerInvites           WorkerInvite[]
-  systemAuditLogs         SystemAuditLog[]
-  announcements           SystemAnnouncement[]
-  authoredTickets         SupportTicket[]        @relation("TicketAuthor")
-  repliedTickets          SupportTicket[]        @relation("TicketReplier")
   holidayRequests         SiteHolidayRequest[]
+  authoredTickets         SupportTicket[]         @relation("TicketAuthor")
 
-  @@index([role])
   @@index([agencyId])
-  @@index([agencyName])
+  @@map("managers")
 }
 
 // ------------------------------------------------------
@@ -504,7 +513,7 @@ model DocumentRun {
 
   assignment SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   site       Site           @relation(fields: [siteId], references: [id])
-  coach      User           @relation(fields: [coachUserId], references: [id])
+  coach      Worker         @relation(fields: [coachUserId], references: [id])
 
   versions       DocumentVersion[]
   submissionLogs DocumentSubmissionLog[]
@@ -528,11 +537,11 @@ model DocumentVersion {
   createdAt   DateTime      @default(now()) @map("created_at")
 
   createdByUserId  BigInt? @map("created_by_user_id")
-  createdByAdminId BigInt? @map("created_by_admin_id")
+  createdByManagerId BigInt? @map("created_by_manager_id")
 
-  run            DocumentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-  createdByUser  User?       @relation(fields: [createdByUserId], references: [id])
-  createdByAdmin AdminUser?  @relation(fields: [createdByAdminId], references: [id])
+  run               DocumentRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  createdByUser     Worker?      @relation(fields: [createdByUserId], references: [id])
+  createdByManager  Manager?     @relation(fields: [createdByManagerId], references: [id])
 
   currentForRuns DocumentRun[]           @relation("DocumentRunCurrentVersion")
   submissionLogs DocumentSubmissionLog[]
@@ -550,17 +559,17 @@ model DocumentSubmissionLog {
 
   submittedAt        DateTime @default(now()) @map("submitted_at")
   submittedByUserId  BigInt?  @map("submitted_by_user_id")
-  submittedByAdminId BigInt?  @map("submitted_by_admin_id")
+  submittedByManagerId BigInt?  @map("submitted_by_manager_id")
 
   sentToEmail  String?   @map("sent_to_email")
   emailSentAt  DateTime? @map("email_sent_at")
   emailStatus  String?   @map("email_status")
   emailPayload Json?     @map("email_payload")
 
-  run              DocumentRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
-  version          DocumentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  submittedByUser  User?           @relation(fields: [submittedByUserId], references: [id])
-  submittedByAdmin AdminUser?      @relation(fields: [submittedByAdminId], references: [id])
+  run               DocumentRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  version           DocumentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  submittedByUser   Worker?         @relation(fields: [submittedByUserId], references: [id])
+  submittedByManager Manager?       @relation(fields: [submittedByManagerId], references: [id])
 
   @@index([runId, stage, submittedAt])
   @@index([versionId])
@@ -584,8 +593,8 @@ model SiteBasePoint {
   authority  ApprovalAuthorityType @map("authority")
 
   confirmedByUserId  BigInt?  @map("confirmed_by_user_id")
-  confirmedByAdminId BigInt?  @map("confirmed_by_admin_id")
-  confirmedAt        DateTime @default(now()) @map("confirmed_at")
+  confirmedByManagerId BigInt?  @map("confirmed_by_manager_id")
+  confirmedAt          DateTime @default(now()) @map("confirmed_at")
 
   memo             String? @map("memo")
   correctionReason String? @map("correction_reason")
@@ -593,8 +602,8 @@ model SiteBasePoint {
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
-  confirmedByUser  User?      @relation("UserConfirmedBasePoints", fields: [confirmedByUserId], references: [id])
-  confirmedByAdmin AdminUser? @relation("AdminConfirmedBasePoints", fields: [confirmedByAdminId], references: [id])
+  confirmedByUser    Worker?      @relation("UserConfirmedBasePoints", fields: [confirmedByUserId], references: [id])
+  confirmedByManager Manager?     @relation("ManagerConfirmedBasePoints", fields: [confirmedByManagerId], references: [id])
 
   prevBasePoint  SiteBasePoint?  @relation("BasePointPrev", fields: [prevBasePointId], references: [id])
   nextBasePoints SiteBasePoint[] @relation("BasePointPrev")
@@ -604,7 +613,7 @@ model SiteBasePoint {
 
   @@index([siteId, stage])
   @@index([confirmedByUserId])
-  @@index([confirmedByAdminId])
+  @@index([confirmedByManagerId])
   @@map("site_base_points")
 }
 
@@ -612,14 +621,14 @@ model SubmissionRequest {
   id                 BigInt                  @id @default(autoincrement())
   agencyId           BigInt?                 @map("agency_id")
   assignmentId       BigInt                  @map("assignment_id")
-  requestedByAdminId BigInt?                 @map("requested_by_admin_id")
-  requestedAt        DateTime                @default(now()) @map("requested_at")
-  dueDate            DateTime?               @map("due_date")
-  status             SubmissionRequestStatus @default(REQUESTED) @map("status")
-  memo               String?                 @map("memo")
+  requestedByManagerId BigInt?                 @map("requested_by_manager_id")
+  requestedAt          DateTime                @default(now()) @map("requested_at")
+  dueDate              DateTime?               @map("due_date")
+  status               SubmissionRequestStatus @default(REQUESTED) @map("status")
+  memo                 String?                 @map("memo")
 
   assignment  SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  requestedBy AdminUser?     @relation(fields: [requestedByAdminId], references: [id])
+  requestedBy Manager?       @relation(fields: [requestedByManagerId], references: [id])
   submissions Submission[]
 
   @@index([assignmentId, status])
@@ -636,7 +645,7 @@ model Submission {
   fileName          String?  @map("file_name")
 
   request SubmissionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  user    User              @relation(fields: [submittedByUserId], references: [id])
+  user    Worker            @relation(fields: [submittedByUserId], references: [id])
 
   @@index([requestId, submittedAt])
   @@index([submittedByUserId, submittedAt])
@@ -724,10 +733,10 @@ model EmploymentContract {
 
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
-  createdByAdminId BigInt?  @map("created_by_admin_id")
+  createdByManagerId BigInt?  @map("created_by_manager_id")
 
   agency Agency @relation(fields: [agencyId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
+  user   Worker @relation(fields: [userId], references: [id])
 
   @@index([agencyId, status])
   @@index([userId, status])
@@ -781,7 +790,7 @@ model PayContract {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  user   User   @relation(fields: [userId], references: [id])
+  user   Worker @relation(fields: [userId], references: [id])
   agency Agency @relation(fields: [agencyId], references: [id])
 
   @@index([agencyId, userId, effectiveFrom])
@@ -818,7 +827,7 @@ model PayrollItem {
   breakdown     Json? @map("breakdown")
 
   run  PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-  user User       @relation(fields: [userId], references: [id])
+  user Worker     @relation(fields: [userId], references: [id])
 
   @@unique([runId, userId])
   @@map("payroll_items")
@@ -881,20 +890,20 @@ model AttendanceIssueEvent {
   type      AttendanceIssueEventType
   actorRole AttendanceIssueActorRole @map("actor_role")
 
-  actorUserId  BigInt? @map("actor_user_id")
-  actorAdminId BigInt? @map("actor_admin_id")
+  actorUserId    BigInt? @map("actor_user_id")
+  actorManagerId BigInt? @map("actor_manager_id")
 
   message   String?
   createdAt DateTime @default(now()) @map("created_at")
 
   issue AttendanceIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
-  actorUser  User?      @relation("AttendanceIssueEventActor", fields: [actorUserId], references: [id])
-  actorAdmin AdminUser? @relation("AttendanceIssueEventAdminActor", fields: [actorAdminId], references: [id])
+  actorUser    Worker?      @relation("AttendanceIssueEventActor", fields: [actorUserId], references: [id])
+  actorManager Manager?     @relation("AttendanceIssueEventManagerActor", fields: [actorManagerId], references: [id])
 
   @@index([issueId, createdAt])
   @@index([actorUserId, createdAt])
-  @@index([actorAdminId, createdAt])
+  @@index([actorManagerId, createdAt])
   @@map("attendance_issue_events")
 }
 
@@ -921,7 +930,7 @@ model ApiCallLog {
   createdAt DateTime @default(now()) @map("created_at")
 
   agency Agency? @relation(fields: [agencyId], references: [id])
-  user   User?   @relation(fields: [userId],   references: [id])
+  user   Worker? @relation(fields: [userId],   references: [id])
 
   @@index([agencyId, service, createdAt])
   @@index([createdAt])
@@ -938,7 +947,7 @@ model SystemAnnouncement {
   sentCount Int      @default(0) @map("sent_count")
   createdAt DateTime @default(now()) @map("created_at")
 
-  admin AdminUser? @relation(fields: [adminId], references: [id])
+  admin Admin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@map("system_announcements")
@@ -957,7 +966,7 @@ model SystemAuditLog {
   ipAddress String?  @map("ip_address")
   createdAt DateTime @default(now()) @map("created_at")
 
-  admin AdminUser? @relation(fields: [adminId], references: [id])
+  admin Admin? @relation(fields: [adminId], references: [id])
 
   @@index([adminId, createdAt])
   @@index([createdAt])
@@ -982,7 +991,7 @@ model AttendanceEditRequest {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   attendance DailyAttendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
-  user       User            @relation(fields: [userId], references: [id])
+  user       Worker          @relation(fields: [userId], references: [id])
 
   @@index([attendanceId, status])
   @@index([userId, status])
@@ -1079,11 +1088,7 @@ enum ApprovalAuthorityType {
   KEAD
 }
 
-enum AdminRole {
-  ADMIN
-  GOV
-  AGENCY
-}
+// AdminRole enum 제거됨 — Admin은 항상 시스템 운영자(ADMIN)이므로 role 필드 불필요
 
 enum BasePointStage {
   AGENCY_CONFIRMED
@@ -1126,7 +1131,7 @@ enum AttendanceIssueEventType {
 }
 
 enum AttendanceIssueActorRole {
-  ADMIN
+  MANAGER // 에이전시 관리자 (이전: ADMIN)
   COACH
 }
 
@@ -1158,7 +1163,6 @@ model SiteHolidayRequest {
   id                     BigInt               @id @default(autoincrement())
   holidayId              BigInt               @map("holiday_id")
   agencyId               BigInt               @map("agency_id")
-  adminId                BigInt?              @map("admin_id")
   requestType            HolidayRequestType   @map("request_type")
   proposedCountAsWorkday Boolean?             @map("proposed_count_as_workday")
   reason                 String?
@@ -1166,9 +1170,11 @@ model SiteHolidayRequest {
   createdAt              DateTime             @default(now()) @map("created_at")
   updatedAt              DateTime             @updatedAt @map("updated_at")
 
-  holiday SiteHoliday @relation(fields: [holidayId], references: [id], onDelete: Cascade)
-  agency  Agency      @relation(fields: [agencyId],  references: [id])
-  admin   AdminUser?  @relation(fields: [adminId],   references: [id])
+  managerId BigInt?      @map("manager_id")
+
+  holiday SiteHoliday @relation(fields: [holidayId],  references: [id], onDelete: Cascade)
+  agency  Agency      @relation(fields: [agencyId],   references: [id])
+  manager Manager? @relation(fields: [managerId], references: [id])
 
   @@index([holidayId, status])
   @@index([agencyId, status])
@@ -1188,7 +1194,7 @@ enum SupportTicketStatus {
 model SupportTicket {
   id         BigInt               @id @default(autoincrement())
   agencyId   BigInt               @map("agency_id")
-  adminId    BigInt?              @map("admin_id")     // 작성한 에이전시 관리자
+  managerId  BigInt?              @map("manager_id")   // 작성한 에이전시 관리자
   category   String               @default("GENERAL")  // GENERAL | DATA_FIX | BILLING | OTHER
   title      String
   body       String
@@ -1199,9 +1205,9 @@ model SupportTicket {
   createdAt  DateTime             @default(now()) @map("created_at")
   updatedAt  DateTime             @updatedAt @map("updated_at")
 
-  agency  Agency     @relation(fields: [agencyId],  references: [id])
-  admin   AdminUser? @relation("TicketAuthor",  fields: [adminId],   references: [id])
-  replier AdminUser? @relation("TicketReplier", fields: [repliedBy], references: [id])
+  agency  Agency      @relation(fields: [agencyId],  references: [id])
+  manager Manager?  @relation("TicketAuthor",  fields: [managerId],  references: [id])
+  replier Admin?    @relation("TicketReplier", fields: [repliedBy],  references: [id])
 
   @@index([agencyId, status])
   @@index([status, createdAt])
@@ -1284,7 +1290,7 @@ model UserNotificationSetting {
 
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user Worker @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_notification_settings")
 }
@@ -1307,7 +1313,7 @@ model TraineeEvaluation {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   trainee Trainee @relation(fields: [traineeId], references: [id])
-  writer  User    @relation(fields: [writerId], references: [id])
+  writer  Worker  @relation(fields: [writerId], references: [id])
 
   @@index([traineeId, evalType])
   @@map("trainee_evaluations")
@@ -1343,12 +1349,12 @@ model WorkerInvite {
   expiresAt        DateTime  @map("expires_at")
   usedAt           DateTime? @map("used_at")
   usedByUserId     BigInt?   @map("used_by_user_id")
-  createdByAdminId BigInt    @map("created_by_admin_id")
-  createdAt        DateTime  @default(now()) @map("created_at")
+  createdByManagerId BigInt      @map("created_by_manager_id")
+  createdAt          DateTime    @default(now()) @map("created_at")
 
-  agency  Agency    @relation(fields: [agencyId], references: [id])
-  site    Site?     @relation(fields: [siteId], references: [id])
-  creator AdminUser @relation(fields: [createdByAdminId], references: [id])
+  agency  Agency      @relation(fields: [agencyId], references: [id])
+  site    Site?       @relation(fields: [siteId], references: [id])
+  creator Manager @relation(fields: [createdByManagerId], references: [id])
 
   @@index([code])
   @@index([agencyId])
@@ -1371,7 +1377,7 @@ model WorkerNotice {
   readAt    DateTime? @map("read_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user Worker @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt])
   @@index([agencyId])

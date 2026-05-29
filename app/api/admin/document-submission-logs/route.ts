@@ -3,26 +3,8 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { readAdminSessionFromRequest } from "@/lib/adminCookies";
+import { requireManagerSession } from "@/lib/managerScope";
 import { Prisma, DocumentStage } from "@prisma/client";
-
-type AdminSession = {
-  sub: string;
-  role: "ADMIN" | "GOV" | "AGENCY";
-  loginId: string;
-  agencyName?: string | null;
-};
-
-async function getSessionOrThrow(req: Request): Promise<AdminSession> {
-  const s = await readAdminSessionFromRequest(req);
-  if (!s) throw new Error("UNAUTHORIZED");
-  return {
-    sub: String(s.sub),
-    role: s.role,
-    loginId: s.loginId,
-    agencyName: s.agencyName ?? null,
-  };
-}
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -36,15 +18,6 @@ function isValidNumericId(s: string) {
   return /^[0-9]+$/.test(s);
 }
 
-async function resolveAgencyIdByNameOrThrow(agencyName: string): Promise<bigint> {
-  const a = await prisma.agency.findUnique({
-    where: { name: agencyName },
-    select: { id: true },
-  });
-  if (!a) throw new Error("VALIDATION:agencyName");
-  return a.id;
-}
-
 function toItem(l: any) {
   return {
     id: String(l.id),
@@ -53,7 +26,7 @@ function toItem(l: any) {
     stage: l.stage,
     submittedAt: l.submittedAt.toISOString(),
     submittedByUserId: l.submittedByUserId != null ? String(l.submittedByUserId) : null,
-    submittedByAdminId: l.submittedByAdminId != null ? String(l.submittedByAdminId) : null,
+    submittedByManagerId: l.submittedByManagerId != null ? String(l.submittedByManagerId) : null,
     sentToEmail: l.sentToEmail ?? null,
     emailSentAt: l.emailSentAt ? l.emailSentAt.toISOString() : null,
     emailStatus: l.emailStatus ?? null,
@@ -64,7 +37,7 @@ function toItem(l: any) {
 // GET: runId로 로그 조회
 export async function GET(req: NextRequest) {
   try {
-    const session = await getSessionOrThrow(req);
+    const scope = await requireManagerSession(req);
 
     const { searchParams } = new URL(req.url);
     const runIdStr = String(searchParams.get("runId") || "").trim();
@@ -73,18 +46,13 @@ export async function GET(req: NextRequest) {
 
     const runId = BigInt(runIdStr);
 
-    // ✅ AGENCY 스코프 검증: assignment.site.agencyId 기준
-    if (session.role === "AGENCY") {
-      if (!session.agencyName) throw new Error("FORBIDDEN");
-      const myAgencyId = await resolveAgencyIdByNameOrThrow(session.agencyName);
-
-      const run = await prisma.documentRun.findUnique({
-        where: { id: runId },
-        select: { assignment: { select: { site: { select: { agencyId: true } } } } },
-      });
-      if (!run) throw new Error("NOT_FOUND");
-      if (run.assignment.site.agencyId == null || run.assignment.site.agencyId !== myAgencyId) throw new Error("FORBIDDEN");
-    }
+    // 스코프 검증
+    const run = await prisma.documentRun.findUnique({
+      where: { id: runId },
+      select: { assignment: { select: { site: { select: { agencyId: true } } } } },
+    });
+    if (!run) throw new Error("NOT_FOUND");
+    if (run.assignment.site.agencyId == null || run.assignment.site.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
 
     const rows = await prisma.documentSubmissionLog.findMany({
       where: { runId },
@@ -96,7 +64,7 @@ export async function GET(req: NextRequest) {
         stage: true,
         submittedAt: true,
         submittedByUserId: true,
-        submittedByAdminId: true,
+        submittedByManagerId: true,
         sentToEmail: true,
         emailSentAt: true,
         emailStatus: true,
@@ -119,40 +87,27 @@ export async function GET(req: NextRequest) {
 // - object/value: 그대로 저장
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSessionOrThrow(req);
+    const scope = await requireManagerSession(req);
 
     const body = await req.json();
-
     const runIdStr = String(body?.runId || "").trim();
     const versionIdStr = String(body?.versionId || "").trim();
     const stageStr = String(body?.stage || "").trim();
 
-    if (!runIdStr) throw new Error("VALIDATION:runId");
-    if (!versionIdStr) throw new Error("VALIDATION:versionId");
-    if (!isValidNumericId(runIdStr)) throw new Error("VALIDATION:runId");
-    if (!isValidNumericId(versionIdStr)) throw new Error("VALIDATION:versionId");
-
+    if (!runIdStr || !isValidNumericId(runIdStr)) throw new Error("VALIDATION:runId");
+    if (!versionIdStr || !isValidNumericId(versionIdStr)) throw new Error("VALIDATION:versionId");
     if (!stageStr || !Object.values(DocumentStage).includes(stageStr as any)) throw new Error("VALIDATION:stage");
 
     const runId = BigInt(runIdStr);
     const versionId = BigInt(versionIdStr);
 
-    // ✅ AGENCY 스코프 검증: run.assignment.site.agencyId
-    if (session.role === "AGENCY") {
-      if (!session.agencyName) throw new Error("FORBIDDEN");
-      const myAgencyId = await resolveAgencyIdByNameOrThrow(session.agencyName);
+    const run = await prisma.documentRun.findUnique({
+      where: { id: runId },
+      select: { assignment: { select: { site: { select: { agencyId: true } } } } },
+    });
+    if (!run) throw new Error("NOT_FOUND");
+    if (run.assignment.site.agencyId == null || run.assignment.site.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
 
-      const run = await prisma.documentRun.findUnique({
-        where: { id: runId },
-        select: { assignment: { select: { site: { select: { agencyId: true } } } } },
-      });
-      if (!run) throw new Error("NOT_FOUND");
-      if (run.assignment.site.agencyId == null || run.assignment.site.agencyId !== myAgencyId) throw new Error("FORBIDDEN");
-    } else if (session.role !== "ADMIN" && session.role !== "GOV") {
-      throw new Error("FORBIDDEN");
-    }
-
-    // version이 run 소속인지 확인
     const v = await prisma.documentVersion.findUnique({
       where: { id: versionId },
       select: { id: true, runId: true },
@@ -163,16 +118,9 @@ export async function POST(req: NextRequest) {
     const sentToEmail = body?.sentToEmail == null ? null : String(body.sentToEmail).trim();
     const emailStatus = body?.emailStatus == null ? null : String(body.emailStatus).trim();
 
-    // ✅ 타입 안전한 JSON 처리
     let emailPayloadInput: Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue | undefined;
     if (Object.prototype.hasOwnProperty.call(body, "emailPayload")) {
-      if (body.emailPayload === null) {
-        emailPayloadInput = Prisma.JsonNull;
-      } else {
-        emailPayloadInput = body.emailPayload as Prisma.InputJsonValue;
-      }
-    } else {
-      emailPayloadInput = undefined; // 필드 생략
+      emailPayloadInput = body.emailPayload === null ? Prisma.JsonNull : (body.emailPayload as Prisma.InputJsonValue);
     }
 
     const created = await prisma.documentSubmissionLog.create({
@@ -180,32 +128,22 @@ export async function POST(req: NextRequest) {
         run: { connect: { id: runId } },
         version: { connect: { id: versionId } },
         stage: stageStr as any,
-
-        submittedByAdmin: { connect: { id: BigInt(session.sub) } },
-
+        submittedByManager: { connect: { id: scope.managerId } },
         sentToEmail,
         emailSentAt: sentToEmail ? new Date() : null,
         emailStatus,
-
         ...(emailPayloadInput !== undefined ? { emailPayload: emailPayloadInput } : {}),
       },
       select: {
-        id: true,
-        runId: true,
-        versionId: true,
-        stage: true,
-        submittedAt: true,
-        submittedByUserId: true,
-        submittedByAdminId: true,
-        sentToEmail: true,
-        emailSentAt: true,
-        emailStatus: true,
-        emailPayload: true,
+        id: true, runId: true, versionId: true, stage: true, submittedAt: true,
+        submittedByUserId: true, submittedByManagerId: true,
+        sentToEmail: true, emailSentAt: true, emailStatus: true, emailPayload: true,
       },
     });
 
     return NextResponse.json({ success: true, item: toItem(created) });
   } catch (e: any) {
+    if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
     return NextResponse.json({ success: false, message: msg }, { status: errToStatus(msg) });
   }

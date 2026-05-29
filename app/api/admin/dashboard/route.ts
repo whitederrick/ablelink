@@ -5,14 +5,12 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function GET(req: Request) {
   try {
-    const scope = await requireAdminSession(req);
-    const agencyFilter = scope.role === "AGENCY" && scope.agencyId
-      ? { agencyId: scope.agencyId }
-      : {};
+    const scope = await requireManagerSession(req);
+    const agencyFilter = { agencyId: scope.agencyId };
 
     const today = new Date();
     const todayStr = today.toISOString().slice(0, 10);
@@ -58,7 +56,7 @@ export async function GET(req: Request) {
       }),
       // 3. 보고서 현황 (최근 50건)
       prisma.documentRun.findMany({
-        where: { status: "OPEN", ...(scope.role === "AGENCY" && scope.agencyId ? { agencyId: scope.agencyId } : {}) },
+        where: { status: "OPEN", agencyId: scope.agencyId },
         take: 50,
         select: {
           id: true, docType: true, dueAt: true, currentVersionId: true,
@@ -78,7 +76,7 @@ export async function GET(req: Request) {
       }),
       // 5. 미배정 Site
       prisma.site.findMany({
-        where: { isActive: true, ...(scope.role === "AGENCY" && scope.agencyId ? { agencyId: scope.agencyId } : {}) },
+        where: { isActive: true, agencyId: scope.agencyId },
         select: {
           id: true, companyName: true,
           assignments: { where: { status: "ACTIVE" }, select: { id: true } },

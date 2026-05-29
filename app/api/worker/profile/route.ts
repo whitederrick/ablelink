@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const session = await getWorkerSessionFromReq(req);
   if (!session) return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
-  const user = await prisma.user.findUnique({
+  const user = await prisma.worker.findUnique({
     where:  { id: BigInt(session.userId) },
     select: { id: true, userName: true, phoneNumber: true, loginId: true, isTemporary: true },
   });
@@ -29,7 +29,7 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const { userName, phoneNumber, currentPassword, newPassword } = body;
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.worker.findUnique({
       where:  { id: BigInt(session.userId) },
       select: { id: true, password: true, userName: true, phoneNumber: true },
     });
@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ success: false, message: "올바른 전화번호 형식이 아닙니다." }, { status: 400 });
       }
       // 중복 확인
-      const dup = await prisma.user.findFirst({
+      const dup = await prisma.worker.findFirst({
         where: { phoneNumber: { in: [phoneNumber, cleaned] }, id: { not: user.id } },
       });
       if (dup) return NextResponse.json({ success: false, message: "이미 사용 중인 전화번호입니다." }, { status: 409 });
@@ -69,7 +69,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, message: "변경할 내용이 없습니다." }, { status: 400 });
     }
 
-    const updated = await prisma.user.update({
+    const updated = await prisma.worker.update({
       where:  { id: user.id },
       data:   updates,
       select: { id: true, userName: true, phoneNumber: true },

@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 const VALID_WORK_TYPES = ["AM", "PM", "FULL_DAY", "CUSTOM"] as const;
 type WorkType = typeof VALID_WORK_TYPES[number];
@@ -25,7 +25,7 @@ function workTimes(wt: WorkType, customStart?: string | null, customEnd?: string
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { id } = await params;
     const assignmentId = BigInt(id);
 
@@ -52,16 +52,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ success: false, message: "직접입력 근무시간은 HH:MM 형식으로 입력해주세요." }, { status: 400 });
     }
 
-    // AGENCY 스코프: 자기 에이전시 배정만 수정 가능
-    if (scope.role === "AGENCY") {
-      const agencyId = requireAgencyScope(scope);
-      const existing = await prisma.siteAssignment.findUnique({
-        where: { id: assignmentId },
-        select: { agencyId: true },
-      });
-      if (!existing) return NextResponse.json({ success: false, message: "NOT_FOUND" }, { status: 404 });
-      if (existing.agencyId !== agencyId) return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
-    }
+    // 자기 에이전시 배정만 수정 가능
+    const agencyId = scope.agencyId;
+    const existing = await prisma.siteAssignment.findUnique({
+      where: { id: assignmentId },
+      select: { agencyId: true },
+    });
+    if (!existing) return NextResponse.json({ success: false, message: "NOT_FOUND" }, { status: 404 });
+    if (existing.agencyId !== agencyId) return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const updated = await prisma.siteAssignment.update({
       where: { id: assignmentId },

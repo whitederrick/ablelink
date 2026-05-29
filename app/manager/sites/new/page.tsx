@@ -44,7 +44,7 @@ export default function AdminSiteNewPage() {
 
   useEffect(() => {
     (async () => {
-      const r = await fetch("/api/admin/auth/me", { cache: "no-store" });
+      const r = await fetch("/api/manager/auth/me", { cache: "no-store" });
       const d = await r.json();
       setMe(d);
     })();

@@ -56,55 +56,8 @@ async function findBestAssignmentId(params: {
 }
 
 async function backfillAdminUserAgencyId() {
-  console.log("1) Backfill AdminUser.agencyId from agencyName...");
-
-  /**
-   * ✅ 타입 이슈 회피:
-   * - agencyId가 nullable(BigInt?)이면: isSet:false가 "NULL"을 의미
-   * - agencyId가 non-null이면: 대상이 없으니 빈 배열 → 자연스럽게 스킵
-   */
-  const admins = await prisma.adminUser.findMany({
-    where: {
-      agencyId: { isSet: false } as any,
-      agencyName: { not: null },
-    },
-    select: { id: true, agencyName: true },
-  });
-
-  if (admins.length === 0) {
-    console.log("  - no admin rows to backfill");
-    return;
-  }
-
-  // agencyName -> agencyId lookup cache
-  const names = Array.from(
-    new Set(admins.map((a) => a.agencyName!).filter(Boolean))
-  );
-
-  const agencies = await prisma.agency.findMany({
-    where: { name: { in: names } },
-    select: { id: true, name: true },
-  });
-
-  const map = new Map<string, bigint>(agencies.map((a) => [a.name, a.id]));
-
-  let ok = 0;
-  let miss = 0;
-
-  for (const a of admins) {
-    const agencyId = map.get(a.agencyName!);
-    if (!agencyId) {
-      miss++;
-      continue;
-    }
-    await prisma.adminUser.update({
-      where: { id: a.id },
-      data: { agencyId },
-    });
-    ok++;
-  }
-
-  console.log(`  - updated: ${ok}, missing agency match: ${miss}`);
+  // NOTE: Admin 모델에 agencyId/agencyName이 제거됨 — 이 단계는 더이상 필요 없음
+  console.log("1) Backfill AdminUser.agencyId — skipped (Admin 모델에 agencyId 없음)");
 }
 
 async function ensureLegacyAssignment(params: {

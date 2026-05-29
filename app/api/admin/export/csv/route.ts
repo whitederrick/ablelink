@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 function errStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -54,7 +54,7 @@ function formatKst(iso: Date | null | undefined): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { searchParams } = new URL(req.url);
 
     const type = (searchParams.get("type") || "attendance").trim();

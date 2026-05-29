@@ -12,7 +12,6 @@ export async function PATCH(
 ) {
   try {
     const scope = await requireAdminSession(req);
-    if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const { id } = await params;
     const adminId = parseBigInt(id);
@@ -20,7 +19,7 @@ export async function PATCH(
     const body = await req.json();
     const { action, newPassword, displayName, isActive, agencyId } = body;
 
-    const admin = await prisma.adminUser.findUnique({ where: { id: adminId } });
+    const admin = await prisma.admin.findUnique({ where: { id: adminId } });
     if (!admin) return NextResponse.json({ success: false, message: "계정을 찾을 수 없습니다." }, { status: 404 });
 
     if (action === "reset-password") {
@@ -28,12 +27,12 @@ export async function PATCH(
         return NextResponse.json({ success: false, message: "비밀번호는 8자 이상이어야 합니다." }, { status: 400 });
       }
       const passwordHash = await bcrypt.hash(newPassword, 12);
-      await prisma.adminUser.update({ where: { id: admin.id }, data: { passwordHash } });
+      await prisma.admin.update({ where: { id: admin.id }, data: { passwordHash } });
       return NextResponse.json({ success: true, message: "비밀번호가 초기화되었습니다." });
     }
 
     if (action === "toggle-active") {
-      await prisma.adminUser.update({ where: { id: admin.id }, data: { isActive: !admin.isActive } });
+      await prisma.admin.update({ where: { id: admin.id }, data: { isActive: !admin.isActive } });
       return NextResponse.json({ success: true, message: admin.isActive ? "계정이 비활성화되었습니다." : "계정이 활성화되었습니다." });
     }
 
@@ -50,7 +49,7 @@ export async function PATCH(
           updateData.agencyName = null;
         }
       }
-      await prisma.adminUser.update({ where: { id: admin.id }, data: updateData });
+      await prisma.admin.update({ where: { id: admin.id }, data: updateData });
       return NextResponse.json({ success: true });
     }
 

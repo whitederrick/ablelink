@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -21,23 +21,19 @@ function isValidNumericId(s: string) {
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
 
     const { id } = await params;
     const idStr = String(id ?? "").trim();
     if (!isValidNumericId(idStr)) throw new Error("VALIDATION:id");
     const siteId = BigInt(idStr);
 
-    // ✅ AGENCY 스코프면 해당 site가 내 agency 소속인지 검증
-    if (scope.role === "AGENCY") {
-      const agencyId = requireAgencyScope(scope);
-      const site = await prisma.site.findUnique({
-        where: { id: siteId },
-        select: { id: true, agencyId: true },
-      });
-      if (!site) throw new Error("NOT_FOUND");
-      if (site.agencyId == null || site.agencyId !== agencyId) throw new Error("FORBIDDEN");
-    }
+    const site = await prisma.site.findUnique({
+      where: { id: siteId },
+      select: { id: true, agencyId: true },
+    });
+    if (!site) throw new Error("NOT_FOUND");
+    if (site.agencyId == null || site.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
 
     const rows = await prisma.traineePlacement.findMany({
       where: { siteId },

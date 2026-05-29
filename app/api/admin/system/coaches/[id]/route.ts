@@ -13,7 +13,6 @@ export async function PATCH(
 ) {
   try {
     const scope = await requireAdminSession(req);
-    if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const { id } = await params;
     const userId = parseBigInt(id);
@@ -21,7 +20,7 @@ export async function PATCH(
     const body = await req.json();
     const { action, newPassword, status, memo } = body;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.worker.findUnique({ where: { id: userId } });
     if (!user) return NextResponse.json({ success: false, message: "직무지도원을 찾을 수 없습니다." }, { status: 404 });
 
     if (action === "reset-password") {
@@ -29,8 +28,8 @@ export async function PATCH(
         return NextResponse.json({ success: false, message: "비밀번호는 8자 이상이어야 합니다." }, { status: 400 });
       }
       const hashedPassword = await bcrypt.hash(newPassword, 12);
-      await prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
-      await logAudit({ adminId: scope.userId, action: "COACH_PASSWORD_RESET", target: `User:${user.id}`, detail: { userName: user.userName } });
+      await prisma.worker.update({ where: { id: user.id }, data: { password: hashedPassword } });
+      await logAudit({ adminId: scope.adminId, action: "COACH_PASSWORD_RESET", target: `User:${user.id}`, detail: { userName: user.userName } });
       return NextResponse.json({ success: true, message: "비밀번호가 초기화되었습니다." });
     }
 
@@ -39,8 +38,8 @@ export async function PATCH(
       if (!validStatuses.includes(status)) {
         return NextResponse.json({ success: false, message: "유효하지 않은 상태입니다." }, { status: 400 });
       }
-      await prisma.user.update({ where: { id: user.id }, data: { status } });
-      await logAudit({ adminId: scope.userId, action: "COACH_STATUS_CHANGED", target: `User:${user.id}`, detail: { before: user.status, after: status, memo } });
+      await prisma.worker.update({ where: { id: user.id }, data: { status } });
+      await logAudit({ adminId: scope.adminId, action: "COACH_STATUS_CHANGED", target: `User:${user.id}`, detail: { before: user.status, after: status, memo } });
       return NextResponse.json({ success: true, message: `상태가 ${status}로 변경되었습니다.` });
     }
 

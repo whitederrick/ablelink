@@ -3,26 +3,8 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { readAdminSessionFromRequest } from "@/lib/adminCookies";
+import { requireManagerSession } from "@/lib/managerScope";
 import { Prisma, DocumentStage } from "@prisma/client";
-
-type AdminSession = {
-  sub: string; // adminUserId
-  role: "ADMIN" | "GOV" | "AGENCY";
-  loginId: string;
-  agencyName?: string | null;
-};
-
-async function getSessionOrThrow(req: Request): Promise<AdminSession> {
-  const s = await readAdminSessionFromRequest(req);
-  if (!s) throw new Error("UNAUTHORIZED");
-  return {
-    sub: String(s.sub),
-    role: s.role,
-    loginId: s.loginId,
-    agencyName: s.agencyName ?? null,
-  };
-}
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -36,15 +18,6 @@ function isValidNumericId(s: string) {
   return /^[0-9]+$/.test(s);
 }
 
-async function resolveAgencyIdByNameOrThrow(agencyName: string): Promise<bigint> {
-  const a = await prisma.agency.findUnique({
-    where: { name: agencyName },
-    select: { id: true },
-  });
-  if (!a) throw new Error("VALIDATION:agencyName");
-  return a.id;
-}
-
 function toItem(v: any) {
   return {
     id: String(v.id),
@@ -56,7 +29,7 @@ function toItem(v: any) {
     sourceData: v.sourceData ?? null,
     createdAt: v.createdAt.toISOString(),
     createdByUserId: v.createdByUserId != null ? String(v.createdByUserId) : null,
-    createdByAdminId: v.createdByAdminId != null ? String(v.createdByAdminId) : null,
+    createdByManagerId: v.createdByManagerId != null ? String(v.createdByManagerId) : null,
   };
 }
 
@@ -64,7 +37,7 @@ function toItem(v: any) {
 // query: runId (required)
 export async function GET(req: NextRequest) {
   try {
-    const session = await getSessionOrThrow(req);
+    const scope = await requireManagerSession(req);
 
     const { searchParams } = new URL(req.url);
     const runIdStr = String(searchParams.get("runId") || "").trim();
@@ -79,10 +52,9 @@ export async function GET(req: NextRequest) {
     });
     if (!run) throw new Error("NOT_FOUND");
 
-    if (session.role === "AGENCY") {
-      if (!session.agencyName) throw new Error("FORBIDDEN");
-      const myAgencyId = await resolveAgencyIdByNameOrThrow(session.agencyName);
-      if (run.assignment.site.agencyId == null || run.assignment.site.agencyId !== myAgencyId) throw new Error("FORBIDDEN");
+    {
+      const agencyId = run.assignment.site.agencyId;
+      if (agencyId == null || agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
     }
 
     const rows = await prisma.documentVersion.findMany({
@@ -98,7 +70,7 @@ export async function GET(req: NextRequest) {
         sourceData: true,
         createdAt: true,
         createdByUserId: true,
-        createdByAdminId: true,
+        createdByManagerId: true,
       },
     });
 
@@ -117,7 +89,7 @@ export async function GET(req: NextRequest) {
 // - object/value: 그대로 저장
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSessionOrThrow(req);
+    const scope = await requireManagerSession(req);
 
     const body = await req.json();
     const runIdStr = String(body?.runId || "").trim();
@@ -140,12 +112,9 @@ export async function POST(req: NextRequest) {
     });
     if (!run) throw new Error("NOT_FOUND");
 
-    if (session.role === "AGENCY") {
-      if (!session.agencyName) throw new Error("FORBIDDEN");
-      const myAgencyId = await resolveAgencyIdByNameOrThrow(session.agencyName);
-      if (run.assignment.site.agencyId == null || run.assignment.site.agencyId !== myAgencyId) throw new Error("FORBIDDEN");
-    } else if (session.role !== "ADMIN" && session.role !== "GOV") {
-      throw new Error("FORBIDDEN");
+    {
+      const agencyId = run.assignment.site.agencyId;
+      if (agencyId == null || agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
     }
 
     const nextVersionNo =
@@ -179,7 +148,7 @@ export async function POST(req: NextRequest) {
 
           ...(sourceDataInput !== undefined ? { sourceData: sourceDataInput } : {}),
 
-          createdByAdmin: { connect: { id: BigInt(session.sub) } },
+          createdByManager: { connect: { id: scope.managerId } },
         },
         select: {
           id: true,
@@ -191,7 +160,7 @@ export async function POST(req: NextRequest) {
           sourceData: true,
           createdAt: true,
           createdByUserId: true,
-          createdByAdminId: true,
+          createdByManagerId: true,
         },
       });
 

@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 중복 확인 (다른 사용자가 이미 같은 이메일을 loginId로 사용 중인지)
-  const dup = await prisma.user.findFirst({
+  const dup = await prisma.worker.findFirst({
     where: { loginId: email, id: { not: BigInt(session.userId) } },
   });
   if (dup) {
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   const code = String(Math.floor(100000 + Math.random() * 900000));
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10분
 
-  await prisma.user.update({
+  await prisma.worker.update({
     where: { id: BigInt(session.userId) },
     data: {
       pendingLoginId:      email,

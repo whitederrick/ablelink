@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { Decimal } from "@prisma/client/runtime/library";
 
@@ -18,13 +18,9 @@ function minutesBetween(start: Date | null, end: Date | null): number {
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const agencyId = scope.agencyId;
-    if (!agencyId && scope.role !== "ADMIN") {
-      return NextResponse.json({ success: false, message: "에이전시 정보 없음" }, { status: 403 });
-    }
-
-    const where = agencyId ? { agencyId } : {};
+    const where = { agencyId };
     const runs = await prisma.payrollRun.findMany({
       where,
       include: { items: { select: { id: true } } },
@@ -50,7 +46,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const agencyId = scope.agencyId;
     if (!agencyId) {
       return NextResponse.json({ success: false, message: "에이전시 정보 없음" }, { status: 403 });

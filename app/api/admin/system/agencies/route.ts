@@ -10,11 +10,10 @@ import bcrypt from "bcryptjs";
 export async function GET(req: Request) {
   try {
     const scope = await requireAdminSession(req);
-    if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const agencies = await prisma.agency.findMany({
       include: {
-        _count: { select: { adminUsers: true, sites: true } },
+        _count: { select: { managerAccounts: true, sites: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -31,7 +30,7 @@ export async function GET(req: Request) {
         maxCoaches:  a.maxCoaches,
         maxSites:    a.maxSites,
         createdAt:   a.createdAt.toISOString(),
-        managerCount: a._count.adminUsers,
+        managerCount: a._count.managerAccounts,
         siteCount:    a._count.sites,
       })),
     });
@@ -44,7 +43,6 @@ export async function GET(req: Request) {
 export async function POST(req: NextRequest) {
   try {
     const scope = await requireAdminSession(req);
-    if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const body = await req.json();
     const { name, planType, managerLoginId, managerPassword, managerDisplayName } = body;
@@ -57,7 +55,8 @@ export async function POST(req: NextRequest) {
     const exists = await prisma.agency.findUnique({ where: { name: name.trim() } });
     if (exists) return NextResponse.json({ success: false, message: "이미 존재하는 에이전시 이름입니다." }, { status: 409 });
 
-    const loginExists = await prisma.adminUser.findUnique({ where: { loginId: managerLoginId.trim() } });
+    // ManagerUser 테이블에서 중복 확인
+    const loginExists = await prisma.manager.findUnique({ where: { loginId: managerLoginId.trim() } });
     if (loginExists) return NextResponse.json({ success: false, message: "이미 사용 중인 관리자 아이디입니다." }, { status: 409 });
 
     const passwordHash = await bcrypt.hash(managerPassword, 12);
@@ -66,21 +65,20 @@ export async function POST(req: NextRequest) {
       const ag = await tx.agency.create({
         data: { name: name.trim(), planType: planType || "FREE" },
       });
-      await tx.adminUser.create({
+      // AdminUser(ADMIN)와 완전 분리 — ManagerUser(managers) 테이블에 생성
+      await tx.manager.create({
         data: {
-          loginId: managerLoginId.trim(),
+          loginId:     managerLoginId.trim(),
           passwordHash,
-          role: "AGENCY",
           displayName: managerDisplayName?.trim() || null,
-          agencyId: ag.id,
-          agencyName: ag.name,
+          agencyId:    ag.id,
         },
       });
       return ag;
     });
 
     await logAudit({
-      adminId: scope.userId,
+      adminId: scope.adminId,
       action: "AGENCY_CREATED",
       target: `Agency:${agency.id}`,
       detail: { name: agency.name, planType, managerLoginId },

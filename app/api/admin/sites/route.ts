@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { checkQuota } from "@/lib/planGuard";
 
 function parseIntSafe(v: string | null, fallback: number) {
@@ -61,7 +61,7 @@ function toRow(r: any) {
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { searchParams } = new URL(req.url);
 
     const q = (searchParams.get("q") || "").trim();
@@ -74,20 +74,7 @@ export async function GET(req: NextRequest) {
 
     let agencyId: bigint | undefined;
 
-    // ✅ AGENCY는 내 스코프로 고정
-    if (scope.role === "AGENCY") {
-      agencyId = requireAgencyScope(scope);
-    } else {
-      // ADMIN은 agencyId 파라미터로 선택 필터
-      const agencyIdStr = (searchParams.get("agencyId") || "").trim();
-      if (agencyIdStr) {
-        try {
-          agencyId = BigInt(agencyIdStr);
-        } catch {
-          throw new Error("VALIDATION:agencyId");
-        }
-      }
-    }
+    agencyId = scope.agencyId;
 
     const where: Prisma.SiteWhereInput = {
       ...(typeof isActive === "boolean" ? { isActive } : {}),
@@ -154,7 +141,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
 
     const body = await req.json();
 
@@ -174,19 +161,7 @@ export async function POST(req: NextRequest) {
     const lonStr = String(gpsLonRaw ?? "").trim();
     if (!latStr || !lonStr) throw new Error("VALIDATION:gpsLatLon");
 
-    // ✅ agencyId 결정: AGENCY는 고정, ADMIN은 body.agencyId 필수
-    let agencyId: bigint;
-    if (scope.role === "AGENCY") {
-      agencyId = requireAgencyScope(scope);
-    } else {
-      const agencyIdInput = String(body.agencyId ?? "").trim();
-      if (!agencyIdInput) throw new Error("VALIDATION:agencyId");
-      try {
-        agencyId = BigInt(agencyIdInput);
-      } catch {
-        throw new Error("VALIDATION:agencyId");
-      }
-    }
+    const agencyId = scope.agencyId;
 
     const quotaCheck = await checkQuota(agencyId, "sites");
     if (!quotaCheck.allowed) {

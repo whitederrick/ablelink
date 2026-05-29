@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: "인증 코드를 입력해주세요." }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({
+  const user = await prisma.worker.findUnique({
     where: { id: BigInt(session.userId) },
     select: { id: true, pendingLoginId: true, verifyCode: true, verifyCodeExpiresAt: true },
   });
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   // loginId를 이메일로 교체 + 임시 필드 초기화
-  await prisma.user.update({
+  await prisma.worker.update({
     where: { id: user.id },
     data: {
       loginId:             user.pendingLoginId,

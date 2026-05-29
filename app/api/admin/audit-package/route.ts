@@ -5,7 +5,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
@@ -48,8 +48,8 @@ function safeFilename(s: string) { return s.replace(/[\\/:*?"<>|]/g, "_"); }
 
 export async function GET(request: NextRequest) {
   try {
-    const scope    = await requireAdminSession(request);
-    const agencyId = requireAgencyScope(scope);
+    const scope    = await requireManagerSession(request);
+    const agencyId = scope.agencyId;
 
     const planCheck = await checkAgencyPlanAccess(agencyId, "AUDIT_PACKAGE");
     if (!planCheck.allowed) {
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     const userId = BigInt(coachUserId);
 
     // 직무지도원 + 배정 조회
-    const user = await prisma.user.findUnique({
+    const user = await prisma.worker.findUnique({
       where: { id: userId },
       select: { userName: true, phoneNumber: true, signatureUrl: true, loginId: true },
     });

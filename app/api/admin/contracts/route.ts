@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess, checkQuota } from "@/lib/planGuard";
 import { sendAlimtalk } from "@/lib/kakao";
 import { randomUUID } from "crypto";
@@ -22,15 +22,13 @@ function errToStatus(msg: string) {
 // GET: 계약서 목록
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get("userId");
     const status = searchParams.get("status");
 
     const where: any = {};
-    if (scope.role === "AGENCY") {
-      where.agencyId = requireAgencyScope(scope);
-    }
+    where.agencyId = scope.agencyId;
     if (userId) {
       try { where.userId = BigInt(userId); }
       catch { return NextResponse.json({ success: false, message: "잘못된 userId입니다." }, { status: 400 }); }
@@ -82,7 +80,7 @@ export async function GET(req: NextRequest) {
 // POST: 계약서 생성 및 카카오 알림톡 링크 발송
 export async function POST(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const body = await req.json();
 
     const {
@@ -126,7 +124,7 @@ export async function POST(req: NextRequest) {
       }
 
       // 전화번호로 기존 유저 조회
-      const existing = await prisma.user.findFirst({
+      const existing = await prisma.worker.findFirst({
         where: { phoneNumber: phone },
         select: { id: true },
       });
@@ -137,12 +135,12 @@ export async function POST(req: NextRequest) {
       } else {
         // 신규 직무지도원 생성 — loginId는 항상 전화번호(하이픈 제거)
         const baseLogin = phone.replace(/-/g, "");
-        const conflict  = await prisma.user.findUnique({ where: { loginId: baseLogin } });
+        const conflict  = await prisma.worker.findUnique({ where: { loginId: baseLogin } });
         const loginId   = conflict ? `${baseLogin}_${Date.now()}` : baseLogin;
 
         let newUser;
         try {
-          newUser = await prisma.user.create({
+          newUser = await prisma.worker.create({
             data: {
               loginId,
               password: await hash(randomUUID(), 12), // 서명 완료 시 readable 임시 비밀번호로 교체됨
@@ -156,7 +154,7 @@ export async function POST(req: NextRequest) {
         } catch (e: any) {
           // loginId 레이스 컨디션(동시 요청) 대응: timestamp 충돌 시 재시도
           if (e?.code === "P2002") {
-            newUser = await prisma.user.create({
+            newUser = await prisma.worker.create({
               data: {
                 loginId: `${baseLogin}_${Date.now()}`,
                 password: await hash(randomUUID(), 12),
@@ -176,22 +174,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── agencyId 결정 ──────────────────────────────────────────
-    let agencyId: bigint;
-    if (scope.role === "AGENCY") {
-      agencyId = requireAgencyScope(scope);
-    } else {
-      // ADMIN: 먼저 admin 자신의 agencyId, 없으면 유저 배정에서 추출
-      if (scope.agencyId) {
-        agencyId = scope.agencyId;
-      } else {
-        const assignment = await prisma.siteAssignment.findFirst({
-          where: { userId: userIdBig, status: { in: ["ACTIVE", "CONFIRMED", "ASSIGNED"] } },
-          select: { agencyId: true },
-        });
-        if (!assignment?.agencyId) throw new Error("VALIDATION:에이전시 정보를 찾을 수 없습니다. 관리자 계정에 에이전시를 연결해주세요.");
-        agencyId = assignment.agencyId;
-      }
-    }
+    const agencyId: bigint = scope.agencyId;
 
     // ─── 구독 플랜 + 한도 체크 ──────────────────────────────────
     const planCheck = await checkAgencyPlanAccess(agencyId, "CONTRACT_ONLINE");
@@ -226,7 +209,7 @@ export async function POST(req: NextRequest) {
         signToken,
         tokenExpiresAt: expiresAt,
         status: "PENDING",
-        createdByAdminId: scope.userId,
+        createdByManagerId: scope.managerId,
       },
     });
 
@@ -268,7 +251,7 @@ async function sendKakaoAlimtalk(params: { userId: bigint; contractUrl: string; 
   const templateCode = process.env.KAKAO_CONTRACT_TEMPLATE_CODE;
   if (!templateCode) throw new Error("KAKAO_CONTRACT_TEMPLATE_CODE 미설정");
 
-  const user = await prisma.user.findUnique({
+  const user = await prisma.worker.findUnique({
     where: { id: params.userId },
     select: { phoneNumber: true, userName: true },
   });

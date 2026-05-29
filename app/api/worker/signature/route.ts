@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const session = await getWorkerSessionFromReq(request);
     if (!session) return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.worker.findUnique({
       where: { id: BigInt(session.userId) },
       select: { signatureUrl: true },
     });
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const fileName = `${userId}/signature_${Date.now()}.png`;
 
     // 기존 서명 삭제 (있으면)
-    const existing = await prisma.user.findUnique({
+    const existing = await prisma.worker.findUnique({
       where: { id: BigInt(userId) },
       select: { signatureUrl: true },
     });
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
 
     // DB 업데이트
-    await prisma.user.update({
+    await prisma.worker.update({
       where: { id: BigInt(userId) },
       data: { signatureUrl: publicUrl },
     });
@@ -106,7 +106,7 @@ export async function DELETE(request: NextRequest) {
     const session = await getWorkerSessionFromReq(request);
     if (!session) return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.worker.findUnique({
       where: { id: BigInt(session.userId) },
       select: { signatureUrl: true },
     });
@@ -116,7 +116,7 @@ export async function DELETE(request: NextRequest) {
       if (path) await deleteFromStorage(path);
     }
 
-    await prisma.user.update({
+    await prisma.worker.update({
       where: { id: BigInt(session.userId) },
       data: { signatureUrl: null },
     });

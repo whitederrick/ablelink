@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 
 function errToStatus(msg: string) {
@@ -21,7 +21,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
     const { id } = await params;
     const versionId = BigInt(id);
 
@@ -42,11 +42,8 @@ export async function GET(
 
     if (!v) throw new Error("NOT_FOUND");
 
-    if (scope.role === "AGENCY") {
-      const myAgencyId = requireAgencyScope(scope);
-      const agencyId = v.run?.assignment?.site?.agencyId ?? null;
-      if (!agencyId || agencyId !== myAgencyId) throw new Error("FORBIDDEN");
-    }
+    const agencyId = v.run?.assignment?.site?.agencyId ?? null;
+    if (!agencyId || agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
 
     const docType = v.run?.docType as DocumentType | undefined;
     if (!docType) {

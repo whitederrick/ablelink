@@ -40,7 +40,7 @@ export default function AdminManagersPage() {
 
   async function fetchSessionRole() {
     try {
-      const res = await fetch("/api/admin/auth/me", { cache: "no-store" });
+      const res = await fetch("/api/manager/auth/me", { cache: "no-store" });
       const data = await res.json();
       setSessionRole(data?.success ? String(data.session?.role || "") : null);
     } catch { setSessionRole(null); }

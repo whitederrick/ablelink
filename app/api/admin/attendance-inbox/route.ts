@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
 type InboxStatus =
@@ -68,16 +68,10 @@ function mapIssueStatusToInboxStatus(issue: {
 
 export async function GET(req: Request) {
   try {
-    const scope = await requireAdminSession(req);
+    const scope = await requireManagerSession(req);
 
-    // ✅ ADMIN은 전체 조회, AGENCY는 소속 기관만 조회
-    let agencyId: bigint | null = null;
-    if (scope.role === "AGENCY") {
-      if (!scope.agencyId) {
-        return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
-      }
-      agencyId = scope.agencyId;
-    }
+    // 소속 기관만 조회
+    const agencyId = scope.agencyId;
 
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") ?? "").trim();
@@ -166,8 +160,8 @@ export async function GET(req: Request) {
               events: {
                 create: [{
                   type: "ISSUE_CREATED",
-                  actorRole: "ADMIN",
-                  actorAdminId: scope.userId,
+                  actorRole: "MANAGER",
+                  actorManagerId: scope.managerId,
                   message: `이슈 등록: ${derived.join(", ")}`,
                 }],
               },

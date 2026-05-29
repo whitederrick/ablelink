@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     }
 
     // 사용자 조회
-    const user = await prisma.user.findUnique({ where: { loginId } });
+    const user = await prisma.worker.findUnique({ where: { loginId } });
 
     // 🔐 타이밍 공격 방지: 사용자가 없어도 동일한 시간 소요되도록 더미 해시 비교
     const passwordToVerify = user?.password ?? "$2b$12$invalidhashfortimingatk";

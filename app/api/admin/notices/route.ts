@@ -4,12 +4,12 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireManagerSession } from "@/lib/managerScope";
 
 export async function GET(req: NextRequest) {
   try {
-    const scope    = await requireAdminSession(req);
-    const agencyId = requireAgencyScope(scope);
+    const scope    = await requireManagerSession(req);
+    const agencyId = scope.agencyId;
 
     const { searchParams } = new URL(req.url);
     const limit = Math.min(100, Number(searchParams.get("limit") ?? 50));
@@ -43,8 +43,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const scope    = await requireAdminSession(req);
-    const agencyId = requireAgencyScope(scope);
+    const scope    = await requireManagerSession(req);
+    const agencyId = scope.agencyId;
 
     const body = await req.json().catch(() => ({}));
     const { userIds, title, body: msgBody, type = "INFO", yearMonth } = body;
