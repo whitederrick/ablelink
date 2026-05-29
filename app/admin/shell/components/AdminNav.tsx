@@ -28,10 +28,24 @@ const groups: NavGroup[] = [
     ],
   },
   {
+    title: "구독·사용량",
+    items: [
+      { href: "/admin/billing",       label: "결제·구독 현황" },
+      { href: "/admin/usage",         label: "AI 사용량" },
+    ],
+  },
+  {
+    title: "운영 도구",
+    items: [
+      { href: "/admin/announcements", label: "시스템 공지" },
+      { href: "/admin/attendances",   label: "근태 현황·교정" },
+    ],
+  },
+  {
     title: "시스템",
     items: [
-      { href: "/admin/logs",        label: "감사 로그" },
-      { href: "/admin/settings",    label: "시스템 설정" },
+      { href: "/admin/logs",          label: "감사 로그" },
+      { href: "/admin/settings",      label: "시스템 설정" },
     ],
   },
 ];

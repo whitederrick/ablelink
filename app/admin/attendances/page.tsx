@@ -3,9 +3,102 @@
 import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { T } from "../_styles";
-import { List, Map as MapIcon, CalendarDays, Download } from "lucide-react";
+import { List, Map as MapIcon, CalendarDays, Download, Wrench, Search, AlertTriangle } from "lucide-react";
 
 const AttendanceMap = dynamic(() => import("./AttendanceMap"), { ssr: false });
+
+type CorrectionRecord = {
+  id: string; userName: string; siteName: string; agencyName: string;
+  workDate: string; startTime: string | null; endTime: string | null;
+  status: string; isFinalClosed: boolean; isGpsModified: boolean;
+};
+const STATUS_LABELS_C: Record<string,string> = { WORKING:"출근 중", DONE:"완료", ABSENT:"결근", MODIFIED:"수정됨" };
+const STATUS_COLORS_C: Record<string,string> = { WORKING:"bg-sky-100 text-sky-700", DONE:"bg-emerald-100 text-emerald-700", ABSENT:"bg-rose-100 text-rose-700", MODIFIED:"bg-amber-100 text-amber-700" };
+
+function CorrectionTool() {
+  const [q, setQ] = useState("");
+  const [dateFrom, setFrom] = useState("");
+  const [dateTo, setTo] = useState("");
+  const [flag, setFlag] = useState("");
+  const [rows, setRows] = useState<CorrectionRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+
+  function search() {
+    setLoading(true); setSearched(true);
+    const p = new URLSearchParams();
+    if (q) p.set("q", q);
+    if (dateFrom) p.set("dateFrom", dateFrom);
+    if (dateTo) p.set("dateTo", dateTo);
+    if (flag) p.set("flag", flag);
+    fetch(`/api/admin/system/attendances?${p}`)
+      .then(r => r.json()).then(d => { if (d.success) setRows(d.records); })
+      .catch(() => {}).finally(() => setLoading(false));
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap gap-3">
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="직무지도원 이름 또는 현장명"
+            onKeyDown={e => e.key === "Enter" && search()} className={T.input + " w-64"} />
+          <div className="flex items-center gap-1.5">
+            <input type="date" value={dateFrom} onChange={e => setFrom(e.target.value)} className={T.input + " w-36"} />
+            <span className="text-slate-400">~</span>
+            <input type="date" value={dateTo} onChange={e => setTo(e.target.value)} className={T.input + " w-36"} />
+          </div>
+          <select value={flag} onChange={e => setFlag(e.target.value)} className={T.select + " w-40"}>
+            <option value="">전체</option>
+            <option value="gps">GPS 수정됨</option>
+            <option value="no_end">퇴근 미입력</option>
+          </select>
+          <button onClick={search} disabled={loading} className={T.btnPrimary + " flex items-center gap-1.5"}>
+            <Search className="h-4 w-4" />{loading ? "검색 중..." : "검색"}
+          </button>
+        </div>
+      </div>
+      {!searched ? (
+        <div className="flex h-32 items-center justify-center rounded-2xl border border-slate-100 bg-white">
+          <p className="text-sm text-slate-400">검색 조건을 입력하고 검색하세요. (최대 100건)</p>
+        </div>
+      ) : loading ? (
+        <div className="flex h-32 items-center justify-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950"/></div>
+      ) : rows.length === 0 ? (
+        <div className="flex h-32 items-center justify-center rounded-2xl border border-slate-100 bg-white">
+          <p className="text-sm text-slate-400">검색 결과가 없습니다.</p>
+        </div>
+      ) : (
+        <>
+          <p className="text-xs font-semibold text-slate-400">{rows.length}건 검색됨</p>
+          <div className={T.tableWrap}>
+            <table className="w-full">
+              <thead><tr>{["날짜","직무지도원","현장","에이전시","출근","퇴근","상태","확정","GPS"].map(h=><th key={h} className={T.th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id} className={T.trBase}>
+                    <td className={T.td + " tabular-nums font-semibold"}>{r.workDate}</td>
+                    <td className={T.td}>{r.userName}</td>
+                    <td className={T.td + " text-slate-600"}>{r.siteName}</td>
+                    <td className={T.td + " text-slate-500 text-xs"}>{r.agencyName}</td>
+                    <td className={T.td + " tabular-nums"}>{r.startTime ?? "-"}</td>
+                    <td className={T.td + " tabular-nums"}>
+                      {r.endTime ?? (r.status === "WORKING"
+                        ? <span className="flex items-center gap-1 text-amber-600 font-semibold text-xs"><AlertTriangle className="h-3 w-3"/>미입력</span>
+                        : "-")}
+                    </td>
+                    <td className={T.td}><span className={`${T.badge} ${STATUS_COLORS_C[r.status]??"bg-slate-100 text-slate-600"}`}>{STATUS_LABELS_C[r.status]??r.status}</span></td>
+                    <td className={T.td + " text-center"}><span className={r.isFinalClosed?"text-emerald-600 font-black":"text-slate-300"}>{r.isFinalClosed?"확정":"미확정"}</span></td>
+                    <td className={T.td + " text-center"}>{r.isGpsModified&&<span className={`${T.badge} bg-amber-100 text-amber-700`}>수정</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 type AttendanceItem = {
   id: string; workDate: string;
@@ -20,7 +113,7 @@ type AttendanceItem = {
   user: { userName: string; phoneNumber: string } | null;
 };
 
-type ViewMode = "list" | "map" | "monthly";
+type ViewMode = "list" | "map" | "monthly" | "correction";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function getDefaultYearMonth() {
@@ -198,9 +291,10 @@ export default function AttendancesPage() {
   const gpsIssues = items.filter(i => i.isGpsModified).length;
 
   const VIEW_TABS: { mode: ViewMode; label: string; Icon: any }[] = [
-    { mode: "list",    label: "목록",    Icon: List },
-    { mode: "map",     label: "지도",    Icon: MapIcon },
-    { mode: "monthly", label: "월별현황", Icon: CalendarDays },
+    { mode: "list",       label: "목록",    Icon: List },
+    { mode: "map",        label: "지도",    Icon: MapIcon },
+    { mode: "monthly",    label: "월별현황", Icon: CalendarDays },
+    { mode: "correction", label: "교정 도구", Icon: Wrench },
   ];
 
   return (
@@ -267,6 +361,8 @@ export default function AttendancesPage() {
           <div className="h-7 w-7 animate-spin rounded-full border-[2.5px] border-slate-200 border-t-slate-950" />
           <p className="text-sm font-semibold text-slate-400">로딩 중...</p>
         </div>
+      ) : viewMode === "correction" ? (
+        <CorrectionTool />
       ) : viewMode === "map" ? (
         <AttendanceMap items={items} />
       ) : viewMode === "monthly" ? (

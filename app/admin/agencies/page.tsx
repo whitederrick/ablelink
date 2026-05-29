@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Building2, Users, MapPin, ChevronDown, Plus, X } from "lucide-react";
+import { Building2, Users, MapPin, ChevronDown, Plus, X, ExternalLink } from "lucide-react";
+import Link from "next/link";
 
 type Agency = {
   id: string; name: string; planType: string; trialEndsAt: string | null;
@@ -131,10 +132,16 @@ export default function AgenciesPage() {
                     <span>가입 {new Date(a.createdAt).toLocaleDateString("ko-KR")}</span>
                   </div>
                 </div>
-                <button onClick={()=>editId===a.id?setEditId(null):openEdit(a)}
-                  className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95 flex-shrink-0">
-                  플랜 변경 <ChevronDown className={`h-3 w-3 transition ${editId===a.id?"rotate-180":""}`}/>
-                </button>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <Link href={`/admin/agencies/${a.id}`}
+                    className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
+                    상세 <ExternalLink className="h-3 w-3"/>
+                  </Link>
+                  <button onClick={()=>editId===a.id?setEditId(null):openEdit(a)}
+                    className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
+                    플랜 변경 <ChevronDown className={`h-3 w-3 transition ${editId===a.id?"rotate-180":""}`}/>
+                  </button>
+                </div>
               </div>
               {editId===a.id&&(
                 <div className="mt-4 border-t border-slate-100 pt-4">

@@ -66,6 +66,7 @@ model User {
 
   attendanceIssueEvents  AttendanceIssueEvent[]  @relation("AttendanceIssueEventActor")
   attendanceEditRequests AttendanceEditRequest[]
+  apiCallLogs            ApiCallLog[]
 
   evaluations         TraineeEvaluation[]
   employmentContracts EmploymentContract[]
@@ -375,6 +376,7 @@ model Agency {
   name        String   @unique @map("name")
   phoneNumber String?  @map("phone_number")
   address     String?
+  isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
 
   // ✅ 구독 관리
@@ -394,6 +396,7 @@ model Agency {
   subscribedAt    DateTime? @map("subscribed_at") // 최초 구독 전환일
 
   managers            AgencyManager[]
+  apiCallLogs         ApiCallLog[]
   sites               Site[]
   assignments         SiteAssignment[]
   payContracts        PayContract[]
@@ -448,6 +451,7 @@ model AdminUser {
   attendanceIssueEvents   AttendanceIssueEvent[]  @relation("AttendanceIssueEventAdminActor")
   workerInvites           WorkerInvite[]
   systemAuditLogs         SystemAuditLog[]
+  announcements           SystemAnnouncement[]
 
   @@index([role])
   @@index([agencyId])
@@ -886,7 +890,53 @@ model AttendanceIssueEvent {
 }
 
 // ------------------------------------------------------
-// 7a. 시스템 감사 로그 (System Audit Log)
+// 7a. 시스템 운영 모델들
+// ------------------------------------------------------
+
+// 시스템 설정 (DB 기반, Vercel 재배포 없이 변경 가능)
+model SystemSetting {
+  key       String   @id
+  value     String
+  label     String?
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("system_settings")
+}
+
+// AI API 호출 로그 (사용량 모니터링)
+model ApiCallLog {
+  id        BigInt   @id @default(autoincrement())
+  agencyId  BigInt?  @map("agency_id")
+  userId    BigInt?  @map("user_id")
+  service   String                     // "GROQ_STT" | "GEMINI_LOG" | "GEMINI_BATCH"
+  success   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  agency Agency? @relation(fields: [agencyId], references: [id])
+  user   User?   @relation(fields: [userId],   references: [id])
+
+  @@index([agencyId, service, createdAt])
+  @@index([createdAt])
+  @@map("api_call_logs")
+}
+
+// 시스템 공지 (Ablelink → 전체 사용자)
+model SystemAnnouncement {
+  id        BigInt   @id @default(autoincrement())
+  title     String
+  body      String
+  type      String   @default("INFO") // INFO | MAINTENANCE | URGENT
+  adminId   BigInt?  @map("admin_id")
+  sentCount Int      @default(0) @map("sent_count")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  admin AdminUser? @relation(fields: [adminId], references: [id])
+
+  @@index([createdAt])
+  @@map("system_announcements")
+}
+
+// ------------------------------------------------------
+// 7b. 시스템 감사 로그 (System Audit Log)
 // ------------------------------------------------------
 
 model SystemAuditLog {
