@@ -447,6 +447,7 @@ model AdminUser {
   DocumentSubmissionLog   DocumentSubmissionLog[]
   attendanceIssueEvents   AttendanceIssueEvent[]  @relation("AttendanceIssueEventAdminActor")
   workerInvites           WorkerInvite[]
+  systemAuditLogs         SystemAuditLog[]
 
   @@index([role])
   @@index([agencyId])
@@ -881,6 +882,26 @@ model AttendanceIssueEvent {
   @@index([actorUserId, createdAt])
   @@index([actorAdminId, createdAt])
   @@map("attendance_issue_events")
+}
+
+// ------------------------------------------------------
+// 7a. 시스템 감사 로그 (System Audit Log)
+// ------------------------------------------------------
+
+model SystemAuditLog {
+  id        BigInt   @id @default(autoincrement())
+  adminId   BigInt?  @map("admin_id")
+  action    String                      // e.g. "AGENCY_PLAN_CHANGED"
+  target    String?                     // e.g. "Agency:123"
+  detail    String?                     // JSON 형태 상세 정보
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  admin AdminUser? @relation(fields: [adminId], references: [id])
+
+  @@index([adminId, createdAt])
+  @@index([createdAt])
+  @@map("system_audit_logs")
 }
 
 // ------------------------------------------------------

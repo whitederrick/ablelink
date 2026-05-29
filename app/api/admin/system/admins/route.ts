@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
 import bcrypt from "bcryptjs";
+import { logAudit } from "@/lib/auditLog";
 
 export async function GET(req: Request) {
   try {
@@ -72,6 +73,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await logAudit({ adminId: scope.userId, action: "ADMIN_CREATED", target: `AdminUser:${admin.id}`, detail: { loginId, role, agencyId } });
     return NextResponse.json({ success: true, id: admin.id.toString() });
   } catch (e: any) {
     if (e instanceof Response) return e;

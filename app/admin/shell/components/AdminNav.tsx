@@ -10,24 +10,28 @@ const groups: NavGroup[] = [
   {
     title: "개요",
     items: [
-      { href: "/admin", label: "시스템 대시보드" },
+      { href: "/admin",          label: "시스템 대시보드" },
     ],
   },
   {
     title: "에이전시 관리",
     items: [
-      { href: "/admin/agencies",     label: "에이전시 목록" },
-      { href: "/admin/subscription", label: "구독 관리" },
-      { href: "/admin/admins",       label: "운영자 계정" },
+      { href: "/admin/agencies",     label: "에이전시 목록·생성" },
+      { href: "/admin/admins",       label: "운영자 계정 관리" },
     ],
   },
   {
-    title: "전체 현황",
+    title: "전체 데이터 현황",
     items: [
-      { href: "/admin/sites",       label: "전체 현장" },
       { href: "/admin/coaches",     label: "전체 직무지도원" },
-      { href: "/admin/attendances", label: "전체 근태" },
-      { href: "/admin/reports",     label: "전체 리포트" },
+      { href: "/admin/sites",       label: "전체 현장" },
+    ],
+  },
+  {
+    title: "시스템",
+    items: [
+      { href: "/admin/logs",        label: "감사 로그" },
+      { href: "/admin/settings",    label: "시스템 설정" },
     ],
   },
 ];
