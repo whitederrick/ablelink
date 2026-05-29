@@ -611,7 +611,29 @@ function WorklogForm() {
 
         {/* ── 수행 과제 ── */}
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
-          <p className="mb-3 text-sm font-black text-slate-700">수행 과제</p>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-black text-slate-700">수행 과제</span>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!traineeId) return;
+                try {
+                  const res = await fetch(`/api/worker/logs/prev?traineeId=${traineeId}`);
+                  const data = await res.json();
+                  if (data.success) {
+                    if (data.taskName)        setTaskName(data.taskName);
+                    if (data.taskScore)       setTaskScore(data.taskScore);
+                    if (data.measurementTime) setMeasurementTime(data.measurementTime);
+                  } else {
+                    alert("이전 과제 기록이 없습니다.");
+                  }
+                } catch { alert("불러오기 실패"); }
+              }}
+              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500 active:scale-95"
+            >
+              이전 과제 불러오기
+            </button>
+          </div>
           <input type="text" value={taskName} onChange={e => setTaskName(e.target.value)}
             placeholder={isAdaptation ? "수행한 직무·과제 내용을 입력하세요" : "수행한 과제명을 입력하세요"}
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none placeholder:font-normal placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100" />

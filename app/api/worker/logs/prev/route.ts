@@ -25,16 +25,22 @@ export async function GET(request: NextRequest) {
       where: {
         traineeId: BigInt(traineeId),
         writerId: BigInt(session.userId),
-        content: { not: null },
       },
+      include: { tasks: { take: 1 } },
       orderBy: { id: "desc" },
     });
 
-    if (!prevLog?.content) {
+    if (!prevLog) {
       return NextResponse.json({ success: false, message: "이전 일지 내용이 없습니다." });
     }
 
-    return NextResponse.json({ success: true, content: prevLog.content });
+    return NextResponse.json({
+      success: true,
+      content:         prevLog.content ?? "",
+      taskName:        prevLog.tasks[0]?.taskName ?? "",
+      taskScore:       prevLog.tasks[0]?.performanceScore ?? 3,
+      measurementTime: prevLog.tasks[0]?.difficulty ?? "",
+    });
   } catch (error: any) {
     console.error("[worker/logs/prev]", error);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
