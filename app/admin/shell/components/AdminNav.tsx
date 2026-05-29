@@ -24,7 +24,7 @@ const groups: NavGroup[] = [
   {
     title: "전체 데이터 현황",
     items: [
-      { href: "/admin/coaches",     label: "전체 직무지도원" },
+      { href: "/admin/workers",     label: "전체 직무지도원" },
       { href: "/admin/sites",       label: "전체 현장" },
     ],
   },

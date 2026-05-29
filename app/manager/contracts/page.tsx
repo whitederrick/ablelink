@@ -54,7 +54,7 @@ function CoachSearchPopup({ onSelect, onClose }: {
     const t = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await fetch(`/api/admin/contracts/coach-search?q=${encodeURIComponent(query.trim())}`);
+        const res = await fetch(`/api/admin/contracts/worker-search?q=${encodeURIComponent(query.trim())}`);
         const data = await res.json();
         if (data.success) setResults(data.items);
       } finally { setSearching(false); setSearched(true); }

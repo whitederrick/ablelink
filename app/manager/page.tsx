@@ -327,14 +327,14 @@ export default function AdminDashboardPage() {
           </Section>
 
           {/* 배정/계약 현황 */}
-          <Section title="배정 / 계약 현황" sub="배정 / 계약 이슈 현황" count={s?.endingIn10} onMore={() => router.push("/manager/coaches")}>
+          <Section title="배정 / 계약 현황" sub="배정 / 계약 이슈 현황" count={s?.endingIn10} onMore={() => router.push("/manager/workers")}>
             <ActionRow
               label="배정 종료 임박"
               count={s?.endingIn10 ?? 0} urgent={(s?.endingIn10 ?? 0) > 0}
               onCountClick={() => setPopup(p => p === "assign_ending" ? null : "assign_ending")}
               showPopup={popup === "assign_ending"}
               popupItems={d?.assignmentAlerts ?? []}
-              onPopupItemClick={() => router.push("/manager/coaches")}
+              onPopupItemClick={() => router.push("/manager/workers")}
               onPopupClose={() => setPopup(null)}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
@@ -367,7 +367,7 @@ export default function AdminDashboardPage() {
               )}
             />
             <div className="border-t border-slate-100 pt-2.5">
-              <button onClick={() => router.push("/manager/coaches")} className="text-xs font-black text-sky-600 transition hover:text-sky-700">
+              <button onClick={() => router.push("/manager/workers")} className="text-xs font-black text-sky-600 transition hover:text-sky-700">
                 → 직무지도원 운영 바로가기
               </button>
             </div>

@@ -1,4 +1,4 @@
-// app/api/admin/coaches/[id]/route.ts
+// app/api/admin/workers/[id]/route.ts
 // PATCH: 직무지도원 이름·전화번호·비밀번호 수정 (어드민)
 
 export const runtime = "nodejs";

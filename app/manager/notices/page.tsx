@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Send, Bell, X, Users, User } from "lucide-react";
 
-type Coach  = { id: string; userName: string; siteName: string };
+type Worker  = { id: string; userName: string; siteName: string };
 type Notice = { id: string; userId: string; userName: string; title: string; body: string; type: string; read: boolean; createdAt: string };
 
 const TYPE_OPTS = [
@@ -13,7 +13,7 @@ const TYPE_OPTS = [
 ];
 
 export default function NoticesPage() {
-  const [coaches, setCoaches]   = useState<Coach[]>([]);
+  const [workers, setWorkers]   = useState<Worker[]>([]);
   const [notices, setNotices]   = useState<Notice[]>([]);
   const [loading, setLoading]   = useState(true);
   const [sending, setSending]   = useState(false);
@@ -35,9 +35,9 @@ export default function NoticesPage() {
   },[]);
 
   useEffect(()=>{
-    fetch("/api/admin/coaches?pageSize=200").then(r=>r.json())
+    fetch("/api/admin/workers?pageSize=200").then(r=>r.json())
       .then(d=>{
-        if(d.success) setCoaches(d.coaches?.map((c:any)=>({id:c.id,userName:c.userName,siteName:c.currentSiteName??c.siteName??""}))||[]);
+        if(d.success) setWorkers(d.data?.map((c:any)=>({id:c.id,userName:c.userName,siteName:c.currentSiteName??c.siteName??""}))||[]);
       }).catch(()=>{}).finally(()=>setLoading(false));
     loadNotices();
   },[loadNotices]);
@@ -91,7 +91,7 @@ export default function NoticesPage() {
             </div>
             {!targetAll&&(
               <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                {coaches.map(c=>(
+                {workers.map(c=>(
                   <label key={c.id} className="flex items-center gap-2.5 cursor-pointer rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
                     <input type="checkbox"
                       checked={selectedCoaches.has(c.id)}

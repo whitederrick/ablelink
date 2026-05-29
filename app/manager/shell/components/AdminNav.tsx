@@ -17,7 +17,7 @@ const groups: NavGroup[] = [
     title: "현장/인원",
     items: [
       { href: "/manager/sites",    label: "현장(Site) 관리" },
-      { href: "/manager/coaches",  label: "직무지도원 관리" },
+      { href: "/manager/workers",  label: "직무지도원 관리" },
       { href: "/manager/trainees", label: "훈련생 현황" },
       { href: "/manager/managers", label: "담당자 관리" },
     ],

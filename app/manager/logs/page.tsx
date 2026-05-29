@@ -10,7 +10,7 @@ type Log = {
   totalTime: number; content: string; taskName: string;
   taskScore: number | null; isCompleted: boolean;
 };
-type Coach = { id: string; userName: string };
+type Worker = { id: string; userName: string };
 
 const TYPE_LABELS: Record<string,string> = { PRE:"사전훈련", FIELD:"현장훈련", ADAPTATION:"적응지도" };
 const DOW = ["일","월","화","수","목","금","토"];
@@ -19,7 +19,7 @@ function nowYM() { const d = new Date(); return `${d.getFullYear()}-${String(d.g
 
 export default function ManagerLogsPage() {
   const [logs, setLogs]       = useState<Log[]>([]);
-  const [coaches, setCoaches] = useState<Coach[]>([]);
+  const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandId, setExpandId] = useState<string|null>(null);
   const [coachId, setCoachId]   = useState("");
@@ -30,9 +30,9 @@ export default function ManagerLogsPage() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),2500); };
 
   useEffect(()=>{
-    fetch("/api/admin/coaches?pageSize=200")
+    fetch("/api/admin/workers?pageSize=200")
       .then(r=>r.json())
-      .then(d=>{ if(d.success) setCoaches(d.coaches?.map((c:any)=>({id:c.id,userName:c.userName}))||[]); });
+      .then(d=>{ if(d.success) setWorkers(d.data?.map((c:any)=>({id:c.id,userName:c.userName}))||[]); });
   },[]);
 
   const load = useCallback(()=>{
@@ -80,7 +80,7 @@ export default function ManagerLogsPage() {
         <select value={coachId} onChange={e=>setCoachId(e.target.value)}
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400">
           <option value="">전체 직무지도원</option>
-          {coaches.map(c=><option key={c.id} value={c.id}>{c.userName}</option>)}
+          {workers.map(c=><option key={c.id} value={c.id}>{c.userName}</option>)}
         </select>
         <select value={completed} onChange={e=>setCompleted(e.target.value)}
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400">

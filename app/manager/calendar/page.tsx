@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 
-type Coach = { id: string; userName: string; siteName: string };
+type Worker = { id: string; userName: string; siteName: string };
 type AttRec = { workDate: string; status: string; startTime: string|null; endTime: string|null; isFinalClosed: boolean; isGpsModified: boolean };
 
 const DOW_HEADER = ["일","월","화","수","목","금","토"];
@@ -17,32 +17,32 @@ function hhMM(iso: string|null) {
 }
 
 export default function ManagerCalendarPage() {
-  const [coaches, setCoaches]       = useState<Coach[]>([]);
-  const [selectedCoach, setSelectedCoach] = useState<Coach|null>(null);
+  const [workers, setWorkers]       = useState<Worker[]>([]);
+  const [selectedWorker, setSelectedWorker] = useState<Worker|null>(null);
   const [records, setRecords]       = useState<AttRec[]>([]);
   const [yearMonth, setYearMonth]   = useState(nowYM());
   const [loading, setLoading]       = useState(false);
 
   useEffect(()=>{
-    fetch("/api/admin/coaches?pageSize=200").then(r=>r.json())
+    fetch("/api/admin/workers?pageSize=200").then(r=>r.json())
       .then(d=>{
         if(d.success) {
-          const list = d.coaches?.map((c:any)=>({id:c.id,userName:c.userName,siteName:c.currentSiteName??c.siteName??""}))||[];
-          setCoaches(list);
+          const list = d.data?.map((c:any)=>({id:c.id,userName:c.userName,siteName:c.currentSiteName??c.siteName??""}))||[];
+          setWorkers(list);
           if(list.length>0) setSelectedCoach(list[0]);
         }
       }).catch(()=>{});
   },[]);
 
   const load = useCallback(()=>{
-    if(!selectedCoach) return;
+    if(!selectedWorker) return;
     setLoading(true);
-    fetch(`/api/admin/attendances?coachId=${selectedCoach.id}&yearMonth=${yearMonth}`)
+    fetch(`/api/admin/attendances?coachId=${selectedWorker.id}&yearMonth=${yearMonth}`)
       .then(r=>r.json())
       .then(d=>{ if(d.success) setRecords(d.records||d.attendances||[]); })
       .catch(()=>{})
       .finally(()=>setLoading(false));
-  },[selectedCoach, yearMonth]);
+  },[selectedWorker, yearMonth]);
 
   useEffect(()=>{ load(); },[load]);
 
@@ -90,9 +90,9 @@ export default function ManagerCalendarPage() {
         <p className="mt-0.5 text-sm text-slate-500">직무지도원별 월간 출근 현황</p></div>
 
       <div className="mb-4 flex items-center gap-3 flex-wrap">
-        <select value={selectedCoach?.id??""} onChange={e=>{const c=coaches.find(x=>x.id===e.target.value);setSelectedCoach(c??null);}}
+        <select value={selectedWorker?.id??""} onChange={e=>{const c=workers.find(x=>x.id===e.target.value);setSelectedCoach(c??null);}}
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400 min-w-[160px]">
-          {coaches.map(c=><option key={c.id} value={c.id}>{c.userName}</option>)}
+          {workers.map(c=><option key={c.id} value={c.id}>{c.userName}</option>)}
         </select>
         <div className="flex items-center gap-1.5">
           <button onClick={()=>changeMonth(-1)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:bg-slate-50 active:scale-95">
@@ -103,15 +103,15 @@ export default function ManagerCalendarPage() {
             <ChevronRight className="h-4 w-4"/>
           </button>
         </div>
-        <button onClick={()=>window.open(`/api/admin/export/csv?type=attendance&from=${yearMonth}-01&to=${yearMonth}-${pad2(lastDate)}&coachId=${selectedCoach?.id??""}`,"_blank")}
+        <button onClick={()=>window.open(`/api/admin/export/csv?type=attendance&from=${yearMonth}-01&to=${yearMonth}-${pad2(lastDate)}&coachId=${selectedWorker?.id??""}`,"_blank")}
           className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 active:scale-95">
           <Download className="h-4 w-4"/>내보내기
         </button>
       </div>
 
-      {selectedCoach&&(
+      {selectedWorker&&(
         <p className="mb-2 text-sm text-slate-500">
-          {selectedCoach.siteName&&<span className="mr-2">{selectedCoach.siteName} ·</span>}
+          {selectedWorker.siteName&&<span className="mr-2">{selectedWorker.siteName} ·</span>}
           출근 <b className="text-slate-900">{working}일</b> ·
           확정 <b className="text-emerald-600">{finalized}일</b>
         </p>

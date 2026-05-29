@@ -669,7 +669,7 @@ curl -s -b "$WORKER_COOKIE" -X PATCH "$BASE/api/worker/profile" \
 section "21. 직무지도원 초대 링크 가입 시나리오"
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 1단계: 매니저 → 초대 생성
-INVITE_PHONE="01011112222"
+INVITE_PHONE="010$(date +%s | cut -c 3-10)"
 INVITE_RESP=$(curl -s -b "$MANAGER_COOKIE" \
   -X POST "$BASE/api/admin/workers/invite" \
   -H "Content-Type: application/json" \

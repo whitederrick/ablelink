@@ -49,7 +49,7 @@ interface RunDetail extends RunSummary {
   totalGrossPay: number; totalDeduction: number; totalNetPay: number;
 }
 
-interface Coach { id: string; userName: string; }
+interface Worker { id: string; userName: string; }
 
 function comma(n: number) { return Math.round(n).toLocaleString("ko-KR"); }
 function fmtMin(m: number) {
@@ -76,7 +76,7 @@ export default function PayrollPage() {
   const [tab, setTab] = useState<Tab>("contracts");
 
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [coaches, setCoaches] = useState<Coach[]>([]);
+  const [workers, setWorkers] = useState<Worker[]>([]);
   const [loadingContracts, setLoadingContracts] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(initialForm);
@@ -109,9 +109,9 @@ export default function PayrollPage() {
   }
 
   async function loadCoaches() {
-    const res = await fetch("/api/admin/coaches?pageSize=200");
+    const res = await fetch("/api/admin/workers?pageSize=200");
     const d = await res.json();
-    if (d.success) setCoaches((d.data || []).map((c: any) => ({ id: c.id, userName: c.userName })));
+    if (d.success) setWorkers((d.data || []).map((c: any) => ({ id: c.id, userName: c.userName })));
   }
 
   async function loadRuns() {
@@ -304,7 +304,7 @@ export default function PayrollPage() {
                   <label className={T.label}>직무지도원</label>
                   <select value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} className={`w-full ${T.select}`}>
                     <option value="">선택</option>
-                    {coaches.map(c => <option key={c.id} value={c.id}>{c.userName}</option>)}
+                    {workers.map(c => <option key={c.id} value={c.id}>{c.userName}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1.5">

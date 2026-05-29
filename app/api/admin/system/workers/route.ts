@@ -36,7 +36,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       success: true,
-      coaches: users.map(u => {
+      workers: users.map(u => {
         const asgn = u.assignments[0];
         return {
           id:          u.id.toString(),

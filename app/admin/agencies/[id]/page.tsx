@@ -20,7 +20,7 @@ type AgencyDetail = {
 };
 type Manager = { id: string; loginId: string; displayName: string | null; isActive: boolean; lastLoginAt: string | null };
 type Site    = { id: string; companyName: string; traineeCount: number };
-type Coach   = { id: string; userName: string; status: string };
+type Worker   = { id: string; userName: string; status: string };
 type Stats   = { logCount: number; attCount: number; apiUsage: { service: string; count: number }[] };
 
 function fmt(d: string | null) {
@@ -39,7 +39,7 @@ export default function AgencyDetailPage() {
   const [agency,   setAgency]   = useState<AgencyDetail | null>(null);
   const [managers, setManagers] = useState<Manager[]>([]);
   const [sites,    setSites]    = useState<Site[]>([]);
-  const [coaches,  setCoaches]  = useState<Coach[]>([]);
+  const [workers, setWorkers]  = useState<Worker[]>([]);
   const [stats,    setStats]    = useState<Stats | null>(null);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState("");
@@ -53,7 +53,7 @@ export default function AgencyDetailPage() {
           setAgency(d.agency);
           setManagers(d.managers);
           setSites(d.sites);
-          setCoaches(d.coaches);
+          setWorkers(d.workers);
           setStats(d.stats);
         } else {
           setError(d.message ?? "로드 실패");
@@ -113,7 +113,7 @@ export default function AgencyDetailPage() {
           <p className={T.summaryLabel}>현장</p>
         </div>
         <div className={T.summaryCard}>
-          <p className={T.summaryNum + " text-slate-900"}>{coaches.length}</p>
+          <p className={T.summaryNum + " text-slate-900"}>{workers.length}</p>
           <p className={T.summaryLabel}>직무지도원</p>
         </div>
         <div className={T.summaryCard}>
@@ -227,13 +227,13 @@ export default function AgencyDetailPage() {
       <div className={T.card}>
         <div className="mb-3 flex items-center gap-2">
           <Activity className="h-4 w-4 text-slate-500" />
-          <p className="text-sm font-black text-slate-700">직무지도원 ({coaches.length}명)</p>
+          <p className="text-sm font-black text-slate-700">직무지도원 ({workers.length}명)</p>
         </div>
-        {coaches.length === 0 ? (
+        {workers.length === 0 ? (
           <p className="text-sm text-slate-400">배정된 직무지도원이 없습니다.</p>
         ) : (
           <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto">
-            {coaches.map(c => (
+            {workers.map(c => (
               <div key={c.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
                 <p className="text-sm font-semibold text-slate-800">{c.userName}</p>
                 <span className={`${T.badge} ${c.status === "ACTIVE" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Search, KeyRound, UserX, UserCheck } from "lucide-react";
 
-type Coach = {
+type Worker = {
   id: string; loginId: string; userName: string; phoneNumber: string;
   status: string; planType: string; siteName: string|null;
   agencyId: string|null; agencyName: string|null; createdAt: string;
@@ -14,7 +14,7 @@ const STATUS_COLORS: Record<string,string> = {
 };
 
 export default function CoachesPage() {
-  const [coaches, setCoaches]   = useState<Coach[]>([]);
+  const [workers, setWorkers]   = useState<Worker[]>([]);
   const [loading, setLoading]   = useState(true);
   const [q, setQ]               = useState("");
   const [actionId, setActionId] = useState<string|null>(null);
@@ -28,8 +28,8 @@ export default function CoachesPage() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),3000); };
   const load = useCallback((query="")=>{
     setLoading(true);
-    fetch(`/api/admin/system/coaches?q=${encodeURIComponent(query)}`)
-      .then(r=>r.json()).then(d=>{if(d.success)setCoaches(d.coaches);}).catch(()=>{}).finally(()=>setLoading(false));
+    fetch(`/api/admin/system/workers?q=${encodeURIComponent(query)}`)
+      .then(r=>r.json()).then(d=>{if(d.success)setWorkers(d.workers);}).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
   useEffect(()=>{load();},[load]);
 
@@ -43,7 +43,7 @@ export default function CoachesPage() {
     } else {
       body={action:"set-status",status:newStatus,memo};
     }
-    const res=await fetch(`/api/admin/system/coaches/${actionId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const res=await fetch(`/api/admin/system/workers/${actionId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     const data=await res.json(); setProcessing(false);
     if(data.success){showToast(data.message);setActionId(null);setActionType(null);setNewPw("");setMemo("");load(q);}
     else showToast(data.message||"실패");
@@ -52,7 +52,7 @@ export default function CoachesPage() {
   return (
     <div>
       <div className="mb-6"><h1 className="text-xl font-black text-slate-900">전체 직무지도원</h1>
-        <p className="mt-0.5 text-sm text-slate-500">전체 {coaches.length}명 · 비밀번호 초기화 및 상태 변경</p></div>
+        <p className="mt-0.5 text-sm text-slate-500">전체 {workers.length}명 · 비밀번호 초기화 및 상태 변경</p></div>
 
       <div className="mb-4 flex gap-2">
         <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&load(q)}
@@ -103,8 +103,8 @@ export default function CoachesPage() {
               ))}
             </tr></thead>
             <tbody className="divide-y divide-slate-50">
-              {coaches.length===0?(<tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">직무지도원이 없습니다.</td></tr>)
-              :coaches.map(c=>(
+              {workers.length===0?(<tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">직무지도원이 없습니다.</td></tr>)
+              :workers.map(c=>(
                 <tr key={c.id} className={`hover:bg-slate-50 transition ${c.status!=="ACTIVE"?"opacity-60":""}`}>
                   <td className="px-4 py-3"><p className="font-semibold text-slate-900">{c.userName}</p><p className="text-xs text-slate-400">{c.loginId}</p></td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{c.phoneNumber}</td>

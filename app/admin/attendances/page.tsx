@@ -156,7 +156,7 @@ function MonthlyView({ items, yearMonth }: { items: AttendanceItem[]; yearMonth:
   const [y, m] = yearMonth.split("-").map(Number);
   const dow = ["일", "월", "화", "수", "목", "금", "토"];
 
-  const coaches = useMemo(() => {
+  const workers = useMemo(() => {
     const map = new Map<string, { name: string; site: string; byDay: Map<string, AttendanceItem> }>();
     for (const item of items) {
       const uid = item.user?.userName || item.id;
@@ -166,7 +166,7 @@ function MonthlyView({ items, yearMonth }: { items: AttendanceItem[]; yearMonth:
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [items]);
 
-  if (coaches.length === 0) return (
+  if (workers.length === 0) return (
     <div className="flex h-[200px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-50">
       <p className="text-sm font-semibold text-slate-400">해당 기간에 근태 기록이 없습니다.</p>
     </div>
@@ -206,12 +206,12 @@ function MonthlyView({ items, yearMonth }: { items: AttendanceItem[]; yearMonth:
             </tr>
           </thead>
           <tbody>
-            {coaches.map(coach => (
-              <tr key={coach.name}>
-                <td className="sticky left-0 z-10 whitespace-nowrap border border-slate-200 bg-white px-3 py-1.5 font-black text-slate-900">{coach.name}</td>
-                <td className="sticky left-[100px] z-10 whitespace-nowrap border border-slate-200 bg-white px-2 py-1.5 text-slate-500">{coach.site}</td>
+            {workers.map(worker => (
+              <tr key={worker.name}>
+                <td className="sticky left-0 z-10 whitespace-nowrap border border-slate-200 bg-white px-3 py-1.5 font-black text-slate-900">{worker.name}</td>
+                <td className="sticky left-[100px] z-10 whitespace-nowrap border border-slate-200 bg-white px-2 py-1.5 text-slate-500">{worker.site}</td>
                 {dayNums.map(d => {
-                  const item = coach.byDay.get(pad2(d));
+                  const item = worker.byDay.get(pad2(d));
                   return (
                     <td key={d} className={`border border-slate-200 p-0.5 text-center ${cellBgCls(item)}`}>
                       <span className={`font-black ${cellTextCls(item)}`}>{cellLabel(item)}</span>

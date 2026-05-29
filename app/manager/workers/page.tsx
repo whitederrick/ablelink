@@ -16,7 +16,7 @@ interface Assignment {
   endDate: string | null;
 }
 
-interface Coach {
+interface Worker {
   id: string;
   userName: string;
   phoneNumber: string;
@@ -210,7 +210,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 }
 
 function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
-  coach: Coach; assignmentId: string; initial: Assignment;
+  coach: Worker; assignmentId: string; initial: Assignment;
   onClose: () => void; onSaved: (updated: Assignment) => void;
 }) {
   const [workType, setWorkType] = useState<WorkType>(initial.workType ?? "FULL_DAY");
@@ -354,8 +354,8 @@ function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
 }
 
 // ── 직무지도원 정보 수정 모달 ─────────────────────────────
-function CoachInfoModal({ coach, onClose, onSaved }: {
-  coach: Coach; onClose: () => void; onSaved: (updated: Partial<Coach>) => void;
+function WorkerInfoModal({ coach, onClose, onSaved }: {
+  coach: Worker; onClose: () => void; onSaved: (updated: Partial<Worker>) => void;
 }) {
   const [userName,    setUserName]    = useState(coach.userName);
   const [phoneNumber, setPhoneNumber] = useState(coach.phoneNumber);
@@ -367,7 +367,7 @@ function CoachInfoModal({ coach, onClose, onSaved }: {
   async function handleSave() {
     setSaving(true); setError("");
     try {
-      const res = await fetch(`/api/admin/coaches/${coach.id}`, {
+      const res = await fetch(`/api/admin/workers/${coach.id}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
@@ -444,24 +444,24 @@ function CoachInfoModal({ coach, onClose, onSaved }: {
 }
 
 export default function CoachesPage() {
-  const [coaches, setCoaches] = useState<Coach[]>([]);
+  const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [total, setTotal] = useState(0);
-  const [editTarget,     setEditTarget]     = useState<{ coach: Coach; assignment: Assignment } | null>(null);
-  const [infoEditTarget, setInfoEditTarget] = useState<Coach | null>(null);
+  const [editTarget,     setEditTarget]     = useState<{ coach: Worker; assignment: Assignment } | null>(null);
+  const [infoEditTarget, setInfoEditTarget] = useState<Worker | null>(null);
   const [showInvite,     setShowInvite]     = useState(false);
   const [assignmentMap, setAssignmentMap] = useState<Record<string, Assignment>>({});
 
   useEffect(() => {
-    fetch("/api/admin/coaches")
+    fetch("/api/admin/workers")
       .then(r => r.json())
-      .then(d => { if (d.success && Array.isArray(d.data)) { setCoaches(d.data); setTotal(d.total ?? d.data.length); } })
+      .then(d => { if (d.success && Array.isArray(d.data)) { setWorkers(d.data); setTotal(d.total ?? d.data.length); } })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  async function openEdit(coach: Coach) {
+  async function openEdit(coach: Worker) {
     const assignmentId = coach.activeAssignment?.assignmentId;
     if (!assignmentId) return alert("배정된 현장이 없습니다.");
     if (!assignmentMap[assignmentId]) {
@@ -485,7 +485,7 @@ export default function CoachesPage() {
     }
   }
 
-  const filtered = coaches.filter(c =>
+  const filtered = workers.filter(c =>
     c.userName.includes(search) || c.phoneNumber.includes(search) ||
     c.activeAssignment?.siteName.includes(search) || c.loginId.includes(search)
   );
@@ -586,11 +586,11 @@ export default function CoachesPage() {
       )}
 
       {infoEditTarget && (
-        <CoachInfoModal
+        <WorkerInfoModal
           coach={infoEditTarget}
           onClose={() => setInfoEditTarget(null)}
           onSaved={updated => {
-            setCoaches(prev => prev.map(c =>
+            setWorkers(prev => prev.map(c =>
               c.id === infoEditTarget.id ? { ...c, ...updated } : c
             ));
             setInfoEditTarget(null);

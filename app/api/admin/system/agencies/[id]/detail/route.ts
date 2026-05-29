@@ -66,7 +66,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         isActive: m.isActive, lastLoginAt: m.lastLoginAt?.toISOString() ?? null,
       })),
       sites: sites.map(s => ({ id: s.id.toString(), companyName: s.companyName, traineeCount: s.trainees.length })),
-      coaches: [...uniqueCoaches.values()],
+      workers: [...uniqueCoaches.values()],
       stats: { logCount, attCount, apiUsage: apiUsage.map(u => ({ service: u.service, count: u._count.id })) },
     });
   } catch (e: any) {
