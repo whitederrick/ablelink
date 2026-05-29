@@ -60,7 +60,7 @@ export async function PATCH(
     let tempPassword: string | null = null;
     if (resetPassword) {
       tempPassword         = generateTempPassword();
-      updates.password     = await hash(tempPassword, 10);
+      updates.password     = await hash(tempPassword, 12);
       updates.isTemporary  = true;
     }
 

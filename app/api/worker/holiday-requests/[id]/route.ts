@@ -5,18 +5,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 
+function safeBigInt(v: string): bigint | null {
+  try { return BigInt(v); } catch { return null; }
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getWorkerSessionFromReq(req);
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
     const { id } = await params;
+    const reqId = safeBigInt(id);
+    if (!reqId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const { action } = await req.json();
     if (!["accept", "reject"].includes(action))
       return NextResponse.json({ success: false, message: "잘못된 액션입니다." }, { status: 400 });
 
     const request = await prisma.siteHolidayRequest.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: reqId },
       include: {
         holiday: {
           include: { assignment: { select: { userId: true } } },
@@ -34,7 +40,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       // 트랜잭션: 요청 수락 + 실제 휴무일 변경 적용
       await prisma.$transaction(async (tx) => {
         await tx.siteHolidayRequest.update({
-          where: { id: BigInt(id) },
+          where: { id: reqId },
           data: { status: "ACCEPTED" },
         });
 

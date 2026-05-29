@@ -61,7 +61,7 @@ export async function PATCH(req: NextRequest) {
       if (newPassword.length < 8) {
         return NextResponse.json({ success: false, message: "비밀번호는 8자 이상이어야 합니다." }, { status: 400 });
       }
-      updates.password    = await hash(newPassword, 10);
+      updates.password    = await hash(newPassword, 12);
       updates.isTemporary = false;
     }
 

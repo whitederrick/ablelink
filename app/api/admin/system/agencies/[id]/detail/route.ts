@@ -2,7 +2,7 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -10,10 +10,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const { id } = await params;
-    const agencyId = BigInt(id);
+    const agencyId = parseBigInt(id);
+    if (!agencyId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
 
-    const [agency, managers, sites, coaches, logCount, attCount, apiUsage] = await Promise.all([
-      prisma.agency.findUnique({ where: { id: agencyId } }),
+    // 에이전시 존재 확인 후 병렬 조회
+    const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
+    if (!agency) return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
+
+    const [managers, sites, coaches, logCount, attCount, apiUsage] = await Promise.all([
       prisma.adminUser.findMany({ where: { agencyId }, select: { id: true, loginId: true, displayName: true, isActive: true, lastLoginAt: true } }),
       prisma.site.findMany({
         where: { agencyId },
@@ -38,8 +42,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }),
     ]);
 
-    if (!agency) return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
-
     const uniqueCoaches = new Map<string, any>();
     for (const a of coaches) {
       const uid = a.user.id.toString();
@@ -52,10 +54,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         id:           agency.id.toString(),
         name:         agency.name,
         planType:     agency.planType,
-        isActive:     (agency as any).isActive ?? true,
-        trialEndsAt:  (agency as any).trialEndsAt?.toISOString() ?? null,
-        subscribedAt: (agency as any).subscribedAt?.toISOString() ?? null,
-        nextBillingAt:(agency as any).nextBillingAt?.toISOString() ?? null,
+        isActive:     agency.isActive,
+        trialEndsAt:  agency.trialEndsAt?.toISOString() ?? null,
+        subscribedAt: agency.subscribedAt?.toISOString() ?? null,
+        nextBillingAt:agency.nextBillingAt?.toISOString() ?? null,
         maxCoaches:   agency.maxCoaches,
         maxSites:     agency.maxSites,
         createdAt:    agency.createdAt.toISOString(),

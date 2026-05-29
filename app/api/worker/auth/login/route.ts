@@ -95,7 +95,6 @@ export async function POST(request: Request) {
       user: {
         id: user.id.toString(),
         userName: user.userName,
-        phoneNumber: user.phoneNumber,
         planType: user.planType,
       },
       hasActiveSite: !!activeAssignment,

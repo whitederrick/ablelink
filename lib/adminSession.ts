@@ -43,17 +43,10 @@ export async function verifyAdminSessionToken(
   let payload: any;
 
   try {
-    // 신규 토큰: aud 포함
     const result = await jwtVerify(token, secretKey, { audience: ADMIN_TOKEN_AUD });
     payload = result.payload;
   } catch {
-    // 구 토큰(aud 없는) 한시적 수용 — 7일 후 자동 만료
-    try {
-      const result = await jwtVerify(token, secretKey);
-      payload = result.payload;
-    } catch {
-      return null;
-    }
+    return null;
   }
 
   const sub = String(payload.sub || "");

@@ -8,9 +8,8 @@ const MAX_AGE = 60 * 60 * 24 * 7;
 const WORKER_TOKEN_AUD = "ablelink-worker";
 
 function getSecret() {
-  // Worker 전용 시크릿 우선, 없으면 공용 시크릿으로 폴백
-  const s = process.env.WORKER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET;
-  if (!s) throw new Error("WORKER_SESSION_SECRET not set");
+  const s = process.env.WORKER_SESSION_SECRET;
+  if (!s) throw new Error("WORKER_SESSION_SECRET is not set");
   return new TextEncoder().encode(s);
 }
 
@@ -32,7 +31,6 @@ export async function signWorkerToken(payload: WorkerPayload): Promise<string> {
 export async function verifyWorkerToken(token: string): Promise<WorkerPayload | null> {
   const secret = getSecret();
   try {
-    // 신규 토큰: aud 포함
     const { payload } = await jwtVerify(token, secret, { audience: WORKER_TOKEN_AUD });
     if ((payload as any).role !== "COACH") return null;
     return {
@@ -41,18 +39,7 @@ export async function verifyWorkerToken(token: string): Promise<WorkerPayload | 
       isTemporary: Boolean((payload as any).isTemporary),
     };
   } catch {
-    // 구 토큰(aud 없는) 한시적 수용 — 7일 후 자동 만료
-    try {
-      const { payload } = await jwtVerify(token, secret);
-      if ((payload as any).role !== "COACH") return null;
-      return {
-        userId: String((payload as any).userId),
-        userName: String((payload as any).userName),
-        isTemporary: Boolean((payload as any).isTemporary),
-      };
-    } catch {
-      return null;
-    }
+    return null;
   }
 }
 

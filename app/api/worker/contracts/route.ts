@@ -159,7 +159,7 @@ async function sendSignedNotificationNew(userId: bigint, phone: string, name: st
   }
 
   const tempPassword = generateTempPassword();
-  await prisma.user.update({ where: { id: userId }, data: { password: await hash(tempPassword, 10) } });
+  await prisma.user.update({ where: { id: userId }, data: { password: await hash(tempPassword, 12) } });
 
   await sendAlimtalk({
     phone, name, templateCode,

@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 import { logAudit } from "@/lib/auditLog";
 
 export async function PATCH(
@@ -15,10 +15,12 @@ export async function PATCH(
     if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const { id } = await params;
+    const agencyId = parseBigInt(id);
+    if (!agencyId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const body = await req.json();
     const { planType, trialEndsAt, maxCoaches, maxSites } = body;
 
-    const agency = await prisma.agency.findUnique({ where: { id: BigInt(id) } });
+    const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
     if (!agency) return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
 
     const validPlans = ["FREE", "TRIAL", "STARTER", "STANDARD", "PRO"];

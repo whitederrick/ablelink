@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     const tempPw = generateTempPassword();
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: await hash(tempPw, 10), isTemporary: true },
+      data: { password: await hash(tempPw, 12), isTemporary: true },
     });
 
     if (isEmail) {

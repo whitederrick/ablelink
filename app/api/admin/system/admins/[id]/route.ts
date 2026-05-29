@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession } from "@/lib/adminScope";
+import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 import bcrypt from "bcryptjs";
 
 export async function PATCH(
@@ -15,10 +15,12 @@ export async function PATCH(
     if (scope.role !== "ADMIN") return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     const { id } = await params;
+    const adminId = parseBigInt(id);
+    if (!adminId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const body = await req.json();
     const { action, newPassword, displayName, isActive, agencyId } = body;
 
-    const admin = await prisma.adminUser.findUnique({ where: { id: BigInt(id) } });
+    const admin = await prisma.adminUser.findUnique({ where: { id: adminId } });
     if (!admin) return NextResponse.json({ success: false, message: "계정을 찾을 수 없습니다." }, { status: 404 });
 
     if (action === "reset-password") {

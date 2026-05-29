@@ -4,15 +4,17 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdminSession, requireAgencyScope } from "@/lib/adminScope";
+import { requireAdminSession, requireAgencyScope, parseBigInt } from "@/lib/adminScope";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const scope = await requireAdminSession(req);
     const { id } = await params;
+    const ticketId = parseBigInt(id);
+    if (!ticketId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
 
     const ticket = await prisma.supportTicket.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: ticketId },
       include: {
         agency:  { select: { name: true } },
         admin:   { select: { loginId: true, displayName: true } },
@@ -57,7 +59,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const scope = await requireAdminSession(req);
     const { id } = await params;
-    const ticketId = BigInt(id);
+    const ticketId = parseBigInt(id);
+    if (!ticketId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
 
     const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
     if (!ticket) return NextResponse.json({ success: false, message: "티켓을 찾을 수 없습니다." }, { status: 404 });

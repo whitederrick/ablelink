@@ -11,8 +11,9 @@ export async function GET(req: Request) {
 
     const agencies = await prisma.agency.findMany({
       select: {
-        id: true, name: true, planType: true,
+        id: true, name: true, planType: true, isActive: true,
         maxCoaches: true, maxSites: true,
+        trialEndsAt: true, nextBillingAt: true, subscribedAt: true, tossBillingKey: true,
         _count: { select: { adminUsers: true, sites: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -23,9 +24,9 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       billing: agencies.map(a => {
-        const trialEndsAt   = (a as any).trialEndsAt   ? new Date((a as any).trialEndsAt)   : null;
-        const nextBillingAt = (a as any).nextBillingAt  ? new Date((a as any).nextBillingAt) : null;
-        const subscribedAt  = (a as any).subscribedAt   ? new Date((a as any).subscribedAt)  : null;
+        const trialEndsAt   = a.trialEndsAt   ? new Date(a.trialEndsAt)   : null;
+        const nextBillingAt = a.nextBillingAt ? new Date(a.nextBillingAt) : null;
+        const subscribedAt  = a.subscribedAt  ? new Date(a.subscribedAt)  : null;
         const isTrialExpired = trialEndsAt && trialEndsAt < now;
         const isBillingOverdue = nextBillingAt && nextBillingAt < now && a.planType !== "FREE" && a.planType !== "TRIAL";
 
@@ -33,13 +34,13 @@ export async function GET(req: Request) {
           id:              a.id.toString(),
           name:            a.name,
           planType:        a.planType,
-          isActive:        (a as any).isActive ?? true,
+          isActive:        a.isActive,
           subscribedAt:    subscribedAt?.toISOString() ?? null,
           nextBillingAt:   nextBillingAt?.toISOString() ?? null,
           trialEndsAt:     trialEndsAt?.toISOString() ?? null,
           isTrialExpired,
           isBillingOverdue,
-          hasBillingKey:   !!((a as any).tossBillingKey),
+          hasBillingKey:   !!a.tossBillingKey,
           managerCount:    a._count.adminUsers,
           siteCount:       a._count.sites,
         };
