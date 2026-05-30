@@ -136,6 +136,18 @@ export async function checkPlanAccess(
   };
 }
 
+/**
+ * Worker 앱 UI 게이트용 — 직무지도원이 지금 유료 기능을 쓸 수 있는지 + 못 쓸 때 안내 메시지.
+ * 대표 기능(AI_VOICE = STARTER 최소 티어)으로 판정하며 계약/개인부여 로직은 checkPlanAccess와 동일.
+ * 프론트가 이 값으로 버튼을 사전 게이트하고 동일한 안내 문구를 표시한다.
+ */
+export async function getWorkerPremiumStatus(
+  workerId: bigint
+): Promise<{ premium: boolean; reason?: PlanCheckResult["reason"]; message?: string }> {
+  const res = await checkPlanAccess(workerId, "AI_VOICE");
+  return { premium: res.allowed, reason: res.reason, message: res.message };
+}
+
 // ─── Admin 측: agencyId 기준 ─────────────────────────────────────
 
 export async function checkAgencyPlanAccess(

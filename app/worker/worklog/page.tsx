@@ -19,6 +19,8 @@ interface SiteInfo {
   trialEndsAt?: string | null;
   customWorkStart?: string | null;
   customWorkEnd?: string | null;
+  premiumAccess?: boolean;
+  premiumMessage?: string | null;
 }
 
 // ─── 유틸 ──────────────────────────────────────────────────────────
@@ -33,12 +35,6 @@ function calcBonus(commute: boolean, breakTime: boolean): number {
   if (!commute && !breakTime) return 0;
   return 1.5;
 }
-function isPremium(plan?: string, trialEndsAt?: string | null): boolean {
-  if (!plan || plan === "FREE") return false;
-  if (plan === "TRIAL") return trialEndsAt ? new Date(trialEndsAt) > new Date() : false;
-  return ["STARTER", "STANDARD", "PRO"].includes(plan);
-}
-
 // 관리자 설정 workType → 기본 시간 반환
 // 관리자 설정 기반 근무 시간 반환
 // end(guidanceEnd): 공단 인정 시간 계산 기준 (FULL_DAY는 점심 1H 공제)
@@ -293,7 +289,7 @@ function WorklogForm() {
   const [error, setError] = useState("");
   const [loadingLog, setLoadingLog] = useState(false);
 
-  const premium = isPremium(siteInfo.agencyPlanType, siteInfo.trialEndsAt);
+  const premium = siteInfo.premiumAccess ?? false;
   const core = diffHours(guideTimes.start, guideTimes.end);
   const extra = isExtraGuide ? diffHours(extraStart, extraEnd) : 0;
   const bonus = calcBonus(isCommuteGuide, isBreakGuide);
@@ -365,7 +361,7 @@ function WorklogForm() {
 
   // 음성 녹음
   async function startRecording() {
-    if (!premium) { alert("음성 AI 변환은 PREMIUM 기능입니다.\n에이전시 담당자에게 구독 문의해주세요."); return; }
+    if (!premium) { alert(siteInfo.premiumMessage || "음성 AI 변환은 유료 기능이에요.\n근로계약 기간 중에 사용할 수 있어요."); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"

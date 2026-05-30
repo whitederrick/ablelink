@@ -29,6 +29,7 @@ export default function SignaturePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<"view" | "draw">("view");
+  const [premium, setPremium] = useState<{ access: boolean; message: string | null }>({ access: true, message: null });
   const lastPos = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -36,6 +37,11 @@ export default function SignaturePage() {
       .then(r => r.json())
       .then(d => { if (d.success && d.signatureUrl) setSavedUrl(d.signatureUrl); })
       .finally(() => setLoading(false));
+    // 계약 기반 유료기능 접근 상태 (사전 게이트·안내 통일)
+    fetch("/api/worker/site/current")
+      .then(r => r.json())
+      .then(d => { if (d?.success && d.data) setPremium({ access: d.data.premiumAccess ?? false, message: d.data.premiumMessage ?? null }); })
+      .catch(() => {});
   }, []);
 
   const initCanvas = useCallback(() => {
@@ -272,13 +278,15 @@ export default function SignaturePage() {
             </div>
           )}
 
-          {/* PREMIUM 안내 */}
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center">
-            <p className="text-xs font-semibold leading-relaxed text-amber-700">
-              🔒 전자서명은 PREMIUM 기능입니다.<br />
-              에이전시 구독 후 사용할 수 있습니다.
-            </p>
-          </div>
+          {/* 유료 기능 안내 — 계약 기반 접근이 막혔을 때만, 상황별 자연스러운 문구 */}
+          {!premium.access && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center">
+              <p className="text-xs font-semibold leading-relaxed text-amber-700">
+                🔒 전자서명은 유료 기능이에요.<br />
+                {premium.message || "근로계약 기간 중에 사용할 수 있어요."}
+              </p>
+            </div>
+          )}
 
         </div>
       </div>

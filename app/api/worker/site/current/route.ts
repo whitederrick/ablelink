@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import { getWorkerPremiumStatus } from "@/lib/planGuard";
 
 export async function GET(request: NextRequest) {
   try {
@@ -60,6 +61,8 @@ export async function GET(request: NextRequest) {
         })
       : null;
 
+    const premiumStatus = await getWorkerPremiumStatus(workerId);
+
     return NextResponse.json({
       success: true,
       data: {
@@ -79,6 +82,10 @@ export async function GET(request: NextRequest) {
         })),
         agencyPlanType: agency?.planType ?? "FREE",
         trialEndsAt: agency?.trialEndsAt ?? null,
+        // 계약 기반 유료기능 접근 (프론트 사전 게이트·안내 통일용)
+        premiumAccess: premiumStatus.premium,
+        premiumReason: premiumStatus.reason ?? null,
+        premiumMessage: premiumStatus.message ?? null,
         // 이메일 발송용 추가 정보
         workerName: user?.workerName ?? "",
         workerPhone: user?.phoneNumber ?? "",
