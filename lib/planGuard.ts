@@ -47,23 +47,52 @@ function planAllows(plan: string, feature: PremiumFeature): boolean {
 }
 
 // ─── Worker 측: workerId 기준 ──────────────────────────────────────
+//
+// 접근 권한은 두 갈래로 결정된다:
+//  (1) 시스템 운영자가 직무지도원 개인에게 직접 부여(worker.planType = PREMIUM)
+//      → 에이전시와 무관하게 전체 유료기능 허용 (초기 직무지도원 테스트/특례용)
+//  (2) 에이전시 구독을 근로계약 기반으로 소비
+//      → 서명된 EmploymentContract의 계약기간(계약종료 +3일 유예) 내일 때만,
+//        그 계약의 에이전시 구독 플랜으로 판단. (계약 전·만료 후에는 사용 불가)
+//  기본 기능(출퇴근·수동일지 등)은 checkPlanAccess를 거치지 않으므로 항상 사용 가능.
+
+const CONTRACT_GRACE_MS = 3 * 24 * 60 * 60 * 1000; // 계약 종료 후 3일 유예 (잔여 일지 제출 등)
 
 export async function checkPlanAccess(
   workerId: bigint,
   feature: PremiumFeature
 ): Promise<PlanCheckResult> {
-  const assignment = await prisma.siteAssignment.findFirst({
-    where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
-    include: { agency: true },
-    orderBy: { startDate: "desc" },
+  // (1) 시스템 운영자 개인 부여
+  const worker = await prisma.worker.findUnique({
+    where: { id: workerId },
+    select: { planType: true },
   });
-
-  const agency = assignment?.agency;
-  if (!agency) {
-    return { allowed: false, reason: "NO_AGENCY", message: "소속 에이전시가 없습니다." };
+  if (worker?.planType === "PREMIUM") {
+    return { allowed: true, planType: "PREMIUM" }; // 개인 부여 = 전체 허용
   }
 
-  return _checkAgency(agency, feature);
+  // (2) 근로계약 기반 에이전시 구독 (계약기간 + 3일 유예 내)
+  const now = new Date();
+  const contract = await prisma.employmentContract.findFirst({
+    where: {
+      workerId,
+      status: { in: ["SIGNED", "COMPLETED"] }, // 직무지도원이 서명 완료한 계약만
+      contractStart: { lte: now },
+      contractEnd: { gte: new Date(now.getTime() - CONTRACT_GRACE_MS) },
+    },
+    include: { agency: true },
+    orderBy: { contractEnd: "desc" },
+  });
+
+  if (!contract?.agency) {
+    return {
+      allowed: false,
+      reason: "NO_AGENCY",
+      message: "유효한 근로계약(에이전시 구독)이 없습니다. 기본 기능만 사용할 수 있습니다.",
+    };
+  }
+
+  return _checkAgency(contract.agency, feature);
 }
 
 // ─── Admin 측: agencyId 기준 ─────────────────────────────────────
