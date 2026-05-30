@@ -7,7 +7,17 @@
 //                       (Resend에서 도메인 인증 완료 후 사용 가능)
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY || "");
+// ⚠️ Resend는 API 키 없이 생성자를 호출하면 throw → 모듈 로드(빌드 시점)에 만들지 않고
+//    실제 발송 시점에 지연 생성한다. (빌드의 page data 수집 단계에서 키 미주입으로 실패 방지)
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) throw new Error("RESEND_API_KEY가 설정되지 않았습니다.");
+    _resend = new Resend(key);
+  }
+  return _resend;
+}
 
 const DEFAULT_FROM =
   process.env.RESEND_FROM_EMAIL ||
@@ -23,7 +33,7 @@ export async function sendEmailWithPdf(opts: {
   pdfBuffer: Buffer;
   fileName: string;
 }) {
-  const { error } = await resend.emails.send({
+  const { error } = await getResend().emails.send({
     from: opts.from || DEFAULT_FROM,
     to: [opts.to],
     subject: opts.subject,
@@ -40,7 +50,7 @@ export async function sendSimpleEmail(opts: {
   subject: string;
   text: string;
 }) {
-  const { error } = await resend.emails.send({
+  const { error } = await getResend().emails.send({
     from: DEFAULT_FROM,
     to: [opts.to],
     subject: opts.subject,
