@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
           { employmentContracts: contractFilter },
           {
             OR: [
-              { userName: { contains: q, mode: "insensitive" } },
+              { workerName: { contains: q, mode: "insensitive" } },
               { phoneNumber: { contains: q } },
             ],
           },
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
         const siteName = latest?.siteName || latest?.workerFilledSiteName || null;
         return {
           id: String(u.id),
-          userName: u.userName,
+          workerName: u.workerName,
           phoneNumber: u.phoneNumber,
           email: u.loginId,
           siteName,

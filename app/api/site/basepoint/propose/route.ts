@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       reason,    // optional (100m 초과/정정요청 사유)
     } = body;
 
-    const userId = session.userId;
+    const workerId = session.workerId;
 
     if (!siteId) {
       return NextResponse.json(
@@ -88,10 +88,10 @@ export async function POST(request: NextRequest) {
     let userIdBig: bigint;
     try {
       siteIdBig = BigInt(siteId);
-      userIdBig = BigInt(userId);
+      userIdBig = BigInt(workerId);
     } catch {
       return NextResponse.json(
-        { success: false, message: "siteId 또는 userId 형식이 올바르지 않습니다." },
+        { success: false, message: "siteId 또는 workerId 형식이 올바르지 않습니다." },
         { status: 400 }
       );
     }
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     // 세션 사용자가 해당 사이트에 배정되어 있는지 확인
     const assignment = await prisma.siteAssignment.findFirst({
       where: {
-        userId: userIdBig,
+        workerId: userIdBig,
         siteId: siteIdBig,
         status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] },
       },
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
           // 감사/이력용: 제안값도 함께 남김
           basePointProposedLat: proposedLatDec,
           basePointProposedLon: proposedLonDec,
-          basePointProposedByUserId: userIdBig,
+          basePointProposedByWorkerId: userIdBig,
           basePointProposedAt: now,
 
           // 결정 메타(자동 승인)
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
         // ✅ 감사/이력용: 제안값 저장
         basePointProposedLat: proposedLatDec,
         basePointProposedLon: proposedLonDec,
-        basePointProposedByUserId: userIdBig,
+        basePointProposedByWorkerId: userIdBig,
         basePointProposedAt: now,
 
         basePointApprovalStatus: "CORRECTION_REQUESTED",

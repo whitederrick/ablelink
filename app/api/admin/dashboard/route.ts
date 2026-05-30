@@ -32,7 +32,7 @@ export async function GET(req: Request) {
         where: { workDate: todayStr, assignment: { ...agencyFilter } },
         select: {
           id: true, startTime: true, endTime: true, isFinalClosed: true, isGpsModified: true,
-          user: { select: { userName: true } },
+          user: { select: { workerName: true } },
           site: { select: { companyName: true } },
           logs: { select: { isCompleted: true } },
           attendanceIssue: { select: { id: true, status: true, issueTypes: true } },
@@ -47,7 +47,7 @@ export async function GET(req: Request) {
           dailyAttendance: {
             select: {
               workDate: true,
-              user: { select: { userName: true } },
+              user: { select: { workerName: true } },
               site: { select: { companyName: true } },
             },
           },
@@ -60,7 +60,7 @@ export async function GET(req: Request) {
         take: 50,
         select: {
           id: true, docType: true, dueAt: true, currentVersionId: true,
-          worker: { select: { userName: true } },
+          worker: { select: { workerName: true } },
           site: { select: { companyName: true } },
         },
       }),
@@ -69,7 +69,7 @@ export async function GET(req: Request) {
         where: { status: "ACTIVE", endDate: { gte: today, lte: in10Days }, ...agencyFilter },
         select: {
           id: true, endDate: true, serviceStep: true,
-          user: { select: { userName: true } },
+          user: { select: { workerName: true } },
           site: { select: { companyName: true } },
         },
         orderBy: { endDate: "asc" },
@@ -103,7 +103,7 @@ export async function GET(req: Request) {
       if (daysAgo >= 3) {
         riskAlerts.push({
           type: "attendance", label: "[근태]",
-          target: issue.dailyAttendance?.user?.userName || "-",
+          target: issue.dailyAttendance?.user?.workerName || "-",
           detail: `${daysAgo}일 연속 미확인 근태 — 『${issue.dailyAttendance?.site?.companyName || ""}』`,
           severity: daysAgo >= 7 ? "high" : "medium",
         });
@@ -115,7 +115,7 @@ export async function GET(req: Request) {
       riskAlerts.push({
         type: "document", label: "[보고서]",
         target: r.site?.companyName || "-",
-        detail: `${docTypeLabel(r.docType)} 미제출(D+${daysOver}) — 『${r.worker?.userName || ""}』`,
+        detail: `${docTypeLabel(r.docType)} 미제출(D+${daysOver}) — 『${r.worker?.workerName || ""}』`,
         severity: daysOver >= 7 ? "high" : "medium",
       });
     }
@@ -126,7 +126,7 @@ export async function GET(req: Request) {
         : 0;
       riskAlerts.push({
         type: "assignment", label: "[배정]",
-        target: a.user?.userName || "-",
+        target: a.user?.workerName || "-",
         detail: `배정 종료 D-${daysLeft} — 『${a.site?.companyName || ""}』`,
         severity: daysLeft <= 3 ? "high" : "medium",
       });
@@ -163,7 +163,7 @@ export async function GET(req: Request) {
         },
         attendanceIssueList: unconfirmedIssues.slice(0, 10).map(i => ({
           id: i.id.toString(),
-          userName: i.dailyAttendance?.user?.userName || "-",
+          workerName: i.dailyAttendance?.user?.workerName || "-",
           siteName: i.dailyAttendance?.site?.companyName || "-",
           workDate: i.dailyAttendance?.workDate || "-",
           issueTypes: i.issueTypes,
@@ -173,7 +173,7 @@ export async function GET(req: Request) {
           id: r.id.toString(),
           docType: r.docType,
           docTypeLabel: docTypeLabel(r.docType),
-          workerName: r.worker?.userName || "-",
+          workerName: r.worker?.workerName || "-",
           siteName: r.site?.companyName || "-",
           dueAt: r.dueAt.toISOString(),
           isOverdue: r.dueAt <= now,
@@ -181,7 +181,7 @@ export async function GET(req: Request) {
         })),
         assignmentAlerts: endingSoonAssignments.slice(0, 8).map(a => ({
           id: a.id.toString(),
-          userName: a.user?.userName || "-",
+          workerName: a.user?.workerName || "-",
           siteName: a.site?.companyName || "-",
           endDate: a.endDate ? a.endDate.toISOString() : null,
           serviceStep: a.serviceStep,
@@ -192,7 +192,7 @@ export async function GET(req: Request) {
         riskAlerts: riskAlerts.slice(0, 20),
         todayList: todayAttendances.map(a => ({
           id: a.id.toString(),
-          userName: a.user?.userName || "-",
+          workerName: a.user?.workerName || "-",
           siteName: a.site?.companyName || "-",
           clockIn: a.startTime ? formatHHMM(a.startTime) : null,
           clockOut: a.endTime ? formatHHMM(a.endTime) : null,

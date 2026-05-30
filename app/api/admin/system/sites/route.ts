@@ -19,7 +19,7 @@ export async function GET(req: Request) {
         trainees: { where: { status: "TRAINING" }, select: { id: true } },
         assignments: {
           where: { status: { in: ["ACTIVE", "ASSIGNED", "CONFIRMED"] } },
-          include: { user: { select: { id: true, userName: true } } },
+          include: { user: { select: { id: true, workerName: true } } },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
         planType:    s.agency?.planType ?? null,
         traineeCount: s.trainees.length,
         workerCount:   s.assignments.length,
-        workers:      s.assignments.map(a => ({ id: a.user.id.toString(), name: a.user.userName })),
+        workers:      s.assignments.map(a => ({ id: a.user.id.toString(), name: a.user.workerName })),
         createdAt:   (s as any).createdAt?.toISOString() ?? null,
       })),
     });

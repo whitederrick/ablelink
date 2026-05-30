@@ -12,9 +12,9 @@ export async function GET(req: NextRequest) {
   const session = await getWorkerSessionFromReq(req);
   if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
-  const userId = BigInt(session.userId);
-  const setting = await prisma.userNotificationSetting.findUnique({
-    where: { userId },
+  const workerId = BigInt(session.workerId);
+  const setting = await prisma.workerNotificationSetting.findUnique({
+    where: { workerId },
     select: { clockInAlertMinutes: true, clockOutAlertMinutes: true, pushSubscription: true },
   });
 
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   const session = await getWorkerSessionFromReq(req);
   if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
-  const userId = BigInt(session.userId);
+  const workerId = BigInt(session.workerId);
   const body = await req.json();
 
   const clockInAlertMinutes  = typeof body.clockInAlertMinutes  === "number" ? Math.max(0, Math.min(60, body.clockInAlertMinutes))  : 3;
@@ -44,9 +44,9 @@ export async function POST(req: NextRequest) {
     data.pushSubscription = body.pushSubscription;
   }
 
-  await prisma.userNotificationSetting.upsert({
-    where: { userId },
-    create: { userId, ...data },
+  await prisma.workerNotificationSetting.upsert({
+    where: { workerId },
+    create: { workerId, ...data },
     update: data,
   });
 

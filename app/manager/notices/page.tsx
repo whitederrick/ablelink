@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Send, Bell, X, Users, User } from "lucide-react";
 
-type Worker  = { id: string; userName: string; siteName: string };
-type Notice = { id: string; userId: string; userName: string; title: string; body: string; type: string; read: boolean; createdAt: string };
+type Worker  = { id: string; workerName: string; siteName: string };
+type Notice = { id: string; workerId: string; workerName: string; title: string; body: string; type: string; read: boolean; createdAt: string };
 
 const TYPE_OPTS = [
   { val:"INFO",   label:"일반 안내",  cls:"bg-sky-100 text-sky-700" },
@@ -37,7 +37,7 @@ export default function NoticesPage() {
   useEffect(()=>{
     fetch("/api/admin/workers?pageSize=200").then(r=>r.json())
       .then(d=>{
-        if(d.success) setWorkers(d.data?.map((c:any)=>({id:c.id,userName:c.userName,siteName:c.currentSiteName??c.siteName??""}))||[]);
+        if(d.success) setWorkers(d.data?.map((c:any)=>({id:c.id,workerName:c.workerName,siteName:c.currentSiteName??c.siteName??""}))||[]);
       }).catch(()=>{}).finally(()=>setLoading(false));
     loadNotices();
   },[loadNotices]);
@@ -101,7 +101,7 @@ export default function NoticesPage() {
                         setSelectedWorkers(next);
                       }}
                       className="h-4 w-4 accent-slate-950"/>
-                    <span className="text-sm font-semibold text-slate-800">{c.userName}</span>
+                    <span className="text-sm font-semibold text-slate-800">{c.workerName}</span>
                     {c.siteName&&<span className="text-xs text-slate-400">{c.siteName}</span>}
                   </label>
                 ))}
@@ -155,7 +155,7 @@ export default function NoticesPage() {
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${t?.cls??"bg-slate-100 text-slate-600"}`}>{t?.label??n.type}</span>
                       {!n.read&&<span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-black text-rose-600">미확인</span>}
                     </div>
-                    <p className="mt-0.5 text-xs text-slate-500">수신: {n.userName}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">수신: {n.workerName}</p>
                     <p className="mt-1 text-sm text-slate-600 leading-relaxed">{n.body}</p>
                   </div>
                   <p className="text-[11px] text-slate-400 shrink-0">{new Date(n.createdAt).toLocaleDateString("ko-KR")}</p>

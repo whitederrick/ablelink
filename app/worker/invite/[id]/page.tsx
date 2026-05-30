@@ -76,7 +76,7 @@ export default function InvitePage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "signup",
-          code, userName: name, password: pw,
+          code, workerName: name, password: pw,
           consentTerms, consentPrivacy, consentLocation,
         }),
       });

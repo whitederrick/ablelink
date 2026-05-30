@@ -10,29 +10,29 @@ beforeAll(() => {
 
 describe("signWorkerToken / verifyWorkerToken", () => {
   it("정상 토큰 발급 후 검증 성공", async () => {
-    const token = await signWorkerToken({ userId: "100", userName: "홍길동" });
+    const token = await signWorkerToken({ workerId: "100", workerName: "홍길동" });
     const result = await verifyWorkerToken(token);
 
     expect(result).not.toBeNull();
-    expect(result!.userId).toBe("100");
-    expect(result!.userName).toBe("홍길동");
+    expect(result!.workerId).toBe("100");
+    expect(result!.workerName).toBe("홍길동");
   });
 
   it("isTemporary 필드 포함", async () => {
-    const token = await signWorkerToken({ userId: "200", userName: "임시사용자", isTemporary: true });
+    const token = await signWorkerToken({ workerId: "200", workerName: "임시사용자", isTemporary: true });
     const result = await verifyWorkerToken(token);
     expect(result!.isTemporary).toBe(true);
   });
 
   it("잘못된 서명 → null 반환", async () => {
-    const token = await signWorkerToken({ userId: "1", userName: "test" });
+    const token = await signWorkerToken({ workerId: "1", workerName: "test" });
     const tampered = token.slice(0, -5) + "XXXXX";
     expect(await verifyWorkerToken(tampered)).toBeNull();
   });
 
   it("만료된 토큰 → null 반환", async () => {
     const key = new TextEncoder().encode(WORKER_SECRET);
-    const expired = await new SignJWT({ userId: "1", userName: "test", role: "COACH" })
+    const expired = await new SignJWT({ workerId: "1", workerName: "test", role: "WORKER" })
       .setProtectedHeader({ alg: "HS256" })
       .setAudience("ablelink-worker")
       .setIssuedAt()
@@ -43,7 +43,7 @@ describe("signWorkerToken / verifyWorkerToken", () => {
 
   it("[보안] audience 없는 구 토큰 → null 반환 (fallback 제거 확인)", async () => {
     const key = new TextEncoder().encode(WORKER_SECRET);
-    const oldToken = await new SignJWT({ userId: "1", userName: "test", role: "COACH" })
+    const oldToken = await new SignJWT({ workerId: "1", workerName: "test", role: "WORKER" })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
       .setExpirationTime("7d")
@@ -51,9 +51,9 @@ describe("signWorkerToken / verifyWorkerToken", () => {
     expect(await verifyWorkerToken(oldToken)).toBeNull();
   });
 
-  it("[보안] role이 COACH 아닌 토큰 → null 반환", async () => {
+  it("[보안] role이 WORKER 아닌 토큰 → null 반환", async () => {
     const key = new TextEncoder().encode(WORKER_SECRET);
-    const adminToken = await new SignJWT({ userId: "1", userName: "admin", role: "ADMIN" })
+    const adminToken = await new SignJWT({ workerId: "1", workerName: "admin", role: "ADMIN" })
       .setProtectedHeader({ alg: "HS256" })
       .setAudience("ablelink-worker")
       .setIssuedAt()
@@ -64,7 +64,7 @@ describe("signWorkerToken / verifyWorkerToken", () => {
 
   it("[보안] Admin 시크릿으로 서명된 Worker 토큰 → null 반환", async () => {
     const adminKey = new TextEncoder().encode("different-admin-secret-32chars!!!");
-    const forgedToken = await new SignJWT({ userId: "1", userName: "attacker", role: "COACH" })
+    const forgedToken = await new SignJWT({ workerId: "1", workerName: "attacker", role: "WORKER" })
       .setProtectedHeader({ alg: "HS256" })
       .setAudience("ablelink-worker")
       .setIssuedAt()

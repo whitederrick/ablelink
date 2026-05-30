@@ -22,7 +22,7 @@ export async function PATCH(
     });
 
     if (!log) return NextResponse.json({ success: false, message: "일지를 찾을 수 없습니다." }, { status: 404 });
-    if (log.writerId.toString() !== session.userId)
+    if (log.writerId.toString() !== session.workerId)
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
 
     if (unconfirm) {

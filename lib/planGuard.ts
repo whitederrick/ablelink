@@ -46,14 +46,14 @@ function planAllows(plan: string, feature: PremiumFeature): boolean {
   return false; // FREE, TRIAL (만료)
 }
 
-// ─── Worker 측: userId 기준 ──────────────────────────────────────
+// ─── Worker 측: workerId 기준 ──────────────────────────────────────
 
 export async function checkPlanAccess(
-  userId: bigint,
+  workerId: bigint,
   feature: PremiumFeature
 ): Promise<PlanCheckResult> {
   const assignment = await prisma.siteAssignment.findFirst({
-    where: { userId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+    where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
     include: { agency: true },
     orderBy: { startDate: "desc" },
   });

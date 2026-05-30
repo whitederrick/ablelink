@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
             agency:      { planType: { in: ["STARTER", "STANDARD", "PRO", "TRIAL"] } },
           },
           include: {
-            user:   { select: { phoneNumber: true, userName: true } },
+            user:   { select: { phoneNumber: true, workerName: true } },
             agency: { select: { planType: true, trialEndsAt: true } },
           },
         });
@@ -89,16 +89,16 @@ export async function GET(req: NextRequest) {
             if (!trialEnd || trialEnd < now) continue;
           }
 
-          const { userName, phoneNumber } = contract.user;
+          const { workerName, phoneNumber } = contract.user;
           const contractEndStr = contract.contractEnd.toISOString().slice(0, 10);
           const siteName = contract.siteName || contract.workerFilledSiteName || "-";
 
           try {
             await sendAlimtalk({
-              phone: phoneNumber, name: userName, templateCode,
+              phone: phoneNumber, name: workerName, templateCode,
               subject: "AbleLink 계약 만료 안내",
               message:
-                `안녕하세요 ${userName}님,\n\n` +
+                `안녕하세요 ${workerName}님,\n\n` +
                 `AbleLink 근로계약 만료 D-${offsetDays} 안내입니다.\n\n` +
                 `사업장: ${siteName}\n` +
                 `계약 종료일: ${contractEndStr}\n\n` +

@@ -1,6 +1,6 @@
 // app/api/admin/audit-package/route.ts
 // 감사 대응 서류 패키지 — STANDARD+
-// GET /api/admin/audit-package?workerUserId=X&periodStart=YYYY-MM-DD&periodEnd=YYYY-MM-DD
+// GET /api/admin/audit-package?workerId=X&periodStart=YYYY-MM-DD&periodEnd=YYYY-MM-DD
 
 export const runtime = "nodejs";
 
@@ -57,23 +57,23 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const workerUserId = searchParams.get("workerUserId");
+    const workerIdRaw = searchParams.get("workerId");
     const periodStart = searchParams.get("periodStart") || new Date().toISOString().slice(0, 10);
     const periodEnd   = searchParams.get("periodEnd")   || periodStart;
 
-    if (!workerUserId) {
-      return NextResponse.json({ success: false, message: "workerUserId 필요" }, { status: 400 });
+    if (!workerIdRaw) {
+      return NextResponse.json({ success: false, message: "workerId 필요" }, { status: 400 });
     }
 
-    const userId = BigInt(workerUserId);
+    const workerId = BigInt(workerIdRaw);
 
     // 직무지도원 + 배정 조회
     const user = await prisma.worker.findUnique({
-      where: { id: userId },
-      select: { userName: true, phoneNumber: true, signatureUrl: true, loginId: true },
+      where: { id: workerId },
+      select: { workerName: true, phoneNumber: true, signatureUrl: true, loginId: true },
     });
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId, agencyId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      where: { workerId, agencyId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
       include: { site: true },
       orderBy: { assignedAt: "desc" },
     });
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
     // 서명 이미지 로드
     const workerImg = await toBase64DataUri(user?.signatureUrl);
     const sigs = {
-      worker:          { name: user?.userName || "", imageUrl: workerImg },
+      worker:          { name: user?.workerName || "", imageUrl: workerImg },
       govAgent:       { name: "", imageUrl: undefined },
       agencyAgent:    { name: "", imageUrl: undefined },
       companyManager: { name: "", imageUrl: undefined },
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
 
     // 출근부용 데이터
     const attendances = await prisma.dailyAttendance.findMany({
-      where: { userId, workDate: { gte: start, lte: end } },
+      where: { workerId, workDate: { gte: start, lte: end } },
       include: { logs: { select: { time1on1: true, timeGroup: true, extTime1on1: true, extTimeGroup: true } } },
       orderBy: { workDate: "asc" },
     });
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
       const totalHours  = entries.reduce((s, e) => s + e.hours,      0);
       const oneToMany   = entries.reduce((s, e) => s + e.multiHours, 0);
       const payload = {
-        workerName:  user?.userName || "", workerPhone: user?.phoneNumber || user?.loginId || "",
+        workerName:  user?.workerName || "", workerPhone: user?.phoneNumber || user?.loginId || "",
         companyName: site.companyName, periodStartYMD: fmtDot(start), periodEndYMD: fmtDot(end),
         totalDays: entries.length, totalHours, weeklyHolidayCount: 0, monthlyLeaveCount: 0,
         allowanceTotalWon: "0", oneToOneHours: totalHours - oneToMany, oneToManyHours: oneToMany,
@@ -141,18 +141,18 @@ export async function GET(request: NextRequest) {
       // 4개 쿼리 병렬
       const [trainingLogs, trainingEv, adaptLogs, adaptEv] = await Promise.all([
         prisma.traineeLog.findMany({
-          where: { writerId: userId, traineeId: tid, trainingType: { in: ["PRE", "FIELD"] }, attendance: { workDate: { gte: start, lte: end } } },
+          where: { writerId: workerId, traineeId: tid, trainingType: { in: ["PRE", "FIELD"] }, attendance: { workDate: { gte: start, lte: end } } },
           include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
         }),
         prisma.traineeEvaluation.findFirst({
-          where: { traineeId: tid, writerId: userId, evalType: "TRAINING" }, orderBy: { updatedAt: "desc" },
+          where: { traineeId: tid, writerId: workerId, evalType: "TRAINING" }, orderBy: { updatedAt: "desc" },
         }),
         prisma.traineeLog.findMany({
-          where: { writerId: userId, traineeId: tid, trainingType: "ADAPTATION", attendance: { workDate: { gte: start, lte: end } } },
+          where: { writerId: workerId, traineeId: tid, trainingType: "ADAPTATION", attendance: { workDate: { gte: start, lte: end } } },
           include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
         }),
         prisma.traineeEvaluation.findFirst({
-          where: { traineeId: tid, writerId: userId, evalType: "ADAPTATION" }, orderBy: { updatedAt: "desc" },
+          where: { traineeId: tid, writerId: workerId, evalType: "ADAPTATION" }, orderBy: { updatedAt: "desc" },
         }),
       ]);
 
@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
 
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 
-    const workerName = safeFilename(user?.userName || workerUserId);
+    const workerName = safeFilename(user?.workerName || workerIdRaw);
     const filename  = `감사서류_${workerName}_${start}_${end}.zip`;
 
     return new NextResponse(new Uint8Array(zipBuffer), {

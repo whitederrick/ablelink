@@ -24,13 +24,13 @@ export async function GET(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId");
+    const workerId = searchParams.get("workerId");
     const status = searchParams.get("status");
 
     const where: any = {};
     where.agencyId = scope.agencyId;
-    if (userId) {
-      try { where.userId = BigInt(userId); }
+    if (workerId) {
+      try { where.workerId = BigInt(workerId); }
       catch { return NextResponse.json({ success: false, message: "잘못된 userId입니다." }, { status: 400 }); }
     }
     const VALID_STATUSES = ["PENDING", "SIGNED", "COMPLETED", "CANCELLED"];
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       take: 50,
       include: {
-        user: { select: { userName: true, phoneNumber: true } },
+        user: { select: { workerName: true, phoneNumber: true } },
       },
     });
 
@@ -54,8 +54,8 @@ export async function GET(req: NextRequest) {
       success: true,
       items: rows.map(r => ({
         id: String(r.id),
-        userId: String(r.userId),
-        userName: r.user.userName,
+        workerId: String(r.workerId),
+        workerName: r.user.workerName,
         userPhone: r.user.phoneNumber,
         contractStart: r.contractStart.toISOString(),
         contractEnd: r.contractEnd.toISOString(),
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const {
-      userId,       // 검색 팝업에서 선택한 기존 유저 ID (선택)
+      workerId,       // 검색 팝업에서 선택한 기존 유저 ID (선택)
       manualName,   // 수동 입력: 이름
       manualPhone,  // 수동 입력: 전화번호
       contractStart, contractEnd,
@@ -108,9 +108,9 @@ export async function POST(req: NextRequest) {
     // ─── 직무지도원 유저 확정 ─────────────────────────────────────
     let userIdBig: bigint;
 
-    if (userId) {
+    if (workerId) {
       // 이력 검색에서 선택한 기존 유저
-      try { userIdBig = BigInt(userId); }
+      try { userIdBig = BigInt(workerId); }
       catch { throw new Error("VALIDATION:잘못된 userId입니다."); }
     } else {
       // 수동 입력: 이름 + 전화번호 필수
@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
             data: {
               loginId,
               password: await hash(randomUUID(), 12), // 서명 완료 시 readable 임시 비밀번호로 교체됨
-              userName: name,
+              workerName: name,
               phoneNumber: phone,
               role: "WORKER",
               status: "ACTIVE",
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
               data: {
                 loginId: `${baseLogin}_${Date.now()}`,
                 password: await hash(randomUUID(), 12),
-                userName: name,
+                workerName: name,
                 phoneNumber: phone,
                 role: "WORKER",
                 status: "ACTIVE",
@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
     const contract = await prisma.employmentContract.create({
       data: {
         agencyId,
-        userId: userIdBig,
+        workerId: userIdBig,
         contractStart: startDate,
         contractEnd: endDate,
         siteName: siteName || null,
@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
     let kakaoError: string | undefined;
 
     try {
-      await sendKakaoAlimtalk({ userId: userIdBig, contractUrl, contractId: String(contract.id) });
+      await sendKakaoAlimtalk({ workerId: userIdBig, contractUrl, contractId: String(contract.id) });
       kakaoSent = true;
       await prisma.employmentContract.update({
         where: { id: contract.id },
@@ -247,21 +247,21 @@ export async function POST(req: NextRequest) {
 }
 
 // ── 카카오 알림톡: 계약서 서명 요청 ────────────────────────────
-async function sendKakaoAlimtalk(params: { userId: bigint; contractUrl: string; contractId: string }) {
+async function sendKakaoAlimtalk(params: { workerId: bigint; contractUrl: string; contractId: string }) {
   const templateCode = process.env.KAKAO_CONTRACT_TEMPLATE_CODE;
   if (!templateCode) throw new Error("KAKAO_CONTRACT_TEMPLATE_CODE 미설정");
 
   const user = await prisma.worker.findUnique({
-    where: { id: params.userId },
-    select: { phoneNumber: true, userName: true },
+    where: { id: params.workerId },
+    select: { phoneNumber: true, workerName: true },
   });
   if (!user) throw new Error("사용자를 찾을 수 없습니다.");
 
   await sendAlimtalk({
-    phone: user.phoneNumber, name: user.userName,
+    phone: user.phoneNumber, name: user.workerName,
     templateCode,
     subject: "근로계약서 서명 요청",
-    message: `안녕하세요 ${user.userName}님,\n\nAbleLink 근로계약서 서명을 요청드립니다.\n아래 링크에서 확인 후 서명해 주세요.\n\n${params.contractUrl}\n\n링크는 7일간 유효합니다.`,
+    message: `안녕하세요 ${user.workerName}님,\n\nAbleLink 근로계약서 서명을 요청드립니다.\n아래 링크에서 확인 후 서명해 주세요.\n\n${params.contractUrl}\n\n링크는 7일간 유효합니다.`,
     buttons: [{ name: "계약서 서명하기", linkType: "WL", linkMo: params.contractUrl, linkPc: params.contractUrl }],
   });
 }

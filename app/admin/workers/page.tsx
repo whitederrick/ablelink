@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Search, KeyRound, UserX, UserCheck } from "lucide-react";
 
 type Worker = {
-  id: string; loginId: string; userName: string; phoneNumber: string;
+  id: string; loginId: string; workerName: string; phoneNumber: string;
   status: string; planType: string; siteName: string|null;
   agencyId: string|null; agencyName: string|null; createdAt: string;
 };
@@ -106,7 +106,7 @@ export default function WorkersPage() {
               {workers.length===0?(<tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">직무지도원이 없습니다.</td></tr>)
               :workers.map(c=>(
                 <tr key={c.id} className={`hover:bg-slate-50 transition ${c.status!=="ACTIVE"?"opacity-60":""}`}>
-                  <td className="px-4 py-3"><p className="font-semibold text-slate-900">{c.userName}</p><p className="text-xs text-slate-400">{c.loginId}</p></td>
+                  <td className="px-4 py-3"><p className="font-semibold text-slate-900">{c.workerName}</p><p className="text-xs text-slate-400">{c.loginId}</p></td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{c.phoneNumber}</td>
                   <td className="px-4 py-3">{c.agencyName?<span className="text-sm font-semibold text-slate-700">{c.agencyName}</span>:<span className="text-slate-300 text-xs">미배정</span>}</td>
                   <td className="px-4 py-3">{c.siteName?<span className="text-xs text-slate-600">{c.siteName}</span>:<span className="text-slate-300 text-xs">없음</span>}</td>

@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
   const user = await prisma.worker.findUnique({
-    where:  { id: BigInt(session.userId) },
-    select: { id: true, userName: true, phoneNumber: true, loginId: true, isTemporary: true },
+    where:  { id: BigInt(session.workerId) },
+    select: { id: true, workerName: true, phoneNumber: true, loginId: true, isTemporary: true },
   });
   if (!user) return NextResponse.json({ success: false, message: "사용자를 찾을 수 없습니다." }, { status: 404 });
 
@@ -27,17 +27,17 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { userName, phoneNumber, currentPassword, newPassword } = body;
+    const { workerName, phoneNumber, currentPassword, newPassword } = body;
 
     const user = await prisma.worker.findUnique({
-      where:  { id: BigInt(session.userId) },
-      select: { id: true, password: true, userName: true, phoneNumber: true },
+      where:  { id: BigInt(session.workerId) },
+      select: { id: true, password: true, workerName: true, phoneNumber: true },
     });
     if (!user) return NextResponse.json({ success: false, message: "사용자를 찾을 수 없습니다." }, { status: 404 });
 
     const updates: Record<string, any> = {};
 
-    if (userName && userName.trim()) updates.userName = userName.trim();
+    if (workerName && workerName.trim()) updates.workerName = workerName.trim();
 
     if (phoneNumber) {
       const cleaned = phoneNumber.replace(/-/g, "");
@@ -72,14 +72,14 @@ export async function PATCH(req: NextRequest) {
     const updated = await prisma.worker.update({
       where:  { id: user.id },
       data:   updates,
-      select: { id: true, userName: true, phoneNumber: true },
+      select: { id: true, workerName: true, phoneNumber: true },
     });
 
     // 세션 토큰 갱신 (이름/전화번호 변경 반영)
     const res = NextResponse.json({ success: true });
     const newToken = await signWorkerToken({
-      userId:      updated.id.toString(),
-      userName:    updated.userName,
+      workerId:      updated.id.toString(),
+      workerName:    updated.workerName,
       isTemporary: false,
     });
     res.cookies.set({

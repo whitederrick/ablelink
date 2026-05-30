@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const prevLog = await prisma.traineeLog.findFirst({
       where: {
         traineeId: BigInt(traineeId),
-        writerId: BigInt(session.userId),
+        writerId: BigInt(session.workerId),
       },
       include: { tasks: { take: 1 } },
       orderBy: { id: "desc" },

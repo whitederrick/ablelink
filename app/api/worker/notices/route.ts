@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const notices: any[] = await (prisma as any).workerNotice.findMany({
-      where: { userId: BigInt(session.userId) },
+      where: { workerId: BigInt(session.workerId) },
       orderBy: { createdAt: "desc" },
       take: 20,
       select: { id: true, title: true, body: true, type: true, yearMonth: true, readAt: true, createdAt: true },

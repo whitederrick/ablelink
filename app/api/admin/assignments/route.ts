@@ -22,7 +22,7 @@ function isValidNumericId(s: string) {
 function toItem(r: any) {
   return {
     id: String(r.id),
-    userId: String(r.userId),
+    workerId: String(r.workerId),
     siteId: String(r.siteId),
     status: r.status,
     startDate: r.startDate?.toISOString?.() ?? r.startDate ?? null,
@@ -49,7 +49,7 @@ function toItem(r: any) {
     user: r.user
       ? {
           id: String(r.user.id),
-          userName: r.user.userName,
+          workerName: r.user.workerName,
           loginId: r.user.loginId,
           phoneNumber: r.user.phoneNumber,
           role: r.user.role,
@@ -60,14 +60,14 @@ function toItem(r: any) {
 }
 
 // GET: 간단 조회(필요 최소)
-// - 필터: siteId, userId, status
+// - 필터: siteId, workerId, status
 export async function GET(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
 
     const { searchParams } = new URL(req.url);
     const siteIdStr = (searchParams.get("siteId") || "").trim();
-    const userIdStr = (searchParams.get("userId") || "").trim();
+    const userIdStr = (searchParams.get("workerId") || "").trim();
     const status = (searchParams.get("status") || "").trim();
 
     const where: any = {};
@@ -76,8 +76,8 @@ export async function GET(req: NextRequest) {
       where.siteId = BigInt(siteIdStr);
     }
     if (userIdStr) {
-      if (!isValidNumericId(userIdStr)) throw new Error("VALIDATION:userId");
-      where.userId = BigInt(userIdStr);
+      if (!isValidNumericId(userIdStr)) throw new Error("VALIDATION:workerId");
+      where.workerId = BigInt(userIdStr);
     }
     if (status) where.status = status;
 
@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
       take: 50,
       select: {
         id: true,
-        userId: true,
+        workerId: true,
         siteId: true,
         status: true,
         startDate: true,
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
         assignedByManagerId: true,
         site: { select: { id: true, companyName: true, address: true, agencyId: true } },
         user: {
-          select: { id: true, userName: true, loginId: true, phoneNumber: true, role: true, status: true },
+          select: { id: true, workerName: true, loginId: true, phoneNumber: true, role: true, status: true },
         },
         workType: true,
         commuteGuidanceIncluded: true,
@@ -122,20 +122,20 @@ export async function GET(req: NextRequest) {
 }
 
 // POST: 배정 생성 (ASSIGNED)
-// body: { siteId, userId, isMainWorker?, memo? }
+// body: { siteId, workerId, isMainWorker?, memo? }
 export async function POST(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
 
     const body = await req.json();
     const siteIdStr = String(body.siteId ?? "").trim();
-    const userIdStr = String(body.userId ?? "").trim();
+    const userIdStr = String(body.workerId ?? "").trim();
 
     if (!isValidNumericId(siteIdStr)) throw new Error("VALIDATION:siteId");
-    if (!isValidNumericId(userIdStr)) throw new Error("VALIDATION:userId");
+    if (!isValidNumericId(userIdStr)) throw new Error("VALIDATION:workerId");
 
     const siteId = BigInt(siteIdStr);
-    const userId = BigInt(userIdStr);
+    const workerId = BigInt(userIdStr);
 
     // 배정하려는 site가 내 agency 소속인지 검증
     const myAgencyId = scope.agencyId;
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
 
     // 배정 대상 user 존재 확인
     const user = await prisma.worker.findUnique({
-      where: { id: userId },
+      where: { id: workerId },
       select: { status: true },
     });
     if (!user) throw new Error("NOT_FOUND");
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
 
     // 동일 site/user에 “활성 배정”이 이미 있으면 중복 방지(정책)
     const dup = await prisma.siteAssignment.findFirst({
-      where: { siteId, userId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      where: { siteId, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
       select: { id: true },
     });
     if (dup) throw new Error("VALIDATION:alreadyAssigned");
@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
     const created = await prisma.siteAssignment.create({
       data: {
         siteId,
-        userId,
+        workerId,
         status: "ASSIGNED",
         isMainWorker,
         assignedAt: new Date(),
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
       },
       select: {
         id: true,
-        userId: true,
+        workerId: true,
         siteId: true,
         status: true,
         startDate: true,
@@ -209,7 +209,7 @@ export async function POST(req: NextRequest) {
         assignedByManagerId: true,
         site: { select: { id: true, companyName: true, address: true, agencyId: true } },
         user: {
-          select: { id: true, userName: true, loginId: true, phoneNumber: true, role: true, status: true },
+          select: { id: true, workerName: true, loginId: true, phoneNumber: true, role: true, status: true },
         },
       },
     });

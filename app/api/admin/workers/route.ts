@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
-import { AssignStatus, UserRole, Prisma } from "@prisma/client";
+import { AssignStatus, WorkerRole, Prisma } from "@prisma/client";
 
 function parseIntSafe(v: string | null, fallback: number) {
   const n = Number(v);
@@ -53,11 +53,11 @@ export async function GET(req: NextRequest) {
     }
 
     const where: Prisma.WorkerWhereInput = {
-      role: UserRole.WORKER,
+      role: WorkerRole.WORKER,
       ...(q
         ? {
             OR: [
-              { userName: { contains: q, mode: "insensitive" } },
+              { workerName: { contains: q, mode: "insensitive" } },
               { loginId: { contains: q, mode: "insensitive" } },
               { phoneNumber: { contains: q, mode: "insensitive" } },
             ],
@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
         select: {
           id: true,
           loginId: true,
-          userName: true,
+          workerName: true,
           phoneNumber: true,
           status: true,
           planType: true,
@@ -126,7 +126,7 @@ export async function GET(req: NextRequest) {
       data: rows.map((u) => ({
         id: String(u.id),
         loginId: u.loginId,
-        userName: u.userName,
+        workerName: u.workerName,
         phoneNumber: u.phoneNumber,
         status: String(u.status),
         planType: String(u.planType),

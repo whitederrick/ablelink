@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const phone    = String(body?.phoneNumber ?? "").replace(/-/g, "").trim();
-    const name     = String(body?.userName    ?? "").trim();
+    const name     = String(body?.workerName    ?? "").trim();
     const password = String(body?.password    ?? "");
     const consentTerms    = body?.consentTerms    === true;
     const consentPrivacy  = body?.consentPrivacy  === true;
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       data: {
         loginId:          phone,
         password:         hashed,
-        userName:         name,
+        workerName:         name,
         phoneNumber:      phone,
         role:             "WORKER",
         status:           "ACTIVE",
@@ -66,8 +66,8 @@ export async function POST(request: Request) {
     await prisma.phoneVerification.deleteMany({ where: { phoneNumber: phone } });
 
     // 자동 로그인
-    const token = await signWorkerToken({ userId: user.id.toString(), userName: user.userName, isTemporary: false });
-    const res = NextResponse.json({ success: true, userId: user.id.toString() });
+    const token = await signWorkerToken({ workerId: user.id.toString(), workerName: user.workerName, isTemporary: false });
+    const res = NextResponse.json({ success: true, workerId: user.id.toString() });
     res.cookies.set(WORKER_COOKIE, token, {
       httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 7,
     });

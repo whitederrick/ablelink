@@ -74,7 +74,7 @@ export async function POST(request: Request) {
 
     const activeAssignment = await prisma.siteAssignment.findFirst({
       where: {
-        userId: user.id,
+        workerId: user.id,
         status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] },
         startDate: { lte: today },
         OR: [{ endDate: null }, { endDate: { gte: today } }],
@@ -85,8 +85,8 @@ export async function POST(request: Request) {
 
     // JWT 발급
     const token = await signWorkerToken({
-      userId: user.id.toString(),
-      userName: user.userName,
+      workerId: user.id.toString(),
+      workerName: user.workerName,
       isTemporary: user.isTemporary,
     });
 
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       success: true,
       user: {
         id: user.id.toString(),
-        userName: user.userName,
+        workerName: user.workerName,
         planType: user.planType,
       },
       hasActiveSite: !!activeAssignment,

@@ -21,15 +21,15 @@ export async function GET(req: NextRequest) {
       ? { agencyId: scope.agencyId }
       : {};
 
-    // 에이전시 내 배정 목록으로 접근 가능한 userId 범위 결정
+    // 에이전시 내 배정 목록으로 접근 가능한 workerId 범위 결정
     const assignments = scope.agencyId
       ? await prisma.siteAssignment.findMany({
           where: { agencyId: scope.agencyId, status: { in: ["ACTIVE","ASSIGNED","CONFIRMED"] } },
-          select: { userId: true },
+          select: { workerId: true },
         })
       : [];
     const allowedUserIds = scope.agencyId
-      ? assignments.map(a => a.userId)
+      ? assignments.map(a => a.workerId)
       : undefined; // ADMIN은 전체
 
     const logs = await prisma.traineeLog.findMany({
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
       },
       include: {
         trainee:    { select: { id: true, name: true, gender: true } },
-        writer:     { select: { id: true, userName: true } },
+        writer:     { select: { id: true, workerName: true } },
         attendance: { select: { workDate: true, site: { select: { companyName: true } } } },
         tasks:      { take: 1 },
       },
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
         traineeId:    l.traineeId.toString(),
         traineeName:  l.trainee.name,
         writerId:     l.writerId.toString(),
-        workerName:    l.writer.userName,
+        workerName:    l.writer.workerName,
         siteName:     l.attendance.site?.companyName ?? "",
         workDate:     l.attendance.workDate,
         trainingType: l.trainingType,

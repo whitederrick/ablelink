@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, AlertTriangle, Lock, LockOpen } from "lucide-react";
 
 type ReviewRow = {
-  userId: string;
-  userName: string;
+  workerId: string;
+  workerName: string;
   phoneNumber: string;
   siteName: string;
   attendance:  { total: number; confirmed: number };
@@ -33,7 +33,7 @@ function ProgressBadge({ confirmed, total }: { confirmed: number; total: number 
   );
 }
 
-type RejectModal = { userId: string; userName: string } | null;
+type RejectModal = { workerId: string; workerName: string } | null;
 
 export default function AdminReviewPage() {
   const [yearMonth, setYearMonth]   = useState(nowYM());
@@ -54,7 +54,7 @@ export default function AdminReviewPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        userId:    rejectModal.userId,
+        workerId:    rejectModal.workerId,
         title:     `[반려] ${yearMonth} 기록 수정 요청`,
         body:      rejectMsg.trim(),
         type:      "REJECT",
@@ -66,7 +66,7 @@ export default function AdminReviewPage() {
     if (data.success) {
       setRejectModal(null);
       setRejectMsg("");
-      showToast(`${rejectModal.userName}에게 반려 알림을 발송했습니다.`);
+      showToast(`${rejectModal.workerName}에게 반려 알림을 발송했습니다.`);
     } else {
       showToast(data.message || "발송 실패");
     }
@@ -93,19 +93,19 @@ export default function AdminReviewPage() {
   ).length;
 
   async function toggleLock(r: ReviewRow) {
-    setLocking(r.userId);
+    setLocking(r.workerId);
     const method = r.isManagerFinalLocked ? "DELETE" : "POST";
     const res    = await fetch("/api/admin/final-lock", {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: r.userId, yearMonth }),
+      body: JSON.stringify({ workerId: r.workerId, yearMonth }),
     });
     const data = await res.json();
     setLocking(null);
     if (data.success) {
       showToast(r.isManagerFinalLocked
-        ? `${r.userName} 잠금이 해제되었습니다.`
-        : `${r.userName} ${yearMonth} 출근기록이 최종 확정되었습니다.`);
+        ? `${r.workerName} 잠금이 해제되었습니다.`
+        : `${r.workerName} ${yearMonth} 출근기록이 최종 확정되었습니다.`);
       // 목록 새로고침
       setLoading(true);
       fetch(`/api/admin/review?yearMonth=${yearMonth}`)
@@ -190,9 +190,9 @@ export default function AdminReviewPage() {
                   r.logs.confirmed >= r.logs.total &&
                   (r.evaluations.total === 0 || r.evaluations.confirmed >= r.evaluations.total);
                 return (
-                  <tr key={r.userId} className="hover:bg-slate-50">
+                  <tr key={r.workerId} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <p className="font-black text-slate-900">{r.userName}</p>
+                      <p className="font-black text-slate-900">{r.workerName}</p>
                       <p className="text-xs font-semibold text-slate-400">{r.phoneNumber}</p>
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-slate-600">{r.siteName}</td>
@@ -214,7 +214,7 @@ export default function AdminReviewPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button
-                        onClick={() => { setRejectModal({ userId: r.userId, userName: r.userName }); setRejectMsg(""); }}
+                        onClick={() => { setRejectModal({ workerId: r.workerId, workerName: r.workerName }); setRejectMsg(""); }}
                         disabled={r.isManagerFinalLocked}
                         className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-black text-rose-600 hover:bg-rose-100 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                       >
@@ -234,7 +234,7 @@ export default function AdminReviewPage() {
                           )}
                           <button
                             onClick={() => toggleLock(r)}
-                            disabled={locking === r.userId}
+                            disabled={locking === r.workerId}
                             className="mt-0.5 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-50 active:scale-95 disabled:opacity-50"
                           >
                             <LockOpen className="inline h-3 w-3 mr-0.5" />해제
@@ -243,11 +243,11 @@ export default function AdminReviewPage() {
                       ) : (
                         <button
                           onClick={() => toggleLock(r)}
-                          disabled={locking === r.userId || r.attendance.total === 0}
+                          disabled={locking === r.workerId || r.attendance.total === 0}
                           className="flex items-center gap-1 rounded-lg border border-slate-900 bg-slate-900 px-2.5 py-1.5 text-xs font-black text-white hover:bg-slate-700 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <Lock className="h-3 w-3" />
-                          {locking === r.userId ? "처리 중..." : "최종 확정"}
+                          {locking === r.workerId ? "처리 중..." : "최종 확정"}
                         </button>
                       )}
                     </td>
@@ -274,7 +274,7 @@ export default function AdminReviewPage() {
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="mb-1 text-base font-black text-slate-900">반려 알림 발송</h3>
             <p className="mb-4 text-sm font-semibold text-slate-400">
-              {rejectModal.userName}에게 수정 요청 메시지를 보냅니다. ({yearMonth})
+              {rejectModal.workerName}에게 수정 요청 메시지를 보냅니다. ({yearMonth})
             </p>
             <textarea
               value={rejectMsg}

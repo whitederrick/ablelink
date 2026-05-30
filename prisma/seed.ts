@@ -57,7 +57,7 @@ async function main() {
     create: {
       loginId: "worker01",
       password: await hash("worker1234!"),
-      userName: "김지도",
+      workerName: "김지도",
       phoneNumber: "010-1234-5678",
       planType: "PREMIUM",
       status: "ACTIVE",
@@ -94,7 +94,7 @@ async function main() {
     where: { id: BigInt(1) },
     update: {},
     create: {
-      userId: worker.id,
+      workerId: worker.id,
       siteId: site.id,
       agencyId: agency.id,
       assignedByManagerId: manager.id,
@@ -133,7 +133,7 @@ async function main() {
   if (!att1) {
     att1 = await prisma.dailyAttendance.create({
       data: {
-        userId:       worker.id,
+        workerId:       worker.id,
         siteId:       site.id,
         assignmentId: assignment.id,
         workDate:     todayStr,
@@ -153,7 +153,7 @@ async function main() {
   if (!att2) {
     att2 = await prisma.dailyAttendance.create({
       data: {
-        userId:       worker.id,
+        workerId:       worker.id,
         siteId:       site.id,
         assignmentId: assignment.id,
         workDate:     yestStr,

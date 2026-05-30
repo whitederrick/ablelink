@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     if (!session) return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
 
     const user = await prisma.worker.findUnique({
-      where: { id: BigInt(session.userId) },
+      where: { id: BigInt(session.workerId) },
       select: { signatureUrl: true },
     });
 
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     if (!session) return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
 
     // 🔐 PREMIUM 체크
-    const planCheck = await checkPlanAccess(BigInt(session.userId), "PDF_SIGN");
+    const planCheck = await checkPlanAccess(BigInt(session.workerId), "PDF_SIGN");
     if (!planCheck.allowed) {
       return NextResponse.json({ success: false, message: planCheck.message }, { status: 403 });
     }
@@ -52,12 +52,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: imgCheck.error }, { status: 400 });
     }
 
-    const userId = session.userId;
-    const fileName = `${userId}/signature_${Date.now()}.png`;
+    const workerId = session.workerId;
+    const fileName = `${workerId}/signature_${Date.now()}.png`;
 
     // 기존 서명 삭제 (있으면)
     const existing = await prisma.worker.findUnique({
-      where: { id: BigInt(userId) },
+      where: { id: BigInt(workerId) },
       select: { signatureUrl: true },
     });
 
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     // DB 업데이트
     await prisma.worker.update({
-      where: { id: BigInt(userId) },
+      where: { id: BigInt(workerId) },
       data: { signatureUrl: publicUrl },
     });
 
@@ -107,7 +107,7 @@ export async function DELETE(request: NextRequest) {
     if (!session) return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
 
     const user = await prisma.worker.findUnique({
-      where: { id: BigInt(session.userId) },
+      where: { id: BigInt(session.workerId) },
       select: { signatureUrl: true },
     });
 
@@ -117,7 +117,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     await prisma.worker.update({
-      where: { id: BigInt(session.userId) },
+      where: { id: BigInt(session.workerId) },
       data: { signatureUrl: null },
     });
 

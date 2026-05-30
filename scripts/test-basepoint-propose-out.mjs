@@ -5,7 +5,7 @@
 // 또는(Windows PowerShell):
 //   $env:BASE_URL="http://localhost:3000"; node scripts/test-basepoint-propose.mjs
 //
-// siteId/userId 및 좌표값은 반드시 본인 DB에 맞게 수정하세요.
+// siteId/workerId 및 좌표값은 반드시 본인 DB에 맞게 수정하세요.
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const ENDPOINT = `${BASE_URL}/api/site/basepoint/propose`;
@@ -16,7 +16,7 @@ const TESTS = [
     name: "WITHIN (<=100m) 기대: APPROVED/applied=true",
     body: {
       siteId: "1",
-      userId: "10",
+      workerId: "10",
       // 주의: 이 값이 'sites.gps_lat/gps_lon'과 100m 이내가 되도록 맞추세요.
       proposedLat: 37.5719,
       proposedLon: 126.9708,
@@ -28,7 +28,7 @@ const TESTS = [
     name: "OVER (>100m) 기대: CORRECTION_REQUESTED/applied=false",
     body: {
       siteId: "1",
-      userId: "1",
+      workerId: "1",
       // 주의: 원본과 충분히 떨어지게(>100m) 입력하세요.
       proposedLat: 37.5665,
       proposedLon: 126.9780,

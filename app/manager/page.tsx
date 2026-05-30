@@ -14,7 +14,7 @@ interface DashboardData {
     unassignedSiteList?: Array<{ id: string; companyName: string }>;
   };
   attendanceIssueList: Array<{
-    id: string; userName: string; siteName: string;
+    id: string; workerName: string; siteName: string;
     workDate: string; issueTypes: string[]; createdAt: string;
   }>;
   docList: Array<{
@@ -23,7 +23,7 @@ interface DashboardData {
     isOverdue: boolean; hasVersion: boolean;
   }>;
   assignmentAlerts: Array<{
-    id: string; userName: string; siteName: string;
+    id: string; workerName: string; siteName: string;
     endDate: string | null; serviceStep: string; daysLeft: number | null;
   }>;
   riskAlerts: Array<{
@@ -31,7 +31,7 @@ interface DashboardData {
     severity: "high" | "medium" | "low";
   }>;
   todayList: Array<{
-    id: string; userName: string; siteName: string;
+    id: string; workerName: string; siteName: string;
     clockIn: string | null; clockOut: string | null;
     isFinalClosed: boolean; isGpsModified: boolean;
     hasIssue: boolean; logStatus: "미작성" | "임시저장" | "완료";
@@ -254,7 +254,7 @@ export default function AdminDashboardPage() {
               onPopupClose={() => setPopup(null)}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
-                  <span><span className="font-black">{item.userName}</span> · {item.siteName}</span>
+                  <span><span className="font-black">{item.workerName}</span> · {item.siteName}</span>
                   <span className="text-slate-400">{item.workDate}</span>
                 </div>
               )}
@@ -269,7 +269,7 @@ export default function AdminDashboardPage() {
               onPopupClose={() => setPopup(null)}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
-                  <span><span className="font-black">{item.userName}</span> · {item.siteName}</span>
+                  <span><span className="font-black">{item.workerName}</span> · {item.siteName}</span>
                   <span className="text-slate-400">{item.workDate}</span>
                 </div>
               )}
@@ -338,7 +338,7 @@ export default function AdminDashboardPage() {
               onPopupClose={() => setPopup(null)}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
-                  <span><span className="font-black">{item.userName}</span> · {item.siteName}</span>
+                  <span><span className="font-black">{item.workerName}</span> · {item.siteName}</span>
                   <span className={`font-black ${(item.daysLeft ?? 99) <= 3 ? "text-rose-600" : "text-amber-600"}`}>
                     D-{item.daysLeft}
                   </span>
@@ -419,7 +419,7 @@ export default function AdminDashboardPage() {
                 {d.todayList.slice(0, 6).map(row => (
                   <div key={row.id} className="flex items-center justify-between border-b border-slate-50 py-2 last:border-b-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-black text-slate-900">{row.userName}</span>
+                      <span className="text-sm font-black text-slate-900">{row.workerName}</span>
                       {row.hasIssue && (
                         <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-black text-rose-600">이슈</span>
                       )}

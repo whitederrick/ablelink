@@ -8,7 +8,7 @@ import { List, Map as MapIcon, CalendarDays, Download, Wrench, Search, AlertTria
 const AttendanceMap = dynamic(() => import("./AttendanceMap"), { ssr: false });
 
 type CorrectionRecord = {
-  id: string; userName: string; siteName: string; agencyName: string;
+  id: string; workerName: string; siteName: string; agencyName: string;
   workDate: string; startTime: string | null; endTime: string | null;
   status: string; isFinalClosed: boolean; isGpsModified: boolean;
 };
@@ -77,7 +77,7 @@ function CorrectionTool() {
                 {rows.map(r => (
                   <tr key={r.id} className={T.trBase}>
                     <td className={T.td + " tabular-nums font-semibold"}>{r.workDate}</td>
-                    <td className={T.td}>{r.userName}</td>
+                    <td className={T.td}>{r.workerName}</td>
                     <td className={T.td + " text-slate-600"}>{r.siteName}</td>
                     <td className={T.td + " text-slate-500 text-xs"}>{r.agencyName}</td>
                     <td className={T.td + " tabular-nums"}>{r.startTime ?? "-"}</td>
@@ -110,7 +110,7 @@ type AttendanceItem = {
   startDistanceM: number | null; endDistanceM: number | null;
   withinRange: boolean | null; rangeM: number | null;
   site: { companyName: string } | null;
-  user: { userName: string; phoneNumber: string } | null;
+  user: { workerName: string; phoneNumber: string } | null;
 };
 
 type ViewMode = "list" | "map" | "monthly" | "correction";
@@ -159,7 +159,7 @@ function MonthlyView({ items, yearMonth }: { items: AttendanceItem[]; yearMonth:
   const workers = useMemo(() => {
     const map = new Map<string, { name: string; site: string; byDay: Map<string, AttendanceItem> }>();
     for (const item of items) {
-      const uid = item.user?.userName || item.id;
+      const uid = item.user?.workerName || item.id;
       if (!map.has(uid)) map.set(uid, { name: uid, site: item.site?.companyName || "-", byDay: new Map() });
       map.get(uid)!.byDay.set(item.workDate.slice(8), item);
     }
@@ -384,7 +384,7 @@ export default function AttendancesPage() {
                 <tr key={row.id} className={T.trBase}>
                   <td className={`${T.td} text-xs text-slate-500`}>{row.workDate}</td>
                   <td className={T.td}>
-                    <div className="font-black text-slate-900">{row.user?.userName || "-"}</div>
+                    <div className="font-black text-slate-900">{row.user?.workerName || "-"}</div>
                     <div className="text-xs text-slate-400">{row.user?.phoneNumber}</div>
                   </td>
                   <td className={T.td}>{row.site?.companyName || "-"}</td>

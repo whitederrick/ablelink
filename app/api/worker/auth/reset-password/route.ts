@@ -46,11 +46,11 @@ export async function POST(req: NextRequest) {
     const user = isEmail
       ? await prisma.worker.findUnique({
           where: { loginId: raw },
-          select: { id: true, userName: true, phoneNumber: true, loginId: true, status: true },
+          select: { id: true, workerName: true, phoneNumber: true, loginId: true, status: true },
         })
       : await prisma.worker.findFirst({
           where: { phoneNumber: { in: [phone, phone.replace(/^(\d{3})(\d{3,4})(\d{4})$/, "$1-$2-$3")] } },
-          select: { id: true, userName: true, phoneNumber: true, loginId: true, status: true },
+          select: { id: true, workerName: true, phoneNumber: true, loginId: true, status: true },
         });
 
     const successMsg = isEmail
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
         await sendSimpleEmail({
           to: raw,
           subject: "[AbleLink] 임시 비밀번호 안내",
-          text: `안녕하세요, ${user.userName || ""}님.\n\n임시 비밀번호: ${tempPw}\n\n로그인 후 반드시 비밀번호를 변경해주세요.\n\n- AbleLink 팀`,
+          text: `안녕하세요, ${user.workerName || ""}님.\n\n임시 비밀번호: ${tempPw}\n\n로그인 후 반드시 비밀번호를 변경해주세요.\n\n- AbleLink 팀`,
         });
       } catch (e: any) {
         console.error("[reset-password] 이메일 발송 실패:", e?.message);
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
         message: `[AbleLink] 임시 비밀번호: ${tempPw}\n로그인 후 반드시 변경해주세요.`,
       });
     } else {
-      console.warn(`[reset-password] SMS/이메일 미설정 — userId: ${user.id} 초기화 완료`);
+      console.warn(`[reset-password] SMS/이메일 미설정 — workerId: ${user.id} 초기화 완료`);
     }
 
     return NextResponse.json({ success: true, message: successMsg });

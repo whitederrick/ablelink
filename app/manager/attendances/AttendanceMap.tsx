@@ -30,7 +30,7 @@ type AttendanceItem = {
   endLocLat: string | null; endLocLon: string | null;
   isGpsModified: boolean; withinRange: boolean | null; rangeM: number | null;
   site: { companyName: string } | null;
-  user: { userName: string } | null;
+  user: { workerName: string } | null;
 };
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
@@ -93,7 +93,7 @@ export default function AttendanceMap({ items }: { items: AttendanceItem[] }) {
             <Marker key={i} position={[p.lat, p.lon]} icon={makeIcon(color)}>
               <Popup>
                 <div style={{ fontSize: 13, lineHeight: 1.6, minWidth: 160 }}>
-                  <b>{p.item.user?.userName || "-"}</b><br />
+                  <b>{p.item.user?.workerName || "-"}</b><br />
                   {p.item.site?.companyName || "-"}<br />
                   {p.item.workDate} · {p.type === "in" ? "출근" : "퇴근"} {p.type === "in" ? fmtTime(p.item.startTime) : fmtTime(p.item.endTime)}<br />
                   {p.type === "in" && p.item.isGpsModified && <span style={{ color: "#f97316" }}>⚠ GPS 이탈</span>}

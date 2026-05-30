@@ -22,12 +22,12 @@ export async function PATCH(
     const scope = await requireManagerSession(req);
 
     const { id } = await params;
-    const userId = BigInt(id);
+    const workerId = BigInt(id);
 
     // 자기 에이전시 소속 직무지도원만 수정 가능
     const worker = await prisma.worker.findFirst({
       where: {
-        id: userId,
+        id: workerId,
         assignments: { some: { site: { agencyId: scope.agencyId } } },
       },
       select: { id: true },
@@ -37,11 +37,11 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { userName, phoneNumber, resetPassword } = body;
+    const { workerName, phoneNumber, resetPassword } = body;
 
     const updates: Record<string, any> = {};
 
-    if (userName?.trim()) updates.userName = userName.trim();
+    if (workerName?.trim()) updates.workerName = workerName.trim();
 
     if (phoneNumber) {
       const cleaned = String(phoneNumber).replace(/-/g, "");
@@ -49,7 +49,7 @@ export async function PATCH(
         return NextResponse.json({ success: false, message: "올바른 전화번호 형식이 아닙니다." }, { status: 400 });
       }
       const dup = await prisma.worker.findFirst({
-        where: { phoneNumber: { in: [phoneNumber, cleaned] }, id: { not: userId } },
+        where: { phoneNumber: { in: [phoneNumber, cleaned] }, id: { not: workerId } },
       });
       if (dup) return NextResponse.json({ success: false, message: "이미 사용 중인 전화번호입니다." }, { status: 409 });
       updates.phoneNumber = phoneNumber;
@@ -66,7 +66,7 @@ export async function PATCH(
       return NextResponse.json({ success: false, message: "변경할 내용이 없습니다." }, { status: 400 });
     }
 
-    await prisma.worker.update({ where: { id: userId }, data: updates });
+    await prisma.worker.update({ where: { id: workerId }, data: updates });
 
     // 임시 비밀번호는 응답에 포함하지 않음 — SMS/카카오 알림으로만 전달
     return NextResponse.json({ success: true, passwordReset: !!tempPassword });

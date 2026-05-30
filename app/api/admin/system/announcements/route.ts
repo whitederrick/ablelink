@@ -43,9 +43,9 @@ export async function POST(req: NextRequest) {
     const noticeType = ["INFO","MAINTENANCE","URGENT"].includes(type) ? type : "INFO";
 
     // 활성 에이전시 내 모든 직무지도원에게 WorkerNotice 생성
-    // groupBy로 중복 제거 후 userId 목록 조회
+    // groupBy로 중복 제거 후 workerId 목록 조회
     const grouped = await prisma.siteAssignment.groupBy({
-      by: ["userId", "agencyId"],
+      by: ["workerId", "agencyId"],
       where: {
         status:   { in: ["ACTIVE", "ASSIGNED", "CONFIRMED"] },
         agency:   { isActive: true },
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     const targets = grouped
       .filter(r => r.agencyId != null)
-      .map(r => ({ userId: r.userId, agencyId: r.agencyId as bigint }));
+      .map(r => ({ workerId: r.workerId, agencyId: r.agencyId as bigint }));
 
     const announcement = await prisma.systemAnnouncement.create({
       data: {
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     if (targets.length > 0) {
       await (prisma as any).workerNotice.createMany({
         data: targets.map(t => ({
-          userId:    t.userId,
+          workerId:    t.workerId,
           agencyId:  t.agencyId,
           title:     `[시스템 공지] ${title.trim()}`.slice(0, 100),
           body:      body.trim().slice(0, 500),

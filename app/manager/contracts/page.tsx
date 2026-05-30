@@ -8,14 +8,14 @@ type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM" | "";
 type ContractStatus = "PENDING" | "SIGNED" | "COMPLETED" | "CANCELLED";
 
 interface ContractItem {
-  id: string; userId: string; userName: string; userPhone: string;
+  id: string; workerId: string; workerName: string; userPhone: string;
   contractStart: string; contractEnd: string; siteName: string | null;
   workType: string | null; status: ContractStatus; signToken: string;
   workerSignedAt: string | null; adminSignedAt: string | null; createdAt: string;
 }
 
 interface SearchResult {
-  id: string; userName: string; phoneNumber: string; email: string;
+  id: string; workerName: string; phoneNumber: string; email: string;
   siteName: string | null; contractStart: string | null; contractEnd: string | null;
 }
 
@@ -94,7 +94,7 @@ function WorkerSearchPopup({ onSelect, onClose }: {
                   {results.map(r => (
                     <tr key={r.id} onClick={() => { onSelect(r); onClose(); }}
                       className={`${T.trBase} cursor-pointer hover:bg-sky-50`}>
-                      <td className={`${T.td} font-black text-slate-900`}>{r.userName}</td>
+                      <td className={`${T.td} font-black text-slate-900`}>{r.workerName}</td>
                       <td className={`${T.td} text-slate-600`}>{r.phoneNumber}</td>
                       <td className={`${T.td} text-xs text-slate-400`}>{r.email || "-"}</td>
                       <td className={`${T.td} text-slate-600`}>{r.siteName || <span className="text-slate-300">미지정</span>}</td>
@@ -129,7 +129,7 @@ function CreateContractModal({ onClose, onCreated }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  function handleSelectWorker(r: SearchResult) { setSelectedUserId(r.id); setManualName(r.userName); setManualPhone(r.phoneNumber); }
+  function handleSelectWorker(r: SearchResult) { setSelectedUserId(r.id); setManualName(r.workerName); setManualPhone(r.phoneNumber); }
   function clearSelection() { setSelectedUserId(""); }
 
   async function handleCreate() {
@@ -140,7 +140,7 @@ function CreateContractModal({ onClose, onCreated }: {
       const res = await fetch("/api/admin/contracts", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: selectedUserId || undefined,
+          workerId: selectedUserId || undefined,
           manualName: manualName.trim(), manualPhone: manualPhone.trim(),
           contractStart, contractEnd, siteName: siteName || null, workType: workType || null,
           commuteGuidanceIncluded: workType === "FULL_DAY" ? false : commuteGuide,
@@ -336,7 +336,7 @@ export default function AdminContractsPage() {
               return (
                 <tr key={c.id} className={T.trBase}>
                   <td className={T.td}>
-                    <div className="font-black text-slate-900">{c.userName}</div>
+                    <div className="font-black text-slate-900">{c.workerName}</div>
                     <div className="text-xs text-slate-400">{c.userPhone}</div>
                   </td>
                   <td className={`${T.td} text-xs text-slate-500`}>

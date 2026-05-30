@@ -15,12 +15,12 @@ export async function PATCH(
     const scope = await requireAdminSession(req);
 
     const { id } = await params;
-    const userId = parseBigInt(id);
-    if (!userId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
+    const workerId = parseBigInt(id);
+    if (!workerId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const body = await req.json();
     const { action, newPassword, status, memo } = body;
 
-    const user = await prisma.worker.findUnique({ where: { id: userId } });
+    const user = await prisma.worker.findUnique({ where: { id: workerId } });
     if (!user) return NextResponse.json({ success: false, message: "직무지도원을 찾을 수 없습니다." }, { status: 404 });
 
     if (action === "reset-password") {
@@ -29,7 +29,7 @@ export async function PATCH(
       }
       const hashedPassword = await bcrypt.hash(newPassword, 12);
       await prisma.worker.update({ where: { id: user.id }, data: { password: hashedPassword } });
-      await logAudit({ adminId: scope.adminId, action: "WORKER_PASSWORD_RESET", target: `User:${user.id}`, detail: { userName: user.userName } });
+      await logAudit({ adminId: scope.adminId, action: "WORKER_PASSWORD_RESET", target: `User:${user.id}`, detail: { workerName: user.workerName } });
       return NextResponse.json({ success: true, message: "비밀번호가 초기화되었습니다." });
     }
 

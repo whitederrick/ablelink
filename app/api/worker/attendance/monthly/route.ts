@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
     const records = await prisma.dailyAttendance.findMany({
       where: {
-        userId:   BigInt(session.userId),
+        workerId:   BigInt(session.workerId),
         workDate: { gte: dateFrom, lte: dateTo },
       },
       orderBy: { workDate: "asc" },

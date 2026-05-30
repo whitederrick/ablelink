@@ -1,8 +1,8 @@
 // app/api/admin/attendances/route.ts
 // 관리자(에이전시) - 직무지도원별 출퇴근(근태) 현황 조회 API
 //
-// GET /api/admin/attendances?userId=1&from=2026-01-01&to=2026-01-31&page=1&pageSize=50
-// GET /api/admin/attendances?yearMonth=2026-01&userId=1
+// GET /api/admin/attendances?workerId=1&from=2026-01-01&to=2026-01-31&page=1&pageSize=50
+// GET /api/admin/attendances?yearMonth=2026-01&workerId=1
 //
 // ✅ 스코프(고도화)
 // - AGENCY: (A) assignmentId가 있으면 assignment.site.agencyId 기준으로 제한(정식)
@@ -56,7 +56,7 @@ function kstEnd(dateStr: string) {
 function toItem(r: any) {
   return {
     id: String(r.id),
-    userId: String(r.userId),
+    workerId: String(r.workerId),
     siteId: String(r.siteId),
 
     // 증빙(있으면)
@@ -95,7 +95,7 @@ function toItem(r: any) {
     user: r.user
       ? {
           id: String(r.user.id),
-          userName: r.user.userName,
+          workerName: r.user.workerName,
           loginId: r.user.loginId,
           phoneNumber: r.user.phoneNumber,
           role: r.user.role,
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
 
-    const userIdStr = (searchParams.get("userId") || "").trim();
+    const userIdStr = (searchParams.get("workerId") || "").trim();
     const siteIdStr = (searchParams.get("siteId") || "").trim();
 
     const from = (searchParams.get("from") || "").trim();
@@ -161,8 +161,8 @@ export async function GET(req: NextRequest) {
     const where: Prisma.DailyAttendanceWhereInput = {};
 
     if (userIdStr) {
-      if (!isValidNumericId(userIdStr)) throw new Error("VALIDATION:userId");
-      where.userId = BigInt(userIdStr);
+      if (!isValidNumericId(userIdStr)) throw new Error("VALIDATION:workerId");
+      where.workerId = BigInt(userIdStr);
     }
 
     if (siteIdStr) {
@@ -195,7 +195,7 @@ export async function GET(req: NextRequest) {
         take: pageSize,
         select: {
           id: true,
-          userId: true,
+          workerId: true,
           siteId: true,
 
           assignmentId: true,
@@ -220,7 +220,7 @@ export async function GET(req: NextRequest) {
           finalizedAt: true,
 
           site: { select: { id: true, companyName: true, address: true, agencyId: true } },
-          user: { select: { id: true, userName: true, loginId: true, phoneNumber: true, role: true, status: true } },
+          user: { select: { id: true, workerName: true, loginId: true, phoneNumber: true, role: true, status: true } },
           assignment: { select: { id: true, status: true, startDate: true, endDate: true } },
         },
       }),

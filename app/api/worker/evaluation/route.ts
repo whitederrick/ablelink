@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   const periodEnd   = searchParams.get("periodEnd");
   if (!traineeId || !evalType) return NextResponse.json({ success: false, message: "traineeId, evalType 필요" }, { status: 400 });
   const existing = await prisma.traineeEvaluation.findFirst({
-    where: { traineeId: BigInt(traineeId), writerId: BigInt(session.userId), evalType, ...(periodStart ? { periodStart } : {}), ...(periodEnd ? { periodEnd } : {}) },
+    where: { traineeId: BigInt(traineeId), writerId: BigInt(session.workerId), evalType, ...(periodStart ? { periodStart } : {}), ...(periodEnd ? { periodEnd } : {}) },
     orderBy: { createdAt: "desc" },
   });
   return NextResponse.json({ success: true, evaluation: existing
@@ -36,9 +36,9 @@ export async function POST(req: NextRequest) {
   const { traineeId, evalType, periodStart, periodEnd, scores, comments } = await req.json();
   if (!traineeId || !evalType || !periodStart || !periodEnd) return NextResponse.json({ success: false, message: "필수값 누락" }, { status: 400 });
   const existing = await prisma.traineeEvaluation.findFirst({
-    where: { traineeId: BigInt(traineeId), writerId: BigInt(session.userId), evalType, periodStart, periodEnd },
+    where: { traineeId: BigInt(traineeId), writerId: BigInt(session.workerId), evalType, periodStart, periodEnd },
   });
-  const data = { traineeId: BigInt(traineeId), writerId: BigInt(session.userId), evalType, periodStart, periodEnd, scores: scores || defaultAllScores(), comments: comments || {}, updatedAt: new Date() };
+  const data = { traineeId: BigInt(traineeId), writerId: BigInt(session.workerId), evalType, periodStart, periodEnd, scores: scores || defaultAllScores(), comments: comments || {}, updatedAt: new Date() };
   const result = existing
     ? await prisma.traineeEvaluation.update({ where: { id: existing.id }, data })
     : await prisma.traineeEvaluation.create({ data });

@@ -25,7 +25,7 @@ const DOC_GROUPS = [
 ];
 
 interface Worker {
-  userId: string; userName: string; siteName: string;
+  workerId: string; workerName: string; siteName: string;
   trainees: { id: string; name: string }[];
 }
 
@@ -63,7 +63,7 @@ export default function AdminDocsPage() {
           setWorkers((d.data || [])
             .filter((u: any) => u.activeAssignment)
             .map((u: any) => ({
-              userId: u.id, userName: u.userName,
+              workerId: u.id, workerName: u.workerName,
               siteName: u.activeAssignment?.siteName || "-", trainees: [],
             })));
         }
@@ -73,23 +73,23 @@ export default function AdminDocsPage() {
 
   useEffect(() => {
     if (!selectedWorker) return;
-    fetch(`/api/admin/docs/trainees?workerUserId=${selectedWorker}`)
+    fetch(`/api/admin/docs/trainees?workerId=${selectedWorker}`)
       .then(r => r.json())
       .then(d => {
         if (d.success && d.trainees) {
-          setWorkers(prev => prev.map(c => c.userId === selectedWorker ? { ...c, trainees: d.trainees } : c));
+          setWorkers(prev => prev.map(c => c.workerId === selectedWorker ? { ...c, trainees: d.trainees } : c));
         }
       });
-    fetch(`/api/admin/docs/manager-email?workerUserId=${selectedWorker}`)
+    fetch(`/api/admin/docs/manager-email?workerId=${selectedWorker}`)
       .then(r => r.json())
       .then(d => { if (d.success && d.email) { setManagerEmail(d.email); setToEmail(d.email); } });
   }, [selectedWorker]);
 
-  const worker = workers.find(c => c.userId === selectedWorker);
+  const worker = workers.find(c => c.workerId === selectedWorker);
   const needsTrainee = DOC_GROUPS.flatMap(g => g.docs).find(d => d.id === docType)?.needsTrainee ?? false;
 
   function previewUrl() {
-    const p = new URLSearchParams({ workerUserId: selectedWorker, docType, periodStart, periodEnd, ...(traineeId ? { traineeId } : {}) });
+    const p = new URLSearchParams({ workerId: selectedWorker, docType, periodStart, periodEnd, ...(traineeId ? { traineeId } : {}) });
     return `/api/admin/docs/preview?${p.toString()}`;
   }
 
@@ -101,7 +101,7 @@ export default function AdminDocsPage() {
     try {
       const res = await fetch("/api/admin/docs/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workerUserId: selectedWorker, docType, periodStart, periodEnd, traineeId: traineeId || undefined, toEmail }),
+        body: JSON.stringify({ workerId: selectedWorker, docType, periodStart, periodEnd, traineeId: traineeId || undefined, toEmail }),
       });
       const d = await res.json();
       setSendResult({ success: d.success, msg: d.message || (d.success ? "발송 완료" : "발송 실패") });
@@ -123,7 +123,7 @@ export default function AdminDocsPage() {
     try {
       const res = await fetch("/api/admin/docs/sign", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workerUserId: selectedWorker, docType, periodStart, periodEnd, traineeId: traineeId || undefined, toEmail }),
+        body: JSON.stringify({ workerId: selectedWorker, docType, periodStart, periodEnd, traineeId: traineeId || undefined, toEmail }),
       });
       const d = await res.json();
       if (d.success && d.pdfBase64) {
@@ -143,7 +143,7 @@ export default function AdminDocsPage() {
     if (!selectedWorker) { alert("직무지도원을 선택해주세요."); return; }
     setAuditLoading(true);
     try {
-      const p = new URLSearchParams({ workerUserId: selectedWorker, periodStart, periodEnd });
+      const p = new URLSearchParams({ workerId: selectedWorker, periodStart, periodEnd });
       const res = await fetch(`/api/admin/audit-package?${p.toString()}`);
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -168,7 +168,7 @@ export default function AdminDocsPage() {
           <button onClick={() => setMode("select")} className={T.btnSecondary}>← 목록으로</button>
           <div className="text-center">
             <p className="font-black text-slate-900">{docLabel}</p>
-            <p className="text-xs font-semibold text-slate-400">{worker?.userName} · {periodStart} ~ {periodEnd}</p>
+            <p className="text-xs font-semibold text-slate-400">{worker?.workerName} · {periodStart} ~ {periodEnd}</p>
           </div>
           <button onClick={handleDownload} className={T.btnPrimary}>📥 PDF 다운로드</button>
         </div>
@@ -228,15 +228,15 @@ export default function AdminDocsPage() {
         ) : (
           <div className="flex flex-col gap-2">
             {workers.map(c => (
-              <button key={c.userId} onClick={() => { setSelectedWorker(c.userId); setTraineeId(""); }}
+              <button key={c.workerId} onClick={() => { setSelectedWorker(c.workerId); setTraineeId(""); }}
                 className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left transition active:scale-95 ${
-                  selectedWorker === c.userId ? "border-slate-950 bg-slate-950" : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                  selectedWorker === c.workerId ? "border-slate-950 bg-slate-950" : "border-slate-200 bg-slate-50 hover:bg-slate-100"
                 }`}>
                 <div>
-                  <p className={`font-black ${selectedWorker === c.userId ? "text-white" : "text-slate-900"}`}>{c.userName}</p>
-                  <p className={`text-xs font-semibold ${selectedWorker === c.userId ? "text-white/70" : "text-slate-400"}`}>📍 {c.siteName}</p>
+                  <p className={`font-black ${selectedWorker === c.workerId ? "text-white" : "text-slate-900"}`}>{c.workerName}</p>
+                  <p className={`text-xs font-semibold ${selectedWorker === c.workerId ? "text-white/70" : "text-slate-400"}`}>📍 {c.siteName}</p>
                 </div>
-                {selectedWorker === c.userId && <span className="text-lg text-white">✓</span>}
+                {selectedWorker === c.workerId && <span className="text-lg text-white">✓</span>}
               </button>
             ))}
           </div>

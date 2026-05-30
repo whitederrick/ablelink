@@ -1,6 +1,6 @@
 // app/api/worker/site/register/route.ts
-// 직무지도원 현장 등록 API (세션 기반 userId 자동 주입)
-// 🔐 보안: JWT 세션에서 userId 추출 (클라이언트에서 userId 직접 전달 차단)
+// 직무지도원 현장 등록 API (세션 기반 workerId 자동 주입)
+// 🔐 보안: JWT 세션에서 workerId 추출 (클라이언트에서 workerId 직접 전달 차단)
 
 export const runtime = "nodejs";
 
@@ -10,13 +10,13 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
   try {
-    // 🔐 세션에서 userId 추출 (클라이언트 위변조 차단)
+    // 🔐 세션에서 workerId 추출 (클라이언트 위변조 차단)
     const session = await getWorkerSessionFromReq(request);
     if (!session) {
       return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
     }
 
-    const userId = BigInt(session.userId);
+    const workerId = BigInt(session.workerId);
     const body = await request.json();
 
     const {
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       // 4. SiteAssignment 생성 — 근무형태는 관리자가 나중에 설정
       await tx.siteAssignment.create({
         data: {
-          userId,
+          workerId,
           siteId: site.id,
           agencyId: agency.id,
           status: "ACTIVE",

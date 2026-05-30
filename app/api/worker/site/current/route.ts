@@ -14,13 +14,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
     }
 
-    const userId = BigInt(session.userId);
+    const workerId = BigInt(session.workerId);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const assignment = await prisma.siteAssignment.findFirst({
       where: {
-        userId,
+        workerId,
         status: "ACTIVE",
         startDate: { lte: today },
         OR: [{ endDate: null }, { endDate: { gte: today } }],
@@ -42,14 +42,14 @@ export async function GET(request: NextRequest) {
     // 오늘 출근 기록 조회
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     const todayAttendance = await prisma.dailyAttendance.findFirst({
-      where: { userId, assignmentId: assignment.id, workDate: todayStr },
+      where: { workerId, assignmentId: assignment.id, workDate: todayStr },
       orderBy: { id: "desc" },
     });
 
     // 직무지도원 정보 조회
     const user = await prisma.worker.findUnique({
-      where: { id: userId },
-      select: { userName: true, phoneNumber: true, signatureUrl: true },
+      where: { id: workerId },
+      select: { workerName: true, phoneNumber: true, signatureUrl: true },
     });
 
     // 사이트 담당자 정보
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
         agencyPlanType: agency?.planType ?? "FREE",
         trialEndsAt: agency?.trialEndsAt ?? null,
         // 이메일 발송용 추가 정보
-        workerName: user?.userName ?? "",
+        workerName: user?.workerName ?? "",
         workerPhone: user?.phoneNumber ?? "",
         signatureUrl: user?.signatureUrl ?? null,
         managerName: manager?.name ?? "",

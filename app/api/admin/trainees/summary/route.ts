@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
             },
           },
         },
-        user: { select: { userName: true } },
+        user: { select: { workerName: true } },
       },
       orderBy: { siteId: "asc" },
     });
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         siteMap.set(siteId, {
           siteId,
           siteName: site.companyName,
-          workerName: assignment.user?.userName || "-",
+          workerName: assignment.user?.workerName || "-",
           trainees: site.trainees.map(t => {
             const completedLogs = t.logs.filter(l => l.isCompleted);
             const lastLog = completedLogs[0];

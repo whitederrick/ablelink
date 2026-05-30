@@ -140,7 +140,7 @@ export default function AdminDocumentsPage() {
     // 해당 발송 건의 미리보기 URL을 PDF URL로 사용
     const previewKey = DOC_TYPE_PREVIEW_KEY[selectedRun.docType] || selectedRun.docType.toLowerCase().replace(/_/g, "-");
     const p = new URLSearchParams({
-      workerUserId: selectedRun.workerUserId,
+      workerId: selectedRun.workerId,
       docType:     previewKey,
       periodStart: selectedRun.periodStart.slice(0, 10),
       periodEnd:   selectedRun.periodEnd.slice(0, 10),
@@ -202,7 +202,7 @@ export default function AdminDocumentsPage() {
                 <option value="">배정 선택...</option>
                 {assignments.map(a => (
                   <option key={a.id} value={a.id}>
-                    {a.userName ?? a.userId} — {a.siteName ?? a.siteId}
+                    {a.workerName ?? a.workerId} — {a.siteName ?? a.siteId}
                   </option>
                 ))}
               </select>
@@ -258,7 +258,7 @@ export default function AdminDocumentsPage() {
               <tbody>
                 {runs.map(r => (
                   <tr key={r.id} className={`${T.trBase} ${selectedRunId === r.id ? "bg-sky-50" : ""}`}>
-                    <td className={T.td}>{r.worker?.userName ?? r.workerUserId}</td>
+                    <td className={T.td}>{r.worker?.workerName ?? r.workerId}</td>
                     <td className={T.td}>{DOC_TYPE_LABEL[r.docType] || r.docType}</td>
                     <td className={T.td}>{fmtDate(r.periodStart)} ~ {fmtDate(r.periodEnd)}</td>
                     <td className={T.td}>{fmtDate(r.dueAt)}</td>

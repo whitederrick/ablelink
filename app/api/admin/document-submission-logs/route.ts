@@ -25,7 +25,7 @@ function toItem(l: any) {
     versionId: String(l.versionId),
     stage: l.stage,
     submittedAt: l.submittedAt.toISOString(),
-    submittedByUserId: l.submittedByUserId != null ? String(l.submittedByUserId) : null,
+    submittedByWorkerId: l.submittedByWorkerId != null ? String(l.submittedByWorkerId) : null,
     submittedByManagerId: l.submittedByManagerId != null ? String(l.submittedByManagerId) : null,
     sentToEmail: l.sentToEmail ?? null,
     emailSentAt: l.emailSentAt ? l.emailSentAt.toISOString() : null,
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
         versionId: true,
         stage: true,
         submittedAt: true,
-        submittedByUserId: true,
+        submittedByWorkerId: true,
         submittedByManagerId: true,
         sentToEmail: true,
         emailSentAt: true,
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
       },
       select: {
         id: true, runId: true, versionId: true, stage: true, submittedAt: true,
-        submittedByUserId: true, submittedByManagerId: true,
+        submittedByWorkerId: true, submittedByManagerId: true,
         sentToEmail: true, emailSentAt: true, emailStatus: true, emailPayload: true,
       },
     });

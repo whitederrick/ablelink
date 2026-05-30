@@ -14,8 +14,8 @@ function getSecret() {
 }
 
 export interface WorkerPayload {
-  userId: string;
-  userName: string;
+  workerId: string;
+  workerName: string;
   isTemporary?: boolean;
 }
 
@@ -34,8 +34,8 @@ export async function verifyWorkerToken(token: string): Promise<WorkerPayload | 
     const { payload } = await jwtVerify(token, secret, { audience: WORKER_TOKEN_AUD });
     if ((payload as any).role !== "WORKER") return null;
     return {
-      userId: String((payload as any).userId),
-      userName: String((payload as any).userName),
+      workerId: String((payload as any).workerId),
+      workerName: String((payload as any).workerName),
       isTemporary: Boolean((payload as any).isTemporary),
     };
   } catch {

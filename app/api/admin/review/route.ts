@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       },
       select: {
         id:   true,
-        user: { select: { id: true, userName: true, phoneNumber: true } },
+        user: { select: { id: true, workerName: true, phoneNumber: true } },
         site: { select: { companyName: true } },
       },
       orderBy: { assignedAt: "desc" },
@@ -44,8 +44,8 @@ export async function GET(req: NextRequest) {
 
     const [attRows, logRows, evalRows] = await Promise.all([
       prisma.dailyAttendance.findMany({
-        where: { userId: { in: uids }, workDate: { gte: dateFrom, lte: dateTo }, startTime: { not: null } },
-        select: { userId: true, isFinalClosed: true, isManagerFinalClosed: true, managerFinalAt: true },
+        where: { workerId: { in: uids }, workDate: { gte: dateFrom, lte: dateTo }, startTime: { not: null } },
+        select: { workerId: true, isFinalClosed: true, isManagerFinalClosed: true, managerFinalAt: true },
       }),
       prisma.traineeLog.findMany({
         where: { writerId: { in: uids }, attendance: { workDate: { gte: dateFrom, lte: dateTo } } },
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
     );
 
     for (const r of attRows) {
-      const uid = r.userId.toString();
+      const uid = r.workerId.toString();
       const c   = attMap.get(uid);
       if (c) { c.total++; if (r.isFinalClosed) c.confirmed++; }
       if (r.isManagerFinalClosed) lockMap.set(uid, { locked: true, managerFinalAt: r.managerFinalAt ?? null });
@@ -81,8 +81,8 @@ export async function GET(req: NextRequest) {
       const uid  = user.id.toString();
       const lock = lockMap.get(uid) ?? { locked: false, managerFinalAt: null };
       return {
-        userId:               uid,
-        userName:             user.userName,
+        workerId:               uid,
+        workerName:             user.workerName,
         phoneNumber:          user.phoneNumber,
         siteName:             site?.companyName ?? "-",
         attendance:           attMap.get(uid)  ?? { total: 0, confirmed: 0 },

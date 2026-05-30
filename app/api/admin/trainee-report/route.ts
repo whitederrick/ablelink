@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     const assignments = await prisma.siteAssignment.findMany({
       where: { agencyId, status: "ACTIVE" },
       include: {
-        user: { select: { id: true, userName: true } },
+        user: { select: { id: true, workerName: true } },
         site: { select: { companyName: true, id: true } },
       },
     });
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     }
 
     const siteIds = [...new Set(assignments.filter(a => a.site).map(a => a.site!.id))];
-    const userIds = [...new Set(assignments.map(a => a.userId))];
+    const userIds = [...new Set(assignments.map(a => a.workerId))];
 
     // N+1 제거: 3개 쿼리로 전체 데이터 일괄 조회
     const [allTrainees, allAttendances] = await Promise.all([
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
         select: { id: true, name: true, gender: true, disabilityType: true, status: true, currentSiteId: true },
       }),
       prisma.dailyAttendance.findMany({
-        where: { userId: { in: userIds }, workDate: { gte: periodStart, lte: periodEnd } },
+        where: { workerId: { in: userIds }, workDate: { gte: periodStart, lte: periodEnd } },
         include: { logs: { include: { tasks: { select: { performanceScore: true } } } } },
       }),
     ]);
@@ -73,8 +73,8 @@ export async function GET(request: NextRequest) {
 
     const attendancesByUser = new Map<bigint, typeof allAttendances>();
     for (const a of allAttendances) {
-      if (!attendancesByUser.has(a.userId)) attendancesByUser.set(a.userId, []);
-      attendancesByUser.get(a.userId)!.push(a);
+      if (!attendancesByUser.has(a.workerId)) attendancesByUser.set(a.workerId, []);
+      attendancesByUser.get(a.workerId)!.push(a);
     }
 
     // 평가: traineeId+writerId → 가장 최신 1건
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
     for (const asgn of assignments) {
       if (!asgn.site) continue;
       const trainees  = traineesBySite.get(asgn.site.id) ?? [];
-      const attendances = attendancesByUser.get(asgn.userId) ?? [];
+      const attendances = attendancesByUser.get(asgn.workerId) ?? [];
       const totalWorkDays = attendances.filter(a => a.startTime).length;
 
       for (const trainee of trainees) {
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
           ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10
           : null;
 
-        const latestEval = latestEvalMap.get(evalKey(tid, asgn.userId)) ?? null;
+        const latestEval = latestEvalMap.get(evalKey(tid, asgn.workerId)) ?? null;
 
         let evalAvg: number | null = null;
         if (latestEval?.scores && typeof latestEval.scores === "object") {
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
           gender:       trainee.gender,
           disabilityType: trainee.disabilityType || "-",
           status:       trainee.status,
-          workerName:    asgn.user?.userName || "-",
+          workerName:    asgn.user?.workerName || "-",
           siteName:     asgn.site.companyName,
           totalWorkDays,
           daysWithLog,

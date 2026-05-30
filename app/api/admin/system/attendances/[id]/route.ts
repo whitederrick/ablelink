@@ -23,7 +23,7 @@ export async function PATCH(
 
     const attendance = await prisma.dailyAttendance.findUnique({
       where: { id: BigInt(id) },
-      include: { user: { select: { userName: true } } },
+      include: { user: { select: { workerName: true } } },
     });
     if (!attendance) return NextResponse.json({ success: false, message: "출근 기록을 찾을 수 없습니다." }, { status: 404 });
 
@@ -49,7 +49,7 @@ export async function PATCH(
       action:  "ATTENDANCE_CORRECTED",
       target:  `DailyAttendance:${attendance.id}`,
       detail:  {
-        userName: attendance.user?.userName,
+        workerName: attendance.user?.workerName,
         workDate: attendance.workDate,
         before:   {
           startTime: attendance.startTime?.toISOString(),

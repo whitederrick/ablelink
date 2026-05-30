@@ -1,6 +1,6 @@
 // proxy.ts
 // 시스템 운영자(/admin), 에이전시 관리자(/manager), 직무지도원(/worker) 경로 보호
-// AdminUser(admins)와 ManagerUser(managers)는 완전히 분리된 별도 쿠키·시크릿 사용
+// Admin(admins)와 Manager(managers)는 완전히 분리된 별도 쿠키·시크릿 사용
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";

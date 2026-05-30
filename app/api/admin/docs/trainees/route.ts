@@ -12,14 +12,14 @@ export async function GET(request: NextRequest) {
   try {
     const scope = await requireManagerSession(request);
     const { searchParams } = new URL(request.url);
-    const workerUserId = searchParams.get("workerUserId") ?? "";
-    if (!workerUserId) return NextResponse.json({ success: false, message: "workerUserId 필요" }, { status: 400 });
+    const workerIdRaw = searchParams.get("workerId") ?? "";
+    if (!workerIdRaw) return NextResponse.json({ success: false, message: "workerId 필요" }, { status: 400 });
 
-    const userId = BigInt(workerUserId);
+    const workerId = BigInt(workerIdRaw);
 
     // 직무지도원의 현장 배정
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] }, agencyId: scope.agencyId },
+      where: { workerId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] }, agencyId: scope.agencyId },
       select: { siteId: true },
       orderBy: { assignedAt: "desc" },
     });

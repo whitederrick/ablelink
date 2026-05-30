@@ -25,7 +25,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }),
       prisma.siteAssignment.findMany({
         where: { agencyId, status: { in: ["ACTIVE","ASSIGNED","CONFIRMED"] } },
-        include: { user: { select: { id: true, userName: true, status: true } } },
+        include: { user: { select: { id: true, workerName: true, status: true } } },
         orderBy: { startDate: "desc" },
       }),
       prisma.traineeLog.count({
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const uniqueWorkers = new Map<string, any>();
     for (const a of workers) {
       const uid = a.user.id.toString();
-      if (!uniqueWorkers.has(uid)) uniqueWorkers.set(uid, { id: uid, userName: a.user.userName, status: a.user.status });
+      if (!uniqueWorkers.has(uid)) uniqueWorkers.set(uid, { id: uid, workerName: a.user.workerName, status: a.user.status });
     }
 
     return NextResponse.json({

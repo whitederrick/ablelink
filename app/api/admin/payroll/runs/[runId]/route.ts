@@ -11,8 +11,8 @@ import { Decimal } from "@prisma/client/runtime/library";
 function itemDto(i: any) {
   return {
     id: i.id.toString(),
-    userId: i.userId.toString(),
-    userName: i.user?.userName ?? "-",
+    workerId: i.workerId.toString(),
+    workerName: i.user?.workerName ?? "-",
     loginId: i.user?.loginId ?? "",
     grossPay: Number(i.grossPay),
     totalDeduction: Number(i.totalDeduction),
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ runI
       where: { id: BigInt(runId) },
       include: {
         items: {
-          include: { user: { select: { id: true, userName: true, loginId: true } } },
+          include: { user: { select: { id: true, workerName: true, loginId: true } } },
           orderBy: { id: "asc" },
         },
       },
@@ -100,7 +100,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
         netPay: new Decimal(gp - td),
         breakdown: { manual: true, grossPay: gp, totalDeduction: td },
       },
-      include: { user: { select: { id: true, userName: true, loginId: true } } },
+      include: { user: { select: { id: true, workerName: true, loginId: true } } },
     });
 
     return NextResponse.json({ success: true, item: itemDto(updated) });

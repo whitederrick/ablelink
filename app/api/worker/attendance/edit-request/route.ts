@@ -17,15 +17,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "출근 기록 ID와 수정 사유는 필수입니다." }, { status: 400 });
     }
 
-    const userId = BigInt(session.userId);
+    const workerId = BigInt(session.workerId);
     const attId  = BigInt(attendanceId);
 
     // 본인 기록인지 확인
     const attendance = await prisma.dailyAttendance.findUnique({
       where: { id: attId },
-      select: { id: true, userId: true, workDate: true },
+      select: { id: true, workerId: true, workDate: true },
     });
-    if (!attendance || attendance.userId !== userId) {
+    if (!attendance || attendance.workerId !== workerId) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
 
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     await prisma.attendanceEditRequest.create({
       data: {
         attendanceId: attId,
-        userId,
+        workerId,
         reason:        reason.trim(),
         proposedStart: proposedStart || null,
         proposedEnd:   proposedEnd   || null,
@@ -72,8 +72,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const attendanceId = searchParams.get("attendanceId");
 
-    const userId = BigInt(session.userId);
-    const where: any = { userId };
+    const workerId = BigInt(session.workerId);
+    const where: any = { workerId };
     if (attendanceId) where.attendanceId = BigInt(attendanceId);
 
     const requests = await prisma.attendanceEditRequest.findMany({

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 
-type Worker = { id: string; userName: string; siteName: string };
+type Worker = { id: string; workerName: string; siteName: string };
 type AttRec = { workDate: string; status: string; startTime: string|null; endTime: string|null; isFinalClosed: boolean; isGpsModified: boolean };
 
 const DOW_HEADER = ["일","월","화","수","목","금","토"];
@@ -27,7 +27,7 @@ export default function ManagerCalendarPage() {
     fetch("/api/admin/workers?pageSize=200").then(r=>r.json())
       .then(d=>{
         if(d.success) {
-          const list = d.data?.map((c:any)=>({id:c.id,userName:c.userName,siteName:c.currentSiteName??c.siteName??""}))||[];
+          const list = d.data?.map((c:any)=>({id:c.id,workerName:c.workerName,siteName:c.currentSiteName??c.siteName??""}))||[];
           setWorkers(list);
           if(list.length>0) setSelectedWorker(list[0]);
         }
@@ -92,7 +92,7 @@ export default function ManagerCalendarPage() {
       <div className="mb-4 flex items-center gap-3 flex-wrap">
         <select value={selectedWorker?.id??""} onChange={e=>{const c=workers.find(x=>x.id===e.target.value);setSelectedWorker(c??null);}}
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400 min-w-[160px]">
-          {workers.map(c=><option key={c.id} value={c.id}>{c.userName}</option>)}
+          {workers.map(c=><option key={c.id} value={c.id}>{c.workerName}</option>)}
         </select>
         <div className="flex items-center gap-1.5">
           <button onClick={()=>changeMonth(-1)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:bg-slate-50 active:scale-95">

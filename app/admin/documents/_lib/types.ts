@@ -8,7 +8,7 @@ export type DocumentRunItem = {
   id: string;
   assignmentId: string;
   siteId: string;
-  workerUserId: string;
+  workerId: string;
 
   docType: DocType;
 
@@ -21,7 +21,7 @@ export type DocumentRunItem = {
   currentVersionId: string | null;
 
   site?: { id: string; companyName: string; agencyId: string | null } | null;
-  worker?: { id: string; userName: string; loginId: string } | null;
+  worker?: { id: string; workerName: string; loginId: string } | null;
 };
 
 export type DocumentVersionItem = {
@@ -41,7 +41,7 @@ export type DocumentSubmissionLogItem = {
   versionId: string;
   stage: DocStage;
   submittedAt: string;
-  submittedByUserId: string | null;
+  submittedByWorkerId: string | null;
   submittedByAdminId: string | null;
   sentToEmail: string | null;
   emailSentAt: string | null;
@@ -54,8 +54,8 @@ export type AssignmentItem = {
   siteId: string;
   siteName?: string | null;
 
-  userId: string;
-  userName?: string | null;
+  workerId: string;
+  workerName?: string | null;
 
   startDate?: string | null;
   endDate?: string | null;

@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       confirmOutOfRange,
     } = body;
 
-    const userIdStr = session.userId;
+    const userIdStr = session.workerId;
     if (latitude === undefined || longitude === undefined) {
       return NextResponse.json({ success: false, message: "VALIDATION:location" }, { status: 400 });
     }
@@ -68,14 +68,14 @@ export async function POST(request: NextRequest) {
     const siteIdBig = toBigIntOrNull(siteId);
 
     console.log(
-      `[출근 요청] userId=${userIdStr}, assignmentId=${assignmentIdBig ?? "auto"}, basePointId=${basePointIdBig ?? "auto"}, confirmOutOfRange=${confirmOutOfRange}`
+      `[출근 요청] workerId=${userIdStr}, assignmentId=${assignmentIdBig ?? "auto"}, basePointId=${basePointIdBig ?? "auto"}, confirmOutOfRange=${confirmOutOfRange}`
     );
 
     // [STEP 1] 오늘 중복 출근 체크
     const todayString = getKstDateString();
     const existingRecord = await prisma.dailyAttendance.findFirst({
       where: {
-        userId: userIdBig,
+        workerId: userIdBig,
         workDate: todayString,
       },
       select: { id: true },
@@ -97,14 +97,14 @@ export async function POST(request: NextRequest) {
       ? await prisma.siteAssignment.findFirst({
           where: {
             id: assignmentIdBig,
-            userId: userIdBig,
+            workerId: userIdBig,
             status: { in: [...validStatuses] },
           },
           include: { site: true },
         })
       : await prisma.siteAssignment.findFirst({
           where: {
-            userId: userIdBig,
+            workerId: userIdBig,
             status: { in: [...validStatuses] },
           },
           orderBy: [{ assignedAt: "desc" }, { id: "desc" }],
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
     // [STEP 5] 출근 기록 저장 (증빙 필드 포함)
     const newAttendance = await prisma.dailyAttendance.create({
       data: {
-        userId: userIdBig,
+        workerId: userIdBig,
         siteId: site.id,
         assignmentId: assignment.id,              // ✅ 증빙
         basePointId: decidedBasePointId,          // ✅ 증빙(없을 수 있음)

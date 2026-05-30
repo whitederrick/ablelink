@@ -18,19 +18,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
     }
 
-    const userId = BigInt(session.userId);
-    const planCheck = await checkPlanAccess(userId, "AI_VOICE");
+    const workerId = BigInt(session.workerId);
+    const planCheck = await checkPlanAccess(workerId, "AI_VOICE");
 
     if (!planCheck.allowed) {
       if (planCheck.reason === "FREE_PLAN") {
         const assignment = await prisma.siteAssignment.findFirst({
-          where: { userId, status: "ACTIVE" },
+          where: { workerId, status: "ACTIVE" },
           include: { agency: true },
           orderBy: { startDate: "desc" },
         });
         if (assignment?.agencyId) {
           await startTrialIfNeeded(assignment.agencyId);
-          const recheck = await checkPlanAccess(userId, "AI_VOICE");
+          const recheck = await checkPlanAccess(workerId, "AI_VOICE");
           if (!recheck.allowed) {
             return NextResponse.json({ success: false, message: recheck.message }, { status: 403 });
           }
@@ -85,12 +85,12 @@ export async function POST(request: NextRequest) {
     if (!groqRes.ok) {
       const errText = await groqRes.text();
       console.error("[voice-to-log] Groq STT 오류:", groqRes.status, errText);
-      void logApiCall(userId, "GROQ_STT", false);
+      void logApiCall(workerId, "GROQ_STT", false);
       return NextResponse.json({ success: false, message: "음성 인식에 실패했습니다." }, { status: 500 });
     }
 
     const transcript = (await groqRes.text()).trim();
-    void logApiCall(userId, "GROQ_STT", true);
+    void logApiCall(workerId, "GROQ_STT", true);
 
     if (!transcript) {
       return NextResponse.json({ success: false, message: "음성을 인식할 수 없습니다. 다시 시도해주세요." });
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
       console.error("[voice-to-log] Gemini 오류:", geminiRes.status, errText);
-      void logApiCall(userId, "GEMINI_LOG", false);
+      void logApiCall(workerId, "GEMINI_LOG", false);
       return NextResponse.json({ success: true, content: transcript });
     }
 
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     const aiContent =
       geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || transcript;
 
-    void logApiCall(userId, "GEMINI_LOG", true);
+    void logApiCall(workerId, "GEMINI_LOG", true);
     console.log("[voice-to-log] 변환 완료");
 
     return NextResponse.json({ success: true, content: aiContent, transcript });

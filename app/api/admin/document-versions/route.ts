@@ -28,7 +28,7 @@ function toItem(v: any) {
     pdfFileName: v.pdfFileName ?? null,
     sourceData: v.sourceData ?? null,
     createdAt: v.createdAt.toISOString(),
-    createdByUserId: v.createdByUserId != null ? String(v.createdByUserId) : null,
+    createdByWorkerId: v.createdByWorkerId != null ? String(v.createdByWorkerId) : null,
     createdByManagerId: v.createdByManagerId != null ? String(v.createdByManagerId) : null,
   };
 }
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
         pdfFileName: true,
         sourceData: true,
         createdAt: true,
-        createdByUserId: true,
+        createdByWorkerId: true,
         createdByManagerId: true,
       },
     });
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
           pdfFileName: true,
           sourceData: true,
           createdAt: true,
-          createdByUserId: true,
+          createdByWorkerId: true,
           createdByManagerId: true,
         },
       });

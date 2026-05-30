@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
 
   // 현재 배정 확인
   const assignment = await prisma.siteAssignment.findFirst({
-    where: { userId: BigInt(session.userId), status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+    where: { workerId: BigInt(session.workerId), status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
     orderBy: { assignedAt: "desc" },
   });
   if (!assignment) return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 404 });

@@ -1,5 +1,5 @@
 // 매니저 최종 확정/잠금
-// POST   — 잠금: 특정 userId+yearMonth의 출근기록 전체 isManagerFinalClosed=true
+// POST   — 잠금: 특정 workerId+yearMonth의 출근기록 전체 isManagerFinalClosed=true
 // DELETE — 잠금 해제
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
@@ -20,17 +20,17 @@ export async function POST(req: NextRequest) {
     const scope    = await requireManagerSession(req);
     const agencyId = scope.agencyId;
 
-    const { userId, yearMonth } = await req.json();
-    if (!userId || !yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth))
+    const { workerId, yearMonth } = await req.json();
+    if (!workerId || !yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth))
       return NextResponse.json({ success: false, message: "userId와 yearMonth(YYYY-MM)가 필요합니다." }, { status: 400 });
 
-    const userBigId = parseBigInt(userId);
+    const userBigId = parseBigInt(workerId);
     if (!userBigId) return NextResponse.json({ success: false, message: "잘못된 userId입니다." }, { status: 400 });
 
     // 해당 직무지도원이 자기 에이전시 소속인지 확인
     // assignmentId로 스코프를 제한해 다중배정 시 타 에이전시 레코드 침범 방지
     const assignments = await prisma.siteAssignment.findMany({
-      where: { userId: userBigId, agencyId, status: { in: ["ACTIVE","ASSIGNED","CONFIRMED"] } },
+      where: { workerId: userBigId, agencyId, status: { in: ["ACTIVE","ASSIGNED","CONFIRMED"] } },
       select: { id: true },
     });
     if (assignments.length === 0)
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     // WorkerNotice 알림
     await prisma.workerNotice.create({
       data: {
-        userId:   userBigId,
+        workerId:   userBigId,
         agencyId,
         title:    `[최종 확정] ${yearMonth} 출근기록이 잠겼습니다`,
         body:     `에이전시 관리자가 ${yearMonth} 출근기록을 최종 확정했습니다. 더 이상 수정이 불가합니다.`,
@@ -76,15 +76,15 @@ export async function DELETE(req: NextRequest) {
     const scope    = await requireManagerSession(req);
     const agencyId = scope.agencyId;
 
-    const { userId, yearMonth } = await req.json();
-    if (!userId || !yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth))
+    const { workerId, yearMonth } = await req.json();
+    if (!workerId || !yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth))
       return NextResponse.json({ success: false, message: "userId와 yearMonth(YYYY-MM)가 필요합니다." }, { status: 400 });
 
-    const userBigId = parseBigInt(userId);
+    const userBigId = parseBigInt(workerId);
     if (!userBigId) return NextResponse.json({ success: false, message: "잘못된 userId입니다." }, { status: 400 });
 
     const assignments = await prisma.siteAssignment.findMany({
-      where: { userId: userBigId, agencyId, status: { in: ["ACTIVE","ASSIGNED","CONFIRMED"] } },
+      where: { workerId: userBigId, agencyId, status: { in: ["ACTIVE","ASSIGNED","CONFIRMED"] } },
       select: { id: true },
     });
     if (assignments.length === 0)

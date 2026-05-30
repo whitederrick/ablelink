@@ -19,7 +19,7 @@ export async function PATCH(
     });
 
     if (!ev) return NextResponse.json({ success: false, message: "평가를 찾을 수 없습니다." }, { status: 404 });
-    if (ev.writerId.toString() !== session.userId)
+    if (ev.writerId.toString() !== session.workerId)
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     if (ev.isConfirmed)
       return NextResponse.json({ success: false, message: "이미 확정된 평가입니다." }, { status: 409 });

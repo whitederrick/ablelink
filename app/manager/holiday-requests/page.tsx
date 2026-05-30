@@ -12,7 +12,7 @@ type PendingReq = {
 
 type HolidayRow = {
   id: string; date: string; reason: string | null; countAsWorkday: boolean;
-  userName: string; userId: string; siteName: string; assignmentId: string;
+  workerName: string; workerId: string; siteName: string; assignmentId: string;
   pendingRequest: PendingReq | null;
 };
 
@@ -96,7 +96,7 @@ export default function HolidayRequestsPage() {
   }
 
   const filtered = rows.filter(r =>
-    !search || r.userName.includes(search) || r.siteName.includes(search)
+    !search || r.workerName.includes(search) || r.siteName.includes(search)
   );
   const pendingCount = rows.filter(r => r.pendingRequest).length;
 
@@ -169,7 +169,7 @@ export default function HolidayRequestsPage() {
               {filtered.map(row => (
                 <tr key={row.id} className={T.trBase}>
                   <td className={T.td + " tabular-nums font-semibold"}>{row.date}</td>
-                  <td className={T.td + " font-semibold text-slate-900"}>{row.userName}</td>
+                  <td className={T.td + " font-semibold text-slate-900"}>{row.workerName}</td>
                   <td className={T.td + " text-slate-500"}>{row.siteName}</td>
                   <td className={T.td + " text-slate-500 max-w-[160px] truncate"}>{row.reason ?? "-"}</td>
                   <td className={T.td}>
@@ -209,7 +209,7 @@ export default function HolidayRequestsPage() {
             <div className="mb-5">
               <p className="text-base font-black text-slate-900">변경 요청 보내기</p>
               <p className="mt-1 text-sm text-slate-500">
-                {reqTarget.userName} · {reqTarget.date}
+                {reqTarget.workerName} · {reqTarget.date}
                 {reqTarget.reason ? ` · ${reqTarget.reason}` : ""}
               </p>
             </div>

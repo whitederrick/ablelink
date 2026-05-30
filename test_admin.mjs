@@ -30,10 +30,10 @@ async function main() {
   console.log("  ✅ 로그인 성공:", afterUrl);
 
   // 2. 직무지도원 관리
-  console.log("\n[2] /admin/coaches 이동");
-  await page.goto(BASE + "/admin/coaches", { waitUntil: "networkidle" });
+  console.log("\n[2] /admin/workers 이동");
+  await page.goto(BASE + "/admin/workers", { waitUntil: "networkidle" });
   await page.waitForTimeout(1200);
-  await shot(page, "01_coaches");
+  await shot(page, "01_workers");
   console.log("  직무지도원 행:", await page.locator("tbody tr").count() + "개");
 
   // 3. 행 클릭 → 근무형태 설정 모달

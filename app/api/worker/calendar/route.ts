@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const year  = Number(searchParams.get("year")  ?? new Date().getFullYear());
     const month = Number(searchParams.get("month") ?? new Date().getMonth() + 1);
 
-    const userId = BigInt(session.userId);
+    const workerId = BigInt(session.workerId);
 
     const startDate = `${year}-${pad2(month)}-01`;
     const endDay    = new Date(year, month, 0).getDate();
@@ -52,14 +52,14 @@ export async function GET(request: NextRequest) {
 
     // 현재 활성 배정 조회
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId, status: "ACTIVE" },
+      where: { workerId, status: "ACTIVE" },
       include: { site: true },
       orderBy: { startDate: "desc" },
     });
 
     // 해당 월 출근 기록 조회
     const attendances = await prisma.dailyAttendance.findMany({
-      where: { userId, workDate: { gte: startDate, lte: endDate } },
+      where: { workerId, workDate: { gte: startDate, lte: endDate } },
       include: { logs: { select: { id: true, isCompleted: true } } },
       orderBy: { workDate: "asc" },
     });

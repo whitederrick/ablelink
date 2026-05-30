@@ -9,7 +9,7 @@ type Step = "choose-id" | "verify-email" | "set-password";
 export default function OnboardingPage() {
   const router = useRouter();
   const [currentLoginId, setCurrentLoginId] = useState("");
-  const [userName, setUserName] = useState("");
+  const [workerName, setUserName] = useState("");
   const [loading, setLoading] = useState(true);
 
   const [step, setStep] = useState<Step>("choose-id");
@@ -33,7 +33,7 @@ export default function OnboardingPage() {
       .then(d => {
         if (d.success) {
           setCurrentLoginId(d.user.loginId);
-          setUserName(d.user.userName);
+          setUserName(d.user.workerName);
           if (!d.user.isTemporary) router.replace("/worker/home");
         }
       })
@@ -130,7 +130,7 @@ export default function OnboardingPage() {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
             <KeyRound className="h-6 w-6 text-sky-400" aria-hidden="true" />
           </div>
-          <p className="mb-1 text-xs font-semibold text-slate-400">환영합니다, {userName}님</p>
+          <p className="mb-1 text-xs font-semibold text-slate-400">환영합니다, {workerName}님</p>
           <h1 className="text-xl font-black text-white">AbleLink 초기 설정</h1>
           <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-400">
             아이디와 비밀번호를 설정하면 서비스를 이용하실 수 있습니다.

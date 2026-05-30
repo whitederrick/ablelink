@@ -1,4 +1,4 @@
-// app/api/home/[userId]/route.ts
+// app/api/home/[workerId]/route.ts
 // 홈 화면용 유저 정보 및 현장 배정 데이터 API (1:多 지도 모드 판정 포함)
 
 export const runtime = "nodejs";
@@ -18,7 +18,7 @@ function getKstNowDate() {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: Promise<{ workerId: string }> }
 ) {
   try {
     const session = await getWorkerSessionFromReq(request);
@@ -29,11 +29,11 @@ export async function GET(
     const resolvedParams = await params;
 
     // 본인 데이터만 접근 가능
-    if (session.userId !== resolvedParams.userId) {
+    if (session.workerId !== resolvedParams.workerId) {
       return NextResponse.json({ success: false, message: "Forbidden" }, { status: 403 });
     }
 
-    const userId = BigInt(resolvedParams.userId);
+    const workerId = BigInt(resolvedParams.workerId);
 
     // 1. 오늘 날짜 구하기 (YYYY-MM-DD)
     const today = getKstDateString();
@@ -50,7 +50,7 @@ export async function GET(
 
     // 이전 날짜의 미종료 WORKING 기록 자동 처리 (출근 후 앱 종료 케이스)
     const staleWorking = await prisma.dailyAttendance.findFirst({
-      where: { userId, status: 'WORKING', workDate: { lt: today } },
+      where: { workerId, status: 'WORKING', workDate: { lt: today } },
     });
     if (staleWorking) {
       await prisma.dailyAttendance.update({
@@ -61,7 +61,7 @@ export async function GET(
 
     const pendingFinalize = await prisma.dailyAttendance.findFirst({
       where: {
-        userId,
+        workerId,
         status: 'DONE',
         isFinalClosed: false,
       },
@@ -94,7 +94,7 @@ export async function GET(
 
     // 2. 유저 정보, 현장 정보 및 '오늘의 출근 기록' 조회
     const userWithData = await prisma.worker.findUnique({
-      where: { id: userId },
+      where: { id: workerId },
       include: {
         assignments: {
           where: { status: { in: ['ASSIGNED', 'CONFIRMED', 'ACTIVE'] } },
@@ -144,7 +144,7 @@ export async function GET(
 
         address: site?.address ?? "",
         detailAddress: site?.detailAddress ?? "",
-        userName: userWithData.userName,
+        workerName: userWithData.workerName,
 
         companyName: site?.companyName || "배정된 현장 없음",
         gpsLat: site?.gpsLat ? Number(site.gpsLat) : null,

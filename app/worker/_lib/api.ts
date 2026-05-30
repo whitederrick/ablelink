@@ -2,8 +2,8 @@
 // 직무지도원 웹용 API 클라이언트
 
 export interface HomeData {
-  userId: string;
-  userName: string;
+  workerId: string;
+  workerName: string;
   siteName: string | null;
   siteId: string | null;
   assignmentId: string | null;
@@ -32,15 +32,15 @@ export interface Trainee {
   trainingType?: string;
 }
 
-export async function fetchHome(userId: string): Promise<HomeData> {
-  const res = await fetch(`/api/home/${userId}`, { cache: "no-store" });
+export async function fetchHome(workerId: string): Promise<HomeData> {
+  const res = await fetch(`/api/home/${workerId}`, { cache: "no-store" });
   const data = await res.json();
   if (!data.success) throw new Error(data.message || "홈 데이터 로드 실패");
   return data.data;
 }
 
 export async function clockIn(payload: {
-  userId: string;
+  workerId: string;
   latitude: number;
   longitude: number;
   isGpsModified?: boolean;
@@ -55,7 +55,7 @@ export async function clockIn(payload: {
 }
 
 export async function clockOut(payload: {
-  userId: string;
+  workerId: string;
   latitude: number;
   longitude: number;
   isGpsModified?: boolean;

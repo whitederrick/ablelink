@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const rl = await checkRateLimit(`email-change:${ip}:${session.userId}`);
+  const rl = await checkRateLimit(`email-change:${ip}:${session.workerId}`);
   if (!rl.allowed) {
     return NextResponse.json({ success: false, message: "잠시 후 다시 시도해주세요." }, { status: 429 });
   }
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   // 중복 확인 (다른 사용자가 이미 같은 이메일을 loginId로 사용 중인지)
   const dup = await prisma.worker.findFirst({
-    where: { loginId: email, id: { not: BigInt(session.userId) } },
+    where: { loginId: email, id: { not: BigInt(session.workerId) } },
   });
   if (dup) {
     return NextResponse.json({ success: false, message: "이미 사용 중인 이메일 주소입니다." }, { status: 409 });
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10분
 
   await prisma.worker.update({
-    where: { id: BigInt(session.userId) },
+    where: { id: BigInt(session.workerId) },
     data: {
       pendingLoginId:      email,
       verifyCode:          code,
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     await sendSimpleEmail({
       to:      email,
       subject: "[AbleLink] 이메일 인증 코드",
-      text:    `안녕하세요, ${session.userName}님.\n\n이메일 아이디 변경을 위한 인증 코드입니다.\n\n인증 코드: ${code}\n\n이 코드는 10분간 유효합니다.\n본인이 요청하지 않으셨다면 무시해주세요.`,
+      text:    `안녕하세요, ${session.workerName}님.\n\n이메일 아이디 변경을 위한 인증 코드입니다.\n\n인증 코드: ${code}\n\n이 코드는 10분간 유효합니다.\n본인이 요청하지 않으셨다면 무시해주세요.`,
     });
   } catch (e) {
     console.error("[email-change/request] SES 오류:", e);

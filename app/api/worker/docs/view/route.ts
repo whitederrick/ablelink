@@ -37,10 +37,10 @@ export async function GET(request: NextRequest) {
     const startStr = searchParams.get("periodStart") || def.start;
     const endStr   = searchParams.get("periodEnd")   || def.end;
 
-    const userId = BigInt(session.userId);
+    const workerId = BigInt(session.workerId);
 
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
       include: { site: true },
       orderBy: { assignedAt: "desc" },
     });
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     // ── 출근부 ──────────────────────────────────────────────────────────
     if (docType === "attendance-sheet") {
       const records = await prisma.dailyAttendance.findMany({
-        where: { userId, siteId, workDate: { gte: startStr, lte: endStr } },
+        where: { workerId, siteId, workDate: { gte: startStr, lte: endStr } },
         orderBy: { workDate: "asc" },
       });
       const rows = records.map(r => ({
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
     if (docType === "training-daily-log") {
       const logs = await prisma.traineeLog.findMany({
         where: {
-          writerId: userId,
+          writerId: workerId,
           trainingType: { in: ["PRE", "FIELD"] },
           attendance: { siteId, workDate: { gte: startStr, lte: endStr } },
         },
@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
     if (docType === "trainee-final-eval") {
       const logs = await prisma.traineeLog.findMany({
         where: {
-          writerId: userId,
+          writerId: workerId,
           trainingType: { in: ["PRE", "FIELD"] },
           attendance: { siteId, workDate: { gte: startStr, lte: endStr } },
         },
@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
     if (docType === "adaptation-daily-log") {
       const logs = await prisma.traineeLog.findMany({
         where: {
-          writerId: userId,
+          writerId: workerId,
           trainingType: "ADAPTATION",
           attendance: { siteId, workDate: { gte: startStr, lte: endStr } },
         },
@@ -193,7 +193,7 @@ export async function GET(request: NextRequest) {
     if (docType === "adaptation-final-eval") {
       const logs = await prisma.traineeLog.findMany({
         where: {
-          writerId: userId,
+          writerId: workerId,
           trainingType: "ADAPTATION",
           attendance: { siteId, workDate: { gte: startStr, lte: endStr } },
         },

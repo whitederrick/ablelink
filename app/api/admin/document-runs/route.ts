@@ -48,7 +48,7 @@ function toItem(r: any) {
     agencyId: r.agencyId != null ? String(r.agencyId) : null,
     assignmentId: String(r.assignmentId),
     siteId: String(r.siteId),
-    workerUserId: String(r.workerUserId),
+    workerId: String(r.workerId),
     docType: r.docType,
     periodStart: r.periodStart.toISOString(),
     periodEnd: r.periodEnd.toISOString(),
@@ -65,12 +65,12 @@ function toItem(r: any) {
           agencyId: r.site.agencyId != null ? String(r.site.agencyId) : null,
         }
       : null,
-    worker: r.worker ? { id: String(r.worker.id), userName: r.worker.userName, loginId: r.worker.loginId } : null,
+    worker: r.worker ? { id: String(r.worker.id), workerName: r.worker.workerName, loginId: r.worker.loginId } : null,
   };
 }
 
 // GET: 목록/검색
-// query: docType, status, assignmentId, siteId, workerUserId, from, to, page, pageSize
+// query: docType, status, assignmentId, siteId, workerId, from, to, page, pageSize
 export async function GET(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
 
     const assignmentIdStr = (searchParams.get("assignmentId") || "").trim();
     const siteIdStr = (searchParams.get("siteId") || "").trim();
-    const workerUserIdStr = (searchParams.get("workerUserId") || "").trim();
+    const workerIdStr = (searchParams.get("workerId") || "").trim();
 
     const fromStr = (searchParams.get("from") || "").trim();
     const toStr = (searchParams.get("to") || "").trim();
@@ -115,9 +115,9 @@ export async function GET(req: NextRequest) {
       if (!isValidNumericId(siteIdStr)) throw new Error("VALIDATION:siteId");
       where.siteId = BigInt(siteIdStr);
     }
-    if (workerUserIdStr) {
-      if (!isValidNumericId(workerUserIdStr)) throw new Error("VALIDATION:workerUserId");
-      where.workerUserId = BigInt(workerUserIdStr);
+    if (workerIdStr) {
+      if (!isValidNumericId(workerIdStr)) throw new Error("VALIDATION:workerId");
+      where.workerId = BigInt(workerIdStr);
     }
 
     // 기간 필터: periodStart ~ periodEnd 오버랩
@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
           agencyId: true,
           assignmentId: true,
           siteId: true,
-          workerUserId: true,
+          workerId: true,
           docType: true,
           periodStart: true,
           periodEnd: true,
@@ -154,7 +154,7 @@ export async function GET(req: NextRequest) {
           createdAt: true,
           updatedAt: true,
           site: { select: { id: true, companyName: true, agencyId: true } },
-          worker: { select: { id: true, userName: true, loginId: true } },
+          worker: { select: { id: true, workerName: true, loginId: true } },
         },
       }),
     ]);
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
       where: { id: assignmentId },
       select: {
         id: true,
-        userId: true,
+        workerId: true,
         siteId: true,
         site: { select: { id: true, agencyId: true } },
       },
@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
         agencyId: assignment.site.agencyId, // nullable 가능
         assignment: { connect: { id: assignment.id } },
         site: { connect: { id: assignment.siteId } },
-        worker: { connect: { id: assignment.userId } },
+        worker: { connect: { id: assignment.workerId } },
 
         docType: docTypeStr as any,
         periodStart,
@@ -229,7 +229,7 @@ export async function POST(req: NextRequest) {
         agencyId: true,
         assignmentId: true,
         siteId: true,
-        workerUserId: true,
+        workerId: true,
         docType: true,
         periodStart: true,
         periodEnd: true,
@@ -240,7 +240,7 @@ export async function POST(req: NextRequest) {
         createdAt: true,
         updatedAt: true,
         site: { select: { id: true, companyName: true, agencyId: true } },
-        worker: { select: { id: true, userName: true, loginId: true } },
+        worker: { select: { id: true, workerName: true, loginId: true } },
       },
     });
 

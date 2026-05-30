@@ -19,8 +19,8 @@ export async function POST(request: NextRequest) {
     const session = await getWorkerSessionFromReq(request);
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
-    const userId = BigInt(session.userId);
-    const planCheck = await checkPlanAccess(userId, "SITE_MANAGER_SIGN");
+    const workerId = BigInt(session.workerId);
+    const planCheck = await checkPlanAccess(workerId, "SITE_MANAGER_SIGN");
     if (!planCheck.allowed) return NextResponse.json({ success: false, message: planCheck.message }, { status: 403 });
 
     const formData = await request.formData();
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
       orderBy: { assignedAt: "desc" },
     });
     if (!assignment) {

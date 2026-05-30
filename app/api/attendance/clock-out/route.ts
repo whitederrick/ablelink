@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     const action = finalize ? "FINALIZE" : reconfirm ? "RECONFIRM" : "CLOCK_OUT";
 
     console.log(
-      `[퇴근 요청] action=${action}, userId=${session.userId}, 보정여부=${isGpsModified}, 거리예외확인=${confirmOutOfRange}, assignmentId=${inputAssignmentId ?? "auto"}, basePointId=${inputBasePointId ?? "auto"}`
+      `[퇴근 요청] action=${action}, workerId=${session.workerId}, 보정여부=${isGpsModified}, 거리예외확인=${confirmOutOfRange}, assignmentId=${inputAssignmentId ?? "auto"}, basePointId=${inputBasePointId ?? "auto"}`
     );
 
     if (latitude === undefined || longitude === undefined) {
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userIdBig = BigInt(session.userId);
+    const userIdBig = BigInt(session.workerId);
 
     // [STEP 1] 오늘 날짜의 출근 기록 찾기
     // - 최초 퇴근(CLOCK_OUT): WORKING 상태만 허용
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
 
     const attendance = await prisma.dailyAttendance.findFirst({
       where: {
-        userId: userIdBig,
+        workerId: userIdBig,
         workDate: todayString,
         status: action === "CLOCK_OUT" ? "WORKING" : "DONE",
       },
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
       const a = await prisma.siteAssignment.findFirst({
         where: {
           id: decidedAssignmentId,
-          userId: userIdBig,
+          workerId: userIdBig,
           status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] },
         },
         select: { id: true, siteId: true },
@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
       // attendance.assignmentId가 없고 body에도 없으면 최신 유효 배정 보강
       const a = await prisma.siteAssignment.findFirst({
         where: {
-          userId: userIdBig,
+          workerId: userIdBig,
           siteId: attendance.siteId,
           status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] },
         },

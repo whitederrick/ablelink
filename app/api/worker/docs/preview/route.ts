@@ -40,13 +40,13 @@ export async function GET(request: NextRequest) {
 
     if (!docType) return NextResponse.json({ success:false, message:"docType 필요" }, { status:400 });
 
-    const userId = BigInt(session.userId);
+    const workerId = BigInt(session.workerId);
     const user = await prisma.worker.findUnique({
-      where: { id: userId },
-      select: { userName:true, phoneNumber:true, signatureUrl:true, loginId:true },
+      where: { id: workerId },
+      select: { workerName:true, phoneNumber:true, signatureUrl:true, loginId:true },
     });
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] } },
+      where: { workerId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] } },
       include: { site:true, assignedByManager:{ select:{ signatureUrl:true, displayName:true } } },
       orderBy: { assignedAt:"desc" },
     });
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
       toBase64DataUri(adminForSign?.signatureUrl),
     ]);
     const sigs = {
-      worker:       { name: user?.userName||"",            imageUrl: workerImg },
+      worker:       { name: user?.workerName||"",            imageUrl: workerImg },
       govAgent:    { name: adminForSign?.displayName||"", imageUrl: govImg },
       agencyAgent: { name: adminForSign?.displayName||"", imageUrl: govImg },
     };
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
 
     if (docType === "ATTENDANCE_SHEET") {
       const attendances = await prisma.dailyAttendance.findMany({
-        where:{ userId, workDate:{ gte:start, lte:end } },
+        where:{ workerId, workDate:{ gte:start, lte:end } },
         include:{ logs:{ select:{ time1on1:true, timeGroup:true, extTime1on1:true, extTimeGroup:true } } },
         orderBy:{ workDate:"asc" },
       });
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
       const totalHours=entries.reduce((s,e)=>s+Number(e.hours),0);
       const oneToMany=entries.reduce((s,e)=>s+Number(e.multiHours),0);
       payload = {
-        workerName:user?.userName||"", workerPhone:user?.phoneNumber||user?.loginId||"",
+        workerName:user?.workerName||"", workerPhone:user?.phoneNumber||user?.loginId||"",
         companyName:site.companyName, periodStartYMD:fmtDot(start), periodEndYMD:fmtDot(end),
         totalDays:entries.length, totalHours, weeklyHolidayCount:0, monthlyLeaveCount:0,
         allowanceTotalWon:"0", oneToOneHours:totalHours-oneToMany, oneToManyHours:oneToMany,
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
       const tid = traineeId ? BigInt(traineeId) : null;
       const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
       const logs = tid ? await prisma.traineeLog.findMany({
-        where:{ writerId:userId, traineeId:tid, trainingType:{in:["PRE","FIELD"]}, attendance:{workDate:{gte:start,lte:end}} },
+        where:{ writerId:workerId, traineeId:tid, trainingType:{in:["PRE","FIELD"]}, attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
       }) : [];
       payload = {
@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
       const tid = traineeId ? BigInt(traineeId) : null;
       const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
       const logs = tid ? await prisma.traineeLog.findMany({
-        where:{ writerId:userId, traineeId:tid, trainingType:"ADAPTATION", attendance:{workDate:{gte:start,lte:end}} },
+        where:{ writerId:workerId, traineeId:tid, trainingType:"ADAPTATION", attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
       }) : [];
       payload = {
@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
       const tid = traineeId ? BigInt(traineeId) : null;
       const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
       const ev = tid ? await prisma.traineeEvaluation.findFirst({
-        where:{ traineeId:tid, writerId:userId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
+        where:{ traineeId:tid, writerId:workerId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
       }) : null;
       payload = {
         traineeName:trainee?.name||"", companyName:site.companyName,
@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
       const tid = traineeId ? BigInt(traineeId) : null;
       const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
       const ev = tid ? await prisma.traineeEvaluation.findFirst({
-        where:{ traineeId:tid, writerId:userId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
+        where:{ traineeId:tid, writerId:workerId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
       }) : null;
       payload = {
         traineeName:trainee?.name||"", companyName:site.companyName,

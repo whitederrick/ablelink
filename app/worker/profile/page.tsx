@@ -11,7 +11,7 @@ type EmailStep = "idle" | "sent";
 export default function WorkerProfilePage() {
   const router = useRouter();
 
-  const [userName,        setUserName]        = useState("");
+  const [workerName,        setUserName]        = useState("");
   const [phoneNumber,     setPhoneNumber]     = useState("");
   const [loginId,         setLoginId]         = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -44,7 +44,7 @@ export default function WorkerProfilePage() {
       .then(r => r.json())
       .then(d => {
         if (d.success) {
-          setUserName(d.user.userName);
+          setUserName(d.user.workerName);
           setPhoneNumber(d.user.phoneNumber);
           setLoginId(d.user.loginId ?? "");
           setIsTemp(d.user.isTemporary ?? false);
@@ -87,7 +87,7 @@ export default function WorkerProfilePage() {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          userName:        userName.trim() || undefined,
+          workerName:        workerName.trim() || undefined,
           phoneNumber:     phoneNumber || undefined,
           currentPassword: currentPassword || undefined,
           newPassword:     newPassword     || undefined,
@@ -191,7 +191,7 @@ export default function WorkerProfilePage() {
               <User className="h-3.5 w-3.5 text-slate-400" />
               이름
             </label>
-            <input type="text" value={userName}
+            <input type="text" value={workerName}
               onChange={e => setUserName(e.target.value)}
               className={INPUT_CLS} />
           </div>

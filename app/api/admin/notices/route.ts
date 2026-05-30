@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
     const notices = await (prisma as any).workerNotice.findMany({
       where: { agencyId },
-      include: { user: { select: { id: true, userName: true } } },
+      include: { user: { select: { id: true, workerName: true } } },
       orderBy: { createdAt: "desc" },
       take: limit,
     });
@@ -26,8 +26,8 @@ export async function GET(req: NextRequest) {
       success: true,
       notices: notices.map((n: any) => ({
         id:         n.id.toString(),
-        userId:     n.userId.toString(),
-        userName:   n.user?.userName ?? "",
+        workerId:     n.workerId.toString(),
+        workerName:   n.user?.workerName ?? "",
         title:      n.title,
         body:       n.body,
         type:       n.type,
@@ -60,10 +60,10 @@ export async function POST(req: NextRequest) {
     } else {
       const assignments = await prisma.siteAssignment.findMany({
         where: { agencyId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
-        select: { userId: true },
+        select: { workerId: true },
       });
       const unique = new Map<string, bigint>();
-      for (const a of assignments) unique.set(a.userId.toString(), a.userId);
+      for (const a of assignments) unique.set(a.workerId.toString(), a.workerId);
       targetIds = [...unique.values()];
     }
 
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       targetIds.map(uid =>
         (prisma as any).workerNotice.create({
           data: {
-            userId: uid, agencyId,
+            workerId: uid, agencyId,
             title: String(title).slice(0, 100),
             body:  String(msgBody).slice(0, 500),
             type:  noticeType,

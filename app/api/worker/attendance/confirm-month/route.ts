@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     const result = await prisma.dailyAttendance.updateMany({
       where: {
-        userId:               BigInt(session.userId),
+        workerId:               BigInt(session.workerId),
         workDate:             { gte: dateFrom, lte: dateTo },
         isFinalClosed:        false,
         isManagerFinalClosed: false,

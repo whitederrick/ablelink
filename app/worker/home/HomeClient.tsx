@@ -290,7 +290,7 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
 
   const fetchHome = useCallback(async () => {
     try {
-      const res = await fetch(`/api/home/${session.userId}`, { cache: "no-store" });
+      const res = await fetch(`/api/home/${session.workerId}`, { cache: "no-store" });
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
 
@@ -329,7 +329,7 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
     } finally {
       setLoading(false);
     }
-  }, [session.userId]);
+  }, [session.workerId]);
 
   useEffect(() => {
     fetchHome();
@@ -383,7 +383,7 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: session.userId,
+          workerId: session.workerId,
           latitude,
           longitude,
           isGpsModified,
@@ -576,7 +576,7 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
               {showProfile && (
                 <div className="absolute right-0 top-12 z-50 min-w-[140px] rounded-2xl border border-slate-100 bg-white p-2 shadow-xl shadow-slate-950/10">
                   <p className="border-b border-slate-100 px-3 pb-2 pt-1 text-xs font-semibold text-slate-400">
-                    {session.userName}님
+                    {session.workerName}님
                   </p>
                   <button
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"

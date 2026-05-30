@@ -33,15 +33,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "assignmentId와 logs가 필요합니다." }, { status: 400 });
     }
 
-    const writerId = BigInt(session.userId);
+    const writerId = BigInt(session.workerId);
     const assignId = BigInt(assignmentId);
 
-    // 배정 정보 조회 (siteId, userId 확인)
+    // 배정 정보 조회 (siteId, workerId 확인)
     const assignment = await prisma.siteAssignment.findUnique({
       where: { id: assignId },
-      select: { userId: true, siteId: true },
+      select: { workerId: true, siteId: true },
     });
-    if (!assignment || assignment.userId !== writerId) {
+    if (!assignment || assignment.workerId !== writerId) {
       return NextResponse.json({ success: false, message: "배정 정보를 찾을 수 없습니다." }, { status: 403 });
     }
 
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         // 과거 날짜: 소급 입력 → DONE + 최종확정 상태로 생성
         const created = await prisma.dailyAttendance.create({
           data: {
-            userId: writerId,
+            workerId: writerId,
             siteId,
             assignmentId: assignId,
             workDate: date,

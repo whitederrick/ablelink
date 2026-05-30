@@ -25,13 +25,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       where: { id: reqId },
       include: {
         holiday: {
-          include: { assignment: { select: { userId: true } } },
+          include: { assignment: { select: { workerId: true } } },
         },
       },
     });
 
     if (!request) return NextResponse.json({ success: false, message: "요청을 찾을 수 없습니다." }, { status: 404 });
-    if (request.holiday.assignment.userId !== BigInt(session.userId))
+    if (request.holiday.assignment.workerId !== BigInt(session.workerId))
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     if (request.status !== "PENDING")
       return NextResponse.json({ success: false, message: "이미 처리된 요청입니다." }, { status: 409 });

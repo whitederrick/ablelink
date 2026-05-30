@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
         assignment: {
           select: {
             id: true,
-            user: { select: { id: true, userName: true } },
+            user: { select: { id: true, workerName: true } },
             site: { select: { companyName: true } },
           },
         },
@@ -47,8 +47,8 @@ export async function GET(req: NextRequest) {
         date:            h.date,
         reason:          h.reason ?? null,
         countAsWorkday:  h.countAsWorkday,
-        userName:        h.assignment.user.userName,
-        userId:          h.assignment.user.id.toString(),
+        workerName:        h.assignment.user.workerName,
+        workerId:          h.assignment.user.id.toString(),
         siteName:        h.assignment.site.companyName,
         assignmentId:    h.assignment.id.toString(),
         pendingRequest:  h.requests[0]
@@ -108,18 +108,18 @@ export async function POST(req: NextRequest) {
     });
 
     // 직무지도원에게 WorkerNotice 알림
-    const workerUserId = holiday.assignment
+    const workerId = holiday.assignment
       ? (await prisma.siteAssignment.findUnique({
           where: { id: holiday.assignmentId },
-          select: { userId: true },
-        }))?.userId
+          select: { workerId: true },
+        }))?.workerId
       : null;
 
-    if (workerUserId) {
+    if (workerId) {
       const typeLabel = requestType === "DELETE" ? "삭제" : "근무인정 변경";
       await prisma.workerNotice.create({
         data: {
-          userId:   workerUserId,
+          workerId:   workerId,
           agencyId,
           title:    `[휴무일 ${typeLabel} 요청] ${holiday.date}`,
           body:     reason?.trim() || `에이전시에서 ${holiday.date} 커스텀 휴무일 ${typeLabel}을 요청했습니다. 캘린더에서 확인해주세요.`,

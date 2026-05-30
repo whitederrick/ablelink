@@ -23,7 +23,7 @@ export async function GET(
     });
 
     if (!log) return NextResponse.json({ success: false, message: "일지를 찾을 수 없습니다." }, { status: 404 });
-    if (log.writerId.toString() !== session.userId)
+    if (log.writerId.toString() !== session.workerId)
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
 
     return NextResponse.json({
@@ -71,7 +71,7 @@ export async function PATCH(
     });
 
     if (!log) return NextResponse.json({ success: false, message: "일지를 찾을 수 없습니다." }, { status: 404 });
-    if (log.writerId.toString() !== session.userId)
+    if (log.writerId.toString() !== session.workerId)
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     const body = await request.json().catch(() => ({}));
     if (typeof body.content !== "string")
@@ -105,7 +105,7 @@ export async function DELETE(
     });
 
     if (!log) return NextResponse.json({ success: false, message: "일지를 찾을 수 없습니다." }, { status: 404 });
-    if (log.writerId.toString() !== session.userId)
+    if (log.writerId.toString() !== session.workerId)
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
 
     await prisma.traineeLog.delete({ where: { id: BigInt(id) } });

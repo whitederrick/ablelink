@@ -15,11 +15,11 @@ export async function GET(request: NextRequest) {
     const periodEnd    = searchParams.get("periodEnd");
     const trainingType = searchParams.get("trainingType");
 
-    const userId = BigInt(session.userId);
+    const workerId = BigInt(session.workerId);
 
     const logs = await prisma.traineeLog.findMany({
       where: {
-        writerId: userId,
+        writerId: workerId,
         ...(traineeId    ? { traineeId: BigInt(traineeId) } : {}),
         ...(trainingType ? { trainingType } : {}),
         attendance: {

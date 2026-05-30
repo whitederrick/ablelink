@@ -8,11 +8,11 @@
 
 ```mermaid
 erDiagram
-    User {
+    Worker {
         bigint id PK
         string login_id UK
         string password
-        string user_name
+        string worker_name
         string phone_number
         enum role
         enum status
@@ -29,7 +29,7 @@ erDiagram
         bigint id PK
         string name UK
         enum plan_type
-        int max_coaches
+        int max_workers
         int max_sites
         datetime trial_started_at
         datetime trial_ends_at
@@ -62,7 +62,7 @@ erDiagram
 
     SiteAssignment {
         bigint id PK
-        bigint user_id FK
+        bigint worker_id FK
         bigint site_id FK
         bigint agency_id FK
         enum service_step
@@ -74,7 +74,7 @@ erDiagram
 
     DailyAttendance {
         bigint id PK
-        bigint user_id FK
+        bigint worker_id FK
         bigint site_id FK
         bigint assignment_id FK
         string work_date
@@ -106,7 +106,7 @@ erDiagram
     EmploymentContract {
         bigint id PK
         bigint agency_id FK
-        bigint user_id FK
+        bigint worker_id FK
         string sign_token UK
         enum status
         datetime contract_start
@@ -117,7 +117,7 @@ erDiagram
         bigint id PK
         bigint assignment_id FK
         bigint site_id FK
-        bigint coach_user_id FK
+        bigint worker_id FK
         enum doc_type
         enum status
         string sign_stage
@@ -128,8 +128,8 @@ erDiagram
     PayContract {
         bigint id PK
         bigint agency_id FK
-        bigint user_id FK
-        enum coach_type
+        bigint worker_id FK
+        enum worker_type
         enum pay_type
         decimal base_amount
         enum income_type
@@ -146,7 +146,7 @@ erDiagram
     PayrollItem {
         bigint id PK
         bigint run_id FK
-        bigint user_id FK
+        bigint worker_id FK
         decimal gross_pay
         decimal total_deduction
         decimal net_pay
@@ -235,7 +235,7 @@ erDiagram
 | `attendance_issue_events` | 근태 이슈 이벤트 이력 | AttendanceIssue |
 | `worker_invites` | 직무지도원 초대 링크 | Agency, Site |
 | `phone_verifications` | 전화번호 OTP 인증 | - |
-| `user_notification_settings` | 알람 설정 | User (1:1) |
+| `worker_notification_settings` | 알람 설정 | Worker (1:1) |
 | `submission_requests` | 문서 제출 요청 | SiteAssignment |
 | `audit_events` | 감사 로그 | - |
 | `common_codes` | 공통 코드 | - |
@@ -248,12 +248,12 @@ erDiagram
 |------|---|
 | `AgencyPlanType` | FREE, TRIAL, STARTER, STANDARD, PRO |
 | `AdminRole` | ADMIN, GOV, AGENCY |
-| `UserRole` | ADMIN, COACH |
-| `UserStatus` | ACTIVE, RESIGNED, PAUSED |
+| `WorkerRole` | ADMIN, WORKER |
+| `WorkerStatus` | ACTIVE, RESIGNED, PAUSED |
 | `AssignStatus` | ACTIVE, ENDED, ASSIGNED, CONFIRMED, REJECTED, DROPPED |
 | `ServiceStep` | PRE_TRAINING, FIELD_TRAINING, ADAPTATION |
 | `DocumentType` | ATTENDANCE_SHEET, TRAINING_DAILY_LOG, TRAINEE_COMPREHENSIVE_EVAL, POST_EMPLOY_ADAPT_LOG, ADAPTATION_COMPREHENSIVE_EVAL, CHECKLIST |
 | `PayType` | MONTHLY, DAILY, HOURLY |
 | `IncomeType` | BUSINESS (사업소득 3.3%), EMPLOYMENT (근로소득 4대보험) |
-| `CoachType` | INTERNAL (소속직원), EXTERNAL (프리랜서) |
+| `WorkerType` | INTERNAL (소속직원), EXTERNAL (프리랜서) |
 | `ContractStatus` | PENDING, SIGNED, COMPLETED, CANCELLED |

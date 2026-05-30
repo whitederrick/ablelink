@@ -91,11 +91,11 @@ export async function POST(req: NextRequest) {
           startDate: { lte: new Date(periodEnd + "T23:59:59+09:00") },
           OR: [{ endDate: null }, { endDate: { gte: new Date(periodStart + "T00:00:00+09:00") } }],
         },
-        select: { userId: true, siteId: true },
+        select: { workerId: true, siteId: true },
       }),
     ]);
 
-    const userIds = [...new Set(assignments.map(a => a.userId))];
+    const userIds = [...new Set(assignments.map(a => a.workerId))];
     if (userIds.length === 0) {
       return NextResponse.json({ success: false, message: "해당 월에 활성 직무지도원이 없습니다." }, { status: 400 });
     }
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
     const periodEndDate = new Date(periodEnd + "T23:59:59+09:00");
 
     const itemInputs: {
-      userId: bigint;
+      workerId: bigint;
       grossPay: Decimal;
       totalDeduction: Decimal;
       netPay: Decimal;
@@ -114,13 +114,13 @@ export async function POST(req: NextRequest) {
     }[] = [];
 
     // 유저별 3개 쿼리를 모든 유저에 걸쳐 동시 실행
-    const userDataList = await Promise.all(userIds.map(async (userId) => {
-      const userSiteIds = assignments.filter(a => a.userId === userId).map(a => a.siteId);
+    const userDataList = await Promise.all(userIds.map(async (workerId) => {
+      const userSiteIds = assignments.filter(a => a.workerId === workerId).map(a => a.siteId);
       const [contract, attendances, traineeCount] = await Promise.all([
         // 유효 급여 계약 조회
         prisma.payContract.findFirst({
           where: {
-            agencyId, userId,
+            agencyId, workerId,
             effectiveFrom: { lte: new Date(periodStart) },
             OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date(periodEnd) } }],
           },
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
         }),
         // 출근 기록 조회
         prisma.dailyAttendance.findMany({
-          where: { userId, workDate: { gte: periodStart, lte: periodEnd }, isFinalClosed: true, assignment: { agencyId } },
+          where: { workerId, workDate: { gte: periodStart, lte: periodEnd }, isFinalClosed: true, assignment: { agencyId } },
           select: { workDate: true, startTime: true, endTime: true },
         }),
         // 훈련생 수
@@ -140,10 +140,10 @@ export async function POST(req: NextRequest) {
           },
         }),
       ]);
-      return { userId, contract, attendances, traineeCount };
+      return { workerId, contract, attendances, traineeCount };
     }));
 
-    for (const { userId, contract, attendances, traineeCount } of userDataList) {
+    for (const { workerId, contract, attendances, traineeCount } of userDataList) {
       const workedDays = attendances.length;
       const workedMinutes = attendances.reduce((s, a) => s + minutesBetween(a.startTime, a.endTime), 0);
 
@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
       const netPay = grossPay - totalDeduction;
 
       itemInputs.push({
-        userId,
+        workerId,
         grossPay: new Decimal(grossPay),
         totalDeduction: new Decimal(totalDeduction),
         netPay: new Decimal(netPay),
@@ -234,7 +234,7 @@ export async function POST(req: NextRequest) {
       if (existing) await tx.payrollRun.delete({ where: { id: existing.id } });
       return tx.payrollRun.create({
         data: { agencyId, yearMonth, status: "DRAFT", items: { create: itemInputs } },
-        include: { items: { include: { user: { select: { id: true, userName: true } } } } },
+        include: { items: { include: { user: { select: { id: true, workerName: true } } } } },
       });
     });
 
@@ -245,8 +245,8 @@ export async function POST(req: NextRequest) {
       itemCount: run.items.length,
       items: run.items.map(i => ({
         id: i.id.toString(),
-        userId: i.userId.toString(),
-        userName: i.user.userName,
+        workerId: i.workerId.toString(),
+        workerName: i.user.workerName,
         grossPay: Number(i.grossPay),
         totalDeduction: Number(i.totalDeduction),
         netPay: Number(i.netPay),

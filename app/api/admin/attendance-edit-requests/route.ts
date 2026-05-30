@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     const requests = await prisma.attendanceEditRequest.findMany({
       where,
       include: {
-        user:       { select: { id: true, userName: true, phoneNumber: true } },
+        user:       { select: { id: true, workerName: true, phoneNumber: true } },
         attendance: {
           select: {
             id: true, workDate: true, startTime: true, endTime: true,
@@ -37,8 +37,8 @@ export async function GET(req: Request) {
       requests: requests.map(r => ({
         id:           r.id.toString(),
         attendanceId: r.attendanceId.toString(),
-        userId:       r.userId.toString(),
-        userName:     r.user.userName,
+        workerId:       r.workerId.toString(),
+        workerName:     r.user.workerName,
         userPhone:    r.user.phoneNumber ?? "",
         workDate:     r.attendance.workDate,
         siteName:     r.attendance.site?.companyName ?? "",

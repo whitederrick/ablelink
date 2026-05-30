@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     if (!password) return NextResponse.json({ success: false, message: "비밀번호를 입력해주세요." }, { status: 400 });
 
     const user = await prisma.worker.findUnique({
-      where: { id: BigInt(session.userId) },
+      where: { id: BigInt(session.workerId) },
       select: { id: true, password: true, status: true, signatureUrl: true },
     });
     if (!user) return NextResponse.json({ success: false, message: "사용자를 찾을 수 없습니다." }, { status: 404 });
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       where: { id: user.id },
       data: {
         loginId:        anonymousId,
-        userName:       "탈퇴한 회원",
+        workerName:       "탈퇴한 회원",
         phoneNumber:    anonymousId,
         password:       anonymousId,
         status:         "RESIGNED",

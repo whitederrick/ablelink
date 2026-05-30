@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
           endLocLon: true,
           startDistanceM: true,
           status: true,
-          user: { select: { userName: true, phoneNumber: true } },
+          user: { select: { workerName: true, phoneNumber: true } },
           site: { select: { companyName: true } },
         },
       });
@@ -130,7 +130,7 @@ export async function GET(req: NextRequest) {
         ...rows.map(r =>
           row([
             r.workDate,
-            r.user?.userName ?? "",
+            r.user?.workerName ?? "",
             r.user?.phoneNumber ?? "",
             r.site?.companyName ?? "",
             formatKst(r.startTime),
@@ -180,7 +180,7 @@ export async function GET(req: NextRequest) {
         attendance: {
           select: {
             workDate: true,
-            user: { select: { userName: true, phoneNumber: true } },
+            user: { select: { workerName: true, phoneNumber: true } },
           },
         },
         trainee: {
@@ -197,7 +197,7 @@ export async function GET(req: NextRequest) {
         const taskStr = r.tasks.map(t => `${t.taskName}(${t.performanceScore}점)`).join("; ");
         return row([
           r.attendance.workDate,
-          r.attendance.user?.userName ?? "",
+          r.attendance.user?.workerName ?? "",
           r.attendance.user?.phoneNumber ?? "",
           r.trainee?.name ?? "",
           r.trainingType,

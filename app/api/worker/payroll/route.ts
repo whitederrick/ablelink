@@ -12,10 +12,10 @@ export async function GET(req: NextRequest) {
     const session = await getWorkerSessionFromReq(req);
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
-    const userId = BigInt(session.userId);
+    const workerId = BigInt(session.workerId);
 
     const items = await prisma.payrollItem.findMany({
-      where: { userId, run: { status: "FINALIZED" } },
+      where: { workerId, run: { status: "FINALIZED" } },
       include: {
         run: { select: { yearMonth: true, status: true, finalizedAt: true, agency: { select: { name: true } } } },
       },

@@ -16,17 +16,17 @@ export async function GET(req: NextRequest) {
     const contracts = await prisma.payContract.findMany({
       where,
       include: {
-        user: { select: { id: true, userName: true, loginId: true } },
+        user: { select: { id: true, workerName: true, loginId: true } },
       },
-      orderBy: [{ userId: "asc" }, { effectiveFrom: "desc" }],
+      orderBy: [{ workerId: "asc" }, { effectiveFrom: "desc" }],
     });
 
     return NextResponse.json({
       success: true,
       data: contracts.map(c => ({
         id: c.id.toString(),
-        userId: c.userId.toString(),
-        userName: c.user.userName,
+        workerId: c.workerId.toString(),
+        workerName: c.user.workerName,
         loginId: c.user.loginId,
         agencyId: c.agencyId.toString(),
         workerType: c.workerType,
@@ -56,9 +56,9 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { userId, workerType, payType, baseAmount, effectiveFrom, effectiveTo, incomeType, hourlyRate2Plus, weeklyHolidayPay } = body;
+    const { workerId, workerType, payType, baseAmount, effectiveFrom, effectiveTo, incomeType, hourlyRate2Plus, weeklyHolidayPay } = body;
 
-    if (!userId || !payType || !baseAmount || !effectiveFrom) {
+    if (!workerId || !payType || !baseAmount || !effectiveFrom) {
       return NextResponse.json({ success: false, message: "필수 항목 누락" }, { status: 400 });
     }
     if (!["INTERNAL", "EXTERNAL"].includes(workerType ?? "EXTERNAL")) {
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     // 기존 유효 계약 종료 처리
     if (effectiveTo === undefined || effectiveTo === null) {
       await prisma.payContract.updateMany({
-        where: { agencyId, userId: BigInt(userId), effectiveTo: null },
+        where: { agencyId, workerId: BigInt(workerId), effectiveTo: null },
         data: { effectiveTo: new Date(effectiveFrom) },
       });
     }
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     const contract = await prisma.payContract.create({
       data: {
         agencyId,
-        userId: BigInt(userId),
+        workerId: BigInt(workerId),
         workerType: resolvedWorkerType,
         payType: resolvedPayType,
         baseAmount,

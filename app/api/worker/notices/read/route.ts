@@ -19,12 +19,12 @@ export async function POST(req: NextRequest) {
       if (!/^\d+$/.test(idStr))
         return NextResponse.json({ success: false, message: "잘못된 ID" }, { status: 400 });
       await db.workerNotice.updateMany({
-        where: { id: BigInt(idStr), userId: BigInt(session.userId), readAt: null },
+        where: { id: BigInt(idStr), workerId: BigInt(session.workerId), readAt: null },
         data: { readAt: now },
       });
     } else {
       await db.workerNotice.updateMany({
-        where: { userId: BigInt(session.userId), readAt: null },
+        where: { workerId: BigInt(session.workerId), readAt: null },
         data: { readAt: now },
       });
     }

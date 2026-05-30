@@ -25,8 +25,8 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getSession(req);
     const user = await prisma.worker.findUnique({
-      where: { id: BigInt(session.userId) },
-      select: { loginId: true, userName: true, phoneNumber: true, isTemporary: true },
+      where: { id: BigInt(session.workerId) },
+      select: { loginId: true, workerName: true, phoneNumber: true, isTemporary: true },
     });
     if (!user) return NextResponse.json({ success: false, message: "사용자를 찾을 수 없습니다." }, { status: 404 });
     return NextResponse.json({ success: true, user });
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession(req);
-    const userId = BigInt(session.userId);
+    const workerId = BigInt(session.workerId);
     const body = await req.json();
     const { action } = body;
 
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "올바른 이메일 주소를 입력하세요." }, { status: 400 });
       }
 
-      const conflict = await prisma.worker.findFirst({ where: { loginId: email, id: { not: userId } } });
+      const conflict = await prisma.worker.findFirst({ where: { loginId: email, id: { not: workerId } } });
       if (conflict) {
         return NextResponse.json({ success: false, message: "이미 사용 중인 이메일입니다." }, { status: 409 });
       }
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10분
 
       await prisma.worker.update({
-        where: { id: userId },
+        where: { id: workerId },
         data: { pendingLoginId: email, verifyCode: code, verifyCodeExpiresAt: expiresAt },
       });
 
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       const { code } = body;
       // 브루트포스 방지: userId당 5분 내 5회 제한
       const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-      const rl = await checkRateLimit(`verify-email:${ip}:${session.userId}`);
+      const rl = await checkRateLimit(`verify-email:${ip}:${session.workerId}`);
       if (!rl.allowed) {
         return NextResponse.json(
           { success: false, message: "인증 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요." },
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
         );
       }
       const user = await prisma.worker.findUnique({
-        where: { id: userId },
+        where: { id: workerId },
         select: { pendingLoginId: true, verifyCode: true, verifyCodeExpiresAt: true },
       });
 
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       // 인증 성공 — loginId 변경 (비밀번호 변경은 다음 단계)
       try {
         await prisma.worker.update({
-          where: { id: userId },
+          where: { id: workerId },
           data: {
             loginId: user.pendingLoginId,
             pendingLoginId: null,
@@ -148,18 +148,18 @@ export async function POST(req: NextRequest) {
       }
 
       const updated = await prisma.worker.update({
-        where: { id: userId },
+        where: { id: workerId },
         data: {
           password: await hash(newPassword, 12),
           isTemporary: false,
         },
-        select: { id: true, userName: true, phoneNumber: true },
+        select: { id: true, workerName: true, phoneNumber: true },
       });
 
       // 새 JWT 발급 (isTemporary: false)
       const token = await signWorkerToken({
-        userId: String(updated.id),
-        userName: updated.userName,
+        workerId: String(updated.id),
+        workerName: updated.workerName,
         isTemporary: false,
       });
 

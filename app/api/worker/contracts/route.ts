@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   const contract = await prisma.employmentContract.findUnique({
     where: { signToken: token },
     include: {
-      user: { select: { userName: true, phoneNumber: true } },
+      user: { select: { workerName: true, phoneNumber: true } },
       agency: { select: { name: true, address: true, phoneNumber: true } },
     },
   });
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
     data: {
       id: String(contract.id),
       status: contract.status,
-      workerName: contract.user.userName,
+      workerName: contract.user.workerName,
       workerPhone: contract.user.phoneNumber,
       agencyName: contract.agency.name,
       agencyAddress: contract.agency.address,
@@ -112,8 +112,8 @@ export async function POST(req: NextRequest) {
   }
 
   const user = await prisma.worker.findUnique({
-    where: { id: contract.userId },
-    select: { userName: true, phoneNumber: true, isTemporary: true },
+    where: { id: contract.workerId },
+    select: { workerName: true, phoneNumber: true, isTemporary: true },
   });
 
   await prisma.employmentContract.update({
@@ -130,9 +130,9 @@ export async function POST(req: NextRequest) {
   // 서명 완료 후 카카오 알림 발송 (실패해도 서명 결과에 영향 없음)
   try {
     if (user?.isTemporary) {
-      await sendSignedNotificationNew(contract.userId, user.phoneNumber, user.userName);
+      await sendSignedNotificationNew(contract.workerId, user.phoneNumber, user.workerName);
     } else if (user) {
-      await sendSignedNotificationExisting(user.phoneNumber, user.userName);
+      await sendSignedNotificationExisting(user.phoneNumber, user.workerName);
     }
   } catch (e) {
     console.error("[contracts sign] 카카오 알림 발송 실패:", e);
@@ -148,7 +148,7 @@ function generateTempPassword(): string {
 }
 
 // ─── 신규 직무지도원 서명 완료 알림 (임시 비밀번호 발급) ──────────
-async function sendSignedNotificationNew(userId: bigint, phone: string, name: string) {
+async function sendSignedNotificationNew(workerId: bigint, phone: string, name: string) {
   const templateCode = process.env.KAKAO_SIGNUP_TEMPLATE_CODE;
   const appUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";
   const loginId = phone.replace(/-/g, "");
@@ -159,7 +159,7 @@ async function sendSignedNotificationNew(userId: bigint, phone: string, name: st
   }
 
   const tempPassword = generateTempPassword();
-  await prisma.worker.update({ where: { id: userId }, data: { password: await hash(tempPassword, 12) } });
+  await prisma.worker.update({ where: { id: workerId }, data: { password: await hash(tempPassword, 12) } });
 
   await sendAlimtalk({
     phone, name, templateCode,

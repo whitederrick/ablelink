@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const yearMonth = searchParams.get("yearMonth");
 
-    const userId = BigInt(session.userId);
+    const workerId = BigInt(session.workerId);
     let dateFilter: { gte: string; lte: string } | undefined;
 
     if (yearMonth && /^\d{4}-\d{2}$/.test(yearMonth)) {
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
     const attendances = await prisma.dailyAttendance.findMany({
       where: {
-        userId,
+        workerId,
         ...(dateFilter ? { workDate: dateFilter } : {}),
       },
       include: {

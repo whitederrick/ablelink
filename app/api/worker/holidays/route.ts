@@ -14,9 +14,9 @@ import { prisma } from "@/lib/prisma";
 
 function isDateOnly(s: string) { return /^\d{4}-\d{2}-\d{2}$/.test(s); }
 
-async function getAssignment(userId: bigint) {
+async function getAssignment(workerId: bigint) {
   return prisma.siteAssignment.findFirst({
-    where: { userId, status: "ACTIVE" },
+    where: { workerId, status: "ACTIVE" },
     orderBy: { startDate: "desc" },
   });
 }
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const year  = Number(searchParams.get("year")  ?? new Date().getFullYear());
     const month = Number(searchParams.get("month") ?? new Date().getMonth() + 1);
 
-    const assignment = await getAssignment(BigInt(session.userId));
+    const assignment = await getAssignment(BigInt(session.workerId));
 
     // national: { date → name }, custom: { date → { reason, countAsWorkday } }
     const customHolidays: Record<string, string> = {};
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "올바른 날짜를 입력해주세요." }, { status: 400 });
     }
 
-    const assignment = await getAssignment(BigInt(session.userId));
+    const assignment = await getAssignment(BigInt(session.workerId));
     if (!assignment) return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 404 });
 
     await prisma.siteHoliday.upsert({
@@ -94,7 +94,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: false, message: "올바른 날짜를 입력해주세요." }, { status: 400 });
     }
 
-    const assignment = await getAssignment(BigInt(session.userId));
+    const assignment = await getAssignment(BigInt(session.workerId));
     if (!assignment) return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 404 });
 
     await prisma.siteHoliday.updateMany({
@@ -116,7 +116,7 @@ export async function DELETE(request: NextRequest) {
     const date = new URL(request.url).searchParams.get("date") ?? "";
     if (!isDateOnly(date)) return NextResponse.json({ success: false, message: "올바른 날짜를 입력해주세요." }, { status: 400 });
 
-    const assignment = await getAssignment(BigInt(session.userId));
+    const assignment = await getAssignment(BigInt(session.workerId));
     if (!assignment) return NextResponse.json({ success: false, message: "배정 없음" }, { status: 404 });
 
     await prisma.siteHoliday.deleteMany({ where: { assignmentId: assignment.id, date } });

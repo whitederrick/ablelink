@@ -106,7 +106,7 @@ export default function WorkerSignupPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phoneNumber: phone.replace(/-/g, ""),
-          userName: name, password: pw,
+          workerName: name, password: pw,
           consentTerms, consentPrivacy, consentLocation,
         }),
       });

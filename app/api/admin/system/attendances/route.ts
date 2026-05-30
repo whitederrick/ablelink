@@ -21,13 +21,13 @@ export async function GET(req: NextRequest) {
         ...(flag === "no_end" ? { endTime: null, status: "WORKING" } : {}),
         ...(q ? {
           OR: [
-            { user:      { userName:    { contains: q } } },
+            { user:      { workerName:    { contains: q } } },
             { site:      { companyName: { contains: q } } },
           ],
         } : {}),
       },
       include: {
-        user: { select: { id: true, userName: true } },
+        user: { select: { id: true, workerName: true } },
         site: { select: { id: true, companyName: true, agency: { select: { name: true } } } },
       },
       orderBy: [{ workDate: "desc" }, { id: "desc" }],
@@ -44,8 +44,8 @@ export async function GET(req: NextRequest) {
       success: true,
       records: records.map(r => ({
         id:            r.id.toString(),
-        userId:        r.userId.toString(),
-        userName:      r.user.userName,
+        workerId:        r.workerId.toString(),
+        workerName:      r.user.workerName,
         siteId:        r.siteId.toString(),
         siteName:      r.site.companyName,
         agencyName:    r.site.agency?.name ?? "",

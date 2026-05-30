@@ -272,7 +272,7 @@ fi
 assert "[보안] register 초대코드 없이 → 400" "400" '"success":false' "" \
   -X POST "$BASE/api/worker/auth/register" \
   -H "Content-Type: application/json" \
-  -d '{"loginId":"01099998888","password":"test1234!","userName":"테스트","phoneNumber":"01099998888"}'
+  -d '{"loginId":"01099998888","password":"test1234!","workerName":"테스트","phoneNumber":"01099998888"}'
 
 # AGENCY → ADMIN 전용 API → 401/403
 assert "[격리] Manager→system/billing → 401" "401" '"success":false' "$MANAGER_COOKIE" \
@@ -283,7 +283,7 @@ assert "[격리] Manager→system/announcements → 401" "401" '"success":false'
   "$BASE/api/admin/system/announcements"
 assert "[격리] Admin→final-lock → 401 (Manager 전용)" "401" '"success":false' "$ADMIN_COOKIE" \
   -X POST "$BASE/api/admin/final-lock" -H "Content-Type: application/json" \
-  -d '{"userId":"1","yearMonth":"2026-05"}'
+  -d '{"workerId":"1","yearMonth":"2026-05"}'
 
 # Rate limit
 echo -n "  OTP rate limit 테스트..."
@@ -309,17 +309,17 @@ assert "OTP 틀린 코드 → 400" "400" '"success":false' "" \
   -d '{"action":"confirm","phoneNumber":"01012345678","code":"000000"}'
 assert "가입 비밀번호 7자 → 400" "400" '"success":false' "" \
   -X POST "$BASE/api/worker/auth/signup" -H "Content-Type: application/json" \
-  -d '{"phoneNumber":"01012345678","userName":"테스트","password":"1234567","consentTerms":true,"consentPrivacy":true}'
+  -d '{"phoneNumber":"01012345678","workerName":"테스트","password":"1234567","consentTerms":true,"consentPrivacy":true}'
 assert "가입 이름 1자 → 400" "400" '"success":false' "" \
   -X POST "$BASE/api/worker/auth/signup" -H "Content-Type: application/json" \
-  -d '{"phoneNumber":"01012345678","userName":"김","password":"12345678","consentTerms":true,"consentPrivacy":true}'
+  -d '{"phoneNumber":"01012345678","workerName":"김","password":"12345678","consentTerms":true,"consentPrivacy":true}'
 assert "가입 약관 미동의 → 400" "400" '"success":false' "" \
   -X POST "$BASE/api/worker/auth/signup" -H "Content-Type: application/json" \
-  -d '{"phoneNumber":"01012345678","userName":"테스트","password":"12345678","consentTerms":false,"consentPrivacy":false}'
+  -d '{"phoneNumber":"01012345678","workerName":"테스트","password":"12345678","consentTerms":false,"consentPrivacy":false}'
 assert "회원탈퇴 잘못된 PW → 400" "400" '"success":false' "$WORKER_COOKIE" \
   -X POST "$BASE/api/worker/profile/delete" -H "Content-Type: application/json" \
   -d '{"password":"wrongpassword"}'
-assert "notices 잘못된 userId 배열 → 404 (대상 없음)" "404" '"success":false' "$MANAGER_COOKIE" \
+assert "notices 잘못된 workerId 배열 → 404 (대상 없음)" "404" '"success":false' "$MANAGER_COOKIE" \
   -X POST "$BASE/api/admin/notices" -H "Content-Type: application/json" \
   -d '{"userIds":["abc","xyz"],"title":"테스트","body":"내용"}'
 
@@ -369,7 +369,7 @@ assert "manager trainees/summary" "200" '"data"' "$MANAGER_COOKIE" "$BASE/api/ad
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 section "10. 직무지도원 핵심 API"
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-assert "profile → userName" "200" '"userName"' "$WORKER_COOKIE" "$BASE/api/worker/profile"
+assert "profile → workerName" "200" '"workerName"' "$WORKER_COOKIE" "$BASE/api/worker/profile"
 assert "profile → loginId" "200" '"loginId"' "$WORKER_COOKIE" "$BASE/api/worker/profile"
 assert "site/current → success" "200" '"success"' "$WORKER_COOKIE" "$BASE/api/worker/site/current"
 assert "calendar → success:true" "200" '"success":true' "$WORKER_COOKIE" "$BASE/api/worker/calendar?year=2026&month=5"
@@ -521,7 +521,7 @@ WORKER_ID_NUM="${WORKER_ID:-1}"  # 로그인 시 동적 조회
 
 LOCK_RESP=$(curl -s -b "$MANAGER_COOKIE" \
   -X POST "$BASE/api/admin/final-lock" -H "Content-Type: application/json" \
-  -d "{\"userId\":\"$WORKER_ID_NUM\",\"yearMonth\":\"2026-05\"}")
+  -d "{\"workerId\":\"$WORKER_ID_NUM\",\"yearMonth\":\"2026-05\"}")
 if echo "$LOCK_RESP" | grep -q '"success":true'; then pass "매니저 최종 확정 → 200"; else fail "매니저 최종 확정" "success:true" "$LOCK_RESP"; fi
 
 LOCKED_ATT_ID=$(curl -s -b "$MANAGER_COOKIE" \
@@ -535,13 +535,13 @@ fi
 
 assert "매니저 잠금 해제 → 200" "200" '"success":true' "$MANAGER_COOKIE" \
   -X DELETE "$BASE/api/admin/final-lock" -H "Content-Type: application/json" \
-  -d "{\"userId\":\"$WORKER_ID_NUM\",\"yearMonth\":\"2026-05\"}"
-assert "잠금: 소속 아닌 userId → 403" "403" '"success":false' "$MANAGER_COOKIE" \
+  -d "{\"workerId\":\"$WORKER_ID_NUM\",\"yearMonth\":\"2026-05\"}"
+assert "잠금: 소속 아닌 workerId → 403" "403" '"success":false' "$MANAGER_COOKIE" \
   -X POST "$BASE/api/admin/final-lock" -H "Content-Type: application/json" \
-  -d '{"userId":"999999999","yearMonth":"2026-05"}'
+  -d '{"workerId":"999999999","yearMonth":"2026-05"}'
 assert "잠금: 잘못된 yearMonth → 400" "400" '"success":false' "$MANAGER_COOKIE" \
   -X POST "$BASE/api/admin/final-lock" -H "Content-Type: application/json" \
-  -d '{"userId":"2","yearMonth":"2026-5"}'
+  -d '{"workerId":"2","yearMonth":"2026-5"}'
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 section "15. 커스텀 휴무일"
@@ -682,9 +682,9 @@ section "20. 프로필 수정"
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 assert "프로필 이름 수정" "200" '"success":true' "$WORKER_COOKIE" \
   -X PATCH "$BASE/api/worker/profile" -H "Content-Type: application/json" \
-  -d '{"userName":"김지도원"}'
+  -d '{"workerName":"김지도원"}'
 PROFILE_AFTER=$(curl -s -b "$WORKER_COOKIE" "$BASE/api/worker/profile")
-if echo "$PROFILE_AFTER" | grep -q '"userName"'; then pass "프로필 이름 수정 반영 확인"; else fail "프로필 이름 수정 반영" '"userName" 포함' "$PROFILE_AFTER"; fi
+if echo "$PROFILE_AFTER" | grep -q '"workerName"'; then pass "프로필 이름 수정 반영 확인"; else fail "프로필 이름 수정 반영" '"workerName" 포함' "$PROFILE_AFTER"; fi
 
 assert "비밀번호 변경: 현재 PW 틀림 → 400" "400" '"success":false' "$WORKER_COOKIE" \
   -X PATCH "$BASE/api/worker/profile" -H "Content-Type: application/json" \
@@ -694,7 +694,7 @@ assert "비밀번호 변경: 7자 → 400" "400" '"success":false' "$WORKER_COOK
   -d '{"currentPassword":"worker1234!","newPassword":"short1"}'
 
 curl -s -b "$WORKER_COOKIE" -X PATCH "$BASE/api/worker/profile" \
-  -H "Content-Type: application/json" -d '{"userName":"김지도"}' > /dev/null
+  -H "Content-Type: application/json" -d '{"workerName":"김지도"}' > /dev/null
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 section "21. 직무지도원 초대 링크 가입 시나리오"
@@ -742,14 +742,14 @@ if [ -n "$INVITE_ID" ] && [ -n "$INVITE_CODE" ]; then
   assert "직무지도원: 초대 가입 약관 미동의 → 400" "400" '"success":false' "" \
     -X POST "$BASE/api/worker/invite/$INVITE_ID" \
     -H "Content-Type: application/json" \
-    -d "{\"action\":\"signup\",\"code\":\"$INVITE_CODE\",\"userName\":\"초대테스트\",\"password\":\"test1234!\",\"consentTerms\":false,\"consentPrivacy\":false}"
+    -d "{\"action\":\"signup\",\"code\":\"$INVITE_CODE\",\"workerName\":\"초대테스트\",\"password\":\"test1234!\",\"consentTerms\":false,\"consentPrivacy\":false}"
 
   # 6단계: 초대 코드로 정상 가입 (action: signup)
   INVITE_COOKIE=$(mktemp)
   SIGNUP_RESP=$(curl -s -c "$INVITE_COOKIE" \
     -X POST "$BASE/api/worker/invite/$INVITE_ID" \
     -H "Content-Type: application/json" \
-    -d "{\"action\":\"signup\",\"code\":\"$INVITE_CODE\",\"userName\":\"초대테스트\",\"password\":\"test1234!\",\"consentTerms\":true,\"consentPrivacy\":true,\"consentLocation\":true}")
+    -d "{\"action\":\"signup\",\"code\":\"$INVITE_CODE\",\"workerName\":\"초대테스트\",\"password\":\"test1234!\",\"consentTerms\":true,\"consentPrivacy\":true,\"consentLocation\":true}")
 
   if echo "$SIGNUP_RESP" | grep -q '"success":true'; then
     pass "직무지도원: 초대 코드로 가입 완료"
@@ -768,7 +768,7 @@ if [ -n "$INVITE_ID" ] && [ -n "$INVITE_CODE" ]; then
   assert "초대 링크 재사용 → 410" "410" '"success":false' "" \
     -X POST "$BASE/api/worker/invite/$INVITE_ID" \
     -H "Content-Type: application/json" \
-    -d "{\"action\":\"signup\",\"code\":\"$INVITE_CODE\",\"userName\":\"재시도\",\"password\":\"test1234!\",\"consentTerms\":true,\"consentPrivacy\":true}"
+    -d "{\"action\":\"signup\",\"code\":\"$INVITE_CODE\",\"workerName\":\"재시도\",\"password\":\"test1234!\",\"consentTerms\":true,\"consentPrivacy\":true}"
 
   # 9단계: 사이트 자동 배정 확인 (siteId 지정했으면 hasSite:true)
   if echo "$SIGNUP_RESP" | grep -q '"hasSite":true'; then

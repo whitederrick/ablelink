@@ -57,8 +57,8 @@ export async function POST(request: NextRequest) {
     const session = await getWorkerSessionFromReq(request);
     if (!session) return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
 
-    const userId = BigInt(session.userId);
-    const planCheck = await checkPlanAccess(userId, "PDF_GENERATE");
+    const workerId = BigInt(session.workerId);
+    const planCheck = await checkPlanAccess(workerId, "PDF_GENERATE");
     if (!planCheck.allowed) return NextResponse.json({ success: false, message: planCheck.message }, { status: 403 });
 
     const body = await request.json();
@@ -68,12 +68,12 @@ export async function POST(request: NextRequest) {
 
     // ── 기본 데이터 조회 ────────────────────────────────────
     const user = await prisma.worker.findUnique({
-      where: { id: userId },
-      select: { userName: true, phoneNumber: true, signatureUrl: true, loginId: true },
+      where: { id: workerId },
+      select: { workerName: true, phoneNumber: true, signatureUrl: true, loginId: true },
     });
 
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] } },
+      where: { workerId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] } },
       include: { site: true },
       orderBy: { assignedAt: "desc" },
     });
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     ]);
 
     const sigs = {
-      worker:          { name: user?.userName || "",        imageUrl: workerImg },
+      worker:          { name: user?.workerName || "",        imageUrl: workerImg },
       govAgent:       { name: "",                          imageUrl: undefined as string | undefined },
       companyManager: { name: companyManagerSignerName,    imageUrl: companyImg },
       agencyAgent:    { name: "",                          imageUrl: undefined as string | undefined },
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
 
     if (docType === "ATTENDANCE_SHEET") {
       const attendances = await prisma.dailyAttendance.findMany({
-        where: { userId, workDate: { gte: start, lte: end } },
+        where: { workerId, workDate: { gte: start, lte: end } },
         include: { logs: { select: { time1on1:true, timeGroup:true, extTime1on1:true, extTimeGroup:true } } },
         orderBy: { workDate: "asc" },
       });
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
       const oneToMany  = entries.reduce((s,e) => s + Number(e.multiHours), 0);
 
       payload = {
-        workerName: user?.userName || "",
+        workerName: user?.workerName || "",
         workerPhone: user?.phoneNumber || user?.loginId || "",
         companyName: site.companyName,
         periodStartYMD: fmtDot(start),
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
       const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
       const logs = await prisma.traineeLog.findMany({
         where: {
-          writerId: userId, traineeId: BigInt(traineeId),
+          writerId: workerId, traineeId: BigInt(traineeId),
           trainingType: { in: ["PRE","FIELD"] },
           attendance: { workDate: { gte: start, lte: end } },
         },
@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
       if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
       const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
       const ev = await prisma.traineeEvaluation.findFirst({
-        where: { traineeId: BigInt(traineeId), writerId: userId, evalType: "TRAINING" },
+        where: { traineeId: BigInt(traineeId), writerId: workerId, evalType: "TRAINING" },
         orderBy: { updatedAt: "desc" },
       });
       if (!ev) return NextResponse.json({ success: false, message: "종합평가를 먼저 작성해주세요." }, { status: 400 });
@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
       const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
       const logs = await prisma.traineeLog.findMany({
         where: {
-          writerId: userId, traineeId: BigInt(traineeId),
+          writerId: workerId, traineeId: BigInt(traineeId),
           trainingType: "ADAPTATION",
           attendance: { workDate: { gte: start, lte: end } },
         },
@@ -263,7 +263,7 @@ export async function POST(request: NextRequest) {
       if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
       const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
       const ev = await prisma.traineeEvaluation.findFirst({
-        where: { traineeId: BigInt(traineeId), writerId: userId, evalType: "ADAPTATION" },
+        where: { traineeId: BigInt(traineeId), writerId: workerId, evalType: "ADAPTATION" },
         orderBy: { updatedAt: "desc" },
       });
       if (!ev) return NextResponse.json({ success: false, message: "종합평가를 먼저 작성해주세요." }, { status: 400 });
@@ -296,7 +296,7 @@ export async function POST(request: NextRequest) {
           from: process.env.EMAIL_FROM || "AbleLink <noreply@able-link.co.kr>",
           to: toEmail,
           subject: `[AbleLink] ${DOC_LABELS[docType] || docType} - ${site.companyName} (${start} ~ ${end})`,
-          body: `안녕하세요.\n\n${site.companyName} 직무지도 ${DOC_LABELS[docType]||docType}를 첨부합니다.\n\n■ 직무지도원: ${user?.userName||""}\n■ 기간: ${start} ~ ${end}\n\n감사합니다.\nAbleLink`,
+          body: `안녕하세요.\n\n${site.companyName} 직무지도 ${DOC_LABELS[docType]||docType}를 첨부합니다.\n\n■ 직무지도원: ${user?.workerName||""}\n■ 기간: ${start} ~ ${end}\n\n감사합니다.\nAbleLink`,
           pdfBuffer,
           fileName,
         });

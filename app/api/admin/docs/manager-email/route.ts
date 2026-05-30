@@ -11,11 +11,11 @@ export async function GET(request: NextRequest) {
   try {
     const scope = await requireManagerSession(request);
     const { searchParams } = new URL(request.url);
-    const workerUserId = searchParams.get("workerUserId") ?? "";
-    if (!workerUserId) return NextResponse.json({ success:false }, { status:400 });
+    const workerId = searchParams.get("workerId") ?? "";
+    if (!workerId) return NextResponse.json({ success:false }, { status:400 });
 
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId: BigInt(workerUserId), status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] }, agencyId: scope.agencyId },
+      where: { workerId: BigInt(workerId), status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] }, agencyId: scope.agencyId },
       include: {
         site: {
           include: {

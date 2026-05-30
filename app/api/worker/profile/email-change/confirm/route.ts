@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   }
 
   const user = await prisma.worker.findUnique({
-    where: { id: BigInt(session.userId) },
+    where: { id: BigInt(session.workerId) },
     select: { id: true, pendingLoginId: true, verifyCode: true, verifyCodeExpiresAt: true },
   });
 

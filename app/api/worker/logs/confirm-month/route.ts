@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     // isCompleted=false인 해당 월 일지 일괄 확정
     const result = await prisma.traineeLog.updateMany({
       where: {
-        writerId:    BigInt(session.userId),
+        writerId:    BigInt(session.workerId),
         isCompleted: false,
         attendance:  { workDate: { gte: dateFrom, lte: dateTo } },
       },

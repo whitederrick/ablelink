@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     const users = await prisma.worker.findMany({
       where: q ? {
         OR: [
-          { userName: { contains: q } },
+          { workerName: { contains: q } },
           { phoneNumber: { contains: q } },
           { loginId: { contains: q } },
         ],
@@ -41,7 +41,7 @@ export async function GET(req: Request) {
         return {
           id:          u.id.toString(),
           loginId:     u.loginId,
-          userName:    u.userName,
+          workerName:    u.workerName,
           phoneNumber: u.phoneNumber,
           status:      u.status,
           planType:    u.planType,

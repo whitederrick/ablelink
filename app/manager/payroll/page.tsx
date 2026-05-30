@@ -23,7 +23,7 @@ type RunStatus = "DRAFT" | "FINALIZED";
 type DeductionType = "FIXED" | "PERCENTAGE";
 
 interface Contract {
-  id: string; userId: string; userName: string; loginId: string;
+  id: string; workerId: string; workerName: string; loginId: string;
   workerType: WorkerType; payType: PayType; baseAmount: number; incomeType: IncomeType;
   hourlyRate2Plus: number | null; weeklyHolidayPay: number | null;
   effectiveFrom: string; effectiveTo: string | null;
@@ -39,7 +39,7 @@ interface RunSummary {
 }
 
 interface RunItem {
-  id: string; userId: string; userName: string; loginId: string;
+  id: string; workerId: string; workerName: string; loginId: string;
   grossPay: number; totalDeduction: number; netPay: number;
   workedDays: number; workedMinutes: number; breakdown: any;
 }
@@ -49,7 +49,7 @@ interface RunDetail extends RunSummary {
   totalGrossPay: number; totalDeduction: number; totalNetPay: number;
 }
 
-interface Worker { id: string; userName: string; }
+interface Worker { id: string; workerName: string; }
 
 function comma(n: number) { return Math.round(n).toLocaleString("ko-KR"); }
 function fmtMin(m: number) {
@@ -67,7 +67,7 @@ const incomeTypeLabel: Record<IncomeType, string> = { BUSINESS: "사업소득(3.
 type Tab = "contracts" | "runs" | "deductions";
 
 const initialForm = {
-  userId: "", workerType: "EXTERNAL" as WorkerType, payType: "HOURLY" as PayType,
+  workerId: "", workerType: "EXTERNAL" as WorkerType, payType: "HOURLY" as PayType,
   baseAmount: "", incomeType: "BUSINESS" as IncomeType,
   hourlyRate2Plus: "", weeklyHolidayPay: "", effectiveFrom: "", effectiveTo: "",
 };
@@ -111,7 +111,7 @@ export default function PayrollPage() {
   async function loadWorkers() {
     const res = await fetch("/api/admin/workers?pageSize=200");
     const d = await res.json();
-    if (d.success) setWorkers((d.data || []).map((c: any) => ({ id: c.id, userName: c.userName })));
+    if (d.success) setWorkers((d.data || []).map((c: any) => ({ id: c.id, workerName: c.workerName })));
   }
 
   async function loadRuns() {
@@ -139,13 +139,13 @@ export default function PayrollPage() {
   }, [tab]);
 
   async function handleSaveContract() {
-    if (!form.userId || !form.baseAmount || !form.effectiveFrom) {
+    if (!form.workerId || !form.baseAmount || !form.effectiveFrom) {
       alert("직무지도원, 금액, 적용 시작일은 필수입니다."); return;
     }
     setSaving(true);
     try {
       const body: any = {
-        userId: form.userId, workerType: form.workerType, payType: form.payType,
+        workerId: form.workerId, workerType: form.workerType, payType: form.payType,
         baseAmount: Number(form.baseAmount), incomeType: form.incomeType,
         effectiveFrom: form.effectiveFrom, effectiveTo: form.effectiveTo || null,
       };
@@ -302,9 +302,9 @@ export default function PayrollPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className={T.label}>직무지도원</label>
-                  <select value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} className={`w-full ${T.select}`}>
+                  <select value={form.workerId} onChange={e => setForm(f => ({ ...f, workerId: e.target.value }))} className={`w-full ${T.select}`}>
                     <option value="">선택</option>
-                    {workers.map(c => <option key={c.id} value={c.id}>{c.userName}</option>)}
+                    {workers.map(c => <option key={c.id} value={c.id}>{c.workerName}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1.5">
@@ -410,7 +410,7 @@ export default function PayrollPage() {
                   {contracts.map(c => (
                     <tr key={c.id} className={T.trBase}>
                       <td className={T.td}>
-                        <div className="font-black text-slate-900">{c.userName}</div>
+                        <div className="font-black text-slate-900">{c.workerName}</div>
                         <div className="text-xs text-slate-400">{maskLoginId(c.loginId)}</div>
                       </td>
                       <td className={T.td}>
@@ -639,7 +639,7 @@ export default function PayrollPage() {
                     return (
                       <tr key={item.id} className={T.trBase}>
                         <td className={T.td}>
-                          <div className="font-black text-slate-900">{item.userName}</div>
+                          <div className="font-black text-slate-900">{item.workerName}</div>
                           <div className="text-xs text-slate-400">{maskLoginId(item.loginId)}</div>
                           {bd?.payType && (
                             <div className="mt-0.5 text-[11px] text-slate-500">
@@ -698,7 +698,7 @@ export default function PayrollPage() {
       {editItem && (
         <div className={T.modalOverlay} onClick={() => setEditItem(null)}>
           <div className={T.modalContent} onClick={e => e.stopPropagation()}>
-            <h2 className="mb-5 text-base font-black text-slate-900">{editItem.userName} 급여 수정</h2>
+            <h2 className="mb-5 text-base font-black text-slate-900">{editItem.workerName} 급여 수정</h2>
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <label className={T.label}>지급액 (원)</label>

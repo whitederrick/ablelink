@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const session = await getWorkerSessionFromReq(request);
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
-    const userId = BigInt(session.userId);
+    const workerId = BigInt(session.workerId);
 
     // 최근 3개월 출근 기록 중 일지가 하나도 없는 것
     const threeMonthsAgo = new Date();
@@ -18,9 +18,9 @@ export async function GET(request: NextRequest) {
 
     const attendances = await prisma.dailyAttendance.findMany({
       where: {
-        userId,
+        workerId,
         workDate: { gte: from },
-        logs: { none: { writerId: userId } },
+        logs: { none: { writerId: workerId } },
       },
       include: {
         site: {

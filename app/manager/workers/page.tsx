@@ -18,7 +18,7 @@ interface Assignment {
 
 interface Worker {
   id: string;
-  userName: string;
+  workerName: string;
   phoneNumber: string;
   loginId: string;
   planType: string;
@@ -278,7 +278,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
     <div className={T.modalOverlay}>
       <div className={T.modalContent}>
         <h2 className="mb-1 text-base font-black text-slate-900">근무형태 설정</h2>
-        <p className="mb-5 text-sm font-semibold text-slate-400">{worker.userName} · {worker.activeAssignment?.siteName}</p>
+        <p className="mb-5 text-sm font-semibold text-slate-400">{worker.workerName} · {worker.activeAssignment?.siteName}</p>
 
         {/* 근무형태 선택 */}
         <div className="mb-4">
@@ -357,7 +357,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
 function WorkerInfoModal({ worker, onClose, onSaved }: {
   worker: Worker; onClose: () => void; onSaved: (updated: Partial<Worker>) => void;
 }) {
-  const [userName,    setUserName]    = useState(worker.userName);
+  const [workerName,    setUserName]    = useState(worker.workerName);
   const [phoneNumber, setPhoneNumber] = useState(worker.phoneNumber);
   const [resetPw,     setResetPw]     = useState(false);
   const [saving,      setSaving]      = useState(false);
@@ -371,7 +371,7 @@ function WorkerInfoModal({ worker, onClose, onSaved }: {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          userName:      userName.trim() !== worker.userName ? userName.trim() : undefined,
+          workerName:      workerName.trim() !== worker.workerName ? workerName.trim() : undefined,
           phoneNumber:   phoneNumber !== worker.phoneNumber   ? phoneNumber    : undefined,
           resetPassword: resetPw,
         }),
@@ -379,7 +379,7 @@ function WorkerInfoModal({ worker, onClose, onSaved }: {
       const data = await res.json();
       if (!data.success) { setError(data.message); return; }
       if (data.tempPassword) { setTempPw(data.tempPassword); return; }
-      onSaved({ userName: userName.trim(), phoneNumber });
+      onSaved({ workerName: workerName.trim(), phoneNumber });
       onClose();
     } catch { setError("저장에 실패했습니다."); }
     finally   { setSaving(false); }
@@ -391,11 +391,11 @@ function WorkerInfoModal({ worker, onClose, onSaved }: {
         <div className={T.modalContent}>
           <h2 className="mb-3 text-base font-black text-slate-900">임시 비밀번호 발급 완료</h2>
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <p className="text-xs font-semibold text-amber-600 mb-1">{worker.userName}님의 임시 비밀번호</p>
+            <p className="text-xs font-semibold text-amber-600 mb-1">{worker.workerName}님의 임시 비밀번호</p>
             <p className="text-2xl font-black tracking-widest text-amber-900">{tempPw}</p>
           </div>
           <p className="mb-4 text-xs font-semibold text-slate-500">직무지도원에게 임시 비밀번호를 안내해주세요. 로그인 후 변경 요청됩니다.</p>
-          <button onClick={() => { onSaved({ userName: userName.trim(), phoneNumber }); onClose(); }}
+          <button onClick={() => { onSaved({ workerName: workerName.trim(), phoneNumber }); onClose(); }}
             className={T.btnPrimary}>확인</button>
         </div>
       </div>
@@ -406,11 +406,11 @@ function WorkerInfoModal({ worker, onClose, onSaved }: {
     <div className={T.modalOverlay}>
       <div className={T.modalContent}>
         <h2 className="mb-1 text-base font-black text-slate-900">직무지도원 정보 수정</h2>
-        <p className="mb-5 text-sm font-semibold text-slate-400">{worker.userName}</p>
+        <p className="mb-5 text-sm font-semibold text-slate-400">{worker.workerName}</p>
 
         <div className="mb-4">
           <label className={T.label}>이름</label>
-          <input value={userName} onChange={e => setUserName(e.target.value)} className={T.input} />
+          <input value={workerName} onChange={e => setUserName(e.target.value)} className={T.input} />
         </div>
 
         <div className="mb-4">
@@ -466,7 +466,7 @@ export default function WorkersPage() {
     if (!assignmentId) return alert("배정된 현장이 없습니다.");
     if (!assignmentMap[assignmentId]) {
       try {
-        const res = await fetch(`/api/admin/assignments?userId=${worker.id}`);
+        const res = await fetch(`/api/admin/assignments?workerId=${worker.id}`);
         const data = await res.json();
         if (data.success && data.items?.length > 0) {
           const item = data.items.find((i: any) => i.id === assignmentId) ?? data.items[0];
@@ -486,7 +486,7 @@ export default function WorkersPage() {
   }
 
   const filtered = workers.filter(c =>
-    c.userName.includes(search) || c.phoneNumber.includes(search) ||
+    c.workerName.includes(search) || c.phoneNumber.includes(search) ||
     c.activeAssignment?.siteName.includes(search) || c.loginId.includes(search)
   );
 
@@ -536,7 +536,7 @@ export default function WorkersPage() {
                 <tr key={c.id}
                   className={`${T.trBase} ${c.activeAssignment ? "cursor-pointer hover:bg-slate-50" : ""}`}
                   onClick={() => c.activeAssignment && openEdit(c)}>
-                  <td className={T.td}><span className="font-black text-slate-900">{c.userName}</span></td>
+                  <td className={T.td}><span className="font-black text-slate-900">{c.workerName}</span></td>
                   <td className={`${T.td} text-slate-500`}>{c.phoneNumber}</td>
                   <td className={`${T.td} text-xs text-slate-400`}>{maskLoginId(c.loginId)}</td>
                   <td className={T.td}>

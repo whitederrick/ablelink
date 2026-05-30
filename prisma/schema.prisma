@@ -27,10 +27,10 @@ model Worker {
   id          BigInt     @id @default(autoincrement())
   loginId     String     @unique @map("login_id")
   password    String
-  userName    String     @map("user_name")
+  workerName    String     @map("worker_name")
   phoneNumber String     @map("phone_number")
-  role        UserRole   @default(WORKER)
-  status      UserStatus @default(ACTIVE)
+  role        WorkerRole   @default(WORKER)
+  status      WorkerStatus @default(ACTIVE)
 
   // ✅ 서비스 플랜 (개인 단위; 프리랜서 전제)
   planType PlanType @default(FREE) @map("plan_type")
@@ -67,7 +67,7 @@ model Worker {
   payrollItems PayrollItem[]
   submissions  Submission[]
 
-  confirmedSiteBasePoints SiteBasePoint[]         @relation("UserConfirmedBasePoints")
+  confirmedSiteBasePoints SiteBasePoint[]         @relation("WorkerConfirmedBasePoints")
   DocumentRun             DocumentRun[]
   DocumentVersion         DocumentVersion[]
   DocumentSubmissionLog   DocumentSubmissionLog[]
@@ -79,7 +79,7 @@ model Worker {
   evaluations         TraineeEvaluation[]
   employmentContracts EmploymentContract[]
 
-  notificationSettings UserNotificationSetting?
+  notificationSettings WorkerNotificationSetting?
   notices              WorkerNotice[]
 
   // ✅ 인력 pool / 매칭
@@ -128,7 +128,7 @@ model Site {
   basePointMemo             String?                 @map("base_point_memo")
   basePointProposedLat      Decimal?
   basePointProposedLon      Decimal?
-  basePointProposedByUserId BigInt?
+  basePointProposedByWorkerId BigInt?
   basePointProposedAt       DateTime?
   basePointDecidedAt        DateTime?
   basePointDecidedById      BigInt?
@@ -193,7 +193,7 @@ model SiteContact {
 
 model SiteAssignment {
   id     BigInt @id @default(autoincrement())
-  userId BigInt @map("user_id")
+  workerId BigInt @map("worker_id")
   siteId BigInt @map("site_id")
 
   // ✅ 업무 단계 구분 (훈련 PRE/FIELD/적응지도)
@@ -237,7 +237,7 @@ model SiteAssignment {
   isMainWorker Boolean @default(true) @map("is_main_worker")
 
   site Site   @relation(fields: [siteId], references: [id])
-  user Worker @relation(fields: [userId], references: [id])
+  user Worker @relation(fields: [workerId], references: [id])
 
   attendances        DailyAttendance[]
   submissionRequests SubmissionRequest[]
@@ -245,7 +245,7 @@ model SiteAssignment {
   signTokens         SiteSignToken[]
   holidays           SiteHoliday[]
 
-  @@index([userId, status])
+  @@index([workerId, status])
   @@index([siteId, status])
   @@index([agencyId, status])
   @@index([serviceStep, attendanceMode])
@@ -301,11 +301,11 @@ model TraineePlacement {
 // ✅ (구멍 #3 해결) assignment 기준으로 유니크/귀속 강화
 model DailyAttendance {
   id     BigInt @id @default(autoincrement())
-  userId BigInt @map("user_id")
+  workerId BigInt @map("worker_id")
   siteId BigInt @map("site_id")
 
   // ✅ assignmentId를 “사실상 필수”로 운영하는 게 안정적
-  // - 멀티 배정/멀티 에이전시에서 userId+workDate 유니크는 깨짐
+  // - 멀티 배정/멀티 에이전시에서 workerId+workDate 유니크는 깨짐
   assignmentId BigInt  @map("assignment_id")
   basePointId  BigInt? @map("base_point_id")
 
@@ -334,17 +334,17 @@ model DailyAttendance {
   managerFinalBy       BigInt?    @map("manager_final_by")
 
   site Site   @relation(fields: [siteId], references: [id])
-  user Worker @relation(fields: [userId], references: [id])
+  user Worker @relation(fields: [workerId], references: [id])
 
   assignment SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   basePoint  SiteBasePoint? @relation(fields: [basePointId], references: [id])
 
   logs TraineeLog[]
 
-  // ✅ 기존: @@unique([userId, workDate]) → 멀티배정에서 충돌
+  // ✅ 기존: @@unique([workerId, workDate]) → 멀티배정에서 충돌
   // ✅ 변경: assignmentId+workDate로 유니크
   @@unique([assignmentId, workDate])
-  @@index([userId, workDate])
+  @@index([workerId, workDate])
   @@index([siteId, workDate])
   @@index([basePointId])
   @@map("daily_attendances")
@@ -514,7 +514,7 @@ model DocumentRun {
   agencyId     BigInt? @map("agency_id")
   assignmentId BigInt  @map("assignment_id")
   siteId       BigInt  @map("site_id")
-  workerUserId BigInt  @map("worker_user_id")
+  workerId BigInt  @map("worker_id")
 
   docType     DocumentType @map("doc_type")
   periodStart DateTime     @map("period_start")
@@ -543,7 +543,7 @@ model DocumentRun {
 
   assignment SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   site       Site           @relation(fields: [siteId], references: [id])
-  worker     Worker         @relation(fields: [workerUserId], references: [id])
+  worker     Worker         @relation(fields: [workerId], references: [id])
 
   versions       DocumentVersion[]
   submissionLogs DocumentSubmissionLog[]
@@ -566,11 +566,11 @@ model DocumentVersion {
   sourceData  Json?         @map("source_data")
   createdAt   DateTime      @default(now()) @map("created_at")
 
-  createdByUserId    BigInt? @map("created_by_user_id")
+  createdByWorkerId    BigInt? @map("created_by_worker_id")
   createdByManagerId BigInt? @map("created_by_manager_id")
 
   run              DocumentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-  createdByUser    Worker?     @relation(fields: [createdByUserId], references: [id])
+  createdByUser    Worker?     @relation(fields: [createdByWorkerId], references: [id])
   createdByManager Manager?    @relation(fields: [createdByManagerId], references: [id])
 
   currentForRuns DocumentRun[]           @relation("DocumentRunCurrentVersion")
@@ -588,7 +588,7 @@ model DocumentSubmissionLog {
   stage     DocumentStage @map("stage")
 
   submittedAt          DateTime @default(now()) @map("submitted_at")
-  submittedByUserId    BigInt?  @map("submitted_by_user_id")
+  submittedByWorkerId    BigInt?  @map("submitted_by_worker_id")
   submittedByManagerId BigInt?  @map("submitted_by_manager_id")
 
   sentToEmail  String?   @map("sent_to_email")
@@ -598,7 +598,7 @@ model DocumentSubmissionLog {
 
   run                DocumentRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
   version            DocumentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  submittedByUser    Worker?         @relation(fields: [submittedByUserId], references: [id])
+  submittedByUser    Worker?         @relation(fields: [submittedByWorkerId], references: [id])
   submittedByManager Manager?        @relation(fields: [submittedByManagerId], references: [id])
 
   @@index([runId, stage, submittedAt])
@@ -622,7 +622,7 @@ model SiteBasePoint {
   stage      BasePointStage        @map("stage")
   authority  ApprovalAuthorityType @map("authority")
 
-  confirmedByUserId    BigInt?  @map("confirmed_by_user_id")
+  confirmedByWorkerId    BigInt?  @map("confirmed_by_worker_id")
   confirmedByManagerId BigInt?  @map("confirmed_by_manager_id")
   confirmedAt          DateTime @default(now()) @map("confirmed_at")
 
@@ -632,7 +632,7 @@ model SiteBasePoint {
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
-  confirmedByUser    Worker?  @relation("UserConfirmedBasePoints", fields: [confirmedByUserId], references: [id])
+  confirmedByUser    Worker?  @relation("WorkerConfirmedBasePoints", fields: [confirmedByWorkerId], references: [id])
   confirmedByManager Manager? @relation("ManagerConfirmedBasePoints", fields: [confirmedByManagerId], references: [id])
 
   prevBasePoint  SiteBasePoint?  @relation("BasePointPrev", fields: [prevBasePointId], references: [id])
@@ -642,7 +642,7 @@ model SiteBasePoint {
   attendances     DailyAttendance[]
 
   @@index([siteId, stage])
-  @@index([confirmedByUserId])
+  @@index([confirmedByWorkerId])
   @@index([confirmedByManagerId])
   @@map("site_base_points")
 }
@@ -669,16 +669,16 @@ model SubmissionRequest {
 model Submission {
   id                BigInt   @id @default(autoincrement())
   requestId         BigInt   @map("request_id")
-  submittedByUserId BigInt   @map("submitted_by_user_id")
+  submittedByWorkerId BigInt   @map("submitted_by_worker_id")
   submittedAt       DateTime @default(now()) @map("submitted_at")
   fileUrl           String?  @map("file_url")
   fileName          String?  @map("file_name")
 
   request SubmissionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  user    Worker            @relation(fields: [submittedByUserId], references: [id])
+  user    Worker            @relation(fields: [submittedByWorkerId], references: [id])
 
   @@index([requestId, submittedAt])
-  @@index([submittedByUserId, submittedAt])
+  @@index([submittedByWorkerId, submittedAt])
   @@map("submissions")
 }
 
@@ -728,7 +728,7 @@ model SiteSignToken {
 model EmploymentContract {
   id           BigInt  @id @default(autoincrement())
   agencyId     BigInt  @map("agency_id")
-  userId       BigInt  @map("user_id") // 직무지도원
+  workerId       BigInt  @map("worker_id") // 직무지도원
   assignmentId BigInt? @map("assignment_id") // 연결된 배정 (선택)
 
   // 계약 기간
@@ -766,10 +766,10 @@ model EmploymentContract {
   createdByManagerId BigInt?  @map("created_by_manager_id")
 
   agency Agency @relation(fields: [agencyId], references: [id])
-  user   Worker @relation(fields: [userId], references: [id])
+  user   Worker @relation(fields: [workerId], references: [id])
 
   @@index([agencyId, status])
-  @@index([userId, status])
+  @@index([workerId, status])
   @@index([signToken])
   @@map("employment_contracts")
 }
@@ -800,7 +800,7 @@ model AuditEvent {
 model PayContract {
   id       BigInt @id @default(autoincrement())
   agencyId BigInt @map("agency_id")
-  userId   BigInt @map("user_id")
+  workerId   BigInt @map("worker_id")
 
   // 내부(소속직원) vs 외부 구분 — 4대보험·주휴수당 적용 여부를 결정
   workerType WorkerType @default(EXTERNAL) @map("worker_type")
@@ -820,10 +820,10 @@ model PayContract {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  user   Worker @relation(fields: [userId], references: [id])
+  user   Worker @relation(fields: [workerId], references: [id])
   agency Agency @relation(fields: [agencyId], references: [id])
 
-  @@index([agencyId, userId, effectiveFrom])
+  @@index([agencyId, workerId, effectiveFrom])
   @@map("pay_contracts")
 }
 
@@ -846,7 +846,7 @@ model PayrollRun {
 model PayrollItem {
   id     BigInt @id @default(autoincrement())
   runId  BigInt @map("run_id")
-  userId BigInt @map("user_id")
+  workerId BigInt @map("worker_id")
 
   grossPay       Decimal @map("gross_pay")
   totalDeduction Decimal @map("total_deduction")
@@ -857,9 +857,9 @@ model PayrollItem {
   breakdown     Json? @map("breakdown")
 
   run  PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-  user Worker     @relation(fields: [userId], references: [id])
+  user Worker     @relation(fields: [workerId], references: [id])
 
-  @@unique([runId, userId])
+  @@unique([runId, workerId])
   @@map("payroll_items")
 }
 
@@ -920,7 +920,7 @@ model AttendanceIssueEvent {
   type      AttendanceIssueEventType
   actorRole AttendanceIssueActorRole @map("actor_role")
 
-  actorUserId    BigInt? @map("actor_user_id")
+  actorWorkerId    BigInt? @map("actor_worker_id")
   actorManagerId BigInt? @map("actor_manager_id")
 
   message   String?
@@ -928,11 +928,11 @@ model AttendanceIssueEvent {
 
   issue AttendanceIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
-  actorUser    Worker?  @relation("AttendanceIssueEventActor", fields: [actorUserId], references: [id])
+  actorUser    Worker?  @relation("AttendanceIssueEventActor", fields: [actorWorkerId], references: [id])
   actorManager Manager? @relation("AttendanceIssueEventManagerActor", fields: [actorManagerId], references: [id])
 
   @@index([issueId, createdAt])
-  @@index([actorUserId, createdAt])
+  @@index([actorWorkerId, createdAt])
   @@index([actorManagerId, createdAt])
   @@map("attendance_issue_events")
 }
@@ -955,13 +955,13 @@ model SystemSetting {
 model ApiCallLog {
   id        BigInt   @id @default(autoincrement())
   agencyId  BigInt?  @map("agency_id")
-  userId    BigInt?  @map("user_id")
+  workerId    BigInt?  @map("worker_id")
   service   String // "GROQ_STT" | "GEMINI_LOG" | "GEMINI_BATCH"
   success   Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
 
   agency Agency? @relation(fields: [agencyId], references: [id])
-  user   Worker? @relation(fields: [userId], references: [id])
+  user   Worker? @relation(fields: [workerId], references: [id])
 
   @@index([agencyId, service, createdAt])
   @@index([createdAt])
@@ -1011,7 +1011,7 @@ model SystemAuditLog {
 model AttendanceEditRequest {
   id            BigInt                  @id @default(autoincrement())
   attendanceId  BigInt                  @map("attendance_id")
-  userId        BigInt                  @map("user_id")
+  workerId        BigInt                  @map("worker_id")
   reason        String
   proposedStart String?                 @map("proposed_start") // HH:MM
   proposedEnd   String?                 @map("proposed_end") // HH:MM
@@ -1022,10 +1022,10 @@ model AttendanceEditRequest {
   updatedAt     DateTime                @updatedAt @map("updated_at")
 
   attendance DailyAttendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
-  user       Worker          @relation(fields: [userId], references: [id])
+  user       Worker          @relation(fields: [workerId], references: [id])
 
   @@index([attendanceId, status])
-  @@index([userId, status])
+  @@index([workerId, status])
   @@map("attendance_edit_requests")
 }
 
@@ -1059,12 +1059,12 @@ enum AttendanceMode {
   NONE
 }
 
-enum UserRole {
+enum WorkerRole {
   ADMIN
   WORKER
 }
 
-enum UserStatus {
+enum WorkerStatus {
   ACTIVE
   RESIGNED
   PAUSED
@@ -1309,9 +1309,9 @@ enum WorkerType {
 // 10. 알람 설정 (Notification Settings)
 // ------------------------------------------------------
 
-model UserNotificationSetting {
+model WorkerNotificationSetting {
   id     BigInt @id @default(autoincrement())
-  userId BigInt @unique @map("user_id")
+  workerId BigInt @unique @map("worker_id")
 
   // 출근 알람: 출근 시각 N분 전 (0=비활성)
   clockInAlertMinutes  Int   @default(3) @map("clock_in_alert_minutes")
@@ -1322,9 +1322,9 @@ model UserNotificationSetting {
 
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user Worker @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
-  @@map("user_notification_settings")
+  @@map("worker_notification_settings")
 }
 
 // ------------------------------------------------------
@@ -1380,7 +1380,7 @@ model WorkerInvite {
   code               String    @map("code")
   expiresAt          DateTime  @map("expires_at")
   usedAt             DateTime? @map("used_at")
-  usedByUserId       BigInt?   @map("used_by_user_id")
+  usedByWorkerId       BigInt?   @map("used_by_worker_id")
   createdByManagerId BigInt    @map("created_by_manager_id")
   createdAt          DateTime  @default(now()) @map("created_at")
 
@@ -1458,7 +1458,7 @@ model ManagerInvite {
 
 model WorkerNotice {
   id        BigInt    @id @default(autoincrement())
-  userId    BigInt    @map("user_id")
+  workerId    BigInt    @map("worker_id")
   agencyId  BigInt    @map("agency_id")
   title     String
   body      String
@@ -1467,9 +1467,9 @@ model WorkerNotice {
   readAt    DateTime? @map("read_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
-  user Worker @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
-  @@index([userId, readAt])
+  @@index([workerId, readAt])
   @@index([agencyId])
   @@map("worker_notices")
 }

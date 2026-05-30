@@ -101,7 +101,7 @@ POST /api/worker/auth/login
 
 getWorkerSessionFromReq(req)
   → 쿠키에서 JWT 검증
-  → WorkerPayload { userId, userName, isTemporary } 반환
+  → WorkerPayload { workerId, workerName, isTemporary } 반환
   → isTemporary=true 이면 /worker/onboarding 리다이렉트
 ```
 
@@ -146,7 +146,7 @@ getWorkerSessionFromReq(req)
 
 ```
 관리자
-  → POST /api/admin/docs/generate (coachUserId, docType, periodStart, periodEnd)
+  → POST /api/admin/docs/generate (workerId, docType, periodStart, periodEnd)
   → 서버: DB에서 출퇴근·일지 데이터 수집
   → PDFKit으로 PDF 렌더링
   → Supabase Storage 업로드

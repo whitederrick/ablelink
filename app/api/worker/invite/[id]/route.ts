@@ -65,14 +65,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     // ── action: "signup" — 계정 생성 ────────────────────────────
-    const userName = String(body?.userName ?? "").trim();
+    const workerName = String(body?.workerName ?? "").trim();
     const password = String(body?.password ?? "");
     const consentTerms    = body?.consentTerms    === true;
     const consentPrivacy  = body?.consentPrivacy  === true;
     const consentLocation = body?.consentLocation === true;
 
     if (!code || code.length !== 6)       return NextResponse.json({ success: false, message: "인증번호 6자리를 입력해주세요." }, { status: 400 });
-    if (userName.length < 2)              return NextResponse.json({ success: false, message: "이름은 2자 이상이어야 합니다." }, { status: 400 });
+    if (workerName.length < 2)              return NextResponse.json({ success: false, message: "이름은 2자 이상이어야 합니다." }, { status: 400 });
     if (password.length < 8)             return NextResponse.json({ success: false, message: "비밀번호는 8자 이상이어야 합니다." }, { status: 400 });
     if (!consentTerms || !consentPrivacy) return NextResponse.json({ success: false, message: "필수 약관에 동의해주세요." }, { status: 400 });
 
@@ -97,7 +97,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         data: {
           loginId:           invite.phoneNumber,
           password:          hashed,
-          userName,
+          workerName,
           phoneNumber:       invite.phoneNumber,
           role:              "WORKER",
           status:            "ACTIVE",
@@ -113,7 +113,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (invite.siteId) {
         await tx.siteAssignment.create({
           data: {
-            userId:    newUser.id,
+            workerId:    newUser.id,
             siteId:    invite.siteId,
             agencyId:  invite.agencyId,
             startDate: now,
@@ -124,13 +124,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       await tx.workerInvite.update({
         where: { id: invite.id },
-        data: { usedAt: now, usedByUserId: newUser.id },
+        data: { usedAt: now, usedByWorkerId: newUser.id },
       });
       return newUser;
     });
 
-    const token = await signWorkerToken({ userId: user.id.toString(), userName: user.userName, isTemporary: false });
-    const res = NextResponse.json({ success: true, userId: user.id.toString(), hasSite: !!invite.siteId });
+    const token = await signWorkerToken({ workerId: user.id.toString(), workerName: user.workerName, isTemporary: false });
+    const res = NextResponse.json({ success: true, workerId: user.id.toString(), hasSite: !!invite.siteId });
     res.cookies.set(WORKER_COOKIE, token, {
       httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 7,
     });

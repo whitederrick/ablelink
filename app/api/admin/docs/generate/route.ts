@@ -55,21 +55,21 @@ export async function POST(request: NextRequest) {
   try {
     const scope = await requireManagerSession(request);
     const body = await request.json();
-    const { workerUserId, docType, periodStart, periodEnd, traineeId, toEmail } = body;
+    const { workerId: workerIdRaw, docType, periodStart, periodEnd, traineeId, toEmail } = body;
 
-    if (!workerUserId || !docType || !periodStart || !periodEnd)
+    if (!workerIdRaw || !docType || !periodStart || !periodEnd)
       return NextResponse.json({ success:false, message:"필수 파라미터 누락" }, { status:400 });
 
-    const userId = BigInt(workerUserId);
+    const workerId = BigInt(workerIdRaw);
     const start = periodStart, end = periodEnd;
 
     const user = await prisma.worker.findUnique({
-      where: { id: userId },
-      select: { userName:true, phoneNumber:true, signatureUrl:true, loginId:true },
+      where: { id: workerId },
+      select: { workerName:true, phoneNumber:true, signatureUrl:true, loginId:true },
     });
 
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { userId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] }, ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
+      where: { workerId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] }, ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
       include: {
         site: true,
         assignedByManager: { select: { signatureUrl:true, displayName:true } },
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     ]);
 
     const sigs = {
-      worker:       { name: user?.userName || "",            imageUrl: workerImg },
+      worker:       { name: user?.workerName || "",            imageUrl: workerImg },
       govAgent:    { name: adminForSign?.displayName || "", imageUrl: govImg },
       agencyAgent: { name: adminForSign?.displayName || "", imageUrl: govImg },
     };
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
 
     if (docType === "ATTENDANCE_SHEET") {
       const attendances = await prisma.dailyAttendance.findMany({
-        where: { userId, workDate:{ gte:start, lte:end } },
+        where: { workerId, workDate:{ gte:start, lte:end } },
         include: { logs:{ select:{ time1on1:true, timeGroup:true, extTime1on1:true, extTimeGroup:true } } },
         orderBy: { workDate:"asc" },
       });
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
       const totalHours = entries.reduce((s,e) => s+Number(e.hours), 0);
       const oneToMany  = entries.reduce((s,e) => s+Number(e.multiHours), 0);
       payload = {
-        workerName: user?.userName||"", workerPhone: user?.phoneNumber||user?.loginId||"",
+        workerName: user?.workerName||"", workerPhone: user?.phoneNumber||user?.loginId||"",
         companyName: site.companyName, periodStartYMD: fmtDot(start), periodEndYMD: fmtDot(end),
         totalDays: entries.length, totalHours,
         weeklyHolidayCount:0, monthlyLeaveCount:0, allowanceTotalWon:"0",
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
       const tid = traineeId ? BigInt(traineeId) : null;
       const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
       const logs = tid ? await prisma.traineeLog.findMany({
-        where:{ writerId:userId, traineeId:tid, trainingType:{in:["PRE","FIELD"]}, attendance:{workDate:{gte:start,lte:end}} },
+        where:{ writerId:workerId, traineeId:tid, trainingType:{in:["PRE","FIELD"]}, attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
       }) : [];
       payload = {
@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
       const tid = traineeId ? BigInt(traineeId) : null;
       const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
       const ev = tid ? await prisma.traineeEvaluation.findFirst({
-        where:{ traineeId:tid, writerId:userId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
+        where:{ traineeId:tid, writerId:workerId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
       }) : null;
       payload = {
         traineeName: trainee?.name||"", companyName: site.companyName,
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
       const tid = traineeId ? BigInt(traineeId) : null;
       const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
       const logs = tid ? await prisma.traineeLog.findMany({
-        where:{ writerId:userId, traineeId:tid, trainingType:"ADAPTATION", attendance:{workDate:{gte:start,lte:end}} },
+        where:{ writerId:workerId, traineeId:tid, trainingType:"ADAPTATION", attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
       }) : [];
       payload = {
@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
       const tid = traineeId ? BigInt(traineeId) : null;
       const trainee = tid ? await prisma.trainee.findUnique({ where:{id:tid}, select:{name:true} }) : null;
       const ev = tid ? await prisma.traineeEvaluation.findFirst({
-        where:{ traineeId:tid, writerId:userId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
+        where:{ traineeId:tid, writerId:workerId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
       }) : null;
       payload = {
         traineeName: trainee?.name||"", companyName: site.companyName,
@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
         from: process.env.EMAIL_FROM || "AbleLink <noreply@able-link.co.kr>",
         to: toEmail,
         subject: `[AbleLink] ${DOC_LABELS[docType]||docType} - ${site.companyName} (${start} ~ ${end})`,
-        body: `안녕하세요.\n\n${site.companyName} 직무지도 ${DOC_LABELS[docType]||docType}를 첨부합니다.\n\n■ 직무지도원: ${user?.userName||""}\n■ 기간: ${start} ~ ${end}\n\n감사합니다.\nAbleLink`,
+        body: `안녕하세요.\n\n${site.companyName} 직무지도 ${DOC_LABELS[docType]||docType}를 첨부합니다.\n\n■ 직무지도원: ${user?.workerName||""}\n■ 기간: ${start} ~ ${end}\n\n감사합니다.\nAbleLink`,
         pdfBuffer, fileName,
       });
       emailSent = true;

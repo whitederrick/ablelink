@@ -6,8 +6,8 @@ import { CheckCircle2, Clock, XCircle, AlertTriangle, RotateCcw } from "lucide-r
 type EditReq = {
   id: string;
   attendanceId: string;
-  userId: string;
-  userName: string;
+  workerId: string;
+  workerName: string;
   userPhone: string;
   workDate: string;
   siteName: string;
@@ -125,7 +125,7 @@ export default function AttendanceEditRequestsPage() {
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-black text-slate-900">{req.userName}</span>
+                    <span className="font-black text-slate-900">{req.workerName}</span>
                     <span className="text-xs font-semibold text-slate-400">{req.userPhone}</span>
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${
                       req.status === "PENDING"  ? "bg-amber-100 text-amber-700" :

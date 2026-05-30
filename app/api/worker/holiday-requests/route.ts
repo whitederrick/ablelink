@@ -10,13 +10,13 @@ export async function GET(req: NextRequest) {
     const session = await getWorkerSessionFromReq(req);
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
-    const userId = BigInt(session.userId);
+    const workerId = BigInt(session.workerId);
 
     const requests = await prisma.siteHolidayRequest.findMany({
       where: {
         status: "PENDING",
         holiday: {
-          assignment: { userId },
+          assignment: { workerId },
         },
       },
       include: {

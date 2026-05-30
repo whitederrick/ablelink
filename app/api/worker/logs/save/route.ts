@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "traineeId는 필수입니다." }, { status: 400 });
     }
 
-    const writerId = BigInt(session.userId);
+    const writerId = BigInt(session.workerId);
 
     // attendanceId 해석: 직접 전달받거나, logDate 기준으로 조회/생성
     let resolvedAttendanceId: bigint;
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     } else {
       const workDate = logDate || new Date().toISOString().slice(0, 10);
       const existing = await prisma.dailyAttendance.findFirst({
-        where: { userId: writerId, workDate },
+        where: { workerId: writerId, workDate },
         orderBy: { id: "desc" },
       });
       if (existing) {
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         }
         const created = await prisma.dailyAttendance.create({
           data: {
-            userId: writerId,
+            workerId: writerId,
             siteId: BigInt(siteId),
             assignmentId: BigInt(assignmentIdFromBody),
             workDate,

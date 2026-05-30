@@ -96,7 +96,7 @@ export async function GET(req: Request) {
 
     if (q) {
       where.OR = [
-        { user: { userName: { contains: q } } },
+        { user: { workerName: { contains: q } } },
         { site: { companyName: { contains: q } } },
       ];
     }
@@ -113,7 +113,7 @@ export async function GET(req: Request) {
         rangeM: true,
         startDistanceM: true,
         endDistanceM: true,
-        user: { select: { id: true, userName: true } },
+        user: { select: { id: true, workerName: true } },
         site: { select: { id: true, companyName: true } },
         // ✅ workType은 Site가 아닌 SiteAssignment에 있음
         assignment: { select: { id: true, workType: true } },
@@ -200,7 +200,7 @@ export async function GET(req: Request) {
 
       items.push({
         id: r.id.toString(),
-        workerName: r.user?.userName ?? "-",
+        workerName: r.user?.workerName ?? "-",
         siteName: r.site?.companyName ?? "-",
         workDate: r.workDate,
         issueTypes: (upserted.issueTypes as any) as IssueType[],
