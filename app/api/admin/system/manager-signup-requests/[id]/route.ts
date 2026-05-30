@@ -5,12 +5,37 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { createClient } from "@supabase/supabase-js";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 
 type Params = { params: Promise<{ id: string }> };
 
-function toDetail(r: any) {
+const BUCKET_NAME = "business-docs";
+const SIGNED_URL_EXPIRES_SEC = 3600; // 1시간
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
+}
+
+async function resolveDocumentUrl(rawPath: string | null): Promise<string | null> {
+  if (!rawPath) return null;
+  // 이미 HTTP URL이면 그대로 반환 (구버전 데이터 호환)
+  if (rawPath.startsWith("http")) return rawPath;
+  // 파일 경로 → signed URL 생성
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  const { data, error } = await supabase.storage
+    .from(BUCKET_NAME)
+    .createSignedUrl(rawPath, SIGNED_URL_EXPIRES_SEC);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
+}
+
+function toDetail(r: any, documentUrl: string | null) {
   return {
     id:                 String(r.id),
     agencyName:         r.agencyName,
@@ -19,7 +44,7 @@ function toDetail(r: any) {
     loginId:            r.loginId,
     displayName:        r.displayName ?? null,
     phoneNumber:        r.phoneNumber ?? null,
-    documentUrl:        r.documentUrl ?? null,
+    documentUrl,
     status:             r.status,
     ntsVerified:        r.ntsVerified,
     ntsBusinessName:    r.ntsBusinessName ?? null,
@@ -50,7 +75,8 @@ export async function GET(req: NextRequest, { params }: Params) {
       return NextResponse.json({ success: false, message: "신청 내역을 찾을 수 없습니다." }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, item: toDetail(request) });
+    const documentUrl = await resolveDocumentUrl(request.documentUrl);
+    return NextResponse.json({ success: true, item: toDetail(request, documentUrl) });
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[admin/system/manager-signup-requests/[id] GET]", e);
@@ -106,7 +132,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           reviewedById: scope.adminId,
         },
       });
-      return NextResponse.json({ success: true, item: toDetail(updated) });
+      return NextResponse.json({ success: true, item: toDetail(updated, null) });
     }
 
     // action === "approve"
@@ -168,7 +194,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return updated;
     });
 
-    return NextResponse.json({ success: true, item: toDetail(result) });
+    return NextResponse.json({ success: true, item: toDetail(result, null) });
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[admin/system/manager-signup-requests/[id] PATCH]", e);

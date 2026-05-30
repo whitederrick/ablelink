@@ -5,7 +5,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { randomInt } from "crypto";
+import { randomInt, createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendSms } from "@/lib/sms";
 import { checkRateLimit } from "@/lib/rateLimit";
@@ -15,6 +15,10 @@ const OTP_TTL_MS = 5 * 60 * 1000; // 5분
 
 function randomCode() {
   return String(randomInt(100000, 1000000));
+}
+
+function hashOtp(code: string, phone: string): string {
+  return createHash("sha256").update(`${code}:${phone}:ablelink-otp`).digest("hex");
 }
 
 export async function POST(request: Request) {
@@ -47,11 +51,12 @@ export async function POST(request: Request) {
     }
 
     const code = randomCode();
+    const codeHash = hashOtp(code, phone);
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
     // 기존 미인증 OTP 삭제 후 새로 생성
     await prisma.phoneVerification.deleteMany({ where: { phoneNumber: phone, verified: false } });
-    await prisma.phoneVerification.create({ data: { phoneNumber: phone, code, expiresAt } });
+    await prisma.phoneVerification.create({ data: { phoneNumber: phone, code: codeHash, expiresAt } });
 
     await sendSms({
       phone,
@@ -64,9 +69,10 @@ export async function POST(request: Request) {
   if (action === "confirm") {
     const phone = String(body?.phoneNumber ?? "").replace(/-/g, "").trim();
     const code  = String(body?.code ?? "").trim();
+    const codeHash = hashOtp(code, phone);
 
     const record = await prisma.phoneVerification.findFirst({
-      where: { phoneNumber: phone, code, verified: false },
+      where: { phoneNumber: phone, code: codeHash, verified: false },
       orderBy: { createdAt: "desc" },
     });
 

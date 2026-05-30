@@ -9,6 +9,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess, startTrialIfNeeded } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
+import { logApiCall } from "@/lib/logApiCall";
 
 export async function POST(request: NextRequest) {
   try {
@@ -84,10 +85,12 @@ export async function POST(request: NextRequest) {
     if (!groqRes.ok) {
       const errText = await groqRes.text();
       console.error("[voice-to-log] Groq STT 오류:", groqRes.status, errText);
+      void logApiCall(userId, "GROQ_STT", false);
       return NextResponse.json({ success: false, message: "음성 인식에 실패했습니다." }, { status: 500 });
     }
 
     const transcript = (await groqRes.text()).trim();
+    void logApiCall(userId, "GROQ_STT", true);
 
     if (!transcript) {
       return NextResponse.json({ success: false, message: "음성을 인식할 수 없습니다. 다시 시도해주세요." });
@@ -137,7 +140,7 @@ export async function POST(request: NextRequest) {
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
       console.error("[voice-to-log] Gemini 오류:", geminiRes.status, errText);
-      // Gemini 실패시 STT 결과 반환 (UX 유지)
+      void logApiCall(userId, "GEMINI_LOG", false);
       return NextResponse.json({ success: true, content: transcript });
     }
 
@@ -145,6 +148,7 @@ export async function POST(request: NextRequest) {
     const aiContent =
       geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || transcript;
 
+    void logApiCall(userId, "GEMINI_LOG", true);
     console.log("[voice-to-log] 변환 완료");
 
     return NextResponse.json({ success: true, content: aiContent, transcript });

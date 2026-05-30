@@ -9,6 +9,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess, startTrialIfNeeded } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
+import { logApiCall } from "@/lib/logApiCall";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
@@ -117,10 +118,12 @@ export async function POST(request: NextRequest) {
 
     if (!groqRes.ok) {
       console.error("[batch-voice-to-log] Groq STT 오류:", groqRes.status, await groqRes.text());
+      void logApiCall(userId, "GROQ_STT", false);
       return NextResponse.json({ success: false, message: "음성 인식에 실패했습니다." }, { status: 500 });
     }
 
     const transcript = (await groqRes.text()).trim();
+    void logApiCall(userId, "GROQ_STT", true);
     if (!transcript) {
       return NextResponse.json({ success: false, message: "음성을 인식할 수 없습니다. 다시 시도해주세요." });
     }
@@ -179,7 +182,7 @@ export async function POST(request: NextRequest) {
 
     if (!geminiRes.ok) {
       console.error("[batch-voice-to-log] Gemini 오류:", geminiRes.status, await geminiRes.text());
-      // Gemini 실패 시 transcript 채워 반환
+      void logApiCall(userId, "GEMINI_BATCH", false);
       const drafts = dates.flatMap(date =>
         trainees.map(t => ({ date, traineeId: t.id, traineeName: t.name, content: transcript }))
       );
@@ -212,6 +215,7 @@ export async function POST(request: NextRequest) {
       })
     );
 
+    void logApiCall(userId, "GEMINI_BATCH", true);
     return NextResponse.json({ success: true, drafts, transcript });
   } catch (error: any) {
     console.error("[batch-voice-to-log] 서버 오류:", error);

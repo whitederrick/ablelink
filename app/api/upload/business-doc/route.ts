@@ -63,11 +63,10 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // 버킷이 없으면 생성 시도 (이미 있으면 무시)
+    // 버킷이 없으면 Private으로 생성 (이미 있으면 무시)
     const { error: bucketError } = await supabase.storage.createBucket(BUCKET_NAME, {
-      public: true,
+      public: false,
     });
-    // 이미 존재하는 경우 에러가 발생하지만 무시
     if (bucketError && !bucketError.message.includes("already exists")) {
       console.warn("[upload/business-doc] 버킷 생성 실패:", bucketError.message);
     }
@@ -95,14 +94,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { data: urlData } = supabase.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(filePath);
-
-    // public URL이 없는 경우 signed URL 대신 경로만 반환
-    const url = urlData?.publicUrl ?? filePath;
-
-    return NextResponse.json({ success: true, url });
+    // Private 버킷 — DB에는 경로만 저장, 표시 시 signed URL 생성
+    return NextResponse.json({ success: true, url: filePath });
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[upload/business-doc]", e);
