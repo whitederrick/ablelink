@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const agencyId = scope.agencyId;
 
     const { workerId, yearMonth } = await req.json();
-    if (!workerId || !yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth))
+    if (!workerId || !yearMonth || !/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth))
       return NextResponse.json({ success: false, message: "userId와 yearMonth(YYYY-MM)가 필요합니다." }, { status: 400 });
 
     const userBigId = parseBigInt(workerId);
@@ -77,7 +77,7 @@ export async function DELETE(req: NextRequest) {
     const agencyId = scope.agencyId;
 
     const { workerId, yearMonth } = await req.json();
-    if (!workerId || !yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth))
+    if (!workerId || !yearMonth || !/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth))
       return NextResponse.json({ success: false, message: "userId와 yearMonth(YYYY-MM)가 필요합니다." }, { status: 400 });
 
     const userBigId = parseBigInt(workerId);
