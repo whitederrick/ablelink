@@ -182,7 +182,9 @@ export async function POST(req: NextRequest) {
         siteId,
         workerId,
         agencyId: scope.agencyId, // 에이전시 스코프 쿼리(급여·CSV·근태inbox·휴무)에서 누락 방지
-        status: "ASSIGNED",
+        // 초대·셀프등록 경로와 동일하게 ACTIVE로 생성 (ASSIGNED→ACTIVE 승격 경로가 없어
+        // 급여 정산·대시보드·구독 인원(ACTIVE만 집계)에서 누락되던 문제 방지)
+        status: "ACTIVE",
         isMainWorker,
         assignedAt: new Date(),
         startDate: body.startDate ? new Date(body.startDate) : new Date(),
