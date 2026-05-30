@@ -11,6 +11,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import AddressMapPicker from "@/components/AddressMapPicker";
 
 interface Trainee {
   id: string;
@@ -49,6 +50,7 @@ function SiteRegisterPageInner() {
   const [companyName, setCompanyName] = useState("");
   const [address, setAddress] = useState("");
   const [gps, setGps] = useState<GpsCoords | null>(null);
+  const [mapPick, setMapPick] = useState<{ lat: number; lon: number; address: string } | null>(null);
   const [currentGps, setCurrentGps] = useState<GpsCoords | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [showGpsMap, setShowGpsMap] = useState(false);
@@ -111,8 +113,12 @@ function SiteRegisterPageInner() {
   }
 
   function selectAddress(item: any) {
-    setAddress(item.addressName || item.address_name || "");
-    setGps({ lat: parseFloat(item.y), lon: parseFloat(item.x) });
+    // 주소 선택 → 지도에서 핀으로 위치 확인 후 확정
+    setMapPick({
+      lat: parseFloat(item.y),
+      lon: parseFloat(item.x),
+      address: item.addressName || item.address_name || "",
+    });
     setShowAddrSearch(false);
     setAddrResults([]);
     setAddrQuery("");
@@ -526,6 +532,19 @@ function SiteRegisterPageInner() {
           </div>
         </div>
       )}
+
+      <AddressMapPicker
+        open={!!mapPick}
+        initialLat={mapPick?.lat ?? 37.5665}
+        initialLon={mapPick?.lon ?? 126.978}
+        initialAddress={mapPick?.address ?? ""}
+        onConfirm={(lat, lon, addr) => {
+          setAddress(addr);
+          setGps({ lat, lon });
+          setMapPick(null);
+        }}
+        onClose={() => setMapPick(null)}
+      />
     </div>
   );
 }

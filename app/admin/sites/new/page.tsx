@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { T } from "../../_styles";
+import AddressMapPicker from "@/components/AddressMapPicker";
 
 type MeResponse =
   | { success: true; session: { role: "ADMIN" | "GOV" | "AGENCY"; agencyName?: string | null } }
@@ -36,6 +37,7 @@ export default function AdminSiteNewPage() {
   const [addrQ, setAddrQ] = useState("");
   const [addrLoading, setAddrLoading] = useState(false);
   const [addrItems, setAddrItems] = useState<AddrItem[]>([]);
+  const [mapPick, setMapPick] = useState<{ lat: number; lon: number; address: string } | null>(null);
 
   const [openMgr, setOpenMgr] = useState(false);
   const [mgrForm, setMgrForm] = useState({ name: "", email: "", phoneNumber: "" });
@@ -113,12 +115,8 @@ export default function AdminSiteNewPage() {
   }
 
   function pickAddress(it: AddrItem) {
-    setForm((p) => ({
-      ...p,
-      address: it.addressName,
-      gpsLat: String(it.y),
-      gpsLon: String(it.x),
-    }));
+    // 주소 선택 → 지도에서 핀으로 위치 확인 후 확정
+    setMapPick({ lat: parseFloat(it.y), lon: parseFloat(it.x), address: it.addressName });
     setAddrItems([]);
   }
 
@@ -370,6 +368,18 @@ export default function AdminSiteNewPage() {
           </div>
         </div>
       )}
+
+      <AddressMapPicker
+        open={!!mapPick}
+        initialLat={mapPick?.lat ?? 37.5665}
+        initialLon={mapPick?.lon ?? 126.978}
+        initialAddress={mapPick?.address ?? ""}
+        onConfirm={(lat, lon, addr) => {
+          setForm((p) => ({ ...p, address: addr, gpsLat: String(lat), gpsLon: String(lon) }));
+          setMapPick(null);
+        }}
+        onClose={() => setMapPick(null)}
+      />
     </div>
   );
 }
