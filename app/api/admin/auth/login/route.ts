@@ -1,4 +1,4 @@
-// 시스템 운영자 전용 로그인 (AdminUser 테이블 — admins)
+// 시스템 운영자 전용 로그인 (Admin 테이블 — admins)
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";

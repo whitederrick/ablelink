@@ -29,7 +29,7 @@ export async function PATCH(
       }
       const hashedPassword = await bcrypt.hash(newPassword, 12);
       await prisma.worker.update({ where: { id: user.id }, data: { password: hashedPassword } });
-      await logAudit({ adminId: scope.adminId, action: "COACH_PASSWORD_RESET", target: `User:${user.id}`, detail: { userName: user.userName } });
+      await logAudit({ adminId: scope.adminId, action: "WORKER_PASSWORD_RESET", target: `User:${user.id}`, detail: { userName: user.userName } });
       return NextResponse.json({ success: true, message: "비밀번호가 초기화되었습니다." });
     }
 
@@ -39,7 +39,7 @@ export async function PATCH(
         return NextResponse.json({ success: false, message: "유효하지 않은 상태입니다." }, { status: 400 });
       }
       await prisma.worker.update({ where: { id: user.id }, data: { status } });
-      await logAudit({ adminId: scope.adminId, action: "COACH_STATUS_CHANGED", target: `User:${user.id}`, detail: { before: user.status, after: status, memo } });
+      await logAudit({ adminId: scope.adminId, action: "WORKER_STATUS_CHANGED", target: `User:${user.id}`, detail: { before: user.status, after: status, memo } });
       return NextResponse.json({ success: true, message: `상태가 ${status}로 변경되었습니다.` });
     }
 

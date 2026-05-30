@@ -45,7 +45,7 @@ export type TraineeFinalEvalPayload = {
   signatureNewPage?: boolean;
   signatureTopMarginMm?: number;
   signatures?: {
-    coach?: { name?: string; imageUrl?: string };
+    worker?: { name?: string; imageUrl?: string };
     agencyAgent?: { name?: string; imageUrl?: string };
   };
 };
@@ -157,7 +157,7 @@ th, td { padding:0; vertical-align:middle; font-size:11pt; border:0.08mm solid #
 .sign-name { min-width:28mm; text-align:left; padding-left:2mm; white-space:nowrap; font-size:12pt; font-stretch:95%; letter-spacing:-0.05em; flex-shrink:0; }
 .sign-gap { height:4pt; }
 .sign-img { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:28mm; height:20mm; object-fit:contain; opacity:0.6; pointer-events:none; z-index:1; }
-.sign-row.coach  { line-height:1.8; }
+.sign-row.worker  { line-height:1.8; }
 .sign-row.agency { line-height:1.3; }
 </style>
 </head>
@@ -201,11 +201,11 @@ th, td { padding:0; vertical-align:middle; font-size:11pt; border:0.08mm solid #
   <div class="sign-page ${signBreak}">
     <div class="sign-area" style="margin-top:${p.signatureTopMarginMm}mm;">
       <div class="sign-block">
-        <div class="sign-row coach">
+        <div class="sign-row worker">
           <div class="sign-left-spacer"></div>
           <div class="sign-label-wrap">직무지도원:</div>
-          <span class="sign-name">${sigs.coach?.name??""}</span>
-          <div class="sign-slot">${sigImg(sigs.coach?.imageUrl)}(서명 또는 인)</div>
+          <span class="sign-name">${sigs.worker?.name??""}</span>
+          <div class="sign-slot">${sigImg(sigs.worker?.imageUrl)}(서명 또는 인)</div>
         </div>
         <div class="sign-gap"></div>
         <div class="sign-row agency">

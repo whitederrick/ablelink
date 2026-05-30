@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { verifyBusinessNumber } from "@/lib/ntsVerify";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 function errToStatus(msg: string) {
   if (msg.startsWith("VALIDATION:")) return 400;
@@ -16,6 +17,17 @@ function errToStatus(msg: string) {
 
 export async function POST(req: NextRequest) {
   try {
+    // 미인증 공개 엔드포인트 — IP당 신청 횟수 제한 (bcrypt/NTS API 남용·DoS 방어)
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const rl = await checkRateLimit(`manager-signup:${ip}`);
+    if (!rl.allowed) {
+      const secs = Math.ceil((rl.retryAfterMs ?? 0) / 1000);
+      return NextResponse.json(
+        { success: false, message: `신청 요청이 너무 많습니다. ${secs}초 후 다시 시도하세요.` },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
 
     const agencyName         = String(body?.agencyName ?? "").trim();

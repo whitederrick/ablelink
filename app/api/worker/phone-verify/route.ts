@@ -69,6 +69,17 @@ export async function POST(request: Request) {
   if (action === "confirm") {
     const phone = String(body?.phoneNumber ?? "").replace(/-/g, "").trim();
     const code  = String(body?.code ?? "").trim();
+
+    // 무차별 대입 방어: 전화번호당 검증 시도 횟수 제한
+    const rlConfirm = await checkRateLimit(`otp-confirm:${phone}`);
+    if (!rlConfirm.allowed) {
+      const mins = Math.ceil((rlConfirm.retryAfterMs ?? 0) / 60000);
+      return NextResponse.json(
+        { success: false, message: `인증 시도가 너무 많습니다. ${mins}분 후 다시 시도해주세요.` },
+        { status: 429 },
+      );
+    }
+
     const codeHash = hashOtp(code, phone);
 
     const record = await prisma.phoneVerification.findFirst({

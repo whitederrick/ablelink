@@ -12,8 +12,8 @@ type AuditLog = {
 const ACTION_COLORS: Record<string,string> = {
   AGENCY_CREATED:"bg-emerald-100 text-emerald-700",
   AGENCY_PLAN_CHANGED:"bg-sky-100 text-sky-700",
-  COACH_PASSWORD_RESET:"bg-amber-100 text-amber-700",
-  COACH_STATUS_CHANGED:"bg-rose-100 text-rose-700",
+  WORKER_PASSWORD_RESET:"bg-amber-100 text-amber-700",
+  WORKER_STATUS_CHANGED:"bg-rose-100 text-rose-700",
   ATTENDANCE_CORRECTED:"bg-violet-100 text-violet-700",
   ADMIN_CREATED:"bg-slate-100 text-slate-700",
 };
@@ -54,7 +54,7 @@ export default function LogsPage() {
             className="rounded-xl border border-slate-200 bg-white pl-9 pr-4 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-sky-400">
             <option value="">전체 액션</option>
             <option value="AGENCY">에이전시 관련</option>
-            <option value="COACH">직무지도원 관련</option>
+            <option value="WORKER">직무지도원 관련</option>
             <option value="ATTENDANCE">출근 기록 수정</option>
             <option value="ADMIN">계정 관련</option>
           </select>

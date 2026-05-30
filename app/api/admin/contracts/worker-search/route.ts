@@ -1,4 +1,4 @@
-// app/api/admin/contracts/coach-search/route.ts
+// app/api/admin/contracts/worker-search/route.ts
 // 근로계약 이력 기준 직무지도원 검색
 
 export const runtime = "nodejs";
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
           take: 1,
           select: {
             siteName: true,
-            coachFilledSiteName: true,
+            workerFilledSiteName: true,
             contractStart: true,
             contractEnd: true,
           },
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
       success: true,
       items: users.map(u => {
         const latest = u.employmentContracts[0];
-        const siteName = latest?.siteName || latest?.coachFilledSiteName || null;
+        const siteName = latest?.siteName || latest?.workerFilledSiteName || null;
         return {
           id: String(u.id),
           userName: u.userName,

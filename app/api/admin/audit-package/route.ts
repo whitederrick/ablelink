@@ -1,6 +1,6 @@
 // app/api/admin/audit-package/route.ts
 // 감사 대응 서류 패키지 — STANDARD+
-// GET /api/admin/audit-package?coachUserId=X&periodStart=YYYY-MM-DD&periodEnd=YYYY-MM-DD
+// GET /api/admin/audit-package?workerUserId=X&periodStart=YYYY-MM-DD&periodEnd=YYYY-MM-DD
 
 export const runtime = "nodejs";
 
@@ -57,15 +57,15 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const coachUserId = searchParams.get("coachUserId");
+    const workerUserId = searchParams.get("workerUserId");
     const periodStart = searchParams.get("periodStart") || new Date().toISOString().slice(0, 10);
     const periodEnd   = searchParams.get("periodEnd")   || periodStart;
 
-    if (!coachUserId) {
-      return NextResponse.json({ success: false, message: "coachUserId 필요" }, { status: 400 });
+    if (!workerUserId) {
+      return NextResponse.json({ success: false, message: "workerUserId 필요" }, { status: 400 });
     }
 
-    const userId = BigInt(coachUserId);
+    const userId = BigInt(workerUserId);
 
     // 직무지도원 + 배정 조회
     const user = await prisma.worker.findUnique({
@@ -86,9 +86,9 @@ export async function GET(request: NextRequest) {
     const end   = periodEnd;
 
     // 서명 이미지 로드
-    const coachImg = await toBase64DataUri(user?.signatureUrl);
+    const workerImg = await toBase64DataUri(user?.signatureUrl);
     const sigs = {
-      coach:          { name: user?.userName || "", imageUrl: coachImg },
+      worker:          { name: user?.userName || "", imageUrl: workerImg },
       govAgent:       { name: "", imageUrl: undefined },
       agencyAgent:    { name: "", imageUrl: undefined },
       companyManager: { name: "", imageUrl: undefined },
@@ -122,12 +122,12 @@ export async function GET(request: NextRequest) {
       const totalHours  = entries.reduce((s, e) => s + e.hours,      0);
       const oneToMany   = entries.reduce((s, e) => s + e.multiHours, 0);
       const payload = {
-        coachName:  user?.userName || "", coachPhone: user?.phoneNumber || user?.loginId || "",
+        workerName:  user?.userName || "", workerPhone: user?.phoneNumber || user?.loginId || "",
         companyName: site.companyName, periodStartYMD: fmtDot(start), periodEndYMD: fmtDot(end),
         totalDays: entries.length, totalHours, weeklyHolidayCount: 0, monthlyLeaveCount: 0,
         allowanceTotalWon: "0", oneToOneHours: totalHours - oneToMany, oneToManyHours: oneToMany,
         otOneToOneHours: 0, otOneToManyHours: 0, entries,
-        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, coach: sigs.coach },
+        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
       };
       const buf = await renderPdfToBuffer({ documentType: "ATTENDANCE_SHEET" as DocumentType, payload });
       zip.file("출근부.pdf", buf);
@@ -171,7 +171,7 @@ export async function GET(request: NextRequest) {
             taskLevelMeasured: scoreLabel(l.tasks[0]?.performanceScore),
             evalGuidance: l.content || "",
           })),
-          signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, coach: sigs.coach },
+          signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
         };
         const buf = await renderPdfToBuffer({ documentType: "TRAINING_DAILY_LOG" as DocumentType, payload });
         folder.file("훈련일지.pdf", buf);
@@ -184,7 +184,7 @@ export async function GET(request: NextRequest) {
           preTrainingStart: assignment.stepStart?.toISOString().slice(0, 10) || start,
           preTrainingEnd: start, fieldTrainingStart: start, fieldTrainingEnd: end,
           scores: (trainingEv?.scores as any) || {}, comments: (trainingEv?.comments as any) || {},
-          signatures: { coach: sigs.coach, agencyAgent: sigs.agencyAgent },
+          signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
         };
         const buf = await renderPdfToBuffer({ documentType: "TRAINEE_FINAL_EVAL" as DocumentType, payload });
         folder.file("훈련생_종합평가.pdf", buf);
@@ -200,7 +200,7 @@ export async function GET(request: NextRequest) {
             performanceLabel: scoreLabel(l.tasks[0]?.performanceScore),
             performanceTime: "", coaching: l.content || "",
           })),
-          signatures: { coach: sigs.coach, govAgent: sigs.govAgent },
+          signatures: { worker: sigs.worker, govAgent: sigs.govAgent },
         };
         const buf = await renderPdfToBuffer({ documentType: "ADAPTATION_DAILY_LOG" as DocumentType, payload });
         folder.file("적응지도_일지.pdf", buf);
@@ -212,7 +212,7 @@ export async function GET(request: NextRequest) {
           traineeName: trainee.name, companyName: site.companyName,
           periodStart: start, periodEnd: end,
           scores: (adaptEv?.scores as any) || {}, comments: (adaptEv?.comments as any) || {},
-          signatures: { coach: sigs.coach, agencyAgent: sigs.agencyAgent },
+          signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
         };
         const buf = await renderPdfToBuffer({ documentType: "ADAPTATION_FINAL_EVAL" as DocumentType, payload });
         folder.file("적응지도_종합평가.pdf", buf);
@@ -221,8 +221,8 @@ export async function GET(request: NextRequest) {
 
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 
-    const coachName = safeFilename(user?.userName || coachUserId);
-    const filename  = `감사서류_${coachName}_${start}_${end}.zip`;
+    const workerName = safeFilename(user?.userName || workerUserId);
+    const filename  = `감사서류_${workerName}_${start}_${end}.zip`;
 
     return new NextResponse(new Uint8Array(zipBuffer), {
       status: 200,

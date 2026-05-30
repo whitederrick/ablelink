@@ -5,7 +5,7 @@ import { ChevronDown, ChevronUp, MapPin } from "lucide-react";
 import { T } from "../_styles";
 
 interface TraineeSummary {
-  siteId: string; siteName: string; coachName: string;
+  siteId: string; siteName: string; workerName: string;
   trainees: Array<{
     id: string; name: string; gender: string; disabilityType: string;
     severity: string; status: string; logCount: number; lastLogDate: string | null;
@@ -48,7 +48,7 @@ export default function TraineesPage() {
   const employedCount = sites.reduce((s, site) => s + site.trainees.filter(t => t.status === "EMPLOYED").length, 0);
 
   const filteredSites = sites.filter(s =>
-    s.siteName.includes(search) || s.coachName.includes(search) ||
+    s.siteName.includes(search) || s.workerName.includes(search) ||
     s.trainees.some(t => t.name.includes(search))
   );
 
@@ -94,7 +94,7 @@ export default function TraineesPage() {
                     <MapPin className="h-4 w-4 text-slate-400" aria-hidden="true" />
                     <span className="font-black text-slate-900">{site.siteName}</span>
                   </div>
-                  <p className="pl-6 text-xs font-semibold text-slate-400">직무지도원: {site.coachName}</p>
+                  <p className="pl-6 text-xs font-semibold text-slate-400">직무지도원: {site.workerName}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="rounded-full bg-sky-50 px-3 py-1 text-sm font-black text-sky-600">{site.trainees.length}명</span>

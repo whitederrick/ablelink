@@ -28,12 +28,12 @@ export async function PATCH(
     if (scope.agencyId !== agencyId) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
-    const limits = PLAN_LIMITS[planType] || { maxCoaches: 0, maxSites: 0 };
+    const limits = PLAN_LIMITS[planType] || { maxWorkers: 0, maxSites: 0 };
     const now = new Date();
 
     const updateData: any = {
       planType,
-      maxCoaches: limits.maxCoaches,
+      maxWorkers: limits.maxWorkers,
       maxSites: limits.maxSites,
     };
 

@@ -11,7 +11,7 @@ interface ContractItem {
   id: string; userId: string; userName: string; userPhone: string;
   contractStart: string; contractEnd: string; siteName: string | null;
   workType: string | null; status: ContractStatus; signToken: string;
-  coachSignedAt: string | null; adminSignedAt: string | null; createdAt: string;
+  workerSignedAt: string | null; adminSignedAt: string | null; createdAt: string;
 }
 
 interface SearchResult {
@@ -38,7 +38,7 @@ function formatPeriod(start: string | null, end: string | null): string {
   return `${s} ~ ${e}`;
 }
 
-function CoachSearchPopup({ onSelect, onClose }: {
+function WorkerSearchPopup({ onSelect, onClose }: {
   onSelect: (r: SearchResult) => void; onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -129,7 +129,7 @@ function CreateContractModal({ onClose, onCreated }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  function handleSelectCoach(r: SearchResult) { setSelectedUserId(r.id); setManualName(r.userName); setManualPhone(r.phoneNumber); }
+  function handleSelectWorker(r: SearchResult) { setSelectedUserId(r.id); setManualName(r.userName); setManualPhone(r.phoneNumber); }
   function clearSelection() { setSelectedUserId(""); }
 
   async function handleCreate() {
@@ -270,7 +270,7 @@ function CreateContractModal({ onClose, onCreated }: {
       </div>
 
       {showSearch && (
-        <CoachSearchPopup onSelect={handleSelectCoach} onClose={() => setShowSearch(false)} />
+        <WorkerSearchPopup onSelect={handleSelectWorker} onClose={() => setShowSearch(false)} />
       )}
     </>
   );
@@ -345,7 +345,7 @@ export default function AdminContractsPage() {
                   <td className={`${T.td} text-slate-600`}>{c.siteName || <span className="text-slate-300">미지정</span>}</td>
                   <td className={`${T.td} text-xs text-slate-600`}>{c.workType ? (WORK_TYPE_LABELS[c.workType] ?? c.workType) : <span className="text-slate-300">미지정</span>}</td>
                   <td className={T.td}><span className={`${T.badge} ${st.cls}`}>{st.label}</span></td>
-                  <td className={`${T.td} text-xs text-slate-400`}>{c.coachSignedAt ? c.coachSignedAt.slice(0, 10) : "-"}</td>
+                  <td className={`${T.td} text-xs text-slate-400`}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>
                     <button onClick={() => copyLink(c.signToken)} className={T.btnSecondary}>링크 복사</button>
                   </td>

@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
     const dateFrom  = searchParams.get("dateFrom")  ?? "";
     const dateTo    = searchParams.get("dateTo")    ?? "";
-    const coachId   = searchParams.get("coachId")   ?? "";
+    const workerId   = searchParams.get("workerId")   ?? "";
     const traineeId = searchParams.get("traineeId") ?? "";
     const completed = searchParams.get("completed") ?? ""; // "true"|"false"|""
 
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     const logs = await prisma.traineeLog.findMany({
       where: {
         ...(allowedUserIds ? { writerId: { in: allowedUserIds } } : {}),
-        ...(coachId   ? { writerId:  BigInt(coachId)   } : {}),
+        ...(workerId   ? { writerId:  BigInt(workerId)   } : {}),
         ...(traineeId ? { traineeId: BigInt(traineeId) } : {}),
         ...(completed === "true"  ? { isCompleted: true  } : {}),
         ...(completed === "false" ? { isCompleted: false } : {}),
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
         traineeId:    l.traineeId.toString(),
         traineeName:  l.trainee.name,
         writerId:     l.writerId.toString(),
-        coachName:    l.writer.userName,
+        workerName:    l.writer.userName,
         siteName:     l.attendance.site?.companyName ?? "",
         workDate:     l.attendance.workDate,
         trainingType: l.trainingType,

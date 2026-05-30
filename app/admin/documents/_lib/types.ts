@@ -8,7 +8,7 @@ export type DocumentRunItem = {
   id: string;
   assignmentId: string;
   siteId: string;
-  coachUserId: string;
+  workerUserId: string;
 
   docType: DocType;
 
@@ -21,7 +21,7 @@ export type DocumentRunItem = {
   currentVersionId: string | null;
 
   site?: { id: string; companyName: string; agencyId: string | null } | null;
-  coach?: { id: string; userName: string; loginId: string } | null;
+  worker?: { id: string; userName: string; loginId: string } | null;
 };
 
 export type DocumentVersionItem = {

@@ -117,13 +117,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 에이전시 관리자 서명은 관리자가 명시적으로 서명 후 첨부 — 여기서는 자동 삽입 안 함
-    const [coachImg, companyImg] = await Promise.all([
+    const [workerImg, companyImg] = await Promise.all([
       toBase64DataUri(user?.signatureUrl),
       toBase64DataUri(companyManagerSignatureUrl),
     ]);
 
     const sigs = {
-      coach:          { name: user?.userName || "",        imageUrl: coachImg },
+      worker:          { name: user?.userName || "",        imageUrl: workerImg },
       govAgent:       { name: "",                          imageUrl: undefined as string | undefined },
       companyManager: { name: companyManagerSignerName,    imageUrl: companyImg },
       agencyAgent:    { name: "",                          imageUrl: undefined as string | undefined },
@@ -152,8 +152,8 @@ export async function POST(request: NextRequest) {
       const oneToMany  = entries.reduce((s,e) => s + Number(e.multiHours), 0);
 
       payload = {
-        coachName: user?.userName || "",
-        coachPhone: user?.phoneNumber || user?.loginId || "",
+        workerName: user?.userName || "",
+        workerPhone: user?.phoneNumber || user?.loginId || "",
         companyName: site.companyName,
         periodStartYMD: fmtDot(start),
         periodEndYMD:   fmtDot(end),
@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
         otOneToOneHours: 0,
         otOneToManyHours: 0,
         entries,
-        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, coach: sigs.coach },
+        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
       };
       fileName = `출근부_${site.companyName}_${start}_${end}.pdf`;
 
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
           taskLevelMeasured: scoreLabel(l.tasks[0]?.performanceScore as any),
           evalGuidance: l.content || "",
         })),
-        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, coach: sigs.coach },
+        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
       };
       fileName = `훈련일지_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
 
@@ -223,7 +223,7 @@ export async function POST(request: NextRequest) {
         fieldTrainingEnd:   end,
         scores:   (ev?.scores as any)   || {},
         comments: (ev?.comments as any) || {},
-        signatures: { coach: sigs.coach, agencyAgent: sigs.agencyAgent },
+        signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
       };
       fileName = `훈련생평가_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
 
@@ -255,7 +255,7 @@ export async function POST(request: NextRequest) {
           performanceTime: "",
           coaching: l.content || "",
         })),
-        signatures: { coach: sigs.coach, govAgent: sigs.govAgent },
+        signatures: { worker: sigs.worker, govAgent: sigs.govAgent },
       };
       fileName = `적응지도일지_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
 
@@ -276,7 +276,7 @@ export async function POST(request: NextRequest) {
         periodEnd:   end,
         scores:   (ev?.scores as any)   || {},
         comments: (ev?.comments as any) || {},
-        signatures: { coach: sigs.coach, agencyAgent: sigs.agencyAgent },
+        signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
       };
       fileName = `적응지도평가_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
 

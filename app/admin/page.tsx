@@ -5,7 +5,7 @@ import { Building2, Users, MapPin, CreditCard, TrendingUp } from "lucide-react";
 
 interface SystemStats {
   agencyCount: number;
-  coachCount: number;
+  workerCount: number;
   siteCount: number;
   traineeCount: number;
   activeSubscriptions: number;
@@ -38,7 +38,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
           {[
             { icon: Building2,  label: "에이전시",   value: stats?.agencyCount ?? 0,        color: "text-violet-600 bg-violet-50" },
-            { icon: Users,      label: "직무지도원", value: stats?.coachCount ?? 0,          color: "text-sky-600 bg-sky-50" },
+            { icon: Users,      label: "직무지도원", value: stats?.workerCount ?? 0,          color: "text-sky-600 bg-sky-50" },
             { icon: MapPin,     label: "현장(Site)", value: stats?.siteCount ?? 0,           color: "text-emerald-600 bg-emerald-50" },
             { icon: Users,      label: "훈련생",     value: stats?.traineeCount ?? 0,        color: "text-amber-600 bg-amber-50" },
             { icon: CreditCard, label: "유료 구독",  value: stats?.activeSubscriptions ?? 0, color: "text-rose-600 bg-rose-50" },

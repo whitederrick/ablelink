@@ -1,5 +1,5 @@
 // app/api/admin/signature/route.ts
-// 에이전시 관리자(AdminUser) 서명 등록/조회/삭제
+// 에이전시 관리자(Admin) 서명 등록/조회/삭제
 // (위탁기관/공단 담당자 = 에이전시 관리자가 서명 미리 등록)
 
 export const runtime = "nodejs";

@@ -25,7 +25,7 @@ export type AdaptationDailyLogPayload = {
   entries?: AdaptationDailyLogEntry[];
   signatureNewPage?: boolean;
   signatures?: {
-    coach?:     { name?: string; imageUrl?: string };
+    worker?:     { name?: string; imageUrl?: string };
     govAgent?:  { name?: string; imageUrl?: string };
   };
 };
@@ -281,7 +281,7 @@ tr { break-inside:avoid; page-break-inside:avoid; }
     <div class="${signBreak}">
       <div class="sign-area">
         <div class="sign-lines">
-          ${sigRow("직무지도원", sigs.coach?.name ?? "", sigs.coach?.imageUrl)}
+          ${sigRow("직무지도원", sigs.worker?.name ?? "", sigs.worker?.imageUrl)}
           <div class="sign-gap"></div>
           ${sigRow("위탁기관 담당자", sigs.govAgent?.name ?? "", sigs.govAgent?.imageUrl)}
         </div>

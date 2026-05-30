@@ -29,7 +29,7 @@ model Worker {
   password    String
   userName    String     @map("user_name")
   phoneNumber String     @map("phone_number")
-  role        UserRole   @default(COACH)
+  role        UserRole   @default(WORKER)
   status      UserStatus @default(ACTIVE)
 
   // ✅ 서비스 플랜 (개인 단위; 프리랜서 전제)
@@ -48,6 +48,14 @@ model Worker {
   consentTermsAt    DateTime? @map("consent_terms_at")
   consentPrivacyAt  DateTime? @map("consent_privacy_at")
   consentLocationAt DateTime? @map("consent_location_at")
+
+  // ✅ 인력 pool / 매칭 속성 (직무지도원·요양보호사·활동보호사 공통)
+  residenceAddress String?  @map("residence_address")
+  residenceLat     Decimal? @map("residence_lat")
+  residenceLon     Decimal? @map("residence_lon")
+  ratingAvg        Decimal  @default(0) @map("rating_avg") // 평점 평균 (집계 캐시)
+  ratingCount      Int      @default(0) @map("rating_count") // 평점 개수 (집계 캐시)
+  bio              String? // 자기소개/특기
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -74,6 +82,11 @@ model Worker {
   notificationSettings UserNotificationSetting?
   notices              WorkerNotice[]
 
+  // ✅ 인력 pool / 매칭
+  professions WorkerProfession[]
+  experiences WorkerExperience[]
+  reviews     WorkerReview[]     @relation("WorkerReviewTarget")
+
   @@map("workers")
 }
 
@@ -90,7 +103,7 @@ model Site {
   gpsLon         Decimal @map("gps_lon")
   allowanceRange Int     @default(100) @map("allowance_range")
 
-  // ✅ COACH_ENTRY / 클린징 대비
+  // ✅ WORKER_ENTRY / 클린징 대비
   isVerified     Boolean        @default(true) @map("is_verified")
   siteSourceType SiteSourceType @default(AGENCY)
 
@@ -100,7 +113,7 @@ model Site {
   placeId              String? @unique @map("place_id")
   normalizedAddressKey String? @map("normalized_address_key")
 
-  // ✅ 병합(클린징) 링크: 임시(COACH_ENTRY) Site가 정식 Site로 병합될 때 사용
+  // ✅ 병합(클린징) 링크: 임시(WORKER_ENTRY) Site가 정식 Site로 병합될 때 사용
   mergedToSiteId  BigInt? @map("merged_to_site_id")
   mergedToSite    Site?   @relation("SiteMerge", fields: [mergedToSiteId], references: [id])
   mergedFromSites Site[]  @relation("SiteMerge")
@@ -128,6 +141,11 @@ model Site {
   // “현재 운영 주체”는 참고용으로 유지 가능(하지만 실귀속은 assignment.agencyId)
   agencyId  BigInt? @map("agency_id")
   managerId BigInt? @map("manager_id")
+
+  // ✅ 직무/사이트 pool 매칭 속성
+  businessType       String?     @map("business_type") // 사업 유형 (제조/서비스/유통 등)
+  requiredProfession Profession? @map("required_profession") // 필요 직종
+  neededActivities   String[]    @default([]) @map("needed_activities") // 주요 필요 활동 태그
 
   // ✅ (구멍 #4 해결) Site에 박혀있던 훈련기간/근무형태 정보 제거
   // - 기간/근무형태는 배정(SiteAssignment) 또는 Placement에 귀속하는 것이 정확함
@@ -208,17 +226,17 @@ model SiteAssignment {
   droppedAt   DateTime? @map("dropped_at")
   endedAt     DateTime? @map("ended_at")
 
-  assignedByManagerId BigInt?      @map("assigned_by_manager_id")
+  assignedByManagerId BigInt?  @map("assigned_by_manager_id")
   assignedByManager   Manager? @relation(fields: [assignedByManagerId], references: [id])
-  statusReason      String?    @map("status_reason")
+  statusReason        String?  @map("status_reason")
 
   // ✅ 배정 주체 에이전시 명시 (멀티 에이전시 대응)
   agencyId BigInt? @map("agency_id")
   agency   Agency? @relation(fields: [agencyId], references: [id])
 
-  isMainCoach Boolean @default(true) @map("is_main_coach")
+  isMainWorker Boolean @default(true) @map("is_main_worker")
 
-  site Site @relation(fields: [siteId], references: [id])
+  site Site   @relation(fields: [siteId], references: [id])
   user Worker @relation(fields: [userId], references: [id])
 
   attendances        DailyAttendance[]
@@ -304,8 +322,8 @@ model DailyAttendance {
   withinRange    Boolean? @map("within_range")
   rangeM         Int?     @map("range_m")
 
-  attendanceIssue  AttendanceIssue?
-  editRequests     AttendanceEditRequest[]
+  attendanceIssue AttendanceIssue?
+  editRequests    AttendanceEditRequest[]
 
   isGpsModified        Boolean    @default(false) @map("is_gps_modified")
   status               WorkStatus @default(WORKING)
@@ -315,7 +333,7 @@ model DailyAttendance {
   managerFinalAt       DateTime?  @map("manager_final_at")
   managerFinalBy       BigInt?    @map("manager_final_by")
 
-  site Site @relation(fields: [siteId], references: [id])
+  site Site   @relation(fields: [siteId], references: [id])
   user Worker @relation(fields: [userId], references: [id])
 
   assignment SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
@@ -387,7 +405,7 @@ model Agency {
 
   // ✅ 구독 관리
   planType   AgencyPlanType @default(FREE) @map("plan_type")
-  maxCoaches Int            @default(0) @map("max_coaches") // 0 = 무제한(PRO)
+  maxWorkers Int            @default(0) @map("max_workers") // 0 = 무제한(PRO)
   maxSites   Int            @default(0) @map("max_sites") // 0 = 무제한(PRO)
 
   // ✅ 15일 무료 체험
@@ -415,6 +433,7 @@ model Agency {
   holidayRequests       SiteHolidayRequest[]
   managerSignupRequests ManagerSignupRequest[]
   managerInvites        ManagerInvite[]
+  workerReviews         WorkerReview[]
 
   @@index([planType])
   @@map("agencies")
@@ -480,6 +499,7 @@ model Manager {
   signupRequest           ManagerSignupRequest?   @relation("SignupRequestManager")
   managerInvite           ManagerInvite?          @relation("ManagerInviteUser")
   managerNotices          ManagerNotice[]
+  workerReviews           WorkerReview[]
 
   @@index([agencyId])
   @@map("managers")
@@ -494,7 +514,7 @@ model DocumentRun {
   agencyId     BigInt? @map("agency_id")
   assignmentId BigInt  @map("assignment_id")
   siteId       BigInt  @map("site_id")
-  coachUserId  BigInt  @map("coach_user_id")
+  workerUserId BigInt  @map("worker_user_id")
 
   docType     DocumentType @map("doc_type")
   periodStart DateTime     @map("period_start")
@@ -508,14 +528,14 @@ model DocumentRun {
   currentVersionId BigInt? @map("current_version_id")
 
   // 서명 워크플로우 (단계별 서명 추적)
-  coachSignedAt       DateTime? @map("coach_signed_at")
+  workerSignedAt      DateTime? @map("worker_signed_at")
   managerSignatureUrl String?   @map("manager_signature_url")
   managerSignedAt     DateTime? @map("manager_signed_at")
   managerSignerName   String?   @map("manager_signer_name")
   agencySignatureUrl  String?   @map("agency_signature_url")
   agencySignedAt      DateTime? @map("agency_signed_at")
   requiresManagerSign Boolean   @default(false) @map("requires_manager_sign")
-  // DRAFT | COACH_SIGNED | MANAGER_SIGNED | SUBMITTED | AGENCY_SIGNED
+  // DRAFT | WORKER_SIGNED | MANAGER_SIGNED | SUBMITTED | AGENCY_SIGNED
   signStage           String    @default("DRAFT") @map("sign_stage")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -523,7 +543,7 @@ model DocumentRun {
 
   assignment SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   site       Site           @relation(fields: [siteId], references: [id])
-  coach      Worker         @relation(fields: [coachUserId], references: [id])
+  worker     Worker         @relation(fields: [workerUserId], references: [id])
 
   versions       DocumentVersion[]
   submissionLogs DocumentSubmissionLog[]
@@ -546,12 +566,12 @@ model DocumentVersion {
   sourceData  Json?         @map("source_data")
   createdAt   DateTime      @default(now()) @map("created_at")
 
-  createdByUserId  BigInt? @map("created_by_user_id")
+  createdByUserId    BigInt? @map("created_by_user_id")
   createdByManagerId BigInt? @map("created_by_manager_id")
 
-  run               DocumentRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
-  createdByUser     Worker?      @relation(fields: [createdByUserId], references: [id])
-  createdByManager  Manager?     @relation(fields: [createdByManagerId], references: [id])
+  run              DocumentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  createdByUser    Worker?     @relation(fields: [createdByUserId], references: [id])
+  createdByManager Manager?    @relation(fields: [createdByManagerId], references: [id])
 
   currentForRuns DocumentRun[]           @relation("DocumentRunCurrentVersion")
   submissionLogs DocumentSubmissionLog[]
@@ -567,8 +587,8 @@ model DocumentSubmissionLog {
   versionId BigInt        @map("version_id")
   stage     DocumentStage @map("stage")
 
-  submittedAt        DateTime @default(now()) @map("submitted_at")
-  submittedByUserId  BigInt?  @map("submitted_by_user_id")
+  submittedAt          DateTime @default(now()) @map("submitted_at")
+  submittedByUserId    BigInt?  @map("submitted_by_user_id")
   submittedByManagerId BigInt?  @map("submitted_by_manager_id")
 
   sentToEmail  String?   @map("sent_to_email")
@@ -576,10 +596,10 @@ model DocumentSubmissionLog {
   emailStatus  String?   @map("email_status")
   emailPayload Json?     @map("email_payload")
 
-  run               DocumentRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
-  version           DocumentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  submittedByUser   Worker?         @relation(fields: [submittedByUserId], references: [id])
-  submittedByManager Manager?       @relation(fields: [submittedByManagerId], references: [id])
+  run                DocumentRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  version            DocumentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  submittedByUser    Worker?         @relation(fields: [submittedByUserId], references: [id])
+  submittedByManager Manager?        @relation(fields: [submittedByManagerId], references: [id])
 
   @@index([runId, stage, submittedAt])
   @@index([versionId])
@@ -602,7 +622,7 @@ model SiteBasePoint {
   stage      BasePointStage        @map("stage")
   authority  ApprovalAuthorityType @map("authority")
 
-  confirmedByUserId  BigInt?  @map("confirmed_by_user_id")
+  confirmedByUserId    BigInt?  @map("confirmed_by_user_id")
   confirmedByManagerId BigInt?  @map("confirmed_by_manager_id")
   confirmedAt          DateTime @default(now()) @map("confirmed_at")
 
@@ -612,8 +632,8 @@ model SiteBasePoint {
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
-  confirmedByUser    Worker?      @relation("UserConfirmedBasePoints", fields: [confirmedByUserId], references: [id])
-  confirmedByManager Manager?     @relation("ManagerConfirmedBasePoints", fields: [confirmedByManagerId], references: [id])
+  confirmedByUser    Worker?  @relation("UserConfirmedBasePoints", fields: [confirmedByUserId], references: [id])
+  confirmedByManager Manager? @relation("ManagerConfirmedBasePoints", fields: [confirmedByManagerId], references: [id])
 
   prevBasePoint  SiteBasePoint?  @relation("BasePointPrev", fields: [prevBasePointId], references: [id])
   nextBasePoints SiteBasePoint[] @relation("BasePointPrev")
@@ -628,9 +648,9 @@ model SiteBasePoint {
 }
 
 model SubmissionRequest {
-  id                 BigInt                  @id @default(autoincrement())
-  agencyId           BigInt?                 @map("agency_id")
-  assignmentId       BigInt                  @map("assignment_id")
+  id                   BigInt                  @id @default(autoincrement())
+  agencyId             BigInt?                 @map("agency_id")
+  assignmentId         BigInt                  @map("assignment_id")
   requestedByManagerId BigInt?                 @map("requested_by_manager_id")
   requestedAt          DateTime                @default(now()) @map("requested_at")
   dueDate              DateTime?               @map("due_date")
@@ -671,7 +691,7 @@ model SiteHoliday {
   countAsWorkday Boolean  @default(false) @map("count_as_workday") // true면 근무 인정
   createdAt      DateTime @default(now()) @map("created_at")
 
-  assignment SiteAssignment      @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignment SiteAssignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   requests   SiteHolidayRequest[]
 
   @@unique([assignmentId, date])
@@ -728,21 +748,21 @@ model EmploymentContract {
   tokenExpiresAt DateTime  @map("token_expires_at")
 
   // 서명 상태
-  status            ContractStatus @default(PENDING) @map("status")
-  coachSignedAt     DateTime?      @map("coach_signed_at")
-  coachSignatureUrl String?        @map("coach_signature_url")
-  adminSignedAt     DateTime?      @map("admin_signed_at")
-  adminSignatureUrl String?        @map("admin_signature_url")
+  status             ContractStatus @default(PENDING) @map("status")
+  workerSignedAt     DateTime?      @map("worker_signed_at")
+  workerSignatureUrl String?        @map("worker_signature_url")
+  adminSignedAt      DateTime?      @map("admin_signed_at")
+  adminSignatureUrl  String?        @map("admin_signature_url")
 
   // 직무지도원이 직접 입력한 내용 (관리자 미입력 시)
-  coachFilledSiteName String? @map("coach_filled_site_name")
-  coachFilledWorkType String? @map("coach_filled_work_type")
+  workerFilledSiteName String? @map("worker_filled_site_name")
+  workerFilledWorkType String? @map("worker_filled_work_type")
 
   pdfUrl    String? @map("pdf_url")
   adminMemo String? @map("admin_memo")
 
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
   createdByManagerId BigInt?  @map("created_by_manager_id")
 
   agency Agency @relation(fields: [agencyId], references: [id])
@@ -783,7 +803,7 @@ model PayContract {
   userId   BigInt @map("user_id")
 
   // 내부(소속직원) vs 외부 구분 — 4대보험·주휴수당 적용 여부를 결정
-  coachType  CoachType  @default(EXTERNAL) @map("coach_type")
+  workerType WorkerType @default(EXTERNAL) @map("worker_type")
   payType    PayType    @map("pay_type")
   baseAmount Decimal    @map("base_amount")
   currency   String     @default("KRW")
@@ -844,13 +864,13 @@ model PayrollItem {
 }
 
 model AgencyDeduction {
-  id       BigInt        @id @default(autoincrement())
-  agencyId BigInt        @map("agency_id")
-  name     String
-  type     DeductionType
-  amount   Decimal
-  isActive Boolean       @default(true) @map("is_active")
-  createdAt DateTime     @default(now()) @map("created_at")
+  id        BigInt        @id @default(autoincrement())
+  agencyId  BigInt        @map("agency_id")
+  name      String
+  type      DeductionType
+  amount    Decimal
+  isActive  Boolean       @default(true) @map("is_active")
+  createdAt DateTime      @default(now()) @map("created_at")
 
   agency Agency @relation(fields: [agencyId], references: [id])
 
@@ -876,8 +896,8 @@ model AttendanceIssue {
   status     AttendanceIssueStatus @default(OPEN)
   issueTypes AttendanceIssueType[] @default([])
 
-  coachReasonText String? @map("coach_reason_text")
-  adminMemo       String? @map("admin_memo")
+  workerReasonText String? @map("worker_reason_text")
+  adminMemo        String? @map("admin_memo")
 
   requestedAt DateTime? @map("requested_at")
   repliedAt   DateTime? @map("replied_at")
@@ -908,8 +928,8 @@ model AttendanceIssueEvent {
 
   issue AttendanceIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
-  actorUser    Worker?      @relation("AttendanceIssueEventActor", fields: [actorUserId], references: [id])
-  actorManager Manager?     @relation("AttendanceIssueEventManagerActor", fields: [actorManagerId], references: [id])
+  actorUser    Worker?  @relation("AttendanceIssueEventActor", fields: [actorUserId], references: [id])
+  actorManager Manager? @relation("AttendanceIssueEventManagerActor", fields: [actorManagerId], references: [id])
 
   @@index([issueId, createdAt])
   @@index([actorUserId, createdAt])
@@ -927,6 +947,7 @@ model SystemSetting {
   value     String
   label     String?
   updatedAt DateTime @updatedAt @map("updated_at")
+
   @@map("system_settings")
 }
 
@@ -935,12 +956,12 @@ model ApiCallLog {
   id        BigInt   @id @default(autoincrement())
   agencyId  BigInt?  @map("agency_id")
   userId    BigInt?  @map("user_id")
-  service   String                     // "GROQ_STT" | "GEMINI_LOG" | "GEMINI_BATCH"
+  service   String // "GROQ_STT" | "GEMINI_LOG" | "GEMINI_BATCH"
   success   Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
 
   agency Agency? @relation(fields: [agencyId], references: [id])
-  user   Worker? @relation(fields: [userId],   references: [id])
+  user   Worker? @relation(fields: [userId], references: [id])
 
   @@index([agencyId, service, createdAt])
   @@index([createdAt])
@@ -970,9 +991,9 @@ model SystemAnnouncement {
 model SystemAuditLog {
   id        BigInt   @id @default(autoincrement())
   adminId   BigInt?  @map("admin_id")
-  action    String                      // e.g. "AGENCY_PLAN_CHANGED"
-  target    String?                     // e.g. "Agency:123"
-  detail    String?                     // JSON 형태 상세 정보
+  action    String // e.g. "AGENCY_PLAN_CHANGED"
+  target    String? // e.g. "Agency:123"
+  detail    String? // JSON 형태 상세 정보
   ipAddress String?  @map("ip_address")
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -988,17 +1009,17 @@ model SystemAuditLog {
 // ------------------------------------------------------
 
 model AttendanceEditRequest {
-  id           BigInt   @id @default(autoincrement())
-  attendanceId BigInt   @map("attendance_id")
-  userId       BigInt   @map("user_id")
-  reason       String
-  proposedStart String? @map("proposed_start") // HH:MM
-  proposedEnd   String? @map("proposed_end")   // HH:MM
+  id            BigInt                  @id @default(autoincrement())
+  attendanceId  BigInt                  @map("attendance_id")
+  userId        BigInt                  @map("user_id")
+  reason        String
+  proposedStart String?                 @map("proposed_start") // HH:MM
+  proposedEnd   String?                 @map("proposed_end") // HH:MM
   status        AttendanceEditReqStatus @default(PENDING)
-  adminNote     String? @map("admin_note")
-  reviewedAt    DateTime? @map("reviewed_at")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  adminNote     String?                 @map("admin_note")
+  reviewedAt    DateTime?               @map("reviewed_at")
+  createdAt     DateTime                @default(now()) @map("created_at")
+  updatedAt     DateTime                @updatedAt @map("updated_at")
 
   attendance DailyAttendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
   user       Worker          @relation(fields: [userId], references: [id])
@@ -1040,7 +1061,7 @@ enum AttendanceMode {
 
 enum UserRole {
   ADMIN
-  COACH
+  WORKER
 }
 
 enum UserStatus {
@@ -1082,12 +1103,12 @@ enum WorkStatus {
 enum SiteSourceType {
   KEAD
   AGENCY
-  COACH_ENTRY
+  WORKER_ENTRY
 }
 
 enum BasePointApprovalStatus {
   ORIGINAL_SET
-  COACH_PROPOSED
+  WORKER_PROPOSED
   APPROVED
   REJECTED
   CORRECTION_REQUESTED
@@ -1102,7 +1123,7 @@ enum ApprovalAuthorityType {
 
 enum BasePointStage {
   AGENCY_CONFIRMED
-  COACH_FINAL
+  WORKER_FINAL
 }
 
 enum BasePointSourceType {
@@ -1142,7 +1163,7 @@ enum AttendanceIssueEventType {
 
 enum AttendanceIssueActorRole {
   MANAGER // 에이전시 관리자 (이전: ADMIN)
-  COACH
+  WORKER
 }
 
 enum DocumentType {
@@ -1159,7 +1180,7 @@ enum DocumentType {
 // ------------------------------------------------------
 
 enum HolidayRequestType {
-  DELETE         // 삭제 요청
+  DELETE // 삭제 요청
   CHANGE_WORKDAY // countAsWorkday 변경 요청
 }
 
@@ -1180,11 +1201,11 @@ model SiteHolidayRequest {
   createdAt              DateTime             @default(now()) @map("created_at")
   updatedAt              DateTime             @updatedAt @map("updated_at")
 
-  managerId BigInt?      @map("manager_id")
+  managerId BigInt? @map("manager_id")
 
-  holiday SiteHoliday @relation(fields: [holidayId],  references: [id], onDelete: Cascade)
-  agency  Agency      @relation(fields: [agencyId],   references: [id])
-  manager Manager? @relation(fields: [managerId], references: [id])
+  holiday SiteHoliday @relation(fields: [holidayId], references: [id], onDelete: Cascade)
+  agency  Agency      @relation(fields: [agencyId], references: [id])
+  manager Manager?    @relation(fields: [managerId], references: [id])
 
   @@index([holidayId, status])
   @@index([agencyId, status])
@@ -1202,23 +1223,23 @@ enum SupportTicketStatus {
 }
 
 model SupportTicket {
-  id         BigInt               @id @default(autoincrement())
-  agencyId   BigInt               @map("agency_id")
-  managerId  BigInt?              @map("manager_id")   // 작성한 에이전시 관리자
-  category   String               @default("GENERAL")  // GENERAL | DATA_FIX | BILLING | OTHER
-  title      String
-  body       String
-  status     SupportTicketStatus  @default(OPEN)
-  reply      String?
-  repliedBy  BigInt?              @map("replied_by")   // 회신한 시스템 운영자
-  repliedAt  DateTime?            @map("replied_at")
-  createdAt  DateTime             @default(now()) @map("created_at")
-  updatedAt  DateTime             @updatedAt @map("updated_at")
+  id        BigInt              @id @default(autoincrement())
+  agencyId  BigInt              @map("agency_id")
+  managerId BigInt?             @map("manager_id") // 작성한 에이전시 관리자
+  category  String              @default("GENERAL") // GENERAL | DATA_FIX | BILLING | OTHER
+  title     String
+  body      String
+  status    SupportTicketStatus @default(OPEN)
+  reply     String?
+  repliedBy BigInt?             @map("replied_by") // 회신한 시스템 운영자
+  repliedAt DateTime?           @map("replied_at")
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
 
-  agency          Agency          @relation(fields: [agencyId],  references: [id])
-  manager         Manager?        @relation("TicketAuthor",  fields: [managerId],  references: [id])
-  replier         Admin?          @relation("TicketReplier", fields: [repliedBy],  references: [id])
-  managerNotices  ManagerNotice[]
+  agency         Agency          @relation(fields: [agencyId], references: [id])
+  manager        Manager?        @relation("TicketAuthor", fields: [managerId], references: [id])
+  replier        Admin?          @relation("TicketReplier", fields: [repliedBy], references: [id])
+  managerNotices ManagerNotice[]
 
   @@index([agencyId, status])
   @@index([status, createdAt])
@@ -1243,7 +1264,7 @@ enum SubmissionRequestStatus {
 }
 
 enum ActorType {
-  ADMIN_USER
+  ADMIN
   USER
   SITE_CONTACT
 }
@@ -1270,16 +1291,16 @@ enum PayrollStatus {
 }
 
 enum IncomeType {
-  BUSINESS   // 사업소득 3.3%
+  BUSINESS // 사업소득 3.3%
   EMPLOYMENT // 근로소득 4대보험
 }
 
 enum DeductionType {
-  FIXED      // 고정 금액
+  FIXED // 고정 금액
   PERCENTAGE // 비율 (소수, e.g. 0.01 = 1%)
 }
 
-enum CoachType {
+enum WorkerType {
   INTERNAL // 내부직무지도원: 소속직원, 일급 25,000원, 사업소득, 주휴/4대보험 미적용
   EXTERNAL // 외부직무지도원: 최저시급 이상, 소득유형 선택, 주휴/4대보험 적용 가능
 }
@@ -1310,18 +1331,18 @@ model UserNotificationSetting {
 // 훈련생/적응지도 종합평가 점수
 // ------------------------------------------------------
 model TraineeEvaluation {
-  id          BigInt   @id @default(autoincrement())
-  traineeId   BigInt   @map("trainee_id")
-  writerId    BigInt   @map("writer_id")
-  evalType    String   @map("eval_type") // "TRAINING" | "ADAPTATION"
-  periodStart String   @map("period_start") // YYYY-MM-DD
-  periodEnd   String   @map("period_end")
+  id          BigInt    @id @default(autoincrement())
+  traineeId   BigInt    @map("trainee_id")
+  writerId    BigInt    @map("writer_id")
+  evalType    String    @map("eval_type") // "TRAINING" | "ADAPTATION"
+  periodStart String    @map("period_start") // YYYY-MM-DD
+  periodEnd   String    @map("period_end")
   scores      Json // { WORK_ATTITUDE:[{initial,final}×5], ... }
-  comments    Json     @default("{}") // { WORK_ATTITUDE:"...", ... }
-  isConfirmed Boolean  @default(false) @map("is_confirmed")
+  comments    Json      @default("{}") // { WORK_ATTITUDE:"...", ... }
+  isConfirmed Boolean   @default(false) @map("is_confirmed")
   confirmedAt DateTime? @map("confirmed_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   trainee Trainee @relation(fields: [traineeId], references: [id])
   writer  Worker  @relation(fields: [writerId], references: [id])
@@ -1351,20 +1372,20 @@ model PhoneVerification {
 // ------------------------------------------------------
 
 model WorkerInvite {
-  id               BigInt    @id @default(autoincrement())
-  agencyId         BigInt    @map("agency_id")
-  siteId           BigInt?   @map("site_id")
-  phoneNumber      String    @map("phone_number")
-  workerName       String?   @map("worker_name")
-  code             String    @map("code")
-  expiresAt        DateTime  @map("expires_at")
-  usedAt           DateTime? @map("used_at")
-  usedByUserId     BigInt?   @map("used_by_user_id")
-  createdByManagerId BigInt      @map("created_by_manager_id")
-  createdAt          DateTime    @default(now()) @map("created_at")
+  id                 BigInt    @id @default(autoincrement())
+  agencyId           BigInt    @map("agency_id")
+  siteId             BigInt?   @map("site_id")
+  phoneNumber        String    @map("phone_number")
+  workerName         String?   @map("worker_name")
+  code               String    @map("code")
+  expiresAt          DateTime  @map("expires_at")
+  usedAt             DateTime? @map("used_at")
+  usedByUserId       BigInt?   @map("used_by_user_id")
+  createdByManagerId BigInt    @map("created_by_manager_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
 
-  agency  Agency      @relation(fields: [agencyId], references: [id])
-  site    Site?       @relation(fields: [siteId], references: [id])
+  agency  Agency  @relation(fields: [agencyId], references: [id])
+  site    Site?   @relation(fields: [siteId], references: [id])
   creator Manager @relation(fields: [createdByManagerId], references: [id])
 
   @@index([code])
@@ -1377,7 +1398,7 @@ model WorkerInvite {
 // ------------------------------------------------------
 
 enum ManagerSignupStatus {
-  PENDING  // 검토 대기
+  PENDING // 검토 대기
   APPROVED // 승인
   REJECTED // 반려
 }
@@ -1467,9 +1488,78 @@ model ManagerNotice {
   readAt    DateTime? @map("read_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
-  manager Manager       @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  manager Manager        @relation(fields: [managerId], references: [id], onDelete: Cascade)
   ticket  SupportTicket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
 
   @@index([managerId, readAt])
   @@map("manager_notices")
+}
+
+// ------------------------------------------------------
+// 15. 인력 pool / 직종·매칭 (Worker Pool & Matching)
+//  - 서비스 확장(직무지도원 + 요양보호사 + 장애인활동보호사) 및
+//    인력/사이트 pool 기반 매칭의 foundation
+// ------------------------------------------------------
+
+// 직종 (확장 가능 — 새 서비스 추가 시 값만 추가)
+enum Profession {
+  JOB_COACH // 직무지도원
+  CAREGIVER // 요양보호사
+  ACTIVITY_ASSISTANT // 장애인활동보호사
+}
+
+// 직무지도원/인력이 보유한 직종 자격 (다중 자격 지원)
+model WorkerProfession {
+  id              BigInt     @id @default(autoincrement())
+  workerId        BigInt     @map("worker_id")
+  profession      Profession
+  certNumber      String?    @map("cert_number") // 자격증 번호
+  certifiedAt     DateTime?  @map("certified_at") // 자격 취득일
+  experienceYears Int        @default(0) @map("experience_years")
+  isPrimary       Boolean    @default(false) @map("is_primary") // 대표 직종
+  isActive        Boolean    @default(true) @map("is_active")
+  createdAt       DateTime   @default(now()) @map("created_at")
+
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, profession])
+  @@index([profession, isActive])
+  @@map("worker_professions")
+}
+
+// 인력 경력 이력
+model WorkerExperience {
+  id          BigInt      @id @default(autoincrement())
+  workerId    BigInt      @map("worker_id")
+  profession  Profession?
+  orgName     String      @map("org_name") // 근무 기관/업체
+  title       String? // 역할/직책
+  startDate   DateTime    @map("start_date")
+  endDate     DateTime?   @map("end_date")
+  description String?
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+  @@map("worker_experiences")
+}
+
+// 인력 평점/후기 (배정 종료 후 에이전시·관리자가 평가)
+model WorkerReview {
+  id        BigInt   @id @default(autoincrement())
+  workerId  BigInt   @map("worker_id")
+  agencyId  BigInt?  @map("agency_id") // 평가 주체 에이전시
+  managerId BigInt?  @map("manager_id") // 평가 작성 관리자
+  rating    Int // 1~5
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  worker  Worker   @relation("WorkerReviewTarget", fields: [workerId], references: [id], onDelete: Cascade)
+  agency  Agency?  @relation(fields: [agencyId], references: [id])
+  manager Manager? @relation(fields: [managerId], references: [id])
+
+  @@index([workerId])
+  @@index([agencyId])
+  @@map("worker_reviews")
 }

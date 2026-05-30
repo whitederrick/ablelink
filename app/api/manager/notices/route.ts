@@ -11,21 +11,23 @@ export async function GET(req: NextRequest) {
   try {
     const { managerId } = await requireManagerSession(req);
 
-    const notices = await prisma.managerNotice.findMany({
-      where: { managerId },
-      orderBy: [{ readAt: "asc" }, { createdAt: "desc" }],
-      take: 50,
-      select: {
-        id:        true,
-        ticketId:  true,
-        title:     true,
-        body:      true,
-        readAt:    true,
-        createdAt: true,
-      },
-    });
-
-    const unreadCount = notices.filter(n => !n.readAt).length;
+    const [notices, unreadCount] = await Promise.all([
+      prisma.managerNotice.findMany({
+        where: { managerId },
+        orderBy: [{ readAt: "asc" }, { createdAt: "desc" }],
+        take: 50,
+        select: {
+          id:        true,
+          ticketId:  true,
+          title:     true,
+          body:      true,
+          readAt:    true,
+          createdAt: true,
+        },
+      }),
+      // take:50로 잘리지 않도록 미읽음 개수는 별도 count 쿼리로 정확히 집계
+      prisma.managerNotice.count({ where: { managerId, readAt: null } }),
+    ]);
 
     return NextResponse.json({
       success: true,

@@ -5,7 +5,7 @@ import { Search, ChevronDown, ChevronUp, Download } from "lucide-react";
 
 type Log = {
   id: string; traineeId: string; traineeName: string;
-  writerId: string; coachName: string; siteName: string;
+  writerId: string; workerName: string; siteName: string;
   workDate: string; trainingType: string; attendance: string;
   totalTime: number; content: string; taskName: string;
   taskScore: number | null; isCompleted: boolean;
@@ -22,7 +22,7 @@ export default function ManagerLogsPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandId, setExpandId] = useState<string|null>(null);
-  const [coachId, setCoachId]   = useState("");
+  const [workerId, setWorkerId]   = useState("");
   const [completed, setCompleted] = useState("");
   const [ym, setYm]             = useState(nowYM());
   const [toast, setToast]       = useState("");
@@ -42,7 +42,7 @@ export default function ManagerLogsPage() {
     const params = new URLSearchParams({
       dateFrom:  `${ym}-01`,
       dateTo:    `${ym}-${String(last).padStart(2,"0")}`,
-      ...(coachId   ? { coachId }   : {}),
+      ...(workerId   ? { workerId }   : {}),
       ...(completed ? { completed } : {}),
     });
     fetch(`/api/admin/logs?${params}`)
@@ -50,7 +50,7 @@ export default function ManagerLogsPage() {
       .then(d=>{ if(d.success) setLogs(d.logs); })
       .catch(()=>{})
       .finally(()=>setLoading(false));
-  },[ym, coachId, completed]);
+  },[ym, workerId, completed]);
 
   useEffect(()=>{ load(); },[load]);
 
@@ -77,7 +77,7 @@ export default function ManagerLogsPage() {
       <div className="mb-4 flex flex-wrap gap-2">
         <input type="month" value={ym} onChange={e=>setYm(e.target.value)}
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/>
-        <select value={coachId} onChange={e=>setCoachId(e.target.value)}
+        <select value={workerId} onChange={e=>setWorkerId(e.target.value)}
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400">
           <option value="">전체 직무지도원</option>
           {workers.map(c=><option key={c.id} value={c.id}>{c.userName}</option>)}
@@ -117,7 +117,7 @@ export default function ManagerLogsPage() {
                     <span className="font-black text-slate-900">
                       {l.workDate} ({DOW[new Date(l.workDate+"T00:00:00").getDay()]})
                     </span>
-                    <span className="text-sm font-semibold text-slate-600">{l.coachName}</span>
+                    <span className="text-sm font-semibold text-slate-600">{l.workerName}</span>
                     <span className="text-sm text-slate-400">→ {l.traineeName}</span>
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">{TYPE_LABELS[l.trainingType]??l.trainingType}</span>
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${l.isCompleted?"bg-emerald-100 text-emerald-700":"bg-amber-100 text-amber-700"}`}>

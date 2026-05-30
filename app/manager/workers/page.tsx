@@ -209,8 +209,8 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
-  coach: Worker; assignmentId: string; initial: Assignment;
+function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: {
+  worker: Worker; assignmentId: string; initial: Assignment;
   onClose: () => void; onSaved: (updated: Assignment) => void;
 }) {
   const [workType, setWorkType] = useState<WorkType>(initial.workType ?? "FULL_DAY");
@@ -278,7 +278,7 @@ function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
     <div className={T.modalOverlay}>
       <div className={T.modalContent}>
         <h2 className="mb-1 text-base font-black text-slate-900">근무형태 설정</h2>
-        <p className="mb-5 text-sm font-semibold text-slate-400">{coach.userName} · {coach.activeAssignment?.siteName}</p>
+        <p className="mb-5 text-sm font-semibold text-slate-400">{worker.userName} · {worker.activeAssignment?.siteName}</p>
 
         {/* 근무형태 선택 */}
         <div className="mb-4">
@@ -354,11 +354,11 @@ function WorkScheduleModal({ coach, assignmentId, initial, onClose, onSaved }: {
 }
 
 // ── 직무지도원 정보 수정 모달 ─────────────────────────────
-function WorkerInfoModal({ coach, onClose, onSaved }: {
-  coach: Worker; onClose: () => void; onSaved: (updated: Partial<Worker>) => void;
+function WorkerInfoModal({ worker, onClose, onSaved }: {
+  worker: Worker; onClose: () => void; onSaved: (updated: Partial<Worker>) => void;
 }) {
-  const [userName,    setUserName]    = useState(coach.userName);
-  const [phoneNumber, setPhoneNumber] = useState(coach.phoneNumber);
+  const [userName,    setUserName]    = useState(worker.userName);
+  const [phoneNumber, setPhoneNumber] = useState(worker.phoneNumber);
   const [resetPw,     setResetPw]     = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState("");
@@ -367,12 +367,12 @@ function WorkerInfoModal({ coach, onClose, onSaved }: {
   async function handleSave() {
     setSaving(true); setError("");
     try {
-      const res = await fetch(`/api/admin/workers/${coach.id}`, {
+      const res = await fetch(`/api/admin/workers/${worker.id}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          userName:      userName.trim() !== coach.userName ? userName.trim() : undefined,
-          phoneNumber:   phoneNumber !== coach.phoneNumber   ? phoneNumber    : undefined,
+          userName:      userName.trim() !== worker.userName ? userName.trim() : undefined,
+          phoneNumber:   phoneNumber !== worker.phoneNumber   ? phoneNumber    : undefined,
           resetPassword: resetPw,
         }),
       });
@@ -391,7 +391,7 @@ function WorkerInfoModal({ coach, onClose, onSaved }: {
         <div className={T.modalContent}>
           <h2 className="mb-3 text-base font-black text-slate-900">임시 비밀번호 발급 완료</h2>
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <p className="text-xs font-semibold text-amber-600 mb-1">{coach.userName}님의 임시 비밀번호</p>
+            <p className="text-xs font-semibold text-amber-600 mb-1">{worker.userName}님의 임시 비밀번호</p>
             <p className="text-2xl font-black tracking-widest text-amber-900">{tempPw}</p>
           </div>
           <p className="mb-4 text-xs font-semibold text-slate-500">직무지도원에게 임시 비밀번호를 안내해주세요. 로그인 후 변경 요청됩니다.</p>
@@ -406,7 +406,7 @@ function WorkerInfoModal({ coach, onClose, onSaved }: {
     <div className={T.modalOverlay}>
       <div className={T.modalContent}>
         <h2 className="mb-1 text-base font-black text-slate-900">직무지도원 정보 수정</h2>
-        <p className="mb-5 text-sm font-semibold text-slate-400">{coach.userName}</p>
+        <p className="mb-5 text-sm font-semibold text-slate-400">{worker.userName}</p>
 
         <div className="mb-4">
           <label className={T.label}>이름</label>
@@ -443,12 +443,12 @@ function WorkerInfoModal({ coach, onClose, onSaved }: {
   );
 }
 
-export default function CoachesPage() {
+export default function WorkersPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [total, setTotal] = useState(0);
-  const [editTarget,     setEditTarget]     = useState<{ coach: Worker; assignment: Assignment } | null>(null);
+  const [editTarget,     setEditTarget]     = useState<{ worker: Worker; assignment: Assignment } | null>(null);
   const [infoEditTarget, setInfoEditTarget] = useState<Worker | null>(null);
   const [showInvite,     setShowInvite]     = useState(false);
   const [assignmentMap, setAssignmentMap] = useState<Record<string, Assignment>>({});
@@ -461,12 +461,12 @@ export default function CoachesPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function openEdit(coach: Worker) {
-    const assignmentId = coach.activeAssignment?.assignmentId;
+  async function openEdit(worker: Worker) {
+    const assignmentId = worker.activeAssignment?.assignmentId;
     if (!assignmentId) return alert("배정된 현장이 없습니다.");
     if (!assignmentMap[assignmentId]) {
       try {
-        const res = await fetch(`/api/admin/assignments?userId=${coach.id}`);
+        const res = await fetch(`/api/admin/assignments?userId=${worker.id}`);
         const data = await res.json();
         if (data.success && data.items?.length > 0) {
           const item = data.items.find((i: any) => i.id === assignmentId) ?? data.items[0];
@@ -477,11 +477,11 @@ export default function CoachesPage() {
             startDate: item.startDate ?? null, endDate: item.endDate ?? null,
           };
           setAssignmentMap(prev => ({ ...prev, [assignmentId]: asgn }));
-          setEditTarget({ coach, assignment: asgn });
+          setEditTarget({ worker, assignment: asgn });
         }
       } catch { alert("배정 정보 조회에 실패했습니다."); }
     } else {
-      setEditTarget({ coach, assignment: assignmentMap[assignmentId] });
+      setEditTarget({ worker, assignment: assignmentMap[assignmentId] });
     }
   }
 
@@ -577,7 +577,7 @@ export default function CoachesPage() {
 
       {editTarget && (
         <WorkScheduleModal
-          coach={editTarget.coach}
+          worker={editTarget.worker}
           assignmentId={editTarget.assignment.id}
           initial={editTarget.assignment}
           onClose={() => setEditTarget(null)}
@@ -587,7 +587,7 @@ export default function CoachesPage() {
 
       {infoEditTarget && (
         <WorkerInfoModal
-          coach={infoEditTarget}
+          worker={infoEditTarget}
           onClose={() => setInfoEditTarget(null)}
           onSaved={updated => {
             setWorkers(prev => prev.map(c =>

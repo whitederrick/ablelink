@@ -7,7 +7,7 @@ import Link from "next/link";
 type Agency = {
   id: string; name: string; planType: string; trialEndsAt: string | null;
   nextBillingAt: string | null; subscribedAt: string | null;
-  maxCoaches: number; maxSites: number;
+  maxWorkers: number; maxSites: number;
   createdAt: string; managerCount: number; siteCount: number;
 };
 
@@ -23,7 +23,7 @@ export default function AgenciesPage() {
   const [search, setSearch]     = useState("");
   const [editId, setEditId]     = useState<string|null>(null);
   const [editPlan, setEditPlan] = useState(""); const [editTrial, setEditTrial] = useState("");
-  const [editMaxCoaches, setEditMaxCoaches] = useState(""); const [editMaxSites, setEditMaxSites] = useState("");
+  const [editMaxWorkers, setEditMaxWorkers] = useState(""); const [editMaxSites, setEditMaxSites] = useState("");
   const [processing, setProcessing] = useState(false);
   const [toast, setToast]       = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -37,11 +37,11 @@ export default function AgenciesPage() {
   },[]);
   useEffect(()=>{load();},[load]);
 
-  function openEdit(a: Agency){setEditId(a.id);setEditPlan(a.planType);setEditTrial(a.trialEndsAt?a.trialEndsAt.slice(0,10):"");setEditMaxCoaches(String(a.maxCoaches));setEditMaxSites(String(a.maxSites));}
+  function openEdit(a: Agency){setEditId(a.id);setEditPlan(a.planType);setEditTrial(a.trialEndsAt?a.trialEndsAt.slice(0,10):"");setEditMaxWorkers(String(a.maxWorkers));setEditMaxSites(String(a.maxSites));}
 
   async function savePlan(){
     if(!editId)return; setProcessing(true);
-    const res=await fetch(`/api/admin/system/agencies/${editId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({planType:editPlan,trialEndsAt:editTrial||null,maxCoaches:Number(editMaxCoaches)||0,maxSites:Number(editMaxSites)||0})});
+    const res=await fetch(`/api/admin/system/agencies/${editId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({planType:editPlan,trialEndsAt:editTrial||null,maxWorkers:Number(editMaxWorkers)||0,maxSites:Number(editMaxSites)||0})});
     const data=await res.json(); setProcessing(false);
     if(data.success){showToast(data.message);setEditId(null);load();}else showToast(data.message||"실패");
   }
@@ -128,7 +128,7 @@ export default function AgenciesPage() {
                   <div className="mt-1 flex items-center gap-4 text-xs text-slate-400">
                     <span className="flex items-center gap-1"><Users className="h-3 w-3"/>{a.managerCount}명 관리자</span>
                     <span className="flex items-center gap-1"><MapPin className="h-3 w-3"/>{a.siteCount}개소</span>
-                    <span>한도 {a.maxCoaches||"∞"}명/{a.maxSites||"∞"}개소</span>
+                    <span>한도 {a.maxWorkers||"∞"}명/{a.maxSites||"∞"}개소</span>
                     <span>가입 {new Date(a.createdAt).toLocaleDateString("ko-KR")}</span>
                   </div>
                 </div>
@@ -153,7 +153,7 @@ export default function AgenciesPage() {
                     {editPlan==="TRIAL"&&<div><label className="mb-1 block text-[11px] font-semibold text-slate-500">체험 종료일</label>
                       <input type="date" value={editTrial} onChange={e=>setEditTrial(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/></div>}
                     <div><label className="mb-1 block text-[11px] font-semibold text-slate-500">최대 직무지도원 (0=무제한)</label>
-                      <input type="number" min="0" value={editMaxCoaches} onChange={e=>setEditMaxCoaches(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/></div>
+                      <input type="number" min="0" value={editMaxWorkers} onChange={e=>setEditMaxWorkers(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/></div>
                     <div><label className="mb-1 block text-[11px] font-semibold text-slate-500">최대 현장 수 (0=무제한)</label>
                       <input type="number" min="0" value={editMaxSites} onChange={e=>setEditMaxSites(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/></div>
                   </div>

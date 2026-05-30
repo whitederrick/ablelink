@@ -10,8 +10,8 @@ type ContractStatus = "PENDING" | "SIGNED" | "COMPLETED" | "CANCELLED";
 interface ContractData {
   id: string;
   status: ContractStatus;
-  coachName: string;
-  coachPhone: string;
+  workerName: string;
+  workerPhone: string;
   agencyName: string;
   agencyAddress: string | null;
   agencyPhone: string | null;
@@ -20,11 +20,11 @@ interface ContractData {
   siteName: string | null;
   workTypeLabel: string;
   commuteGuidanceIncluded: boolean;
-  coachFilledSiteName: string | null;
-  coachFilledWorkType: string | null;
-  coachSignedAt: string | null;
+  workerFilledSiteName: string | null;
+  workerFilledWorkType: string | null;
+  workerSignedAt: string | null;
   adminSignedAt: string | null;
-  coachSignatureUrl: string | null;
+  workerSignatureUrl: string | null;
 }
 
 // ── 서명 캔버스 ───────────────────────────────────────────────
@@ -119,7 +119,7 @@ function ContractBody({ data, filledSite, filledWork }: { data: ContractData; fi
       <p><strong>근로계약서</strong></p>
       <p>
         위탁기관(이하 "갑") <strong>{data.agencyName}</strong>과
-        직무지도원(이하 "을") <strong>{data.coachName}</strong>은 아래와 같이 근로계약을 체결한다.
+        직무지도원(이하 "을") <strong>{data.workerName}</strong>은 아래와 같이 근로계약을 체결한다.
       </p>
       <table style={{ width: "100%", borderCollapse: "collapse", margin: "12px 0", fontSize: 13 }}>
         <tbody>
@@ -167,8 +167,8 @@ export default function ContractSignPage() {
       .then(d => {
         if (!d.success) { setError(d.message); return; }
         setData(d.data);
-        if (d.data.coachFilledSiteName) setFilledSite(d.data.coachFilledSiteName);
-        if (d.data.coachFilledWorkType) setFilledWork(d.data.coachFilledWorkType);
+        if (d.data.workerFilledSiteName) setFilledSite(d.data.workerFilledSiteName);
+        if (d.data.workerFilledWorkType) setFilledWork(d.data.workerFilledWorkType);
       })
       .catch(() => setError("서버 오류가 발생했습니다."))
       .finally(() => setLoading(false));
@@ -182,7 +182,7 @@ export default function ContractSignPage() {
       const res = await fetch("/api/worker/contracts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, signatureUrl, coachFilledSiteName: filledSite || null, coachFilledWorkType: filledWork || null }),
+        body: JSON.stringify({ token, signatureUrl, workerFilledSiteName: filledSite || null, workerFilledWorkType: filledWork || null }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.message);
@@ -205,8 +205,8 @@ export default function ContractSignPage() {
           <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: "0 0 8px" }}>서명이 완료되었습니다</h2>
           <p style={{ fontSize: 14, color: "#6b7280" }}>계약서가 위탁기관에 전달되었습니다.</p>
-          {data.coachSignatureUrl && (
-            <img src={data.coachSignatureUrl} alt="서명" style={{ maxWidth: 200, marginTop: 16, border: "1px solid #e5e7eb", borderRadius: 8 }} />
+          {data.workerSignatureUrl && (
+            <img src={data.workerSignatureUrl} alt="서명" style={{ maxWidth: 200, marginTop: 16, border: "1px solid #e5e7eb", borderRadius: 8 }} />
           )}
         </div>
       </div>
@@ -223,7 +223,7 @@ export default function ContractSignPage() {
         <div style={ps.header}>
           <div style={ps.agencyBadge}>{data.agencyName}</div>
           <h1 style={ps.title}>근로계약서</h1>
-          <p style={ps.sub}>{data.coachName}님의 서명을 요청드립니다</p>
+          <p style={ps.sub}>{data.workerName}님의 서명을 요청드립니다</p>
         </div>
 
         {/* 계약서 본문 */}
@@ -289,7 +289,7 @@ export default function ContractSignPage() {
         </button>
 
         <p style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", marginTop: 12 }}>
-          이 링크는 {new Date(data.coachSignedAt ?? "").toLocaleDateString() || "7일"} 후 만료됩니다.
+          이 링크는 {new Date(data.workerSignedAt ?? "").toLocaleDateString() || "7일"} 후 만료됩니다.
         </p>
       </div>
     </div>

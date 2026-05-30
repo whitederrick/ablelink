@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Plus, RefreshCw, UserCheck, UserX, KeyRound, Building2 } from "lucide-react";
 
-type AdminUser = {
+type AdminAccount = {
   id: string;
   loginId: string;
   role: "ADMIN" | "AGENCY" | "GOV";
@@ -25,12 +25,12 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 export default function AdminsPage() {
-  const [admins, setAdmins]       = useState<AdminUser[]>([]);
+  const [admins, setAdmins]       = useState<AdminAccount[]>([]);
   const [agencies, setAgencies]   = useState<Agency[]>([]);
   const [loading, setLoading]     = useState(true);
   const [toast, setToast]         = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
+  const [resetTarget, setResetTarget] = useState<AdminAccount | null>(null);
   const [newPw, setNewPw]         = useState("");
   const [processing, setProcessing] = useState(false);
 
@@ -67,7 +67,7 @@ export default function AdminsPage() {
     else showToast(data.message || "생성 실패");
   }
 
-  async function toggleActive(admin: AdminUser) {
+  async function toggleActive(admin: AdminAccount) {
     setProcessing(true);
     const res = await fetch(`/api/admin/system/admins/${admin.id}`, {
       method: "PATCH",

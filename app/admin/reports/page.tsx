@@ -47,7 +47,7 @@ function RateBar({ value }: { value: number }) {
 
 interface TraineeRow {
   traineeId: string; traineeName: string; gender: string; disabilityType: string;
-  status: string; coachName: string; siteName: string;
+  status: string; workerName: string; siteName: string;
   totalWorkDays: number; daysWithLog: number; logRate: number;
   avgScore: number | null;
   evalType: string | null; evalPeriod: string | null; evalAvg: number | null;
@@ -84,7 +84,7 @@ export default function TraineeReportPage() {
   const filtered = data.filter(r =>
     !search ||
     r.traineeName.includes(search) ||
-    r.coachName.includes(search) ||
+    r.workerName.includes(search) ||
     r.siteName.includes(search)
   );
 
@@ -194,7 +194,7 @@ export default function TraineeReportPage() {
                   </td>
                   <td className={T.td}>
                     <p className="font-semibold text-slate-800">{row.siteName}</p>
-                    <p className="text-xs font-semibold text-slate-400">{row.coachName}</p>
+                    <p className="text-xs font-semibold text-slate-400">{row.workerName}</p>
                   </td>
                   <td className={`${T.td} text-center font-black`}>
                     {row.totalWorkDays}일

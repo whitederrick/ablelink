@@ -50,13 +50,13 @@ export async function POST(request: NextRequest) {
   try {
     const scope = await requireManagerSession(request);
     const body = await request.json();
-    const { coachUserId, docType: rawDocType, periodStart, periodEnd, traineeId, toEmail } = body;
+    const { workerUserId, docType: rawDocType, periodStart, periodEnd, traineeId, toEmail } = body;
 
     const docType = normalizeDocType(rawDocType);
-    if (!docType || !coachUserId || !periodStart || !periodEnd)
+    if (!docType || !workerUserId || !periodStart || !periodEnd)
       return NextResponse.json({ success: false, message: "필수 파라미터 누락" }, { status: 400 });
 
-    const userId = BigInt(coachUserId);
+    const userId = BigInt(workerUserId);
     const start = periodStart, end = periodEnd;
 
     // 서명하는 관리자 본인의 서명 이미지 사용
@@ -79,13 +79,13 @@ export async function POST(request: NextRequest) {
     if (!assignment?.site)
       return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 404 });
 
-    const [coachImg, govImg] = await Promise.all([
+    const [workerImg, govImg] = await Promise.all([
       toBase64DataUri(user?.signatureUrl),
       toBase64DataUri(admin.signatureUrl),
     ]);
 
     const sigs = {
-      coach:       { name: user?.userName || "",       imageUrl: coachImg },
+      worker:       { name: user?.userName || "",       imageUrl: workerImg },
       govAgent:    { name: admin.displayName || "",    imageUrl: govImg },
       agencyAgent: { name: admin.displayName || "",    imageUrl: govImg },
       companyManager: { name: "", imageUrl: undefined as string | undefined },
@@ -111,12 +111,12 @@ export async function POST(request: NextRequest) {
       const totalHours = entries.reduce((s, e) => s + Number(e.hours), 0);
       const oneToMany  = entries.reduce((s, e) => s + Number(e.multiHours), 0);
       payload = {
-        coachName: user?.userName || "", coachPhone: user?.phoneNumber || user?.loginId || "",
+        workerName: user?.userName || "", workerPhone: user?.phoneNumber || user?.loginId || "",
         companyName: site.companyName, periodStartYMD: fmtDot(start), periodEndYMD: fmtDot(end),
         totalDays: entries.length, totalHours, weeklyHolidayCount: 0, monthlyLeaveCount: 0,
         allowanceTotalWon: "0", oneToOneHours: totalHours - oneToMany, oneToManyHours: oneToMany,
         otOneToOneHours: 0, otOneToManyHours: 0, entries,
-        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, coach: sigs.coach },
+        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
       };
       fileName = `출근부_${site.companyName}_${start}_${end}_서명완료.pdf`;
 
@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
           task: l.tasks[0]?.taskName || "", taskLevelMeasured: scoreLabel(l.tasks[0]?.performanceScore),
           evalGuidance: l.content || "",
         })),
-        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, coach: sigs.coach },
+        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
       };
       fileName = `훈련일지_${trainee?.name || "훈련생"}_${start}_${end}_서명완료.pdf`;
 
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
         preTrainingStart:  assignment.stepStart?.toISOString().slice(0, 10) || start,
         preTrainingEnd:    start, fieldTrainingStart: start, fieldTrainingEnd: end,
         scores: (ev?.scores as any) || {}, comments: (ev?.comments as any) || {},
-        signatures: { coach: sigs.coach, agencyAgent: sigs.agencyAgent },
+        signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
       };
       fileName = `훈련생평가_${trainee?.name || "훈련생"}_${start}_${end}_서명완료.pdf`;
 
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
           workTime: "", guidance: "Y", task: l.tasks[0]?.taskName || "",
           performanceLabel: scoreLabel(l.tasks[0]?.performanceScore), performanceTime: "", coaching: l.content || "",
         })),
-        signatures: { coach: sigs.coach, govAgent: sigs.govAgent },
+        signatures: { worker: sigs.worker, govAgent: sigs.govAgent },
       };
       fileName = `적응지도일지_${trainee?.name || "훈련생"}_${start}_${end}_서명완료.pdf`;
 
@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
       payload = {
         traineeName: trainee?.name || "", companyName: site.companyName, periodStart: start, periodEnd: end,
         scores: (ev?.scores as any) || {}, comments: (ev?.comments as any) || {},
-        signatures: { coach: sigs.coach, agencyAgent: sigs.agencyAgent },
+        signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
       };
       fileName = `적응지도평가_${trainee?.name || "훈련생"}_${start}_${end}_서명완료.pdf`;
 

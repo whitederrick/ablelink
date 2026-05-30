@@ -17,7 +17,7 @@ export async function PATCH(
     const agencyId = parseBigInt(id);
     if (!agencyId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const body = await req.json();
-    const { planType, trialEndsAt, maxCoaches, maxSites } = body;
+    const { planType, trialEndsAt, maxWorkers, maxSites } = body;
 
     const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
     if (!agency) return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
@@ -30,7 +30,7 @@ export async function PATCH(
     const updateData: any = {};
     if (planType !== undefined)     updateData.planType    = planType;
     if (trialEndsAt !== undefined)  updateData.trialEndsAt = trialEndsAt ? new Date(trialEndsAt) : null;
-    if (maxCoaches !== undefined)   updateData.maxCoaches  = Number(maxCoaches);
+    if (maxWorkers !== undefined)   updateData.maxWorkers  = Number(maxWorkers);
     if (maxSites !== undefined)     updateData.maxSites    = Number(maxSites);
 
     await prisma.agency.update({ where: { id: agency.id }, data: updateData });

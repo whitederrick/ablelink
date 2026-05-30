@@ -36,7 +36,7 @@ export type TrainingDailyLogPayload = {
   signatures?: {
     govAgent?:       { name?: string; imageUrl?: string };
     companyManager?: { name?: string; imageUrl?: string };
-    coach?:          { name?: string; imageUrl?: string };
+    worker?:          { name?: string; imageUrl?: string };
   };
 };
 
@@ -320,7 +320,7 @@ export function renderTRAINING_DAILY_LOG_HTML(payload: TrainingDailyLogPayload) 
     <div class="footer">
       <div class="sig-row"><div>(공단/위탁기관) 담당자: ${sigs.govAgent?.name??""}</div><div>${sigSlot(sigs.govAgent?.imageUrl)}</div></div>
       <div class="sig-row"><div>사업체담당자: ${sigs.companyManager?.name??""}</div><div>${sigSlot(sigs.companyManager?.imageUrl)}</div></div>
-      <div class="sig-row"><div>직무지도원: ${sigs.coach?.name??""}</div><div>${sigSlot(sigs.coach?.imageUrl)}</div></div>
+      <div class="sig-row"><div>직무지도원: ${sigs.worker?.name??""}</div><div>${sigSlot(sigs.worker?.imageUrl)}</div></div>
     </div>
   </div>
 </body>

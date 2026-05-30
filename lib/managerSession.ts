@@ -1,10 +1,10 @@
 // lib/managerSession.ts
-// 에이전시 관리자(ManagerUser) 전용 JWT 세션
+// 에이전시 관리자(Manager) 전용 JWT 세션
 
 import { SignJWT, jwtVerify } from "jose";
 
 export type ManagerSessionPayload = {
-  sub:      string; // ManagerUser.id
+  sub:      string; // Manager.id
   agencyId: string; // Agency.id (필수 — agencyId 없으면 토큰 발급 불가)
   loginId:  string;
 };

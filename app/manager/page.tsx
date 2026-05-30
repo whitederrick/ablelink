@@ -19,7 +19,7 @@ interface DashboardData {
   }>;
   docList: Array<{
     id: string; docType: string; docTypeLabel: string;
-    coachName: string; siteName: string; dueAt: string;
+    workerName: string; siteName: string; dueAt: string;
     isOverdue: boolean; hasVersion: boolean;
   }>;
   assignmentAlerts: Array<{
@@ -293,7 +293,7 @@ export default function AdminDashboardPage() {
               onPopupClose={() => setPopup(null)}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
-                  <span><span className="font-black">{item.siteName}</span> · {item.coachName}</span>
+                  <span><span className="font-black">{item.siteName}</span> · {item.workerName}</span>
                   <span className="text-amber-600">{item.docTypeLabel}</span>
                 </div>
               )}
@@ -314,7 +314,7 @@ export default function AdminDashboardPage() {
               onPopupClose={() => setPopup(null)}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
-                  <span><span className="font-black">{item.siteName}</span> · {item.coachName}</span>
+                  <span><span className="font-black">{item.siteName}</span> · {item.workerName}</span>
                   <span className="text-rose-600">{item.docTypeLabel}</span>
                 </div>
               )}

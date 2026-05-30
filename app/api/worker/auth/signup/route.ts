@@ -52,7 +52,7 @@ export async function POST(request: Request) {
         password:         hashed,
         userName:         name,
         phoneNumber:      phone,
-        role:             "COACH",
+        role:             "WORKER",
         status:           "ACTIVE",
         planType:         "FREE",
         isTemporary:      false,

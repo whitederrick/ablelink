@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
 
           const { userName, phoneNumber } = contract.user;
           const contractEndStr = contract.contractEnd.toISOString().slice(0, 10);
-          const siteName = contract.siteName || contract.coachFilledSiteName || "-";
+          const siteName = contract.siteName || contract.workerFilledSiteName || "-";
 
           try {
             await sendAlimtalk({

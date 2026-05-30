@@ -8,9 +8,9 @@ import { requireManagerSession } from "@/lib/managerScope";
 type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
 type InboxStatus =
   | "ADMIN_UNCONFIRMED"
-  | "COACH_CONFIRM_REQUESTED"
-  | "COACH_REASON_MISSING"
-  | "COACH_REPLIED"
+  | "WORKER_CONFIRM_REQUESTED"
+  | "WORKER_REASON_MISSING"
+  | "WORKER_REPLIED"
   | "ADMIN_RESOLVED";
 
 function getWorkTypeDefaultExpectedStartMin(workType: string | null | undefined): number | null {
@@ -56,12 +56,12 @@ function deriveIssueTypes(row: {
 
 function mapIssueStatusToInboxStatus(issue: {
   status: "OPEN" | "REQUESTED" | "REPLIED" | "RESOLVED";
-  coachReasonText: string | null;
+  workerReasonText: string | null;
 }): InboxStatus {
   if (issue.status === "RESOLVED") return "ADMIN_RESOLVED";
-  if (issue.status === "REPLIED") return "COACH_REPLIED";
+  if (issue.status === "REPLIED") return "WORKER_REPLIED";
   if (issue.status === "REQUESTED") {
-    return issue.coachReasonText ? "COACH_CONFIRM_REQUESTED" : "COACH_REASON_MISSING";
+    return issue.workerReasonText ? "WORKER_CONFIRM_REQUESTED" : "WORKER_REASON_MISSING";
   }
   return "ADMIN_UNCONFIRMED";
 }
@@ -121,7 +121,7 @@ export async function GET(req: Request) {
           select: {
             status: true,
             issueTypes: true,
-            coachReasonText: true,
+            workerReasonText: true,
             adminMemo: true,
             updatedAt: true,
             createdAt: true,
@@ -148,7 +148,7 @@ export async function GET(req: Request) {
       // 기존 이슈 조회 → 없으면 생성 (upsert race condition 방지)
       let existing = await prisma.attendanceIssue.findUnique({
         where: { dailyAttendanceId: r.id },
-        select: { status: true, issueTypes: true, coachReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
+        select: { status: true, issueTypes: true, workerReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
       });
 
       if (!existing) {
@@ -166,14 +166,14 @@ export async function GET(req: Request) {
                 }],
               },
             },
-            select: { status: true, issueTypes: true, coachReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
+            select: { status: true, issueTypes: true, workerReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
           });
         } catch (e: any) {
           // 동시 요청으로 이미 생성된 경우 재조회
           if (e?.code === "P2002") {
             existing = await prisma.attendanceIssue.findUnique({
               where: { dailyAttendanceId: r.id },
-              select: { status: true, issueTypes: true, coachReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
+              select: { status: true, issueTypes: true, workerReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
             });
           } else {
             throw e;
@@ -183,7 +183,7 @@ export async function GET(req: Request) {
         existing = await prisma.attendanceIssue.update({
           where: { dailyAttendanceId: r.id },
           data: { issueTypes: derived as any },
-          select: { status: true, issueTypes: true, coachReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
+          select: { status: true, issueTypes: true, workerReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
         });
       }
 
@@ -192,7 +192,7 @@ export async function GET(req: Request) {
 
       const inboxStatus = mapIssueStatusToInboxStatus({
         status: upserted.status as any,
-        coachReasonText: upserted.coachReasonText,
+        workerReasonText: upserted.workerReasonText,
       });
 
       if (statuses.length > 0 && !statuses.includes(inboxStatus)) continue;
@@ -200,7 +200,7 @@ export async function GET(req: Request) {
 
       items.push({
         id: r.id.toString(),
-        coachName: r.user?.userName ?? "-",
+        workerName: r.user?.userName ?? "-",
         siteName: r.site?.companyName ?? "-",
         workDate: r.workDate,
         issueTypes: (upserted.issueTypes as any) as IssueType[],
@@ -212,7 +212,7 @@ export async function GET(req: Request) {
         rangeM: r.rangeM ?? null,
         startDistanceM: r.startDistanceM ?? null,
         endDistanceM: r.endDistanceM ?? null,
-        coachReasonText: upserted.coachReasonText ?? null,
+        workerReasonText: upserted.workerReasonText ?? null,
         adminMemo: upserted.adminMemo ?? null,
         updatedAt: (upserted.updatedAt ?? upserted.createdAt).toISOString(),
         timeline: [],

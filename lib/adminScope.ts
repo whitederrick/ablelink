@@ -1,5 +1,5 @@
 // lib/adminScope.ts
-// 시스템 운영자(AdminUser) API 공통 세션/스코프 강제 유틸
+// 시스템 운영자(Admin) API 공통 세션/스코프 강제 유틸
 
 import "server-only";
 import { NextResponse } from "next/server";
@@ -14,7 +14,7 @@ export function parseBigInt(value: unknown): bigint | null {
 }
 
 export type AdminScope = {
-  adminId: bigint; // AdminUser.id
+  adminId: bigint; // Admin.id
   loginId: string;
 };
 

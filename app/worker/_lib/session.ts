@@ -20,7 +20,7 @@ export interface WorkerPayload {
 }
 
 export async function signWorkerToken(payload: WorkerPayload): Promise<string> {
-  return new SignJWT({ ...payload, role: "COACH" })
+  return new SignJWT({ ...payload, role: "WORKER" })
     .setProtectedHeader({ alg: "HS256" })
     .setAudience(WORKER_TOKEN_AUD)
     .setIssuedAt()
@@ -32,7 +32,7 @@ export async function verifyWorkerToken(token: string): Promise<WorkerPayload | 
   const secret = getSecret();
   try {
     const { payload } = await jwtVerify(token, secret, { audience: WORKER_TOKEN_AUD });
-    if ((payload as any).role !== "COACH") return null;
+    if ((payload as any).role !== "WORKER") return null;
     return {
       userId: String((payload as any).userId),
       userName: String((payload as any).userName),

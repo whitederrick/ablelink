@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────
-# AbleLink API 테스트 스크립트 v5
+# AbleLink API 테스트 스크립트 v6
+# (v6: 섹션 24 — 업로드 입력 검증 + OTP/초대/가입 무차별 대입 방어 검증 추가)
 # 실행: bash docs/run-tests.sh
 # 사전 조건: npx tsx prisma/seed.ts 실행 후 npm run dev 실행
 # ──────────────────────────────────────────────────────────────
@@ -1008,6 +1009,78 @@ if [ -n "$TEMP_ADMIN_DB_ID" ]; then
   rm -f "$TEMP_ADMIN_COOKIE"
 else
   skip "임시 Admin ID 없음 — 비활성화 세션 무효화 테스트 스킵"
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+section "24. 신규 보안 강화 검증 (업로드 검증·무차별 대입 방어)"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# ── 서류 업로드 입력 검증 ──────────────────────────────────────
+# file 필드 누락 → 400 (다른 필드만 전송해 유효한 multipart 유지)
+assert "업로드: file 필드 누락 → 400" "400" '"success":false' "" \
+  -X POST "$BASE/api/upload/business-doc" -F "dummy=1"
+
+# 허용되지 않은 형식(text/plain) → 400
+TXT_TMP=$(mktemp)
+echo "not an image" > "$TXT_TMP"
+assert "업로드: 허용되지 않은 형식 → 400" "400" '"success":false' "" \
+  -X POST "$BASE/api/upload/business-doc" -F "file=@$TXT_TMP;type=text/plain;filename=test.txt"
+
+# 업로드 rate limit → 429 (잘못된 형식 반복, IP당 제한)
+echo -n "  업로드 rate limit 테스트..."
+UP_429=0
+for i in $(seq 1 15); do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/upload/business-doc" \
+    -F "file=@$TXT_TMP;type=text/plain;filename=test.txt")
+  [ "$CODE" = "429" ] && UP_429=1 && break
+done
+if [ $UP_429 -eq 1 ]; then pass "업로드 rate limit → 429 발생"; else fail "업로드 rate limit" "429" "15회 후에도 429 없음"; fi
+rm -f "$TXT_TMP"
+
+# ── OTP confirm 무차별 대입 방어 → 429 ────────────────────────
+echo -n "  OTP confirm 무차별 대입 방어 테스트..."
+OTP_CONFIRM_PHONE="01055443322"
+OTPC_429=0
+for i in $(seq 1 15); do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/worker/phone-verify" \
+    -H "Content-Type: application/json" \
+    -d "{\"action\":\"confirm\",\"phoneNumber\":\"$OTP_CONFIRM_PHONE\",\"code\":\"000000\"}")
+  [ "$CODE" = "429" ] && OTPC_429=1 && break
+done
+if [ $OTPC_429 -eq 1 ]; then pass "OTP confirm 무차별 대입 → 429 차단"; else fail "OTP confirm 무차별 대입 방어" "429" "15회 후에도 429 없음"; fi
+
+# ── 관리자 가입 신청 rate limit → 429 ─────────────────────────
+# (잘못된 본문 전송 → rate limit 통과 시 400, 초과 시 429. DB 오염 없음)
+echo -n "  관리자 가입 rate limit 테스트..."
+MS_429=0
+for i in $(seq 1 15); do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/manager/auth/signup" \
+    -H "Content-Type: application/json" -d '{}')
+  [ "$CODE" = "429" ] && MS_429=1 && break
+done
+if [ $MS_429 -eq 1 ]; then pass "관리자 가입 rate limit → 429 발생"; else fail "관리자 가입 rate limit" "429" "15회 후에도 429 없음"; fi
+
+# ── 직무지도원 초대 코드 무차별 대입 방어 → 429 ───────────────
+# 전용 초대를 새로 발급해 무차별 대입 시 차단되는지 검증
+BF_PHONE="010$(date +%s | cut -c 2-9)"
+BF_INVITE_RESP=$(curl -s -b "$MANAGER_COOKIE" \
+  -X POST "$BASE/api/admin/workers/invite" \
+  -H "Content-Type: application/json" \
+  -d "{\"phoneNumber\":\"$BF_PHONE\",\"workerName\":\"무차별테스트\",\"siteId\":\"2\"}")
+BF_INVITE_ID=$(echo "$BF_INVITE_RESP" | grep -o '"id":"[0-9]*"' | head -1 | grep -o '[0-9]*')
+[ -z "$BF_INVITE_ID" ] && BF_INVITE_ID=$(echo "$BF_INVITE_RESP" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+
+if [ -n "$BF_INVITE_ID" ]; then
+  echo -n "  초대 코드 무차별 대입 방어 테스트..."
+  INV_429=0
+  for i in $(seq 1 15); do
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/worker/invite/$BF_INVITE_ID" \
+      -H "Content-Type: application/json" -d '{"action":"verify","code":"000000"}')
+    [ "$CODE" = "429" ] && INV_429=1 && break
+  done
+  if [ $INV_429 -eq 1 ]; then pass "초대 코드 무차별 대입 → 429 차단"; else fail "초대 코드 무차별 대입 방어" "429" "15회 후에도 429 없음"; fi
+else
+  skip "무차별 대입 테스트용 초대 발급 실패 — 스킵"
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

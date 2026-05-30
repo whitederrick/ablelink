@@ -23,8 +23,8 @@ export type AttendanceSheetWeek = {
 };
 
 export type AttendanceSheetPayload = {
-  coachName: string;
-  coachPhone: string;
+  workerName: string;
+  workerPhone: string;
   companyName: string;
   periodStartYMD: string;
   periodEndYMD: string;
@@ -45,7 +45,7 @@ export type AttendanceSheetPayload = {
   signatures?: {
     govAgent?:      { name?: string; imageUrl?: string };
     companyManager?: { name?: string; imageUrl?: string };
-    coach?:          { name?: string; imageUrl?: string };
+    worker?:          { name?: string; imageUrl?: string };
   };
   // raw entries (beforeRender 입력용)
   entries?: Array<{
@@ -281,9 +281,9 @@ th, td { border:0.6pt solid #000; padding:0.6mm 1.5mm; letter-spacing:-0.8px; ve
     </colgroup>
     <tr>
       <th class="label">성&nbsp;&nbsp;&nbsp;&nbsp;명</th>
-      <td class="value">${p.coachName}</td>
+      <td class="value">${p.workerName}</td>
       <th class="label">연락처</th>
-      <td class="value">${p.coachPhone}</td>
+      <td class="value">${p.workerPhone}</td>
     </tr>
     <tr>
       <th class="label">배치사업체명</th>
@@ -335,7 +335,7 @@ th, td { border:0.6pt solid #000; padding:0.6mm 1.5mm; letter-spacing:-0.8px; ve
       <div class="sign-lines">
         ${sigRow("(공단/위탁기관) 담당자", sigs.govAgent?.name ?? "", sigs.govAgent?.imageUrl)}
         ${sigRow("사업체담당자", "", sigs.companyManager?.imageUrl)}
-        ${sigRow("직무지도원", sigs.coach?.name ?? "", sigs.coach?.imageUrl)}
+        ${sigRow("직무지도원", sigs.worker?.name ?? "", sigs.worker?.imageUrl)}
       </div>
     </div>
   </div>

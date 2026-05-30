@@ -10,7 +10,7 @@ const PLANS = [
     id: "STARTER",
     name: "스타터",
     price: 50000,
-    maxCoaches: 5,
+    maxWorkers: 5,
     maxSites: 5,
     features: [
       "직무지도원 최대 5명",
@@ -26,7 +26,7 @@ const PLANS = [
     id: "STANDARD",
     name: "스탠다드",
     price: 90000,
-    maxCoaches: 20,
+    maxWorkers: 20,
     maxSites: 20,
     features: [
       "직무지도원 최대 20명",
@@ -41,7 +41,7 @@ const PLANS = [
     id: "PRO",
     name: "프로",
     price: 150000,
-    maxCoaches: 0,
+    maxWorkers: 0,
     maxSites: 0,
     features: [
       "직무지도원 무제한",
@@ -218,7 +218,7 @@ export default function SubscribePage() {
                   <span className="text-sm font-semibold text-slate-400">원/월</span>
                 </div>
                 <p className="mt-1 text-xs font-semibold text-slate-400">
-                  직무지도원 {plan.maxCoaches === 0 ? "무제한" : `최대 ${plan.maxCoaches}명`} ·
+                  직무지도원 {plan.maxWorkers === 0 ? "무제한" : `최대 ${plan.maxWorkers}명`} ·
                   현장 {plan.maxSites === 0 ? "무제한" : `최대 ${plan.maxSites}개`}
                 </p>
 

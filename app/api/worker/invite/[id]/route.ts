@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/password";
 import { signWorkerToken, WORKER_COOKIE } from "@/app/worker/_lib/session";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -38,6 +39,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
+    // 무차별 대입 방어: 초대 ID당 코드 검증/가입 시도 횟수 제한
+    const rl = await checkRateLimit(`worker-invite:${id}`);
+    if (!rl.allowed) {
+      const mins = Math.ceil((rl.retryAfterMs ?? 0) / 60000);
+      return NextResponse.json(
+        { success: false, message: `시도가 너무 많습니다. ${mins}분 후 다시 시도해주세요.` },
+        { status: 429 },
+      );
+    }
+
     const body   = await request.json();
     const action = String(body?.action ?? "signup");
     const code   = String(body?.code ?? "").trim();
@@ -88,7 +99,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           password:          hashed,
           userName,
           phoneNumber:       invite.phoneNumber,
-          role:              "COACH",
+          role:              "WORKER",
           status:            "ACTIVE",
           planType:          "FREE",
           isTemporary:       false,

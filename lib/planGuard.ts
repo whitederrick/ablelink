@@ -142,16 +142,16 @@ export async function startTrialIfNeeded(agencyId: bigint): Promise<void> {
 
 export async function checkQuota(
   agencyId: bigint,
-  type: "coaches" | "sites"
+  type: "workers" | "sites"
 ): Promise<{ allowed: boolean; current: number; max: number }> {
   const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
   if (!agency) return { allowed: false, current: 0, max: 0 };
 
-  const max = type === "coaches" ? agency.maxCoaches : agency.maxSites;
+  const max = type === "workers" ? agency.maxWorkers : agency.maxSites;
   if (max === 0) return { allowed: true, current: 0, max: 0 }; // 무제한
 
   const current =
-    type === "coaches"
+    type === "workers"
       ? await prisma.siteAssignment.count({ where: { agencyId, status: "ACTIVE" } })
       : await prisma.site.count({ where: { agencyId, isActive: true } });
 
@@ -160,10 +160,10 @@ export async function checkQuota(
 
 // ─── 플랜별 기본 한도 (DB 초기값 세팅용) ─────────────────────────
 
-export const PLAN_LIMITS: Record<string, { maxCoaches: number; maxSites: number }> = {
-  FREE:     { maxCoaches: 3,  maxSites: 2  },
-  TRIAL:    { maxCoaches: 0,  maxSites: 0  }, // 무제한 (기간 제한만)
-  STARTER:  { maxCoaches: 10, maxSites: 10 },
-  STANDARD: { maxCoaches: 30, maxSites: 30 },
-  PRO:      { maxCoaches: 0,  maxSites: 0  }, // 무제한
+export const PLAN_LIMITS: Record<string, { maxWorkers: number; maxSites: number }> = {
+  FREE:     { maxWorkers: 3,  maxSites: 2  },
+  TRIAL:    { maxWorkers: 0,  maxSites: 0  }, // 무제한 (기간 제한만)
+  STARTER:  { maxWorkers: 10, maxSites: 10 },
+  STANDARD: { maxWorkers: 30, maxSites: 30 },
+  PRO:      { maxWorkers: 0,  maxSites: 0  }, // 무제한
 };

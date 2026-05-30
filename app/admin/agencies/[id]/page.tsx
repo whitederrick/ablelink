@@ -16,7 +16,7 @@ const PLAN_COLORS: Record<string, string> = {
 type AgencyDetail = {
   id: string; name: string; planType: string; isActive: boolean;
   trialEndsAt: string | null; subscribedAt: string | null; nextBillingAt: string | null;
-  maxCoaches: number; maxSites: number; createdAt: string;
+  maxWorkers: number; maxSites: number; createdAt: string;
 };
 type Manager = { id: string; loginId: string; displayName: string | null; isActive: boolean; lastLoginAt: string | null };
 type Site    = { id: string; companyName: string; traineeCount: number };
@@ -140,7 +140,7 @@ export default function AgencyDetailPage() {
           </div>
           <div>
             <p className="text-xs font-semibold text-slate-400">최대 직무지도원</p>
-            <p className="mt-0.5 font-semibold text-slate-800">{agency.maxCoaches || "무제한"}</p>
+            <p className="mt-0.5 font-semibold text-slate-800">{agency.maxWorkers || "무제한"}</p>
           </div>
           <div>
             <p className="text-xs font-semibold text-slate-400">최대 현장</p>

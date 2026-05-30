@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
     const newUser = await prisma.$transaction(async (tx) => {
       const user = await tx.worker.create({
-        data: { loginId, password: hashed, userName, phoneNumber, role: "COACH", status: "ACTIVE", planType: "FREE" },
+        data: { loginId, password: hashed, userName, phoneNumber, role: "WORKER", status: "ACTIVE", planType: "FREE" },
       });
       await tx.workerInvite.update({
         where: { id: invite.id },

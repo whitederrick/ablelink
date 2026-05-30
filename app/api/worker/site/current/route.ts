@@ -80,8 +80,8 @@ export async function GET(request: NextRequest) {
         agencyPlanType: agency?.planType ?? "FREE",
         trialEndsAt: agency?.trialEndsAt ?? null,
         // 이메일 발송용 추가 정보
-        coachName: user?.userName ?? "",
-        coachPhone: user?.phoneNumber ?? "",
+        workerName: user?.userName ?? "",
+        workerPhone: user?.phoneNumber ?? "",
         signatureUrl: user?.signatureUrl ?? null,
         managerName: manager?.name ?? "",
         managerEmail: manager?.email ?? "",

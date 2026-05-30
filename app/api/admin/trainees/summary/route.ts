@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         siteMap.set(siteId, {
           siteId,
           siteName: site.companyName,
-          coachName: assignment.user?.userName || "-",
+          workerName: assignment.user?.userName || "-",
           trainees: site.trainees.map(t => {
             const completedLogs = t.logs.filter(l => l.isCompleted);
             const lastLog = completedLogs[0];

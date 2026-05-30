@@ -28,9 +28,9 @@ export async function GET(req: NextRequest) {
       trialEndsAt: a.trialEndsAt?.toISOString() ?? null,
       subscribedAt: a.subscribedAt?.toISOString() ?? null,
       nextBillingAt: a.nextBillingAt?.toISOString() ?? null,
-      maxCoaches: a.maxCoaches,
+      maxWorkers: a.maxWorkers,
       maxSites: a.maxSites,
-      currentCoaches: a.assignments.length,
+      currentWorkers: a.assignments.length,
       currentSites: a.sites.length,
     }));
 

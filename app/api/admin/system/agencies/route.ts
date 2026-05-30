@@ -27,7 +27,7 @@ export async function GET(req: Request) {
         trialEndsAt: (a as any).trialEndsAt?.toISOString() ?? null,
         nextBillingAt: (a as any).nextBillingAt?.toISOString() ?? null,
         subscribedAt:  (a as any).subscribedAt?.toISOString() ?? null,
-        maxCoaches:  a.maxCoaches,
+        maxWorkers:  a.maxWorkers,
         maxSites:    a.maxSites,
         createdAt:   a.createdAt.toISOString(),
         managerCount: a._count.managerAccounts,
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     const exists = await prisma.agency.findUnique({ where: { name: name.trim() } });
     if (exists) return NextResponse.json({ success: false, message: "이미 존재하는 에이전시 이름입니다." }, { status: 409 });
 
-    // ManagerUser 테이블에서 중복 확인
+    // Manager 테이블에서 중복 확인
     const loginExists = await prisma.manager.findUnique({ where: { loginId: managerLoginId.trim() } });
     if (loginExists) return NextResponse.json({ success: false, message: "이미 사용 중인 관리자 아이디입니다." }, { status: 409 });
 
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       const ag = await tx.agency.create({
         data: { name: name.trim(), planType: planType || "FREE" },
       });
-      // AdminUser(ADMIN)와 완전 분리 — ManagerUser(managers) 테이블에 생성
+      // Admin(ADMIN)와 완전 분리 — Manager(managers) 테이블에 생성
       await tx.manager.create({
         data: {
           loginId:     managerLoginId.trim(),

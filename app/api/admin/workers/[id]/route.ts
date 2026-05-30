@@ -25,14 +25,14 @@ export async function PATCH(
     const userId = BigInt(id);
 
     // 자기 에이전시 소속 직무지도원만 수정 가능
-    const coach = await prisma.worker.findFirst({
+    const worker = await prisma.worker.findFirst({
       where: {
         id: userId,
         assignments: { some: { site: { agencyId: scope.agencyId } } },
       },
       select: { id: true },
     });
-    if (!coach) {
+    if (!worker) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
 
@@ -72,7 +72,7 @@ export async function PATCH(
     return NextResponse.json({ success: true, passwordReset: !!tempPassword });
   } catch (e: any) {
     if (e instanceof Response) return e;
-    console.error("[admin coaches PATCH]", e);
+    console.error("[admin workers PATCH]", e);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

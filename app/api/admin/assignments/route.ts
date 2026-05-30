@@ -122,7 +122,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST: 배정 생성 (ASSIGNED)
-// body: { siteId, userId, isMainCoach?, memo? }
+// body: { siteId, userId, isMainWorker?, memo? }
 export async function POST(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
     });
     if (dup) throw new Error("VALIDATION:alreadyAssigned");
 
-    const isMainCoach = body.isMainCoach === false ? false : true;
+    const isMainWorker = body.isMainWorker === false ? false : true;
     const memo = body.memo != null ? String(body.memo).trim() : null;
 
     // 근무형태
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
         siteId,
         userId,
         status: "ASSIGNED",
-        isMainCoach,
+        isMainWorker,
         assignedAt: new Date(),
         startDate: body.startDate ? new Date(body.startDate) : new Date(),
         endDate: body.endDate ? new Date(body.endDate) : null,

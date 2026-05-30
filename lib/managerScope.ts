@@ -8,7 +8,7 @@ import { readAdminSessionFromRequest } from "@/lib/adminCookies";
 import { parseBigInt } from "@/lib/adminScope";
 
 export type ManagerScope = {
-  managerId: bigint;  // ManagerUser.id
+  managerId: bigint;  // Manager.id
   agencyId:  bigint;  // Agency.id — 항상 존재 (토큰 발급 시 필수)
   loginId:   string;
 };

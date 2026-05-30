@@ -16,7 +16,7 @@ async function main() {
       phoneNumber: "02-1234-5678",
       address: "서울시 강남구 테헤란로 1",
       planType: "STANDARD",
-      maxCoaches: 30,
+      maxWorkers: 30,
       maxSites: 30,
       isActive: true,
     },
@@ -65,6 +65,13 @@ async function main() {
   });
   console.log("✅ 직무지도원:", worker.loginId, "(id:", worker.id.toString(), ")");
 
+  // 직종 자격 (인력 pool foundation) — 대표 직종: 직무지도원
+  await prisma.workerProfession.upsert({
+    where: { workerId_profession: { workerId: worker.id, profession: "JOB_COACH" } },
+    update: {},
+    create: { workerId: worker.id, profession: "JOB_COACH", isPrimary: true, experienceYears: 3 },
+  });
+
   // ─── 5. 사업장 ─────────────────────────────────────────────
   const site = await prisma.site.upsert({
     where: { id: BigInt(1) },
@@ -95,7 +102,7 @@ async function main() {
       serviceStep: "FIELD_TRAINING",
       attendanceMode: "APP_GPS",
       startDate: new Date("2026-01-01"),
-      isMainCoach: true,
+      isMainWorker: true,
     },
   });
   console.log("✅ 배정 완료 (id:", assignment.id.toString(), ")");

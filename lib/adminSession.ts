@@ -1,10 +1,10 @@
 // lib/adminSession.ts
-// 시스템 운영자(AdminUser) 전용 JWT 세션
+// 시스템 운영자(Admin) 전용 JWT 세션
 
 import { SignJWT, jwtVerify } from "jose";
 
 export type AdminSessionPayload = {
-  sub:     string; // AdminUser.id
+  sub:     string; // Admin.id
   loginId: string;
 };
 

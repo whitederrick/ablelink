@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
         status: r.status,
         signToken: r.signToken,
         tokenExpiresAt: r.tokenExpiresAt.toISOString(),
-        coachSignedAt: r.coachSignedAt?.toISOString() ?? null,
+        workerSignedAt: r.workerSignedAt?.toISOString() ?? null,
         adminSignedAt: r.adminSignedAt?.toISOString() ?? null,
         pdfUrl: r.pdfUrl,
         createdAt: r.createdAt.toISOString(),
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
               password: await hash(randomUUID(), 12), // 서명 완료 시 readable 임시 비밀번호로 교체됨
               userName: name,
               phoneNumber: phone,
-              role: "COACH",
+              role: "WORKER",
               status: "ACTIVE",
               isTemporary: true, // 최초 로그인 시 온보딩 플로우 강제
             },
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
                 password: await hash(randomUUID(), 12),
                 userName: name,
                 phoneNumber: phone,
-                role: "COACH",
+                role: "WORKER",
                 status: "ACTIVE",
                 isTemporary: true,
               },
@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
     if (!planCheck.allowed) {
       return NextResponse.json({ success: false, message: planCheck.message, reason: planCheck.reason }, { status: 403 });
     }
-    const quotaCheck = await checkQuota(agencyId, "coaches");
+    const quotaCheck = await checkQuota(agencyId, "workers");
     if (!quotaCheck.allowed) {
       return NextResponse.json({
         success: false,

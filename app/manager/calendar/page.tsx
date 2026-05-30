@@ -37,7 +37,7 @@ export default function ManagerCalendarPage() {
   const load = useCallback(()=>{
     if(!selectedWorker) return;
     setLoading(true);
-    fetch(`/api/admin/attendances?coachId=${selectedWorker.id}&yearMonth=${yearMonth}`)
+    fetch(`/api/admin/attendances?workerId=${selectedWorker.id}&yearMonth=${yearMonth}`)
       .then(r=>r.json())
       .then(d=>{ if(d.success) setRecords(d.records||d.attendances||[]); })
       .catch(()=>{})
@@ -103,7 +103,7 @@ export default function ManagerCalendarPage() {
             <ChevronRight className="h-4 w-4"/>
           </button>
         </div>
-        <button onClick={()=>window.open(`/api/admin/export/csv?type=attendance&from=${yearMonth}-01&to=${yearMonth}-${pad2(lastDate)}&coachId=${selectedWorker?.id??""}`,"_blank")}
+        <button onClick={()=>window.open(`/api/admin/export/csv?type=attendance&from=${yearMonth}-01&to=${yearMonth}-${pad2(lastDate)}&workerId=${selectedWorker?.id??""}`,"_blank")}
           className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 active:scale-95">
           <Download className="h-4 w-4"/>내보내기
         </button>

@@ -6,8 +6,8 @@ import { Search, MapPin, Users, Building2 } from "lucide-react";
 type SiteItem = {
   id: string; companyName: string; address: string;
   agencyId: string|null; agencyName: string|null; planType: string|null;
-  traineeCount: number; coachCount: number;
-  coaches: {id:string;name:string}[];
+  traineeCount: number; workerCount: number;
+  workers: {id:string;name:string}[];
 };
 
 export default function SitesPage() {
@@ -66,8 +66,8 @@ export default function SitesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 text-slate-600">
-                      <MapPin className="h-3.5 w-3.5"/>{s.coachCount}명
-                      {s.coaches.length>0&&<span className="ml-1 text-xs text-slate-400">({s.coaches.map(c=>c.name).join(", ")})</span>}
+                      <MapPin className="h-3.5 w-3.5"/>{s.workerCount}명
+                      {s.workers.length>0&&<span className="ml-1 text-xs text-slate-400">({s.workers.map(c=>c.name).join(", ")})</span>}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-400 max-w-[200px] truncate">{s.address||"-"}</td>

@@ -45,7 +45,7 @@ export default function AdminDocsPage() {
   const [periodEnd,     setPeriodEnd]     = useState(def.end);
   const [mode,          setMode]          = useState<"select" | "view">("select");
   const [iframeKey,     setIframeKey]     = useState(0);
-  const [loadingCoaches, setLoadingCoaches] = useState(false);
+  const [loadingWorkers, setLoadingWorkers] = useState(false);
   const [toEmail,       setToEmail]       = useState("");
   const [managerEmail,  setManagerEmail]  = useState("");
   const [sending,       setSending]       = useState(false);
@@ -55,7 +55,7 @@ export default function AdminDocsPage() {
   const [auditLoading,  setAuditLoading]  = useState(false);
 
   useEffect(() => {
-    setLoadingCoaches(true);
+    setLoadingWorkers(true);
     fetch("/api/admin/workers?pageSize=100")
       .then(r => r.json())
       .then(d => {
@@ -68,19 +68,19 @@ export default function AdminDocsPage() {
             })));
         }
       })
-      .finally(() => setLoadingCoaches(false));
+      .finally(() => setLoadingWorkers(false));
   }, []);
 
   useEffect(() => {
     if (!selectedWorker) return;
-    fetch(`/api/admin/docs/trainees?coachUserId=${selectedWorker}`)
+    fetch(`/api/admin/docs/trainees?workerUserId=${selectedWorker}`)
       .then(r => r.json())
       .then(d => {
         if (d.success && d.trainees) {
           setWorkers(prev => prev.map(c => c.userId === selectedWorker ? { ...c, trainees: d.trainees } : c));
         }
       });
-    fetch(`/api/admin/docs/manager-email?coachUserId=${selectedWorker}`)
+    fetch(`/api/admin/docs/manager-email?workerUserId=${selectedWorker}`)
       .then(r => r.json())
       .then(d => { if (d.success && d.email) { setManagerEmail(d.email); setToEmail(d.email); } });
   }, [selectedWorker]);
@@ -89,7 +89,7 @@ export default function AdminDocsPage() {
   const needsTrainee = DOC_GROUPS.flatMap(g => g.docs).find(d => d.id === docType)?.needsTrainee ?? false;
 
   function previewUrl() {
-    const p = new URLSearchParams({ coachUserId: selectedWorker, docType, periodStart, periodEnd, ...(traineeId ? { traineeId } : {}) });
+    const p = new URLSearchParams({ workerUserId: selectedWorker, docType, periodStart, periodEnd, ...(traineeId ? { traineeId } : {}) });
     return `/api/admin/docs/preview?${p.toString()}`;
   }
 
@@ -101,7 +101,7 @@ export default function AdminDocsPage() {
     try {
       const res = await fetch("/api/admin/docs/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coachUserId: selectedWorker, docType, periodStart, periodEnd, traineeId: traineeId || undefined, toEmail }),
+        body: JSON.stringify({ workerUserId: selectedWorker, docType, periodStart, periodEnd, traineeId: traineeId || undefined, toEmail }),
       });
       const d = await res.json();
       setSendResult({ success: d.success, msg: d.message || (d.success ? "발송 완료" : "발송 실패") });
@@ -123,7 +123,7 @@ export default function AdminDocsPage() {
     try {
       const res = await fetch("/api/admin/docs/sign", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coachUserId: selectedWorker, docType, periodStart, periodEnd, traineeId: traineeId || undefined, toEmail }),
+        body: JSON.stringify({ workerUserId: selectedWorker, docType, periodStart, periodEnd, traineeId: traineeId || undefined, toEmail }),
       });
       const d = await res.json();
       if (d.success && d.pdfBase64) {
@@ -143,7 +143,7 @@ export default function AdminDocsPage() {
     if (!selectedWorker) { alert("직무지도원을 선택해주세요."); return; }
     setAuditLoading(true);
     try {
-      const p = new URLSearchParams({ coachUserId: selectedWorker, periodStart, periodEnd });
+      const p = new URLSearchParams({ workerUserId: selectedWorker, periodStart, periodEnd });
       const res = await fetch(`/api/admin/audit-package?${p.toString()}`);
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -221,7 +221,7 @@ export default function AdminDocsPage() {
       {/* 직무지도원 선택 */}
       <div className={T.card}>
         <p className="mb-3 text-sm font-black text-slate-900">직무지도원 선택</p>
-        {loadingCoaches ? (
+        {loadingWorkers ? (
           <p className={T.empty}>불러오는 중...</p>
         ) : workers.length === 0 ? (
           <p className={T.empty}>배정된 직무지도원이 없습니다.</p>

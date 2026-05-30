@@ -18,13 +18,13 @@ function maskLoginId(id: string) {
 
 type PayType = "MONTHLY" | "DAILY" | "HOURLY";
 type IncomeType = "BUSINESS" | "EMPLOYMENT";
-type CoachType = "INTERNAL" | "EXTERNAL";
+type WorkerType = "INTERNAL" | "EXTERNAL";
 type RunStatus = "DRAFT" | "FINALIZED";
 type DeductionType = "FIXED" | "PERCENTAGE";
 
 interface Contract {
   id: string; userId: string; userName: string; loginId: string;
-  coachType: CoachType; payType: PayType; baseAmount: number; incomeType: IncomeType;
+  workerType: WorkerType; payType: PayType; baseAmount: number; incomeType: IncomeType;
   hourlyRate2Plus: number | null; weeklyHolidayPay: number | null;
   effectiveFrom: string; effectiveTo: string | null;
 }
@@ -67,7 +67,7 @@ const incomeTypeLabel: Record<IncomeType, string> = { BUSINESS: "사업소득(3.
 type Tab = "contracts" | "runs" | "deductions";
 
 const initialForm = {
-  userId: "", coachType: "EXTERNAL" as CoachType, payType: "HOURLY" as PayType,
+  userId: "", workerType: "EXTERNAL" as WorkerType, payType: "HOURLY" as PayType,
   baseAmount: "", incomeType: "BUSINESS" as IncomeType,
   hourlyRate2Plus: "", weeklyHolidayPay: "", effectiveFrom: "", effectiveTo: "",
 };
@@ -108,7 +108,7 @@ export default function PayrollPage() {
     } finally { setLoadingContracts(false); }
   }
 
-  async function loadCoaches() {
+  async function loadWorkers() {
     const res = await fetch("/api/admin/workers?pageSize=200");
     const d = await res.json();
     if (d.success) setWorkers((d.data || []).map((c: any) => ({ id: c.id, userName: c.userName })));
@@ -133,7 +133,7 @@ export default function PayrollPage() {
   }
 
   useEffect(() => {
-    if (tab === "contracts") { loadContracts(); loadCoaches(); }
+    if (tab === "contracts") { loadContracts(); loadWorkers(); }
     else if (tab === "runs") loadRuns();
     else loadDeductions();
   }, [tab]);
@@ -145,7 +145,7 @@ export default function PayrollPage() {
     setSaving(true);
     try {
       const body: any = {
-        userId: form.userId, coachType: form.coachType, payType: form.payType,
+        userId: form.userId, workerType: form.workerType, payType: form.payType,
         baseAmount: Number(form.baseAmount), incomeType: form.incomeType,
         effectiveFrom: form.effectiveFrom, effectiveTo: form.effectiveTo || null,
       };
@@ -309,10 +309,10 @@ export default function PayrollPage() {
                 </div>
                 <div className="space-y-1.5">
                   <label className={T.label}>직무지도원 유형</label>
-                  <select value={form.coachType} onChange={e => {
-                    const ct = e.target.value as CoachType;
+                  <select value={form.workerType} onChange={e => {
+                    const ct = e.target.value as WorkerType;
                     setForm(f => ({
-                      ...f, coachType: ct,
+                      ...f, workerType: ct,
                       payType: ct === "INTERNAL" ? "DAILY" : (f.payType === "DAILY" ? "HOURLY" : f.payType),
                       incomeType: ct === "INTERNAL" ? "BUSINESS" : f.incomeType,
                       hourlyRate2Plus: ct === "INTERNAL" ? "" : f.hourlyRate2Plus,
@@ -325,24 +325,24 @@ export default function PayrollPage() {
                 </div>
                 <div className="space-y-1.5">
                   <label className={T.label}>소득 유형</label>
-                  <select value={form.incomeType} disabled={form.coachType === "INTERNAL"}
+                  <select value={form.incomeType} disabled={form.workerType === "INTERNAL"}
                     onChange={e => setForm(f => ({ ...f, incomeType: e.target.value as IncomeType }))} className={`w-full ${T.select} disabled:opacity-50`}>
                     <option value="BUSINESS">사업소득 (3.3% 공제)</option>
                     <option value="EMPLOYMENT">근로소득 (4대보험)</option>
                   </select>
-                  {form.coachType === "INTERNAL" && (
+                  {form.workerType === "INTERNAL" && (
                     <p className="text-[11px] font-semibold text-slate-400">※ 내부 직무지도원은 사업소득만 적용</p>
                   )}
                 </div>
                 <div className="space-y-1.5">
                   <label className={T.label}>급여 유형</label>
-                  <select value={form.payType} disabled={form.coachType === "INTERNAL"}
+                  <select value={form.payType} disabled={form.workerType === "INTERNAL"}
                     onChange={e => setForm(f => ({ ...f, payType: e.target.value as PayType }))} className={`w-full ${T.select} disabled:opacity-50`}>
-                    {form.coachType === "EXTERNAL" && <option value="HOURLY">시급</option>}
+                    {form.workerType === "EXTERNAL" && <option value="HOURLY">시급</option>}
                     <option value="DAILY">일급</option>
-                    {form.coachType === "EXTERNAL" && <option value="MONTHLY">월급</option>}
+                    {form.workerType === "EXTERNAL" && <option value="MONTHLY">월급</option>}
                   </select>
-                  {form.coachType === "INTERNAL" && (
+                  {form.workerType === "INTERNAL" && (
                     <p className="text-[11px] font-semibold text-slate-400">※ 내부 직무지도원은 일급만 적용</p>
                   )}
                 </div>
@@ -354,7 +354,7 @@ export default function PayrollPage() {
                     className={`w-full ${T.input}`} />
                 </div>
 
-                {form.coachType === "EXTERNAL" && form.payType === "HOURLY" && (
+                {form.workerType === "EXTERNAL" && form.payType === "HOURLY" && (
                   <div className="space-y-1.5">
                     <label className={T.label}>훈련생 2명 이상 시급 (원)</label>
                     <input type="number" value={form.hourlyRate2Plus}
@@ -365,7 +365,7 @@ export default function PayrollPage() {
                   </div>
                 )}
 
-                {form.coachType === "EXTERNAL" && (
+                {form.workerType === "EXTERNAL" && (
                   <div className="space-y-1.5">
                     <label className={T.label}>주휴수당 (원, 선택)</label>
                     <input type="number" value={form.weeklyHolidayPay}
@@ -415,8 +415,8 @@ export default function PayrollPage() {
                       </td>
                       <td className={T.td}>
                         <div className="flex flex-wrap gap-1">
-                          <span className={`${T.badge} ${c.coachType === "INTERNAL" ? "bg-amber-50 text-amber-600" : "bg-slate-50 text-slate-600"}`}>
-                            {c.coachType === "INTERNAL" ? "내부" : "외부"}
+                          <span className={`${T.badge} ${c.workerType === "INTERNAL" ? "bg-amber-50 text-amber-600" : "bg-slate-50 text-slate-600"}`}>
+                            {c.workerType === "INTERNAL" ? "내부" : "외부"}
                           </span>
                           <span className={`${T.badge} ${c.incomeType === "EMPLOYMENT" ? "bg-purple-50 text-purple-600" : "bg-sky-50 text-sky-600"}`}>
                             {c.incomeType === "EMPLOYMENT" ? "근로소득" : "사업소득"}

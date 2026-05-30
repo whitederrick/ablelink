@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
           gender:       trainee.gender,
           disabilityType: trainee.disabilityType || "-",
           status:       trainee.status,
-          coachName:    asgn.user?.userName || "-",
+          workerName:    asgn.user?.userName || "-",
           siteName:     asgn.site.companyName,
           totalWorkDays,
           daysWithLog,
@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
     // 사이트명 → 코치명 → 훈련생명 순 정렬
     result.sort((a, b) =>
       a.siteName.localeCompare(b.siteName) ||
-      a.coachName.localeCompare(b.coachName) ||
+      a.workerName.localeCompare(b.workerName) ||
       a.traineeName.localeCompare(b.traineeName)
     );
 

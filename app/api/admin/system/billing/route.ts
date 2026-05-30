@@ -11,7 +11,7 @@ export async function GET(req: Request) {
     const agencies = await prisma.agency.findMany({
       select: {
         id: true, name: true, planType: true, isActive: true,
-        maxCoaches: true, maxSites: true,
+        maxWorkers: true, maxSites: true,
         trialEndsAt: true, nextBillingAt: true, subscribedAt: true, tossBillingKey: true,
         _count: { select: { managerAccounts: true, sites: true } },
       },

@@ -18,9 +18,9 @@ type IssueFilter = IssueType | "ALL";
 
 type InboxStatus =
   | "ADMIN_UNCONFIRMED"
-  | "COACH_CONFIRM_REQUESTED"
-  | "COACH_REASON_MISSING"
-  | "COACH_REPLIED"
+  | "WORKER_CONFIRM_REQUESTED"
+  | "WORKER_REASON_MISSING"
+  | "WORKER_REPLIED"
   | "ADMIN_RESOLVED";
 
 type PeriodPreset = "TODAY" | "LAST_7" | "LAST_14" | "LAST_30" | "CUSTOM";
@@ -37,7 +37,7 @@ type WorkType = "AM" | "PM" | "FULL";
 type InboxItem = {
   id: string;
 
-  coachName: string;
+  workerName: string;
   siteName: string;
   workDate: string; // YYYY-MM-DD
 
@@ -54,7 +54,7 @@ type InboxItem = {
   startDistanceM?: number | null;
   endDistanceM?: number | null;
 
-  coachReasonText?: string | null;
+  workerReasonText?: string | null;
   adminMemo?: string | null;
 
   updatedAt: string; // ISO
@@ -82,9 +82,9 @@ const ISSUE_STYLE: Record<IssueType, { className: string }> = {
 
 const STATUS_LABEL: Record<InboxStatus, string> = {
   ADMIN_UNCONFIRMED: "담당자 미확인",
-  COACH_CONFIRM_REQUESTED: "직무지도원 확인 요청",
-  COACH_REASON_MISSING: "직무지도원 사유 미제출",
-  COACH_REPLIED: "직무지도원 회신 완료",
+  WORKER_CONFIRM_REQUESTED: "직무지도원 확인 요청",
+  WORKER_REASON_MISSING: "직무지도원 사유 미제출",
+  WORKER_REPLIED: "직무지도원 회신 완료",
   ADMIN_RESOLVED: "담당자 처리 완료",
 };
 
@@ -196,7 +196,7 @@ async function fetchInboxItems(filters: {
       return {
         id: String(it.id),
 
-        coachName: String(it.coachName ?? "-"),
+        workerName: String(it.workerName ?? "-"),
         siteName: String(it.siteName ?? "-"),
         workDate: String(it.workDate),
 
@@ -213,7 +213,7 @@ async function fetchInboxItems(filters: {
         startDistanceM: it.startDistanceM ?? null,
         endDistanceM: it.endDistanceM ?? null,
 
-        coachReasonText: it.coachReasonText ?? null,
+        workerReasonText: it.workerReasonText ?? null,
         adminMemo: it.adminMemo ?? null,
 
         updatedAt: String(it.updatedAt || new Date().toISOString()),
@@ -313,8 +313,8 @@ function getAvailableActions(it: InboxItem) {
   // (처리완료)=>숨김.
   const s = it.status;
   const showRequestReason =
-    s === "ADMIN_UNCONFIRMED" || s === "COACH_CONFIRM_REQUESTED" || s === "COACH_REASON_MISSING";
-  const showSupplementAndResolve = s === "COACH_REPLIED";
+    s === "ADMIN_UNCONFIRMED" || s === "WORKER_CONFIRM_REQUESTED" || s === "WORKER_REASON_MISSING";
+  const showSupplementAndResolve = s === "WORKER_REPLIED";
   const showNone = s === "ADMIN_RESOLVED";
 
   return {
@@ -337,9 +337,9 @@ export default function AttendanceInboxClient() {
   // 기본: 처리완료는 숨김(필요 시 포함)
   const [statuses, setStatuses] = useState<InboxStatus[]>([
     "ADMIN_UNCONFIRMED",
-    "COACH_CONFIRM_REQUESTED",
-    "COACH_REASON_MISSING",
-    "COACH_REPLIED",
+    "WORKER_CONFIRM_REQUESTED",
+    "WORKER_REASON_MISSING",
+    "WORKER_REPLIED",
   ]);
 
   /** data */
@@ -637,19 +637,19 @@ export default function AttendanceInboxClient() {
                 {STATUS_LABEL.ADMIN_UNCONFIRMED}
               </Chip>
               <Chip
-                active={statuses.includes("COACH_CONFIRM_REQUESTED")}
-                onClick={() => toggleStatus("COACH_CONFIRM_REQUESTED")}
+                active={statuses.includes("WORKER_CONFIRM_REQUESTED")}
+                onClick={() => toggleStatus("WORKER_CONFIRM_REQUESTED")}
               >
-                {STATUS_LABEL.COACH_CONFIRM_REQUESTED}
+                {STATUS_LABEL.WORKER_CONFIRM_REQUESTED}
               </Chip>
               <Chip
-                active={statuses.includes("COACH_REASON_MISSING")}
-                onClick={() => toggleStatus("COACH_REASON_MISSING")}
+                active={statuses.includes("WORKER_REASON_MISSING")}
+                onClick={() => toggleStatus("WORKER_REASON_MISSING")}
               >
-                {STATUS_LABEL.COACH_REASON_MISSING}
+                {STATUS_LABEL.WORKER_REASON_MISSING}
               </Chip>
-              <Chip active={statuses.includes("COACH_REPLIED")} onClick={() => toggleStatus("COACH_REPLIED")}>
-                {STATUS_LABEL.COACH_REPLIED}
+              <Chip active={statuses.includes("WORKER_REPLIED")} onClick={() => toggleStatus("WORKER_REPLIED")}>
+                {STATUS_LABEL.WORKER_REPLIED}
               </Chip>
               <Chip active={statuses.includes("ADMIN_RESOLVED")} onClick={() => toggleStatus("ADMIN_RESOLVED")}>
                 {STATUS_LABEL.ADMIN_RESOLVED}
@@ -694,7 +694,7 @@ export default function AttendanceInboxClient() {
                         <div className="mb-0 flex items-start gap-3">
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-semibold">
-                              {it.coachName} <span className="text-slate-300 font-normal">·</span>{" "}
+                              {it.workerName} <span className="text-slate-300 font-normal">·</span>{" "}
                               <span className="font-normal text-slate-700">{it.siteName}</span>
                             </div>
                             <div className="mt-0.5 text-xs text-slate-700">
@@ -725,8 +725,8 @@ export default function AttendanceInboxClient() {
                           <span className={[
                             "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 py-1 text-[11px] font-semibold text-white",
                             it.status === "ADMIN_RESOLVED" ? "bg-emerald-600"
-                              : it.status === "COACH_REPLIED" ? "bg-sky-600"
-                              : it.status === "COACH_REASON_MISSING" ? "bg-rose-600"
+                              : it.status === "WORKER_REPLIED" ? "bg-sky-600"
+                              : it.status === "WORKER_REASON_MISSING" ? "bg-rose-600"
                               : "bg-slate-600",
                           ].join(" ")}>
                             {STATUS_LABEL[it.status]}
@@ -794,7 +794,7 @@ export default function AttendanceInboxClient() {
                   <div className="mt-3 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-lg font-semibold">
-                        {selected.coachName}{" "}
+                        {selected.workerName}{" "}
                         <span className="text-slate-300 font-normal">·</span>{" "}
                         <span className="font-normal text-slate-700">{selected.siteName}</span>
                       </div>
@@ -817,8 +817,8 @@ export default function AttendanceInboxClient() {
                       <div className={[
                         "whitespace-nowrap rounded-xl px-4 py-1.5 text-xs font-semibold text-white",
                         selected.status === "ADMIN_RESOLVED" ? "bg-emerald-600"
-                          : selected.status === "COACH_REPLIED" ? "bg-sky-600"
-                          : selected.status === "COACH_REASON_MISSING" ? "bg-rose-600"
+                          : selected.status === "WORKER_REPLIED" ? "bg-sky-600"
+                          : selected.status === "WORKER_REASON_MISSING" ? "bg-rose-600"
                           : "bg-slate-600",
                       ].join(" ")}>
                         {STATUS_LABEL[selected.status]}
@@ -963,7 +963,7 @@ export default function AttendanceInboxClient() {
 
                     updateSelected((it) =>
                       pushTimeline(
-                        { ...it, status: "COACH_REASON_MISSING" },
+                        { ...it, status: "WORKER_REASON_MISSING" },
                         "담당자 사유 등록 요청",
                         ok ? modal.draft : `${modal.draft}\n\n(서버 반영 실패: 로컬 반영)`
                       )

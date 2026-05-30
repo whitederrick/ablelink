@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   try {
     await requireAdminSession(req);
 
-    const [agencyCount, coachCount, siteCount, traineeCount, subCount] = await Promise.all([
+    const [agencyCount, workerCount, siteCount, traineeCount, subCount] = await Promise.all([
       prisma.agency.count(),
       prisma.worker.count(),
       prisma.site.count(),
@@ -21,7 +21,7 @@ export async function GET(req: Request) {
       success: true,
       stats: {
         agencyCount,
-        coachCount,
+        workerCount,
         siteCount,
         traineeCount,
         activeSubscriptions: subCount,

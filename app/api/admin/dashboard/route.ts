@@ -60,7 +60,7 @@ export async function GET(req: Request) {
         take: 50,
         select: {
           id: true, docType: true, dueAt: true, currentVersionId: true,
-          coach: { select: { userName: true } },
+          worker: { select: { userName: true } },
           site: { select: { companyName: true } },
         },
       }),
@@ -115,7 +115,7 @@ export async function GET(req: Request) {
       riskAlerts.push({
         type: "document", label: "[보고서]",
         target: r.site?.companyName || "-",
-        detail: `${docTypeLabel(r.docType)} 미제출(D+${daysOver}) — 『${r.coach?.userName || ""}』`,
+        detail: `${docTypeLabel(r.docType)} 미제출(D+${daysOver}) — 『${r.worker?.userName || ""}』`,
         severity: daysOver >= 7 ? "high" : "medium",
       });
     }
@@ -173,7 +173,7 @@ export async function GET(req: Request) {
           id: r.id.toString(),
           docType: r.docType,
           docTypeLabel: docTypeLabel(r.docType),
-          coachName: r.coach?.userName || "-",
+          workerName: r.worker?.userName || "-",
           siteName: r.site?.companyName || "-",
           dueAt: r.dueAt.toISOString(),
           isOverdue: r.dueAt <= now,

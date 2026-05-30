@@ -1,7 +1,7 @@
 /* scripts/backfill-20260224.ts
  * 목적:
  * 1) DailyAttendance.assignmentId backfill (멀티배정 대비)
- * 2) AdminUser.agencyId backfill (agencyName -> Agency.id)
+ * 2) Admin.agencyId backfill (agencyName -> Agency.id)
  * 3) TraineePlacement.status 정규화 (문자열/레거시 값 -> enum)
  *
  * 실행:
@@ -55,9 +55,9 @@ async function findBestAssignmentId(params: {
   return candidates[0]?.id ?? null;
 }
 
-async function backfillAdminUserAgencyId() {
+async function backfillAdminAgencyId() {
   // NOTE: Admin 모델에 agencyId/agencyName이 제거됨 — 이 단계는 더이상 필요 없음
-  console.log("1) Backfill AdminUser.agencyId — skipped (Admin 모델에 agencyId 없음)");
+  console.log("1) Backfill Admin.agencyId — skipped (Admin 모델에 agencyId 없음)");
 }
 
 async function ensureLegacyAssignment(params: {
@@ -100,7 +100,7 @@ async function ensureLegacyAssignment(params: {
       endDate: end,
       // legacy 임을 기록하고 싶으면 statusReason에 남김(필드가 있으면)
       statusReason: `LEGACY_BACKFILL:${workDate}`,
-      isMainCoach: true,
+      isMainWorker: true,
     },
     select: { id: true },
   });
@@ -225,7 +225,7 @@ async function normalizeTraineePlacementStatus() {
 async function main() {
   console.log("=== Backfill Start ===");
 
-  await backfillAdminUserAgencyId();
+  await backfillAdminAgencyId();
   await backfillDailyAttendanceAssignmentId();
   await normalizeTraineePlacementStatus();
 

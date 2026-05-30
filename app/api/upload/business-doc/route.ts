@@ -4,7 +4,9 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { createClient } from "@supabase/supabase-js";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_MIME_TYPES = [
@@ -32,8 +34,31 @@ function getExtension(mimeType: string): string {
   }
 }
 
+// 버킷 생성은 프로세스당 1회만 시도 (매 요청 네트워크 왕복 방지)
+let bucketEnsured = false;
+
+async function ensureBucket(supabase: ReturnType<typeof getSupabaseAdmin>) {
+  if (bucketEnsured) return;
+  const { error } = await supabase.storage.createBucket(BUCKET_NAME, { public: false });
+  if (error && !error.message.includes("already exists")) {
+    console.warn("[upload/business-doc] 버킷 생성 실패:", error.message);
+  }
+  bucketEnsured = true;
+}
+
 export async function POST(req: NextRequest) {
   try {
+    // 미인증 공개 엔드포인트 — IP당 업로드 횟수 제한 (스토리지 남용/DoS 방어)
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const rl = await checkRateLimit(`upload-business-doc:${ip}`);
+    if (!rl.allowed) {
+      const secs = Math.ceil((rl.retryAfterMs ?? 0) / 1000);
+      return NextResponse.json(
+        { success: false, message: `업로드 요청이 너무 많습니다. ${secs}초 후 다시 시도하세요.` },
+        { status: 429 }
+      );
+    }
+
     const formData = await req.formData();
     const file = formData.get("file");
 
@@ -63,18 +88,11 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // 버킷이 없으면 Private으로 생성 (이미 있으면 무시)
-    const { error: bucketError } = await supabase.storage.createBucket(BUCKET_NAME, {
-      public: false,
-    });
-    if (bucketError && !bucketError.message.includes("already exists")) {
-      console.warn("[upload/business-doc] 버킷 생성 실패:", bucketError.message);
-    }
+    // 버킷이 없으면 Private으로 생성 (프로세스당 1회)
+    await ensureBucket(supabase);
 
     const ext = getExtension(file.type);
-    const timestamp = Date.now();
-    const randomHex = Math.random().toString(16).slice(2, 10);
-    const filePath = `manager-signup/${timestamp}-${randomHex}.${ext}`;
+    const filePath = `manager-signup/${Date.now()}-${randomUUID()}.${ext}`;
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);

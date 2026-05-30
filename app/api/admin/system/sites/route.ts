@@ -36,8 +36,8 @@ export async function GET(req: Request) {
         agencyName:  s.agency?.name ?? null,
         planType:    s.agency?.planType ?? null,
         traineeCount: s.trainees.length,
-        coachCount:   s.assignments.length,
-        coaches:      s.assignments.map(a => ({ id: a.user.id.toString(), name: a.user.userName })),
+        workerCount:   s.assignments.length,
+        workers:      s.assignments.map(a => ({ id: a.user.id.toString(), name: a.user.userName })),
         createdAt:   (s as any).createdAt?.toISOString() ?? null,
       })),
     });

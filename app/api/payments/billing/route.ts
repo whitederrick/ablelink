@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
     const nextBillingAt = new Date(now);
     nextBillingAt.setMonth(nextBillingAt.getMonth() + 1);
 
-    const limits = PLAN_LIMITS[planType] || { maxCoaches: 0, maxSites: 0 };
+    const limits = PLAN_LIMITS[planType] || { maxWorkers: 0, maxSites: 0 };
 
     await prisma.agency.update({
       where: { id: BigInt(agencyId) },
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
         nextBillingAt,
         trialStartedAt: null,
         trialEndsAt: null,
-        maxCoaches: limits.maxCoaches,
+        maxWorkers: limits.maxWorkers,
         maxSites: limits.maxSites,
       },
     });

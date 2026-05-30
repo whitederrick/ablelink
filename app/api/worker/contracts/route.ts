@@ -51,8 +51,8 @@ export async function GET(req: NextRequest) {
     data: {
       id: String(contract.id),
       status: contract.status,
-      coachName: contract.user.userName,
-      coachPhone: contract.user.phoneNumber,
+      workerName: contract.user.userName,
+      workerPhone: contract.user.phoneNumber,
       agencyName: contract.agency.name,
       agencyAddress: contract.agency.address,
       agencyPhone: contract.agency.phoneNumber,
@@ -62,11 +62,11 @@ export async function GET(req: NextRequest) {
       workTypeLabel: workTypeLabel + customTimeStr,
       commuteGuidanceIncluded: contract.commuteGuidanceIncluded,
       // 직무지도원이 직접 입력한 내용 (관리자가 미입력 시)
-      coachFilledSiteName: contract.coachFilledSiteName,
-      coachFilledWorkType: contract.coachFilledWorkType,
-      coachSignedAt: contract.coachSignedAt?.toISOString() ?? null,
+      workerFilledSiteName: contract.workerFilledSiteName,
+      workerFilledWorkType: contract.workerFilledWorkType,
+      workerSignedAt: contract.workerSignedAt?.toISOString() ?? null,
       adminSignedAt: contract.adminSignedAt?.toISOString() ?? null,
-      coachSignatureUrl: contract.coachSignatureUrl,
+      workerSignatureUrl: contract.workerSignatureUrl,
     },
   });
 }
@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
 // POST: 직무지도원 서명 처리
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { token, signatureUrl, coachFilledSiteName, coachFilledWorkType } = body;
+  const { token, signatureUrl, workerFilledSiteName, workerFilledWorkType } = body;
 
   if (!token || !signatureUrl) {
     return NextResponse.json({ success: false, message: "필수 항목이 없습니다." }, { status: 400 });
@@ -88,10 +88,10 @@ export async function POST(req: NextRequest) {
   if (signatureUrl.length > 2 * 1024 * 1024) {
     return NextResponse.json({ success: false, message: "서명 이미지가 너무 큽니다." }, { status: 400 });
   }
-  if (coachFilledSiteName && (typeof coachFilledSiteName !== "string" || coachFilledSiteName.length > 200)) {
+  if (workerFilledSiteName && (typeof workerFilledSiteName !== "string" || workerFilledSiteName.length > 200)) {
     return NextResponse.json({ success: false, message: "사업체명이 너무 깁니다." }, { status: 400 });
   }
-  if (coachFilledWorkType && (typeof coachFilledWorkType !== "string" || coachFilledWorkType.length > 100)) {
+  if (workerFilledWorkType && (typeof workerFilledWorkType !== "string" || workerFilledWorkType.length > 100)) {
     return NextResponse.json({ success: false, message: "근무형태 값이 너무 깁니다." }, { status: 400 });
   }
 
@@ -120,10 +120,10 @@ export async function POST(req: NextRequest) {
     where: { id: contract.id },
     data: {
       status: "SIGNED",
-      coachSignedAt: new Date(),
-      coachSignatureUrl: signatureUrl,
-      coachFilledSiteName: coachFilledSiteName || null,
-      coachFilledWorkType: coachFilledWorkType || null,
+      workerSignedAt: new Date(),
+      workerSignatureUrl: signatureUrl,
+      workerFilledSiteName: workerFilledSiteName || null,
+      workerFilledWorkType: workerFilledWorkType || null,
     },
   });
 

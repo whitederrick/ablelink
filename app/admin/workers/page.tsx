@@ -13,7 +13,7 @@ const STATUS_COLORS: Record<string,string> = {
   ACTIVE:"bg-emerald-100 text-emerald-700", RESIGNED:"bg-rose-100 text-rose-700", PAUSED:"bg-amber-100 text-amber-700",
 };
 
-export default function CoachesPage() {
+export default function WorkersPage() {
   const [workers, setWorkers]   = useState<Worker[]>([]);
   const [loading, setLoading]   = useState(true);
   const [q, setQ]               = useState("");

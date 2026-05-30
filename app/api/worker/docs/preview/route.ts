@@ -60,12 +60,12 @@ export async function GET(request: NextRequest) {
         orderBy: { id:"asc" },
       });
     }
-    const [coachImg, govImg] = await Promise.all([
+    const [workerImg, govImg] = await Promise.all([
       toBase64DataUri(user?.signatureUrl),
       toBase64DataUri(adminForSign?.signatureUrl),
     ]);
     const sigs = {
-      coach:       { name: user?.userName||"",            imageUrl: coachImg },
+      worker:       { name: user?.userName||"",            imageUrl: workerImg },
       govAgent:    { name: adminForSign?.displayName||"", imageUrl: govImg },
       agencyAgent: { name: adminForSign?.displayName||"", imageUrl: govImg },
     };
@@ -88,12 +88,12 @@ export async function GET(request: NextRequest) {
       const totalHours=entries.reduce((s,e)=>s+Number(e.hours),0);
       const oneToMany=entries.reduce((s,e)=>s+Number(e.multiHours),0);
       payload = {
-        coachName:user?.userName||"", coachPhone:user?.phoneNumber||user?.loginId||"",
+        workerName:user?.userName||"", workerPhone:user?.phoneNumber||user?.loginId||"",
         companyName:site.companyName, periodStartYMD:fmtDot(start), periodEndYMD:fmtDot(end),
         totalDays:entries.length, totalHours, weeklyHolidayCount:0, monthlyLeaveCount:0,
         allowanceTotalWon:"0", oneToOneHours:totalHours-oneToMany, oneToManyHours:oneToMany,
         otOneToOneHours:0, otOneToManyHours:0, entries,
-        signatures:{ govAgent:sigs.govAgent, companyManager:{name:"",imageUrl:undefined}, coach:sigs.coach },
+        signatures:{ govAgent:sigs.govAgent, companyManager:{name:"",imageUrl:undefined}, worker:sigs.worker },
       };
     } else if (docType === "TRAINING_DAILY_LOG") {
       const tid = traineeId ? BigInt(traineeId) : null;
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
           attendanceStatus:l.evaluation||"출석", trainingTime:`${Number(l.totalRecognizedTime)}H`,
           guidanceFlag:"Y", task:l.tasks[0]?.taskName||"",
           taskLevelMeasured:scoreLabel(l.tasks[0]?.performanceScore), evalGuidance:l.content||"" })),
-        signatures:{ govAgent:sigs.govAgent, companyManager:{name:"",imageUrl:undefined}, coach:sigs.coach },
+        signatures:{ govAgent:sigs.govAgent, companyManager:{name:"",imageUrl:undefined}, worker:sigs.worker },
       };
     } else if (docType === "ADAPTATION_DAILY_LOG") {
       const tid = traineeId ? BigInt(traineeId) : null;
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
         entries:logs.map(l=>({ dateISO:l.attendance.workDate, attendance:l.evaluation||"출석",
           workTime:"", guidance:"Y", task:l.tasks[0]?.taskName||"",
           performanceLabel:scoreLabel(l.tasks[0]?.performanceScore), performanceTime:"", coaching:l.content||"" })),
-        signatures:{ coach:sigs.coach, govAgent:sigs.govAgent },
+        signatures:{ worker:sigs.worker, govAgent:sigs.govAgent },
       };
     } else if (docType === "TRAINEE_FINAL_EVAL") {
       const tid = traineeId ? BigInt(traineeId) : null;
@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
         preTrainingStart:assignment.stepStart?.toISOString().slice(0,10)||start,
         preTrainingEnd:start, fieldTrainingStart:start, fieldTrainingEnd:end,
         scores:(ev?.scores as any)||{}, comments:(ev?.comments as any)||{},
-        signatures:{ coach:sigs.coach, agencyAgent:sigs.agencyAgent },
+        signatures:{ worker:sigs.worker, agencyAgent:sigs.agencyAgent },
       };
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
       const tid = traineeId ? BigInt(traineeId) : null;
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
         traineeName:trainee?.name||"", companyName:site.companyName,
         periodStart:start, periodEnd:end,
         scores:(ev?.scores as any)||{}, comments:(ev?.comments as any)||{},
-        signatures:{ coach:sigs.coach, agencyAgent:sigs.agencyAgent },
+        signatures:{ worker:sigs.worker, agencyAgent:sigs.agencyAgent },
       };
     } else {
       payload = { traineeName:"", companyName:site.companyName, periodStart:start, periodEnd:end };

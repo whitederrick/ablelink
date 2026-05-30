@@ -12,7 +12,7 @@ type SiteItem = {
 
 const APPROVAL_CLS: Record<string, { label: string; cls: string }> = {
   ORIGINAL_SET:         { label: "미확정",   cls: "bg-slate-100 text-slate-500" },
-  COACH_PROPOSED:       { label: "제안됨",   cls: "bg-amber-50 text-amber-600" },
+  WORKER_PROPOSED:       { label: "제안됨",   cls: "bg-amber-50 text-amber-600" },
   APPROVED:             { label: "승인",     cls: "bg-emerald-50 text-emerald-600" },
   REJECTED:             { label: "반려",     cls: "bg-rose-50 text-rose-600" },
   CORRECTION_REQUESTED: { label: "수정요청", cls: "bg-sky-50 text-sky-600" },

@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
     }
 
     const where: Prisma.WorkerWhereInput = {
-      role: UserRole.COACH,
+      role: UserRole.WORKER,
       ...(q
         ? {
             OR: [

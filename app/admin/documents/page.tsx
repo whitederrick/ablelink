@@ -140,7 +140,7 @@ export default function AdminDocumentsPage() {
     // 해당 발송 건의 미리보기 URL을 PDF URL로 사용
     const previewKey = DOC_TYPE_PREVIEW_KEY[selectedRun.docType] || selectedRun.docType.toLowerCase().replace(/_/g, "-");
     const p = new URLSearchParams({
-      coachUserId: selectedRun.coachUserId,
+      workerUserId: selectedRun.workerUserId,
       docType:     previewKey,
       periodStart: selectedRun.periodStart.slice(0, 10),
       periodEnd:   selectedRun.periodEnd.slice(0, 10),
@@ -258,7 +258,7 @@ export default function AdminDocumentsPage() {
               <tbody>
                 {runs.map(r => (
                   <tr key={r.id} className={`${T.trBase} ${selectedRunId === r.id ? "bg-sky-50" : ""}`}>
-                    <td className={T.td}>{r.coach?.userName ?? r.coachUserId}</td>
+                    <td className={T.td}>{r.worker?.userName ?? r.workerUserId}</td>
                     <td className={T.td}>{DOC_TYPE_LABEL[r.docType] || r.docType}</td>
                     <td className={T.td}>{fmtDate(r.periodStart)} ~ {fmtDate(r.periodEnd)}</td>
                     <td className={T.td}>{fmtDate(r.dueAt)}</td>

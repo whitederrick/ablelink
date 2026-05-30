@@ -6,8 +6,8 @@ interface AgencySub {
   id: string; name: string; planType: string;
   trialStartedAt: string | null; trialEndsAt: string | null;
   subscribedAt: string | null; nextBillingAt: string | null;
-  maxCoaches: number; maxSites: number;
-  currentCoaches: number; currentSites: number;
+  maxWorkers: number; maxSites: number;
+  currentWorkers: number; currentSites: number;
 }
 
 const PLAN_CLS: Record<string, { label: string; cls: string }> = {
@@ -92,7 +92,7 @@ export default function SubscriptionPage() {
                   <div>
                     <div className="text-xs font-semibold text-slate-400">직무지도원</div>
                     <div className="text-sm font-semibold text-slate-700">
-                      {a.currentCoaches}명{a.maxCoaches > 0 ? ` / ${a.maxCoaches}명` : " (무제한)"}
+                      {a.currentWorkers}명{a.maxWorkers > 0 ? ` / ${a.maxWorkers}명` : " (무제한)"}
                     </div>
                   </div>
                   <div>
