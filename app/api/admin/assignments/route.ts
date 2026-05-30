@@ -181,6 +181,7 @@ export async function POST(req: NextRequest) {
       data: {
         siteId,
         workerId,
+        agencyId: scope.agencyId, // 에이전시 스코프 쿼리(급여·CSV·근태inbox·휴무)에서 누락 방지
         status: "ASSIGNED",
         isMainWorker,
         assignedAt: new Date(),
