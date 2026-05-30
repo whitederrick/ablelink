@@ -8,10 +8,9 @@ import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 import { getWorkerSessionFromReq, signWorkerToken, WORKER_COOKIE } from "@/app/worker/_lib/session";
-import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
+import { sendSimpleEmail } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rateLimit";
 
-const ses = new SESClient({ region: process.env.AWS_REGION || "ap-northeast-2" });
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
 
 async function getSession(req: NextRequest) {
@@ -70,20 +69,11 @@ export async function POST(req: NextRequest) {
         data: { pendingLoginId: email, verifyCode: code, verifyCodeExpiresAt: expiresAt },
       });
 
-      const fromEmail = process.env.SES_FROM_EMAIL || "noreply@able-link.co.kr";
-      await ses.send(new SendEmailCommand({
-        Source: fromEmail,
-        Destination: { ToAddresses: [email] },
-        Message: {
-          Subject: { Data: "[AbleLink] 이메일 인증 코드", Charset: "UTF-8" },
-          Body: {
-            Text: {
-              Data: `AbleLink 이메일 인증 코드: ${code}\n\n이 코드는 10분간 유효합니다.`,
-              Charset: "UTF-8",
-            },
-          },
-        },
-      }));
+      await sendSimpleEmail({
+        to: email,
+        subject: "[AbleLink] 이메일 인증 코드",
+        text: `AbleLink 이메일 인증 코드: ${code}\n\n이 코드는 10분간 유효합니다.`,
+      });
 
       return NextResponse.json({ success: true, message: "인증 코드가 발송되었습니다." });
     }

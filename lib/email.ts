@@ -1,13 +1,19 @@
-// lib/email.ts — AWS SES 이메일 발송 유틸
-import { SESClient, SendRawEmailCommand, SendEmailCommand } from "@aws-sdk/client-ses";
+// lib/email.ts — Resend 이메일 발송 유틸
+// (AWS SES 샌드박스 해제 반려로 Resend 전환. 함수 시그니처는 동일 → 호출부 무변경)
+//
+// 필요 환경변수:
+//   RESEND_API_KEY    — Resend 대시보드에서 발급 (필수)
+//   RESEND_FROM_EMAIL — 기본 발신자, 예: "AbleLink <noreply@able-link.co.kr>"
+//                       (Resend에서 도메인 인증 완료 후 사용 가능)
+import { Resend } from "resend";
 
-const ses = new SESClient({
-  region: process.env.AWS_SES_REGION || process.env.AWS_REGION || "ap-northeast-2",
-  credentials: {
-    accessKeyId:     process.env.AWS_SES_ACCESS_KEY     || process.env.AWS_ACCESS_KEY_ID     || "",
-    secretAccessKey: process.env.AWS_SES_SECRET_KEY     || process.env.AWS_SECRET_ACCESS_KEY || "",
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY || "");
+
+const DEFAULT_FROM =
+  process.env.RESEND_FROM_EMAIL ||
+  process.env.EMAIL_FROM ||
+  process.env.SES_FROM_EMAIL ||
+  "AbleLink <noreply@able-link.co.kr>";
 
 export async function sendEmailWithPdf(opts: {
   from: string;
@@ -17,34 +23,16 @@ export async function sendEmailWithPdf(opts: {
   pdfBuffer: Buffer;
   fileName: string;
 }) {
-  const boundary = `----=_Part_${Date.now()}`;
-  const b64 = opts.pdfBuffer.toString("base64");
-  const raw = [
-    `From: ${opts.from}`,
-    `To: ${opts.to}`,
-    `Subject: =?UTF-8?B?${Buffer.from(opts.subject).toString("base64")}?=`,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/mixed; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: base64",
-    "",
-    Buffer.from(opts.body).toString("base64"),
-    "",
-    `--${boundary}`,
-    `Content-Type: application/pdf; name="${opts.fileName}"`,
-    "Content-Transfer-Encoding: base64",
-    `Content-Disposition: attachment; filename="${opts.fileName}"`,
-    "",
-    b64,
-    "",
-    `--${boundary}--`,
-  ].join("\r\n");
-
-  await ses.send(
-    new SendRawEmailCommand({ RawMessage: { Data: Buffer.from(raw) } })
-  );
+  const { error } = await resend.emails.send({
+    from: opts.from || DEFAULT_FROM,
+    to: [opts.to],
+    subject: opts.subject,
+    text: opts.body,
+    attachments: [{ filename: opts.fileName, content: opts.pdfBuffer }],
+  });
+  if (error) {
+    throw new Error(`Resend 발송 실패: ${error.message ?? JSON.stringify(error)}`);
+  }
 }
 
 export async function sendSimpleEmail(opts: {
@@ -52,15 +40,13 @@ export async function sendSimpleEmail(opts: {
   subject: string;
   text: string;
 }) {
-  const from = process.env.SES_FROM_EMAIL || "noreply@able-link.co.kr";
-  await ses.send(
-    new SendEmailCommand({
-      Source: from,
-      Destination: { ToAddresses: [opts.to] },
-      Message: {
-        Subject: { Data: opts.subject, Charset: "UTF-8" },
-        Body:    { Text: { Data: opts.text, Charset: "UTF-8" } },
-      },
-    })
-  );
+  const { error } = await resend.emails.send({
+    from: DEFAULT_FROM,
+    to: [opts.to],
+    subject: opts.subject,
+    text: opts.text,
+  });
+  if (error) {
+    throw new Error(`Resend 발송 실패: ${error.message ?? JSON.stringify(error)}`);
+  }
 }
