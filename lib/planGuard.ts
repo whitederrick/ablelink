@@ -29,10 +29,23 @@ const STANDARD_FEATURES = new Set<PremiumFeature>([
 
 export interface PlanCheckResult {
   allowed: boolean;
-  reason?: "NO_AGENCY" | "FREE_PLAN" | "TRIAL_EXPIRED" | "PLAN_TOO_LOW" | "QUOTA_EXCEEDED";
+  reason?:
+    | "NO_AGENCY"
+    | "CONTRACT_PENDING"      // 계약서 미서명 (서명하면 사용 가능)
+    | "CONTRACT_NOT_STARTED"  // 계약 시작 전
+    | "CONTRACT_EXPIRED"      // 계약 종료 (유예 초과)
+    | "FREE_PLAN"
+    | "TRIAL_EXPIRED"
+    | "PLAN_TOO_LOW"
+    | "QUOTA_EXCEEDED";
   planType?: string;
   trialEndsAt?: Date | null;
   message?: string;
+}
+
+function fmtDate(d: Date): string {
+  const k = new Date(d.getTime() + 9 * 3600 * 1000);
+  return `${k.getUTCFullYear()}.${String(k.getUTCMonth() + 1).padStart(2, "0")}.${String(k.getUTCDate()).padStart(2, "0")}`;
 }
 
 function isStandardFeature(f: PremiumFeature): boolean {
@@ -84,15 +97,43 @@ export async function checkPlanAccess(
     orderBy: { contractEnd: "desc" },
   });
 
-  if (!contract?.agency) {
-    return {
-      allowed: false,
-      reason: "NO_AGENCY",
-      message: "유효한 근로계약(에이전시 구독)이 없습니다. 기본 기능만 사용할 수 있습니다.",
-    };
+  if (contract?.agency) {
+    return _checkAgency(contract.agency, feature);
   }
 
-  return _checkAgency(contract.agency, feature);
+  // (3) 유효 계약이 없을 때 — 상황별 자연스러운 안내 메시지
+  const latest = await prisma.employmentContract.findFirst({
+    where: { workerId, status: { in: ["PENDING", "SIGNED", "COMPLETED"] } },
+    orderBy: { createdAt: "desc" },
+    select: { status: true, contractStart: true, contractEnd: true },
+  });
+
+  if (latest?.status === "PENDING") {
+    return {
+      allowed: false,
+      reason: "CONTRACT_PENDING",
+      message: "근로계약서에 서명하면 이 기능을 사용할 수 있어요.",
+    };
+  }
+  if (latest && (latest.status === "SIGNED" || latest.status === "COMPLETED")) {
+    if (latest.contractStart > now) {
+      return {
+        allowed: false,
+        reason: "CONTRACT_NOT_STARTED",
+        message: `근로계약 시작일(${fmtDate(latest.contractStart)})부터 이 기능을 사용할 수 있어요.`,
+      };
+    }
+    return {
+      allowed: false,
+      reason: "CONTRACT_EXPIRED",
+      message: "근로계약 기간이 종료되어 유료 기능을 사용할 수 없어요. 기본 기능은 그대로 사용할 수 있어요.",
+    };
+  }
+  return {
+    allowed: false,
+    reason: "NO_AGENCY",
+    message: "아직 연결된 에이전시 근로계약이 없어요. 출퇴근·일지 등 기본 기능은 그대로 사용할 수 있어요.",
+  };
 }
 
 // ─── Admin 측: agencyId 기준 ─────────────────────────────────────
