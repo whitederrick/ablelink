@@ -1021,7 +1021,8 @@ assert "업로드: file 필드 누락 → 400" "400" '"success":false' "" \
   -X POST "$BASE/api/upload/business-doc" -F "dummy=1"
 
 # 허용되지 않은 형식(text/plain) → 400
-TXT_TMP=$(mktemp)
+# (상대경로 사용 — Windows curl이 mktemp의 /tmp 경로를 못 읽는 문제 회피)
+TXT_TMP="./_uptest_$$.txt"
 echo "not an image" > "$TXT_TMP"
 assert "업로드: 허용되지 않은 형식 → 400" "400" '"success":false' "" \
   -X POST "$BASE/api/upload/business-doc" -F "file=@$TXT_TMP;type=text/plain;filename=test.txt"
