@@ -66,6 +66,10 @@ export async function POST(request: NextRequest) {
     if (!audioBlob || audioBlob.size === 0) {
       return NextResponse.json({ success: false, message: "음성 파일이 없습니다." }, { status: 400 });
     }
+    const MAX_AUDIO_BYTES = 20 * 1024 * 1024; // 20MB (Groq Whisper 상한 25MB 내, 비용 남용 방어)
+    if (audioBlob.size > MAX_AUDIO_BYTES) {
+      return NextResponse.json({ success: false, message: "음성 파일이 너무 큽니다. (최대 20MB)" }, { status: 413 });
+    }
     if (!dateFrom || !dateTo) {
       return NextResponse.json({ success: false, message: "날짜 범위를 선택해주세요." }, { status: 400 });
     }

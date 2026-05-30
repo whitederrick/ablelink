@@ -87,6 +87,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[admin/assignments/[id]]", e);
-    return NextResponse.json({ success: false, message: e?.message ?? "UNKNOWN" }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

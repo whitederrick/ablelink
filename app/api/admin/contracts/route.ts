@@ -73,7 +73,10 @@ export async function GET(req: NextRequest) {
     });
   } catch (e: any) {
     if (e instanceof Response) return e;
-    return NextResponse.json({ success: false, message: e?.message ?? "UNKNOWN" }, { status: errToStatus(e?.message) });
+    const msg = e?.message ?? "UNKNOWN";
+    const status = errToStatus(msg);
+    if (status === 500) console.error("[contracts GET]", e);
+    return NextResponse.json({ success: false, message: status === 500 ? "서버 오류" : msg }, { status });
   }
 }
 
@@ -241,8 +244,10 @@ export async function POST(req: NextRequest) {
     });
   } catch (e: any) {
     if (e instanceof Response) return e;
-    console.error("[contracts POST]", e);
-    return NextResponse.json({ success: false, message: e?.message ?? "UNKNOWN" }, { status: errToStatus(e?.message) });
+    const msg = e?.message ?? "UNKNOWN";
+    const status = errToStatus(msg);
+    if (status === 500) console.error("[contracts POST]", e);
+    return NextResponse.json({ success: false, message: status === 500 ? "서버 오류" : msg }, { status });
   }
 }
 

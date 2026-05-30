@@ -32,7 +32,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: true, user });
   } catch (e: any) {
     if (e instanceof Response) return e;
-    return NextResponse.json({ success: false, message: e?.message ?? "UNKNOWN" }, { status: 500 });
+    console.error("[onboarding GET]", e);
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }
 
@@ -178,6 +179,6 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[onboarding POST]", e);
-    return NextResponse.json({ success: false, message: e?.message ?? "UNKNOWN" }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

@@ -66,8 +66,16 @@ export async function POST(request: NextRequest) {
         password:       anonymousId,
         status:         "RESIGNED",
         signatureUrl:   null,
+        // 본인인증·온보딩 잔여값 제거
+        ciKey:          null,   // 실명 연계 식별자 — 탈퇴 시 반드시 파기
+        pendingLoginId: null,   // 변경 대기 중이던 이메일
         verifyCode:     null,
         verifyCodeExpiresAt: null,
+        // 거주지·자기소개 등 매칭용 PII 제거
+        residenceAddress: null,
+        residenceLat:     null,
+        residenceLon:     null,
+        bio:              null,
         consentTermsAt:   null,
         consentPrivacyAt:  null,
         consentLocationAt: null,

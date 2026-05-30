@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { readManagerSessionFromRequest } from "@/lib/managerCookies";
 import { readAdminSessionFromRequest } from "@/lib/adminCookies";
 import { parseBigInt } from "@/lib/adminScope";
+import { prisma } from "@/lib/prisma";
 
 export type ManagerScope = {
   managerId: bigint;  // Manager.id
@@ -26,6 +27,14 @@ export async function requireManagerSession(req: Request): Promise<ManagerScope>
 
   if (!managerId || !agencyId) throw jsonError(401, "UNAUTHORIZED");
 
+  // 토큰이 유효해도 계정 비활성/소속변경 시 무효화 (Admin과 동일하게 매 요청 DB 재검증)
+  const manager = await prisma.manager.findUnique({
+    where: { id: managerId },
+    select: { isActive: true, agencyId: true },
+  });
+  if (!manager || !manager.isActive) throw jsonError(401, "ACCOUNT_DISABLED");
+  if (manager.agencyId !== agencyId) throw jsonError(401, "UNAUTHORIZED");
+
   return { managerId, agencyId, loginId: session.loginId };
 }
 
@@ -43,13 +52,23 @@ export async function requireAdminOrManagerSession(req: Request): Promise<DualSe
   if (mgr) {
     const managerId = parseBigInt(mgr.sub);
     const agencyId  = parseBigInt(mgr.agencyId);
-    if (managerId && agencyId)
-      return { kind: "manager", managerId, agencyId, loginId: mgr.loginId };
+    if (managerId && agencyId) {
+      const manager = await prisma.manager.findUnique({
+        where: { id: managerId },
+        select: { isActive: true, agencyId: true },
+      });
+      if (manager && manager.isActive && manager.agencyId === agencyId)
+        return { kind: "manager", managerId, agencyId, loginId: mgr.loginId };
+    }
   }
 
   if (adm) {
     const adminId = parseBigInt(adm.sub);
-    if (adminId) return { kind: "admin", adminId, loginId: String(adm.loginId) };
+    if (adminId) {
+      const admin = await prisma.admin.findUnique({ where: { id: adminId }, select: { isActive: true } });
+      if (admin && admin.isActive)
+        return { kind: "admin", adminId, loginId: String(adm.loginId) };
+    }
   }
 
   throw jsonError(401, "UNAUTHORIZED");

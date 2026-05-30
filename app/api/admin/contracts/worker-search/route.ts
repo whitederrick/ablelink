@@ -64,8 +64,9 @@ export async function GET(req: NextRequest) {
     });
   } catch (e: any) {
     if (e instanceof Response) return e;
+    console.error("[contracts/worker-search]", e);
     return NextResponse.json(
-      { success: false, message: e?.message ?? "UNKNOWN" },
+      { success: false, message: "서버 오류" },
       { status: 500 }
     );
   }

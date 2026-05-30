@@ -2,6 +2,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 export const WORKER_COOKIE = "ablelink_worker_session";
 const MAX_AGE = 60 * 60 * 24 * 7;
@@ -43,16 +44,26 @@ export async function verifyWorkerToken(token: string): Promise<WorkerPayload | 
   }
 }
 
+// 토큰이 유효해도 계정이 비활성/탈퇴(status !== ACTIVE)면 세션 무효화 (Admin과 동일하게 매 요청 DB 재검증)
+async function ensureWorkerActive(payload: WorkerPayload | null): Promise<WorkerPayload | null> {
+  if (!payload) return null;
+  let id: bigint;
+  try { id = BigInt(payload.workerId); } catch { return null; }
+  const worker = await prisma.worker.findUnique({ where: { id }, select: { status: true } });
+  if (!worker || worker.status !== "ACTIVE") return null;
+  return payload;
+}
+
 export async function getWorkerSession(): Promise<WorkerPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(WORKER_COOKIE)?.value;
   if (!token) return null;
-  return verifyWorkerToken(token);
+  return ensureWorkerActive(await verifyWorkerToken(token));
 }
 
 // NextRequest에서 쿠키를 읽는 버전 (API Route에서 사용)
 export async function getWorkerSessionFromReq(req: NextRequest): Promise<WorkerPayload | null> {
   const token = req.cookies.get(WORKER_COOKIE)?.value;
   if (!token) return null;
-  return verifyWorkerToken(token);
+  return ensureWorkerActive(await verifyWorkerToken(token));
 }
