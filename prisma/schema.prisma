@@ -87,6 +87,9 @@ model Worker {
   experiences WorkerExperience[]
   reviews     WorkerReview[]     @relation("WorkerReviewTarget")
 
+  // ✅ 직무지도 매칭 마켓플레이스 (확대 서비스) — 공급측 신청
+  recruitApplications RecruitApplication[]
+
   @@map("workers")
 }
 
@@ -434,6 +437,7 @@ model Agency {
   managerSignupRequests ManagerSignupRequest[]
   managerInvites        ManagerInvite[]
   workerReviews         WorkerReview[]
+  recruitPosts          RecruitPost[]
 
   @@index([planType])
   @@map("agencies")
@@ -1562,4 +1566,79 @@ model WorkerReview {
   @@index([workerId])
   @@index([agencyId])
   @@map("worker_reviews")
+}
+
+// ======================================================
+// 직무지도 매칭 마켓플레이스 (확대 서비스, 느슨 결합 모듈)
+//  - 수요측: 에이전시(Manager) 또는 시스템운영자(Admin=공단/플랫폼)가 모집 공고 등록
+//  - 공급측: Worker(에이전시 없는 user 포함)가 조회·신청
+//  - 매칭 성사 시 향후 SiteAssignment/계약으로 연계 (현재 서비스 편입)
+// ======================================================
+
+enum RecruitStatus {
+  OPEN   // 모집중
+  CLOSED // 마감
+}
+
+enum RecruitApplicationStatus {
+  PENDING   // 신청(대기)
+  ACCEPTED  // 수락(매칭)
+  REJECTED  // 반려
+  WITHDRAWN // 신청 취소
+}
+
+model RecruitPost {
+  id            BigInt        @id @default(autoincrement())
+  title         String                                  // 공고 제목
+  companyName   String        @map("company_name")      // 사업체명
+  profession    Profession    @default(JOB_COACH)        // 직종(직무지도원/요양보호사/활동지원사)
+  taskName      String?       @map("task_name")         // 직무지도 과제(사업명)
+  address       String                                  // 위치(주소)
+  detailAddress String?       @map("detail_address")
+  lat           Decimal?
+  lon           Decimal?
+  region        String?                                 // 검색용 지역 라벨(시/군/구)
+  workHours     String?       @map("work_hours")        // 근무시간
+  workDays      String?       @map("work_days")         // 근무요일
+  payInfo       String?       @map("pay_info")          // 급여/수당 안내
+  headcount     Int           @default(1)               // 모집 인원
+  description   String?                                 // 상세 설명
+  status        RecruitStatus @default(OPEN)
+
+  // 등록 주체 (매니저=에이전시 / 운영자=공단·플랫폼)
+  agencyId           BigInt?  @map("agency_id")
+  createdByManagerId BigInt?  @map("created_by_manager_id")
+  createdByAdminId   BigInt?  @map("created_by_admin_id")
+  contactName        String?  @map("contact_name")
+  contactPhone       String?  @map("contact_phone")
+
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  agency        Agency?       @relation(fields: [agencyId], references: [id])
+  applications  RecruitApplication[]
+
+  @@index([status, profession])
+  @@index([agencyId])
+  @@index([createdByManagerId])
+  @@map("recruit_posts")
+}
+
+model RecruitApplication {
+  id            BigInt                   @id @default(autoincrement())
+  recruitPostId BigInt                   @map("recruit_post_id")
+  workerId      BigInt                   @map("worker_id")
+  message       String?                                          // 신청 메시지(자기소개 등)
+  status        RecruitApplicationStatus @default(PENDING)
+  decidedAt     DateTime?                @map("decided_at")       // 수락/반려 시각
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  updatedAt     DateTime                 @updatedAt @map("updated_at")
+
+  post          RecruitPost @relation(fields: [recruitPostId], references: [id], onDelete: Cascade)
+  worker        Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([recruitPostId, workerId])
+  @@index([workerId, status])
+  @@index([recruitPostId, status])
+  @@map("recruit_applications")
 }
