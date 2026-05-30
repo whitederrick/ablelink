@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────
-# AbleLink API 테스트 스크립트 v4
+# AbleLink API 테스트 스크립트 v5
 # 실행: bash docs/run-tests.sh
 # 사전 조건: npx tsx prisma/seed.ts 실행 후 npm run dev 실행
 # ──────────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ extract() { echo "$1" | grep -o "\"$2\":\"[^\"]*\"" | head -1 | cut -d'"' -f4; }
 extract_num() { echo "$1" | grep -o "\"$2\":[0-9]*" | head -1 | cut -d':' -f2; }
 
 # ── 서버 확인 ──────────────────────────────────────────────────
-echo -e "${BOLD}AbleLink API 테스트 v4${NC}"
+echo -e "${BOLD}AbleLink API 테스트 v5${NC}"
 echo "서버 확인 중..."
 if ! curl -s -o /dev/null -w "%{http_code}" "$BASE/worker/login" | grep -q "200"; then
   echo -e "${RED}서버 미실행. npm run dev 를 먼저 실행하세요.${NC}"; exit 1
@@ -189,7 +189,8 @@ for ep in \
   "/api/worker/logs/list" \
   "/api/worker/holidays" \
   "/api/worker/holiday-requests" \
-  "/api/worker/notification"; do
+  "/api/worker/notification" \
+  "/api/manager/notices"; do
   assert_not "$ep 미인증 → 401 (500 아님)" "401" '"message":"서버 오류"' "" "$BASE$ep"
 done
 
@@ -350,6 +351,9 @@ assert "system/agencies/9999/detail → 404" "404" '"success":false' "$ADMIN_COO
 section "9. 에이전시 관리자 핵심 API"
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 assert "manager dashboard" "200" '"success":true' "$MANAGER_COOKIE" "$BASE/api/admin/dashboard"
+assert "manager me → unreadNoticeCount 포함" "200" '"unreadNoticeCount"' "$MANAGER_COOKIE" "$BASE/api/manager/auth/me"
+assert "manager notices 목록 (GET)" "200" '"notices"' "$MANAGER_COOKIE" "$BASE/api/manager/notices"
+assert "manager notices → unreadCount 포함" "200" '"unreadCount"' "$MANAGER_COOKIE" "$BASE/api/manager/notices"
 assert "manager workers" "200" '"data"' "$MANAGER_COOKIE" "$BASE/api/admin/workers"
 assert "manager sites" "200" '"items"' "$MANAGER_COOKIE" "$BASE/api/admin/sites"
 assert "manager assignments" "200" '"success":true' "$MANAGER_COOKIE" "$BASE/api/admin/assignments"
@@ -596,6 +600,32 @@ if [ -n "$TICKET_ID" ]; then
   else
     fail "회신 후 상태 REPLIED" '"status":"REPLIED"' "$TICKET_AFTER"
   fi
+
+  # 회신 후 매니저 알림 자동 생성 확인
+  NOTICE_AFTER_REPLY=$(curl -s -b "$MANAGER_COOKIE" "$BASE/api/manager/notices")
+  if echo "$NOTICE_AFTER_REPLY" | grep -q '"unreadCount":0\b' || echo "$NOTICE_AFTER_REPLY" | grep -qE '"unreadCount":[1-9]'; then
+    pass "운영자 회신 후 매니저 알림 조회 정상"
+  else
+    fail "운영자 회신 후 매니저 알림 조회" '"unreadCount" 포함' "$NOTICE_AFTER_REPLY"
+  fi
+
+  # 매니저 알림 전체 읽음 처리
+  assert "매니저 알림 전체 읽음 처리" "200" '"success":true' "$MANAGER_COOKIE" \
+    -X POST "$BASE/api/manager/notices" -H "Content-Type: application/json" -d '{"all":true}'
+
+  # 읽음 처리 후 unreadCount = 0 확인
+  NOTICES_AFTER_READ=$(curl -s -b "$MANAGER_COOKIE" "$BASE/api/manager/notices")
+  UNREAD_AFTER=$(echo "$NOTICES_AFTER_READ" | grep -o '"unreadCount":[0-9]*' | cut -d: -f2)
+  if [ "${UNREAD_AFTER:-0}" = "0" ]; then
+    pass "매니저 알림 읽음 처리 후 unreadCount=0"
+  else
+    fail "매니저 알림 읽음 처리" "unreadCount=0" "unreadCount=${UNREAD_AFTER}"
+  fi
+
+  # 없는 noticeId → 404
+  assert "매니저 알림 없는 ID → 404" "404" '"success":false' "$MANAGER_COOKIE" \
+    -X POST "$BASE/api/manager/notices" -H "Content-Type: application/json" \
+    -d '{"noticeId":"999999999"}'
 
   assert "에이전시: 티켓 종료" "200" '"success":true' "$MANAGER_COOKIE" \
     -X PATCH "$BASE/api/admin/support/$TICKET_ID" -H "Content-Type: application/json" \
@@ -917,6 +947,67 @@ if [ -n "$MGR_INVITE_CODE" ]; then
   rm -f "$MGR_INVITE_COOKIE"
 else
   skip "초대 코드 없음 — 초대 가입 시나리오 스킵"
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+section "23. Admin 비활성화 시 기존 세션 무효화"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# 1) 임시 admin 계정 생성
+TS23=$(date +%s)
+TEMP_ADMIN_ID_STR="tmpAdmin${TS23}"
+CREATE_ADMIN_RESP=$(curl -s -b "$ADMIN_COOKIE" \
+  -X POST "$BASE/api/admin/system/admins" \
+  -H "Content-Type: application/json" \
+  -d "{\"loginId\":\"${TEMP_ADMIN_ID_STR}\",\"password\":\"temp1234!\",\"displayName\":\"임시운영자\"}")
+
+if echo "$CREATE_ADMIN_RESP" | grep -q '"success":true'; then
+  pass "임시 Admin 계정 생성"
+  TEMP_ADMIN_DB_ID=$(echo "$CREATE_ADMIN_RESP" | grep -o '"id":"[0-9]*"' | head -1 | grep -o '[0-9]*')
+  [ -z "$TEMP_ADMIN_DB_ID" ] && TEMP_ADMIN_DB_ID=$(echo "$CREATE_ADMIN_RESP" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+else
+  fail "임시 Admin 계정 생성" "success:true" "$CREATE_ADMIN_RESP"
+  TEMP_ADMIN_DB_ID=""
+fi
+
+if [ -n "$TEMP_ADMIN_DB_ID" ]; then
+  # 2) 임시 admin 로그인 → 세션 쿠키 획득
+  TEMP_ADMIN_COOKIE=$(mktemp)
+  curl -s -c "$TEMP_ADMIN_COOKIE" \
+    -X POST "$BASE/api/admin/auth/login" \
+    -H "Content-Type: application/json" \
+    -d "{\"loginId\":\"${TEMP_ADMIN_ID_STR}\",\"password\":\"temp1234!\"}" > /dev/null
+
+  # 로그인 세션으로 API 접근 → 200 확인
+  BEFORE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -b "$TEMP_ADMIN_COOKIE" "$BASE/api/admin/system/admins")
+  if [ "$BEFORE_CODE" = "200" ]; then
+    pass "임시 Admin 세션 정상 작동 확인"
+  else
+    fail "임시 Admin 세션 정상 작동" "200" "$BEFORE_CODE"
+  fi
+
+  # 3) 기존 운영자가 임시 admin 비활성화 (toggle-active)
+  TOGGLE_RESP=$(curl -s -b "$ADMIN_COOKIE" \
+    -X PATCH "$BASE/api/admin/system/admins/$TEMP_ADMIN_DB_ID" \
+    -H "Content-Type: application/json" \
+    -d '{"action":"toggle-active"}')
+  if echo "$TOGGLE_RESP" | grep -q '"success":true'; then
+    pass "임시 Admin 계정 비활성화"
+  else
+    fail "임시 Admin 계정 비활성화" "success:true" "$TOGGLE_RESP"
+  fi
+
+  # 4) 비활성화 후 기존 세션으로 API 접근 → 401 확인
+  AFTER_CODE=$(curl -s -o /dev/null -w "%{http_code}" -b "$TEMP_ADMIN_COOKIE" "$BASE/api/admin/system/admins")
+  if [ "$AFTER_CODE" = "401" ]; then
+    pass "비활성화 후 기존 세션 → 401 무효화 확인"
+  else
+    fail "비활성화 후 세션 무효화" "401" "$AFTER_CODE"
+  fi
+
+  rm -f "$TEMP_ADMIN_COOKIE"
+else
+  skip "임시 Admin ID 없음 — 비활성화 세션 무효화 테스트 스킵"
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
