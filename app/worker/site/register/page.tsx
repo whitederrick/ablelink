@@ -105,7 +105,7 @@ function SiteRegisterPageInner() {
     try {
       const res = await fetch(`/api/geo/search-address?q=${encodeURIComponent(addrQuery)}`);
       const data = await res.json();
-      setAddrResults(data.results || []);
+      setAddrResults(data.documents || []);
     } catch {
       alert("주소 검색에 실패했습니다.");
     } finally {

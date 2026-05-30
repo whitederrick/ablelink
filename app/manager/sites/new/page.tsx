@@ -100,7 +100,7 @@ export default function AdminSiteNewPage() {
       const d = await r.json();
       const items: AddrItem[] =
         d?.items?.map((x: any) => ({ addressName: x.addressName ?? x.address_name, x: x.x, y: x.y })) ||
-        d?.documents?.map((x: any) => ({ addressName: x.address_name, x: x.x, y: x.y })) ||
+        d?.documents?.map((x: any) => ({ addressName: x.addressName ?? x.address_name, x: x.x, y: x.y })) ||
         [];
       setAddrItems(items);
       if (items.length === 0) alert("주소 검색 결과가 없습니다.");
