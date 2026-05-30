@@ -222,6 +222,7 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
   const [clockOutAlert, setClockOutAlert] = useState(3);
   const [showAlarmSettings, setShowAlarmSettings] = useState(false);
   const alarmFiredRef = useRef<Set<string>>(new Set());
+  const [premium, setPremium] = useState<{ access: boolean; reason: string | null; message: string | null }>({ access: true, reason: null, message: null });
   const [unreadNotices,  setUnreadNotices]  = useState(0);
   const [showNotices,    setShowNotices]    = useState(false);
   const [notices,        setNotices]        = useState<{id:string;title:string;body:string;type:string;yearMonth:string|null;read:boolean;createdAt:string}[]>([]);
@@ -233,6 +234,22 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
         if (d.success && d.data) {
           setClockInAlert(d.data.clockInAlertMinutes ?? 3);
           setClockOutAlert(d.data.clockOutAlertMinutes ?? 3);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // 계약 기반 유료기능 접근 상태 (배너 안내 통일)
+  useEffect(() => {
+    fetch("/api/worker/site/current")
+      .then(r => r.json())
+      .then(d => {
+        if (d?.success && d.data) {
+          setPremium({
+            access: d.data.premiumAccess ?? false,
+            reason: d.data.premiumReason ?? null,
+            message: d.data.premiumMessage ?? null,
+          });
         }
       })
       .catch(() => {});
@@ -874,21 +891,25 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
           </div>
         )}
 
-        {/* PREMIUM 배너 */}
-        {homeData?.siteName && (
-          <button
-            onClick={() => router.push("/worker/subscribe")}
-            className="flex w-full items-center gap-3 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3.5 text-left transition active:scale-[0.98]"
-          >
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-sky-100">
-              <Sparkles className="h-5 w-5 text-sky-500" aria-hidden="true" />
+        {/* 유료기능 안내 배너 — 계약 기반 접근이 막혔을 때만, 상황별 CTA 문구 (접근 가능하면 숨김) */}
+        {homeData?.siteName && !premium.access && (
+          <div className="flex w-full items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3.5 text-left">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-amber-100">
+              <Sparkles className="h-5 w-5 text-amber-500" aria-hidden="true" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-black text-sky-900">AI 기능 &amp; PDF 자동 생성</p>
-              <p className="text-xs font-semibold text-sky-600">음성 일지 작성, PDF 자동 발송 등 PREMIUM 기능</p>
+              <p className="text-sm font-black text-amber-900">
+                {premium.reason === "CONTRACT_PENDING"
+                  ? "근로계약서 서명이 필요해요"
+                  : premium.reason === "CONTRACT_EXPIRED"
+                  ? "근로계약 기간이 종료되었어요"
+                  : "AI · PDF 등 유료 기능 안내"}
+              </p>
+              <p className="text-xs font-semibold leading-relaxed text-amber-700">
+                {premium.message || "근로계약 기간 중에 AI 일지·PDF·전자서명을 사용할 수 있어요."}
+              </p>
             </div>
-            <ChevronRight className="h-4 w-4 flex-shrink-0 text-sky-400" aria-hidden="true" />
-          </button>
+          </div>
         )}
       </div>
 
