@@ -1512,6 +1512,13 @@ enum Profession {
   ACTIVITY_ASSISTANT // 장애인활동보호사
 }
 
+// 직종 자격 증빙 검증 상태
+enum ProfessionVerifyStatus {
+  PENDING  // 검증 대기 (가입/등록 직후)
+  VERIFIED // 운영자 승인
+  REJECTED // 반려
+}
+
 // 직무지도원/인력이 보유한 직종 자격 (다중 자격 지원)
 model WorkerProfession {
   id              BigInt     @id @default(autoincrement())
@@ -1522,12 +1529,20 @@ model WorkerProfession {
   experienceYears Int        @default(0) @map("experience_years")
   isPrimary       Boolean    @default(false) @map("is_primary") // 대표 직종
   isActive        Boolean    @default(true) @map("is_active")
+
+  // 자격 증빙·검증 (마켓플레이스 직종 증명형 가입/등록)
+  certDocUrl        String?                @map("cert_doc_url") // 증빙 파일 URL
+  verifyStatus      ProfessionVerifyStatus @default(PENDING) @map("verify_status")
+  verifiedAt        DateTime?              @map("verified_at")
+  verifiedByAdminId BigInt?                @map("verified_by_admin_id")
+
   createdAt       DateTime   @default(now()) @map("created_at")
 
   worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@unique([workerId, profession])
   @@index([profession, isActive])
+  @@index([verifyStatus])
   @@map("worker_professions")
 }
 
