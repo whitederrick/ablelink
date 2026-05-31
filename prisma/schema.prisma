@@ -87,8 +87,10 @@ model Worker {
   experiences WorkerExperience[]
   reviews     WorkerReview[]     @relation("WorkerReviewTarget")
 
-  // ✅ 직무지도 매칭 마켓플레이스 (확대 서비스) — 공급측 신청
-  recruitApplications RecruitApplication[]
+  // ✅ 직무지도 매칭 마켓플레이스 (확대 서비스)
+  openToOffers Boolean @default(false) @map("open_to_offers") // 구직중(에이전시 컨택 허용)
+  recruitApplications RecruitApplication[] // 공급측 신청(방향 A)
+  talentOffers        TalentOffer[]        // 수신한 제안(방향 B)
 
   @@map("workers")
 }
@@ -438,6 +440,7 @@ model Agency {
   managerInvites        ManagerInvite[]
   workerReviews         WorkerReview[]
   recruitPosts          RecruitPost[]
+  talentOffers          TalentOffer[]
 
   @@index([planType])
   @@map("agencies")
@@ -1656,4 +1659,34 @@ model RecruitApplication {
   @@index([workerId, status])
   @@index([recruitPostId, status])
   @@map("recruit_applications")
+}
+
+// 방향 B: 에이전시/공단이 후보자(이력서 공개)에게 보내는 제안(컨택)
+enum TalentOfferStatus {
+  PENDING  // 제안 보냄(대기)
+  ACCEPTED // 후보자 수락
+  DECLINED // 후보자 거절
+}
+
+model TalentOffer {
+  id                 BigInt            @id @default(autoincrement())
+  workerId           BigInt            @map("worker_id")
+  agencyId           BigInt?           @map("agency_id")
+  createdByManagerId BigInt?           @map("created_by_manager_id")
+  createdByAdminId   BigInt?           @map("created_by_admin_id")
+  profession         Profession?                                  // 제안 직종(선택)
+  siteName           String?           @map("site_name")          // 제안 현장/사업체(자유 텍스트)
+  message            String?
+  status             TalentOfferStatus @default(PENDING)
+  decidedAt          DateTime?         @map("decided_at")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  worker Worker  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  agency Agency? @relation(fields: [agencyId], references: [id])
+
+  @@index([workerId, status])
+  @@index([agencyId, status])
+  @@index([createdByManagerId])
+  @@map("talent_offers")
 }
