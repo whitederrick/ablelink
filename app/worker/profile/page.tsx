@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, Lock, Mail, Phone, User } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BadgeCheck, ChevronRight, Lock, Mail, Phone, User } from "lucide-react";
 
 const INPUT_CLS = "w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100 disabled:opacity-60";
 
@@ -208,6 +208,20 @@ export default function WorkerProfilePage() {
               inputMode="numeric"
               className={INPUT_CLS} />
           </div>
+
+          {/* 보유 자격 관리 */}
+          <button
+            type="button"
+            onClick={() => router.push("/worker/profile/professions")}
+            className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left transition active:scale-[0.99]"
+          >
+            <BadgeCheck className="h-5 w-5 flex-shrink-0 text-sky-500" />
+            <div className="flex-1">
+              <p className="text-sm font-black text-slate-800">보유 자격 관리</p>
+              <p className="text-xs font-semibold text-slate-400">직무지도원·요양보호사·활동지원사 자격 등록·증명</p>
+            </div>
+            <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
+          </button>
 
           {/* 비밀번호 변경 */}
           <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
