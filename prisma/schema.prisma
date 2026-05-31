@@ -1573,9 +1573,11 @@ model WorkerReview {
   workerId  BigInt   @map("worker_id")
   agencyId  BigInt?  @map("agency_id") // 평가 주체 에이전시
   managerId BigInt?  @map("manager_id") // 평가 작성 관리자
+  createdByAdminId BigInt? @map("created_by_admin_id") // 평가 주체 운영자(공단/플랫폼)
   rating    Int // 1~5
   comment   String?
   createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   worker  Worker   @relation("WorkerReviewTarget", fields: [workerId], references: [id], onDelete: Cascade)
   agency  Agency?  @relation(fields: [agencyId], references: [id])

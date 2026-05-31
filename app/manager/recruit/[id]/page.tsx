@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { T } from "../../_styles";
+import WorkerReviewModal from "@/components/WorkerReviewModal";
 
 const PROF_LABEL: Record<string, string> = {
   JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사",
@@ -28,6 +29,7 @@ export default function ManagerRecruitApplicantsPage() {
   const [post, setPost] = useState<PostInfo | null>(null);
   const [apps, setApps] = useState<Applicant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reviewTarget, setReviewTarget] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,12 +89,14 @@ export default function ManagerRecruitApplicantsPage() {
                     </div>
                     {a.message && <p className="mt-2 rounded-lg bg-slate-50 p-2 text-sm font-semibold text-slate-600">{a.message}</p>}
                   </div>
-                  {a.status === "PENDING" && (
+                  {a.status === "PENDING" ? (
                     <div className="flex flex-shrink-0 gap-2">
                       <button onClick={() => decide(a.id, "reject")} className={T.btnSecondary}>반려</button>
                       <button onClick={() => decide(a.id, "accept")} className={T.btnPrimary}>수락</button>
                     </div>
-                  )}
+                  ) : a.status === "ACCEPTED" ? (
+                    <button onClick={() => setReviewTarget({ id: a.worker.id, name: a.worker.name })} className={`flex-shrink-0 ${T.btnSecondary}`}>평가</button>
+                  ) : null}
                 </div>
                 <p className="mt-2 text-[11px] font-semibold text-slate-300">{a.createdAt.slice(0, 10)} 신청</p>
               </div>
@@ -100,6 +104,13 @@ export default function ManagerRecruitApplicantsPage() {
           })
         )}
       </div>
+
+      <WorkerReviewModal
+        open={!!reviewTarget}
+        workerId={reviewTarget?.id ?? ""}
+        workerName={reviewTarget?.name ?? ""}
+        onClose={(changed) => { setReviewTarget(null); if (changed) load(); }}
+      />
     </div>
   );
 }
