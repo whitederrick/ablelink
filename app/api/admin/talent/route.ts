@@ -43,7 +43,8 @@ export async function GET(req: NextRequest) {
       candidates: workers.map((w) => ({
         id: w.id.toString(),
         name: w.workerName,
-        region: w.residenceAddress ?? null,
+        // 개인정보 보호: 전체 거주지 대신 시/군/구 수준만 노출 (제안 수락 전)
+        region: w.residenceAddress ? w.residenceAddress.trim().split(/\s+/).slice(0, 2).join(" ") : null,
         bio: w.bio ?? null,
         ratingAvg: Number(w.ratingAvg),
         ratingCount: w.ratingCount,

@@ -92,6 +92,7 @@ model Worker {
   recruitApplications RecruitApplication[] // 공급측 신청(방향 A)
   talentOffers        TalentOffer[]        // 수신한 제안(방향 B)
 
+  @@index([openToOffers, status]) // 인력풀 검색(talent) 필터 가속
   @@map("workers")
 }
 

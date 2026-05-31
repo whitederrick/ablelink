@@ -79,8 +79,15 @@ export async function POST(request: NextRequest) {
         consentTermsAt:   null,
         consentPrivacyAt:  null,
         consentLocationAt: null,
+        // 마켓플레이스: 더 이상 검색·컨택 노출되지 않도록
+        openToOffers:     false,
       },
     });
+
+    // 마켓플레이스 잔여 처리: 자격 cert(준PII) 파기, 진행중 신청/제안 정리
+    await prisma.workerProfession.updateMany({ where: { workerId: user.id }, data: { certNumber: null, certDocUrl: null } });
+    await prisma.recruitApplication.updateMany({ where: { workerId: user.id, status: "PENDING" }, data: { status: "WITHDRAWN" } });
+    await prisma.talentOffer.updateMany({ where: { workerId: user.id, status: "PENDING" }, data: { status: "DECLINED", decidedAt: new Date() } });
 
     const res = NextResponse.json({ success: true });
     res.cookies.set(WORKER_COOKIE, "", {
