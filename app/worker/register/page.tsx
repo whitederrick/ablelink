@@ -51,9 +51,7 @@ function SiteRegisterPageInner() {
   const [address, setAddress] = useState("");
   const [gps, setGps] = useState<GpsCoords | null>(null);
   const [mapPick, setMapPick] = useState<{ lat: number; lon: number; address: string } | null>(null);
-  const [currentGps, setCurrentGps] = useState<GpsCoords | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [showGpsMap, setShowGpsMap] = useState(false);
 
   const [agencyName, setAgencyName] = useState("");
   const [managerName, setManagerName] = useState("");
@@ -80,7 +78,8 @@ function SiteRegisterPageInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const getMyGps = useCallback(async () => {
+  // 현재 위치 중심으로 지도를 열어 핀으로 사이트 위치를 확정한다 (현장에 있을 때 편리)
+  const openMapAtCurrent = useCallback(async () => {
     setGpsLoading(true);
     try {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -88,15 +87,13 @@ function SiteRegisterPageInner() {
           enableHighAccuracy: true, timeout: 10000,
         });
       });
-      const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-      setCurrentGps(coords);
-      setShowGpsMap(true);
+      setMapPick({ lat: pos.coords.latitude, lon: pos.coords.longitude, address });
     } catch {
       alert("위치를 가져올 수 없습니다. 브라우저 위치 권한을 허용해주세요.");
     } finally {
       setGpsLoading(false);
     }
-  }, []);
+  }, [address]);
 
   async function searchAddress() {
     if (!addrQuery.trim()) return;
@@ -141,7 +138,7 @@ function SiteRegisterPageInner() {
     setError("");
     if (!companyName.trim()) { setError("사업체명을 입력해주세요."); return; }
     if (!address.trim()) { setError("주소를 입력해주세요."); return; }
-    if (!gps) { setError("위치(GPS)를 확인해주세요. 주소 검색 후 '현재 위치 확인' 버튼을 눌러주세요."); return; }
+    if (!gps) { setError("주소를 검색하거나 '현재 위치로 지도 열기'로 위치를 지도에서 확정해주세요."); return; }
     if (!managerName.trim()) { setError("담당자 이름을 입력해주세요."); return; }
     if (!managerEmail.trim()) { setError("담당자 이메일을 입력해주세요."); return; }
     if (trainees.length === 0) { setError("훈련생을 최소 1명 이상 추가해주세요."); return; }
@@ -177,8 +174,6 @@ function SiteRegisterPageInner() {
       setLoading(false);
     }
   }
-
-  const dist = gps && currentGps ? calcDistance(gps.lat, gps.lon, currentGps.lat, currentGps.lon) : null;
 
   const inputCls = "h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100 disabled:text-slate-400";
   const labelCls = "mb-2 block text-xs font-black uppercase tracking-wide text-slate-500";
@@ -227,12 +222,6 @@ function SiteRegisterPageInner() {
                       검색
                     </button>
                   </div>
-                  {gps && (
-                    <p className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-slate-400">
-                      <MapPin className="h-3 w-3" aria-hidden="true" />
-                      GPS: {gps.lat.toFixed(6)}, {gps.lon.toFixed(6)}
-                    </p>
-                  )}
                 </>
               ) : (
                 <div className="flex min-h-12 items-center rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-500">
@@ -253,46 +242,36 @@ function SiteRegisterPageInner() {
               />
             </div>
 
-            <button
-              type="button"
-              onClick={getMyGps}
-              disabled={gpsLoading}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-3 text-sm font-black text-slate-700 transition active:scale-[0.97] disabled:opacity-60"
-            >
-              <Navigation className="h-4 w-4" aria-hidden="true" />
-              {gpsLoading ? "위치 확인 중..." : "현재 위치 확인"}
-            </button>
-
-            {showGpsMap && currentGps && gps && (
-              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="mb-1.5 flex justify-between text-xs font-semibold">
-                  <span className="text-rose-500">지정 위치</span>
-                  <span className="text-slate-700">{gps.lat.toFixed(6)}, {gps.lon.toFixed(6)}</span>
+            {/* 위치: 지도 핀으로 확정된 사이트 위치를 명확히 표시 (저장되는 값) */}
+            {gps ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5">
+                <div className="flex items-center gap-1.5 text-xs font-black text-emerald-700">
+                  <MapPin className="h-3.5 w-3.5" aria-hidden="true" /> 위치 확정됨
                 </div>
-                <div className="mb-1.5 flex justify-between text-xs font-semibold">
-                  <span className="text-emerald-600">현재 위치</span>
-                  <span className="text-slate-700">{currentGps.lat.toFixed(6)}, {currentGps.lon.toFixed(6)}</span>
-                </div>
-                <div className="mb-2 flex justify-between text-xs font-semibold">
-                  <span className="text-slate-500">오차 범위</span>
-                  <span className={`font-black ${dist! > 100 ? "text-rose-500" : "text-emerald-600"}`}>{dist}m</span>
-                </div>
-                <p className="mb-3 text-[11px] font-semibold leading-relaxed text-slate-400">
-                  100m 이내이면 자동 확정, 100m 초과이면 관리자 승인이 필요합니다.
+                <p className="mt-1 text-[11px] font-semibold leading-relaxed text-slate-500">
+                  지도에서 선택한 이 위치가 저장됩니다 · {gps.lat.toFixed(6)}, {gps.lon.toFixed(6)}
                 </p>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => setShowGpsMap(false)}
-                    className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-black text-slate-600 transition active:scale-95">
-                    취소
+                {!isEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setMapPick({ lat: gps.lat, lon: gps.lon, address })}
+                    className="mt-2 text-xs font-black text-emerald-700 underline underline-offset-2 active:scale-95"
+                  >
+                    지도에서 위치 다시 선택
                   </button>
-                  <button type="button"
-                    onClick={() => { if (!gps) setGps(currentGps); setShowGpsMap(false); }}
-                    className="flex-1 rounded-xl bg-slate-950 py-2.5 text-xs font-black text-white transition active:scale-95">
-                    확인
-                  </button>
-                </div>
+                )}
               </div>
-            )}
+            ) : !isEdit ? (
+              <button
+                type="button"
+                onClick={openMapAtCurrent}
+                disabled={gpsLoading}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-3 text-sm font-black text-slate-700 transition active:scale-[0.97] disabled:opacity-60"
+              >
+                <Navigation className="h-4 w-4" aria-hidden="true" />
+                {gpsLoading ? "위치 확인 중..." : "현재 위치로 지도 열기"}
+              </button>
+            ) : null}
           </div>
 
           <div className="rounded-2xl border border-slate-100 bg-white p-4">
