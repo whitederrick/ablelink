@@ -11,6 +11,9 @@ const PROF_LABEL: Record<string, string> = {
 const APP_LABEL: Record<string, string> = {
   PENDING: "신청 완료 (검토 대기)", ACCEPTED: "수락됨 🎉", REJECTED: "반려됨", WITHDRAWN: "신청 취소됨",
 };
+const CERT_HINT: Record<string, string> = {
+  JOB_COACH: "직무지도원 양성과정 수료증 번호", CAREGIVER: "요양보호사 국가자격증 번호", ACTIVITY_ASSISTANT: "활동지원사 교육과정 수료증 번호",
+};
 
 interface Post {
   id: string; title: string; companyName: string; profession: string;
@@ -30,27 +33,35 @@ export default function RecruitDetailPage() {
   const [showApply, setShowApply] = useState(false);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [certNeeded, setCertNeeded] = useState(false);
+  const [certNumber, setCertNumber] = useState("");
+  const [experienceYears, setExperienceYears] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const r = await fetch(`/api/recruit/posts/${id}`);
       const d = await r.json();
-      if (d.success) setPost(d.post);
+      if (d.success) { setPost(d.post); setCertNeeded(!!d.certNeeded); }
     } finally { setLoading(false); }
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
 
   async function apply() {
+    if (certNeeded && !certNumber.trim()) { alert("자격 증빙(자격번호)을 입력해주세요."); return; }
     setSubmitting(true);
     try {
-      const r = await fetch("/api/recruit/apply", {
+      const r = await fetch("/api/worker/recruit/apply", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recruitPostId: id, message: message.trim() || undefined }),
+        body: JSON.stringify({
+          recruitPostId: id,
+          message: message.trim() || undefined,
+          ...(certNeeded ? { certNumber: certNumber.trim(), experienceYears: Number(experienceYears) || 0 } : {}),
+        }),
       });
       const d = await r.json();
-      if (d.success) { setShowApply(false); setMessage(""); await load(); }
+      if (d.success) { setShowApply(false); setMessage(""); setCertNumber(""); setExperienceYears(""); await load(); }
       else alert(d.message || "신청에 실패했습니다.");
     } finally { setSubmitting(false); }
   }
@@ -113,6 +124,27 @@ export default function RecruitDetailPage() {
           <div className="w-full max-w-md rounded-t-3xl bg-white p-5 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
             <p className="text-base font-black text-slate-900">직무지도 신청</p>
             <p className="mt-0.5 text-xs font-semibold text-slate-400">{post.companyName} · {post.title}</p>
+
+            {certNeeded && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs font-black text-amber-700">{PROF_LABEL[post.profession] ?? post.profession} 자격 증빙</p>
+                <p className="mb-2 text-[11px] font-semibold text-amber-600">최초 신청이라 자격 확인이 필요해요. 한번 입력하면 다음부터는 다시 묻지 않아요.</p>
+                <input
+                  value={certNumber}
+                  onChange={(e) => setCertNumber(e.target.value)}
+                  placeholder={CERT_HINT[post.profession] ?? "자격번호"}
+                  className="mb-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400"
+                />
+                <input
+                  value={experienceYears}
+                  onChange={(e) => setExperienceYears(e.target.value.replace(/\D/g, ""))}
+                  placeholder="경력 (년)"
+                  inputMode="numeric"
+                  className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400"
+                />
+              </div>
+            )}
+
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}

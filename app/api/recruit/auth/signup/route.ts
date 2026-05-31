@@ -1,7 +1,7 @@
 // app/api/recruit/auth/signup/route.ts
-// 마켓플레이스 직종 증명형 회원가입 (기존 /worker/auth/signup 과 별개)
-// 전화 OTP 인증 후, 직종(직무지도원/요양보호사/활동지원사) 선택 + 자격 정보로 가입.
-// → Worker 1건 + WorkerProfession N건(verifyStatus=PENDING, 운영자 검증 대기) 생성 후 자동 로그인.
+// 마켓플레이스 가벼운 회원가입 (기존 /worker/auth/signup 과 별개)
+// 전화 OTP 인증 + 이름/비번/약관만. 자격 증빙은 "최초 신청 시"에 받는다(저장되면 재요구 X).
+// professions는 선택(관심 직종 표기용, 미입력 가능). → Worker 생성 + 자동 로그인.
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -40,8 +40,7 @@ export async function POST(request: Request) {
       }))
       .filter((p) => PROFESSIONS.includes(p.profession as any) && !seen.has(p.profession) && seen.add(p.profession));
 
-    if (professions.length === 0)
-      return NextResponse.json({ success: false, message: "직종을 1개 이상 선택해주세요." }, { status: 400 });
+    // 직종은 선택(관심 표기용) — 미선택 허용. 자격 증빙은 최초 신청 시 받음.
 
     // OTP 인증 완료 여부 (5분 TTL)
     const verified = await prisma.phoneVerification.findFirst({

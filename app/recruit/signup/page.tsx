@@ -62,7 +62,6 @@ export default function RecruitSignupPage() {
     if (name.trim().length < 2) { setError("이름을 입력해주세요."); return; }
     if (password.length < 8) { setError("비밀번호는 8자 이상이어야 합니다."); return; }
     const selected = PROFS.filter((p) => profs[p.value].checked);
-    if (selected.length === 0) { setError("직종을 1개 이상 선택해주세요."); return; }
     if (!terms || !privacy) { setError("필수 약관에 동의해주세요."); return; }
 
     setSubmitting(true);
@@ -128,8 +127,11 @@ export default function RecruitSignupPage() {
 
           {/* 3. 직종 & 자격 */}
           <div className="rounded-2xl border border-slate-100 bg-white p-4">
-            <p className="mb-1 text-xs font-black uppercase tracking-wide text-slate-500">3. 직종 & 자격 증명</p>
-            <p className="mb-3 text-[11px] font-semibold text-slate-400">보유한 자격을 모두 선택하세요 (복수 가능). 운영자 검증 후 활성화됩니다.</p>
+            <p className="mb-1 text-xs font-black uppercase tracking-wide text-slate-500">3. 직종 &amp; 자격 증명 <span className="font-bold text-slate-300">(선택)</span></p>
+            <p className="mb-3 rounded-lg bg-slate-50 px-2.5 py-2 text-[11px] font-semibold leading-relaxed text-slate-500">
+              💡 지금 자격을 등록해두면 공고 신청 시 <b className="text-sky-600">추가 입력 없이 바로 지원</b>할 수 있어요.<br />
+              건너뛰어도 괜찮아요 — 나중에 공고에 신청할 때 해당 직종 자격 입력을 요청할 수 있어요. (운영자 검증 후 활성화)
+            </p>
             <div className="space-y-2.5">
               {PROFS.map((p) => {
                 const st = profs[p.value];

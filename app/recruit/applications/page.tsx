@@ -28,7 +28,7 @@ export default function MyApplicationsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/recruit/applications");
+      const r = await fetch("/api/worker/recruit/applications");
       const d = await r.json();
       if (d.success) setApps(d.applications);
       else if (r.status === 401) router.replace("/worker/login");
@@ -39,7 +39,7 @@ export default function MyApplicationsPage() {
 
   async function withdraw(id: string) {
     if (!confirm("신청을 취소하시겠습니까?")) return;
-    const r = await fetch(`/api/recruit/applications?id=${id}`, { method: "DELETE" });
+    const r = await fetch(`/api/worker/recruit/applications?id=${id}`, { method: "DELETE" });
     const d = await r.json();
     if (d.success) load();
     else alert(d.message || "취소에 실패했습니다.");

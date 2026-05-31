@@ -26,8 +26,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
     if (!p) return NextResponse.json({ success: false, message: "공고를 찾을 수 없습니다." }, { status: 404 });
 
+    // 이 공고 직종에 대한 저장된 자격 증빙이 있는지 → 없으면 신청 시 입력 요청
+    const prof = await prisma.workerProfession.findUnique({
+      where: { workerId_profession: { workerId, profession: p.profession } },
+    });
+
     return NextResponse.json({
       success: true,
+      certNeeded: !prof,
       post: {
         id: p.id.toString(),
         title: p.title,

@@ -17,9 +17,28 @@ export async function POST(req: NextRequest) {
     const postId = parseBigInt(b.recruitPostId);
     if (!postId) return NextResponse.json({ success: false, message: "공고 ID가 필요합니다." }, { status: 400 });
 
-    const post = await prisma.recruitPost.findUnique({ where: { id: postId }, select: { id: true, status: true } });
+    const post = await prisma.recruitPost.findUnique({ where: { id: postId }, select: { id: true, status: true, profession: true } });
     if (!post) return NextResponse.json({ success: false, message: "공고를 찾을 수 없습니다." }, { status: 404 });
     if (post.status !== "OPEN") return NextResponse.json({ success: false, message: "마감된 공고입니다." }, { status: 409 });
+
+    // 자격 증빙 — 이 직종 자격이 저장돼 있으면 재사용(재요구 X), 없으면 이번 신청 시 입력 필수 → 저장
+    const saved = await prisma.workerProfession.findUnique({
+      where: { workerId_profession: { workerId, profession: post.profession } },
+    });
+    if (!saved) {
+      const certNumber = b.certNumber != null ? String(b.certNumber).trim() : "";
+      if (!certNumber) {
+        return NextResponse.json(
+          { success: false, reason: "CERT_REQUIRED", profession: post.profession, message: "이 공고 직종의 자격 증빙을 입력해주세요." },
+          { status: 400 },
+        );
+      }
+      const experienceYears = Math.max(0, Math.min(60, Number(b.experienceYears) || 0));
+      const count = await prisma.workerProfession.count({ where: { workerId } });
+      await prisma.workerProfession.create({
+        data: { workerId, profession: post.profession, certNumber, experienceYears, isPrimary: count === 0, verifyStatus: "PENDING" },
+      });
+    }
 
     const message = b.message != null ? String(b.message).trim().slice(0, 1000) : null;
 
