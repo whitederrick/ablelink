@@ -28,7 +28,7 @@ export default function MyApplicationsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/worker/recruit/applications");
+      const r = await fetch("/api/recruit/applications");
       const d = await r.json();
       if (d.success) setApps(d.applications);
       else if (r.status === 401) router.replace("/worker/login");
@@ -39,7 +39,7 @@ export default function MyApplicationsPage() {
 
   async function withdraw(id: string) {
     if (!confirm("신청을 취소하시겠습니까?")) return;
-    const r = await fetch(`/api/worker/recruit/applications?id=${id}`, { method: "DELETE" });
+    const r = await fetch(`/api/recruit/applications?id=${id}`, { method: "DELETE" });
     const d = await r.json();
     if (d.success) load();
     else alert(d.message || "취소에 실패했습니다.");
@@ -61,7 +61,7 @@ export default function MyApplicationsPage() {
           ) : apps.length === 0 ? (
             <div className="py-16 text-center">
               <p className="text-sm font-semibold text-slate-300">아직 신청한 공고가 없습니다.</p>
-              <button onClick={() => router.push("/worker/recruit")} className="mt-3 rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white active:scale-95">공고 둘러보기</button>
+              <button onClick={() => router.push("/recruit")} className="mt-3 rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white active:scale-95">공고 둘러보기</button>
             </div>
           ) : (
             apps.map((a) => {
@@ -72,7 +72,7 @@ export default function MyApplicationsPage() {
                     <span className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-black text-sky-600">{PROF_LABEL[a.post.profession] ?? a.post.profession}</span>
                     <span className={`rounded-md px-2 py-0.5 text-[11px] font-black ${st.cls}`}>{st.label}</span>
                   </div>
-                  <button onClick={() => router.push(`/worker/recruit/${a.post.id}`)} className="mt-2 block text-left">
+                  <button onClick={() => router.push(`/recruit/${a.post.id}`)} className="mt-2 block text-left">
                     <p className="text-sm font-black text-slate-900">{a.post.title}</p>
                     <p className="text-xs font-bold text-slate-500">{a.post.companyName}{a.post.region ? ` · ${a.post.region}` : ""}</p>
                   </button>

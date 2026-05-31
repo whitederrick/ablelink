@@ -58,7 +58,7 @@ export default function RecruitBrowsePage() {
           </button>
           <h1 className="text-base font-black text-slate-900">직무지도 찾기</h1>
           <button
-            onClick={() => router.push("/worker/recruit/applications")}
+            onClick={() => router.push("/recruit/applications")}
             className="ml-auto flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600 active:scale-95"
           >
             <ClipboardList className="h-3.5 w-3.5" /> 내 신청
@@ -106,7 +106,7 @@ export default function RecruitBrowsePage() {
             posts.map((p) => (
               <button
                 key={p.id}
-                onClick={() => router.push(`/worker/recruit/${p.id}`)}
+                onClick={() => router.push(`/recruit/${p.id}`)}
                 className="w-full rounded-2xl border border-slate-100 bg-white p-4 text-left transition active:scale-[0.98]"
               >
                 <div className="flex items-center gap-2">
