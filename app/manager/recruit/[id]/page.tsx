@@ -48,8 +48,14 @@ export default function ManagerRecruitApplicantsPage() {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
     });
     const d = await r.json();
-    if (d.success) load();
-    else alert(d.message || "처리에 실패했습니다.");
+    if (d.success) {
+      if (action === "accept") {
+        alert(d.autoAssigned
+          ? "수락되었습니다. 해당 인력이 현장에 자동 배정되어 활성 인력으로 편입되었습니다."
+          : "수락되었습니다.");
+      }
+      load();
+    } else alert(d.message || "처리에 실패했습니다.");
   }
 
   return (

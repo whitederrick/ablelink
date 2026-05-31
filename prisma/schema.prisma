@@ -170,6 +170,7 @@ model Site {
   agencyManager AgencyManager? @relation(fields: [managerId], references: [id])
   DocumentRun   DocumentRun[]
   workerInvites WorkerInvite[]
+  recruitPosts  RecruitPost[]  @relation("RecruitPostSite")
 
   @@index([agencyId, isActive])
   @@index([siteSourceType, isVerified])
@@ -1633,10 +1634,14 @@ model RecruitPost {
   contactName        String?  @map("contact_name")
   contactPhone       String?  @map("contact_phone")
 
+  // 매칭 수락 시 생성/연계된 운영 Site (방향 A 자동 배정). 첫 수락 시 생성 후 재사용(headcount>1)
+  siteId        BigInt?       @map("site_id")
+
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
   agency        Agency?       @relation(fields: [agencyId], references: [id])
+  site          Site?         @relation("RecruitPostSite", fields: [siteId], references: [id])
   applications  RecruitApplication[]
 
   @@index([status, profession])
