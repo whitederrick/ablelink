@@ -4,7 +4,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
 
 export const runtime = "nodejs";
 
@@ -55,67 +54,48 @@ export async function GET(req: NextRequest) {
     tokensCleared = r.count;
   } catch (e: any) { errors.push(`토큰삭제: ${e.message}`); }
 
-  // ── 3. 계약 만료 알림톡 (D-30 / D-7 / D-1) ─────────────────────
-  const templateCode = process.env.KAKAO_CONTRACT_EXPIRY_TEMPLATE_CODE;
-  const appUrl       = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";
-  const alimtalkOk   = isAlimtalkReady("KAKAO_CONTRACT_EXPIRY_TEMPLATE_CODE");
+  // ── 3. 계약 만료 안내 (D-30 / D-7 / D-1) — 앱 내 알림(무료, 비용 절감) ──
+  for (const offsetDays of [30, 7, 1]) {
+    const targetDate = kstDateStr(offsetDays); // 오늘로부터 N일 후 날짜
+    try {
+      const targetStart = new Date(`${targetDate}T00:00:00+09:00`);
+      const targetEnd   = new Date(`${targetDate}T23:59:59+09:00`);
 
-  if (!alimtalkOk || !templateCode) {
-    errors.push("만료알림: KAKAO_CONTRACT_EXPIRY_TEMPLATE_CODE 미설정 — 건너뜀");
-  } else {
-    for (const offsetDays of [30, 7, 1]) {
-      const targetDate = kstDateStr(offsetDays); // 오늘로부터 N일 후 날짜
-      try {
-        // contractEnd가 정확히 targetDate인 활성 계약 (COMPLETED/SIGNED) 검색
-        const targetStart = new Date(`${targetDate}T00:00:00+09:00`);
-        const targetEnd   = new Date(`${targetDate}T23:59:59+09:00`);
+      const contracts = await prisma.employmentContract.findMany({
+        where: {
+          status:      { in: ["COMPLETED", "SIGNED"] },
+          contractEnd: { gte: targetStart, lte: targetEnd },
+          agency:      { planType: { in: ["STARTER", "STANDARD", "PRO", "TRIAL"] } },
+        },
+        include: { agency: { select: { planType: true, trialEndsAt: true } } },
+      });
 
-        const contracts = await prisma.employmentContract.findMany({
-          where: {
-            status:      { in: ["COMPLETED", "SIGNED"] },
-            contractEnd: { gte: targetStart, lte: targetEnd },
-            agency:      { planType: { in: ["STARTER", "STANDARD", "PRO", "TRIAL"] } },
-          },
-          include: {
-            user:   { select: { phoneNumber: true, workerName: true } },
-            agency: { select: { planType: true, trialEndsAt: true } },
-          },
-        });
-
-        for (const contract of contracts) {
-          // TRIAL인 경우 기간이 유효한지 추가 확인
-          if (contract.agency.planType === "TRIAL") {
-            const trialEnd = contract.agency.trialEndsAt;
-            if (!trialEnd || trialEnd < now) continue;
-          }
-
-          const { workerName, phoneNumber } = contract.user;
-          const contractEndStr = contract.contractEnd.toISOString().slice(0, 10);
-          const siteName = contract.siteName || contract.workerFilledSiteName || "-";
-
-          try {
-            await sendAlimtalk({
-              phone: phoneNumber, name: workerName, templateCode,
-              subject: "AbleLink 계약 만료 안내",
-              message:
-                `안녕하세요 ${workerName}님,\n\n` +
-                `AbleLink 근로계약 만료 D-${offsetDays} 안내입니다.\n\n` +
-                `사업장: ${siteName}\n` +
-                `계약 종료일: ${contractEndStr}\n\n` +
-                `재계약이 필요하시면 담당 에이전시로 연락해 주세요.\n\n` +
-                `${appUrl}/worker/home`,
-              buttons: [
-                { name: "AbleLink 앱 열기", linkType: "WL", linkMo: `${appUrl}/worker/home`, linkPc: `${appUrl}/worker/home` },
-              ],
-            });
-            expiryNotified++;
-          } catch (e: any) {
-            errors.push(`만료알림[${contract.id}]: ${e.message}`);
-          }
+      for (const contract of contracts) {
+        if (contract.agency.planType === "TRIAL") {
+          const trialEnd = contract.agency.trialEndsAt;
+          if (!trialEnd || trialEnd < now) continue;
         }
-      } catch (e: any) {
-        errors.push(`만료알림D-${offsetDays}: ${e.message}`);
+
+        const contractEndStr = contract.contractEnd.toISOString().slice(0, 10);
+        const siteName = contract.siteName || contract.workerFilledSiteName || "-";
+
+        try {
+          await prisma.workerNotice.create({
+            data: {
+              workerId: contract.workerId,
+              agencyId: contract.agencyId,
+              title: `근로계약 만료 D-${offsetDays} 안내`,
+              body: `사업장: ${siteName}\n계약 종료일: ${contractEndStr}\n재계약이 필요하면 담당 에이전시로 연락해 주세요.`,
+              type: "WARN",
+            },
+          });
+          expiryNotified++;
+        } catch (e: any) {
+          errors.push(`만료알림[${contract.id}]: ${e.message}`);
+        }
       }
+    } catch (e: any) {
+      errors.push(`만료알림D-${offsetDays}: ${e.message}`);
     }
   }
 

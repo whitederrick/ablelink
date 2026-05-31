@@ -127,15 +127,25 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // 서명 완료 후 카카오 알림 발송 (실패해도 서명 결과에 영향 없음)
+  // 서명 완료 후 알림 (실패해도 서명 결과에 영향 없음)
   try {
     if (user?.isTemporary) {
+      // 신규 가입자: 임시 비밀번호 발급 → 알림톡(필수, 미로그인 상태 자격증명 전달)
       await sendSignedNotificationNew(contract.workerId, user.phoneNumber, user.workerName);
-    } else if (user) {
-      await sendSignedNotificationExisting(user.phoneNumber, user.workerName);
+    } else if (contract.agencyId) {
+      // 기존 회원: 서명 완료 안내 → 앱 내 알림(무료, 비용 절감)
+      await prisma.workerNotice.create({
+        data: {
+          workerId: contract.workerId,
+          agencyId: contract.agencyId,
+          title: "근로계약서 서명 완료",
+          body: "새 근로계약서 서명이 완료되었습니다. 문서 메뉴에서 확인할 수 있어요.",
+          type: "INFO",
+        },
+      });
     }
   } catch (e) {
-    console.error("[contracts sign] 카카오 알림 발송 실패:", e);
+    console.error("[contracts sign] 서명 완료 알림 처리 실패:", e);
   }
 
   return NextResponse.json({ success: true, message: "서명이 완료되었습니다." });
@@ -169,20 +179,3 @@ async function sendSignedNotificationNew(workerId: bigint, phone: string, name: 
   });
 }
 
-// ─── 기존 직무지도원 서명 완료 알림 ─────────────────────────────
-async function sendSignedNotificationExisting(phone: string, name: string) {
-  const templateCode = process.env.KAKAO_CONTRACT_SIGNED_TEMPLATE_CODE;
-  const appUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";
-
-  if (!templateCode) {
-    console.warn("[contracts sign] KAKAO_CONTRACT_SIGNED_TEMPLATE_CODE 미설정 — 알림 건너뜀");
-    return;
-  }
-
-  await sendAlimtalk({
-    phone, name, templateCode,
-    subject: "AbleLink 계약 안내",
-    message: `안녕하세요 ${name}님,\n\n새 근로계약서 서명이 완료되었습니다.\nAbleLink에 기존 아이디로 로그인하여 확인해 주세요.\n\n${appUrl}/worker/login`,
-    buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
-  });
-}
