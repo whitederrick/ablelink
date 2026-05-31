@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           select: {
             id: true, workerName: true, phoneNumber: true, bio: true,
             residenceAddress: true, ratingAvg: true, ratingCount: true,
-            professions: { select: { profession: true, experienceYears: true, isPrimary: true } },
+            professions: { select: { profession: true, experienceYears: true, isPrimary: true, verifyStatus: true } },
           },
         },
       },
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           residenceAddress: a.worker.residenceAddress ?? null,
           ratingAvg: Number(a.worker.ratingAvg),
           ratingCount: a.worker.ratingCount,
-          professions: a.worker.professions.map((p) => ({ profession: p.profession, experienceYears: p.experienceYears, isPrimary: p.isPrimary })),
+          professions: a.worker.professions.map((p) => ({ profession: p.profession, experienceYears: p.experienceYears, isPrimary: p.isPrimary, verifyStatus: p.verifyStatus })),
         },
       })),
     });

@@ -17,7 +17,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 
 interface Applicant {
   id: string; status: string; message: string | null; createdAt: string;
-  worker: { id: string; name: string; phoneNumber: string; bio: string | null; residenceAddress: string | null; ratingAvg: number; ratingCount: number; professions: { profession: string; experienceYears: number; isPrimary: boolean }[] };
+  worker: { id: string; name: string; phoneNumber: string; bio: string | null; residenceAddress: string | null; ratingAvg: number; ratingCount: number; professions: { profession: string; experienceYears: number; isPrimary: boolean; verifyStatus: string }[] };
 }
 interface PostInfo { id: string; title: string; companyName: string; status: string; headcount: number; }
 
@@ -78,6 +78,11 @@ export default function ManagerRecruitApplicantsPage() {
                     <p className="mt-0.5 text-xs font-semibold text-slate-400">{a.worker.phoneNumber}{a.worker.residenceAddress ? ` · ${a.worker.residenceAddress}` : ""}</p>
                     <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] font-bold text-slate-500">
                       {primary && <span className="rounded bg-sky-50 px-1.5 py-0.5 text-sky-600">{PROF_LABEL[primary.profession] ?? primary.profession} · {primary.experienceYears}년</span>}
+                      {primary && (primary.verifyStatus === "VERIFIED"
+                        ? <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-600">자격 검증완료</span>
+                        : primary.verifyStatus === "REJECTED"
+                        ? <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-500">자격 반려</span>
+                        : <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-600">자격 검증대기</span>)}
                       {a.worker.ratingCount > 0 && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-600">★ {a.worker.ratingAvg.toFixed(1)} ({a.worker.ratingCount})</span>}
                     </div>
                     {a.message && <p className="mt-2 rounded-lg bg-slate-50 p-2 text-sm font-semibold text-slate-600">{a.message}</p>}
