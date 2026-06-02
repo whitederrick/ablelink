@@ -111,7 +111,7 @@ export default function RecruitBrowsePage() {
               >
                 <div className="flex items-center gap-2">
                   <span className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-black text-sky-600">{PROF_LABEL[p.profession] ?? p.profession}</span>
-                  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500">{p.agencyName ?? "공단·플랫폼"}</span>
+                  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500">{p.agencyName ?? "Able-Link"}</span>
                   {p.myApplication && (
                     <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-600">{APP_LABEL[p.myApplication.status]}</span>
                   )}

@@ -15,6 +15,8 @@ import {
   LogOut,
   MapPin,
   PenLine,
+  Search,
+  Send,
   Sparkles,
   User,
   X,
@@ -852,6 +854,27 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
             </button>
           </div>
         )}
+
+        {/* 직무지도 매칭 (마켓플레이스) — 모든 직무지도원에게 노출. 공고 없으면 빈 목록 */}
+        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+          <p className="mb-2.5 text-[11px] font-black uppercase tracking-wide text-slate-400">직무지도 매칭</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => router.push("/recruit")}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-black text-slate-700 transition active:scale-95"
+            >
+              <Search className="h-3.5 w-3.5 text-sky-500" aria-hidden="true" />
+              직무지도 찾기
+            </button>
+            <button
+              onClick={() => router.push("/recruit/offers")}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-black text-slate-700 transition active:scale-95"
+            >
+              <Send className="h-3.5 w-3.5 text-sky-500" aria-hidden="true" />
+              받은 제안
+            </button>
+          </div>
+        </div>
 
         {/* AI 일괄 일지 작성 버튼 */}
         {homeData?.siteName && (

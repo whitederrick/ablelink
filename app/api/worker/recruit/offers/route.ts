@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
       success: true,
       offers: offers.map((o) => ({
         id: o.id.toString(),
-        agencyName: o.agency?.name ?? "(공단/플랫폼)",
+        agencyName: o.agency?.name ?? "Able-Link",
         profession: o.profession,
         siteName: o.siteName ?? null,
         message: o.message ?? null,

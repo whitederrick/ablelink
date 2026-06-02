@@ -80,7 +80,7 @@ export default function RecruitDetailPage() {
         <h1 className="mt-2 text-lg font-black leading-snug text-slate-900">{post.title}</h1>
         <p className="mt-0.5 text-sm font-bold text-slate-500">{post.companyName}</p>
         <span className="mt-1 inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500">
-          <Building2 className="h-3 w-3" />{post.agencyName ?? "공단·플랫폼"}
+          <Building2 className="h-3 w-3" />등록자 · {post.agencyName ?? "Able-Link"}
         </span>
 
         <div className="mt-4 space-y-2.5 rounded-2xl border border-slate-100 bg-white p-4">

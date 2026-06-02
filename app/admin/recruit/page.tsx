@@ -80,7 +80,7 @@ export default function ManagerRecruitPage() {
                   <td className={T.td}>
                     {p.agencyName
                       ? <span className="font-semibold text-slate-600">{p.agencyName}</span>
-                      : <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-black text-emerald-600">공단·플랫폼</span>}
+                      : <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-black text-emerald-600">Able-Link(운영자)</span>}
                   </td>
                   <td className={T.td}>{PROF_LABEL[p.profession] ?? p.profession}</td>
                   <td className={T.td}>{p.region ?? "-"}</td>

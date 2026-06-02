@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
         id: r.id.toString(),
         rating: r.rating,
         comment: r.comment ?? null,
-        by: r.agency?.name ?? "(공단/플랫폼)",
+        by: r.agency?.name ?? "Able-Link",
         createdAt: r.createdAt.toISOString(),
       })),
     });
