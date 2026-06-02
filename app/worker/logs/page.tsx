@@ -6,6 +6,7 @@ import {
   BarChart2, CalendarDays, ChevronLeft, ChevronRight,
   CircleDollarSign, ClipboardList, FileText, FileWarning, Home,
   PenLine, Trash2, X,
+  Search,
 } from "lucide-react";
 
 type TrainingType = "PRE" | "FIELD" | "ADAPTATION";
@@ -31,8 +32,8 @@ const NAV_ITEMS = [
   { icon: Home,             label: "홈",       href: "/worker/home" },
   { icon: CalendarDays,     label: "캘린더",   href: "/worker/calendar" },
   { icon: PenLine,          label: "전자서명", href: "/worker/signature" },
-  { icon: FileText,         label: "문서",     href: "/worker/docs" },
-  { icon: CircleDollarSign, label: "히스토리", href: "/worker/history" },
+  { icon: FileText,         label: "문서",     href: "/worker/docs/view" },
+  { icon: Search,           label: "매칭",    href: "/recruit" },
 ];
 
 const TYPE_LABEL: Record<TrainingType, string> = {

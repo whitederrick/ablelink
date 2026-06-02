@@ -3,7 +3,7 @@
 // 직무지도 매칭 — 공급측(워커/user) 공고 검색·조회
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Search, MapPin, Clock, Users, ClipboardList } from "lucide-react";
+import { ChevronLeft, Search, MapPin, Clock, Users, ClipboardList, Send } from "lucide-react";
 
 const PROFESSIONS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -57,12 +57,20 @@ export default function RecruitBrowsePage() {
             <ChevronLeft className="h-5 w-5 text-slate-500" />
           </button>
           <h1 className="text-base font-black text-slate-900">직무지도 찾기</h1>
-          <button
-            onClick={() => router.push("/recruit/applications")}
-            className="ml-auto flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600 active:scale-95"
-          >
-            <ClipboardList className="h-3.5 w-3.5" /> 내 신청
-          </button>
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              onClick={() => router.push("/recruit/offers")}
+              className="flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600 active:scale-95"
+            >
+              <Send className="h-3.5 w-3.5" /> 받은 제안
+            </button>
+            <button
+              onClick={() => router.push("/recruit/applications")}
+              className="flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600 active:scale-95"
+            >
+              <ClipboardList className="h-3.5 w-3.5" /> 내 신청
+            </button>
+          </div>
         </header>
 
         {/* 검색 */}

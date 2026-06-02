@@ -239,11 +239,15 @@ function WorklogForm() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const traineeId    = params.get("traineeId") ?? "";
   const attendanceId = params.get("attendanceId") ?? "";
-  const traineeName  = params.get("traineeName") ?? "훈련생";
   const trainingType = (params.get("trainingType") as TrainingType) ?? "FIELD";
   const logId        = params.get("logId");  // 수정 모드일 때 존재
+  // #7: traineeId를 URL뿐 아니라 페이지 내 선택으로도 지정 가능하게 state화
+  const [traineeId, setTraineeId]     = useState(params.get("traineeId") ?? "");
+  const [traineeName, setTraineeName] = useState(params.get("traineeName") ?? "");
+  const [trainees, setTrainees]       = useState<{ id: string; name: string; gender: string }[]>([]);
+  // #8: 기간 내 사용한 수행과제 목록(재사용 선택용)
+  const [recentTasks, setRecentTasks] = useState<{ taskName: string; taskScore: number; measurementTime: string }[]>([]);
 
   const isAdaptation = trainingType === "ADAPTATION";
   const trainingLabel = trainingType === "PRE" ? "사전훈련" : trainingType === "FIELD" ? "현장훈련" : "적응지도";
@@ -301,6 +305,8 @@ function WorklogForm() {
     fetch("/api/worker/site/current").then(r => r.json()).then(d => {
       if (d.success && d.data) {
         setSiteInfo(d.data);
+        if (Array.isArray(d.data.trainees))
+          setTrainees(d.data.trainees.map((t: any) => ({ id: String(t.id), name: t.name, gender: t.gender || "M" })));
         if (d.data.siteId) setSiteId(d.data.siteId);
         if (d.data.assignmentId) setAssignmentId(d.data.assignmentId);
         if (!attendanceId && d.data.attendanceId) setResolvedAttendanceId(d.data.attendanceId);
@@ -324,6 +330,15 @@ function WorklogForm() {
       }
     }).catch(() => {});
   }, []);
+
+  // #8: 훈련생 선택/변경 시 최근 수행과제 목록 로드
+  useEffect(() => {
+    if (!traineeId) { setRecentTasks([]); return; }
+    fetch(`/api/worker/logs/recent-tasks?traineeId=${traineeId}`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setRecentTasks(d.tasks); })
+      .catch(() => {});
+  }, [traineeId]);
 
   // 수정 모드: 기존 일지 로드
   useEffect(() => {
@@ -426,6 +441,11 @@ function WorklogForm() {
 
   async function handleSave(isComplete: boolean) {
     setError("");
+    if (!traineeId) {
+      setError("훈련생을 선택해주세요.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     const dow = new Date(logDate + "T00:00:00").getDay();
     const isWeekend = dow === 0 || dow === 6;
     if (isWeekend && !weekendReason.trim()) {
@@ -509,7 +529,7 @@ function WorklogForm() {
           <span className="text-base font-black text-slate-900">
             {isAdaptation ? "적응지도 일지" : `훈련 일지`}
           </span>
-          <span className="text-xs font-semibold text-slate-400">{traineeName}</span>
+          <span className="text-xs font-semibold text-slate-400">{traineeName || "훈련생 선택"}</span>
         </div>
         <button onClick={() => handleSave(true)} disabled={saving}
           className="rounded-xl bg-slate-950 px-3 py-1.5 text-sm font-black text-white transition active:scale-95 disabled:opacity-60">
@@ -518,6 +538,29 @@ function WorklogForm() {
       </header>
 
       <div className="mx-auto max-w-md space-y-3 px-4 py-3 pb-10">
+
+        {/* #7 훈련생 선택 (URL로 안 들어왔거나 변경 시) */}
+        {trainees.length > 0 && (
+          <div className={`rounded-2xl border p-4 ${!traineeId ? "border-rose-200 bg-rose-50" : "border-slate-100 bg-white"}`}>
+            <p className="mb-2 text-sm font-black text-slate-700">
+              훈련생 {!traineeId && <span className="font-semibold text-rose-500">* 선택 필요</span>}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {trainees.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => { setTraineeId(t.id); setTraineeName(t.name); }}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-black transition active:scale-95 ${
+                    traineeId === t.id ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-slate-50 text-slate-700"
+                  }`}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 훈련 구분 배지 (훈련일지만) */}
         {!isAdaptation && (
@@ -651,29 +694,27 @@ function WorklogForm() {
 
         {/* ── 수행 과제 ── */}
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-black text-slate-700">수행 과제</span>
-            <button
-              type="button"
-              onClick={async () => {
-                if (!traineeId) return;
-                try {
-                  const res = await fetch(`/api/worker/logs/prev?traineeId=${traineeId}`);
-                  const data = await res.json();
-                  if (data.success) {
-                    if (data.taskName)        setTaskName(data.taskName);
-                    if (data.taskScore)       setTaskScore(data.taskScore);
-                    if (data.measurementTime) setMeasurementTime(data.measurementTime);
-                  } else {
-                    alert("이전 과제 기록이 없습니다.");
-                  }
-                } catch { alert("불러오기 실패"); }
-              }}
-              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500 active:scale-95"
-            >
-              이전 과제 불러오기
-            </button>
+            {recentTasks.length > 0 && <span className="text-[11px] font-semibold text-slate-400">이전 과제 선택 가능</span>}
           </div>
+          {/* #8: 이전에 입력한 수행과제 재사용 — 칩 선택 시 과제명·수행정도·측정시간 자동 입력 */}
+          {recentTasks.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {recentTasks.map((t, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => { setTaskName(t.taskName); setTaskScore(t.taskScore); if (t.measurementTime) setMeasurementTime(t.measurementTime); }}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition active:scale-95 ${
+                    taskName === t.taskName ? "border-sky-500 bg-sky-50 text-sky-700" : "border-slate-200 bg-slate-50 text-slate-600"
+                  }`}
+                >
+                  {t.taskName}
+                </button>
+              ))}
+            </div>
+          )}
           <input type="text" value={taskName} onChange={e => setTaskName(e.target.value)}
             placeholder={isAdaptation ? "수행한 직무·과제 내용을 입력하세요" : "수행한 과제명을 입력하세요"}
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none placeholder:font-normal placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100" />
