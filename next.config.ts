@@ -14,6 +14,16 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   serverExternalPackages: ["pdfkit", "playwright"],
 
+  // PDF 생성(pdfkit) 라우트의 서버리스 함수 번들에 한글 폰트 포함
+  // (public/은 기본적으로 함수 fs에 포함되지 않아 fs.readFileSync 실패 방지)
+  // renderPdfToBuffer를 호출하는 모든 라우트 그룹 커버: worker/docs, admin/docs, audit-package, document-versions
+  outputFileTracingIncludes: {
+    "/api/worker/docs/**": ["./public/fonts/NotoSansKR-Light.ttf", "./public/fonts/NotoSansKR-Bold.ttf"],
+    "/api/admin/docs/**": ["./public/fonts/NotoSansKR-Light.ttf", "./public/fonts/NotoSansKR-Bold.ttf"],
+    "/api/admin/audit-package/**": ["./public/fonts/NotoSansKR-Light.ttf", "./public/fonts/NotoSansKR-Bold.ttf"],
+    "/api/admin/document-versions/**": ["./public/fonts/NotoSansKR-Light.ttf", "./public/fonts/NotoSansKR-Bold.ttf"],
+  },
+
   async headers() {
     return [
       {
