@@ -27,10 +27,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
     if (!app) return NextResponse.json({ success: false, message: "신청을 찾을 수 없습니다." }, { status: 404 });
 
+    // admin(운영자)은 모든 공고의 신청 처리 가능. manager는 본인/소속 공고만.
     const owned =
       session.kind === "manager"
         ? app.post.createdByManagerId === session.managerId || app.post.agencyId === session.agencyId
-        : app.post.createdByAdminId === session.adminId;
+        : true;
     if (!owned) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     if (app.status !== "PENDING") {
       return NextResponse.json({ success: false, message: "이미 처리된 신청입니다." }, { status: 409 });

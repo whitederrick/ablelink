@@ -46,7 +46,15 @@ export default function OffersPage() {
 
   async function decide(id: string, action: "accept" | "decline") {
     const r = await fetch("/api/worker/recruit/offers", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, action }) });
-    if ((await r.json()).success) load();
+    const d = await r.json();
+    if (d.success) {
+      if (action === "accept") {
+        alert(d.autoAssigned
+          ? "제안을 수락하여 현장에 배정되었습니다. 앱에서 출퇴근·일지를 시작할 수 있어요."
+          : "제안을 수락했습니다. 담당자 연락 또는 배정 절차가 진행됩니다.");
+      }
+      load();
+    }
   }
 
   return (

@@ -32,6 +32,7 @@ export async function GET(req: Request) {
         id:          s.id.toString(),
         companyName: s.companyName,
         address:     s.address ?? "",
+        requiredProfession: s.requiredProfession ?? null,
         agencyId:    s.agency?.id?.toString() ?? null,
         agencyName:  s.agency?.name ?? null,
         planType:    s.agency?.planType ?? null,

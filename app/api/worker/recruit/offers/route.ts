@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { parseBigInt } from "@/lib/adminScope";
+import { checkQuota } from "@/lib/planGuard";
 
 export async function GET(req: NextRequest) {
   try {
@@ -53,8 +54,65 @@ export async function PATCH(req: NextRequest) {
     if (!offer || offer.workerId !== workerId) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     if (offer.status !== "PENDING") return NextResponse.json({ success: false, message: "이미 처리된 제안입니다." }, { status: 409 });
 
-    await prisma.talentOffer.update({ where: { id }, data: { status: action === "accept" ? "ACCEPTED" : "DECLINED", decidedAt: new Date() } });
-    return NextResponse.json({ success: true });
+    // 수락 + 제안에 현장이 연결돼 있으면 → 해당 현장으로 자동 배정(방향 B). 좌표/agencyId는 site에서.
+    // 가드(비활성 인력·구독 한도·중복)는 미충족 시 배정만 건너뛰고 수락 자체는 진행(에이전시가 수동 처리).
+    let autoAssigned = false;
+    let assignSiteId: bigint | null = null;
+    let assignAgencyId: bigint | null = null;
+    if (action === "accept" && offer.siteId != null) {
+      const site = await prisma.site.findUnique({ where: { id: offer.siteId }, select: { id: true, agencyId: true, isActive: true } });
+      const w = await prisma.worker.findUnique({ where: { id: workerId }, select: { status: true } });
+      if (site && site.isActive && site.agencyId != null && w && String(w.status) === "ACTIVE") {
+        const wq = await checkQuota(site.agencyId, "workers");
+        const dup = await prisma.siteAssignment.findFirst({
+          where: { siteId: site.id, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+          select: { id: true },
+        });
+        if (wq.allowed && !dup) { assignSiteId = site.id; assignAgencyId = site.agencyId; }
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.talentOffer.update({ where: { id }, data: { status: action === "accept" ? "ACCEPTED" : "DECLINED", decidedAt: new Date() } });
+      if (assignSiteId && assignAgencyId) {
+        await tx.siteAssignment.create({
+          data: {
+            siteId: assignSiteId,
+            workerId,
+            agencyId: assignAgencyId,
+            status: "ACTIVE",
+            isMainWorker: true,
+            assignedAt: new Date(),
+            startDate: new Date(),
+            assignedByManagerId: offer.createdByManagerId,
+            statusReason: "마켓플레이스 제안 수락 자동 배정",
+            workType: "FULL_DAY",
+            commuteGuidanceIncluded: false,
+          },
+        });
+        autoAssigned = true;
+      }
+    });
+
+    // 수락 결과 알림(WorkerNotice.agencyId 필수 → 에이전시 연계일 때만, 무료 채널)
+    const noticeAgencyId = assignAgencyId ?? offer.agencyId;
+    if (action === "accept" && noticeAgencyId) {
+      try {
+        await prisma.workerNotice.create({
+          data: {
+            workerId,
+            agencyId: noticeAgencyId,
+            title: "[직무지도 매칭] 제안을 수락했습니다",
+            body: autoAssigned
+              ? `제안을 수락하여 '${offer.siteName ?? "현장"}'에 배정되었습니다. 앱에서 출퇴근·일지 작성을 시작할 수 있습니다.`
+              : "제안을 수락했습니다. 담당자 연락 또는 배정 절차가 진행됩니다.",
+            type: "INFO",
+          },
+        });
+      } catch { /* 비치명적 */ }
+    }
+
+    return NextResponse.json({ success: true, autoAssigned });
   } catch (e: any) {
     console.error("[worker/recruit/offers PATCH]", e);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });

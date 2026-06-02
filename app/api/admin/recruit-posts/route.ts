@@ -28,24 +28,25 @@ function serialize(p: any) {
     status: p.status,
     contactName: p.contactName ?? null,
     contactPhone: p.contactPhone ?? null,
+    agencyName: p.agency?.name ?? null, // null = 운영자(공단/플랫폼) 공고
     applicationCount: p._count?.applications ?? undefined,
     createdAt: p.createdAt.toISOString(),
   };
 }
 
-// 목록 — 본인이 등록한 공고
+// 목록 — manager: 본인/소속 공고 / admin: 전체 공고(운영자가 모든 에이전시 공고 관리)
 export async function GET(req: NextRequest) {
   try {
     const session = await requireAdminOrManagerSession(req);
     const where =
       session.kind === "manager"
         ? { OR: [{ createdByManagerId: session.managerId }, { agencyId: session.agencyId }] }
-        : { createdByAdminId: session.adminId };
+        : {}; // admin: 전체
 
     const posts = await prisma.recruitPost.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      include: { _count: { select: { applications: true } } },
+      include: { _count: { select: { applications: true } }, agency: { select: { name: true } } },
     });
     return NextResponse.json({ success: true, posts: posts.map(serialize) });
   } catch (e: any) {

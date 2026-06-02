@@ -31,6 +31,20 @@ export async function POST(req: NextRequest) {
     if (dup) return NextResponse.json({ success: false, message: "이미 보낸 제안이 처리 대기 중입니다." }, { status: 409 });
 
     const profession = PROFS.includes(b.profession) ? b.profession : null;
+
+    // 선택: 실제 현장 연결(수락 시 자동 배정). manager는 본인 agency 소속 활성 사이트만.
+    let siteId: bigint | null = null;
+    if (b.siteId != null && String(b.siteId).trim() !== "") {
+      const sid = parseBigInt(b.siteId);
+      if (!sid) return NextResponse.json({ success: false, message: "잘못된 현장 ID" }, { status: 400 });
+      const site = await prisma.site.findUnique({ where: { id: sid }, select: { id: true, isActive: true, agencyId: true } });
+      if (!site || !site.isActive) return NextResponse.json({ success: false, message: "연결할 현장을 찾을 수 없습니다." }, { status: 404 });
+      if (site.agencyId == null) return NextResponse.json({ success: false, message: "에이전시 귀속 현장만 연결할 수 있습니다." }, { status: 400 });
+      if (session.kind === "manager" && site.agencyId !== session.agencyId)
+        return NextResponse.json({ success: false, message: "본인 에이전시의 현장만 연결할 수 있습니다." }, { status: 403 });
+      siteId = site.id;
+    }
+
     await prisma.talentOffer.create({
       data: {
         workerId,
@@ -39,6 +53,7 @@ export async function POST(req: NextRequest) {
         createdByAdminId: session.kind === "admin" ? session.adminId : null,
         profession,
         siteName: b.siteName?.trim() || null,
+        siteId,
         message: b.message?.trim() || null,
         status: "PENDING",
       },

@@ -171,6 +171,7 @@ model Site {
   DocumentRun   DocumentRun[]
   workerInvites WorkerInvite[]
   recruitPosts  RecruitPost[]  @relation("RecruitPostSite")
+  talentOffers  TalentOffer[]  @relation("TalentOfferSite")
 
   @@index([agencyId, isActive])
   @@index([siteSourceType, isVerified])
@@ -1684,6 +1685,8 @@ model TalentOffer {
   createdByAdminId   BigInt?           @map("created_by_admin_id")
   profession         Profession?                                  // 제안 직종(선택)
   siteName           String?           @map("site_name")          // 제안 현장/사업체(자유 텍스트)
+  // 제안 시 연결한 실제 현장(선택). 후보자 수락 시 이 현장으로 자동 배정(방향 B).
+  siteId             BigInt?           @map("site_id")
   message            String?
   status             TalentOfferStatus @default(PENDING)
   decidedAt          DateTime?         @map("decided_at")
@@ -1692,6 +1695,7 @@ model TalentOffer {
 
   worker Worker  @relation(fields: [workerId], references: [id], onDelete: Cascade)
   agency Agency? @relation(fields: [agencyId], references: [id])
+  site   Site?   @relation("TalentOfferSite", fields: [siteId], references: [id])
 
   @@index([workerId, status])
   @@index([agencyId, status])

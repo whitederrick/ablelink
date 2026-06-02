@@ -7,8 +7,11 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireAdminOrManagerSession, resolveScopeAgencyId } from "@/lib/managerScope";
+import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
+
+const PROFESSIONS = ["JOB_COACH", "CAREGIVER", "ACTIVITY_ASSISTANT"] as const;
 
 function parseIntSafe(v: string | null, fallback: number) {
   const n = Number(v);
@@ -49,6 +52,8 @@ function toRow(r: any) {
     managerEmail: r.agencyManager?.email ?? null,
     managerPhone: r.agencyManager?.phoneNumber ?? null,
 
+    requiredProfession: r.requiredProfession ?? null,
+
     basePointConfirmed: r.basePointConfirmed,
     basePointAuthority: r.basePointAuthority,
     basePointApprovalStatus: r.basePointApprovalStatus,
@@ -61,7 +66,7 @@ function toRow(r: any) {
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
+    const session = await requireAdminOrManagerSession(req);
     const { searchParams } = new URL(req.url);
 
     const q = (searchParams.get("q") || "").trim();
@@ -72,9 +77,13 @@ export async function GET(req: NextRequest) {
     const isActive =
       isActiveParam == null ? true : isActiveParam === "true" || isActiveParam === "1";
 
+    // manager: 본인 agency 강제 / admin(운영자): ?agencyId 선택(없으면 전체)
     let agencyId: bigint | undefined;
-
-    agencyId = scope.agencyId;
+    if (session.kind === "manager") agencyId = session.agencyId;
+    else {
+      const a = searchParams.get("agencyId");
+      agencyId = a ? (parseBigInt(a) ?? undefined) : undefined;
+    }
 
     const where: Prisma.SiteWhereInput = {
       ...(typeof isActive === "boolean" ? { isActive } : {}),
@@ -110,6 +119,7 @@ export async function GET(req: NextRequest) {
 
           agencyId: true,
           managerId: true,
+          requiredProfession: true,
 
           agency: { select: { id: true, name: true } },
           agencyManager: { select: { id: true, name: true, email: true, phoneNumber: true } },
@@ -141,7 +151,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
+    const session = await requireAdminOrManagerSession(req);
 
     const body = await req.json();
 
@@ -153,6 +163,8 @@ export async function POST(req: NextRequest) {
     const gpsLonRaw = body.gpsLon;
 
     const managerIdRaw = body.managerId;
+    // 직종(카테고리) — 선택
+    const requiredProfession = PROFESSIONS.includes(body.requiredProfession) ? body.requiredProfession : null;
 
     if (!companyName) throw new Error("VALIDATION:companyName");
     if (!address) throw new Error("VALIDATION:address");
@@ -161,7 +173,8 @@ export async function POST(req: NextRequest) {
     const lonStr = String(gpsLonRaw ?? "").trim();
     if (!latStr || !lonStr) throw new Error("VALIDATION:gpsLatLon");
 
-    const agencyId = scope.agencyId;
+    // manager: 본인 agency / admin(운영자): body.agencyId 지정 필수
+    const agencyId = resolveScopeAgencyId(session, body.agencyId);
 
     const quotaCheck = await checkQuota(agencyId, "sites");
     if (!quotaCheck.allowed) {
@@ -192,6 +205,7 @@ export async function POST(req: NextRequest) {
         gpsLon: new Prisma.Decimal(lonStr),
         agencyId,
         managerId,
+        requiredProfession,
       },
       select: {
         id: true,
@@ -202,6 +216,7 @@ export async function POST(req: NextRequest) {
         gpsLon: true,
         agencyId: true,
         managerId: true,
+        requiredProfession: true,
         agency: { select: { id: true, name: true } },
         agencyManager: { select: { id: true, name: true, email: true, phoneNumber: true } },
         basePointConfirmed: true,

@@ -23,7 +23,20 @@ export default function ManagerTalentPage() {
   const [offerTo, setOfferTo] = useState<Cand | null>(null);
   const [offerMsg, setOfferMsg] = useState("");
   const [offerSite, setOfferSite] = useState("");
+  const [offerSiteId, setOfferSiteId] = useState("");
+  const [sites, setSites] = useState<{ id: string; companyName: string; agencyName: string | null }[]>([]);
   const [sending, setSending] = useState(false);
+
+  // 제안에 연결할 현장 목록(수락 시 자동 배정). manager=본인 agency 사이트.
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/admin/sites?pageSize=100", { cache: "no-store" });
+        const d = await r.json();
+        if (d.success) setSites((d.items || []).map((s: any) => ({ id: s.id, companyName: s.companyName, agencyName: s.agencyName })));
+      } catch { /* noop */ }
+    })();
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,10 +60,10 @@ export default function ManagerTalentPage() {
     try {
       const r = await fetch("/api/admin/talent/offer", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workerId: offerTo.id, profession: profession || undefined, siteName: offerSite.trim() || undefined, message: offerMsg.trim() || undefined }),
+        body: JSON.stringify({ workerId: offerTo.id, profession: profession || undefined, siteName: offerSite.trim() || undefined, siteId: offerSiteId || undefined, message: offerMsg.trim() || undefined }),
       });
       const d = await r.json();
-      if (d.success) { alert("제안을 보냈습니다."); setOfferTo(null); setOfferMsg(""); setOfferSite(""); }
+      if (d.success) { alert("제안을 보냈습니다."); setOfferTo(null); setOfferMsg(""); setOfferSite(""); setOfferSiteId(""); }
       else alert(d.message || "제안 전송에 실패했습니다.");
     } finally { setSending(false); }
   }
@@ -109,7 +122,14 @@ export default function ManagerTalentPage() {
         <div className={T.modalOverlay} onClick={() => setOfferTo(null)}>
           <div className="w-full max-w-md rounded-3xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
             <p className="text-base font-black text-slate-900">{offerTo.name} 님에게 제안</p>
-            <input value={offerSite} onChange={(e) => setOfferSite(e.target.value)} placeholder="제안 현장/사업체명 (선택)" className={`mt-3 w-full ${T.input}`} />
+            <label className="mt-3 block text-xs font-bold text-slate-500">현장 연결 (선택) — 후보자 수락 시 자동 배정</label>
+            <select value={offerSiteId} onChange={(e) => setOfferSiteId(e.target.value)} className={`mt-1 w-full ${T.select ?? T.input}`}>
+              <option value="">연결 안 함 (텍스트만)</option>
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>{s.companyName}{s.agencyName ? ` (${s.agencyName})` : ""}</option>
+              ))}
+            </select>
+            <input value={offerSite} onChange={(e) => setOfferSite(e.target.value)} placeholder="제안 현장/사업체명 (선택, 텍스트)" className={`mt-2 w-full ${T.input}`} />
             <textarea value={offerMsg} onChange={(e) => setOfferMsg(e.target.value)} rows={4} placeholder="제안 메시지 (근무 조건, 연락 방법 등)" className="mt-2 w-full rounded-xl border border-slate-200 p-3 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" />
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setOfferTo(null)} className={T.btnSecondary}>취소</button>

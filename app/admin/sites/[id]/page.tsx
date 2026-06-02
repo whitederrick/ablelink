@@ -17,10 +17,23 @@ type SiteDetail = {
   managerName: string | null;
   managerEmail: string | null;
   managerPhone: string | null;
+  requiredProfession: string | null;
   basePointConfirmed: boolean;
   basePointApprovalStatus: string;
   basePointUpdatedAt: string | null;
   isActive: boolean;
+};
+
+const PROF_LABEL: Record<string, string> = {
+  JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사",
+};
+
+type AssignmentItem = {
+  id: string; status: string; workType: string;
+  user: { id: string; workerName: string; phoneNumber: string | null } | null;
+};
+type WorkerOption = {
+  id: string; workerName: string; phoneNumber: string | null; status: string;
 };
 
 // GPS 허용 범위 옵션
@@ -57,6 +70,57 @@ export default function AdminSiteDetailPage() {
   const [managerEmail, setManagerEmail] = useState("");
   const [managerPhone, setManagerPhone] = useState("");
 
+  // 직무지도원 배정
+  const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
+  const [workerOptions, setWorkerOptions] = useState<WorkerOption[]>([]);
+  const [selectedWorkerId, setSelectedWorkerId] = useState("");
+  const [assignWorkType, setAssignWorkType] = useState("FULL_DAY");
+  const [assigning, setAssigning] = useState(false);
+
+  async function fetchAssignments() {
+    try {
+      const res = await fetch(`/api/admin/assignments?siteId=${siteId}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data.success) setAssignments(data.items);
+    } catch { /* noop */ }
+  }
+
+  async function fetchWorkerOptions(profession: string | null) {
+    try {
+      const sp = new URLSearchParams();
+      if (profession) sp.set("profession", profession);
+      const res = await fetch(`/api/admin/system/workers?${sp.toString()}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data.success) setWorkerOptions(data.workers.filter((w: any) => w.status === "ACTIVE"));
+    } catch { /* noop */ }
+  }
+
+  async function assignWorker() {
+    if (!selectedWorkerId) return alert("배정할 직무지도원을 선택하세요.");
+    setAssigning(true);
+    try {
+      const res = await fetch("/api/admin/assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, workerId: selectedWorkerId, workType: assignWorkType }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        const msg = data.message === "VALIDATION:alreadyAssigned" ? "이미 배정된 직무지도원입니다."
+          : data.message === "VALIDATION:userInactive" ? "비활성 직무지도원입니다."
+          : data.message || "배정에 실패했습니다.";
+        throw new Error(msg);
+      }
+      setSelectedWorkerId("");
+      await fetchAssignments();
+      alert("배정되었습니다.");
+    } catch (e: any) {
+      alert(e.message || "배정에 실패했습니다.");
+    } finally {
+      setAssigning(false);
+    }
+  }
+
   async function fetchDetail() {
     setLoading(true);
     try {
@@ -78,6 +142,8 @@ export default function AdminSiteDetailPage() {
       setManagerName(it.managerName || "");
       setManagerEmail(it.managerEmail || "");
       setManagerPhone(it.managerPhone || "");
+      fetchAssignments();
+      fetchWorkerOptions(it.requiredProfession);
     } catch (e) {
       alert("상세 조회에 실패했습니다.");
     } finally {
@@ -264,6 +330,67 @@ export default function AdminSiteDetailPage() {
             <Field label="이메일 *" value={managerEmail} onChange={setManagerEmail} />
             <Field label="전화번호 *" value={managerPhone} onChange={setManagerPhone} />
           </div>
+        </div>
+
+        {/* 직무지도원 배정 */}
+        <div style={s.section}>
+          <h2 style={s.sectionTitle}>
+            직무지도원 배정
+            {item.requiredProfession && (
+              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: "#0284c7", background: "#e0f2fe", padding: "2px 8px", borderRadius: 6 }}>
+                {PROF_LABEL[item.requiredProfession] ?? item.requiredProfession}
+              </span>
+            )}
+          </h2>
+          <p style={s.sectionDesc}>이 현장에 직무지도원을 배정합니다. {item.requiredProfession ? "현장 직종 자격 보유자만 표시됩니다." : ""}</p>
+
+          {/* 현재 배정 목록 */}
+          {assignments.length > 0 ? (
+            <div style={{ marginBottom: 14, display: "flex", flexDirection: "column", gap: 6 }}>
+              {assignments.map(a => (
+                <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#f9fafb", borderRadius: 8, fontSize: 13, border: "1px solid #f0f0f0" }}>
+                  <span style={{ fontWeight: 600, color: "#111827" }}>{a.user?.workerName ?? "(이름없음)"}</span>
+                  <span style={{ color: "#9ca3af" }}>{a.user?.phoneNumber ?? ""}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 12, color: a.status === "ACTIVE" ? "#2e7d32" : "#9ca3af", fontWeight: 600 }}>{a.status} · {a.workType}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ marginBottom: 14, fontSize: 13, color: "#9ca3af" }}>아직 배정된 직무지도원이 없습니다.</p>
+          )}
+
+          {/* 신규 배정 */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value={selectedWorkerId}
+              onChange={e => setSelectedWorkerId(e.target.value)}
+              style={{ flex: 1, minWidth: 200, height: 40, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 12px", fontSize: 14, background: "#fff" }}
+            >
+              <option value="">직무지도원 선택…</option>
+              {workerOptions.map(w => (
+                <option key={w.id} value={w.id}>{w.workerName} / {w.phoneNumber ?? "-"}</option>
+              ))}
+            </select>
+            <select
+              value={assignWorkType}
+              onChange={e => setAssignWorkType(e.target.value)}
+              style={{ height: 40, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 12px", fontSize: 14, background: "#fff" }}
+            >
+              <option value="FULL_DAY">종일(FULL_DAY)</option>
+              <option value="AM">오전(AM)</option>
+              <option value="PM">오후(PM)</option>
+            </select>
+            <button
+              onClick={assignWorker}
+              disabled={assigning || !selectedWorkerId}
+              style={{ height: 40, padding: "0 18px", background: "#2563eb", color: "#fff", fontSize: 14, fontWeight: 700, border: "none", borderRadius: 8, cursor: "pointer", opacity: assigning || !selectedWorkerId ? 0.6 : 1 }}
+            >
+              {assigning ? "배정 중…" : "배정"}
+            </button>
+          </div>
+          {workerOptions.length === 0 && (
+            <p style={{ marginTop: 8, fontSize: 12, color: "#f59e0b" }}>배정 가능한 {item.requiredProfession ? (PROF_LABEL[item.requiredProfession] ?? "") + " 자격 " : ""}직무지도원이 없습니다.</p>
+          )}
         </div>
 
         {/* 저장 버튼 */}

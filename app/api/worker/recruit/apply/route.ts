@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { parseBigInt } from "@/lib/adminScope";
+import { getWorkerAgencyIds, isPostVisibleToWorker } from "@/lib/recruitVisibility";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,8 +18,15 @@ export async function POST(req: NextRequest) {
     const postId = parseBigInt(b.recruitPostId);
     if (!postId) return NextResponse.json({ success: false, message: "공고 ID가 필요합니다." }, { status: 400 });
 
-    const post = await prisma.recruitPost.findUnique({ where: { id: postId }, select: { id: true, status: true, profession: true } });
+    const post = await prisma.recruitPost.findUnique({ where: { id: postId }, select: { id: true, status: true, profession: true, agencyId: true, createdByAdminId: true } });
     if (!post) return NextResponse.json({ success: false, message: "공고를 찾을 수 없습니다." }, { status: 404 });
+
+    // 노출 게이트: 볼 수 없는 공고에는 신청도 불가(403)
+    const agencyIds = await getWorkerAgencyIds(workerId);
+    if (!isPostVisibleToWorker({ createdByAdminId: post.createdByAdminId, agencyId: post.agencyId }, agencyIds)) {
+      return NextResponse.json({ success: false, message: "신청할 수 없는 공고입니다." }, { status: 403 });
+    }
+
     if (post.status !== "OPEN") return NextResponse.json({ success: false, message: "마감된 공고입니다." }, { status: 409 });
 
     // 자격 증빙 — 이 직종 자격이 저장돼 있으면 재사용(재요구 X), 없으면 이번 신청 시 입력 필수 → 저장

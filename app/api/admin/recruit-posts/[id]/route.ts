@@ -13,10 +13,11 @@ async function ownOrThrow(req: NextRequest, id: string) {
   if (!postId) throw NextResponse.json({ success: false, message: "잘못된 ID" }, { status: 400 });
   const post = await prisma.recruitPost.findUnique({ where: { id: postId } });
   if (!post) throw NextResponse.json({ success: false, message: "공고를 찾을 수 없습니다." }, { status: 404 });
+  // admin(운영자)은 모든 공고 관리 가능. manager는 본인/소속 공고만.
   const owned =
     session.kind === "manager"
       ? post.createdByManagerId === session.managerId || post.agencyId === session.agencyId
-      : post.createdByAdminId === session.adminId;
+      : true;
   if (!owned) throw NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
   return { postId, post };
 }

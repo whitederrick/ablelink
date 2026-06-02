@@ -79,7 +79,9 @@ export default function RecruitDetailPage() {
         {closed && <span className="ml-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-500">마감</span>}
         <h1 className="mt-2 text-lg font-black leading-snug text-slate-900">{post.title}</h1>
         <p className="mt-0.5 text-sm font-bold text-slate-500">{post.companyName}</p>
-        {post.agencyName && <p className="text-xs font-semibold text-slate-400">{post.agencyName}</p>}
+        <span className="mt-1 inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500">
+          <Building2 className="h-3 w-3" />{post.agencyName ?? "공단·플랫폼"}
+        </span>
 
         <div className="mt-4 space-y-2.5 rounded-2xl border border-slate-100 bg-white p-4">
           {post.taskName && <Row icon={<Building2 className="h-4 w-4" />} label="직무지도 과제(사업명)" value={post.taskName} />}

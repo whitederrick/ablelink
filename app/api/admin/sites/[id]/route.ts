@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireAdminOrManagerSession } from "@/lib/managerScope";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -37,6 +37,8 @@ function toRow(r: any) {
     managerEmail: r.agencyManager?.email ?? null,
     managerPhone: r.agencyManager?.phoneNumber ?? null,
 
+    requiredProfession: r.requiredProfession ?? null,
+
     allowanceRange: r.allowanceRange ?? 100,
 
     basePointConfirmed: r.basePointConfirmed,
@@ -58,7 +60,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const scope = await requireManagerSession(req);
+    const session = await requireAdminOrManagerSession(req);
     const { id } = await params;
 
     const idStr = String(id ?? "").trim();
@@ -77,6 +79,7 @@ export async function GET(
         gpsLon: true,
         agencyId: true,
         managerId: true,
+        requiredProfession: true,
         basePointConfirmed: true,
         basePointAuthority: true,
         basePointApprovalStatus: true,
@@ -89,7 +92,8 @@ export async function GET(
     });
     if (!site) throw new Error("NOT_FOUND");
 
-    assertAgencyAccess(scope.agencyId, site.agencyId);
+    // manager는 본인 agency 사이트만, admin(운영자)은 전체 접근
+    if (session.kind === "manager") assertAgencyAccess(session.agencyId, site.agencyId);
 
     return NextResponse.json({ success: true, item: toRow(site) });
   } catch (e: any) {
@@ -107,7 +111,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const scope = await requireManagerSession(req);
+    const session = await requireAdminOrManagerSession(req);
     const { id } = await params;
 
     const idStr = String(id ?? "").trim();
@@ -120,7 +124,7 @@ export async function PATCH(
     });
     if (!existing) throw new Error("NOT_FOUND");
 
-    assertAgencyAccess(scope.agencyId, existing.agencyId);
+    if (session.kind === "manager") assertAgencyAccess(session.agencyId, existing.agencyId);
 
     const body = await req.json();
 
@@ -184,7 +188,9 @@ export async function PATCH(
         select: { agencyId: true },
       });
       if (!m) throw new Error("VALIDATION:managerId");
-      if (m.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
+      // 담당자는 사이트 귀속 에이전시 소속이어야 함(manager는 본인 agency = 사이트 agency)
+      const requiredAgencyId = session.kind === "manager" ? session.agencyId : existing.agencyId;
+      if (m.agencyId !== requiredAgencyId) throw new Error("FORBIDDEN");
     }
 
     const updated = await prisma.site.update({
@@ -226,7 +232,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const scope = await requireManagerSession(req);
+    const session = await requireAdminOrManagerSession(req);
     const { id } = await params;
 
     const idStr = String(id ?? "").trim();
@@ -239,7 +245,7 @@ export async function DELETE(
     });
     if (!existing) throw new Error("NOT_FOUND");
 
-    assertAgencyAccess(scope.agencyId, existing.agencyId);
+    if (session.kind === "manager") assertAgencyAccess(session.agencyId, existing.agencyId);
 
     await prisma.site.delete({ where: { id: siteId } });
     return NextResponse.json({ success: true });

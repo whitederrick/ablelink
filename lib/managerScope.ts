@@ -73,3 +73,13 @@ export async function requireAdminOrManagerSession(req: Request): Promise<DualSe
 
   throw jsonError(401, "UNAUTHORIZED");
 }
+
+// dual 세션에서 작업 대상 agencyId 결정:
+// - manager: 본인 agencyId 강제(요청값 무시 — 스코프 이탈 방지)
+// - admin(운영자): 요청에서 받은 agencyId 사용(필수). 운영자는 모든 에이전시를 관리.
+export function resolveScopeAgencyId(session: DualSession, requested?: string | bigint | null): bigint {
+  if (session.kind === "manager") return session.agencyId;
+  const parsed = typeof requested === "bigint" ? requested : parseBigInt(String(requested ?? ""));
+  if (!parsed) throw jsonError(400, "AGENCY_REQUIRED");
+  return parsed;
+}

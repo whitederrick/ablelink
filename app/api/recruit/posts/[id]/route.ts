@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { parseBigInt } from "@/lib/adminScope";
+import { getWorkerAgencyIds, isPostVisibleToWorker } from "@/lib/recruitVisibility";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -25,6 +26,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     });
     if (!p) return NextResponse.json({ success: false, message: "공고를 찾을 수 없습니다." }, { status: 404 });
+
+    // 노출 게이트: 운영자 공고 OR 배정 이력 에이전시 공고만 조회 허용(미노출은 404로 은닉)
+    const agencyIds = await getWorkerAgencyIds(workerId);
+    if (!isPostVisibleToWorker({ createdByAdminId: p.createdByAdminId, agencyId: p.agencyId }, agencyIds)) {
+      return NextResponse.json({ success: false, message: "공고를 찾을 수 없습니다." }, { status: 404 });
+    }
 
     // 이 공고 직종에 대한 저장된 자격 증빙이 있는지 → 없으면 신청 시 입력 요청
     const prof = await prisma.workerProfession.findUnique({

@@ -146,8 +146,11 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const distRounded = Math.round(distM);
 
-    if (distM <= allowanceM) {
-      // ✅ 허용 범위 이내: 즉시 확정(원본 gps 반영)
+    // 🔒 위치 잠금 정책: 이미 확정된(basePointConfirmed) 기준점은 직무지도원이 임의로
+    //    덮어쓸 수 없다. 허용범위 이내라도 좌표를 변경하지 않고 정정요청으로만 접수
+    //    (에이전시/운영자 승인 필요). 최초 미확정 상태에서만 1회 자동 확정 허용.
+    if (distM <= allowanceM && !site.basePointConfirmed) {
+      // ✅ 최초 확정(잠금 전): 즉시 확정(원본 gps 반영)
       await prisma.site.update({
         where: { id: siteIdBig },
         data: {
@@ -189,10 +192,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ❌ 허용 범위 초과: 정정요청만 기록 (원본 gps/confirmed/updatedAt은 유지)
+    // ❌ 정정요청만 기록 (원본 gps/confirmed/updatedAt은 유지)
+    //  - 잠금(이미 확정): 거리와 무관하게 변경 불가 → 정정요청
+    //  - 허용범위 초과: 기존 정책
+    const locked = site.basePointConfirmed === true;
     const autoReason =
       reason ||
-      `원본 좌표 대비 ${distRounded}m 차이로 허용범위(${allowanceM}m)를 초과합니다. 주소/GPS 정보 재확인이 필요합니다.`;
+      (locked
+        ? `이미 확정된 기준점입니다. 변경하려면 에이전시/운영자 승인이 필요합니다. (요청 좌표는 원본 대비 ${distRounded}m)`
+        : `원본 좌표 대비 ${distRounded}m 차이로 허용범위(${allowanceM}m)를 초과합니다. 주소/GPS 정보 재확인이 필요합니다.`);
 
     await prisma.site.update({
       where: { id: siteIdBig },
@@ -223,9 +231,12 @@ export async function POST(request: NextRequest) {
       success: true,
       status: "CORRECTION_REQUESTED",
       applied: false,
+      locked,
       distanceM: distRounded,
       allowanceM,
-      message: "허용범위를 초과하여 정정 요청 상태로 전환되었습니다. (에이전시 확인 필요)",
+      message: locked
+        ? "이미 확정된 기준점은 변경할 수 없어 정정 요청으로 접수되었습니다. (에이전시/운영자 승인 필요)"
+        : "허용범위를 초과하여 정정 요청 상태로 전환되었습니다. (에이전시 확인 필요)",
     });
   } catch (error: any) {
     console.error("basepoint propose error:", error);

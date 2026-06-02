@@ -1,16 +1,24 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Search, MapPin, Users, Building2 } from "lucide-react";
+
+const PROF_LABEL: Record<string, string> = {
+  JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사",
+};
 
 type SiteItem = {
   id: string; companyName: string; address: string;
+  requiredProfession: string|null;
   agencyId: string|null; agencyName: string|null; planType: string|null;
   traineeCount: number; workerCount: number;
   workers: {id:string;name:string}[];
 };
 
 export default function SitesPage() {
+  const router = useRouter();
   const [sites, setSites]   = useState<SiteItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ]           = useState("");
@@ -24,8 +32,13 @@ export default function SitesPage() {
 
   return (
     <div>
-      <div className="mb-6"><h1 className="text-xl font-black text-slate-900">전체 현장(Site)</h1>
-        <p className="mt-0.5 text-sm text-slate-500">전체 {sites.length}개 현장 현황</p></div>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-black text-slate-900">전체 현장(Site)</h1>
+          <p className="mt-0.5 text-sm text-slate-500">전체 {sites.length}개 현장 현황</p>
+        </div>
+        <Link href="/admin/sites/new" className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white no-underline active:scale-95">+ 현장 생성</Link>
+      </div>
 
       <div className="mb-4 flex gap-2">
         <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&load(q)}
@@ -42,14 +55,14 @@ export default function SitesPage() {
         <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-slate-100 bg-slate-50">
-              {["현장명","에이전시","훈련생","직무지도원","주소"].map(h=>(
+              {["현장명","직종","에이전시","훈련생","직무지도원","주소"].map(h=>(
                 <th key={h} className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">{h}</th>
               ))}
             </tr></thead>
             <tbody className="divide-y divide-slate-50">
-              {sites.length===0?(<tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-slate-400">현장이 없습니다.</td></tr>)
+              {sites.length===0?(<tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">현장이 없습니다.</td></tr>)
               :sites.map(s=>(
-                <tr key={s.id} className="hover:bg-slate-50 transition">
+                <tr key={s.id} onClick={()=>router.push(`/admin/sites/${s.id}`)} className="cursor-pointer hover:bg-slate-50 transition">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 flex-shrink-0">
@@ -57,6 +70,11 @@ export default function SitesPage() {
                       </div>
                       <span className="font-semibold text-slate-900">{s.companyName}</span>
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {s.requiredProfession
+                      ? <span className="rounded-md bg-sky-50 px-2 py-0.5 text-xs font-black text-sky-600">{PROF_LABEL[s.requiredProfession] ?? s.requiredProfession}</span>
+                      : <span className="text-slate-300 text-xs">-</span>}
                   </td>
                   <td className="px-4 py-3">
                     {s.agencyName?<span className="text-sm text-slate-700">{s.agencyName}</span>:<span className="text-slate-300 text-xs">없음</span>}

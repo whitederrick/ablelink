@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { getWorkerAgencyIds, recruitVisibilityOr } from "@/lib/recruitVisibility";
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,24 +19,31 @@ export async function GET(req: NextRequest) {
     const profession = searchParams.get("profession") || "";
     const region = (searchParams.get("region") || "").trim();
 
-    const where: any = { status: "OPEN" };
-    if (["JOB_COACH", "CAREGIVER", "ACTIVITY_ASSISTANT"].includes(profession)) where.profession = profession;
-    if (region) where.region = { contains: region, mode: "insensitive" };
+    // 노출 게이트: 운영자 공고(전체공개) OR 배정 이력 에이전시 공고
+    const agencyIds = await getWorkerAgencyIds(workerId);
+    const visibilityOr = recruitVisibilityOr(agencyIds);
+
+    const and: any[] = [{ status: "OPEN" }, { OR: visibilityOr }];
+    if (["JOB_COACH", "CAREGIVER", "ACTIVITY_ASSISTANT"].includes(profession)) and.push({ profession });
+    if (region) and.push({ region: { contains: region, mode: "insensitive" } });
     if (q) {
-      where.OR = [
-        { title: { contains: q, mode: "insensitive" } },
-        { companyName: { contains: q, mode: "insensitive" } },
-        { taskName: { contains: q, mode: "insensitive" } },
-        { address: { contains: q, mode: "insensitive" } },
-      ];
+      and.push({
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { companyName: { contains: q, mode: "insensitive" } },
+          { taskName: { contains: q, mode: "insensitive" } },
+          { address: { contains: q, mode: "insensitive" } },
+        ],
+      });
     }
 
     const posts = await prisma.recruitPost.findMany({
-      where,
+      where: { AND: and },
       orderBy: { createdAt: "desc" },
       take: 100,
       include: {
         applications: { where: { workerId }, select: { id: true, status: true } },
+        agency: { select: { name: true } },
         _count: { select: { applications: true } },
       },
     });
@@ -46,6 +54,7 @@ export async function GET(req: NextRequest) {
         id: p.id.toString(),
         title: p.title,
         companyName: p.companyName,
+        agencyName: p.agency?.name ?? null, // null = 운영자(공단/플랫폼) 공고
         profession: p.profession,
         taskName: p.taskName ?? null,
         address: p.address,

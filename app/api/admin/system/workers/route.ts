@@ -11,16 +11,22 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q")?.trim() ?? "";
+    const profession = searchParams.get("profession")?.trim() ?? "";
+    const profValid = ["JOB_COACH", "CAREGIVER", "ACTIVITY_ASSISTANT"].includes(profession);
+
+    const and: any[] = [];
+    if (q) and.push({ OR: [
+      { workerName: { contains: q } },
+      { phoneNumber: { contains: q } },
+      { loginId: { contains: q } },
+    ] });
+    // 직종(카테고리) 필터 — 해당 직종 자격을 보유한 인력만(배정 대상 후보)
+    if (profValid) and.push({ professions: { some: { profession } } });
 
     const users = await prisma.worker.findMany({
-      where: q ? {
-        OR: [
-          { workerName: { contains: q } },
-          { phoneNumber: { contains: q } },
-          { loginId: { contains: q } },
-        ],
-      } : undefined,
+      where: and.length ? { AND: and } : undefined,
       include: {
+        professions: { select: { profession: true, verifyStatus: true } },
         assignments: {
           where: { status: { in: ["ACTIVE", "ASSIGNED", "CONFIRMED"] } },
           include: {
@@ -45,6 +51,7 @@ export async function GET(req: Request) {
           phoneNumber: u.phoneNumber,
           status:      u.status,
           planType:    u.planType,
+          professions: u.professions.map(p => ({ profession: p.profession, verifyStatus: p.verifyStatus })),
           siteName:    asgn?.site?.companyName ?? null,
           agencyId:    asgn?.site?.agency?.id?.toString() ?? null,
           agencyName:  asgn?.site?.agency?.name ?? null,

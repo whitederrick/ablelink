@@ -11,7 +11,7 @@ const PROF_LABEL: Record<string, string> = {
 };
 
 interface Post {
-  id: string; title: string; companyName: string; profession: string;
+  id: string; title: string; companyName: string; agencyName: string | null; profession: string;
   taskName: string | null; region: string | null; headcount: number;
   status: string; applicationCount?: number; createdAt: string;
 }
@@ -56,6 +56,7 @@ export default function ManagerRecruitPage() {
           <thead>
             <tr>
               <th className={T.th}>공고</th>
+              <th className={T.th}>출처(에이전시)</th>
               <th className={T.th}>직종</th>
               <th className={T.th}>지역</th>
               <th className={T.th}>모집</th>
@@ -66,15 +67,20 @@ export default function ManagerRecruitPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className={T.empty}>불러오는 중…</td></tr>
+              <tr><td colSpan={8} className={T.empty}>불러오는 중…</td></tr>
             ) : posts.length === 0 ? (
-              <tr><td colSpan={7} className={T.empty}>등록한 공고가 없습니다. ‘새 공고’로 등록해보세요.</td></tr>
+              <tr><td colSpan={8} className={T.empty}>등록한 공고가 없습니다. ‘새 공고’로 등록해보세요.</td></tr>
             ) : (
               posts.map((p) => (
                 <tr key={p.id} className={T.trBase}>
                   <td className={T.td}>
                     <Link href={`/admin/recruit/${p.id}`} className="font-bold text-slate-900 hover:text-sky-600">{p.title}</Link>
                     <div className="text-xs text-slate-400">{p.companyName}{p.taskName ? ` · ${p.taskName}` : ""}</div>
+                  </td>
+                  <td className={T.td}>
+                    {p.agencyName
+                      ? <span className="font-semibold text-slate-600">{p.agencyName}</span>
+                      : <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-black text-emerald-600">공단·플랫폼</span>}
                   </td>
                   <td className={T.td}>{PROF_LABEL[p.profession] ?? p.profession}</td>
                   <td className={T.td}>{p.region ?? "-"}</td>

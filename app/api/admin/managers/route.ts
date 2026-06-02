@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireAdminOrManagerSession, resolveScopeAgencyId } from "@/lib/managerScope";
 import { Prisma } from "@prisma/client";
 
 function errToStatus(msg: string) {
@@ -34,15 +34,17 @@ function toRow(r: any) {
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
+    const session = await requireAdminOrManagerSession(req);
 
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") || "").trim();
     const page = parseIntSafe(searchParams.get("page"), 1);
     const pageSize = Math.min(parseIntSafe(searchParams.get("pageSize"), 20), 100);
+    // manager: 본인 agency / admin(운영자): ?agencyId 지정 필수
+    const agencyId = resolveScopeAgencyId(session, searchParams.get("agencyId"));
 
     const where: Prisma.AgencyManagerWhereInput = {
-      agencyId: scope.agencyId,
+      agencyId,
       ...(q
         ? {
             OR: [
@@ -82,12 +84,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
+    const session = await requireAdminOrManagerSession(req);
 
     const body = await req.json();
     const name = String(body?.name ?? "").trim();
     const email = String(body?.email ?? "").trim();
     const phoneNumber = body?.phoneNumber == null ? null : String(body.phoneNumber).trim();
+    // manager: 본인 agency / admin(운영자): body.agencyId 지정 필수
+    const agencyId = resolveScopeAgencyId(session, body?.agencyId);
 
     if (!name) throw new Error("VALIDATION:name");
     if (!email) throw new Error("VALIDATION:email");
@@ -97,7 +101,7 @@ export async function POST(req: NextRequest) {
         name,
         email,
         phoneNumber,
-        agency: { connect: { id: scope.agencyId } },
+        agency: { connect: { id: agencyId } },
       },
       select: {
         id: true,

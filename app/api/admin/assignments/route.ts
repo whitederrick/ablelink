@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireAdminOrManagerSession } from "@/lib/managerScope";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -63,7 +63,7 @@ function toItem(r: any) {
 // - 필터: siteId, workerId, status
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
+    const session = await requireAdminOrManagerSession(req);
 
     const { searchParams } = new URL(req.url);
     const siteIdStr = (searchParams.get("siteId") || "").trim();
@@ -81,8 +81,8 @@ export async function GET(req: NextRequest) {
     }
     if (status) where.status = status;
 
-    // 해당 agency의 site에 속한 assignment만
-    where.site = { agencyId: scope.agencyId };
+    // manager: 본인 agency의 site 배정만 / admin(운영자): 전체
+    if (session.kind === "manager") where.site = { agencyId: session.agencyId };
 
     const rows = await prisma.siteAssignment.findMany({
       where,
@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
 // body: { siteId, workerId, isMainWorker?, memo? }
 export async function POST(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
+    const session = await requireAdminOrManagerSession(req);
 
     const body = await req.json();
     const siteIdStr = String(body.siteId ?? "").trim();
@@ -137,16 +137,16 @@ export async function POST(req: NextRequest) {
     const siteId = BigInt(siteIdStr);
     const workerId = BigInt(userIdStr);
 
-    // 배정하려는 site가 내 agency 소속인지 검증
-    const myAgencyId = scope.agencyId;
+    // 배정 대상 site 검증. manager는 본인 agency 소속만, admin(운영자)은 임의 활성 사이트.
     const site = await prisma.site.findUnique({
       where: { id: siteId },
-      select: { agencyId: true, isActive: true },
+      select: { agencyId: true, isActive: true, managerId: true },
     });
     if (!site) throw new Error("NOT_FOUND");
     if (!site.isActive) throw new Error("VALIDATION:siteInactive");
-    if (site.agencyId == null) throw new Error("FORBIDDEN");
-    if (site.agencyId !== myAgencyId) throw new Error("FORBIDDEN");
+    if (site.agencyId == null) throw new Error("FORBIDDEN"); // 배정은 에이전시 귀속 사이트만(급여·구독 집계)
+    if (session.kind === "manager" && site.agencyId !== session.agencyId) throw new Error("FORBIDDEN");
+    const effectiveAgencyId = site.agencyId;
 
     // 배정 대상 user 존재 확인
     const user = await prisma.worker.findUnique({
@@ -175,13 +175,14 @@ export async function POST(req: NextRequest) {
     const customWorkStart = workType === "CUSTOM" ? (body.customWorkStart ?? null) : null;
     const customWorkEnd   = workType === "CUSTOM" ? (body.customWorkEnd ?? null) : null;
 
-    const assignedByManagerId = scope.managerId;
+    // manager 로그인 계정(Manager.id) 기록. admin(운영자) 직접 배정은 null.
+    const assignedByManagerId = session.kind === "manager" ? session.managerId : null;
 
     const created = await prisma.siteAssignment.create({
       data: {
         siteId,
         workerId,
-        agencyId: scope.agencyId, // 에이전시 스코프 쿼리(급여·CSV·근태inbox·휴무)에서 누락 방지
+        agencyId: effectiveAgencyId, // 에이전시 스코프 쿼리(급여·CSV·근태inbox·휴무)에서 누락 방지
         // 초대·셀프등록 경로와 동일하게 ACTIVE로 생성 (ASSIGNED→ACTIVE 승격 경로가 없어
         // 급여 정산·대시보드·구독 인원(ACTIVE만 집계)에서 누락되던 문제 방지)
         status: "ACTIVE",

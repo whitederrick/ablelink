@@ -5,22 +5,24 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireAdminOrManagerSession } from "@/lib/managerScope";
 
 export async function GET(req: Request) {
   try {
-    const scope = await requireManagerSession(req);
+    const session = await requireAdminOrManagerSession(req);
 
-    const agencyId = scope.agencyId;
+    // manager: 본인 agency만 / admin(운영자): 전체 에이전시
+    const agencyWhere = session.kind === "manager" ? { id: session.agencyId } : {};
+    const mgrWhere = session.kind === "manager" ? { agencyId: session.agencyId } : {};
 
     const agencies = await prisma.agency.findMany({
-      where: { id: agencyId },
+      where: agencyWhere,
       orderBy: { id: "asc" },
       select: { id: true, name: true },
     });
 
     const managers = await prisma.agencyManager.findMany({
-      ...(agencyId ? { where: { agencyId } } : {}),
+      where: mgrWhere,
       orderBy: { id: "asc" },
       select: { id: true, agencyId: true, name: true, email: true, phoneNumber: true },
     });

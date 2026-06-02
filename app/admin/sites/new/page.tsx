@@ -32,6 +32,7 @@ export default function AdminSiteNewPage() {
     gpsLat: "",
     gpsLon: "",
   });
+  const [requiredProfession, setRequiredProfession] = useState<string>("JOB_COACH");
   const [allowanceRange, setAllowanceRange] = useState(100);
 
   const [addrQ, setAddrQ] = useState("");
@@ -167,6 +168,7 @@ export default function AdminSiteNewPage() {
         gpsLon: form.gpsLon.trim(),
         allowanceRange,
         managerId,
+        requiredProfession,
       };
       if (isAdmin) payload.agencyId = agencyId;
       const r = await fetch("/api/admin/sites", {
@@ -208,6 +210,20 @@ export default function AdminSiteNewPage() {
             </select>
           </div>
         )}
+
+        <div className={T.card}>
+          <label className={T.label}>직종(카테고리) *</label>
+          <select
+            value={requiredProfession}
+            onChange={(e) => setRequiredProfession(e.target.value)}
+            className={`w-full ${T.select}`}
+          >
+            <option value="JOB_COACH">직무지도원</option>
+            <option value="CAREGIVER">요양보호사</option>
+            <option value="ACTIVITY_ASSISTANT">활동지원사</option>
+          </select>
+          <p className="mt-1 text-xs font-semibold text-slate-400">현장에 필요한 직종 구분입니다. 직무지도원 배정 시 같은 직종으로 필터됩니다.</p>
+        </div>
 
         <div className={T.card}>
           <p className="mb-4 text-sm font-black text-slate-900">기본 정보</p>
