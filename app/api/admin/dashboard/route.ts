@@ -18,11 +18,13 @@ export async function GET(req: Request) {
 
     const in5Days = new Date(today); in5Days.setDate(in5Days.getDate() + 5);
     const in10Days = new Date(today); in10Days.setDate(in10Days.getDate() + 10);
+    const issueFloor = new Date(today); issueFloor.setDate(issueFloor.getDate() - 45);
+    const issueFloorStr = issueFloor.toISOString().slice(0, 10);
 
     // ── 5개 쿼리 병렬 실행 ────────────────────────────────────────
     const [
       todayAttendances,
-      unconfirmedIssues,
+      recentAttendances,
       docRunsOpen,
       endingSoonAssignments,
       allActiveSites,
@@ -38,21 +40,20 @@ export async function GET(req: Request) {
           attendanceIssue: { select: { id: true, status: true, issueTypes: true } },
         },
       }),
-      // 2. 미확인 근태 (최근 50건)
-      prisma.attendanceIssue.findMany({
-        where: { status: "OPEN", dailyAttendance: { assignment: { ...agencyFilter } } },
-        take: 50,
+      // 2. 미확인 근태 — AttendanceIssue(인박스 열람 시 lazy 생성)에 의존하지 않고
+      //    최근 출근기록에서 직접 도출(범위이탈/누락/시간이상). RESOLVED만 제외.
+      prisma.dailyAttendance.findMany({
+        where: { workDate: { gte: issueFloorStr }, assignment: { ...agencyFilter } },
+        take: 400,
+        orderBy: { workDate: "desc" },
         select: {
-          id: true, issueTypes: true, createdAt: true,
-          dailyAttendance: {
-            select: {
-              workDate: true,
-              user: { select: { workerName: true } },
-              site: { select: { companyName: true } },
-            },
-          },
+          id: true, workDate: true, startTime: true, endTime: true, status: true,
+          startDistanceM: true, rangeM: true,
+          user: { select: { workerName: true } },
+          site: { select: { companyName: true } },
+          assignment: { select: { workType: true } },
+          attendanceIssue: { select: { status: true } },
         },
-        orderBy: { createdAt: "desc" },
       }),
       // 3. 보고서 현황 (최근 50건)
       prisma.documentRun.findMany({
@@ -84,6 +85,19 @@ export async function GET(req: Request) {
       }),
     ]);
 
+    // 최근 출근기록 → 근태 이슈 직접 도출(RESOLVED 제외). 인박스 열람 여부와 무관하게 정확.
+    const derivedIssues = recentAttendances
+      .map(r => ({ r, types: deriveDashboardIssueTypes(r, todayStr) }))
+      .filter(x => x.types.length > 0 && x.r.attendanceIssue?.status !== "RESOLVED")
+      .map(x => ({
+        id: x.r.id.toString(),
+        workerName: x.r.user?.workerName || "-",
+        siteName: x.r.site?.companyName || "-",
+        workDate: x.r.workDate,
+        issueTypes: x.types,
+        createdAt: x.r.startTime ? x.r.startTime.toISOString() : new Date(`${x.r.workDate}T00:00:00Z`).toISOString(),
+      }));
+
     const todayWorking = todayAttendances.filter(a => a.startTime && !a.isFinalClosed).length;
     const todayDone = todayAttendances.filter(a => a.isFinalClosed).length;
     const logDoneCount = todayAttendances.filter(a => a.logs.length > 0 && a.logs.every(l => l.isCompleted)).length;
@@ -98,13 +112,13 @@ export async function GET(req: Request) {
       type: string; label: string; target: string; detail: string; severity: "high" | "medium" | "low";
     }> = [];
 
-    for (const issue of unconfirmedIssues.slice(0, 15)) {
-      const daysAgo = Math.floor((now.getTime() - issue.createdAt.getTime()) / 86400000);
+    for (const issue of derivedIssues.slice(0, 15)) {
+      const daysAgo = Math.floor((now.getTime() - new Date(`${issue.workDate}T00:00:00Z`).getTime()) / 86400000);
       if (daysAgo >= 3) {
         riskAlerts.push({
           type: "attendance", label: "[근태]",
-          target: issue.dailyAttendance?.user?.workerName || "-",
-          detail: `${daysAgo}일 연속 미확인 근태 — 『${issue.dailyAttendance?.site?.companyName || ""}』`,
+          target: issue.workerName,
+          detail: `${daysAgo}일 경과 미확인 근태 — 『${issue.siteName}』`,
           severity: daysAgo >= 7 ? "high" : "medium",
         });
       }
@@ -153,7 +167,7 @@ export async function GET(req: Request) {
           todayDone,
           logDoneCount,
           logPendingCount,
-          unconfirmedCount: unconfirmedIssues.length,
+          unconfirmedCount: derivedIssues.length,
           docPendingSubmit,
           docOverdue,
           endingIn5,
@@ -161,14 +175,7 @@ export async function GET(req: Request) {
           unassignedSiteCount: unassignedSites.length,
           unassignedSiteList: unassignedSites.slice(0, 10).map(s => ({ id: s.id.toString(), companyName: s.companyName })),
         },
-        attendanceIssueList: unconfirmedIssues.slice(0, 10).map(i => ({
-          id: i.id.toString(),
-          workerName: i.dailyAttendance?.user?.workerName || "-",
-          siteName: i.dailyAttendance?.site?.companyName || "-",
-          workDate: i.dailyAttendance?.workDate || "-",
-          issueTypes: i.issueTypes,
-          createdAt: i.createdAt.toISOString(),
-        })),
+        attendanceIssueList: derivedIssues.slice(0, 10),
         docList: docRunsOpen.slice(0, 8).map(r => ({
           id: r.id.toString(),
           docType: r.docType,
@@ -209,6 +216,33 @@ export async function GET(req: Request) {
     console.error("[admin/dashboard]", error);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
+}
+
+// 인박스와 동일 기준으로 출근기록에서 이슈 도출(범위이탈/누락/시간이상).
+// 진행 중(오늘 WORKING·미퇴근)은 '퇴근 누락'으로 보지 않음.
+function deriveDashboardIssueTypes(
+  r: {
+    workDate: string; status: string;
+    startTime: Date | null; endTime: Date | null;
+    startDistanceM: number | null; rangeM: number | null;
+    assignment: { workType: string | null } | null;
+  },
+  todayStr: string,
+): string[] {
+  const out: string[] = [];
+  if (!r.startTime) out.push("MISSING_CLOCK_IN");
+  if (!r.endTime && !(r.workDate === todayStr && r.status === "WORKING")) out.push("MISSING_CLOCK_OUT");
+  if (r.startDistanceM != null && r.rangeM != null && r.startDistanceM > r.rangeM) out.push("OUT_OF_RANGE");
+
+  const wt = r.assignment?.workType ?? null;
+  const exp = wt === "PM" ? 13 * 60 : (wt === "AM" || wt === "FULL_DAY") ? 9 * 60 : null;
+  if (exp != null && r.startTime) {
+    const kst = new Date(r.startTime.getTime() + 9 * 3600000);
+    const actual = kst.getUTCHours() * 60 + kst.getUTCMinutes();
+    const diff = actual - exp;
+    if (diff >= 1 || diff <= -60) out.push("TIME_ANOMALY");
+  }
+  return out;
 }
 
 function formatHHMM(d: Date) {
