@@ -143,6 +143,7 @@ export default function AdminDashboardPage() {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [popup, setPopup] = useState<null | "attendance_gps" | "attendance_time" | "doc_pending" | "doc_overdue" | "assign_ending" | "unassigned_site">(null);
   const [pendingEditReqs, setPendingEditReqs] = useState(0);
+  const [announcements, setAnnouncements] = useState<{ id: string; title: string; body: string; type: string; createdAt: string }[]>([]);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -162,6 +163,10 @@ export default function AdminDashboardPage() {
     fetch("/api/admin/attendance-edit-requests")
       .then(r => r.json())
       .then(d => { if (d.success) setPendingEditReqs(d.requests.filter((r: any) => r.status === "PENDING").length); })
+      .catch(() => {});
+    fetch("/api/admin/announcements")
+      .then(r => r.json())
+      .then(d => { if (d.success) setAnnouncements(d.announcements); })
       .catch(() => {});
   }, []);
 
@@ -239,8 +244,8 @@ export default function AdminDashboardPage() {
         ))}
       </div>
 
-      {/* 메인 그리드 — 좌측 액션 박스 폭을 합리적으로 제한(과폭 방지), 좁은 화면은 단일 컬럼 */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,580px)_340px]">
+      {/* 메인 그리드 — 좌측 액션 박스는 과폭 방지(≤520px), 우측 정보 박스(리스크·공지·오늘출근)는 넉넉히 */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,520px)_minmax(420px,1fr)]">
 
         {/* 좌측 */}
         <div className="space-y-4">
@@ -297,12 +302,6 @@ export default function AdminDashboardPage() {
               )}
             />
             <ActionRow
-              label="보고서 반려(수정 요청)"
-              count={0} urgent={false}
-              onCountClick={() => {}} showPopup={false} popupItems={[]}
-              onPopupItemClick={() => {}} onPopupClose={() => {}} renderPopupItem={() => null}
-            />
-            <ActionRow
               label="보고서 미제출"
               count={s?.docOverdue ?? 0} urgent={(s?.docOverdue ?? 0) > 0}
               onCountClick={() => setPopup(p => p === "doc_overdue" ? null : "doc_overdue")}
@@ -337,12 +336,6 @@ export default function AdminDashboardPage() {
                   </span>
                 </div>
               )}
-            />
-            <ActionRow
-              label="계약서 미등록"
-              count={0} urgent={false}
-              onCountClick={() => {}} showPopup={false} popupItems={[]}
-              onPopupItemClick={() => {}} onPopupClose={() => {}} renderPopupItem={() => null}
             />
             <ActionRow
               label="직무지도원 미배정 Site"
@@ -382,18 +375,25 @@ export default function AdminDashboardPage() {
             )}
           </Section>
 
-          {/* 공지사항 */}
+          {/* 공지사항 — 운영자 시스템 공지 실데이터 */}
           <Section title="공지사항">
-            {[
-              "[공지] 관리자 시스템 기능 매뉴얼",
-              "[안내] 직무지도원앱(APP) 서비스 기능 연계 안내",
-              "[안내] 기능 고도화 일정 안나",
-              "[안내] 직무지도원 보고서 장애인고용공단 전송 기능 안내",
-            ].map((notice, i) => (
-              <div key={i} className="border-b border-slate-50 py-2 text-sm font-semibold text-slate-700 last:border-b-0">
-                {notice}
-              </div>
-            ))}
+            {announcements.length === 0 ? (
+              <EmptyRow text="등록된 공지가 없습니다" />
+            ) : (
+              announcements.map(a => (
+                <div key={a.id} className="border-b border-slate-50 py-2 last:border-b-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-semibold text-slate-700">
+                      <span className={`mr-1 ${a.type === "URGENT" ? "text-rose-600" : a.type === "MAINTENANCE" ? "text-amber-600" : "text-sky-600"}`}>
+                        [{a.type === "URGENT" ? "긴급" : a.type === "MAINTENANCE" ? "점검" : "공지"}]
+                      </span>
+                      {a.title}
+                    </p>
+                    <span className="flex-shrink-0 text-[10px] font-semibold text-slate-300">{a.createdAt.slice(0, 10)}</span>
+                  </div>
+                </div>
+              ))
+            )}
           </Section>
 
           {/* 오늘 출근 현황 */}
