@@ -1,6 +1,8 @@
 // lib/pdf/templates-html/ATTENDANCE_SHEET.ts
 // 직무지도원 출근부 — jsreport 원본 1:1 이식
-import { buildHcrFontFaceCss } from "../engine/fontEmbed";
+// (구) Playwright HTML 엔진 잔재. 현재 PDF는 pdfkitRenderer가 직접 그리며 이 파일은 payload 타입 정의로만 사용됨.
+// 아래 렌더 함수는 미사용(dead) — 컴파일 유지를 위한 no-op 스텁.
+function buildHcrFontFaceCss(_pageMargin?: string): string { return ""; }
 
 export type AttendanceSheetEntry = {
   date: string;      // "M/D" 표시용

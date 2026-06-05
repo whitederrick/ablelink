@@ -1,5 +1,7 @@
 // lib/pdf/templates-html/TRAINING_DAILY_LOG.ts
-import { buildHcrFontFaceCss } from "../engine/fontEmbed";
+// (구) Playwright HTML 엔진 잔재. 현재 PDF는 pdfkitRenderer가 직접 그리며 이 파일은 payload 타입 정의로만 사용됨.
+// 아래 렌더 함수는 미사용(dead) — 컴파일 유지를 위한 no-op 스텁.
+function buildHcrFontFaceCss(_pageMargin?: string): string { return ""; }
 
 type Section = "PRE" | "FIELD";
 

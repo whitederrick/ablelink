@@ -1,6 +1,8 @@
 // lib/pdf/templates-html/ADAPTATION_FINAL_EVAL.ts
 // 적응지도 대상자 종합 평가기록부 — jsreport 원본 1:1 이식
-import { buildHcrFontFaceCss } from "../engine/fontEmbed";
+// (구) Playwright HTML 엔진 잔재. 현재 PDF는 pdfkitRenderer가 직접 그리며 이 파일은 payload 타입 정의로만 사용됨.
+// 아래 렌더 함수는 미사용(dead) — 컴파일 유지를 위한 no-op 스텁.
+function buildHcrFontFaceCss(_pageMargin?: string): string { return ""; }
 
 const MASTER = [
   { code:"WORK_ATTITUDE",    label:"근무태도", items:["결근, 지각, 조퇴 등을 하지 않는다","결근, 지각, 조퇴 등을 할 때는 연락을 취한다","휴식시간과 근무시간을 잘 지킨다","주의사항을 잘 듣고 그대로 이행한다","외모를 깨끗하고 단정하게 유지한다"] },

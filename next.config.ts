@@ -12,7 +12,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["pdfkit", "playwright"],
+  serverExternalPackages: ["pdfkit"],
 
   // PDF 생성(pdfkit) 라우트의 서버리스 함수 번들에 한글 폰트 포함
   // (public/은 기본적으로 함수 fs에 포함되지 않아 fs.readFileSync 실패 방지)

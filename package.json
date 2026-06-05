@@ -28,7 +28,7 @@
     "next": "16.1.1",
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.17.2",
-    "playwright": "^1.57.0",
+    "pdfjs-dist": "^4.10.38",
     "prisma": "^5.19.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",

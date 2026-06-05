@@ -3,11 +3,12 @@
 // (구) Playwright/Chromium 엔진은 Vercel 서버리스에서 동작 불가 → pdfkitRenderer로 대체.
 import { renderPdfKit } from "./pdfkitRenderer";
 
+// payload 타입만 사용 — HTML 렌더 함수(구 playwright 엔진용)는 미사용이므로 import 안 함.
 import { type AttendanceSheetPayload }    from "./templates-html/ATTENDANCE_SHEET";
-import { renderTRAINING_DAILY_LOG_HTML, type TrainingDailyLogPayload }   from "./templates-html/TRAINING_DAILY_LOG";
-import { renderADAPTATION_DAILY_LOG_HTML, type AdaptationDailyLogPayload } from "./templates-html/ADAPTATION_DAILY_LOG";
-import { renderADAPTATION_FINAL_EVAL_HTML, type FinalEvalPayload }       from "./templates-html/ADAPTATION_FINAL_EVAL";
-import { renderTRAINEE_FINAL_EVAL_HTML, type TraineeFinalEvalPayload }   from "./templates-html/TRAINEE_FINAL_EVAL";
+import { type TrainingDailyLogPayload }   from "./templates-html/TRAINING_DAILY_LOG";
+import { type AdaptationDailyLogPayload } from "./templates-html/ADAPTATION_DAILY_LOG";
+import { type FinalEvalPayload }          from "./templates-html/ADAPTATION_FINAL_EVAL";
+import { type TraineeFinalEvalPayload }   from "./templates-html/TRAINEE_FINAL_EVAL";
 
 export type DocumentType =
   | "ATTENDANCE_SHEET"
