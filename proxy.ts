@@ -94,8 +94,6 @@ export async function proxy(req: NextRequest) {
     "/worker/invite/",
     "/worker/register",
     "/worker/reset-password",
-    "/worker/subscribe/success",
-    "/worker/subscribe/fail",
   ];
   if (workerPublicPaths.some(p => pathname.startsWith(p))) return NextResponse.next();
 

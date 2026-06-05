@@ -12,11 +12,11 @@ import { requireManagerSession } from "@/lib/managerScope";
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const TOSS_API = "https://api.tosspayments.com/v1";
 
-// 플랜별 가격 (월정액, 원)
+// 플랜별 가격 (월정액, 원). 표시가(worker/subscribe·manager/subscription)·PLAN_LIMITS와 정합 유지.
 const PLAN_PRICES: Record<string, number> = {
-  STARTER:  30000,  // 3만원/월
-  STANDARD: 80000,  // 8만원/월
-  PRO:      150000, // 15만원/월
+  STARTER:  49000,
+  STANDARD: 99000,
+  PRO:      199000,
 };
 
 const PLAN_NAMES: Record<string, string> = {

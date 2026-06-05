@@ -9,7 +9,7 @@ Disallow: /worker/docs
 Disallow: /worker/calendar
 Disallow: /worker/site
 Disallow: /worker/onboarding
-Disallow: /worker/subscribe
+Disallow: /manager/
 
 Allow: /worker/login
 Allow: /worker/signup

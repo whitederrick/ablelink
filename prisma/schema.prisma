@@ -1624,6 +1624,9 @@ model RecruitPost {
   workHours     String?       @map("work_hours")        // 근무시간
   workDays      String?       @map("work_days")         // 근무요일
   payInfo       String?       @map("pay_info")          // 급여/수당 안내
+  // 직무지도 기간(겹침 판정 기준). DB는 nullable(하위호환), API/UI에서 입력 필수 강제.
+  serviceStart  DateTime?     @map("service_start")     // 직무지도 시작일
+  serviceEnd    DateTime?     @map("service_end")       // 직무지도 종료일
   headcount     Int           @default(1)               // 모집 인원
   description   String?                                 // 상세 설명
   status        RecruitStatus @default(OPEN)

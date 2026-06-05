@@ -19,7 +19,8 @@ interface Post {
   id: string; title: string; companyName: string; profession: string;
   taskName: string | null; address: string; detailAddress: string | null;
   region: string | null; workHours: string | null; workDays: string | null;
-  payInfo: string | null; headcount: number; description: string | null;
+  payInfo: string | null; serviceStart: string | null; serviceEnd: string | null;
+  headcount: number; description: string | null;
   status: string; agencyName: string | null; contactName: string | null; contactPhone: string | null;
   myApplication: { id: string; status: string } | null;
 }
@@ -34,6 +35,7 @@ export default function RecruitDetailPage() {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [certNeeded, setCertNeeded] = useState(false);
+  const [scheduleConflict, setScheduleConflict] = useState(false);
   const [certNumber, setCertNumber] = useState("");
   const [experienceYears, setExperienceYears] = useState("");
 
@@ -42,7 +44,7 @@ export default function RecruitDetailPage() {
     try {
       const r = await fetch(`/api/recruit/posts/${id}`);
       const d = await r.json();
-      if (d.success) { setPost(d.post); setCertNeeded(!!d.certNeeded); }
+      if (d.success) { setPost(d.post); setCertNeeded(!!d.certNeeded); setScheduleConflict(!!d.scheduleConflict); }
     } finally { setLoading(false); }
   }, [id]);
 
@@ -85,6 +87,9 @@ export default function RecruitDetailPage() {
 
         <div className="mt-4 space-y-2.5 rounded-2xl border border-slate-100 bg-white p-4">
           {post.taskName && <Row icon={<Building2 className="h-4 w-4" />} label="직무지도 과제(사업명)" value={post.taskName} />}
+          {(post.serviceStart || post.serviceEnd) && (
+            <Row icon={<CalendarDays className="h-4 w-4" />} label="직무지도 기간" value={`${post.serviceStart ?? "?"} ~ ${post.serviceEnd ?? "?"}`} />
+          )}
           <Row icon={<MapPin className="h-4 w-4" />} label="위치" value={`${post.address}${post.detailAddress ? " " + post.detailAddress : ""}`} />
           {post.workHours && <Row icon={<Clock className="h-4 w-4" />} label="근무시간" value={post.workHours} />}
           {post.workDays && <Row icon={<CalendarDays className="h-4 w-4" />} label="근무요일" value={post.workDays} />}
@@ -113,6 +118,10 @@ export default function RecruitDetailPage() {
           <div className="rounded-xl bg-amber-50 py-3 text-center text-sm font-black text-amber-700">{APP_LABEL[post.myApplication.status]}</div>
         ) : closed ? (
           <div className="rounded-xl bg-slate-100 py-3 text-center text-sm font-black text-slate-400">마감된 공고입니다</div>
+        ) : scheduleConflict ? (
+          <div className="rounded-xl bg-rose-50 px-3 py-3 text-center text-xs font-black leading-relaxed text-rose-600">
+            현재 진행 중인 직무지도 기간과 일정이 겹쳐 신청할 수 없어요.<br />기간이 겹치지 않는 공고에만 사전 신청할 수 있어요.
+          </div>
         ) : (
           <button onClick={() => setShowApply(true)} className="min-h-12 w-full rounded-2xl bg-slate-950 text-sm font-black text-white active:scale-[0.98]">
             직무지도 신청하기

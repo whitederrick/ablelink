@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { parseBigInt } from "@/lib/adminScope";
 import { getWorkerAgencyIds, isPostVisibleToWorker } from "@/lib/recruitVisibility";
+import { hasScheduleConflict } from "@/lib/recruitSchedule";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -38,9 +39,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       where: { workerId_profession: { workerId, profession: p.profession } },
     });
 
+    // 일정 겹침 사전 안내(신청 버튼 비활성화용) — 실제 차단은 apply 라우트에서도 재검증.
+    const scheduleConflict = await hasScheduleConflict(workerId, p.serviceStart, p.serviceEnd);
+
     return NextResponse.json({
       success: true,
       certNeeded: !prof,
+      scheduleConflict,
       post: {
         id: p.id.toString(),
         title: p.title,
@@ -55,6 +60,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         workHours: p.workHours ?? null,
         workDays: p.workDays ?? null,
         payInfo: p.payInfo ?? null,
+        serviceStart: p.serviceStart ? p.serviceStart.toISOString().slice(0, 10) : null,
+        serviceEnd: p.serviceEnd ? p.serviceEnd.toISOString().slice(0, 10) : null,
         headcount: p.headcount,
         description: p.description ?? null,
         status: p.status,

@@ -52,9 +52,10 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    title: "고객 지원",
+    title: "구독/지원",
     items: [
-      { href: "/manager/support", label: "운영자 문의" },
+      { href: "/manager/subscription", label: "구독 관리" },
+      { href: "/manager/support",      label: "운영자 문의" },
     ],
   },
 ];

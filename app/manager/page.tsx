@@ -183,15 +183,18 @@ export default function AdminDashboardPage() {
   const docPendingList = d?.docList.filter(r => !r.isOverdue) ?? [];
   const docOverdueList = d?.docList.filter(r => r.isOverdue) ?? [];
 
+  // 정렬: daily(매일 챙겨야 하는 것)를 앞, 기간·마감성(보고서·배정 종료)을 뒤로.
   const SUMMARY_CARDS = [
+    // ── daily ──
     { label: "오늘 근무",       value: s?.todayWorking ?? 0,        unit: "명", urgent: false, onClick: undefined as (() => void) | undefined },
     { label: "미확인 근태",     value: s?.unconfirmedCount ?? 0,    unit: "건", urgent: (s?.unconfirmedCount ?? 0) > 0, onClick: () => router.push("/manager/inbox/attendance") },
+    { label: "출근부 수정 요청", value: pendingEditReqs,             unit: "건", urgent: pendingEditReqs > 0, onClick: () => router.push("/manager/attendance-edit-requests") },
+    { label: "일지 미완료",     value: s?.logPendingCount ?? 0,     unit: "건", urgent: (s?.logPendingCount ?? 0) > 0, onClick: undefined, sub: `완료: ${s?.logDoneCount ?? 0}건` },
+    // ── 기간·마감성 ──
     { label: "보고서 제출 대기", value: s?.docPendingSubmit ?? 0,   unit: "건", urgent: false, onClick: () => router.push("/manager/documents") },
     { label: "보고서 미제출",   value: s?.docOverdue ?? 0,          unit: "건", urgent: (s?.docOverdue ?? 0) > 0, onClick: () => router.push("/manager/documents") },
     { label: "배정 종료 임박",  value: s?.endingIn5 ?? 0,           unit: "명", urgent: (s?.endingIn5 ?? 0) > 0, onClick: undefined, sub: `D-10: ${s?.endingIn10 ?? 0}명` },
-    { label: "일지 미완료",     value: s?.logPendingCount ?? 0,     unit: "건", urgent: (s?.logPendingCount ?? 0) > 0, onClick: undefined, sub: `완료: ${s?.logDoneCount ?? 0}건` },
     { label: "미배정 Site",     value: s?.unassignedSiteCount ?? 0, unit: "건", urgent: (s?.unassignedSiteCount ?? 0) > 0, onClick: () => router.push("/manager/sites") },
-    { label: "출근부 수정 요청", value: pendingEditReqs,             unit: "건", urgent: pendingEditReqs > 0, onClick: () => router.push("/manager/attendance-edit-requests") },
   ];
 
   return (
@@ -211,8 +214,8 @@ export default function AdminDashboardPage() {
         </button>
       </div>
 
-      {/* 요약 카드 7종 */}
-      <div className="grid grid-cols-8 gap-2.5">
+      {/* 요약 카드 — daily(앞)/기간성(뒤). 반응형: 모바일 2열 → 데스크톱 8열 */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-8">
         {SUMMARY_CARDS.map((card, i) => (
           <button
             key={i}
@@ -236,8 +239,8 @@ export default function AdminDashboardPage() {
         ))}
       </div>
 
-      {/* 메인 그리드 */}
-      <div className="grid grid-cols-[1fr_360px] gap-4">
+      {/* 메인 그리드 — 좌측 액션 박스 폭을 합리적으로 제한(과폭 방지), 좁은 화면은 단일 컬럼 */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,580px)_340px]">
 
         {/* 좌측 */}
         <div className="space-y-4">
@@ -274,11 +277,6 @@ export default function AdminDashboardPage() {
                 </div>
               )}
             />
-            <div className="border-t border-slate-100 pt-2.5">
-              <button onClick={() => router.push("/manager/inbox/attendance")} className="text-xs font-black text-sky-600 transition hover:text-sky-700">
-                → 근태 관리 바로가기
-              </button>
-            </div>
           </Section>
 
           {/* 보고서 제출 현황 */}
@@ -319,11 +317,6 @@ export default function AdminDashboardPage() {
                 </div>
               )}
             />
-            <div className="border-t border-slate-100 pt-2.5">
-              <button onClick={() => router.push("/manager/documents")} className="text-xs font-black text-sky-600 transition hover:text-sky-700">
-                → 문서 관리 바로가기
-              </button>
-            </div>
           </Section>
 
           {/* 배정/계약 현황 */}
@@ -366,11 +359,6 @@ export default function AdminDashboardPage() {
                 </div>
               )}
             />
-            <div className="border-t border-slate-100 pt-2.5">
-              <button onClick={() => router.push("/manager/workers")} className="text-xs font-black text-sky-600 transition hover:text-sky-700">
-                → 직무지도원 운영 바로가기
-              </button>
-            </div>
           </Section>
         </div>
 

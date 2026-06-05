@@ -5,35 +5,32 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { requireManagerSession } from "@/lib/managerScope";
+import { PLAN_LIMITS } from "@/lib/planGuard";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getWorkerSessionFromReq(request);
-    if (!session) {
-      return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
-    }
+    // 구독 해지는 본인 에이전시 매니저만. (이전: 워커 세션 + 스코프 미검증 → 임의 에이전시 해지 가능 버그)
+    const scope = await requireManagerSession(request);
 
-    const { agencyId } = await request.json();
-
-    if (!agencyId) {
-      return NextResponse.json({ success: false, message: "agencyId가 필요합니다." }, { status: 400 });
-    }
-
-    // 구독 해지: 빌링키 제거, 다음 결제일 제거, FREE로 변경
+    const free = PLAN_LIMITS.FREE;
+    // 구독 해지: 빌링키 제거, 다음 결제일 제거, FREE로 변경 + FREE 한도 복원
     await prisma.agency.update({
-      where: { id: BigInt(agencyId) },
+      where: { id: scope.agencyId },
       data: {
         planType: "FREE",
         tossBillingKey: null,
         tossCustomerKey: null,
         nextBillingAt: null,
         subscriptionId: null,
+        maxWorkers: free.maxWorkers,
+        maxSites: free.maxSites,
       },
     });
 
     return NextResponse.json({ success: true, message: "구독이 해지되었습니다." });
   } catch (error: any) {
+    if (error instanceof Response) return error;
     console.error("[payments/cancel]", error);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }

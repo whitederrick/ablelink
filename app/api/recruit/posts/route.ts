@@ -61,6 +61,8 @@ export async function GET(req: NextRequest) {
         workHours: p.workHours ?? null,
         workDays: p.workDays ?? null,
         payInfo: p.payInfo ?? null,
+        serviceStart: p.serviceStart ? p.serviceStart.toISOString().slice(0, 10) : null,
+        serviceEnd: p.serviceEnd ? p.serviceEnd.toISOString().slice(0, 10) : null,
         headcount: p.headcount,
         createdAt: p.createdAt.toISOString(),
         applicationCount: p._count.applications,

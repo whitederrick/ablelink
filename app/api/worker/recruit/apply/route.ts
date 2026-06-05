@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { parseBigInt } from "@/lib/adminScope";
 import { getWorkerAgencyIds, isPostVisibleToWorker } from "@/lib/recruitVisibility";
+import { hasScheduleConflict } from "@/lib/recruitSchedule";
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
     const postId = parseBigInt(b.recruitPostId);
     if (!postId) return NextResponse.json({ success: false, message: "공고 ID가 필요합니다." }, { status: 400 });
 
-    const post = await prisma.recruitPost.findUnique({ where: { id: postId }, select: { id: true, status: true, profession: true, agencyId: true, createdByAdminId: true } });
+    const post = await prisma.recruitPost.findUnique({ where: { id: postId }, select: { id: true, status: true, profession: true, agencyId: true, createdByAdminId: true, serviceStart: true, serviceEnd: true } });
     if (!post) return NextResponse.json({ success: false, message: "공고를 찾을 수 없습니다." }, { status: 404 });
 
     // 노출 게이트: 볼 수 없는 공고에는 신청도 불가(403)
@@ -28,6 +29,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (post.status !== "OPEN") return NextResponse.json({ success: false, message: "마감된 공고입니다." }, { status: 409 });
+
+    // 일정 겹침: 현재 진행 중(ACTIVE) 직무지도 기간과 겹치면 신청 불가. 겹치지 않는 공고만 사전 신청.
+    if (await hasScheduleConflict(workerId, post.serviceStart, post.serviceEnd)) {
+      return NextResponse.json(
+        { success: false, reason: "SCHEDULE_CONFLICT", message: "현재 진행 중인 직무지도 기간과 일정이 겹쳐 신청할 수 없습니다. 기간이 겹치지 않는 공고에만 사전 신청할 수 있어요." },
+        { status: 409 },
+      );
+    }
 
     // 자격 증빙 — 이 직종 자격이 저장돼 있으면 재사용(재요구 X), 없으면 이번 신청 시 입력 필수 → 저장
     const saved = await prisma.workerProfession.findUnique({

@@ -18,6 +18,7 @@ export default function ManagerRecruitNewPage() {
   const [form, setForm] = useState({
     title: "", companyName: "", profession: "JOB_COACH", taskName: "",
     address: "", detailAddress: "", lat: "", lon: "", region: "",
+    serviceStart: "", serviceEnd: "",
     workHours: "", workDays: "", payInfo: "", headcount: "1", description: "",
     contactName: "", contactPhone: "",
   });
@@ -40,6 +41,12 @@ export default function ManagerRecruitNewPage() {
   async function submit() {
     if (!form.title.trim() || !form.companyName.trim() || !form.address.trim()) {
       alert("제목·사업체명·주소는 필수입니다."); return;
+    }
+    if (!form.serviceStart || !form.serviceEnd) {
+      alert("직무지도 기간(시작일·종료일)을 입력해주세요."); return;
+    }
+    if (form.serviceStart > form.serviceEnd) {
+      alert("종료일은 시작일 이후여야 합니다."); return;
     }
     setSaving(true);
     try {
@@ -113,6 +120,10 @@ export default function ManagerRecruitNewPage() {
 
         <div className={T.card}>
           <p className="mb-4 text-sm font-black text-slate-900">근무 조건</p>
+          <div className="mb-3 grid grid-cols-2 gap-3">
+            <div><label className={T.label}>직무지도 시작일 *</label><input type="date" value={form.serviceStart} onChange={(e) => set("serviceStart", e.target.value)} className={`w-full ${T.input}`} /></div>
+            <div><label className={T.label}>직무지도 종료일 *</label><input type="date" value={form.serviceEnd} min={form.serviceStart || undefined} onChange={(e) => set("serviceEnd", e.target.value)} className={`w-full ${T.input}`} /></div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={T.label}>근무시간</label><input value={form.workHours} onChange={(e) => set("workHours", e.target.value)} className={`w-full ${T.input}`} placeholder="예) 09:00~18:00" /></div>
             <div><label className={T.label}>근무요일</label><input value={form.workDays} onChange={(e) => set("workDays", e.target.value)} className={`w-full ${T.input}`} placeholder="예) 주 5일(월~금)" /></div>

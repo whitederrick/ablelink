@@ -22,6 +22,8 @@ function serialize(p: any) {
     workHours: p.workHours ?? null,
     workDays: p.workDays ?? null,
     payInfo: p.payInfo ?? null,
+    serviceStart: p.serviceStart ? p.serviceStart.toISOString().slice(0, 10) : null,
+    serviceEnd: p.serviceEnd ? p.serviceEnd.toISOString().slice(0, 10) : null,
     headcount: p.headcount,
     description: p.description ?? null,
     status: p.status,
@@ -80,6 +82,16 @@ export async function POST(req: NextRequest) {
     const profession = "JOB_COACH";
     const headcount = Math.max(1, Math.min(999, parseInt(String(b.headcount ?? "1"), 10) || 1));
 
+    // 직무지도 기간(겹침 판정 기준) — 입력 필수, 시작 ≤ 종료.
+    const serviceStart = b.serviceStart ? new Date(b.serviceStart) : null;
+    const serviceEnd = b.serviceEnd ? new Date(b.serviceEnd) : null;
+    if (!serviceStart || isNaN(serviceStart.getTime()) || !serviceEnd || isNaN(serviceEnd.getTime())) {
+      return NextResponse.json({ success: false, message: "직무지도 기간(시작일·종료일)을 입력해주세요." }, { status: 400 });
+    }
+    if (serviceStart > serviceEnd) {
+      return NextResponse.json({ success: false, message: "종료일은 시작일 이후여야 합니다." }, { status: 400 });
+    }
+
     const post = await prisma.recruitPost.create({
       data: {
         title,
@@ -94,6 +106,8 @@ export async function POST(req: NextRequest) {
         workHours: b.workHours?.trim() || null,
         workDays: b.workDays?.trim() || null,
         payInfo: b.payInfo?.trim() || null,
+        serviceStart,
+        serviceEnd,
         headcount,
         description: b.description?.trim() || null,
         contactName: b.contactName?.trim() || null,
