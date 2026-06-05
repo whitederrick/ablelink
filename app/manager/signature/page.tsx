@@ -7,7 +7,7 @@ async function resizeSignature(src: HTMLCanvasElement, w: number, h: number): Pr
   const off = document.createElement("canvas");
   off.width = w; off.height = h;
   const ctx = off.getContext("2d")!;
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 230, 100);
+  ctx.clearRect(0, 0, 230, 100); // 투명 배경(문서 위 서명이 인영을 가리지 않도록)
   const pad = 20, scale = Math.min((w - pad * 2) / src.width, (h - pad * 2) / src.height);
   ctx.drawImage(src, (w - src.width * scale) / 2, (h - src.height * scale) / 2, src.width * scale, src.height * scale);
   return new Promise<Blob>((res, rej) => off.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95));
@@ -35,7 +35,7 @@ export default function AdminSignaturePage() {
     c.width  = 230;
     c.height = 100;
     const ctx = c.getContext("2d")!;
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 230, 100);
+    ctx.clearRect(0, 0, 230, 100); // 투명 배경(문서 위 서명이 인영을 가리지 않도록)
     ctx.strokeStyle = "#000000"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
   }, [mode]);
 
@@ -56,7 +56,7 @@ export default function AdminSignaturePage() {
   function onEnd() { setDrawing(false); lastPos.current = null; }
   function clear() {
     const c = canvasRef.current!, ctx = c.getContext("2d")!;
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 230, 100);
+    ctx.clearRect(0, 0, 230, 100); // 투명 배경(문서 위 서명이 인영을 가리지 않도록)
   }
 
   async function save() {

@@ -54,8 +54,7 @@ export default function SignPage() {
     canvas.height = rect.height * dpr;
     const ctx = canvas.getContext("2d")!;
     ctx.scale(dpr, dpr);
-    ctx.fillStyle   = "#fff";
-    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.clearRect(0, 0, rect.width, rect.height); // 투명 배경(문서 위 서명이 인영을 가리지 않도록)
     ctx.strokeStyle = "#000";
     ctx.lineWidth   = 3.5;
     ctx.lineCap     = "round";
@@ -102,8 +101,7 @@ export default function SignPage() {
     const canvas = canvasRef.current!;
     const ctx    = canvas.getContext("2d")!;
     const rect   = canvas.getBoundingClientRect();
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.clearRect(0, 0, rect.width, rect.height); // 투명 배경
   }
 
   async function submit() {

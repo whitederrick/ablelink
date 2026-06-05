@@ -29,8 +29,7 @@ function ManagerSignContent() {
     c.height = rect.height * dpr;
     const ctx = c.getContext("2d")!;
     ctx.scale(dpr, dpr);
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.clearRect(0, 0, rect.width, rect.height); // 투명 배경(문서 위 서명이 인영을 가리지 않도록)
     ctx.strokeStyle = "#0f172a";
     ctx.lineWidth = 3.5;
     ctx.lineCap = "round";
@@ -81,8 +80,7 @@ function ManagerSignContent() {
     const ctx = c.getContext("2d")!;
     const dpr = window.devicePixelRatio || 1;
     const rect = c.getBoundingClientRect();
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.clearRect(0, 0, rect.width, rect.height); // 투명 배경(문서 위 서명이 인영을 가리지 않도록)
     setIsEmpty(true);
   }
 

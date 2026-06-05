@@ -41,7 +41,7 @@ export default function SignaturePage() {
     // 계약 기반 유료기능 접근 상태 (사전 게이트·안내 통일)
     fetch("/api/worker/site/current")
       .then(r => r.json())
-      .then(d => { if (d?.success && d.data) setPremium({ access: d.data.premiumAccess ?? false, message: d.data.premiumMessage ?? null }); })
+      .then(d => { if (d?.success && d.data) setPremium({ access: d.data.docAccess ?? false, message: d.data.premiumMessage ?? null }); })
       .catch(() => {});
   }, []);
 
@@ -52,8 +52,9 @@ export default function SignaturePage() {
     if (!ctx) return;
     canvas.width  = 230;
     canvas.height = 100;
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, 230, 100);
+    // 투명 배경으로 둠 — 흰색을 채우면 PDF의 "(서명 또는 인)" 글자를 덮으므로 종이에 서명하듯 투명하게 저장.
+    // 그리는 동안 보이는 흰 배경은 canvas의 CSS background-color로 표현된다.
+    ctx.clearRect(0, 0, 230, 100);
     ctx.strokeStyle = "#1a1a2e";
     ctx.lineWidth = 4;
     ctx.lineCap = "round";
@@ -111,8 +112,7 @@ export default function SignaturePage() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, 230, 100);
+    ctx.clearRect(0, 0, 230, 100);
     setIsEmpty(true);
   }
 
