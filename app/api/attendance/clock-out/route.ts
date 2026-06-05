@@ -103,12 +103,15 @@ export async function POST(request: NextRequest) {
     });
 
     if (!attendance) {
+      // 안정성: 클라이언트가 "이미 처리됨"으로 자가치유하도록 식별 코드 부여.
+      // (유실된 응답 후 재시도/중복요청 시 진행 중 기록이 이미 DONE이라 여기로 옴)
       return NextResponse.json(
         {
           success: false,
+          code: action === "CLOCK_OUT" ? "NO_ACTIVE_ATTENDANCE" : "NO_RECONFIRMABLE_ATTENDANCE",
           message:
             action === "CLOCK_OUT"
-              ? "진행 중인 출근 기록을 찾을 수 없습니다."
+              ? "진행 중인 출근 기록을 찾을 수 없습니다. (이미 퇴근 처리되었을 수 있어요)"
               : "재확인/업무종료 가능한 퇴근 기록을 찾을 수 없습니다.",
         },
         { status: 404 }

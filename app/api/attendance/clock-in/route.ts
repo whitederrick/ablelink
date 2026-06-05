@@ -82,8 +82,9 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingRecord) {
+      // 안정성: 클라이언트가 "이미 처리됨"으로 자가치유하도록 식별 코드 부여(중복요청/유실응답 대비).
       return NextResponse.json(
-        { success: false, message: "이미 오늘 출근 기록이 있습니다." },
+        { success: false, code: "ALREADY_CLOCKED_IN", message: "이미 오늘 출근 기록이 있습니다." },
         { status: 400 }
       );
     }

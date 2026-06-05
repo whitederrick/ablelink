@@ -415,6 +415,14 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
             });
           });
         }
+        // 안정성: 실패 시에도 서버 상태로 재동기화(유실된 응답/중복요청/백그라운드 복귀 대비).
+        // → UI가 서버 truth로 수렴해 "버튼은 퇴근하기인데 서버엔 이미 DONE" 같은 교착을 자가 치유.
+        await refresh();
+        // 이미 처리된(서버 기준 진행 중 기록 없음/이미 출근) 케이스는 에러가 아니라 동기화로 안내.
+        if (data.code === "NO_ACTIVE_ATTENDANCE" || data.code === "ALREADY_CLOCKED_IN") {
+          showToast("이미 처리된 상태예요. 최신 상태로 맞췄어요.", "success");
+          return false;
+        }
         showToast(data.message || "처리 중 오류가 발생했습니다.", "error");
         return false;
       }
