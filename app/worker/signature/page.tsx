@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
-  CircleDollarSign,
   ChevronLeft,
   FileText,
   Home,
@@ -12,6 +11,7 @@ import {
   Trash2,
   Search,
 } from "lucide-react";
+import { SignaturePad, type SignaturePadHandle } from "../../_components/SignaturePad";
 
 const NAV_ITEMS = [
   { icon: Home,             label: "홈",      href: "/worker/home" },
@@ -23,108 +23,31 @@ const NAV_ITEMS = [
 
 export default function SignaturePage() {
   const router = useRouter();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [isEmpty, setIsEmpty] = useState(true);
+  const padRef = useRef<SignaturePadHandle>(null);
+  const [empty, setEmpty] = useState(true);
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<"view" | "draw">("view");
   const [premium, setPremium] = useState<{ access: boolean; message: string | null }>({ access: true, message: null });
-  const lastPos = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     fetch("/api/worker/signature")
       .then(r => r.json())
       .then(d => { if (d.success && d.signatureUrl) setSavedUrl(d.signatureUrl); })
       .finally(() => setLoading(false));
-    // 계약 기반 유료기능 접근 상태 (사전 게이트·안내 통일)
+    // 문서·서명 접근(셀프등록 워커는 무료 허용)
     fetch("/api/worker/site/current")
       .then(r => r.json())
       .then(d => { if (d?.success && d.data) setPremium({ access: d.data.docAccess ?? false, message: d.data.premiumMessage ?? null }); })
       .catch(() => {});
   }, []);
 
-  const initCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    canvas.width  = 230;
-    canvas.height = 100;
-    // 투명 배경으로 둠 — 흰색을 채우면 PDF의 "(서명 또는 인)" 글자를 덮으므로 종이에 서명하듯 투명하게 저장.
-    // 그리는 동안 보이는 흰 배경은 canvas의 CSS background-color로 표현된다.
-    ctx.clearRect(0, 0, 230, 100);
-    ctx.strokeStyle = "#1a1a2e";
-    ctx.lineWidth = 4;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-  }, []);
-
-  useEffect(() => {
-    if (mode === "draw") setTimeout(initCanvas, 50);
-  }, [mode, initCanvas]);
-
-  function getPos(e: React.MouseEvent | React.TouchEvent): { x: number; y: number } {
-    const canvas = canvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    if ("touches" in e) {
-      const touch = e.touches[0];
-      return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
-    }
-    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
-  }
-
-  function startDraw(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    setIsDrawing(true);
-    setIsEmpty(false);
-    const pos = getPos(e);
-    lastPos.current = pos;
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    ctx.beginPath();
-    ctx.arc(pos.x, pos.y, 1.2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  function draw(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    if (!isDrawing || !lastPos.current) return;
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    const pos = getPos(e);
-    ctx.beginPath();
-    ctx.moveTo(lastPos.current.x, lastPos.current.y);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    lastPos.current = pos;
-  }
-
-  function endDraw(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    setIsDrawing(false);
-    lastPos.current = null;
-  }
-
-  function clearCanvas() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, 230, 100);
-    setIsEmpty(true);
-  }
-
   async function handleSave() {
-    if (isEmpty) { alert("서명을 먼저 입력해주세요."); return; }
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const blob = await padRef.current?.getBlob();
+    if (!blob) { alert("서명을 먼저 입력해주세요."); return; }
     setSaving(true);
     try {
-      const blob = await new Promise<Blob>((res, rej) =>
-        canvas.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95)
-      );
       const formData = new FormData();
       formData.append("signature", blob, "signature.png");
       const res = await fetch("/api/worker/signature", { method: "POST", body: formData });
@@ -147,6 +70,7 @@ export default function SignaturePage() {
       await fetch("/api/worker/signature", { method: "DELETE" });
       setSavedUrl(null);
       setMode("draw");
+      setEmpty(true);
     } finally {
       setSaving(false);
     }
@@ -186,7 +110,7 @@ export default function SignaturePage() {
             </p>
             <p className="text-xs font-semibold leading-relaxed text-slate-600">
               등록된 서명은 출근부, 훈련일지 등 공문서 PDF에 자동으로 합성됩니다.<br />
-              실제 서명과 동일하게 작성해주세요.
+              스마트폰에서는 손가락으로, PC에서는 마우스로 서명할 수 있어요.
             </p>
           </div>
 
@@ -199,7 +123,7 @@ export default function SignaturePage() {
               </div>
               <div className="mt-4 flex gap-2.5">
                 <button
-                  onClick={() => { setMode("draw"); setIsEmpty(true); }}
+                  onClick={() => { setMode("draw"); setEmpty(true); }}
                   className="flex min-h-12 flex-1 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97]"
                 >
                   다시 서명하기
@@ -224,7 +148,7 @@ export default function SignaturePage() {
               </div>
               <p className="text-sm font-semibold text-slate-400">등록된 서명이 없습니다.</p>
               <button
-                onClick={() => setMode("draw")}
+                onClick={() => { setMode("draw"); setEmpty(true); }}
                 className="min-h-12 rounded-2xl bg-slate-950 px-8 text-base font-black text-white transition active:scale-[0.97]"
               >
                 서명 등록하기
@@ -232,36 +156,27 @@ export default function SignaturePage() {
             </div>
           )}
 
-          {/* 서명 입력 캔버스 */}
+          {/* 서명 입력 패드 */}
           {mode === "draw" && (
             <div className="flex flex-col gap-3">
               <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="mb-3 text-xs font-semibold text-slate-400">서명 영역</p>
-                <canvas
-                  ref={canvasRef}
-                  className="block touch-none cursor-crosshair"
-                  style={{ width: "100%", height: "100px", border: "2px solid #374151", borderRadius: "8px", backgroundColor: "#fff" }}
-                  onMouseDown={startDraw}
-                  onMouseMove={draw}
-                  onMouseUp={endDraw}
-                  onMouseLeave={endDraw}
-                  onTouchStart={startDraw}
-                  onTouchMove={draw}
-                  onTouchEnd={endDraw}
-                />
-                <p className="mt-2 text-right text-[11px] text-slate-300">이 영역에 서명해주세요</p>
+                <div className="overflow-hidden rounded-xl border-2 border-slate-700 bg-white">
+                  <SignaturePad ref={padRef} height={220} onChange={setEmpty} />
+                </div>
+                <p className="mt-2 text-right text-[11px] text-slate-300">칸 전체에 꽉 차게 서명해 주세요</p>
               </div>
 
               <div className="flex gap-2.5">
                 <button
-                  onClick={clearCanvas}
+                  onClick={() => padRef.current?.clear()}
                   className="flex min-h-12 flex-1 items-center justify-center rounded-2xl bg-slate-100 text-sm font-black text-slate-700 transition active:scale-[0.97]"
                 >
                   지우기
                 </button>
                 <button
                   onClick={handleSave}
-                  disabled={isEmpty || saving}
+                  disabled={empty || saving}
                   className="flex min-h-12 flex-[2] items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97] disabled:opacity-60"
                 >
                   {saving ? "저장 중..." : "서명 저장"}
@@ -279,7 +194,7 @@ export default function SignaturePage() {
             </div>
           )}
 
-          {/* 유료 기능 안내 — 계약 기반 접근이 막혔을 때만, 상황별 자연스러운 문구 */}
+          {/* 문서·서명 기능 안내 — 접근 막혔을 때만 */}
           {!premium.access && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center">
               <p className="text-xs font-semibold leading-relaxed text-amber-700">
