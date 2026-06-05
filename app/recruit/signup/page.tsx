@@ -1,14 +1,13 @@
 "use client";
 
-// 마켓플레이스 직종 증명형 회원가입 (직무지도원/요양보호사/활동지원사 자격 선택·증명)
+// 마켓플레이스 직종 증명형 회원가입
+// 매칭은 현재 직무지도원 직종만 운영(요양보호사·활동지원사 비노출). 서버도 JOB_COACH 강제.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Check, ShieldCheck } from "lucide-react";
 
 const PROFS: { value: string; label: string; certHint: string }[] = [
   { value: "JOB_COACH", label: "직무지도원", certHint: "직무지도원 양성과정 수료증 번호" },
-  { value: "CAREGIVER", label: "요양보호사", certHint: "요양보호사 국가자격증 번호" },
-  { value: "ACTIVITY_ASSISTANT", label: "활동지원사", certHint: "활동지원사 교육과정 수료증 번호" },
 ];
 
 type ProfState = { checked: boolean; certNumber: string; experienceYears: string };
@@ -97,7 +96,7 @@ export default function RecruitSignupPage() {
         <div className="space-y-3 px-4 pt-3">
           <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-xs font-semibold leading-relaxed text-sky-700">
             <ShieldCheck className="mb-1 h-4 w-4" />
-            직무지도원·요양보호사·활동지원사 자격을 등록하고 직무지도 공고에 지원하거나, 에이전시의 제안을 받을 수 있어요. 자격은 운영자 검증 후 활성화됩니다.
+            직무지도원 자격을 등록하고 직무지도 공고에 지원하거나, 에이전시의 제안을 받을 수 있어요. 자격은 운영자 검증 후 활성화됩니다.
           </div>
 
           {/* 1. 휴대폰 인증 */}

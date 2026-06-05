@@ -5,8 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "../_styles";
 
+// 매칭은 현재 직무지도원 직종만 운영 → 직종 필터 미노출(서버도 JOB_COACH 강제).
 const PROF_LABEL: Record<string, string> = { JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사" };
-const PROFS = [{ value: "", label: "전체" }, { value: "JOB_COACH", label: "직무지도원" }, { value: "CAREGIVER", label: "요양보호사" }, { value: "ACTIVITY_ASSISTANT", label: "활동지원사" }];
 
 interface Cand {
   id: string; name: string; region: string | null; bio: string | null; ratingAvg: number; ratingCount: number;
@@ -17,7 +17,6 @@ export default function ManagerTalentPage() {
   const router = useRouter();
   const [cands, setCands] = useState<Cand[]>([]);
   const [loading, setLoading] = useState(true);
-  const [profession, setProfession] = useState("");
   const [region, setRegion] = useState("");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [offerTo, setOfferTo] = useState<Cand | null>(null);
@@ -42,7 +41,6 @@ export default function ManagerTalentPage() {
     setLoading(true);
     try {
       const sp = new URLSearchParams();
-      if (profession) sp.set("profession", profession);
       if (region.trim()) sp.set("region", region.trim());
       if (verifiedOnly) sp.set("verifiedOnly", "1");
       const r = await fetch(`/api/admin/talent?${sp}`);
@@ -50,9 +48,9 @@ export default function ManagerTalentPage() {
       if (d.success) setCands(d.candidates);
       else if (r.status === 401) router.replace("/manager/login");
     } finally { setLoading(false); }
-  }, [profession, region, verifiedOnly, router]);
+  }, [region, verifiedOnly, router]);
 
-  useEffect(() => { load(); }, [profession, verifiedOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [verifiedOnly]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function sendOffer() {
     if (!offerTo) return;
@@ -60,7 +58,7 @@ export default function ManagerTalentPage() {
     try {
       const r = await fetch("/api/admin/talent/offer", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workerId: offerTo.id, profession: profession || undefined, siteName: offerSite.trim() || undefined, siteId: offerSiteId || undefined, message: offerMsg.trim() || undefined }),
+        body: JSON.stringify({ workerId: offerTo.id, siteName: offerSite.trim() || undefined, siteId: offerSiteId || undefined, message: offerMsg.trim() || undefined }),
       });
       const d = await r.json();
       if (d.success) { alert("제안을 보냈습니다."); setOfferTo(null); setOfferMsg(""); setOfferSite(""); setOfferSiteId(""); }
@@ -72,14 +70,11 @@ export default function ManagerTalentPage() {
     <div className="p-6">
       <div className="mb-5">
         <h1 className={T.pageTitle}>인력풀 검색</h1>
-        <p className={T.pageSub}>구직 중인 직무지도원·요양보호사·활동지원사 후보자를 찾아 제안을 보냅니다.</p>
+        <p className={T.pageSub}>구직 중인 직무지도원 후보자를 찾아 제안을 보냅니다.</p>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        {PROFS.map((p) => (
-          <button key={p.value} onClick={() => setProfession(p.value)} className={`rounded-xl px-3.5 py-2 text-sm font-black transition ${profession === p.value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-500"}`}>{p.label}</button>
-        ))}
-        <label className="ml-2 flex items-center gap-1.5 text-sm font-semibold text-slate-600">
+        <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-600">
           <input type="checkbox" checked={verifiedOnly} onChange={(e) => setVerifiedOnly(e.target.checked)} /> 검증된 자격만
         </label>
         <div className="ml-auto flex items-center gap-2">

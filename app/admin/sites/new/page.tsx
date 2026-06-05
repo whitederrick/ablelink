@@ -218,9 +218,8 @@ export default function AdminSiteNewPage() {
             onChange={(e) => setRequiredProfession(e.target.value)}
             className={`w-full ${T.select}`}
           >
+            {/* 매칭은 현재 직무지도원 직종만 운영(요양보호사·활동지원사 비노출) */}
             <option value="JOB_COACH">직무지도원</option>
-            <option value="CAREGIVER">요양보호사</option>
-            <option value="ACTIVITY_ASSISTANT">활동지원사</option>
           </select>
           <p className="mt-1 text-xs font-semibold text-slate-400">현장에 필요한 직종 구분입니다. 직무지도원 배정 시 같은 직종으로 필터됩니다.</p>
         </div>

@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 
-const PROFESSIONS = ["JOB_COACH", "CAREGIVER", "ACTIVITY_ASSISTANT"] as const;
+// 매칭은 현재 직무지도원 직종만 운영(요양보호사·활동지원사 비노출). 서버에서 강제.
+const PROFESSIONS = ["JOB_COACH"] as const;
 
 function serialize(p: any) {
   return {

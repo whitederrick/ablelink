@@ -16,15 +16,14 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") || "").trim();
-    const profession = searchParams.get("profession") || "";
     const region = (searchParams.get("region") || "").trim();
 
     // 노출 게이트: 운영자 공고(전체공개) OR 배정 이력 에이전시 공고
     const agencyIds = await getWorkerAgencyIds(workerId);
     const visibilityOr = recruitVisibilityOr(agencyIds);
 
-    const and: any[] = [{ status: "OPEN" }, { OR: visibilityOr }];
-    if (["JOB_COACH", "CAREGIVER", "ACTIVITY_ASSISTANT"].includes(profession)) and.push({ profession });
+    // 매칭 서비스는 현재 직무지도원 직종만 운영(요양보호사·활동지원사는 비노출). 서버에서 강제.
+    const and: any[] = [{ status: "OPEN" }, { profession: "JOB_COACH" }, { OR: visibilityOr }];
     if (region) and.push({ region: { contains: region, mode: "insensitive" } });
     if (q) {
       and.push({

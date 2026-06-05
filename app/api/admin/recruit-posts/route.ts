@@ -5,8 +5,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
-
-const PROFESSIONS = ["JOB_COACH", "CAREGIVER", "ACTIVITY_ASSISTANT"] as const;
+import { checkAgencyPlanAccess } from "@/lib/planGuard";
 
 function serialize(p: any) {
   return {
@@ -60,6 +59,15 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await requireAdminOrManagerSession(req);
+
+    // 매칭 공고 등록은 STARTER+ 구독 기능. 에이전시(매니저)만 게이트, 운영자(공단/플랫폼)는 예외.
+    if (session.kind === "manager") {
+      const access = await checkAgencyPlanAccess(session.agencyId, "RECRUIT_POST");
+      if (!access.allowed) {
+        return NextResponse.json({ success: false, message: access.message || "구독이 필요한 기능입니다.", reason: access.reason }, { status: 403 });
+      }
+    }
+
     const b = await req.json();
 
     const title = String(b.title ?? "").trim();
@@ -68,7 +76,8 @@ export async function POST(req: NextRequest) {
     if (!title || !companyName || !address) {
       return NextResponse.json({ success: false, message: "제목·사업체명·주소는 필수입니다." }, { status: 400 });
     }
-    const profession = PROFESSIONS.includes(b.profession) ? b.profession : "JOB_COACH";
+    // 매칭은 직무지도원 직종만 운영 — 서버에서 강제(요청값 무시).
+    const profession = "JOB_COACH";
     const headcount = Math.max(1, Math.min(999, parseInt(String(b.headcount ?? "1"), 10) || 1));
 
     const post = await prisma.recruitPost.create({

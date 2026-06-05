@@ -6,19 +6,26 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
-
-const PROFS = ["JOB_COACH", "CAREGIVER", "ACTIVITY_ASSISTANT"] as const;
+import { checkAgencyPlanAccess } from "@/lib/planGuard";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAdminOrManagerSession(req);
+    const session = await requireAdminOrManagerSession(req);
+
+    // 인재풀 검색·역제안은 PRO 전용. 에이전시(매니저)만 게이트, 운영자는 예외.
+    if (session.kind === "manager") {
+      const access = await checkAgencyPlanAccess(session.agencyId, "TALENT_SOURCING");
+      if (!access.allowed) {
+        return NextResponse.json({ success: false, message: access.message || "PRO 플랜에서 사용할 수 있는 기능입니다.", reason: access.reason }, { status: 403 });
+      }
+    }
+
     const { searchParams } = new URL(req.url);
-    const profession = searchParams.get("profession") || "";
     const region = (searchParams.get("region") || "").trim();
     const verifiedOnly = searchParams.get("verifiedOnly") === "1";
 
-    const profWhere: any = {};
-    if (PROFS.includes(profession as any)) profWhere.profession = profession;
+    // 매칭은 직무지도원 직종만 운영 — 서버에서 강제.
+    const profWhere: any = { profession: "JOB_COACH" };
     if (verifiedOnly) profWhere.verifyStatus = "VERIFIED";
 
     const where: any = {

@@ -9,7 +9,8 @@ export type StarterFeature =
   | "PDF_GENERATE"    // PDF 자동 생성
   | "PDF_SIGN"        // 전자서명 합성
   | "CONTRACT_ONLINE" // 온라인 계약서 작성
-  | "DOC_INBOX";      // 문서 인박스
+  | "DOC_INBOX"       // 문서 인박스
+  | "RECRUIT_POST";   // 매칭: 직무지도 공고 등록·자동배정 (수요측)
 
 // STANDARD 이상 필요한 기능
 export type StandardFeature =
@@ -18,13 +19,21 @@ export type StandardFeature =
   | "AUDIT_PACKAGE"     // 감사 대응 서류 패키지
   | "TRAINEE_REPORT";   // 훈련생 진척도 리포트
 
-export type PremiumFeature = StarterFeature | StandardFeature;
+// PRO 에서만 가능한 기능
+export type ProFeature =
+  | "TALENT_SOURCING";  // 매칭: 인재풀 검색·역제안 (방향 B, 프리미엄 소싱)
+
+export type PremiumFeature = StarterFeature | StandardFeature | ProFeature;
 
 const STANDARD_FEATURES = new Set<PremiumFeature>([
   "SITE_MANAGER_SIGN",
   "PAYROLL",
   "AUDIT_PACKAGE",
   "TRAINEE_REPORT",
+]);
+
+const PRO_FEATURES = new Set<PremiumFeature>([
+  "TALENT_SOURCING",
 ]);
 
 export interface PlanCheckResult {
@@ -82,10 +91,14 @@ function isStandardFeature(f: PremiumFeature): boolean {
   return STANDARD_FEATURES.has(f);
 }
 
+function isProFeature(f: PremiumFeature): boolean {
+  return PRO_FEATURES.has(f);
+}
+
 function planAllows(plan: string, feature: PremiumFeature): boolean {
   if (plan === "PRO") return true;
-  if (plan === "STANDARD") return true;
-  if (plan === "STARTER") return !isStandardFeature(feature);
+  if (plan === "STANDARD") return !isProFeature(feature);
+  if (plan === "STARTER") return !isStandardFeature(feature) && !isProFeature(feature);
   return false; // FREE, TRIAL (만료)
 }
 
@@ -240,7 +253,7 @@ function _checkAgency(
   }
 
   if (!planAllows(plan, feature)) {
-    const required = isStandardFeature(feature) ? "STANDARD" : "STARTER";
+    const required = isProFeature(feature) ? "PRO" : isStandardFeature(feature) ? "STANDARD" : "STARTER";
     return {
       allowed: false,
       reason: "PLAN_TOO_LOW",
@@ -289,10 +302,12 @@ export async function checkQuota(
 
 // ─── 플랜별 기본 한도 (DB 초기값 세팅용) ─────────────────────────
 
+// 정책(2026-06-05): 유료 플랜은 인원/사업장 한도 없음 — 성장 벽 제거(에이전시 확보 우선).
+// FREE만 온램프 한도 유지. 향후 스케일 과금은 캡이 아니라 AI 사용량 미터링/시트 애드온으로.
 export const PLAN_LIMITS: Record<string, { maxWorkers: number; maxSites: number }> = {
-  FREE:     { maxWorkers: 3,  maxSites: 2  },
-  TRIAL:    { maxWorkers: 0,  maxSites: 0  }, // 무제한 (기간 제한만)
-  STARTER:  { maxWorkers: 10, maxSites: 10 },
-  STANDARD: { maxWorkers: 30, maxSites: 30 },
-  PRO:      { maxWorkers: 0,  maxSites: 0  }, // 무제한
+  FREE:     { maxWorkers: 3, maxSites: 2 },
+  TRIAL:    { maxWorkers: 0, maxSites: 0 }, // 무제한 (기간 제한만)
+  STARTER:  { maxWorkers: 0, maxSites: 0 }, // 무제한
+  STANDARD: { maxWorkers: 0, maxSites: 0 }, // 무제한
+  PRO:      { maxWorkers: 0, maxSites: 0 }, // 무제한
 };

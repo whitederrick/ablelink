@@ -5,13 +5,21 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
+import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { parseBigInt } from "@/lib/adminScope";
-
-const PROFS = ["JOB_COACH", "CAREGIVER", "ACTIVITY_ASSISTANT"] as const;
 
 export async function POST(req: NextRequest) {
   try {
     const session = await requireAdminOrManagerSession(req);
+
+    // 인재풀 역제안은 PRO 전용. 에이전시(매니저)만 게이트, 운영자는 예외.
+    if (session.kind === "manager") {
+      const access = await checkAgencyPlanAccess(session.agencyId, "TALENT_SOURCING");
+      if (!access.allowed) {
+        return NextResponse.json({ success: false, message: access.message || "PRO 플랜에서 사용할 수 있는 기능입니다.", reason: access.reason }, { status: 403 });
+      }
+    }
+
     const b = await req.json();
     const workerId = parseBigInt(b.workerId);
     if (!workerId) return NextResponse.json({ success: false, message: "대상 후보자가 필요합니다." }, { status: 400 });
@@ -30,7 +38,8 @@ export async function POST(req: NextRequest) {
     });
     if (dup) return NextResponse.json({ success: false, message: "이미 보낸 제안이 처리 대기 중입니다." }, { status: 409 });
 
-    const profession = PROFS.includes(b.profession) ? b.profession : null;
+    // 매칭은 직무지도원 직종만 운영 — 서버에서 강제.
+    const profession = "JOB_COACH";
 
     // 선택: 실제 현장 연결(수락 시 자동 배정). manager는 본인 agency 소속 활성 사이트만.
     let siteId: bigint | null = null;

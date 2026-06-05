@@ -5,12 +5,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Plus, Check, Clock, X, Trash2 } from "lucide-react";
 
+// 추가 가능한 직종: 매칭은 현재 직무지도원만 운영(서버도 JOB_COACH 강제).
 const PROFS: { value: string; label: string; certHint: string }[] = [
   { value: "JOB_COACH", label: "직무지도원", certHint: "직무지도원 양성과정 수료증 번호" },
-  { value: "CAREGIVER", label: "요양보호사", certHint: "요양보호사 국가자격증 번호" },
-  { value: "ACTIVITY_ASSISTANT", label: "활동지원사", certHint: "활동지원사 교육과정 수료증 번호" },
 ];
-const LABEL: Record<string, string> = Object.fromEntries(PROFS.map((p) => [p.value, p.label]));
+// 표시용 라벨은 과거 데이터 호환을 위해 전체 직종 유지.
+const LABEL: Record<string, string> = { JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사" };
 const STATUS: Record<string, { label: string; cls: string; icon: any }> = {
   PENDING:  { label: "검증 대기", cls: "bg-amber-50 text-amber-600", icon: Clock },
   VERIFIED: { label: "검증 완료", cls: "bg-emerald-50 text-emerald-600", icon: Check },

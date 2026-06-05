@@ -5,12 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Search, MapPin, Clock, Users, ClipboardList, Send } from "lucide-react";
 
-const PROFESSIONS: { value: string; label: string }[] = [
-  { value: "", label: "전체" },
-  { value: "JOB_COACH", label: "직무지도원" },
-  { value: "CAREGIVER", label: "요양보호사" },
-  { value: "ACTIVITY_ASSISTANT", label: "활동지원사" },
-];
+// 매칭은 현재 직무지도원 직종만 운영 → 직종 필터 미노출(서버도 JOB_COACH 강제).
 const PROF_LABEL: Record<string, string> = {
   JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사",
 };
@@ -31,22 +26,20 @@ export default function RecruitBrowsePage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  const [profession, setProfession] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
     const sp = new URLSearchParams();
     if (q.trim()) sp.set("q", q.trim());
-    if (profession) sp.set("profession", profession);
     try {
       const r = await fetch(`/api/recruit/posts?${sp.toString()}`);
       const d = await r.json();
       if (d.success) setPosts(d.posts);
       else if (r.status === 401) router.replace("/worker/login");
     } finally { setLoading(false); }
-  }, [q, profession, router]);
+  }, [q, router]);
 
-  useEffect(() => { load(); }, [profession]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-slate-50 pb-10">
@@ -87,20 +80,6 @@ export default function RecruitBrowsePage() {
               />
             </div>
             <button onClick={load} className="rounded-xl bg-slate-950 px-4 text-sm font-black text-white active:scale-95">검색</button>
-          </div>
-          {/* 직종 필터 */}
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-            {PROFESSIONS.map((p) => (
-              <button
-                key={p.value}
-                onClick={() => setProfession(p.value)}
-                className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-black transition active:scale-95 ${
-                  profession === p.value ? "bg-sky-500 text-white" : "bg-white text-slate-500 border border-slate-200"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
           </div>
         </div>
 

@@ -8,10 +8,9 @@ import AddressMapPicker from "@/components/AddressMapPicker";
 
 type AddrItem = { addressName: string; x: string; y: string };
 
+// 매칭은 현재 직무지도원 직종만 운영(요양보호사·활동지원사 비노출). 서버도 JOB_COACH 강제.
 const PROFESSIONS = [
   { value: "JOB_COACH", label: "직무지도원" },
-  { value: "CAREGIVER", label: "요양보호사" },
-  { value: "ACTIVITY_ASSISTANT", label: "활동지원사" },
 ];
 
 export default function ManagerRecruitNewPage() {

@@ -218,7 +218,7 @@ export default function WorkerProfilePage() {
             <BadgeCheck className="h-5 w-5 flex-shrink-0 text-sky-500" />
             <div className="flex-1">
               <p className="text-sm font-black text-slate-800">보유 자격 관리</p>
-              <p className="text-xs font-semibold text-slate-400">직무지도원·요양보호사·활동지원사 자격 등록·증명</p>
+              <p className="text-xs font-semibold text-slate-400">직무지도원 자격 등록·증명</p>
             </div>
             <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
           </button>
