@@ -2,70 +2,35 @@
 
 import { useEffect, useRef, useState } from "react";
 import { T } from "../_styles";
+import { SignaturePad, type SignaturePadHandle } from "../../_components/SignaturePad";
 
-async function resizeSignature(src: HTMLCanvasElement, w: number, h: number): Promise<Blob> {
-  const off = document.createElement("canvas");
-  off.width = w; off.height = h;
-  const ctx = off.getContext("2d")!;
-  ctx.clearRect(0, 0, 230, 100); // 투명 배경(문서 위 서명이 인영을 가리지 않도록)
-  const pad = 20, scale = Math.min((w - pad * 2) / src.width, (h - pad * 2) / src.height);
-  ctx.drawImage(src, (w - src.width * scale) / 2, (h - src.height * scale) / 2, src.width * scale, src.height * scale);
-  return new Promise<Blob>((res, rej) => off.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95));
-}
-
-export default function AdminSignaturePage() {
+export default function ManagerSignaturePage() {
   const [savedUrl,    setSavedUrl]    = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [mode,    setMode]    = useState<"view" | "draw">("view");
-  const [drawing, setDrawing] = useState(false);
+  const [empty,   setEmpty]   = useState(true);
   const [saving,  setSaving]  = useState(false);
   const [toast,   setToast]   = useState("");
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const lastPos   = useRef<{ x: number; y: number } | null>(null);
+  const padRef = useRef<SignaturePadHandle>(null);
+
+  // 스마트폰 서명
+  const [phone, setPhone] = useState<{ url: string; qr: string } | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/signature").then(r => r.json()).then(d => {
       if (d.success) { setSavedUrl(d.signatureUrl); setDisplayName(d.displayName); }
     });
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
-  useEffect(() => {
-    if (mode !== "draw") return;
-    const c = canvasRef.current; if (!c) return;
-    c.width  = 230;
-    c.height = 100;
-    const ctx = c.getContext("2d")!;
-    ctx.clearRect(0, 0, 230, 100); // 투명 배경(문서 위 서명이 인영을 가리지 않도록)
-    ctx.strokeStyle = "#000000"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  }, [mode]);
-
-  function getPos(e: React.MouseEvent | React.TouchEvent, c: HTMLCanvasElement) {
-    const r = c.getBoundingClientRect();
-    if ("touches" in e) return { x: e.touches[0].clientX - r.left, y: e.touches[0].clientY - r.top };
-    return { x: (e as React.MouseEvent).clientX - r.left, y: (e as React.MouseEvent).clientY - r.top };
-  }
-  function onStart(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault(); setDrawing(true); lastPos.current = getPos(e, canvasRef.current!);
-  }
-  function onMove(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault(); if (!drawing) return;
-    const c = canvasRef.current!, ctx = c.getContext("2d")!, p = getPos(e, c);
-    if (lastPos.current) { ctx.beginPath(); ctx.moveTo(lastPos.current.x, lastPos.current.y); ctx.lineTo(p.x, p.y); ctx.stroke(); }
-    lastPos.current = p;
-  }
-  function onEnd() { setDrawing(false); lastPos.current = null; }
-  function clear() {
-    const c = canvasRef.current!, ctx = c.getContext("2d")!;
-    ctx.clearRect(0, 0, 230, 100); // 투명 배경(문서 위 서명이 인영을 가리지 않도록)
-  }
+  function flash(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000); }
 
   async function save() {
-    const c = canvasRef.current!;
+    const blob = await padRef.current?.getBlob();
+    if (!blob) { flash("서명을 입력해주세요."); return; }
     setSaving(true);
     try {
-      const blob = await new Promise<Blob>((res, rej) =>
-        c.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95)
-      );
       const fd = new FormData(); fd.append("signature", blob, "sig.png");
       const d = await fetch("/api/admin/signature", { method: "POST", body: fd }).then(r => r.json());
       if (d.success) { setSavedUrl(d.signatureUrl); setMode("view"); flash("서명이 저장되었습니다."); }
@@ -80,7 +45,34 @@ export default function AdminSignaturePage() {
     setSavedUrl(null); flash("삭제되었습니다.");
   }
 
-  function flash(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000); }
+  // 스마트폰으로 서명 — 토큰 발급 + QR 표시 + 완료 폴링
+  async function startPhoneSign() {
+    try {
+      const d = await fetch("/api/admin/signature/phone-token", { method: "POST" }).then(r => r.json());
+      if (!d.success) { flash(d.message || "발급 실패"); return; }
+      const QRCode = (await import("qrcode")).default;
+      const qr = await QRCode.toDataURL(d.url, { width: 260, margin: 1 });
+      const baseline = savedUrl;
+      setPhone({ url: d.url, qr });
+
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(async () => {
+        const r = await fetch("/api/admin/signature").then(x => x.json()).catch(() => null);
+        if (r?.success && r.signatureUrl && r.signatureUrl !== baseline) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setSavedUrl(r.signatureUrl);
+          setPhone(null);
+          setMode("view");
+          flash("스마트폰 서명이 저장되었습니다.");
+        }
+      }, 3000);
+    } catch { flash("오류가 발생했습니다."); }
+  }
+
+  function cancelPhoneSign() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setPhone(null);
+  }
 
   return (
     <div className="space-y-4">
@@ -99,8 +91,9 @@ export default function AdminSignaturePage() {
             <div className="flex min-h-[120px] items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-5">
               <img src={savedUrl} alt="서명" className="max-h-[100px] max-w-full object-contain" />
             </div>
-            <div className="mt-4 flex gap-2">
-              <button onClick={() => setMode("draw")} className={T.btnPrimary}>다시 등록</button>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button onClick={() => { setMode("draw"); setEmpty(true); }} className={T.btnPrimary}>다시 등록</button>
+              <button onClick={startPhoneSign} className={T.btnSecondary}>📱 스마트폰으로 서명</button>
               <button onClick={del} className={T.btnDanger}>삭제</button>
             </div>
           </>
@@ -108,27 +101,28 @@ export default function AdminSignaturePage() {
           <div className="py-8 text-center">
             <p className="mb-1 text-3xl">✍️</p>
             <p className="mb-5 text-sm font-semibold text-slate-400">등록된 서명이 없습니다.</p>
-            <button onClick={() => setMode("draw")} className={T.btnPrimary}>서명 등록하기</button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <button onClick={() => { setMode("draw"); setEmpty(true); }} className={T.btnPrimary}>서명 등록하기</button>
+              <button onClick={startPhoneSign} className={T.btnSecondary}>📱 스마트폰으로 서명</button>
+            </div>
           </div>
         ))}
 
         {mode === "draw" && (
           <>
-            <div className="relative mb-3 max-w-[230px] overflow-hidden rounded-xl border-2 border-slate-950 bg-slate-50">
-              <canvas ref={canvasRef}
-                className="block w-full cursor-crosshair"
-                style={{ height: "120px", touchAction: "none" }}
-                onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd} onMouseLeave={onEnd}
-                onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd} />
+            <div className="relative mb-3 overflow-hidden rounded-xl border-2 border-slate-950 bg-white">
+              <SignaturePad ref={padRef} height={200} onChange={setEmpty} />
               <p className="pointer-events-none absolute bottom-2 right-2 text-[11px] text-slate-300">✍️ 패드 전체에 꽉 차게 서명해 주세요</p>
             </div>
-            <div className="flex gap-2">
-              <button onClick={clear} className={T.btnSecondary}>지우기</button>
-              <button onClick={save} disabled={saving} className={T.btnPrimary}>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => padRef.current?.clear()} className={T.btnSecondary}>지우기</button>
+              <button onClick={save} disabled={saving || empty} className={T.btnPrimary}>
                 {saving ? "저장 중..." : "저장"}
               </button>
+              <button onClick={startPhoneSign} className={T.btnSecondary}>📱 스마트폰으로 서명</button>
               <button onClick={() => setMode("view")} className={T.btnSecondary}>취소</button>
             </div>
+            <p className="mt-2 text-xs font-semibold text-slate-400">마우스로 그리기 어려우면 "스마트폰으로 서명"을 눌러 QR로 폰에서 입력하세요.</p>
           </>
         )}
       </div>
@@ -142,6 +136,26 @@ export default function AdminSignaturePage() {
           <li><strong className="text-slate-700">사업체 담당자</strong> → 문서 생성 화면에서 QR코드/링크로 현장 즉석 서명</li>
         </ul>
       </div>
+
+      {/* 스마트폰 서명 QR 모달 */}
+      {phone && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-950/50 px-5" onClick={e => { if (e.target === e.currentTarget) cancelPhoneSign(); }}>
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
+            <p className="text-base font-black text-slate-900">스마트폰으로 서명</p>
+            <p className="mt-1 text-sm font-semibold text-slate-400">휴대폰 카메라로 QR을 스캔한 뒤 폰 화면에서 서명하세요.</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={phone.qr} alt="서명 QR" className="mx-auto my-5 h-60 w-60 rounded-xl border border-slate-100" />
+            <div className="flex items-center justify-center gap-2 text-sm font-bold text-slate-500">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+              서명을 기다리는 중...
+            </div>
+            <p className="mt-3 break-all rounded-xl bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-400">{phone.url}</p>
+            <button onClick={cancelPhoneSign} className="mt-4 w-full rounded-2xl border border-slate-200 py-3 text-sm font-black text-slate-500">
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 z-[2000] -translate-x-1/2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-2xl">
