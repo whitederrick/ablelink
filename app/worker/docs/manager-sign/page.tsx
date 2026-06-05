@@ -82,7 +82,7 @@ function ManagerSignContent() {
 
       {/* 서명 패드 (공용 — 고해상도·스무딩·trim) */}
       <div className="mx-5 max-w-[460px] overflow-hidden rounded-2xl border-2 border-slate-950 bg-white">
-        <SignaturePad ref={padRef} height={220} onChange={setEmpty} />
+        <SignaturePad ref={padRef} onChange={setEmpty} />
       </div>
       <p className="mb-2 mt-1 text-center text-xs text-slate-300">↑ 이 영역에 꽉 차게 서명해주세요</p>
 

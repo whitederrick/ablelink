@@ -86,7 +86,7 @@ export default function SelfSignPage() {
         </div>
 
         <div className="overflow-hidden rounded-2xl border-2 border-slate-950 bg-white">
-          <SignaturePad ref={padRef} height={300} onChange={setEmpty} />
+          <SignaturePad ref={padRef} onChange={setEmpty} />
         </div>
 
         {err && <p className="mt-2 text-center text-sm font-bold text-rose-600">{err}</p>}

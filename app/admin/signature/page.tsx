@@ -73,7 +73,7 @@ export default function AdminSignaturePage() {
         {mode === "draw" && (
           <>
             <div className="relative mb-3 max-w-[460px] overflow-hidden rounded-xl border-2 border-slate-950 bg-white">
-              <SignaturePad ref={padRef} height={190} onChange={setEmpty} />
+              <SignaturePad ref={padRef} onChange={setEmpty} />
               <p className="pointer-events-none absolute bottom-2 right-2 text-[11px] text-slate-300">✍️ 패드 전체에 꽉 차게 서명해 주세요</p>
             </div>
             <div className="flex gap-2">

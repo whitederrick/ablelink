@@ -13,16 +13,19 @@ export interface SignaturePadHandle {
   isEmpty: () => boolean;
 }
 
-const EXPORT_SCALE = 3; // 저장 해상도 배율 (CSS px × 3 → 고해상도)
+const EXPORT_SCALE = 4; // 저장 해상도 배율 (CSS px × 4 → 더 선명)
+// 입력 칸 가로:세로 비율 — PDF "(서명 또는 인)" 박스(약 96x26pt)에 맞춤.
+// 패드를 이 비율로 그리면 trim된 서명이 문서 박스를 가로로 꽉 채운다.
+export const SIGN_ASPECT = 3.6;
 
 type Pt = { x: number; y: number };
 function mid(a: Pt, b: Pt): Pt { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
 
 export const SignaturePad = forwardRef<SignaturePadHandle, {
-  height?: number;
+  aspect?: number;
   className?: string;
   onChange?: (empty: boolean) => void;
-}>(function SignaturePad({ height = 200, className, onChange }, ref) {
+}>(function SignaturePad({ aspect = SIGN_ASPECT, className, onChange }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const last = useRef<Pt | null>(null);
@@ -147,7 +150,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, {
     <canvas
       ref={canvasRef}
       className={className}
-      style={{ display: "block", width: "100%", height: `${height}px`, touchAction: "none", cursor: "crosshair", background: "#fff" }}
+      style={{ display: "block", width: "100%", aspectRatio: String(aspect), touchAction: "none", cursor: "crosshair", background: "#fff" }}
       onMouseDown={start}
       onMouseMove={move}
       onMouseUp={end}

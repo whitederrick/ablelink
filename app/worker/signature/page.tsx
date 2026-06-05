@@ -162,7 +162,7 @@ export default function SignaturePage() {
               <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="mb-3 text-xs font-semibold text-slate-400">서명 영역</p>
                 <div className="overflow-hidden rounded-xl border-2 border-slate-700 bg-white">
-                  <SignaturePad ref={padRef} height={220} onChange={setEmpty} />
+                  <SignaturePad ref={padRef} onChange={setEmpty} />
                 </div>
                 <p className="mt-2 text-right text-[11px] text-slate-300">칸 전체에 꽉 차게 서명해 주세요</p>
               </div>

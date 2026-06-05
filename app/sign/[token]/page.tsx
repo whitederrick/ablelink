@@ -139,7 +139,7 @@ export default function SignPage() {
 
         {/* 서명 패드 (공용 — 고해상도·스무딩·trim) */}
         <div style={s.canvasWrap}>
-          <SignaturePad ref={padRef} height={220} onChange={setEmpty} />
+          <SignaturePad ref={padRef} onChange={setEmpty} />
           <p style={s.canvasHint}>✍️ 패드 전체에 꽉 차게 서명해 주세요</p>
         </div>
 
