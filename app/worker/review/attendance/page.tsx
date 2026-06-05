@@ -29,6 +29,14 @@ type EditReq = {
   createdAt: string;
 };
 
+type ReasonIssue = {
+  id: string;
+  workDate: string | null;
+  siteName: string | null;
+  issueTypes: string[];
+  requestMessage: string | null;
+};
+
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
@@ -54,6 +62,8 @@ export default function AttendanceReviewPage() {
   const [yearMonth, setYearMonth]   = useState(nowYM());
   const [records, setRecords]       = useState<AttRec[]>([]);
   const [editReqs, setEditReqs]     = useState<EditReq[]>([]);
+  const [reasonIssues, setReasonIssues] = useState<ReasonIssue[]>([]);
+  const [reasonModal, setReasonModal]   = useState<{ issue: ReasonIssue; text: string; submitting: boolean } | null>(null);
   const [loading, setLoading]       = useState(false);
   const [batchSaving, setBatchSaving] = useState(false);
   const [toast, setToast]           = useState("");
@@ -76,9 +86,11 @@ export default function AttendanceReviewPage() {
     Promise.all([
       fetch(`/api/worker/attendance/monthly?yearMonth=${yearMonth}`).then(r => r.json()),
       fetch(`/api/worker/attendance/edit-request`).then(r => r.json()),
-    ]).then(([attRes, reqRes]) => {
+      fetch(`/api/worker/attendance/issues`).then(r => r.json()),
+    ]).then(([attRes, reqRes, issueRes]) => {
       if (attRes.success) setRecords(attRes.records);
       if (reqRes.success) setEditReqs(reqRes.requests);
+      if (issueRes.success) setReasonIssues(issueRes.issues);
     }).finally(() => setLoading(false));
   }, [yearMonth]);
 
@@ -115,6 +127,21 @@ export default function AttendanceReviewPage() {
     setBatchSaving(false);
     if (data.success) { showToast(`${data.confirmed}건 확정 완료`); load(); }
     else showToast(data.message || "일괄 확정 실패");
+  }
+
+  async function submitReason() {
+    if (!reasonModal) return;
+    if (!reasonModal.text.trim()) { showToast("사유를 입력해주세요."); return; }
+    setReasonModal(m => m ? { ...m, submitting: true } : null);
+    const res = await fetch(`/api/worker/attendance/issues/${reasonModal.issue.id}/reason`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: reasonModal.text.trim() }),
+    });
+    const data = await res.json();
+    setReasonModal(null);
+    if (data.success) { showToast("사유가 제출되었습니다."); load(); }
+    else showToast(data.message || "제출 실패");
   }
 
   async function submitEditReq() {
@@ -165,6 +192,38 @@ export default function AttendanceReviewPage() {
       </header>
 
       <div className="mx-auto max-w-md space-y-3 px-4 py-4">
+        {/* 관리자 사유 입력 요청 (있을 때만, 최상단) */}
+        {reasonIssues.length > 0 && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <p className="text-sm font-black text-amber-800">관리자가 사유 입력을 요청했어요 ({reasonIssues.length}건)</p>
+            </div>
+            <p className="mt-0.5 text-[11px] font-semibold text-amber-600">아래 근태에 대한 사유를 입력하면 관리자에게 전달됩니다.</p>
+            <div className="mt-3 space-y-2">
+              {reasonIssues.map(it => (
+                <div key={it.id} className="rounded-xl bg-white p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-black text-slate-900">{it.workDate ?? "-"}</span>
+                    <button
+                      onClick={() => setReasonModal({ issue: it, text: "", submitting: false })}
+                      className="flex-shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-black text-white active:scale-95"
+                    >
+                      사유 입력
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                    {it.siteName ?? "-"}{it.issueTypes.length ? ` · ${it.issueTypes.join(", ")}` : ""}
+                  </p>
+                  {it.requestMessage && (
+                    <p className="mt-1 text-[11px] font-semibold text-amber-700">요청: {it.requestMessage}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* 월 선택 */}
         <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-5 py-3">
           <button onClick={() => changeMonth(-1)}
@@ -397,6 +456,45 @@ export default function AttendanceReviewPage() {
                 ) : "수정 요청 제출"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 사유 입력 모달 */}
+      {reasonModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 px-0"
+          onClick={e => { if (e.target === e.currentTarget) setReasonModal(null); }}>
+          <div className="w-full max-w-md rounded-t-3xl bg-white px-5 pb-10 pt-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-black text-slate-900">근태 사유 입력</h2>
+              <button onClick={() => setReasonModal(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mb-1 text-xs font-semibold text-slate-500">
+              {reasonModal.issue.workDate ?? "-"} · {reasonModal.issue.siteName ?? "-"}
+            </div>
+            <div className="mb-4 text-xs text-slate-400">
+              {reasonModal.issue.issueTypes.join(", ")}
+              {reasonModal.issue.requestMessage ? ` · 요청: ${reasonModal.issue.requestMessage}` : ""}
+            </div>
+            <textarea
+              value={reasonModal.text}
+              onChange={e => setReasonModal(m => m ? { ...m, text: e.target.value } : null)}
+              placeholder="예) 현장 사정으로 출입구가 변경되어 기준 위치에서 벗어나 출근을 기록했습니다."
+              rows={4}
+              className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-700 outline-none placeholder:font-normal placeholder:text-slate-400 focus:border-sky-400 focus:bg-white"
+            />
+            <button
+              onClick={submitReason}
+              disabled={reasonModal.submitting || !reasonModal.text.trim()}
+              className="mt-4 w-full rounded-2xl bg-slate-950 py-4 text-sm font-black text-white active:scale-[0.98] disabled:opacity-60"
+            >
+              {reasonModal.submitting ? (
+                <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />제출 중...</span>
+              ) : "사유 제출"}
+            </button>
           </div>
         </div>
       )}
