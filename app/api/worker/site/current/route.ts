@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
-import { getWorkerPremiumStatus } from "@/lib/planGuard";
+import { getWorkerPremiumStatus, getWorkerDocAccess } from "@/lib/planGuard";
 
 export async function GET(request: NextRequest) {
   try {
@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
       : null;
 
     const premiumStatus = await getWorkerPremiumStatus(workerId);
+    const docAccessStatus = await getWorkerDocAccess(workerId);
 
     return NextResponse.json({
       success: true,
@@ -86,6 +87,8 @@ export async function GET(request: NextRequest) {
         premiumAccess: premiumStatus.premium,
         premiumReason: premiumStatus.reason ?? null,
         premiumMessage: premiumStatus.message ?? null,
+        // 문서·서명 접근(셀프등록 워커는 무료 허용 → premiumAccess와 별개)
+        docAccess: docAccessStatus.allowed,
         // 이메일 발송용 추가 정보
         workerName: user?.workerName ?? "",
         workerPhone: user?.phoneNumber ?? "",

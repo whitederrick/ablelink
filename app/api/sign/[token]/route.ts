@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { checkAgencyPlanAccess } from "@/lib/planGuard";
+import { checkAgencyPlanAccess, isSelfManagedAgency } from "@/lib/planGuard";
 import { validateSignatureImage } from "@/lib/imageValidation";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -63,7 +63,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const agencyId = rec.assignment?.agencyId;
   if (agencyId) {
     const planCheck = await checkAgencyPlanAccess(agencyId, "SITE_MANAGER_SIGN");
-    if (!planCheck.allowed) {
+    // 셀프등록(무소속 운영) 에이전시는 기본 문서·서명 무료 허용
+    if (!planCheck.allowed && !(await isSelfManagedAgency(agencyId))) {
       return NextResponse.json({ success: false, message: "사업체 담당자 서명 기능은 STANDARD 플랜 이상에서 사용 가능합니다." }, { status: 403 });
     }
   }

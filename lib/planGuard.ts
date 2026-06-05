@@ -34,6 +34,7 @@ export interface PlanCheckResult {
     | "CONTRACT_PENDING"      // 계약서 미서명 (서명하면 사용 가능)
     | "CONTRACT_NOT_STARTED"  // 계약 시작 전
     | "CONTRACT_EXPIRED"      // 계약 종료 (유예 초과)
+    | "SELF_MANAGED"          // 셀프등록(무소속 운영) 워커 — 기본 문서·서명 무료 허용
     | "FREE_PLAN"
     | "TRIAL_EXPIRED"
     | "PLAN_TOO_LOW"
@@ -41,6 +42,35 @@ export interface PlanCheckResult {
   planType?: string;
   trialEndsAt?: Date | null;
   message?: string;
+}
+
+// 셀프등록(에이전시 미소속 운영) 워커에게도 무료로 허용하는 "기본 문서·서명" 기능.
+// AI 음성·온라인계약·급여 등은 제외 → 유료 유지.
+const SELF_DOC_FEATURES = new Set<PremiumFeature>([
+  "PDF_GENERATE",
+  "PDF_SIGN",
+  "SITE_MANAGER_SIGN",
+]);
+
+/**
+ * 셀프등록(무소속 운영) 워커 여부.
+ * 셀프 현장등록은 AgencyManager(연락처)만 만들고 Manager(로그인 계정)는 만들지 않는다.
+ * → 활성 배정의 에이전시에 Manager 로그인 계정이 0개면 "직접 운영" 컨텍스트로 간주.
+ */
+export async function isSelfManagedWorker(workerId: bigint): Promise<boolean> {
+  const assignment = await prisma.siteAssignment.findFirst({
+    where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+    select: { agencyId: true },
+    orderBy: { assignedAt: "desc" },
+  });
+  if (!assignment?.agencyId) return false;
+  return isSelfManagedAgency(assignment.agencyId);
+}
+
+/** Manager(로그인 계정)가 0개인 에이전시 = 셀프등록/무소속 운영 컨텍스트. */
+export async function isSelfManagedAgency(agencyId: bigint): Promise<boolean> {
+  const managerCount = await prisma.manager.count({ where: { agencyId } });
+  return managerCount === 0;
 }
 
 function fmtDate(d: Date): string {
@@ -101,6 +131,12 @@ export async function checkPlanAccess(
     return _checkAgency(contract.agency, feature);
   }
 
+  // (2.5) 셀프등록(무소속 운영) 워커 — 기본 문서·서명(PDF·전자서명·사업체담당자 사인)은 무료 허용.
+  //       에이전시 계약 기반 게이트는 "에이전시가 실제로 AbleLink를 운영(Manager 계정 보유)"할 때만 적용.
+  if (SELF_DOC_FEATURES.has(feature) && (await isSelfManagedWorker(workerId))) {
+    return { allowed: true, reason: "SELF_MANAGED" };
+  }
+
   // (3) 유효 계약이 없을 때 — 상황별 자연스러운 안내 메시지
   const latest = await prisma.employmentContract.findFirst({
     where: { workerId, status: { in: ["PENDING", "SIGNED", "COMPLETED"] } },
@@ -146,6 +182,17 @@ export async function getWorkerPremiumStatus(
 ): Promise<{ premium: boolean; reason?: PlanCheckResult["reason"]; message?: string }> {
   const res = await checkPlanAccess(workerId, "AI_VOICE");
   return { premium: res.allowed, reason: res.reason, message: res.message };
+}
+
+/**
+ * 문서·서명 접근 권한(PDF 생성/전자서명). 셀프등록 워커는 무료 허용되므로 premium(AI 기준)과 별개로 노출.
+ * UI(문서·서명 화면)는 premiumAccess 대신 이 값으로 게이트한다.
+ */
+export async function getWorkerDocAccess(
+  workerId: bigint
+): Promise<{ allowed: boolean; reason?: PlanCheckResult["reason"]; message?: string }> {
+  const res = await checkPlanAccess(workerId, "PDF_GENERATE");
+  return { allowed: res.allowed, reason: res.reason, message: res.message };
 }
 
 // ─── Admin 측: agencyId 기준 ─────────────────────────────────────
