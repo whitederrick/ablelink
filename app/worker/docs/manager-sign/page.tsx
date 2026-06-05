@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { Suspense } from "react";
+import { SignaturePad, type SignaturePadHandle } from "../../../_components/SignaturePad";
 
 // ─── 실제 서명 UI ───────────────────────────────────────────
 function ManagerSignContent() {
@@ -13,85 +13,16 @@ function ManagerSignContent() {
   const periodStart = params.get("ps") ?? "";
   const periodEnd   = params.get("pe") ?? "";
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const lastPos   = useRef<{ x: number; y: number } | null>(null);
-  const [drawing, setDrawing]   = useState(false);
-  const [isEmpty,  setIsEmpty]  = useState(true);
-  const [saving,   setSaving]   = useState(false);
+  const padRef = useRef<SignaturePadHandle>(null);
+  const [empty,  setEmpty]  = useState(true);
+  const [saving, setSaving] = useState(false);
   const [signerName, setSignerName] = useState("");
 
-  const initCanvas = useCallback(() => {
-    const c = canvasRef.current;
-    if (!c) return;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = c.getBoundingClientRect();
-    c.width  = rect.width  * dpr;
-    c.height = rect.height * dpr;
-    const ctx = c.getContext("2d")!;
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, rect.width, rect.height); // 투명 배경(문서 위 서명이 인영을 가리지 않도록)
-    ctx.strokeStyle = "#0f172a";
-    ctx.lineWidth = 3.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-  }, []);
-
-  useEffect(() => {
-    setTimeout(initCanvas, 50);
-    window.addEventListener("resize", initCanvas);
-    return () => window.removeEventListener("resize", initCanvas);
-  }, [initCanvas]);
-
-  function getXY(e: React.MouseEvent | React.TouchEvent) {
-    const c = canvasRef.current!;
-    const rect = c.getBoundingClientRect();
-    if ("touches" in e) {
-      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-    }
-    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
-  }
-
-  function onStart(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    setDrawing(true);
-    setIsEmpty(false);
-    lastPos.current = getXY(e);
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    const p = getXY(e);
-    ctx.beginPath(); ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2); ctx.fill();
-  }
-  function onMove(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    if (!drawing || !lastPos.current) return;
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    const p = getXY(e);
-    ctx.beginPath(); ctx.moveTo(lastPos.current.x, lastPos.current.y); ctx.lineTo(p.x, p.y); ctx.stroke();
-    lastPos.current = p;
-  }
-  function onEnd(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
-    setDrawing(false);
-    lastPos.current = null;
-  }
-  function clearCanvas() {
-    const c = canvasRef.current!;
-    const ctx = c.getContext("2d")!;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = c.getBoundingClientRect();
-    ctx.clearRect(0, 0, rect.width, rect.height); // 투명 배경(문서 위 서명이 인영을 가리지 않도록)
-    setIsEmpty(true);
-  }
-
   async function handleSave() {
-    if (isEmpty) { alert("서명을 먼저 입력해주세요."); return; }
+    const blob = await padRef.current?.getBlob();
+    if (!blob) { alert("서명을 먼저 입력해주세요."); return; }
     setSaving(true);
     try {
-      const c = canvasRef.current!;
-      const blob = await new Promise<Blob>((res, rej) =>
-        c.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95)
-      );
       const fd = new FormData();
       fd.append("signature", blob, "manager-sign.png");
       fd.append("docType", docType);
@@ -149,33 +80,23 @@ function ManagerSignContent() {
         />
       </div>
 
-      {/* 서명 캔버스 */}
-      <div className="mx-5 overflow-hidden rounded-2xl border-2 border-slate-950 bg-white" style={{ height: "160px" }}>
-        <canvas
-          ref={canvasRef}
-          className="block h-full w-full cursor-crosshair touch-none"
-          onMouseDown={onStart}
-          onMouseMove={onMove}
-          onMouseUp={onEnd}
-          onMouseLeave={onEnd}
-          onTouchStart={onStart}
-          onTouchMove={onMove}
-          onTouchEnd={onEnd}
-        />
+      {/* 서명 패드 (공용 — 고해상도·스무딩·trim) */}
+      <div className="mx-5 max-w-[460px] overflow-hidden rounded-2xl border-2 border-slate-950 bg-white">
+        <SignaturePad ref={padRef} height={220} onChange={setEmpty} />
       </div>
-      <p className="mb-2 mt-1 text-center text-xs text-slate-300">↑ 이 영역에 서명해주세요</p>
+      <p className="mb-2 mt-1 text-center text-xs text-slate-300">↑ 이 영역에 꽉 차게 서명해주세요</p>
 
       {/* 버튼 */}
       <div className="flex-shrink-0 flex gap-3 px-5 pb-8 pt-3">
         <button
-          onClick={clearCanvas}
+          onClick={() => padRef.current?.clear()}
           className="flex-1 rounded-2xl border border-slate-200 bg-white py-4 text-sm font-black text-slate-600 active:scale-[0.98]"
         >
           지우기
         </button>
         <button
           onClick={handleSave}
-          disabled={isEmpty || saving}
+          disabled={empty || saving}
           className="flex-[2] rounded-2xl bg-slate-950 py-4 text-sm font-black text-white active:scale-[0.98] disabled:opacity-50"
         >
           {saving ? (

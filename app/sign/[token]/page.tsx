@@ -2,8 +2,9 @@
 // app/sign/[token]/page.tsx
 // 사업체담당자 즉석 서명 페이지 (공개 — 스마트폰 접속)
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { SignaturePad, type SignaturePadHandle } from "../../_components/SignaturePad";
 
 type Info = {
   docType: string; roleLabel: string; signerName: string | null;
@@ -25,9 +26,8 @@ export default function SignPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const isDrawing = useRef(false);
-  const lastPos   = useRef<{ x: number; y: number } | null>(null);
+  const padRef = useRef<SignaturePadHandle>(null);
+  const [empty, setEmpty] = useState(true);
 
   useEffect(() => {
     fetch(`/api/sign/${token}`)
@@ -44,73 +44,11 @@ export default function SignPage() {
       .catch(() => { setPhase("error"); setErrorMsg("서버 연결 실패"); });
   }, [token]);
 
-  const initCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dpr  = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    if (!rect.width) return;
-    canvas.width  = rect.width  * dpr;
-    canvas.height = rect.height * dpr;
-    const ctx = canvas.getContext("2d")!;
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, rect.width, rect.height); // 투명 배경(문서 위 서명이 인영을 가리지 않도록)
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth   = 3.5;
-    ctx.lineCap     = "round";
-    ctx.lineJoin    = "round";
-  }, []);
-
-  useEffect(() => {
-    if (phase !== "ready") return;
-    const t = setTimeout(initCanvas, 50);
-    return () => clearTimeout(t);
-  }, [phase, initCanvas]);
-
-  function getPos(e: React.TouchEvent | React.MouseEvent, canvas: HTMLCanvasElement) {
-    const rect = canvas.getBoundingClientRect();
-    if ("touches" in e) {
-      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-    }
-    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
-  }
-
-  function startDraw(e: React.TouchEvent | React.MouseEvent) {
-    e.preventDefault();
-    const canvas = canvasRef.current!;
-    isDrawing.current = true;
-    lastPos.current = getPos(e, canvas);
-  }
-  function draw(e: React.TouchEvent | React.MouseEvent) {
-    e.preventDefault();
-    if (!isDrawing.current) return;
-    const canvas = canvasRef.current!;
-    const ctx = canvas.getContext("2d")!;
-    const pos = getPos(e, canvas);
-    if (lastPos.current) {
-      ctx.beginPath();
-      ctx.moveTo(lastPos.current.x, lastPos.current.y);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
-    }
-    lastPos.current = pos;
-  }
-  function endDraw() { isDrawing.current = false; lastPos.current = null; }
-
-  function clearCanvas() {
-    const canvas = canvasRef.current!;
-    const ctx    = canvas.getContext("2d")!;
-    const rect   = canvas.getBoundingClientRect();
-    ctx.clearRect(0, 0, rect.width, rect.height); // 투명 배경
-  }
-
   async function submit() {
-    const canvas = canvasRef.current!;
+    const blob = await padRef.current?.getBlob();
+    if (!blob) { alert("서명을 입력해주세요."); return; }
     setSaving(true);
     try {
-      const blob = await new Promise<Blob>((res, rej) =>
-        canvas.toBlob(b => b ? res(b) : rej(new Error("변환 실패")), "image/png", 0.95)
-      );
       const fd = new FormData();
       fd.append("signature", blob, "signature.png");
       const res = await fetch(`/api/sign/${token}`, { method: "POST", body: fd });
@@ -196,30 +134,20 @@ export default function SignPage() {
         {/* 서명 안내 */}
         <div style={s.signLabel}>
           <span>아래 영역에 서명해주세요</span>
-          <button onClick={clearCanvas} style={s.clearBtn}>지우기</button>
+          <button onClick={() => padRef.current?.clear()} style={s.clearBtn}>지우기</button>
         </div>
 
-        {/* 서명 캔버스 */}
+        {/* 서명 패드 (공용 — 고해상도·스무딩·trim) */}
         <div style={s.canvasWrap}>
-          <canvas
-            ref={canvasRef}
-            style={s.canvas}
-            onMouseDown={startDraw}
-            onMouseMove={draw}
-            onMouseUp={endDraw}
-            onMouseLeave={endDraw}
-            onTouchStart={startDraw}
-            onTouchMove={draw}
-            onTouchEnd={endDraw}
-          />
+          <SignaturePad ref={padRef} height={220} onChange={setEmpty} />
           <p style={s.canvasHint}>✍️ 패드 전체에 꽉 차게 서명해 주세요</p>
         </div>
 
         {/* 제출 */}
         <button
           onClick={submit}
-          disabled={saving}
-          style={{ ...s.submitBtn, opacity: saving ? 0.7 : 1 }}
+          disabled={saving || empty}
+          style={{ ...s.submitBtn, opacity: saving || empty ? 0.5 : 1 }}
         >
           {saving ? "저장 중..." : "서명 완료"}
         </button>
