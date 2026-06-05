@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import {
   BarChart2,
   BookOpen,
@@ -10,7 +11,7 @@ import {
   ChevronLeft,
   CircleDollarSign,
   ClipboardList,
-  ExternalLink,
+  Download,
   FileText,
   Home,
   PenLine,
@@ -48,6 +49,16 @@ const DOC_GROUPS_ADAPTATION = [
     { id: "adaptation-final-eval" as DocType, label: "적응지도 종합평가",Icon: TrendingUp, desc: "취업 후 적응지도 종합 평가기록부 (종료 시)", needsTrainee: true },
   ]},
 ];
+
+// pdf.js 뷰어는 무겁고 클라이언트 전용 → 문서 조회 시점에만 lazy 로드
+const PdfViewer = dynamic(() => import("../../_components/PdfViewer"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center bg-slate-200 text-sm font-bold text-slate-500">
+      문서를 불러오는 중...
+    </div>
+  ),
+});
 
 const DOC_LABELS: Record<DocType, string> = {
   "attendance-sheet":      "출근부",
@@ -118,6 +129,29 @@ function DocsViewInner() {
     setMode("view");
   }
 
+  const [downloading, setDownloading] = useState(false);
+  // 서버가 내려준 구분된 한글 파일명으로 실제 저장 (window.open은 모바일에서 새탭/다운로드로 빠짐)
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      const res = await fetch(previewUrl(), { cache: "no-store" });
+      if (!res.ok) { alert("문서를 불러올 수 없습니다."); return; }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition") || "";
+      let fname = `${DOC_LABELS[docType]}_${periodStart}_${periodEnd}.pdf`;
+      const m = cd.match(/filename\*=UTF-8''([^;]+)/i);
+      if (m) { try { fname = decodeURIComponent(m[1]); } catch { /* keep fallback */ } }
+      const u = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = u; a.download = fname; a.click();
+      URL.revokeObjectURL(u);
+    } catch {
+      alert("다운로드 중 오류가 발생했습니다.");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   // ── 뷰어 화면 ───────────────────────────────────────────
   if (mode === "view") {
     return (
@@ -134,15 +168,16 @@ function DocsViewInner() {
             <span className="text-xs font-semibold text-slate-400">{periodStart} ~ {periodEnd}</span>
           </div>
           <button
-            onClick={() => window.open(previewUrl(), "_blank")}
-            className="rounded-xl bg-slate-950 px-3 py-1.5 text-xs font-black text-white transition active:scale-95"
+            onClick={handleDownload}
+            disabled={downloading}
+            className="rounded-xl bg-slate-950 px-3 py-1.5 text-xs font-black text-white transition active:scale-95 disabled:opacity-60"
           >
-            PDF
+            {downloading ? "저장 중..." : "저장"}
           </button>
         </header>
 
-        <div className="flex-1 overflow-hidden bg-slate-200">
-          <iframe key={iframeKey} src={previewUrl()} className="h-full w-full border-none" title="문서 미리보기" />
+        <div className="flex-1 overflow-hidden">
+          <PdfViewer key={iframeKey} url={previewUrl()} />
         </div>
 
         <div className="flex flex-shrink-0 gap-2 border-t border-slate-100 bg-white p-3">
@@ -154,11 +189,12 @@ function DocsViewInner() {
             문서 선택
           </button>
           <button
-            onClick={() => window.open(previewUrl(), "_blank")}
-            className="flex flex-[2] items-center justify-center gap-1.5 rounded-xl bg-slate-950 py-3 text-sm font-black text-white transition active:scale-95"
+            onClick={handleDownload}
+            disabled={downloading}
+            className="flex flex-[2] items-center justify-center gap-1.5 rounded-xl bg-slate-950 py-3 text-sm font-black text-white transition active:scale-95 disabled:opacity-60"
           >
-            <ExternalLink className="h-4 w-4" aria-hidden="true" />
-            PDF 다운로드
+            <Download className="h-4 w-4" aria-hidden="true" />
+            {downloading ? "저장 중..." : "PDF 저장"}
           </button>
         </div>
       </div>

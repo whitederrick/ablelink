@@ -8,6 +8,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer } from "@/lib/pdf";
+import { buildDocFileName } from "@/lib/pdf/filename";
 import { sendEmailWithPdf } from "@/lib/email";
 
 // ── 유틸 ──────────────────────────────────────────────────────
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
         entries,
         signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
       };
-      fileName = `출근부_${site.companyName}_${start}_${end}.pdf`;
+      fileName = buildDocFileName("ATTENDANCE_SHEET", { companyName: site.companyName, start, end });
 
     } else if (docType === "TRAINING_DAILY_LOG") {
       if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
@@ -202,7 +203,7 @@ export async function POST(request: NextRequest) {
         })),
         signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
       };
-      fileName = `훈련일지_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
+      fileName = buildDocFileName("TRAINING_DAILY_LOG", { traineeName: trainee?.name, companyName: site.companyName, start, end });
 
     } else if (docType === "TRAINEE_FINAL_EVAL") {
       if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
@@ -225,7 +226,7 @@ export async function POST(request: NextRequest) {
         comments: (ev?.comments as any) || {},
         signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
       };
-      fileName = `훈련생평가_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
+      fileName = buildDocFileName("TRAINEE_FINAL_EVAL", { traineeName: trainee?.name, companyName: site.companyName, start, end });
 
     } else if (docType === "ADAPTATION_DAILY_LOG") {
       if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
@@ -257,7 +258,7 @@ export async function POST(request: NextRequest) {
         })),
         signatures: { worker: sigs.worker, govAgent: sigs.govAgent },
       };
-      fileName = `적응지도일지_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
+      fileName = buildDocFileName("ADAPTATION_DAILY_LOG", { traineeName: trainee?.name, companyName: site.companyName, start, end });
 
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
       if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
@@ -278,7 +279,7 @@ export async function POST(request: NextRequest) {
         comments: (ev?.comments as any) || {},
         signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
       };
-      fileName = `적응지도평가_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
+      fileName = buildDocFileName("ADAPTATION_FINAL_EVAL", { traineeName: trainee?.name, companyName: site.companyName, start, end });
 
     } else {
       return NextResponse.json({ success: false, message: `지원하지 않는 문서: ${docType}` }, { status: 400 });

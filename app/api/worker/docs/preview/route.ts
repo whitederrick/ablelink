@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType, type DocumentType } from "@/lib/pdf";
+import { buildDocFileName, contentDisposition } from "@/lib/pdf/filename";
 
 function fmtHHMM(d: Date): string {
   const kst = new Date(d.getTime() + 9*3600000);
@@ -157,11 +158,18 @@ export async function GET(request: NextRequest) {
 
     const pdfBuffer = await renderPdfToBuffer({ documentType: docType, payload });
 
+    // 훈련생별/기간별로 구분되는 파일명 (다운로드 시 중복 방지)
+    const fileName = buildDocFileName(docType, {
+      traineeName: payload?.traineeName ?? null,
+      companyName: site.companyName,
+      start, end,
+    });
+
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${docType}_preview.pdf"`,
+        "Content-Disposition": contentDisposition(fileName, "inline"),
         "Cache-Control": "no-store",
       },
     });
