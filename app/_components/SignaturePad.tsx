@@ -42,7 +42,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, {
     ctx.clearRect(0, 0, rect.width, rect.height);
     ctx.strokeStyle = "#0f172a";
     ctx.fillStyle = "#0f172a";
-    ctx.lineWidth = 2.6;
+    ctx.lineWidth = 4; // 굵게 (문서에 적정 굵기로 보이도록)
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
   }, []);
@@ -103,11 +103,36 @@ export const SignaturePad = forwardRef<SignaturePadHandle, {
   }
 
   useImperativeHandle(ref, () => ({
+    // 잉크 영역만 잘라내(trim) 내보냄 → 문서 (서명 또는 인) 칸을 적정 크기로 꽉 채움(여백 때문에 작게 들어가던 문제 해결)
     getBlob: () =>
       new Promise<Blob | null>(resolve => {
         const c = canvasRef.current;
         if (!c || emptyRef.current) { resolve(null); return; }
-        c.toBlob(b => resolve(b), "image/png");
+        const ctx = c.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        const W = c.width, H = c.height;
+        let minX = W, minY = H, maxX = 0, maxY = 0, found = false;
+        try {
+          const data = ctx.getImageData(0, 0, W, H).data;
+          for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+              if (data[(y * W + x) * 4 + 3] > 12) { // 알파(잉크) 픽셀
+                found = true;
+                if (x < minX) minX = x; if (x > maxX) maxX = x;
+                if (y < minY) minY = y; if (y > maxY) maxY = y;
+              }
+            }
+          }
+        } catch { resolve(null); return; }
+        if (!found) { resolve(null); return; }
+        const pad = Math.round(Math.max(W, H) * 0.03); // 잘림 방지용 소량 여백
+        minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
+        maxX = Math.min(W - 1, maxX + pad); maxY = Math.min(H - 1, maxY + pad);
+        const w = maxX - minX + 1, h = maxY - minY + 1;
+        const off = document.createElement("canvas");
+        off.width = w; off.height = h;
+        off.getContext("2d")!.drawImage(c, minX, minY, w, h, 0, 0, w, h);
+        off.toBlob(b => resolve(b), "image/png");
       }),
     clear: () => {
       setup();

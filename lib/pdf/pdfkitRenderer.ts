@@ -84,7 +84,8 @@ function signatures(doc: PDFKit.PDFDocument, y: number, rows: { label: string; s
       try {
         const b64 = r.sig.imageUrl.split(",")[1];
         const img = Buffer.from(b64, "base64");
-        doc.image(img, right - 70, cy - 4, { fit: [60, 22], align: "center" });
+        // 서명(잉크만 trim된 이미지)을 "(서명 또는 인)" 영역에 적정 크기로 배치
+        doc.image(img, right - 96, cy - 6, { fit: [90, 26], align: "center", valign: "center" });
       } catch { /* 이미지 실패 무시 */ }
     }
     cy += 24;
