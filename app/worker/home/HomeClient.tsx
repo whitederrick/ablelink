@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  BarChart2,
   Bell,
   CalendarDays,
+  CheckCircle2,
   ChevronRight,
   CircleDollarSign,
   ClipboardList,
   FileText,
+  FileWarning,
   Home,
   Layers,
   LogOut,
@@ -21,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import type { WorkerPayload } from "../_lib/session";
+import type { HomeSummary } from "@/lib/worker/homeSummary";
 
 // ─── 타입 ───────────────────────────────────────────────
 type AttendanceStatus = "BEFORE" | "WORKING" | "DONE" | "CLOSED";
@@ -52,6 +54,8 @@ interface HomeData {
   serviceStep: string | null;
   trainingType: "PRE" | "FIELD" | "ADAPTATION";
 }
+
+type NoticeItem = { id: string; title: string; body: string; type: string; yearMonth: string | null; read: boolean; createdAt: string };
 
 // ─── 유틸 ───────────────────────────────────────────────
 function calcDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -155,6 +159,35 @@ async function getCurrentPosition(): Promise<GeolocationCoordinates> {
   });
 }
 
+// home-summary의 home 객체 → HomeData 정규화 (초기 시드/재조회 공용)
+function normalizeHome(raw: any): HomeData {
+  return {
+    siteName: raw.companyName && raw.companyName !== "배정된 현장 없음" ? raw.companyName : null,
+    siteId: raw.id ? String(raw.id) : null,
+    assignmentId: raw.assignmentId ? String(raw.assignmentId) : null,
+    gpsLat: raw.gpsLat ?? null,
+    gpsLon: raw.gpsLon ?? null,
+    allowanceRange: raw.allowanceRange ?? 100,
+    workType: raw.workType ?? null,
+    commuteGuidanceIncluded: raw.commuteGuidanceIncluded ?? false,
+    customWorkStart: raw.customWorkStart ?? null,
+    customWorkEnd: raw.customWorkEnd ?? null,
+    traineeCount: Array.isArray(raw.trainees) ? raw.trainees.length : 0,
+    trainees: (raw.trainees ?? []).map((t: any) => ({
+      id: String(t.id),
+      name: t.name,
+      gender: t.gender === "M" || t.gender === "남" ? "M" : "F",
+    })),
+    attendanceStatus: normalizeStatus(raw),
+    attendanceId: raw.attendanceId ? String(raw.attendanceId) : null,
+    workStartTime: raw.startTime ?? null,
+    workEndTime: raw.endTime ?? null,
+    isFinalClosed: raw.isFinalClosed ?? false,
+    serviceStep: raw.serviceStep ?? null,
+    trainingType: raw.trainingType ?? "FIELD",
+  };
+}
+
 // ─── 상태별 설정 ─────────────────────────────────────────
 const STATUS_CONFIG: Record<
   AttendanceStatus,
@@ -197,11 +230,11 @@ const WORK_TYPE_LABEL: Record<string, string> = {
 };
 
 // ─── 메인 컴포넌트 ───────────────────────────────────────
-export default function HomeClient({ session }: { session: WorkerPayload }) {
+export default function HomeClient({ session, initialData }: { session: WorkerPayload; initialData: HomeSummary | null }) {
   const router = useRouter();
-  const [homeData, setHomeData] = useState<HomeData | null>(null);
-  const [status, setStatus] = useState<AttendanceStatus>("BEFORE");
-  const [loading, setLoading] = useState(true);
+  const [homeData, setHomeData] = useState<HomeData | null>(initialData ? normalizeHome(initialData.home) : null);
+  const [status, setStatus] = useState<AttendanceStatus>(initialData ? normalizeStatus(initialData.home) : "BEFORE");
+  const [loading, setLoading] = useState(!initialData);
   const [actionLoading, setActionLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
@@ -219,54 +252,51 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
   const [showProfile, setShowProfile] = useState(false);
   const profileRef = useRef<HTMLButtonElement>(null);
 
-  const [clockInAlert,  setClockInAlert]  = useState(3);
-  const [clockOutAlert, setClockOutAlert] = useState(3);
+  const [clockInAlert,  setClockInAlert]  = useState(initialData?.alarm.clockInAlertMinutes ?? 3);
+  const [clockOutAlert, setClockOutAlert] = useState(initialData?.alarm.clockOutAlertMinutes ?? 3);
   const [showAlarmSettings, setShowAlarmSettings] = useState(false);
   const alarmFiredRef = useRef<Set<string>>(new Set());
-  const [premium, setPremium] = useState<{ access: boolean; reason: string | null; message: string | null }>({ access: true, reason: null, message: null });
-  const [unreadNotices,  setUnreadNotices]  = useState(0);
+  const [premium, setPremium] = useState<{ access: boolean; reason: string | null; message: string | null }>({
+    access: initialData?.premiumAccess ?? true,
+    reason: initialData?.premiumReason ?? null,
+    message: initialData?.premiumMessage ?? null,
+  });
+  const [unreadNotices,  setUnreadNotices]  = useState(initialData?.unreadCount ?? 0);
   const [showNotices,    setShowNotices]    = useState(false);
-  const [notices,        setNotices]        = useState<{id:string;title:string;body:string;type:string;yearMonth:string|null;read:boolean;createdAt:string}[]>([]);
+  const [notices,        setNotices]        = useState<NoticeItem[]>(initialData?.notices ?? []);
+  // 놓친 업무 / 오늘 일지 상태
+  const [missingCount,   setMissingCount]   = useState(initialData?.missing.count ?? 0);
+  const [todayMissing,   setTodayMissing]   = useState(initialData?.today.missingTraineeCount ?? 0);
+  // 오늘 일지 쓰기 — 훈련생 선택 시트
+  const [showLogPicker,  setShowLogPicker]  = useState(false);
 
-  useEffect(() => {
-    fetch("/api/worker/notification")
-      .then(r => r.json())
-      .then(d => {
-        if (d.success && d.data) {
-          setClockInAlert(d.data.clockInAlertMinutes ?? 3);
-          setClockOutAlert(d.data.clockOutAlertMinutes ?? 3);
-        }
-      })
-      .catch(() => {});
+  // 단일 통합 조회 (출퇴근/일지 액션 후 재검증). 첫 로드는 서버 프리페치(initialData)로 처리.
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/worker/home-summary", { cache: "no-store" });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      const d: HomeSummary = data.data;
+      setHomeData(normalizeHome(d.home));
+      setStatus(normalizeStatus(d.home));
+      setPremium({ access: d.premiumAccess, reason: d.premiumReason, message: d.premiumMessage });
+      setNotices(d.notices);
+      setUnreadNotices(d.unreadCount);
+      setClockInAlert(d.alarm.clockInAlertMinutes);
+      setClockOutAlert(d.alarm.clockOutAlertMinutes);
+      setMissingCount(d.missing.count);
+      setTodayMissing(d.today.missingTraineeCount);
+    } catch (e: any) {
+      showToast(e.message || "데이터를 불러올 수 없습니다.", "error");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // 계약 기반 유료기능 접근 상태 (배너 안내 통일)
+  // initialData가 없을 때(서버 프리페치 실패)만 클라이언트 폴백 조회
   useEffect(() => {
-    fetch("/api/worker/site/current")
-      .then(r => r.json())
-      .then(d => {
-        if (d?.success && d.data) {
-          setPremium({
-            access: d.data.premiumAccess ?? false,
-            reason: d.data.premiumReason ?? null,
-            message: d.data.premiumMessage ?? null,
-          });
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/worker/notices")
-      .then(r => r.json())
-      .then(d => {
-        if (d.success) {
-          setNotices(d.notices);
-          setUnreadNotices(d.unreadCount);
-        }
-      })
-      .catch(() => {});
-  }, []);
+    if (!initialData) refresh();
+  }, [initialData, refresh]);
 
   async function markAllRead() {
     await fetch("/api/worker/notices/read", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
@@ -305,53 +335,6 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
 
   const showToast = (msg: string, type: "success" | "error" | "info" = "info") =>
     setToast({ msg, type });
-
-  const fetchHome = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/home/${session.workerId}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
-
-      const raw = data.data;
-      const normalized: HomeData = {
-        siteName: raw.companyName && raw.companyName !== "배정된 현장 없음"
-          ? raw.companyName : null,
-        siteId: raw.id ? String(raw.id) : null,
-        assignmentId: raw.assignmentId ? String(raw.assignmentId) : null,
-        gpsLat: raw.gpsLat ?? null,
-        gpsLon: raw.gpsLon ?? null,
-        allowanceRange: raw.allowanceRange ?? 100,
-        workType: raw.workType ?? null,
-        commuteGuidanceIncluded: raw.commuteGuidanceIncluded ?? false,
-        customWorkStart: raw.customWorkStart ?? null,
-        customWorkEnd: raw.customWorkEnd ?? null,
-        traineeCount: Array.isArray(raw.trainees) ? raw.trainees.length : 0,
-        trainees: (raw.trainees ?? []).map((t: any) => ({
-          id: String(t.id),
-          name: t.name,
-          gender: t.gender === "M" || t.gender === "남" ? "M" : "F",
-        })),
-        attendanceStatus: normalizeStatus(raw),
-        attendanceId: raw.attendanceId ? String(raw.attendanceId) : null,
-        workStartTime: raw.startTime ?? null,
-        workEndTime: raw.endTime ?? null,
-        isFinalClosed: raw.isFinalClosed ?? false,
-        serviceStep: raw.serviceStep ?? null,
-        trainingType: raw.trainingType ?? "FIELD",
-      };
-
-      setHomeData(normalized);
-      setStatus(normalized.attendanceStatus);
-    } catch (e: any) {
-      showToast(e.message || "데이터를 불러올 수 없습니다.", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [session.workerId]);
-
-  useEffect(() => {
-    fetchHome();
-  }, [fetchHome]);
 
   async function doAttendance(
     endpoint: string,
@@ -436,7 +419,7 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
         return false;
       }
 
-      await fetchHome();
+      await refresh();
       return true;
     } finally {
       setActionLoading(false);
@@ -492,6 +475,25 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
     router.replace("/worker/login");
   }
 
+  // 일지 작성 진입 (출근 안 눌러도 가능 — 서버가 출근기록 자동 생성)
+  function goWorklog(trainee: Trainee) {
+    const params = new URLSearchParams({
+      traineeId: trainee.id,
+      traineeName: trainee.name,
+      trainingType: homeData?.trainingType || "FIELD",
+      ...(homeData?.attendanceId ? { attendanceId: homeData.attendanceId } : {}),
+    });
+    router.push(`/worker/worklog?${params.toString()}`);
+  }
+
+  // "오늘 일지 쓰기" — 훈련생 1명이면 바로, 여러 명이면 선택 시트
+  function handleWriteToday() {
+    const ts = homeData?.trainees ?? [];
+    if (ts.length === 0) return;
+    if (ts.length === 1) { goWorklog(ts[0]); return; }
+    setShowLogPicker(true);
+  }
+
   // ─── 로딩 ──────────────────────────────────────────────
   if (loading) {
     return (
@@ -513,6 +515,9 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
   const workTypeLabel = homeData?.workType
     ? (WORK_TYPE_LABEL[homeData.workType] ?? `${homeData.customWorkStart}–${homeData.customWorkEnd}`)
     : null;
+
+  const hasSite = !!homeData?.siteName;
+  const traineeList = homeData?.trainees ?? [];
 
   const NAV_ITEMS = [
     { icon: Home,           label: "홈",      href: "/worker/home" },
@@ -560,8 +565,9 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
                 </button>
                 {showNotices && (
                   <div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-slate-100 bg-white shadow-xl shadow-slate-950/10">
-                    <div className="border-b border-slate-100 px-4 py-3">
+                    <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                       <p className="text-sm font-black text-slate-900">알림</p>
+                      <button onClick={() => setShowNotices(false)} aria-label="닫기"><X className="h-4 w-4 text-slate-400" /></button>
                     </div>
                     {notices.length === 0 ? (
                       <div className="px-4 py-8 text-center text-sm font-semibold text-slate-400">알림이 없습니다.</div>
@@ -718,8 +724,172 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
           )}
         </div>
 
-        {/* 근무형태 + 알람 */}
-        {homeData?.siteName && homeData.workType && (
+        {/* ── 오늘 할 일 / 놓친 일 요약 (핵심 — 가장 위) ── */}
+        {hasSite && (
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-5 pt-4 pb-3">
+              <p className="text-sm font-black text-slate-900">오늘 할 일</p>
+            </div>
+
+            {/* 오늘 일지 */}
+            <button
+              onClick={handleWriteToday}
+              disabled={traineeList.length === 0}
+              className="flex w-full items-center gap-3 px-5 py-4 text-left transition active:bg-slate-50 disabled:opacity-50"
+            >
+              <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl ${todayMissing > 0 ? "bg-slate-950" : "bg-emerald-100"}`}>
+                {todayMissing > 0
+                  ? <ClipboardList className="h-5 w-5 text-sky-400" aria-hidden="true" />
+                  : <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden="true" />}
+              </div>
+              <div className="flex-1">
+                {todayMissing > 0 ? (
+                  <>
+                    <p className="text-base font-black text-slate-900">오늘 일지 쓰기</p>
+                    <p className="text-xs font-semibold text-slate-400">{todayMissing}명 미작성 · 출근 안 해도 작성할 수 있어요</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-base font-black text-emerald-600">오늘 일지 완료</p>
+                    <p className="text-xs font-semibold text-slate-400">오늘 담당 훈련생 일지를 모두 작성했어요</p>
+                  </>
+                )}
+              </div>
+              {todayMissing > 0 && <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-300" aria-hidden="true" />}
+            </button>
+
+            {/* 놓친(밀린) 일지 */}
+            <button
+              onClick={() => router.push("/worker/logs/missing")}
+              className="flex w-full items-center gap-3 border-t border-slate-100 px-5 py-4 text-left transition active:bg-slate-50"
+            >
+              <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl ${missingCount > 0 ? "bg-amber-100" : "bg-slate-100"}`}>
+                {missingCount > 0
+                  ? <FileWarning className="h-5 w-5 text-amber-500" aria-hidden="true" />
+                  : <CheckCircle2 className="h-5 w-5 text-slate-400" aria-hidden="true" />}
+              </div>
+              <div className="flex-1">
+                {missingCount > 0 ? (
+                  <>
+                    <p className="text-base font-black text-amber-700">밀린 일지 {missingCount}건</p>
+                    <p className="text-xs font-semibold text-slate-400">지난 출근 중 일지가 빠진 날이 있어요</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-base font-black text-slate-700">밀린 일지 없음</p>
+                    <p className="text-xs font-semibold text-slate-400">지난 일지를 모두 작성했어요</p>
+                  </>
+                )}
+              </div>
+              <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-300" aria-hidden="true" />
+            </button>
+          </div>
+        )}
+
+        {/* 담당 훈련생 목록 */}
+        {traineeList.length > 0 && (
+          <div>
+            <div className="mb-3 flex items-center justify-between px-1">
+              <span className="text-sm font-black text-slate-800">담당 훈련생</span>
+              <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-black text-white">
+                {traineeList.length}명
+              </span>
+            </div>
+            <div className="space-y-2.5">
+              {traineeList.map(t => {
+                const trainingType = homeData?.trainingType || "FIELD";
+                const isAdaptation = trainingType === "ADAPTATION";
+                const now = new Date();
+                const y = now.getFullYear();
+                const mo = String(now.getMonth() + 1).padStart(2, "0");
+                const last = new Date(y, now.getMonth() + 1, 0).getDate();
+                const ps = `${y}-${mo}-01`;
+                const pe = `${y}-${mo}-${String(last).padStart(2, "0")}`;
+                const evalPath = isAdaptation
+                  ? `/worker/evaluation/adaptation?traineeId=${t.id}&traineeName=${encodeURIComponent(t.name)}&periodStart=${ps}&periodEnd=${pe}`
+                  : `/worker/evaluation/training?traineeId=${t.id}&traineeName=${encodeURIComponent(t.name)}&periodStart=${ps}&periodEnd=${pe}`;
+
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm"
+                  >
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-sm font-black text-slate-600">
+                      {t.name.slice(0, 1)}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-black text-slate-900">{t.name}</p>
+                      <p className="text-xs font-semibold text-slate-400">{t.gender === "M" ? "남성" : "여성"}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => router.push(evalPath)}
+                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-600 transition active:scale-95"
+                        title={isAdaptation ? "적응지도 종료 시 작성" : "훈련 종료 시 작성"}
+                      >
+                        종합평가
+                      </button>
+                      <button
+                        onClick={() => goWorklog(t)}
+                        className="flex items-center gap-1 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white transition active:scale-95"
+                      >
+                        <ClipboardList className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
+                        일지 작성
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 현장 없을 때 */}
+        {!hasSite && (
+          <div className="rounded-3xl border border-slate-100 bg-white py-12 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
+              <MapPin className="h-7 w-7 text-slate-400" aria-hidden="true" />
+            </div>
+            <p className="mb-5 text-sm font-semibold text-slate-500">배정된 현장이 없습니다.</p>
+            <button
+              onClick={() => router.push("/worker/site/register")}
+              className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-95"
+            >
+              현장 등록하기
+            </button>
+          </div>
+        )}
+
+        {/* ── 빠른 작업 (흩어진 단축버튼 통합) ── */}
+        {hasSite && (
+          <div>
+            <p className="mb-3 px-1 text-sm font-black text-slate-800">빠른 작업</p>
+            <div className="grid grid-cols-2 gap-2.5">
+              <QuickAction icon={FileText}  label="문서 보기"   sub="출근부·일지 PDF" onClick={() => router.push("/worker/docs/view")} />
+              <QuickAction icon={ClipboardList} label="일지 목록" sub="작성한 일지" onClick={() => router.push("/worker/logs")} />
+              <QuickAction icon={CheckCircle2} label="출근부 확정" sub="월별 확정" onClick={() => router.push("/worker/review/attendance")} />
+              <QuickAction icon={PenLine} label="일지 확정" sub="월별 확정" onClick={() => router.push("/worker/review/logs")} />
+            </div>
+
+            {/* AI 일괄 작성 */}
+            <button
+              onClick={() => router.push("/worker/worklog/batch")}
+              className="mt-2.5 flex w-full items-center gap-3 rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3.5 text-left transition active:scale-[0.98]"
+            >
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-violet-100">
+                <Layers className="h-5 w-5 text-violet-600" aria-hidden="true" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-black text-violet-900">AI 일지 일괄 작성</p>
+                <p className="text-xs font-semibold text-violet-500">음성 1번으로 여러 날짜 일지를 한번에</p>
+              </div>
+              <ChevronRight className="h-4 w-4 flex-shrink-0 text-violet-400" aria-hidden="true" />
+            </button>
+          </div>
+        )}
+
+        {/* 근무형태 + 알람 (보조 정보 — 아래로) */}
+        {hasSite && homeData?.workType && (
           <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
             <div className="flex items-center justify-between">
               <div>
@@ -751,156 +921,8 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
           </div>
         )}
 
-        {/* 서비스 단계 표시 */}
-        {homeData?.siteName && homeData.serviceStep && (
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">현재 서비스 단계</p>
-                <p className="mt-0.5 text-sm font-black text-slate-900">
-                  {homeData.serviceStep === "PRE_TRAINING" ? "지원고용 — 사전훈련"
-                    : homeData.serviceStep === "FIELD_TRAINING" ? "지원고용 — 현장훈련"
-                    : homeData.serviceStep === "ADAPTATION" ? "취업 후 적응지도"
-                    : homeData.serviceStep}
-                </p>
-              </div>
-              <button
-                onClick={() => router.push("/worker/logs")}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-600 transition active:scale-95"
-              >
-                일지 목록
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 담당 훈련생 목록 */}
-        {homeData?.trainees && homeData.trainees.length > 0 && (
-          <div>
-            <div className="mb-3 flex items-center justify-between px-1">
-              <span className="text-sm font-black text-slate-800">담당 훈련생</span>
-              <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-black text-white">
-                {homeData.trainees.length}명
-              </span>
-            </div>
-            <div className="space-y-2.5">
-              {homeData.trainees.map(t => {
-                const aid = homeData?.attendanceId ?? "";
-                const trainingType = homeData?.trainingType || "FIELD";
-                const isAdaptation = trainingType === "ADAPTATION";
-                const now = new Date();
-                const y = now.getFullYear();
-                const mo = String(now.getMonth() + 1).padStart(2, "0");
-                const last = new Date(y, now.getMonth() + 1, 0).getDate();
-                const ps = `${y}-${mo}-01`;
-                const pe = `${y}-${mo}-${String(last).padStart(2, "0")}`;
-                const evalType = isAdaptation ? "ADAPTATION" : "TRAINING";
-                const evalPath = isAdaptation
-                  ? `/worker/evaluation/adaptation?traineeId=${t.id}&traineeName=${encodeURIComponent(t.name)}&periodStart=${ps}&periodEnd=${pe}`
-                  : `/worker/evaluation/training?traineeId=${t.id}&traineeName=${encodeURIComponent(t.name)}&periodStart=${ps}&periodEnd=${pe}`;
-
-                return (
-                  <div
-                    key={t.id}
-                    className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm"
-                  >
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-sm font-black text-slate-600">
-                      {t.name.slice(0, 1)}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-black text-slate-900">{t.name}</p>
-                      <p className="text-xs font-semibold text-slate-400">{t.gender === "M" ? "남성" : "여성"}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      {/* 종합평가 버튼 (훈련/적응지도 종료 시 작성) */}
-                      <button
-                        onClick={() => router.push(evalPath)}
-                        className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-black text-slate-600 transition active:scale-95"
-                        title={isAdaptation ? "적응지도 종료 시 작성" : "훈련 종료 시 작성"}
-                      >
-                        <BarChart2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-                        종합평가
-                      </button>
-                      {/* 일지 작성 버튼 */}
-                      <button
-                        onClick={() => {
-                          const params = new URLSearchParams({
-                            traineeId: t.id,
-                            traineeName: t.name,
-                            trainingType,
-                            ...(aid ? { attendanceId: aid } : {}),
-                          });
-                          router.push(`/worker/worklog?${params.toString()}`);
-                        }}
-                        className="flex items-center gap-1 rounded-xl bg-slate-950 px-2.5 py-2 text-xs font-black text-white transition active:scale-95"
-                      >
-                        <ClipboardList className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
-                        일지 작성
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* 현장 없을 때 */}
-        {!homeData?.siteName && (
-          <div className="rounded-3xl border border-slate-100 bg-white py-12 text-center shadow-sm">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
-              <MapPin className="h-7 w-7 text-slate-400" aria-hidden="true" />
-            </div>
-            <p className="mb-5 text-sm font-semibold text-slate-500">배정된 현장이 없습니다.</p>
-            <button
-              onClick={() => router.push("/worker/site/register")}
-              className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-95"
-            >
-              현장 등록하기
-            </button>
-          </div>
-        )}
-
-        {/* AI 일괄 일지 작성 버튼 */}
-        {homeData?.siteName && (
-          <button
-            onClick={() => router.push("/worker/worklog/batch")}
-            className="flex w-full items-center gap-3 rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3.5 text-left transition active:scale-[0.98]"
-          >
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-violet-100">
-              <Layers className="h-5 w-5 text-violet-600" aria-hidden="true" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-black text-violet-900">AI 일지 일괄 작성</p>
-              <p className="text-xs font-semibold text-violet-500">음성 1번으로 여러 날짜 일지를 한번에 작성</p>
-            </div>
-            <ChevronRight className="h-4 w-4 flex-shrink-0 text-violet-400" aria-hidden="true" />
-          </button>
-        )}
-
-        {/* 검토·확정 바로가기 */}
-        {homeData?.siteName && (
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <p className="mb-2.5 text-[11px] font-black uppercase tracking-wide text-slate-400">검토·확정</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => router.push("/worker/review/attendance")}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-xs font-black text-slate-700 transition active:scale-95 border border-slate-200"
-              >
-                출근부 확정
-              </button>
-              <button
-                onClick={() => router.push("/worker/review/logs")}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-xs font-black text-slate-700 transition active:scale-95 border border-slate-200"
-              >
-                일지 확정
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 유료기능 안내 배너 — 계약 기반 접근이 막혔을 때만, 상황별 CTA 문구 (접근 가능하면 숨김) */}
-        {homeData?.siteName && !premium.access && (
+        {/* 유료기능 안내 배너 — 접근 막혔을 때만 (AI 기준) */}
+        {hasSite && !premium.access && (
           <div className="flex w-full items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3.5 text-left">
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-amber-100">
               <Sparkles className="h-5 w-5 text-amber-500" aria-hidden="true" />
@@ -911,15 +933,46 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
                   ? "근로계약서 서명이 필요해요"
                   : premium.reason === "CONTRACT_EXPIRED"
                   ? "근로계약 기간이 종료되었어요"
-                  : "AI · PDF 등 유료 기능 안내"}
+                  : "AI 음성 일지 안내"}
               </p>
               <p className="text-xs font-semibold leading-relaxed text-amber-700">
-                {premium.message || "근로계약 기간 중에 AI 일지·PDF·전자서명을 사용할 수 있어요."}
+                {premium.message || "근로계약 기간 중에 AI 음성 일지를 사용할 수 있어요."}
               </p>
             </div>
           </div>
         )}
       </div>
+
+      {/* ── 오늘 일지 쓰기 — 훈련생 선택 시트 ── */}
+      {showLogPicker && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 px-4 pb-6" onClick={e => { if (e.target === e.currentTarget) setShowLogPicker(false); }}>
+          <div className="w-full max-w-md rounded-3xl bg-white p-6">
+            <p className="mb-1 text-base font-black text-slate-900">어떤 훈련생 일지를 쓸까요?</p>
+            <p className="mb-5 text-sm font-semibold text-slate-400">훈련생을 선택하면 일지 작성으로 이동합니다.</p>
+            <div className="space-y-2">
+              {traineeList.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => { setShowLogPicker(false); goWorklog(t); }}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5 text-left transition active:scale-95"
+                >
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-slate-200 text-sm font-black text-slate-600">
+                    {t.name.slice(0, 1)}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-black text-slate-900">{t.name}</p>
+                    <p className="text-xs font-semibold text-slate-400">{t.gender === "M" ? "남성" : "여성"}</p>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-slate-300" aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setShowLogPicker(false)} className="mt-4 w-full rounded-2xl border border-slate-200 py-3 text-sm font-black text-slate-500">
+              취소
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── 다이얼로그 ── */}
       {dialog && (
@@ -1008,6 +1061,26 @@ export default function HomeClient({ session }: { session: WorkerPayload }) {
         })}
       </nav>
     </div>
+  );
+}
+
+// ─── 빠른 작업 버튼 ──────────────────────────────────────────
+function QuickAction({ icon: Icon, label, sub, onClick }: {
+  icon: any; label: string; sub: string; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3.5 text-left shadow-sm transition active:scale-[0.97]"
+    >
+      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100">
+        <Icon className="h-5 w-5 text-slate-600" aria-hidden="true" />
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-black text-slate-900">{label}</p>
+        <p className="truncate text-[11px] font-semibold text-slate-400">{sub}</p>
+      </div>
+    </button>
   );
 }
 
