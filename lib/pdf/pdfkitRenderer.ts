@@ -84,9 +84,9 @@ function signatures(doc: PDFKit.PDFDocument, y: number, rows: { label: string; s
       try {
         const b64 = r.sig.imageUrl.split(",")[1];
         const img = Buffer.from(b64, "base64");
-        // 서명(잉크만 trim된 이미지)을 "(서명 또는 인)" 영역에 가로로 꽉 차게 배치
-        // 패드 비율(SIGN_ASPECT≈3.6)과 박스 비율(96/26≈3.7)을 맞춰 좌우로 채워지게 함
-        doc.image(img, right - 98, cy - 5, { fit: [96, 26], align: "center", valign: "center" });
+        // 서명(잉크만 trim된 이미지)을 우측 "(서명 또는 인)" 영역에 배치.
+        // 박스가 넓어 왼쪽이 이름까지 침범하던 문제 → 우측으로 이동(이름 영역 침범 방지).
+        doc.image(img, right - 80, cy - 4, { fit: [78, 24], align: "center", valign: "center" });
       } catch { /* 이미지 실패 무시 */ }
     }
     cy += 24;
