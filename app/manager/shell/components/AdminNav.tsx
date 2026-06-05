@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 type NavItem  = { href: string; label: string };
 type NavGroup = { title: string; items: NavItem[] };
@@ -63,6 +64,8 @@ const groups: NavGroup[] = [
 
 export default function AdminNav() {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const toggle = (t: string) => setCollapsed(c => ({ ...c, [t]: !c[t] }));
   const isActive = (href: string) =>
     href === "/manager" ? pathname === "/manager" : pathname.startsWith(href);
 
@@ -80,10 +83,14 @@ export default function AdminNav() {
       <nav className="flex flex-col gap-6">
         {groups.map(g => (
           <div key={g.title}>
-            <p className="mb-1.5 px-3 text-[10px] font-black uppercase tracking-widest text-slate-600">
-              {g.title}
-            </p>
-            <div className="space-y-0.5">
+            <button
+              onClick={() => toggle(g.title)}
+              className="mb-1.5 flex w-full items-center justify-between px-3 text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:text-slate-400"
+            >
+              <span>{g.title}</span>
+              <span className="text-sm leading-none text-slate-600">{collapsed[g.title] ? "+" : "–"}</span>
+            </button>
+            <div className={`space-y-0.5 ${collapsed[g.title] ? "hidden" : ""}`}>
               {g.items.map(item => {
                 const active = isActive(item.href);
                 return (
