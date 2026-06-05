@@ -39,9 +39,10 @@ const groups: NavGroup[] = [
       { href: "/manager/contracts",  label: "근로계약서" },
       { href: "/manager/documents",  label: "문서 운영" },
       { href: "/manager/docs",       label: "문서 조회" },
-      { href: "/manager/review",     label: "확정 현황" },
-      { href: "/manager/reports",    label: "진척도 리포트" },
-      { href: "/manager/notices",    label: "공지 발송" },
+      { href: "/manager/review",      label: "확정 현황" },
+      { href: "/manager/reports",     label: "진척도 리포트" },
+      { href: "/manager/announcements", label: "공지 게시판" },
+      { href: "/manager/notices",     label: "알림 발송(개별)" },
     ],
   },
   {

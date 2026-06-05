@@ -994,6 +994,22 @@ model SystemAnnouncement {
   @@map("system_announcements")
 }
 
+// 에이전시 공지 게시판 (매니저 작성 → 소속 직무지도원 열람). 알림 fan-out 없이 게시판 1행.
+model AgencyAnnouncement {
+  id                 BigInt   @id @default(autoincrement())
+  agencyId           BigInt   @map("agency_id")
+  title              String
+  body               String
+  type               String   @default("INFO") // INFO | WARN | URGENT
+  pinned             Boolean  @default(false)
+  createdByManagerId BigInt?  @map("created_by_manager_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@index([agencyId, pinned, createdAt])
+  @@map("agency_announcements")
+}
+
 // ------------------------------------------------------
 // 7b. 시스템 감사 로그 (System Audit Log)
 // ------------------------------------------------------

@@ -15,6 +15,7 @@ import {
   Layers,
   LogOut,
   MapPin,
+  Megaphone,
   PenLine,
   Search,
   Sparkles,
@@ -887,6 +888,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
               <QuickAction icon={ClipboardList} label="일지 목록" sub="작성한 일지" onClick={() => router.push("/worker/logs")} />
               <QuickAction icon={CheckCircle2} label="출근부 확정" sub="월별 확정" onClick={() => router.push("/worker/review/attendance")} />
               <QuickAction icon={PenLine} label="일지 확정" sub="월별 확정" onClick={() => router.push("/worker/review/logs")} />
+              <QuickAction icon={Megaphone} label="공지사항" sub="운영자·소속기관 공지" onClick={() => router.push("/worker/notices")} />
             </div>
 
             {/* AI 일괄 작성 */}
