@@ -43,7 +43,7 @@ export interface HomeSummary {
   premiumReason: string | null;
   premiumMessage: string | null;
   docAccess: boolean;
-  notices: { id: string; title: string; body: string; type: string; yearMonth: string | null; read: boolean; createdAt: string }[];
+  notices: { id: string; title: string; body: string; type: string; yearMonth: string | null; link: string | null; read: boolean; createdAt: string }[];
   unreadCount: number;
   alarm: { clockInAlertMinutes: number; clockOutAlertMinutes: number };
   // 놓친 업무
@@ -114,11 +114,11 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     where: { workerId },
     orderBy: { createdAt: "desc" },
     take: 20,
-    select: { id: true, title: true, body: true, type: true, yearMonth: true, readAt: true, createdAt: true },
+    select: { id: true, title: true, body: true, type: true, yearMonth: true, link: true, readAt: true, createdAt: true },
   });
   const notices = rawNotices.map((n: any) => ({
     id: n.id.toString(), title: n.title, body: n.body, type: n.type,
-    yearMonth: n.yearMonth, read: n.readAt !== null, createdAt: n.createdAt.toISOString(),
+    yearMonth: n.yearMonth, link: n.link ?? null, read: n.readAt !== null, createdAt: n.createdAt.toISOString(),
   }));
   const unreadCount = rawNotices.filter((n: any) => !n.readAt).length;
 

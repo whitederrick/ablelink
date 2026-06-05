@@ -117,13 +117,18 @@ export async function POST(req: NextRequest) {
 
     if (workerId) {
       const typeLabel = requestType === "DELETE" ? "삭제" : "근무인정 변경";
+      const defaultBody =
+        requestType === "DELETE"
+          ? `관리자가 ${holiday.date} 커스텀 휴무일 삭제를 요청했습니다. 아래를 눌러 캘린더에서 확인해주세요.`
+          : `관리자가 ${holiday.date} 커스텀 휴무일의 근무 인정 변경을 요청했습니다. 아래를 눌러 캘린더에서 확인해주세요.`;
       await prisma.workerNotice.create({
         data: {
           workerId:   workerId,
           agencyId,
-          title:    `[휴무일 ${typeLabel} 요청] ${holiday.date}`,
-          body:     reason?.trim() || `에이전시에서 ${holiday.date} 커스텀 휴무일 ${typeLabel}을 요청했습니다. 캘린더에서 확인해주세요.`,
+          title:    `[커스텀 휴무일 ${typeLabel} 요청] ${holiday.date}`,
+          body:     reason?.trim() ? `${defaultBody} (사유: ${reason.trim()})` : defaultBody,
           type:     "INFO",
+          link:     "/worker/calendar",
         },
       });
     }

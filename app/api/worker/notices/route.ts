@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       where: { workerId: BigInt(session.workerId) },
       orderBy: { createdAt: "desc" },
       take: 20,
-      select: { id: true, title: true, body: true, type: true, yearMonth: true, readAt: true, createdAt: true },
+      select: { id: true, title: true, body: true, type: true, yearMonth: true, link: true, readAt: true, createdAt: true },
     });
 
     return NextResponse.json({
@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
         body:      n.body,
         type:      n.type,
         yearMonth: n.yearMonth,
+        link:      n.link ?? null,
         read:      n.readAt !== null,
         createdAt: n.createdAt.toISOString(),
       })),

@@ -55,7 +55,7 @@ interface HomeData {
   trainingType: "PRE" | "FIELD" | "ADAPTATION";
 }
 
-type NoticeItem = { id: string; title: string; body: string; type: string; yearMonth: string | null; read: boolean; createdAt: string };
+type NoticeItem = { id: string; title: string; body: string; type: string; yearMonth: string | null; link?: string | null; read: boolean; createdAt: string };
 
 // ─── 유틸 ───────────────────────────────────────────────
 function calcDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -573,15 +573,25 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
                       <div className="px-4 py-8 text-center text-sm font-semibold text-slate-400">알림이 없습니다.</div>
                     ) : (
                       <div className="max-h-80 divide-y divide-slate-50 overflow-y-auto">
-                        {notices.map(n => (
-                          <div key={n.id} className={`px-4 py-3 ${n.read ? "" : "bg-rose-50"}`}>
-                            <p className={`text-xs font-black ${n.type === "REJECT" ? "text-rose-600" : "text-slate-700"}`}>
-                              {n.title}
-                            </p>
-                            <p className="mt-0.5 text-xs font-semibold text-slate-500">{n.body}</p>
-                            <p className="mt-1 text-[10px] text-slate-300">{new Date(n.createdAt).toLocaleDateString("ko-KR")}</p>
-                          </div>
-                        ))}
+                        {notices.map(n => {
+                          const go = () => { if (n.link) { setShowNotices(false); router.push(n.link); } };
+                          return (
+                            <div
+                              key={n.id}
+                              onClick={n.link ? go : undefined}
+                              className={`px-4 py-3 ${n.read ? "" : "bg-rose-50"} ${n.link ? "cursor-pointer transition active:bg-slate-50" : ""}`}
+                            >
+                              <p className={`text-xs font-black ${n.type === "REJECT" ? "text-rose-600" : "text-slate-700"}`}>
+                                {n.title}
+                              </p>
+                              <p className="mt-0.5 text-xs font-semibold text-slate-500">{n.body}</p>
+                              <div className="mt-1 flex items-center justify-between">
+                                <p className="text-[10px] text-slate-300">{new Date(n.createdAt).toLocaleDateString("ko-KR")}</p>
+                                {n.link && <span className="text-[10px] font-black text-sky-600">바로가기 →</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

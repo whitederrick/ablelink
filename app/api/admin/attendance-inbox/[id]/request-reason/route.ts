@@ -67,8 +67,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           workerId: att.workerId,
           agencyId: scope.agencyId,
           title: "[근태] 출근 사유 입력 요청",
-          body: `${att.workDate} 근태에 대해 사유 입력이 요청되었습니다. 출근부 검토·확정 화면에서 입력해주세요.`,
+          body: `${att.workDate} 근태에 대해 사유 입력이 요청되었습니다. 아래를 눌러 사유를 입력해주세요.`,
           type: "INFO",
+          link: "/worker/review/attendance",
         },
       });
     } catch { /* 비치명적 */ }
