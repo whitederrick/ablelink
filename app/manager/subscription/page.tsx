@@ -12,6 +12,7 @@ interface AgencySub {
   id: string; name: string; planType: string;
   trialEndsAt: string | null; subscribedAt: string | null; nextBillingAt: string | null;
   maxWorkers: number; maxSites: number; currentWorkers: number; currentSites: number;
+  billingCycle: string; customAmount: number | null;
 }
 
 // 가격·기능은 lib/planGuard.ts(게이트)·PLAN_LIMITS(한도)·payments/billing(PLAN_PRICES)과 정합 유지.
@@ -151,6 +152,15 @@ export default function SubscriptionPage() {
                   </div>
                 )}
               </div>
+              {agency.customAmount != null && agency.customAmount > 0 && (
+                <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-50 p-3">
+                  <Check className="h-4 w-4 flex-shrink-0 text-emerald-600" />
+                  <p className="text-xs font-bold text-emerald-700">
+                    운영자 협상가 적용: {agency.billingCycle === "ANNUAL" ? "연" : "월"} {agency.customAmount.toLocaleString()}원
+                    <span className="ml-1 font-semibold text-emerald-600">(표준가 대신 이 금액으로 결제됩니다)</span>
+                  </p>
+                </div>
+              )}
               {!isPaid && (
                 <div className="mt-4 flex items-start gap-2 rounded-xl bg-sky-50 p-3">
                   <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-500" />

@@ -8,22 +8,10 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
 import { requireManagerSession } from "@/lib/managerScope";
+import { PLAN_PRICES, PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel } from "@/lib/billing";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const TOSS_API = "https://api.tosspayments.com/v1";
-
-// 플랜별 가격 (월정액, 원). 표시가(worker/subscribe·manager/subscription)·PLAN_LIMITS와 정합 유지.
-const PLAN_PRICES: Record<string, number> = {
-  STARTER:  49000,
-  STANDARD: 99000,
-  PRO:      199000,
-};
-
-const PLAN_NAMES: Record<string, string> = {
-  STARTER:  "AbleLink 스타터",
-  STANDARD: "AbleLink 스탠다드",
-  PRO:      "AbleLink 프로",
-};
 
 function tossAuth() {
   return "Basic " + Buffer.from(TOSS_SECRET_KEY + ":").toString("base64");
@@ -55,6 +43,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 운영자 딜(주기·협상가) 반영을 위해 에이전시 조회
+    const agencyRow = await prisma.agency.findUnique({
+      where: { id: BigInt(agencyId) },
+      select: { planType: true, billingCycle: true, customAmount: true },
+    });
+    if (!agencyRow) {
+      return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
+    }
+    // 청구 금액·주기 = 운영자 협상가 우선, 없으면 표준 월정액. (선택한 planType 기준으로 표준가 산출)
+    const { amount, cycle } = effectiveBilling({ planType, billingCycle: agencyRow.billingCycle, customAmount: agencyRow.customAmount });
+
     // 1. 빌링키 발급
     const billingRes = await fetch(`${TOSS_API}/billing/authorizations/confirm`, {
       method: "POST",
@@ -76,7 +75,6 @@ export async function POST(request: NextRequest) {
     }
 
     const billingKey = billingData.billingKey;
-    const amount = PLAN_PRICES[planType];
     const orderId = `ablelink_${agencyId}_${Date.now()}`;
     const now = new Date();
 
@@ -91,7 +89,7 @@ export async function POST(request: NextRequest) {
         customerKey,
         amount,
         orderId,
-        orderName: `${PLAN_NAMES[planType]} 월 구독`,
+        orderName: `${PLAN_NAMES[planType]} ${cycleLabel(cycle)} 구독`,
         customerEmail: billingData.customerEmail || null,
         customerName: billingData.customerName || null,
         taxFreeAmount: 0,
@@ -108,9 +106,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. DB 업데이트
-    const nextBillingAt = new Date(now);
-    nextBillingAt.setMonth(nextBillingAt.getMonth() + 1);
+    // 3. DB 업데이트 — 다음 결제일은 딜 주기(월/연)로 가산
+    const nextBillingAt = advanceBilling(now, cycle);
 
     const limits = PLAN_LIMITS[planType] || { maxWorkers: 0, maxSites: 0 };
 

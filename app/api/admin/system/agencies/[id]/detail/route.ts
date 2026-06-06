@@ -59,6 +59,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         nextBillingAt:agency.nextBillingAt?.toISOString() ?? null,
         maxWorkers:   agency.maxWorkers,
         maxSites:     agency.maxSites,
+        billingCycle: agency.billingCycle,
+        customAmount: agency.customAmount,
+        billingNote:  agency.billingNote,
         createdAt:    agency.createdAt.toISOString(),
       },
       managers: managers.map(m => ({

@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel } from "@/lib/billing";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const CRON_SECRET = process.env.CRON_SECRET || "";
@@ -13,17 +14,6 @@ const TOSS_API = "https://api.tosspayments.com/v1";
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 const GRACE_DAYS = 3; // 일시 결제 오류(토스 점검 등) 시 이 기간 동안 매일 재시도 후 강등
-
-const PLAN_PRICES: Record<string, number> = {
-  STARTER:  30000,
-  STANDARD: 80000,
-  PRO:      150000,
-};
-const PLAN_NAMES: Record<string, string> = {
-  STARTER:  "AbleLink 스타터",
-  STANDARD: "AbleLink 스탠다드",
-  PRO:      "AbleLink 프로",
-};
 
 function tossAuth() {
   return "Basic " + Buffer.from(TOSS_SECRET_KEY + ":").toString("base64");
@@ -59,12 +49,12 @@ export async function POST(request: NextRequest) {
 
   for (const agency of agencies) {
     try {
-      const amount = PLAN_PRICES[agency.planType];
+      // 운영자 딜(협상가·주기) 반영. 표준 월정액은 customAmount 없을 때만.
+      const { amount, cycle } = effectiveBilling(agency);
       if (!amount) continue;
 
       const currentBillingAt = new Date(agency.nextBillingAt!);
-      const nextBillingAt = new Date(currentBillingAt);
-      nextBillingAt.setMonth(nextBillingAt.getMonth() + 1);
+      const nextBillingAt = advanceBilling(currentBillingAt, cycle);
       const daysOverdue = Math.floor((today.getTime() - currentBillingAt.getTime()) / MS_DAY);
 
       // 결제 대상 월(KST) 기준 결정적 orderId — 같은 달 재시도 시 Toss가 중복청구를 거부(멱등성)
@@ -82,7 +72,7 @@ export async function POST(request: NextRequest) {
           customerKey: agency.tossCustomerKey,
           amount,
           orderId,
-          orderName: `${PLAN_NAMES[agency.planType]} 월 구독`,
+          orderName: `${PLAN_NAMES[agency.planType]} ${cycleLabel(cycle)} 구독`,
           taxFreeAmount: 0,
         }),
       });

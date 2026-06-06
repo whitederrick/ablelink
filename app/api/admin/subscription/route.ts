@@ -32,6 +32,8 @@ export async function GET(req: NextRequest) {
       maxSites: a.maxSites,
       currentWorkers: a.assignments.length,
       currentSites: a.sites.length,
+      billingCycle: a.billingCycle,
+      customAmount: a.customAmount,
     }));
 
     return NextResponse.json({ success: true, data });

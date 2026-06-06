@@ -17,6 +17,7 @@ type AgencyDetail = {
   id: string; name: string; planType: string; isActive: boolean;
   trialEndsAt: string | null; subscribedAt: string | null; nextBillingAt: string | null;
   maxWorkers: number; maxSites: number; createdAt: string;
+  billingCycle: string; customAmount: number | null; billingNote: string | null;
 };
 type Manager = { id: string; loginId: string; displayName: string | null; isActive: boolean; lastLoginAt: string | null };
 type Site    = { id: string; companyName: string; traineeCount: number };
@@ -44,6 +45,13 @@ export default function AgencyDetailPage() {
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState("");
 
+  // 결제 딜 설정 (건바이건)
+  const [dealCycle,  setDealCycle]  = useState<"MONTHLY" | "ANNUAL">("MONTHLY");
+  const [dealAmount, setDealAmount] = useState("");
+  const [dealNote,   setDealNote]   = useState("");
+  const [savingDeal, setSavingDeal] = useState(false);
+  const [dealMsg,    setDealMsg]    = useState("");
+
   useEffect(() => {
     setLoading(true);
     fetch(`/api/admin/system/agencies/${id}/detail`)
@@ -55,6 +63,9 @@ export default function AgencyDetailPage() {
           setSites(d.sites);
           setWorkers(d.workers);
           setStats(d.stats);
+          setDealCycle(d.agency.billingCycle === "ANNUAL" ? "ANNUAL" : "MONTHLY");
+          setDealAmount(d.agency.customAmount != null ? String(d.agency.customAmount) : "");
+          setDealNote(d.agency.billingNote ?? "");
         } else {
           setError(d.message ?? "로드 실패");
         }
@@ -62,6 +73,29 @@ export default function AgencyDetailPage() {
       .catch(() => setError("서버 오류"))
       .finally(() => setLoading(false));
   }, [id]);
+
+  async function saveDeal() {
+    setSavingDeal(true); setDealMsg("");
+    try {
+      const res = await fetch(`/api/admin/system/agencies/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          billingCycle: dealCycle,
+          customAmount: dealAmount.trim() === "" ? null : Number(dealAmount),
+          billingNote:  dealNote.trim() || null,
+        }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        setDealMsg("저장되었습니다. 다음 결제·구독부터 적용됩니다.");
+        setAgency(a => a ? { ...a, billingCycle: dealCycle, customAmount: dealAmount.trim() === "" ? null : Number(dealAmount), billingNote: dealNote.trim() || null } : a);
+      } else {
+        setDealMsg(d.message ?? "저장 실패");
+      }
+    } catch { setDealMsg("서버 오류"); }
+    finally { setSavingDeal(false); }
+  }
 
   if (loading) return (
     <div className="flex h-60 items-center justify-center">
@@ -150,6 +184,48 @@ export default function AgencyDetailPage() {
             <p className="text-xs font-semibold text-slate-400">일지 기록 수</p>
             <p className="mt-0.5 font-semibold text-slate-800">{(stats?.logCount ?? 0).toLocaleString()}</p>
           </div>
+        </div>
+      </div>
+
+      {/* 결제 딜 설정 (건바이건) */}
+      <div className={T.card}>
+        <p className="mb-1 text-sm font-black text-slate-700">결제 딜 설정 (건바이건)</p>
+        <p className="mb-3 text-xs text-slate-400">
+          협상가를 입력하면 표준 월정액 대신 그 금액으로 청구됩니다. 비우면 표준 월정액. 다음 결제·구독부터 적용.
+        </p>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <label className="text-xs font-semibold text-slate-400">결제 주기</label>
+            <div className="mt-1 flex gap-2">
+              {(["MONTHLY", "ANNUAL"] as const).map(c => (
+                <button key={c} onClick={() => setDealCycle(c)}
+                  className={`flex-1 rounded-xl border px-3 py-2 font-semibold transition ${
+                    dealCycle === c ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}>
+                  {c === "MONTHLY" ? "월" : "연"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-400">협상가 (원, 비우면 표준)</label>
+            <input value={dealAmount} inputMode="numeric"
+              onChange={e => setDealAmount(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="예: 990000"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-semibold text-slate-900 outline-none focus:border-sky-400" />
+          </div>
+        </div>
+        <div className="mt-3">
+          <label className="text-xs font-semibold text-slate-400">딜 메모</label>
+          <input value={dealNote} onChange={e => setDealNote(e.target.value)}
+            placeholder="협상 내용·근거 등 (운영자 참고)"
+            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" />
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <button onClick={saveDeal} disabled={savingDeal} className={T.btnPrimary}>
+            {savingDeal ? "저장 중..." : "딜 저장"}
+          </button>
+          {dealMsg && <span className="text-xs font-semibold text-slate-500">{dealMsg}</span>}
         </div>
       </div>
 
