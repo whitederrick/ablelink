@@ -186,7 +186,7 @@ export default function MobileBoard({
   const overdueDocs = d?.docList.filter(r => r.isOverdue) ?? [];
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50">
       {/* 헤더 */}
       <header className="sticky top-0 z-20 border-b border-slate-100 bg-white/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between">
@@ -240,19 +240,19 @@ export default function MobileBoard({
                 {editReqs.map(r => (
                   <div key={r.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
                     <div className="flex items-baseline justify-between gap-2">
-                      <p className="text-[14px] font-black text-slate-900">{r.workerName}</p>
-                      <p className="text-[11px] font-semibold text-slate-400">{r.workDate}</p>
+                      <p className="min-w-0 truncate text-[14px] font-black text-slate-900">{r.workerName}</p>
+                      <p className="flex-shrink-0 text-[11px] font-semibold text-slate-400">{r.workDate}</p>
                     </div>
-                    <p className="mt-0.5 text-[12px] font-semibold text-slate-500">{r.siteName}</p>
+                    <p className="mt-0.5 truncate text-[12px] font-semibold text-slate-500">{r.siteName}</p>
                     <div className="mt-2 rounded-lg bg-white px-2.5 py-2 text-[12px] font-semibold">
-                      <div className="flex items-center gap-1.5 text-slate-600">
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-slate-600">
                         <span className="text-slate-400">현재</span>
                         <span>{r.currentStart || "-"} ~ {r.currentEnd || "-"}</span>
                         <span className="text-slate-300">→</span>
                         <span className="font-black text-sky-700">{r.proposedStart || "-"} ~ {r.proposedEnd || "-"}</span>
                       </div>
                       {r.reason && (
-                        <p className="mt-1 text-[12px] font-medium text-slate-500">사유: {r.reason}</p>
+                        <p className="mt-1 break-words text-[12px] font-medium text-slate-500">사유: {r.reason}</p>
                       )}
                     </div>
                     <div className="mt-2.5 grid grid-cols-2 gap-2">
@@ -346,7 +346,7 @@ export default function MobileBoard({
                   <div className="space-y-1">
                     {overdueDocs.slice(0, 6).map(r => (
                       <div key={r.id} className="flex items-center justify-between gap-2 rounded-lg bg-rose-50/60 px-2.5 py-1.5">
-                        <span className="truncate text-[12px] font-semibold text-slate-700">
+                        <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-slate-700">
                           <span className="font-black">{r.siteName}</span> · {r.workerName}
                         </span>
                         <span className="flex-shrink-0 text-[11px] font-black text-rose-600">{r.docTypeLabel}</span>
@@ -363,7 +363,7 @@ export default function MobileBoard({
                   <div className="space-y-1">
                     {d.assignmentAlerts.slice(0, 6).map(a => (
                       <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg bg-amber-50/60 px-2.5 py-1.5">
-                        <span className="truncate text-[12px] font-semibold text-slate-700">
+                        <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-slate-700">
                           <span className="font-black">{a.workerName}</span> · {a.siteName}
                         </span>
                         <span className={`flex-shrink-0 text-[11px] font-black ${(a.daysLeft ?? 99) <= 3 ? "text-rose-600" : "text-amber-600"}`}>
