@@ -9,6 +9,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   ClipboardList,
+  Download,
   FileText,
   FileWarning,
   Home,
@@ -889,6 +890,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
               <QuickAction icon={CheckCircle2} label="출근부 확정" sub="월별 확정" onClick={() => router.push("/worker/review/attendance")} />
               <QuickAction icon={PenLine} label="일지 확정" sub="월별 확정" onClick={() => router.push("/worker/review/logs")} />
               <QuickAction icon={Megaphone} label="공지사항" sub="운영자·소속기관 공지" onClick={() => router.push("/worker/notices")} />
+              <QuickAction icon={Download} label="내보내기" sub="출근부·일지 엑셀/CSV" onClick={() => router.push("/worker/export")} />
             </div>
 
             {/* AI 일괄 작성 */}
