@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { T } from "../../_styles";
+import PageHeader from "../../_components/PageHeader";
 import AddressMapPicker from "@/components/AddressMapPicker";
 
 type MeResponse =
@@ -189,11 +190,11 @@ export default function AdminSiteNewPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className={T.pageTitle}>Site 신규 등록</h1>
-        <Link href="/admin/sites" className={T.btnSecondary}>← 목록으로</Link>
-      </div>
+    <div className="max-w-2xl space-y-5">
+      <PageHeader
+        title="현장(Site) 신규 등록"
+        actions={<Link href="/admin/sites" className={T.btnSecondary}>← 목록으로</Link>}
+      />
 
       <div className="space-y-4">
         {isAdmin && (

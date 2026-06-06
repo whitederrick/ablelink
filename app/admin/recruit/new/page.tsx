@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "../../_styles";
+import PageHeader from "../../_components/PageHeader";
 import AddressMapPicker from "@/components/AddressMapPicker";
 
 type AddrItem = { addressName: string; x: string; y: string };
@@ -60,11 +61,11 @@ export default function ManagerRecruitNewPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-5">
-        <h1 className={T.pageTitle}>새 직무지도 공고</h1>
-        <p className={T.pageSub}>직무지도원이 검색·신청할 모집 공고를 등록합니다.</p>
-      </div>
+    <div>
+      <PageHeader
+        title="새 직무지도 공고"
+        sub="직무지도원이 검색·신청할 모집 공고를 등록합니다."
+      />
 
       <div className="max-w-2xl space-y-5">
         <div className={T.card}>

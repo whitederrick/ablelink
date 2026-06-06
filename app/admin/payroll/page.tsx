@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 function maskLoginId(id: string) {
   if (!id) return "";
@@ -273,19 +274,21 @@ export default function PayrollPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className={T.pageTitle}>급여 관리</h1>
-        <div className="flex gap-2">
-          {TAB_ITEMS.map(({ key, label }) => (
-            <button key={key} onClick={() => setTab(key)}
-              className={`rounded-xl border px-4 py-2 text-sm font-semibold transition active:scale-95 ${
-                tab === key ? "border-slate-950 bg-slate-950 font-black text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-              }`}>
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PageHeader
+        title="급여 관리"
+        actions={
+          <div className="flex gap-2">
+            {TAB_ITEMS.map(({ key, label }) => (
+              <button key={key} onClick={() => setTab(key)}
+                className={`rounded-xl border px-4 py-2 text-sm font-semibold transition active:scale-95 ${
+                  tab === key ? "border-slate-950 bg-slate-950 font-black text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       {/* ── 계약 탭 ── */}
       {tab === "contracts" && (

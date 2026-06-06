@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 const PROF_LABEL: Record<string, string> = { JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사" };
 const TABS = [
@@ -49,11 +50,11 @@ export default function AdminProfessionsPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-5">
-        <h1 className={T.pageTitle}>직종 자격 검증</h1>
-        <p className={T.pageSub}>마켓플레이스 인력의 직무지도원·요양보호사·활동지원사 자격 증빙을 검증합니다.</p>
-      </div>
+    <div>
+      <PageHeader
+        title="직종 자격 검증"
+        sub="마켓플레이스 인력의 직무지도원·요양보호사·활동지원사 자격 증빙을 검증합니다."
+      />
 
       {/* 상태 탭 */}
       <div className="mb-4 flex items-center gap-2">

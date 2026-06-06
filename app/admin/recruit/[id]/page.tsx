@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { T } from "../../_styles";
+import PageHeader from "../../_components/PageHeader";
 import WorkerReviewModal from "@/components/WorkerReviewModal";
 
 const PROF_LABEL: Record<string, string> = {
@@ -53,12 +54,12 @@ export default function ManagerRecruitApplicantsPage() {
   }
 
   return (
-    <div className="p-6">
+    <div>
       <button onClick={() => router.push("/admin/recruit")} className="mb-3 text-sm font-bold text-slate-400 hover:text-slate-600">← 공고 목록</button>
-      <div className="mb-5">
-        <h1 className={T.pageTitle}>{post ? post.title : "신청자"}</h1>
-        <p className={T.pageSub}>{post ? `${post.companyName} · ${post.headcount}명 모집 · 신청 ${apps.length}건` : ""}</p>
-      </div>
+      <PageHeader
+        title={post ? post.title : "신청자"}
+        sub={post ? `${post.companyName} · ${post.headcount}명 모집 · 신청 ${apps.length}건` : ""}
+      />
 
       <div className="space-y-3">
         {loading ? (

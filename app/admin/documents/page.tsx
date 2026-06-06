@@ -10,6 +10,7 @@ import {
   createVersion, listSubmissionLogs, createSubmissionLog,
 } from "./_lib/api";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 const DOC_TYPE_LABEL: Record<string, string> = {
   TRAINING_DAILY_LOG:            "지원고용 훈련일지",
@@ -183,10 +184,10 @@ export default function AdminDocumentsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className={T.pageTitle}>문서 운영</h1>
-        <p className={T.pageSub}>직무지도원별 문서 발송 건 생성 및 제출 이력 관리</p>
-      </div>
+      <PageHeader
+        title="문서 운영"
+        sub="직무지도원별 문서 발송 건 생성 및 제출 이력 관리"
+      />
 
       {/* 배정 + 설정 */}
       <div className={T.card}>
