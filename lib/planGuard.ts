@@ -107,9 +107,10 @@ function planAllows(plan: string, feature: PremiumFeature): boolean {
 // 접근 권한은 두 갈래로 결정된다:
 //  (1) 시스템 운영자가 직무지도원 개인에게 직접 부여(worker.planType = PREMIUM)
 //      → 에이전시와 무관하게 전체 유료기능 허용 (초기 직무지도원 테스트/특례용)
-//  (2) 에이전시 구독을 근로계약 기반으로 소비
-//      → 서명된 EmploymentContract의 계약기간(계약종료 +3일 유예) 내일 때만,
-//        그 계약의 에이전시 구독 플랜으로 판단. (계약 전·만료 후에는 사용 불가)
+//  (2) 에이전시 구독을 근로계약/배정 기반으로 소비
+//      → 서명된 EmploymentContract의 계약기간(계약종료 +3일 유예) 내이면 그 에이전시 플랜으로 판단.
+//      → 전자계약서가 없으면(전자계약서는 PRO 전용) 활성 SiteAssignment의 배정기간을 계약기간으로 보고
+//        그 에이전시 플랜으로 판단. (2026-06-06 접근모델 재설계)
 //  기본 기능(출퇴근·수동일지 등)은 checkPlanAccess를 거치지 않으므로 항상 사용 가능.
 
 const CONTRACT_GRACE_MS = 3 * 24 * 60 * 60 * 1000; // 계약 종료 후 3일 유예 (잔여 일지 제출 등)
@@ -150,7 +151,25 @@ export async function checkPlanAccess(
     return { allowed: true, reason: "SELF_MANAGED" };
   }
 
-  // (3) 유효 계약이 없을 때 — 상황별 자연스러운 안내 메시지
+  // (2b) 활성 배정 기반 engagement — 전자 근로계약서(PRO 전용)가 없어도 배정 기간을
+  //      계약 기간으로 보고 해당 에이전시 구독 플랜으로 판정한다. (배정 startDate~endDate, 종료 +3일 유예)
+  //      전자계약서가 PRO 전용이 되면서, STARTER/STANDARD 에이전시도 워커가 기능을 쓸 수 있게 하는 연결고리.
+  const engagement = await prisma.siteAssignment.findFirst({
+    where: {
+      workerId,
+      status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] },
+      agencyId: { not: null },
+      startDate: { lte: now },
+      OR: [{ endDate: null }, { endDate: { gte: new Date(now.getTime() - CONTRACT_GRACE_MS) } }],
+    },
+    include: { agency: true },
+    orderBy: { startDate: "desc" },
+  });
+  if (engagement?.agency) {
+    return _checkAgency(engagement.agency, feature);
+  }
+
+  // (3) 유효 계약·배정이 없을 때 — 상황별 자연스러운 안내 메시지
   const latest = await prisma.employmentContract.findFirst({
     where: { workerId, status: { in: ["PENDING", "SIGNED", "COMPLETED"] } },
     orderBy: { createdAt: "desc" },
