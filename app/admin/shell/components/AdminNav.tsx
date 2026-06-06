@@ -54,6 +54,7 @@ const groups: NavGroup[] = [
   {
     title: "시스템",
     items: [
+      { href: "/admin/backup",        label: "데이터 백업" },
       { href: "/admin/logs",          label: "감사 로그" },
       { href: "/admin/settings",      label: "시스템 설정" },
     ],
