@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Plus, X, ChevronDown, RefreshCw, CheckCircle2, Clock, MessageCircle } from "lucide-react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 type Ticket = {
   id: string; category: string; title: string; body: string;
@@ -89,20 +90,20 @@ export default function ManagerSupportPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className={T.pageTitle}>운영자 문의</h1>
-          <p className={T.pageSub}>데이터 수정 요청, 결제 문의 등을 Ablelink 운영팀에 보냅니다</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => load()} className={T.btnSecondary + " flex items-center gap-1.5"}>
-            <RefreshCw className="h-4 w-4" />
-          </button>
-          <button onClick={() => setShowForm(true)} className={T.btnPrimary + " flex items-center gap-2"}>
-            <Plus className="h-4 w-4" />문의 작성
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="운영자 문의"
+        sub="데이터 수정 요청, 결제 문의 등을 Ablelink 운영팀에 보냅니다"
+        actions={
+          <>
+            <button onClick={() => load()} className={T.btnSecondary + " flex items-center gap-1.5"}>
+              <RefreshCw className="h-4 w-4" />
+            </button>
+            <button onClick={() => setShowForm(true)} className={T.btnPrimary + " flex items-center gap-2"}>
+              <Plus className="h-4 w-4" />문의 작성
+            </button>
+          </>
+        }
+      />
 
       {/* 요약 */}
       <div className="mb-5 grid grid-cols-3 gap-3.5">

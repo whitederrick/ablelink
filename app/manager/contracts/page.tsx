@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 import { X } from "lucide-react";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM" | "";
@@ -298,13 +299,11 @@ export default function AdminContractsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className={T.pageTitle}>근로계약서 관리</h1>
-          <p className={T.pageSub}>전자계약서 생성 및 발송 관리</p>
-        </div>
-        <button onClick={() => setShowCreate(true)} className={T.btnPrimary}>+ 계약서 생성</button>
-      </div>
+      <PageHeader
+        title="근로계약서 관리"
+        sub="전자계약서 생성 및 발송 관리"
+        actions={<button onClick={() => setShowCreate(true)} className={T.btnPrimary}>+ 계약서 생성</button>}
+      />
 
       {lastCreatedUrl && (
         <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">

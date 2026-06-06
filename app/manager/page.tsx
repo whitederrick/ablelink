@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
+import PageHeader from "./_components/PageHeader";
 
 interface DashboardData {
   today: string;
@@ -205,19 +206,19 @@ export default function AdminDashboardPage() {
   return (
     <div className="max-w-[1200px] space-y-6">
       {/* 헤더 */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-lg font-black text-slate-900">업무 현황 요약</h1>
-          <p className="mt-0.5 text-sm font-semibold text-slate-400">{todayFmt}</p>
-        </div>
-        <button
-          onClick={fetchDashboard}
-          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 active:scale-95"
-        >
-          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{lastUpdated.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 업데이트</span>
-        </button>
-      </div>
+      <PageHeader
+        title="업무 현황 요약"
+        sub={todayFmt}
+        actions={
+          <button
+            onClick={fetchDashboard}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 active:scale-95"
+          >
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{lastUpdated.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 업데이트</span>
+          </button>
+        }
+      />
 
       {/* 요약 카드 — daily(앞)/기간성(뒤). 반응형: 모바일 2열 → 데스크톱 8열 */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-8">

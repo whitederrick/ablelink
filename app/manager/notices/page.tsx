@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Send, Bell, X, Users, User } from "lucide-react";
+import PageHeader from "../_components/PageHeader";
 
 type Worker  = { id: string; workerName: string; siteName: string };
 type Notice = { id: string; workerId: string; workerName: string; title: string; body: string; type: string; read: boolean; createdAt: string };
@@ -62,8 +63,7 @@ export default function NoticesPage() {
 
   return (
     <div>
-      <div className="mb-6"><h1 className="text-lg font-black text-slate-900">알림 발송(개별)</h1>
-        <p className="mt-0.5 text-sm text-slate-500">직무지도원에게 공지·안내·반려 알림을 발송합니다.</p></div>
+      <PageHeader title="알림 발송(개별)" sub="직무지도원에게 공지·안내·반려 알림을 발송합니다." />
 
       <div className="mb-4 flex gap-2">
         {(["send","history"] as const).map(t=>(

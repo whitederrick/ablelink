@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 import { List, Map as MapIcon, CalendarDays, Download } from "lucide-react";
 
 const AttendanceMap = dynamic(() => import("./AttendanceMap"), { ssr: false });
@@ -205,7 +206,7 @@ export default function AttendancesPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className={T.pageTitle}>근태 현황</h1>
+      <PageHeader title="근태 현황" />
 
       <div className={T.summaryGrid}>
         {[

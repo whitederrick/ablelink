@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 const STATUS_LABELS: Record<string, string> = {
   TRAINING: "훈련중", EMPLOYED: "취업", DROPOUT: "중도포기", GRADUATED: "수료",
@@ -103,10 +104,10 @@ export default function TraineeReportPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className={T.pageTitle}>훈련생 진척도 리포트</h1>
-        <p className={T.pageSub}>훈련생별 출근 일지 작성률과 수행 점수를 월별로 확인합니다. (STANDARD+)</p>
-      </div>
+      <PageHeader
+        title="훈련생 진척도 리포트"
+        sub="훈련생별 출근 일지 작성률과 수행 점수를 월별로 확인합니다. (STANDARD+)"
+      />
 
       {/* 검색/기간 필터 */}
       <div className={`${T.card} flex flex-wrap items-center gap-3`}>

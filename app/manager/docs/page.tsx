@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 type DocType =
   | "attendance-sheet"
@@ -216,7 +217,7 @@ export default function AdminDocsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className={T.pageTitle}>제출 문서 조회</h1>
+      <PageHeader title="제출 문서 조회" />
 
       {/* 직무지도원 선택 */}
       <div className={T.card}>

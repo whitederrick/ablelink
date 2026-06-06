@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
+import PageHeader from "../_components/PageHeader";
 
 type Worker = { id: string; workerName: string; siteName: string };
 type AttRec = { workDate: string; status: string; startTime: string|null; endTime: string|null; isFinalClosed: boolean; isGpsModified: boolean };
@@ -86,8 +87,7 @@ export default function ManagerCalendarPage() {
 
   return (
     <div>
-      <div className="mb-6"><h1 className="text-lg font-black text-slate-900">근태 캘린더</h1>
-        <p className="mt-0.5 text-sm text-slate-500">직무지도원별 월간 출근 현황</p></div>
+      <PageHeader title="근태 캘린더" sub="직무지도원별 월간 출근 현황" />
 
       <div className="mb-4 flex items-center gap-3 flex-wrap">
         <select value={selectedWorker?.id??""} onChange={e=>{const c=workers.find(x=>x.id===e.target.value);setSelectedWorker(c??null);}}

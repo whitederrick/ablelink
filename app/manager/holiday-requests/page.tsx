@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { RefreshCw, ChevronLeft, ChevronRight, Send, Clock } from "lucide-react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 type PendingReq = {
   id: string; requestType: "DELETE" | "CHANGE_WORKDAY";
@@ -126,20 +127,20 @@ export default function HolidayRequestsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className={T.pageTitle}>커스텀 휴무일 관리</h1>
-          <p className={T.pageSub}>직무지도원이 등록한 휴무일의 근무 인정 여부를 확인·결정합니다</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setYm(prevMonth(ym))} className={T.btnSecondary + " px-2.5"}><ChevronLeft className="h-4 w-4" /></button>
-          <span className="min-w-[90px] text-center text-sm font-black text-slate-900">{fmtYM(ym)}</span>
-          <button onClick={() => setYm(nextMonth(ym))} className={T.btnSecondary + " px-2.5"}><ChevronRight className="h-4 w-4" /></button>
-          <button onClick={() => load(ym)} className={T.btnSecondary + " flex items-center gap-1.5 ml-1"}>
-            <RefreshCw className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="커스텀 휴무일 관리"
+        sub="직무지도원이 등록한 휴무일의 근무 인정 여부를 확인·결정합니다"
+        actions={
+          <div className="flex items-center gap-2">
+            <button onClick={() => setYm(prevMonth(ym))} className={T.btnSecondary + " px-2.5"}><ChevronLeft className="h-4 w-4" /></button>
+            <span className="min-w-[90px] text-center text-sm font-black text-slate-900">{fmtYM(ym)}</span>
+            <button onClick={() => setYm(nextMonth(ym))} className={T.btnSecondary + " px-2.5"}><ChevronRight className="h-4 w-4" /></button>
+            <button onClick={() => load(ym)} className={T.btnSecondary + " flex items-center gap-1.5 ml-1"}>
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+        }
+      />
 
       {/* 요약 */}
       <div className="mb-5 grid grid-cols-3 gap-3.5">

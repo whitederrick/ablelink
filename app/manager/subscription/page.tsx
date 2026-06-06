@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { Check, Sparkles } from "lucide-react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 interface AgencySub {
   id: string; name: string; planType: string;
@@ -108,10 +109,10 @@ export default function SubscriptionPage() {
     <>
       <Script src="https://js.tosspayments.com/v1/payment" onLoad={() => setTossLoaded(true)} />
       <div className="p-6">
-        <div className="mb-5">
-          <h1 className={T.pageTitle}>구독 관리</h1>
-          <p className={T.pageSub}>에이전시 구독 플랜을 확인하고 변경합니다. 결제는 토스페이먼츠로 안전하게 처리됩니다.</p>
-        </div>
+        <PageHeader
+          title="구독 관리"
+          sub="에이전시 구독 플랜을 확인하고 변경합니다. 결제는 토스페이먼츠로 안전하게 처리됩니다."
+        />
 
         {loading ? (
           <p className={T.empty}>불러오는 중…</p>
