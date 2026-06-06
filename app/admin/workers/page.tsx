@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Search, KeyRound, UserX, UserCheck } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
+import { T } from "../_styles";
 
 type Worker = {
   id: string; loginId: string; workerName: string; phoneNumber: string;
@@ -106,7 +107,7 @@ export default function WorkersPage() {
       <div className="mb-4 flex gap-2">
         <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&load(q)}
           placeholder="이름·전화번호·아이디 검색..."
-          className="w-full max-w-sm rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/>
+          className={`flex-1 ${T.input}`}/>
         <button onClick={()=>load(q)} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white active:scale-95">
           <Search className="h-4 w-4"/>
         </button>

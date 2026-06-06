@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "../_components/PageHeader";
+import { T } from "../_styles";
 import { Search, MapPin, Users, Building2 } from "lucide-react";
 
 const PROF_LABEL: Record<string, string> = {
@@ -44,7 +45,7 @@ export default function SitesPage() {
       <div className="mb-4 flex gap-2">
         <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&load(q)}
           placeholder="현장명 검색..."
-          className="w-full max-w-sm rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/>
+          className={`flex-1 ${T.input}`}/>
         <button onClick={()=>load(q)} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white active:scale-95">
           <Search className="h-4 w-4"/>
         </button>
