@@ -37,7 +37,7 @@ const groups: NavGroup[] = [
       { href: "/manager/sites",    label: "현장(Site) 관리" },
       { href: "/manager/workers",  label: "직무지도원 관리" },
       { href: "/manager/trainees", label: "훈련생 현황" },
-      { href: "/manager/managers", label: "담당자 관리" },
+      { href: "/manager/managers", label: "기관 담당자 관리" },
     ],
   },
   {
@@ -45,22 +45,22 @@ const groups: NavGroup[] = [
     items: [
       { href: "/manager/attendances",              label: "근태 현황" },
       { href: "/manager/calendar",                 label: "근태 캘린더" },
-      { href: "/manager/inbox/attendance",         label: "GPS 승인 대기" },
+      { href: "/manager/inbox/attendance",         label: "근태 이슈 확인" },
       { href: "/manager/attendance-edit-requests", label: "출근부 수정 요청" },
       { href: "/manager/holiday-requests",         label: "커스텀 휴무일 관리" },
-      { href: "/manager/logs",                     label: "일지 내용 열람" },
+      { href: "/manager/logs",                     label: "훈련 일지 열람" },
     ],
   },
   {
     title: "문서/소통",
     items: [
-      { href: "/manager/review",        label: "확정 현황" },
+      { href: "/manager/review",        label: "출근부·일지 확정" },
       { href: "/manager/announcements", label: "공지 게시판" },
       { href: "/manager/notices",       label: "알림 발송(개별)" },
       { href: "/manager/contracts",     label: "근로계약서", plan: "STARTER" },
-      { href: "/manager/documents",     label: "문서 운영",  plan: "STARTER" },
-      { href: "/manager/docs",          label: "문서 조회",  plan: "STARTER" },
-      { href: "/manager/reports",       label: "진척도 리포트", plan: "STANDARD" },
+      { href: "/manager/documents",     label: "문서 발송·제출 관리", plan: "STARTER" },
+      { href: "/manager/docs",          label: "제출 문서 조회",      plan: "STARTER" },
+      { href: "/manager/reports",       label: "훈련생 진척도 리포트", plan: "STANDARD" },
     ],
   },
   {

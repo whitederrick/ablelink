@@ -122,7 +122,7 @@ export default function AdminReviewPage() {
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black text-slate-900">확정 현황</h1>
+          <h1 className="text-2xl font-black text-slate-900">출근부·일지 확정</h1>
           <p className="mt-1 text-sm font-semibold text-slate-400">직무지도원별 출근부·일지·평가 확정 상태</p>
         </div>
         {/* 월 선택 */}

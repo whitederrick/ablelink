@@ -122,7 +122,7 @@ export default function AdminManagersPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className={T.pageTitle}>담당자(기관) 관리</h1>
+        <h1 className={T.pageTitle}>기관 담당자 관리</h1>
         <button onClick={() => { setForm({ name: "", email: "", phoneNumber: "", agencyId: "", agencyName: "" }); setModalOpen(true); }}
           className={T.btnPrimary}>+ 신규 등록</button>
       </div>

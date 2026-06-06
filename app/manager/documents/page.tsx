@@ -184,7 +184,7 @@ export default function AdminDocumentsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className={T.pageTitle}>문서 운영</h1>
+        <h1 className={T.pageTitle}>문서 발송·제출 관리</h1>
         <p className={T.pageSub}>직무지도원별 문서 발송 건 생성 및 제출 이력 관리</p>
       </div>
 

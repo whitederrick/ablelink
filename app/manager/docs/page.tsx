@@ -216,7 +216,7 @@ export default function AdminDocsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className={T.pageTitle}>문서 조회</h1>
+      <h1 className={T.pageTitle}>제출 문서 조회</h1>
 
       {/* 직무지도원 선택 */}
       <div className={T.card}>

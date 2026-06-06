@@ -543,7 +543,7 @@ export default function AttendanceInboxClient() {
     <div className="pb-6">
       {/* ===== Header ===== */}
       <div className="mb-5 flex items-baseline gap-3">
-        <div className="text-lg font-black text-slate-900" style={{letterSpacing:"-0.3px"}}>근태 인박스</div>
+        <div className="text-lg font-black text-slate-900" style={{letterSpacing:"-0.3px"}}>근태 이슈 확인</div>
         <div className="text-sm font-semibold text-slate-400">※ 근태 관련 이슈를 파악하고, 근태 이슈 발생 사유를 확인합니다.</div>
       </div>
 
