@@ -108,7 +108,7 @@ export default function SubscriptionPage() {
   return (
     <>
       <Script src="https://js.tosspayments.com/v1/payment" onLoad={() => setTossLoaded(true)} />
-      <div className="p-6">
+      <div>
         <PageHeader
           title="구독 관리"
           sub="에이전시 구독 플랜을 확인하고 변경합니다. 결제는 토스페이먼츠로 안전하게 처리됩니다."

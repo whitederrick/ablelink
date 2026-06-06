@@ -74,7 +74,7 @@ export default function AttendanceEditRequestsPage() {
   const pendingCount = requests.filter(r => r.status === "PENDING").length;
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="max-w-4xl">
       <PageHeader
         title="출근부 수정 요청 관리"
         sub="직무지도원이 제출한 출근 기록 수정 요청을 검토하고 승인 또는 반려합니다."

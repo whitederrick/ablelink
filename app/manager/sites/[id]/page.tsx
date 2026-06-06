@@ -1,6 +1,6 @@
 "use client";
-// app/admin/sites/[id]/page.tsx
-// Site 상세/수정 페이지
+// app/manager/sites/[id]/page.tsx
+// 현장(Site) 상세/수정 페이지 — 매니저 콘솔 공통 디자인 토큰(T)·PageHeader로 통일
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -35,7 +35,7 @@ const RANGE_OPTIONS = [
   { value: 500, label: "500m", desc: "건물 단지 단위" },
 ];
 
-export default function AdminSiteDetailPage() {
+export default function ManagerSiteDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const siteId = params.id;
@@ -80,7 +80,7 @@ export default function AdminSiteDetailPage() {
       setManagerName(it.managerName || "");
       setManagerEmail(it.managerEmail || "");
       setManagerPhone(it.managerPhone || "");
-    } catch (e) {
+    } catch {
       alert("상세 조회에 실패했습니다.");
     } finally {
       setLoading(false);
@@ -144,15 +144,14 @@ export default function AdminSiteDetailPage() {
 
   if (loading || !item) {
     return (
-      <div style={s.center}>
-        <div style={s.spinner} />
+      <div className="flex h-60 items-center justify-center">
+        <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
       </div>
     );
   }
 
   return (
-    <div style={s.page}>
-      {/* 헤더 — 공통 PageHeader로 통일 */}
+    <div className="max-w-2xl space-y-5">
       <PageHeader
         title="현장(Site) 상세"
         sub={
@@ -171,114 +170,103 @@ export default function AdminSiteDetailPage() {
         }
       />
 
-      <div style={s.content}>
-        {/* 기본 정보 */}
-        <div style={s.section}>
-          <h2 style={s.sectionTitle}>기본 정보</h2>
-          <div style={s.fieldGrid}>
-            <Field label="사업체명 *" value={companyName} onChange={setCompanyName} />
-            <Field label="주소 *" value={address} onChange={setAddress} />
-            <Field label="상세주소" value={detailAddress} onChange={setDetailAddress} />
-            <div style={s.row}>
-              <Field label="GPS 위도 *" value={gpsLat} onChange={setGpsLat} />
-              <Field label="GPS 경도 *" value={gpsLon} onChange={setGpsLon} />
-            </div>
-          </div>
-
-          {/* 기준점 상태 */}
-          <div style={s.infoBox}>
-            <span style={s.infoLabel}>기준점 상태:</span>
-            <span style={{ color: item.basePointConfirmed ? "#2e7d32" : "#f57c00", fontWeight: 600 }}>
-              {item.basePointConfirmed ? "확정" : "미확정"}
-            </span>
-            <span style={{ color: "#aaa", marginLeft: 12, fontSize: 12 }}>
-              ({item.basePointApprovalStatus})
-            </span>
+      {/* 기본 정보 */}
+      <div className={T.card}>
+        <h2 className="mb-4 text-sm font-black text-slate-900">기본 정보</h2>
+        <div className="space-y-3">
+          <Field label="사업체명 *" value={companyName} onChange={setCompanyName} />
+          <Field label="주소 *" value={address} onChange={setAddress} />
+          <Field label="상세주소" value={detailAddress} onChange={setDetailAddress} />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="GPS 위도 *" value={gpsLat} onChange={setGpsLat} />
+            <Field label="GPS 경도 *" value={gpsLon} onChange={setGpsLon} />
           </div>
         </div>
 
-        {/* GPS 허용 범위 설정 */}
-        <div style={s.section}>
-          <h2 style={s.sectionTitle}>📍 GPS 출퇴근 허용 범위</h2>
-          <p style={s.sectionDesc}>
-            직무지도원이 현장 반경 내에서 출퇴근 처리할 수 있는 허용 거리입니다.<br />
-            범위를 벗어나면 에이전시 승인이 필요합니다.
-          </p>
+        {/* 기준점 상태 */}
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5 text-sm">
+          <span className="text-slate-400">기준점 상태:</span>
+          <span className={item.basePointConfirmed ? "font-bold text-emerald-600" : "font-bold text-amber-600"}>
+            {item.basePointConfirmed ? "확정" : "미확정"}
+          </span>
+          <span className="ml-2 text-xs text-slate-400">({item.basePointApprovalStatus})</span>
+        </div>
+      </div>
 
-          {/* 프리셋 옵션 */}
-          <div style={s.rangeGrid}>
-            {RANGE_OPTIONS.map(opt => (
+      {/* GPS 허용 범위 설정 */}
+      <div className={T.card}>
+        <h2 className="mb-1 text-sm font-black text-slate-900">📍 GPS 출퇴근 허용 범위</h2>
+        <p className="mb-4 text-sm font-semibold leading-relaxed text-slate-400">
+          직무지도원이 현장 반경 내에서 출퇴근 처리할 수 있는 허용 거리입니다.<br />
+          범위를 벗어나면 에이전시 승인이 필요합니다.
+        </p>
+
+        {/* 프리셋 옵션 */}
+        <div className="mb-3 grid grid-cols-4 gap-2">
+          {RANGE_OPTIONS.map(opt => {
+            const active = !useCustom && allowanceRange === opt.value;
+            return (
               <button
                 key={opt.value}
-                style={{
-                  ...s.rangeBtn,
-                  ...((!useCustom && allowanceRange === opt.value) ? s.rangeBtnActive : {}),
-                }}
                 onClick={() => { setAllowanceRange(opt.value); setUseCustom(false); }}
+                className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 transition active:scale-95 ${
+                  active ? "border-sky-500 bg-sky-50" : "border-slate-200 bg-white hover:bg-slate-50"
+                }`}
               >
-                <span style={s.rangeBtnValue}>{opt.label}</span>
-                <span style={s.rangeBtnDesc}>{opt.desc}</span>
+                <span className="text-[15px] font-black text-slate-900">{opt.label}</span>
+                <span className="text-[11px] font-semibold text-slate-400">{opt.desc}</span>
               </button>
-            ))}
-            <button
-              style={{
-                ...s.rangeBtn,
-                ...(useCustom ? s.rangeBtnActive : {}),
-              }}
-              onClick={() => setUseCustom(true)}
-            >
-              <span style={s.rangeBtnValue}>직접 입력</span>
-              <span style={s.rangeBtnDesc}>50~1000m</span>
-            </button>
-          </div>
-
-          {/* 직접 입력 */}
-          {useCustom && (
-            <div style={s.customRangeRow}>
-              <input
-                style={s.customRangeInput}
-                type="number"
-                min={50}
-                max={1000}
-                value={customRange}
-                onChange={e => setCustomRange(e.target.value)}
-                placeholder="50 ~ 1000"
-              />
-              <span style={s.customRangeUnit}>m</span>
-            </div>
-          )}
-
-          {/* 현재 설정 미리보기 */}
-          <div style={s.rangePreview}>
-            <span style={{ fontSize: 12, color: "#6b7280" }}>현재 설정</span>
-            <strong style={{ color: "#2563eb" }}>
-              반경 {isNaN(finalRange) ? "-" : finalRange}m
-            </strong>
-            <span style={{ color: "#888", fontSize: 12, marginLeft: 8 }}>
-              {finalRange <= 100 ? "(엄격)" : finalRange <= 200 ? "(보통)" : "(넓음)"}
-            </span>
-          </div>
+            );
+          })}
+          <button
+            onClick={() => setUseCustom(true)}
+            className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 transition active:scale-95 ${
+              useCustom ? "border-sky-500 bg-sky-50" : "border-slate-200 bg-white hover:bg-slate-50"
+            }`}
+          >
+            <span className="text-[15px] font-black text-slate-900">직접 입력</span>
+            <span className="text-[11px] font-semibold text-slate-400">50~1000m</span>
+          </button>
         </div>
 
-        {/* 담당자 정보 */}
-        <div style={s.section}>
-          <h2 style={s.sectionTitle}>담당자 정보</h2>
-          <div style={s.fieldGrid}>
-            <Field label="성명 *" value={managerName} onChange={setManagerName} />
-            <Field label="이메일 *" value={managerEmail} onChange={setManagerEmail} />
-            <Field label="전화번호 *" value={managerPhone} onChange={setManagerPhone} />
+        {/* 직접 입력 */}
+        {useCustom && (
+          <div className="mb-3 flex items-center gap-2">
+            <input
+              type="number" min={50} max={1000}
+              value={customRange}
+              onChange={e => setCustomRange(e.target.value)}
+              placeholder="50 ~ 1000"
+              className={`w-32 text-center ${T.input}`}
+            />
+            <span className="text-sm font-semibold text-slate-500">m</span>
           </div>
-        </div>
+        )}
 
-        {/* 저장 버튼 */}
-        <button
-          style={{ ...s.saveBtn, opacity: saving ? 0.7 : 1 }}
-          onClick={onSave}
-          disabled={saving}
-        >
-          {saving ? "저장 중..." : "변경사항 저장"}
-        </button>
+        {/* 현재 설정 미리보기 */}
+        <div className="flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50 px-3.5 py-2.5 text-sm">
+          <span className="text-xs font-semibold text-slate-500">현재 설정</span>
+          <strong className="text-sky-600">반경 {isNaN(finalRange) ? "-" : finalRange}m</strong>
+          <span className="ml-1 text-xs text-slate-400">
+            {finalRange <= 100 ? "(엄격)" : finalRange <= 200 ? "(보통)" : "(넓음)"}
+          </span>
+        </div>
       </div>
+
+      {/* 담당자 정보 */}
+      <div className={T.card}>
+        <h2 className="mb-4 text-sm font-black text-slate-900">담당자 정보</h2>
+        <div className="space-y-3">
+          <Field label="성명 *" value={managerName} onChange={setManagerName} />
+          <Field label="이메일 *" value={managerEmail} onChange={setManagerEmail} />
+          <Field label="전화번호 *" value={managerPhone} onChange={setManagerPhone} />
+        </div>
+      </div>
+
+      {/* 저장 버튼 */}
+      <button onClick={onSave} disabled={saving} className={`${T.btnPrimary} w-full py-3.5`}>
+        {saving ? "저장 중..." : "변경사항 저장"}
+      </button>
     </div>
   );
 }
@@ -287,50 +275,9 @@ function Field({ label, value, onChange }: {
   label: string; value: string; onChange: (v: string) => void;
 }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6, letterSpacing: "0.2px" }}>
-        {label}
-      </label>
-      <input
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        style={{ width: "100%", height: 40, border: "1px solid #e5e7eb", borderRadius: 8, padding: "0 12px", fontSize: 14, color: "#111827", outline: "none", boxSizing: "border-box", background: "#fff", fontFamily: "inherit" }}
-      />
+    <div>
+      <label className={T.label}>{label}</label>
+      <input value={value} onChange={e => onChange(e.target.value)} className={`w-full ${T.input}`} />
     </div>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page: { maxWidth: 800 },
-  center: { display: "flex", justifyContent: "center", padding: "60px 0" },
-  spinner: { width: 28, height: 28, border: "2.5px solid #e5e7eb", borderTop: "2.5px solid #2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
-  title: { fontSize: 18, fontWeight: 700, color: "#111827", margin: "0 0 4px", letterSpacing: "-0.3px" },
-  subtitle: { fontSize: 13, color: "#9ca3af", margin: 0 },
-  headerBtns: { display: "flex", gap: 8 },
-  backBtn: { padding: "8px 16px", border: "1px solid #e5e7eb", borderRadius: 8, backgroundColor: "#fff", cursor: "pointer", fontSize: 13, color: "#374151" },
-  deleteBtn: { padding: "8px 16px", border: "1px solid #fecaca", borderRadius: 8, backgroundColor: "#fff", color: "#dc2626", cursor: "pointer", fontSize: 13, fontWeight: 500 },
-
-  content: { display: "flex", flexDirection: "column", gap: 14 },
-  section: { backgroundColor: "#fff", borderRadius: 12, padding: "20px 24px", border: "1px solid #f0f0f0" },
-  sectionTitle: { fontSize: 14, fontWeight: 700, color: "#111827", margin: "0 0 4px" },
-  sectionDesc: { fontSize: 13, color: "#9ca3af", margin: "0 0 16px", lineHeight: 1.6 },
-  fieldGrid: { display: "flex", flexDirection: "column" },
-  row: { display: "flex", gap: 12 },
-  infoBox: { display: "flex", alignItems: "center", gap: 8, marginTop: 12, padding: "10px 14px", backgroundColor: "#f9fafb", borderRadius: 8, fontSize: 13, border: "1px solid #f0f0f0" },
-  infoLabel: { color: "#9ca3af" },
-
-  rangeGrid: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 12 },
-  rangeBtn: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "12px 8px", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", backgroundColor: "#fff", transition: "all 0.15s" },
-  rangeBtnActive: { border: "1.5px solid #2563eb", backgroundColor: "#eff6ff" },
-  rangeBtnValue: { fontSize: 15, fontWeight: 700, color: "#111827" },
-  rangeBtnDesc: { fontSize: 11, color: "#9ca3af" },
-  customRangeRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 12 },
-  customRangeInput: { width: 120, height: 42, border: "1.5px solid #2563eb", borderRadius: 8, padding: "0 12px", fontSize: 16, fontWeight: 700, color: "#2563eb", outline: "none", textAlign: "center" as const },
-  customRangeUnit: { fontSize: 15, color: "#6b7280", fontWeight: 600 },
-  rangePreview: { display: "flex", alignItems: "center", gap: 6, padding: "10px 14px", backgroundColor: "#eff6ff", borderRadius: 8, fontSize: 14, border: "1px solid #bfdbfe" },
-  rangePreviewIcon: { fontSize: 16 },
-
-  saveBtn: { width: "100%", padding: "14px", backgroundColor: "#2563eb", color: "#fff", fontSize: 14, fontWeight: 700, border: "none", borderRadius: 10, cursor: "pointer", marginTop: 4 },
-};

@@ -188,7 +188,7 @@ export default function AdminSiteNewPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
+    <div className="max-w-2xl space-y-5">
       <PageHeader
         title="현장(Site) 신규 등록"
         actions={<Link href="/manager/sites" className={T.btnSecondary}>← 목록으로</Link>}

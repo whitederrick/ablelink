@@ -62,7 +62,7 @@ export default function AgencyAnnouncementsPage() {
   }
 
   return (
-    <div className="p-6">
+    <div>
       <PageHeader
         title="공지 게시판"
         sub="소속 직무지도원 앱의 ‘공지사항’에 게시됩니다. (알림 도배 없이 게시판으로 열람)"

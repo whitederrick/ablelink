@@ -216,7 +216,7 @@ export default function AdminDocsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="max-w-2xl space-y-4">
       <PageHeader title="제출 문서 조회" />
 
       {/* 직무지도원 선택 */}

@@ -43,7 +43,7 @@ export default function ManagerRecruitPage() {
   }
 
   return (
-    <div className="p-6">
+    <div>
       <PageHeader
         title="직무지도 모집 공고"
         sub="직무지도원을 모집할 공고를 등록하고 신청자를 관리합니다."

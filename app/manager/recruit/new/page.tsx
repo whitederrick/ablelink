@@ -61,7 +61,7 @@ export default function ManagerRecruitNewPage() {
   }
 
   return (
-    <div className="p-6">
+    <div>
       <PageHeader
         title="새 직무지도 공고"
         sub="직무지도원이 검색·신청할 모집 공고를 등록합니다."

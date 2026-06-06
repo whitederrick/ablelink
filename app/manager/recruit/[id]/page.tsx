@@ -60,7 +60,7 @@ export default function ManagerRecruitApplicantsPage() {
   }
 
   return (
-    <div className="p-6">
+    <div>
       <button onClick={() => router.push("/manager/recruit")} className="mb-3 text-sm font-bold text-slate-400 hover:text-slate-600">← 공고 목록</button>
       <PageHeader
         title={post ? post.title : "신청자"}
