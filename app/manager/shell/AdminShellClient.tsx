@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import AdminNav from "./components/AdminNav";
 import AdminTopbar from "./components/AdminTopbar";
+import MobileBoard from "../_components/MobileBoard";
 
 type MeResponse =
   | {
@@ -21,11 +22,21 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<MeResponse | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   const isPublicPage =
     pathname === "/manager/login" ||
     pathname.startsWith("/manager/signup") ||
     pathname.startsWith("/manager/invite");
+
+  // 모바일(<lg)에선 데스크톱 콘솔 대신 간판(MobileBoard)만 렌더 — 데스크톱 콘솔은 정보 과밀.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (isPublicPage) { setLoading(false); return; }
@@ -58,6 +69,16 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
           <p className="mt-3 text-sm font-semibold text-slate-400">로딩 중...</p>
         </div>
       </div>
+    );
+  }
+
+  // 모바일: 셸 대신 간판 화면(즉시 처리 / 오늘 인지 / 마감 인지)만 노출.
+  if (isMobile) {
+    return (
+      <MobileBoard
+        session={(session as any)?.session}
+        onLoggedOut={() => router.replace("/manager/login")}
+      />
     );
   }
 
