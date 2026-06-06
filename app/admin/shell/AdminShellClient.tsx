@@ -58,15 +58,17 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
     );
   }
 
+  // 무스크롤 구조: 셸은 뷰포트 높이로 고정(h-screen+overflow-hidden) → 페이지 전체 스크롤 없음.
+  // 사이드바·본문만 각자 내부 스크롤. 본문은 화면 안에서만 스크롤된다.
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
       <AdminNav />
       <div className="flex min-w-0 flex-1 flex-col">
         <AdminTopbar
           session={(session as any)?.session}
           onLoggedOut={() => router.replace("/admin/login")}
         />
-        <main className="flex-1 overflow-y-auto p-7">
+        <main className="min-h-0 flex-1 overflow-y-auto p-7">
           {children}
         </main>
       </div>
