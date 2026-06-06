@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 import { X } from "lucide-react";
 
 type ManagerItem = {
@@ -121,11 +122,13 @@ export default function AdminManagersPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className={T.pageTitle}>기관 담당자 관리</h1>
-        <button onClick={() => { setForm({ name: "", email: "", phoneNumber: "", agencyId: "", agencyName: "" }); setModalOpen(true); }}
-          className={T.btnPrimary}>+ 신규 등록</button>
-      </div>
+      <PageHeader
+        title="기관 담당자 관리"
+        actions={
+          <button onClick={() => { setForm({ name: "", email: "", phoneNumber: "", agencyId: "", agencyName: "" }); setModalOpen(true); }}
+            className={T.btnPrimary}>+ 신규 등록</button>
+        }
+      />
 
       <div className="flex gap-2">
         <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && (setPage(1), fetchList(1))}

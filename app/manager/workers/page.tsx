@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 import { CheckCircle2, Copy, Pencil, Send } from "lucide-react";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM";
@@ -510,19 +511,15 @@ export default function WorkersPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className={T.pageTitle}>직무지도원 관리</h1>
-          <p className={T.pageSub}>총 {total}명 · 행 클릭 시 근무형태 설정</p>
-        </div>
-        <button
-          onClick={() => setShowInvite(true)}
-          className={`${T.btnPrimary} flex items-center gap-1.5`}
-        >
-          <Send className="h-3.5 w-3.5" />
-          초대 발송
-        </button>
-      </div>
+      <PageHeader
+        title="직무지도원 관리"
+        sub={`총 ${total}명 · 행 클릭 시 근무형태 설정`}
+        actions={
+          <button onClick={() => setShowInvite(true)} className={`${T.btnPrimary} flex items-center gap-1.5`}>
+            <Send className="h-3.5 w-3.5" />초대 발송
+          </button>
+        }
+      />
 
       <div className="flex gap-2">
         <input value={search} onChange={e => setSearch(e.target.value)}

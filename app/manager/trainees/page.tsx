@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Pencil, X, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 type Trainee = {
   id: string; siteId: string; siteName: string; name: string; gender: string;
@@ -82,15 +83,15 @@ export default function TraineesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-start justify-between gap-3">
-        <div>
-          <h1 className={T.pageTitle}>훈련생 관리</h1>
-          <p className={T.pageSub}>전체 {trainees.length}명 훈련생</p>
-        </div>
-        <button onClick={openCreate} className={`${T.btnPrimary} flex items-center gap-1.5`}>
-          <Plus className="h-4 w-4"/>훈련생 등록
-        </button>
-      </div>
+      <PageHeader
+        title="훈련생 관리"
+        sub={`전체 ${trainees.length}명 훈련생`}
+        actions={
+          <button onClick={openCreate} className={`${T.btnPrimary} flex items-center gap-1.5`}>
+            <Plus className="h-4 w-4"/>훈련생 등록
+          </button>
+        }
+      />
 
       <div className="mb-4">
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="이름·현장·장애유형 검색..."

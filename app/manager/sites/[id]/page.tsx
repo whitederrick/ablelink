@@ -4,6 +4,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { T } from "../../_styles";
+import PageHeader from "../../_components/PageHeader";
 
 type SiteDetail = {
   id: string;
@@ -150,22 +152,24 @@ export default function AdminSiteDetailPage() {
 
   return (
     <div style={s.page}>
-      {/* 헤더 */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>현장(Site) 상세</h1>
-          <p style={s.subtitle}>
-            ID: {item.id} · 기관: {item.agencyName} ·
-            <span style={{ color: item.isActive ? "#2e7d32" : "#e53935", fontWeight: 600 }}>
-              {item.isActive ? " 활성" : " 비활성"}
+      {/* 헤더 — 공통 PageHeader로 통일 */}
+      <PageHeader
+        title="현장(Site) 상세"
+        sub={
+          <>
+            ID: {item.id} · 기관: {item.agencyName} ·{" "}
+            <span className={item.isActive ? "font-bold text-emerald-600" : "font-bold text-rose-600"}>
+              {item.isActive ? "활성" : "비활성"}
             </span>
-          </p>
-        </div>
-        <div style={s.headerBtns}>
-          <button style={s.backBtn} onClick={() => router.back()}>← 목록</button>
-          <button style={s.deleteBtn} onClick={onDelete}>비활성화</button>
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <button onClick={() => router.back()} className={T.btnSecondary}>← 목록</button>
+            <button onClick={onDelete} className={T.btnDanger}>비활성화</button>
+          </>
+        }
+      />
 
       <div style={s.content}>
         {/* 기본 정보 */}

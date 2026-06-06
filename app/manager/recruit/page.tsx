@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 const PROF_LABEL: Record<string, string> = {
   JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사",
@@ -43,13 +44,11 @@ export default function ManagerRecruitPage() {
 
   return (
     <div className="p-6">
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h1 className={T.pageTitle}>직무지도 모집 공고</h1>
-          <p className={T.pageSub}>직무지도원을 모집할 공고를 등록하고 신청자를 관리합니다.</p>
-        </div>
-        <Link href="/manager/recruit/new" className={T.btnPrimary}>+ 새 공고</Link>
-      </div>
+      <PageHeader
+        title="직무지도 모집 공고"
+        sub="직무지도원을 모집할 공고를 등록하고 신청자를 관리합니다."
+        actions={<Link href="/manager/recruit/new" className={T.btnPrimary}>+ 새 공고</Link>}
+      />
 
       <div className={T.tableWrap}>
         <table className="w-full">

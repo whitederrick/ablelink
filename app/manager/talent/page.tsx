@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 // 매칭은 현재 직무지도원 직종만 운영 → 직종 필터 미노출(서버도 JOB_COACH 강제).
 const PROF_LABEL: Record<string, string> = { JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사" };
@@ -68,10 +69,10 @@ export default function ManagerTalentPage() {
 
   return (
     <div className="p-6">
-      <div className="mb-5">
-        <h1 className={T.pageTitle}>인력풀 검색</h1>
-        <p className={T.pageSub}>구직 중인 직무지도원 후보자를 찾아 제안을 보냅니다.</p>
-      </div>
+      <PageHeader
+        title="인재풀 검색"
+        sub="구직 중인 직무지도원 후보자를 찾아 제안을 보냅니다."
+      />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-600">

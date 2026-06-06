@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 import { useEffect, useMemo, useState } from "react";
 
 type SiteItem = {
@@ -52,15 +53,13 @@ export default function AdminSitesPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className={T.pageTitle}>현장(Site) 관리</h1>
-          <p className={T.pageSub}>총 {total}건 · page {page} / {totalPages}</p>
-        </div>
-        <Link href="/manager/sites/new">
-          <button className={T.btnPrimary}>신규 등록</button>
-        </Link>
-      </div>
+      <PageHeader
+        title="현장(Site) 관리"
+        sub={`총 ${total}건 · page ${page} / ${totalPages}`}
+        actions={
+          <Link href="/manager/sites/new" className={T.btnPrimary}>신규 등록</Link>
+        }
+      />
 
       <div className="flex gap-2">
         <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && onSearch()}
