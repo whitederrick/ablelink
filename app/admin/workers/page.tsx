@@ -31,6 +31,11 @@ export default function WorkersPage() {
   const [cPhone, setCPhone]     = useState("");
   const [cPw, setCPw]           = useState("");
   const [cPlan, setCPlan]       = useState("FREE");
+  // 사이트 배정
+  const [assignFor, setAssignFor] = useState<{id:string;name:string}|null>(null);
+  const [assignSites, setAssignSites] = useState<{id:string;companyName:string;agencyName:string|null}[]>([]);
+  const [assignQ, setAssignQ]   = useState("");
+  const [assignLoading, setAssignLoading] = useState(false);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),3000); };
 
@@ -44,6 +49,22 @@ export default function WorkersPage() {
     const data=await res.json(); setProcessing(false);
     if(data.success){showToast(data.message);setCreating(false);setCName("");setCPhone("");setCPw("");setCPlan("FREE");load(q);}
     else showToast(data.message||"생성 실패");
+  }
+
+  const loadSites=useCallback((query="")=>{
+    setAssignLoading(true);
+    fetch(`/api/admin/system/sites?q=${encodeURIComponent(query)}`)
+      .then(r=>r.json()).then(d=>{if(d.success)setAssignSites(d.sites.filter((s:any)=>s.agencyId));}).catch(()=>{}).finally(()=>setAssignLoading(false));
+  },[]);
+  function openAssign(c:Worker){ setAssignFor({id:c.id,name:c.workerName}); setAssignQ(""); loadSites(""); }
+  async function doAssign(siteId:string){
+    if(!assignFor)return;
+    setProcessing(true);
+    const res=await fetch("/api/admin/assignments",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({siteId,workerId:assignFor.id})});
+    const data=await res.json(); setProcessing(false);
+    if(data.success){showToast("사이트에 배정되었습니다.");setAssignFor(null);load(q);}
+    else showToast(data.message||"배정 실패");
   }
   const load = useCallback((query="")=>{
     setLoading(true);
@@ -161,6 +182,32 @@ export default function WorkersPage() {
         </div>
       )}
 
+      {assignFor&&(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-5">
+          <div className="flex max-h-[80vh] w-full max-w-sm flex-col rounded-2xl bg-white p-6 shadow-2xl">
+            <p className="mb-1 text-base font-black text-slate-900">사이트 배정</p>
+            <p className="mb-3 text-xs font-semibold text-slate-400">{assignFor.name} 님을 배정할 현장을 선택하세요.</p>
+            <input value={assignQ} onChange={e=>{setAssignQ(e.target.value);loadSites(e.target.value);}} placeholder="현장명 검색..."
+              className="mb-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400"/>
+            <div className="flex-1 overflow-y-auto rounded-xl border border-slate-100">
+              {assignLoading?(
+                <p className="py-8 text-center text-sm text-slate-400">불러오는 중...</p>
+              ):assignSites.length===0?(
+                <p className="py-8 text-center text-sm text-slate-400">현장이 없습니다.</p>
+              ):assignSites.map(s=>(
+                <button key={s.id} onClick={()=>doAssign(s.id)} disabled={processing}
+                  className="flex w-full items-center justify-between border-b border-slate-50 px-3 py-2.5 text-left last:border-b-0 hover:bg-slate-50 disabled:opacity-50">
+                  <span className="text-sm font-semibold text-slate-800">{s.companyName}</span>
+                  <span className="text-xs text-slate-400">{s.agencyName ?? "-"}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={()=>setAssignFor(null)}
+              className="mt-3 w-full rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 active:scale-95">닫기</button>
+          </div>
+        </div>
+      )}
+
       {loading?(
         <div className="flex h-40 items-center justify-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950"/></div>
       ):(
@@ -197,6 +244,8 @@ export default function WorkersPage() {
                       </button>
                       <button onClick={()=>{setActionId(c.id);setActionType("plan");setNewPlan(c.planType||"FREE");}} title="구독 등급 부여"
                         className="rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-black text-indigo-600 hover:bg-slate-50 active:scale-95">등급</button>
+                      <button onClick={()=>openAssign(c)} title="사이트 배정"
+                        className="rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-black text-sky-600 hover:bg-slate-50 active:scale-95">배정</button>
                     </div>
                   </td>
                 </tr>
