@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Plus, RefreshCw, UserCheck, UserX, KeyRound, Building2 } from "lucide-react";
+import PageHeader from "../_components/PageHeader";
 
 type AdminAccount = {
   id: string;
@@ -96,16 +97,16 @@ export default function AdminsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black text-slate-900">운영자 계정 관리</h1>
-          <p className="mt-0.5 text-sm text-slate-500">시스템 운영자 및 에이전시 관리자 계정을 관리합니다.</p>
-        </div>
-        <button onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white active:scale-95">
-          <Plus className="h-4 w-4" />계정 생성
-        </button>
-      </div>
+      <PageHeader
+        title="운영자 계정 관리"
+        sub="시스템 운영자 및 에이전시 관리자 계정을 관리합니다."
+        actions={
+          <button onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white active:scale-95">
+            <Plus className="h-4 w-4" />계정 생성
+          </button>
+        }
+      />
 
       {/* 계정 생성 폼 */}
       {showCreate && (

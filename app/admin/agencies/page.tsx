@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Building2, Users, MapPin, ChevronDown, Plus, X, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import PageHeader from "../_components/PageHeader";
 
 type Agency = {
   id: string; name: string; planType: string; trialEndsAt: string | null;
@@ -58,15 +59,15 @@ export default function AgenciesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black text-slate-900">에이전시 관리</h1>
-          <p className="mt-0.5 text-sm text-slate-500">전체 {agencies.length}개 · 플랜 변경 및 신규 생성</p>
-        </div>
-        <button onClick={()=>setShowCreate(true)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white active:scale-95">
-          <Plus className="h-4 w-4" />에이전시 생성
-        </button>
-      </div>
+      <PageHeader
+        title="에이전시 관리"
+        sub={`전체 ${agencies.length}개 · 플랜 변경 및 신규 생성`}
+        actions={
+          <button onClick={()=>setShowCreate(true)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white active:scale-95">
+            <Plus className="h-4 w-4" />에이전시 생성
+          </button>
+        }
+      />
 
       {/* 에이전시 생성 모달 */}
       {showCreate&&(

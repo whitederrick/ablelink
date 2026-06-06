@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Search, KeyRound, UserX, UserCheck } from "lucide-react";
+import PageHeader from "../_components/PageHeader";
 
 type Worker = {
   id: string; loginId: string; workerName: string; phoneNumber: string;
@@ -100,8 +101,7 @@ export default function WorkersPage() {
 
   return (
     <div>
-      <div className="mb-6"><h1 className="text-xl font-black text-slate-900">전체 직무지도원</h1>
-        <p className="mt-0.5 text-sm text-slate-500">전체 {workers.length}명 · 비밀번호 초기화 및 상태 변경</p></div>
+      <PageHeader title="전체 직무지도원" sub={`전체 ${workers.length}명 · 비밀번호 초기화 및 상태 변경`} />
 
       <div className="mb-4 flex gap-2">
         <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&load(q)}

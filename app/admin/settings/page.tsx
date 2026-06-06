@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Settings, AlertTriangle, CheckCircle2 } from "lucide-react";
+import PageHeader from "../_components/PageHeader";
 
 interface SettingItem {
   key: string;
@@ -34,8 +35,7 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <div className="mb-6"><h1 className="text-xl font-black text-slate-900">시스템 설정</h1>
-        <p className="mt-0.5 text-sm text-slate-500">운영 파라미터 및 환경 변수 현황</p></div>
+      <PageHeader title="시스템 설정" sub="운영 파라미터 및 환경 변수 현황" />
 
       {/* 운영 파라미터 */}
       <div className="mb-6 rounded-2xl border border-slate-100 bg-white p-6">

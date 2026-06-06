@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Building2, Users, MapPin, CreditCard, TrendingUp } from "lucide-react";
+import PageHeader from "./_components/PageHeader";
 
 interface SystemStats {
   agencyCount: number;
@@ -25,10 +26,7 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-black text-slate-900">시스템 대시보드</h1>
-        <p className="mt-0.5 text-sm text-slate-500">AbleLink 전체 운영 현황</p>
-      </div>
+      <PageHeader title="시스템 대시보드" sub="AbleLink 전체 운영 현황" />
 
       {loading ? (
         <div className="flex h-40 items-center justify-center">

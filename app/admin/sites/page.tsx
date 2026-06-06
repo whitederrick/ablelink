@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import PageHeader from "../_components/PageHeader";
 import { Search, MapPin, Users, Building2 } from "lucide-react";
 
 const PROF_LABEL: Record<string, string> = {
@@ -32,13 +33,13 @@ export default function SitesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black text-slate-900">전체 현장(Site)</h1>
-          <p className="mt-0.5 text-sm text-slate-500">전체 {sites.length}개 현장 현황</p>
-        </div>
-        <Link href="/admin/sites/new" className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white no-underline active:scale-95">+ 현장 생성</Link>
-      </div>
+      <PageHeader
+        title="전체 현장(Site)"
+        sub={`전체 ${sites.length}개 현장 현황`}
+        actions={
+          <Link href="/admin/sites/new" className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white no-underline active:scale-95">+ 현장 생성</Link>
+        }
+      />
 
       <div className="mb-4 flex gap-2">
         <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&load(q)}

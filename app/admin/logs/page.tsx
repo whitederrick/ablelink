@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { RefreshCw, Filter } from "lucide-react";
+import PageHeader from "../_components/PageHeader";
 
 type AuditLog = {
   id: string; action: string; target: string|null; detail: string|null;
@@ -39,13 +40,15 @@ export default function LogsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div><h1 className="text-xl font-black text-slate-900">감사 로그</h1>
-          <p className="mt-0.5 text-sm text-slate-500">시스템 운영자의 모든 데이터 변경 이력</p></div>
-        <button onClick={()=>load(filter)} className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 active:scale-95">
-          <RefreshCw className="h-4 w-4"/>새로고침
-        </button>
-      </div>
+      <PageHeader
+        title="감사 로그"
+        sub="시스템 운영자의 모든 데이터 변경 이력"
+        actions={
+          <button onClick={()=>load(filter)} className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 active:scale-95">
+            <RefreshCw className="h-4 w-4"/>새로고침
+          </button>
+        }
+      />
 
       <div className="mb-4 flex gap-2">
         <div className="relative">
