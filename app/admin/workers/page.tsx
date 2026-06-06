@@ -18,9 +18,10 @@ export default function WorkersPage() {
   const [loading, setLoading]   = useState(true);
   const [q, setQ]               = useState("");
   const [actionId, setActionId] = useState<string|null>(null);
-  const [actionType, setActionType] = useState<"pw"|"status"|null>(null);
+  const [actionType, setActionType] = useState<"pw"|"status"|"plan"|null>(null);
   const [newPw, setNewPw]       = useState("");
   const [newStatus, setNewStatus] = useState("RESIGNED");
+  const [newPlan, setNewPlan]   = useState("FREE");
   const [memo, setMemo]         = useState("");
   const [processing, setProcessing] = useState(false);
   const [toast, setToast]       = useState("");
@@ -40,6 +41,8 @@ export default function WorkersPage() {
     if(actionType==="pw"){
       if(newPw.length<8){showToast("8자 이상 입력하세요.");setProcessing(false);return;}
       body={action:"reset-password",newPassword:newPw};
+    } else if(actionType==="plan"){
+      body={action:"set-plan",planType:newPlan,memo};
     } else {
       body={action:"set-status",status:newStatus,memo};
     }
@@ -66,10 +69,26 @@ export default function WorkersPage() {
       {actionId&&actionType&&(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-5">
           <div className="w-full max-w-xs rounded-2xl bg-white p-6 shadow-2xl">
-            <p className="mb-4 text-base font-black text-slate-900">{actionType==="pw"?"비밀번호 초기화":"상태 변경"}</p>
+            <p className="mb-4 text-base font-black text-slate-900">{actionType==="pw"?"비밀번호 초기화":actionType==="plan"?"구독 등급 부여":"상태 변경"}</p>
             {actionType==="pw"?(
               <input type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="새 비밀번호 (8자 이상)"
                 className="mb-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400"/>
+            ):actionType==="plan"?(
+              <>
+                <p className="mb-2 text-xs font-semibold leading-relaxed text-slate-400">
+                  에이전시 계약과 무관하게 개인에게 직접 부여하는 등급입니다(초기 영업·특례용). FREE=회수.
+                </p>
+                <select value={newPlan} onChange={e=>setNewPlan(e.target.value)}
+                  className="mb-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none">
+                  <option value="FREE">FREE (회수)</option>
+                  <option value="STARTER">STARTER</option>
+                  <option value="STANDARD">STANDARD</option>
+                  <option value="PRO">PRO</option>
+                  <option value="PREMIUM">PREMIUM (전체)</option>
+                </select>
+                <textarea value={memo} onChange={e=>setMemo(e.target.value)} rows={2} placeholder="부여 사유 (감사 로그 기록)"
+                  className="mb-4 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold outline-none"/>
+              </>
             ):(
               <>
                 <select value={newStatus} onChange={e=>setNewStatus(e.target.value)}
@@ -110,7 +129,14 @@ export default function WorkersPage() {
                   <td className="px-4 py-3 text-slate-600 text-xs">{c.phoneNumber}</td>
                   <td className="px-4 py-3">{c.agencyName?<span className="text-sm font-semibold text-slate-700">{c.agencyName}</span>:<span className="text-slate-300 text-xs">미배정</span>}</td>
                   <td className="px-4 py-3">{c.siteName?<span className="text-xs text-slate-600">{c.siteName}</span>:<span className="text-slate-300 text-xs">없음</span>}</td>
-                  <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${STATUS_COLORS[c.status]??"bg-slate-100 text-slate-600"}`}>{c.status}</span></td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col items-start gap-1">
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${STATUS_COLORS[c.status]??"bg-slate-100 text-slate-600"}`}>{c.status}</span>
+                      {c.planType && c.planType!=="FREE" && (
+                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-black text-indigo-700">{c.planType}</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
                       <button onClick={()=>{setActionId(c.id);setActionType("pw");}} title="비밀번호 초기화"
@@ -119,6 +145,8 @@ export default function WorkersPage() {
                         className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 active:scale-95">
                         {c.status==="ACTIVE"?<UserX className="h-3.5 w-3.5 text-rose-500"/>:<UserCheck className="h-3.5 w-3.5 text-emerald-600"/>}
                       </button>
+                      <button onClick={()=>{setActionId(c.id);setActionType("plan");setNewPlan(c.planType||"FREE");}} title="구독 등급 부여"
+                        className="rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-black text-indigo-600 hover:bg-slate-50 active:scale-95">등급</button>
                     </div>
                   </td>
                 </tr>

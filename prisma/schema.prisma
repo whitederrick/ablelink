@@ -1066,7 +1066,11 @@ model AttendanceEditRequest {
 
 enum PlanType {
   FREE
-  PREMIUM
+  PREMIUM // 전체 기능(운영자 특례)
+  // 운영자 등급 단위 개통(2026-06-06) — 개인에게 특정 등급만 부여
+  STARTER
+  STANDARD
+  PRO
 }
 
 // 에이전시 구독 플랜 (실제 과금 단위)

@@ -43,15 +43,18 @@ export async function PATCH(
       return NextResponse.json({ success: true, message: `상태가 ${status}로 변경되었습니다.` });
     }
 
-    // 운영자 개인 구독 부여/회수 (에이전시 계약과 무관한 직접 권한 — 초기 직무지도원 테스트/특례용)
+    // 운영자 개인 구독 부여/회수 (에이전시 계약과 무관한 직접 권한 — 초기 영업·특례용)
+    // 등급 단위 개통(2026-06-06): FREE/STARTER/STANDARD/PRO/PREMIUM 중 선택.
     if (action === "set-plan") {
       const plan = String(body.planType ?? "");
-      if (!["FREE", "PREMIUM"].includes(plan)) {
-        return NextResponse.json({ success: false, message: "planType은 FREE 또는 PREMIUM이어야 합니다." }, { status: 400 });
+      const validPlans = ["FREE", "STARTER", "STANDARD", "PRO", "PREMIUM"];
+      if (!validPlans.includes(plan)) {
+        return NextResponse.json({ success: false, message: "planType은 FREE/STARTER/STANDARD/PRO/PREMIUM 중 하나여야 합니다." }, { status: 400 });
       }
-      await prisma.worker.update({ where: { id: user.id }, data: { planType: plan as "FREE" | "PREMIUM" } });
+      await prisma.worker.update({ where: { id: user.id }, data: { planType: plan as any } });
       await logAudit({ adminId: scope.adminId, action: "WORKER_PLAN_CHANGED", target: `Worker:${user.id}`, detail: { before: user.planType, after: plan, memo } });
-      return NextResponse.json({ success: true, message: plan === "PREMIUM" ? "개인 구독(PREMIUM)이 부여되었습니다." : "개인 구독이 회수되었습니다." });
+      const msg = plan === "FREE" ? "개인 구독이 회수되었습니다." : `개인 구독(${plan})이 부여되었습니다.`;
+      return NextResponse.json({ success: true, message: msg });
     }
 
     return NextResponse.json({ success: false, message: "알 수 없는 action" }, { status: 400 });

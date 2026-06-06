@@ -128,13 +128,20 @@ export async function checkPlanAccess(
   workerId: bigint,
   feature: PremiumFeature
 ): Promise<PlanCheckResult> {
-  // (1) 시스템 운영자 개인 부여
+  // (1) 시스템 운영자 개인 부여 (등급 단위, 2026-06-06)
   const worker = await prisma.worker.findUnique({
     where: { id: workerId },
     select: { planType: true },
   });
-  if (worker?.planType === "PREMIUM") {
-    return { allowed: true, planType: "PREMIUM" }; // 개인 부여 = 전체 허용
+  const grant = worker?.planType;
+  if (grant === "PREMIUM") {
+    return { allowed: true, planType: "PREMIUM" }; // 전체 허용(운영자 특례)
+  }
+  if (grant === "STARTER" || grant === "STANDARD" || grant === "PRO") {
+    // 운영자가 개인에게 부여한 등급으로 판정. 그 등급으로 부족한 기능은 아래 에이전시 기반으로 폴백.
+    if (planAllows(grant, feature)) {
+      return { allowed: true, planType: grant };
+    }
   }
 
   // (2) 근로계약 기반 에이전시 구독 (계약기간 + 3일 유예 내)
