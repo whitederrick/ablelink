@@ -27,7 +27,7 @@ export default function WorkerLoginPage() {
         setError(data.message || "로그인에 실패했습니다.");
         return;
       }
-      router.replace(data.hasActiveSite ? "/worker/home" : "/worker/site/register");
+      router.replace("/worker/home"); // 셀프 현장등록 종료 — 현장 없어도 홈(배정 대기 안내)
     } catch {
       setError("서버와 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");
     } finally {

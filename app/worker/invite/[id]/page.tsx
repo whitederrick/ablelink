@@ -83,7 +83,7 @@ export default function InvitePage() {
       const data = await res.json();
       if (!data.success) { setError(data.message); return; }
       setStep("done");
-      setTimeout(() => router.replace(data.hasSite ? "/worker/home" : "/worker/site/register"), 2000);
+      setTimeout(() => router.replace("/worker/home"), 2000); // 셀프 현장등록 종료 — 항상 홈
     } catch { setError("서버와 연결할 수 없습니다."); }
     finally { setSubmitting(false); }
   }

@@ -222,6 +222,9 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   const [workEnd, setWorkEnd] = useState(
     initial.customWorkEnd ?? WORK_TYPE_DEFAULTS[initial.workType ?? "FULL_DAY"].end
   );
+  // 계약(배정) 기간 — 전자계약서 PRO 전용 대비 수동 입력. 접근 판정의 계약기간 역할.
+  const [cStart, setCStart] = useState(initial.startDate ? initial.startDate.slice(0, 10) : "");
+  const [cEnd, setCEnd]     = useState(initial.endDate ? initial.endDate.slice(0, 10) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -258,6 +261,8 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
           commuteGuidanceIncluded: isFullDay ? false : commuteGuidanceIncluded,
           customWorkStart: workStart,
           customWorkEnd:   workEnd,
+          startDate: cStart || undefined,
+          endDate:   cEnd,
         }),
       });
       const data = await res.json();
@@ -267,6 +272,8 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         commuteGuidanceIncluded: isFullDay ? false : commuteGuidanceIncluded,
         customWorkStart: workStart,
         customWorkEnd:   workEnd,
+        startDate: cStart ? new Date(cStart).toISOString() : initial.startDate,
+        endDate:   cEnd ? new Date(cEnd).toISOString() : null,
       });
       onClose();
     } catch (e: any) {
@@ -293,6 +300,17 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
               </button>
             ))}
           </div>
+        </div>
+
+        {/* 계약(배정) 기간 — 수동 입력 */}
+        <div className="mb-4">
+          <label className={T.label}>근로계약 기간</label>
+          <div className="flex items-center gap-2">
+            <input type="date" value={cStart} max={cEnd || undefined} onChange={e => setCStart(e.target.value)} className={`flex-1 ${T.input}`} />
+            <span className="font-semibold text-slate-400">~</span>
+            <input type="date" value={cEnd} min={cStart || undefined} onChange={e => setCEnd(e.target.value)} className={`flex-1 ${T.input}`} />
+          </div>
+          <p className="mt-1.5 text-xs font-semibold text-slate-400">종료일을 비우면 무기한. 이 기간이 유료기능 접근 판정의 계약기간이 됩니다.</p>
         </div>
 
         {/* 근무 시간 — 모든 유형에서 수정 가능 */}

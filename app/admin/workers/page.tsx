@@ -36,6 +36,8 @@ export default function WorkersPage() {
   const [assignSites, setAssignSites] = useState<{id:string;companyName:string;agencyName:string|null}[]>([]);
   const [assignQ, setAssignQ]   = useState("");
   const [assignLoading, setAssignLoading] = useState(false);
+  const [assignStart, setAssignStart] = useState("");
+  const [assignEnd, setAssignEnd]     = useState("");
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),3000); };
 
@@ -56,12 +58,17 @@ export default function WorkersPage() {
     fetch(`/api/admin/system/sites?q=${encodeURIComponent(query)}`)
       .then(r=>r.json()).then(d=>{if(d.success)setAssignSites(d.sites.filter((s:any)=>s.agencyId));}).catch(()=>{}).finally(()=>setAssignLoading(false));
   },[]);
-  function openAssign(c:Worker){ setAssignFor({id:c.id,name:c.workerName}); setAssignQ(""); loadSites(""); }
+  function openAssign(c:Worker){
+    setAssignFor({id:c.id,name:c.workerName}); setAssignQ("");
+    const t=new Date(); setAssignStart(`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`); setAssignEnd("");
+    loadSites("");
+  }
   async function doAssign(siteId:string){
     if(!assignFor)return;
+    if(assignStart&&assignEnd&&assignStart>assignEnd){showToast("계약 시작일이 종료일보다 늦습니다.");return;}
     setProcessing(true);
     const res=await fetch("/api/admin/assignments",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({siteId,workerId:assignFor.id})});
+      body:JSON.stringify({siteId,workerId:assignFor.id,startDate:assignStart||undefined,endDate:assignEnd||undefined})});
     const data=await res.json(); setProcessing(false);
     if(data.success){showToast("사이트에 배정되었습니다.");setAssignFor(null);load(q);}
     else showToast(data.message||"배정 실패");
@@ -186,7 +193,20 @@ export default function WorkersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-5">
           <div className="flex max-h-[80vh] w-full max-w-sm flex-col rounded-2xl bg-white p-6 shadow-2xl">
             <p className="mb-1 text-base font-black text-slate-900">사이트 배정</p>
-            <p className="mb-3 text-xs font-semibold text-slate-400">{assignFor.name} 님을 배정할 현장을 선택하세요.</p>
+            <p className="mb-3 text-xs font-semibold text-slate-400">{assignFor.name} 님의 계약기간을 입력하고 배정할 현장을 선택하세요.</p>
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-400">계약 시작</label>
+                <input type="date" value={assignStart} max={assignEnd||undefined} onChange={e=>setAssignStart(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-sm font-semibold outline-none focus:border-sky-400"/>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-400">계약 종료(선택)</label>
+                <input type="date" value={assignEnd} min={assignStart||undefined} onChange={e=>setAssignEnd(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-sm font-semibold outline-none focus:border-sky-400"/>
+              </div>
+            </div>
+            <p className="mb-2 text-[11px] font-semibold text-slate-400">종료일을 비우면 무기한(진행 중). 이 기간이 유료기능 접근 판정의 계약기간이 됩니다.</p>
             <input value={assignQ} onChange={e=>{setAssignQ(e.target.value);loadSites(e.target.value);}} placeholder="현장명 검색..."
               className="mb-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400"/>
             <div className="flex-1 overflow-y-auto rounded-xl border border-slate-100">

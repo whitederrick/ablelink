@@ -61,9 +61,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!existing) return NextResponse.json({ success: false, message: "NOT_FOUND" }, { status: 404 });
     if (existing.agencyId !== agencyId) return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
+    // 수동 계약기간(전자계약서 PRO 전용 대비) — 배정 기간이 접근 판정의 계약기간 역할
+    const updateData: any = { workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd };
+    if (body.startDate !== undefined && body.startDate) updateData.startDate = new Date(body.startDate);
+    if (body.endDate !== undefined)  updateData.endDate  = body.endDate ? new Date(body.endDate) : null;
+
     const updated = await prisma.siteAssignment.update({
       where: { id: assignmentId },
-      data: { workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd },
+      data: updateData,
       select: {
         id: true,
         workType: true,

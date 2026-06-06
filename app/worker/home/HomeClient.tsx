@@ -870,12 +870,15 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
               <MapPin className="h-7 w-7 text-slate-400" aria-hidden="true" />
             </div>
-            <p className="mb-5 text-sm font-semibold text-slate-500">배정된 현장이 없습니다.</p>
+            <p className="mb-1 text-sm font-semibold text-slate-500">배정된 현장이 없습니다.</p>
+            <p className="mb-5 px-6 text-xs font-semibold leading-relaxed text-slate-400">
+              소속 에이전시 또는 시스템 운영자가 현장을 배정하면 시작할 수 있어요.
+            </p>
             <button
-              onClick={() => router.push("/worker/site/register")}
+              onClick={() => router.push("/recruit")}
               className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-95"
             >
-              현장 등록하기
+              매칭에서 직무지도 찾기
             </button>
           </div>
         )}

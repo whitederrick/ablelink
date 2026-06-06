@@ -10,6 +10,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess, startTrialIfNeeded } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { logApiCall } from "@/lib/logApiCall";
+import { buildContextLines } from "@/lib/worker/aiContext";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
@@ -172,11 +173,14 @@ export async function POST(request: NextRequest) {
     const dateList  = dates.join(", ");
     const traineeList = trainees.map(t => t.name).join(", ");
 
-    // 현장·수행과제 맥락 — AI가 실제 현장/과제 기반으로 구체적으로 쓰게 해 '밋밋함' 방지
+    // 현장·수행과제·계약(근무조건) 맥락 — AI가 실제 현장/과제/계약 기반으로 구체적으로 쓰게 해 '밋밋함' 방지
     const ctxAssignment = await prisma.siteAssignment.findFirst({
       where: { workerId, status: { in: ["ACTIVE", "CONFIRMED", "ASSIGNED"] } },
       orderBy: { startDate: "desc" },
-      select: { site: { select: { companyName: true, neededActivities: true } } },
+      select: {
+        startDate: true, endDate: true, workType: true, customWorkStart: true, customWorkEnd: true,
+        site: { select: { companyName: true, neededActivities: true } },
+      },
     });
     const recentTasks = await prisma.traineeLogTask.findMany({
       where: { log: { attendance: { workerId } } },
@@ -185,12 +189,9 @@ export async function POST(request: NextRequest) {
       orderBy: { id: "desc" },
       take: 15,
     });
-    const ctxLines: string[] = [];
-    if (ctxAssignment?.site?.companyName) ctxLines.push(`현장: ${ctxAssignment.site.companyName}`);
-    if (ctxAssignment?.site?.neededActivities?.length) ctxLines.push(`현장 주요 활동: ${ctxAssignment.site.neededActivities.join(", ")}`);
-    if (recentTasks.length) ctxLines.push(`자주 수행한 과제: ${recentTasks.map(t => t.taskName).join(", ")}`);
+    const ctxLines = buildContextLines(ctxAssignment, recentTasks);
     const contextBlock = ctxLines.length
-      ? `\n현장·과제 맥락(반드시 반영해 구체적으로 작성):\n${ctxLines.join("\n")}\n`
+      ? `\n현장·과제·계약 맥락(반드시 반영해 구체적으로 작성):\n${ctxLines.join("\n")}\n`
       : "";
 
     const prompt = `당신은 장애인 직무지도원의 업무일지 작성을 돕는 전문 어시스턴트입니다.
