@@ -25,8 +25,26 @@ export default function WorkersPage() {
   const [memo, setMemo]         = useState("");
   const [processing, setProcessing] = useState(false);
   const [toast, setToast]       = useState("");
+  // 신규 생성(promo 온보딩)
+  const [creating, setCreating] = useState(false);
+  const [cName, setCName]       = useState("");
+  const [cPhone, setCPhone]     = useState("");
+  const [cPw, setCPw]           = useState("");
+  const [cPlan, setCPlan]       = useState("FREE");
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),3000); };
+
+  async function doCreate(){
+    if(cName.trim().length<2){showToast("이름은 2자 이상");return;}
+    if(!/^01[0-9]{8,9}$/.test(cPhone.replace(/-/g,""))){showToast("올바른 휴대전화번호를 입력하세요.");return;}
+    if(cPw.length<8){showToast("임시 비밀번호는 8자 이상");return;}
+    setProcessing(true);
+    const res=await fetch("/api/admin/system/workers",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({workerName:cName.trim(),phoneNumber:cPhone.replace(/-/g,""),password:cPw,planType:cPlan})});
+    const data=await res.json(); setProcessing(false);
+    if(data.success){showToast(data.message);setCreating(false);setCName("");setCPhone("");setCPw("");setCPlan("FREE");load(q);}
+    else showToast(data.message||"생성 실패");
+  }
   const load = useCallback((query="")=>{
     setLoading(true);
     fetch(`/api/admin/system/workers?q=${encodeURIComponent(query)}`)
@@ -64,7 +82,39 @@ export default function WorkersPage() {
         <button onClick={()=>load(q)} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white active:scale-95">
           <Search className="h-4 w-4"/>
         </button>
+        <button onClick={()=>setCreating(true)} className="ml-auto rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50 active:scale-95">
+          + 신규 직무지도원
+        </button>
       </div>
+
+      {creating&&(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-5">
+          <div className="w-full max-w-xs rounded-2xl bg-white p-6 shadow-2xl">
+            <p className="mb-1 text-base font-black text-slate-900">신규 직무지도원 생성</p>
+            <p className="mb-4 text-xs font-semibold leading-relaxed text-slate-400">자가가입 종료에 따라 운영자가 직접 발급(promo 온보딩). 전화번호가 로그인 아이디가 됩니다.</p>
+            <input value={cName} onChange={e=>setCName(e.target.value)} placeholder="이름"
+              className="mb-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400"/>
+            <input value={cPhone} onChange={e=>setCPhone(e.target.value.replace(/[^0-9]/g,""))} inputMode="numeric" placeholder="휴대전화번호 (아이디)"
+              className="mb-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400"/>
+            <input type="text" value={cPw} onChange={e=>setCPw(e.target.value)} placeholder="임시 비밀번호 (8자 이상)"
+              className="mb-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400"/>
+            <select value={cPlan} onChange={e=>setCPlan(e.target.value)}
+              className="mb-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none">
+              <option value="FREE">등급: FREE</option>
+              <option value="STARTER">등급: STARTER</option>
+              <option value="STANDARD">등급: STANDARD</option>
+              <option value="PRO">등급: PRO</option>
+              <option value="PREMIUM">등급: PREMIUM (전체)</option>
+            </select>
+            <div className="flex gap-2">
+              <button onClick={()=>{setCreating(false);setCName("");setCPhone("");setCPw("");setCPlan("FREE");}}
+                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 active:scale-95">취소</button>
+              <button onClick={doCreate} disabled={processing}
+                className="flex-1 rounded-xl bg-slate-950 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">{processing?"...":"생성"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {actionId&&actionType&&(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-5">
