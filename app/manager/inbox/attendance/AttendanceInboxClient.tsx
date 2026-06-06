@@ -593,7 +593,7 @@ export default function AttendanceInboxClient() {
                   value={customFrom}
                   onChange={(e) => setCustomFrom(e.target.value)}
                   disabled={period !== "CUSTOM"}
-                  className={cx("rounded-xl border px-3 py-2 text-sm", period !== "CUSTOM" ? "opacity-40" : "")}
+                  className={cx("rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100", period !== "CUSTOM" ? "opacity-40" : "")}
                 />
                 <span className="text-slate-500">~</span>
                 <input
@@ -601,7 +601,7 @@ export default function AttendanceInboxClient() {
                   value={customTo}
                   onChange={(e) => setCustomTo(e.target.value)}
                   disabled={period !== "CUSTOM"}
-                  className={cx("rounded-xl border px-3 py-2 text-sm", period !== "CUSTOM" ? "opacity-40" : "")}
+                  className={cx("rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100", period !== "CUSTOM" ? "opacity-40" : "")}
                 />
               </div>
             </div>

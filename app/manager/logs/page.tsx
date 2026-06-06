@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Search, ChevronDown, ChevronUp, Download } from "lucide-react";
+import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 type Log = {
   id: string; traineeId: string; traineeName: string;
@@ -64,14 +66,15 @@ export default function ManagerLogsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div><h1 className="text-lg font-black text-slate-900">훈련 일지 열람</h1>
-          <p className="mt-0.5 text-sm text-slate-500">직무지도원이 작성한 훈련 일지를 확인합니다.</p></div>
-        <button onClick={exportCsv}
-          className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 active:scale-95">
-          <Download className="h-4 w-4"/>CSV 내보내기
-        </button>
-      </div>
+      <PageHeader
+        title="훈련 일지 열람"
+        sub="직무지도원이 작성한 훈련 일지를 확인합니다."
+        actions={
+          <button onClick={exportCsv} className={`${T.btnSecondary} flex items-center gap-1.5`}>
+            <Download className="h-4 w-4"/>CSV 내보내기
+          </button>
+        }
+      />
 
       {/* 필터 */}
       <div className="mb-4 flex flex-wrap gap-2">

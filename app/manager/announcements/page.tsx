@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pin, Trash2 } from "lucide-react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 type Item = { id: string; title: string; body: string; type: string; pinned: boolean; createdAt: string };
 
@@ -62,10 +63,10 @@ export default function AgencyAnnouncementsPage() {
 
   return (
     <div className="p-6">
-      <div className="mb-5">
-        <h1 className={T.pageTitle}>공지 게시판</h1>
-        <p className={T.pageSub}>소속 직무지도원 앱의 &lsquo;공지사항&rsquo;에 게시됩니다. (알림 도배 없이 게시판으로 열람)</p>
-      </div>
+      <PageHeader
+        title="공지 게시판"
+        sub="소속 직무지도원 앱의 ‘공지사항’에 게시됩니다. (알림 도배 없이 게시판으로 열람)"
+      />
 
       <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
         {/* 작성 */}
