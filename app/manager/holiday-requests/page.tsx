@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { RefreshCw, ChevronLeft, ChevronRight, Send, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { RefreshCw, ChevronLeft, ChevronRight, Send, Clock } from "lucide-react";
 import { T } from "../_styles";
 
 type PendingReq = {
@@ -44,12 +44,12 @@ export default function HolidayRequestsPage() {
   const [search, setSearch]   = useState("");
   const [toast, setToast]     = useState("");
 
-  // 요청 폼 상태
+  // 삭제 요청 폼 상태
   const [reqTarget, setReqTarget] = useState<HolidayRow | null>(null);
-  const [reqType, setReqType]     = useState<"DELETE" | "CHANGE_WORKDAY">("DELETE");
-  const [reqWorkday, setReqWorkday] = useState(false);
   const [reqReason, setReqReason] = useState("");
   const [sending, setSending]     = useState(false);
+  // 근무 인정 직접 결정(즉시 반영) 상태
+  const [savingWorkday, setSavingWorkday] = useState<string | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3500); };
 
@@ -66,11 +66,10 @@ export default function HolidayRequestsPage() {
 
   function openRequest(row: HolidayRow) {
     setReqTarget(row);
-    setReqType("DELETE");
-    setReqWorkday(!row.countAsWorkday);
     setReqReason("");
   }
 
+  // 삭제 요청(직무지도원 수락 필요)
   async function sendRequest() {
     if (!reqTarget) return;
     setSending(true);
@@ -78,20 +77,45 @@ export default function HolidayRequestsPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        holidayId:             reqTarget.id,
-        requestType:           reqType,
-        proposedCountAsWorkday: reqType === "CHANGE_WORKDAY" ? reqWorkday : undefined,
-        reason:                reqReason.trim() || undefined,
+        holidayId:   reqTarget.id,
+        requestType: "DELETE",
+        reason:      reqReason.trim() || undefined,
       }),
     });
     const data = await res.json();
     setSending(false);
     if (data.success) {
-      showToast("요청이 직무지도원에게 전달되었습니다.");
+      showToast("삭제 요청이 직무지도원에게 전달되었습니다.");
       setReqTarget(null);
       load(ym);
     } else {
       showToast(data.message ?? "요청 실패");
+    }
+  }
+
+  // 근무 인정 직접 결정 — 관리자 권한으로 즉시 반영(직무지도원 수락 불필요)
+  async function setWorkday(row: HolidayRow, value: boolean) {
+    if (savingWorkday || row.countAsWorkday === value) return;
+    setSavingWorkday(row.id);
+    setRows(prev => prev.map(r => (r.id === row.id ? { ...r, countAsWorkday: value } : r))); // 낙관적 반영
+    try {
+      const res = await fetch("/api/admin/holiday-requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ holidayId: row.id, countAsWorkday: value }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(value ? "근무 인정으로 확정했습니다." : "근무 미인정으로 변경했습니다.");
+      } else {
+        showToast(data.message ?? "변경 실패");
+        load(ym); // 롤백
+      }
+    } catch {
+      showToast("서버 오류");
+      load(ym);
+    } finally {
+      setSavingWorkday(null);
     }
   }
 
@@ -105,7 +129,7 @@ export default function HolidayRequestsPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className={T.pageTitle}>커스텀 휴무일 관리</h1>
-          <p className={T.pageSub}>직무지도원이 등록한 커스텀 휴무일을 조회하고 변경을 요청합니다</p>
+          <p className={T.pageSub}>직무지도원이 등록한 휴무일의 근무 인정 여부를 확인·결정합니다</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setYm(prevMonth(ym))} className={T.btnSecondary + " px-2.5"}><ChevronLeft className="h-4 w-4" /></button>
@@ -141,8 +165,9 @@ export default function HolidayRequestsPage() {
       </div>
 
       {/* 안내 */}
-      <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        <span className="font-black">합의 원칙:</span> 변경/삭제 요청을 보내면 직무지도원이 수락해야만 반영됩니다. 일방적으로 변경되지 않습니다.
+      <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+        <span className="font-black">근무 인정</span>은 관리자가 직접 확인 후 결정하며 즉시 반영되어 급여 계산에 사용됩니다(직무지도원 수락 불필요).
+        <span className="ml-1 font-black">휴무일 삭제</span>는 직무지도원이 수락해야 반영됩니다.
       </div>
 
       {loading ? (
@@ -173,9 +198,26 @@ export default function HolidayRequestsPage() {
                   <td className={T.td + " text-slate-500"}>{row.siteName}</td>
                   <td className={T.td + " text-slate-500 max-w-[160px] truncate"}>{row.reason ?? "-"}</td>
                   <td className={T.td}>
-                    <span className={`${T.badge} ${row.countAsWorkday ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                      {row.countAsWorkday ? "인정" : "미인정"}
-                    </span>
+                    <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
+                      <button
+                        onClick={() => setWorkday(row, true)}
+                        disabled={savingWorkday === row.id}
+                        className={`px-2.5 py-1 text-xs font-bold transition disabled:opacity-50 ${
+                          row.countAsWorkday ? "bg-emerald-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
+                        }`}
+                      >
+                        인정
+                      </button>
+                      <button
+                        onClick={() => setWorkday(row, false)}
+                        disabled={savingWorkday === row.id}
+                        className={`border-l border-slate-200 px-2.5 py-1 text-xs font-bold transition disabled:opacity-50 ${
+                          !row.countAsWorkday ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
+                        }`}
+                      >
+                        미인정
+                      </button>
+                    </div>
                   </td>
                   <td className={T.td}>
                     {row.pendingRequest ? (
@@ -191,7 +233,7 @@ export default function HolidayRequestsPage() {
                     {!row.pendingRequest && (
                       <button onClick={() => openRequest(row)}
                         className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
-                        <Send className="h-3 w-3" />요청
+                        <Send className="h-3 w-3" />삭제 요청
                       </button>
                     )}
                   </td>
@@ -202,55 +244,18 @@ export default function HolidayRequestsPage() {
         </div>
       )}
 
-      {/* 요청 모달 */}
+      {/* 삭제 요청 모달 */}
       {reqTarget && (
         <div className={T.modalOverlay}>
           <div className={T.modalContent}>
             <div className="mb-5">
-              <p className="text-base font-black text-slate-900">변경 요청 보내기</p>
+              <p className="text-base font-black text-slate-900">휴무일 삭제 요청</p>
               <p className="mt-1 text-sm text-slate-500">
                 {reqTarget.workerName} · {reqTarget.date}
                 {reqTarget.reason ? ` · ${reqTarget.reason}` : ""}
               </p>
             </div>
             <div className="space-y-4">
-              <div>
-                <label className={T.label}>요청 유형</label>
-                <div className="flex gap-2">
-                  {(["DELETE", "CHANGE_WORKDAY"] as const).map(t => (
-                    <button key={t} onClick={() => setReqType(t)}
-                      className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition active:scale-95 ${
-                        reqType === t
-                          ? "border-slate-950 bg-slate-950 text-white"
-                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                      }`}>
-                      {REQ_TYPE_LABELS[t]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {reqType === "CHANGE_WORKDAY" && (
-                <div>
-                  <label className={T.label}>변경 후 근무인정 여부</label>
-                  <div className="flex gap-2">
-                    {[true, false].map(v => (
-                      <button key={String(v)} onClick={() => setReqWorkday(v)}
-                        className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition active:scale-95 ${
-                          reqWorkday === v
-                            ? "border-slate-950 bg-slate-950 text-white"
-                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                        }`}>
-                        {v ? "근무 인정" : "근무 미인정"}
-                      </button>
-                    ))}
-                  </div>
-                  {reqWorkday === reqTarget.countAsWorkday && (
-                    <p className="mt-1.5 text-xs text-amber-600">현재와 동일한 값입니다.</p>
-                  )}
-                </div>
-              )}
-
               <div>
                 <label className={T.label}>사유 (선택)</label>
                 <textarea value={reqReason} onChange={e => setReqReason(e.target.value)}
@@ -260,13 +265,14 @@ export default function HolidayRequestsPage() {
               </div>
 
               <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5 text-xs text-amber-700">
-                요청을 보내면 직무지도원의 알림함에 전달됩니다. 직무지도원이 수락해야 실제로 반영됩니다.
+                삭제 요청을 보내면 직무지도원의 알림함에 전달됩니다. 직무지도원이 수락해야 실제로 삭제됩니다.
+                (근무 인정 여부는 목록에서 관리자가 직접 결정하며 즉시 반영됩니다.)
               </div>
             </div>
             <div className="mt-5 flex gap-2">
               <button onClick={() => setReqTarget(null)} className={T.btnSecondary + " flex-1"}>취소</button>
               <button onClick={sendRequest} disabled={sending} className={T.btnPrimary + " flex-1"}>
-                {sending ? "전송 중..." : "요청 전송"}
+                {sending ? "전송 중..." : "삭제 요청 전송"}
               </button>
             </div>
           </div>

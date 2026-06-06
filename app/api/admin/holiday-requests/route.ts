@@ -1,6 +1,7 @@
-// 커스텀 휴무일 변경 요청
-// GET  — AGENCY: 자기 에이전시 직무지도원들의 휴무일 목록 + 기존 요청 현황
-// POST — AGENCY: 변경/삭제 요청 생성
+// 커스텀 휴무일 관리
+// GET   — AGENCY: 자기 에이전시 직무지도원들의 휴무일 목록 + 기존 요청 현황
+// POST  — AGENCY: 삭제 요청 생성(직무지도원 수락 필요)
+// PATCH — AGENCY: 근무 인정(countAsWorkday) 최종 결정 — 관리자 권한으로 즉시 반영(급여 반영)
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -134,6 +135,53 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, id: request.id.toString() });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
+  }
+}
+
+// 근무 인정(countAsWorkday) 최종 결정 — 관리자 권한으로 즉시 반영.
+// 직무지도원 수락 없이 관리자가 확정하며, 급여 계산에 반영된다.
+export async function PATCH(req: NextRequest) {
+  try {
+    const scope = await requireManagerSession(req);
+    const agencyId = scope.agencyId;
+
+    const { holidayId, countAsWorkday } = await req.json();
+    if (!holidayId || typeof countAsWorkday !== "boolean")
+      return NextResponse.json({ success: false, message: "holidayId와 countAsWorkday(boolean)가 필요합니다." }, { status: 400 });
+
+    // 자기 에이전시 소속 휴무일인지 확인
+    const holiday = await prisma.siteHoliday.findUnique({
+      where: { id: BigInt(holidayId) },
+      include: { assignment: { select: { agencyId: true, workerId: true } } },
+    });
+    if (!holiday || holiday.assignment.agencyId !== agencyId)
+      return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
+
+    // 값이 동일하면 변경/알림 없이 성공 처리
+    if (holiday.countAsWorkday === countAsWorkday)
+      return NextResponse.json({ success: true, countAsWorkday });
+
+    await prisma.siteHoliday.update({
+      where: { id: holiday.id },
+      data: { countAsWorkday },
+    });
+
+    // 직무지도원에게 결정 알림
+    await prisma.workerNotice.create({
+      data: {
+        workerId: holiday.assignment.workerId,
+        agencyId,
+        title: `[커스텀 휴무일 근무 인정 ${countAsWorkday ? "확정" : "해제"}] ${holiday.date}`,
+        body: `관리자가 ${holiday.date} 커스텀 휴무일을 ${countAsWorkday ? "근무 인정으로 확정" : "근무 미인정으로 변경"}했습니다. 급여에 반영됩니다.`,
+        type: "INFO",
+        link: "/worker/calendar",
+      },
+    });
+
+    return NextResponse.json({ success: true, countAsWorkday });
   } catch (e: any) {
     if (e instanceof Response) return e;
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
