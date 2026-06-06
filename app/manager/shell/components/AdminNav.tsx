@@ -65,6 +65,13 @@ const groups: NavGroup[] = [
     ],
   },
   {
+    title: "직무지도 매칭",
+    items: [
+      { href: "/manager/recruit", label: "직무지도 공고",  plan: "PRO" },
+      { href: "/manager/talent",  label: "인재풀 검색",    plan: "PRO" },
+    ],
+  },
+  {
     title: "정산",
     items: [
       { href: "/manager/signature", label: "내 서명" },

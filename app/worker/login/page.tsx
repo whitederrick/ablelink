@@ -104,6 +104,12 @@ export default function WorkerLoginPage() {
             <span className="font-semibold text-slate-400">계정은 소속 에이전시 초대 또는 시스템 운영자를 통해 발급됩니다.</span>
           </div>
 
+          <Link href="/recruit/signup"
+            className="flex flex-col items-center gap-0.5 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-center no-underline transition active:scale-[0.98]">
+            <span className="text-sm font-black text-sky-700">직무지도원으로 지원하시나요?</span>
+            <span className="text-xs font-semibold text-sky-500">직무지도 매칭에서 지원하고 일자리를 찾아보세요 →</span>
+          </Link>
+
           <div className="flex items-center justify-center gap-2 text-sm">
             <span className="font-semibold text-slate-500">비밀번호를 잊으셨나요?</span>
             <Link href="/worker/reset-password" className="font-black text-slate-600">
