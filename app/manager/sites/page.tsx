@@ -54,7 +54,7 @@ export default function AdminSitesPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className={T.pageTitle}>Site 관리</h1>
+          <h1 className={T.pageTitle}>현장(Site) 관리</h1>
           <p className={T.pageSub}>총 {total}건 · page {page} / {totalPages}</p>
         </div>
         <Link href="/manager/sites/new">

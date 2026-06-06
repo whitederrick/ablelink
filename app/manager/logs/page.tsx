@@ -65,7 +65,7 @@ export default function ManagerLogsPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <div><h1 className="text-xl font-black text-slate-900">훈련 일지 열람</h1>
+        <div><h1 className="text-lg font-black text-slate-900">훈련 일지 열람</h1>
           <p className="mt-0.5 text-sm text-slate-500">직무지도원이 작성한 훈련 일지를 확인합니다.</p></div>
         <button onClick={exportCsv}
           className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 active:scale-95">

@@ -153,7 +153,7 @@ export default function AdminSiteDetailPage() {
       {/* 헤더 */}
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>Site 상세</h1>
+          <h1 style={s.title}>현장(Site) 상세</h1>
           <p style={s.subtitle}>
             ID: {item.id} · 기관: {item.agencyName} ·
             <span style={{ color: item.isActive ? "#2e7d32" : "#e53935", fontWeight: 600 }}>

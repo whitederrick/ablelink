@@ -62,7 +62,7 @@ export default function NoticesPage() {
 
   return (
     <div>
-      <div className="mb-6"><h1 className="text-xl font-black text-slate-900">공지 발송</h1>
+      <div className="mb-6"><h1 className="text-lg font-black text-slate-900">알림 발송(개별)</h1>
         <p className="mt-0.5 text-sm text-slate-500">직무지도원에게 공지·안내·반려 알림을 발송합니다.</p></div>
 
       <div className="mb-4 flex gap-2">

@@ -86,7 +86,7 @@ export default function ManagerCalendarPage() {
 
   return (
     <div>
-      <div className="mb-6"><h1 className="text-xl font-black text-slate-900">근태 캘린더</h1>
+      <div className="mb-6"><h1 className="text-lg font-black text-slate-900">근태 캘린더</h1>
         <p className="mt-0.5 text-sm text-slate-500">직무지도원별 월간 출근 현황</p></div>
 
       <div className="mb-4 flex items-center gap-3 flex-wrap">

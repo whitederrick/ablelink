@@ -244,8 +244,8 @@ export default function AdminDashboardPage() {
         ))}
       </div>
 
-      {/* 메인 그리드 — 좌측 액션 박스는 과폭 방지(≤520px), 우측 정보 박스(리스크·공지·오늘출근)는 넉넉히 */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,520px)_minmax(420px,1fr)]">
+      {/* 메인 그리드 — 좌/우 카드 섹션 동일 폭(50/50) */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
         {/* 좌측 */}
         <div className="space-y-4">

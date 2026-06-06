@@ -76,7 +76,7 @@ export default function AttendanceEditRequestsPage() {
     <div className="p-6 max-w-4xl">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-slate-900">출근부 수정 요청 관리</h1>
+          <h1 className="text-lg font-black text-slate-900">출근부 수정 요청 관리</h1>
           <p className="mt-0.5 text-sm text-slate-500">직무지도원이 제출한 출근 기록 수정 요청을 검토하고 승인 또는 반려합니다.</p>
         </div>
         {pendingCount > 0 && (

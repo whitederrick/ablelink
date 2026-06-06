@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Pencil, X, ChevronDown, ChevronUp, Search } from "lucide-react";
+import { T } from "../_styles";
 
 type Trainee = {
   id: string; siteId: string; siteName: string; name: string; gender: string;
@@ -81,11 +82,12 @@ export default function TraineesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div><h1 className="text-xl font-black text-slate-900">훈련생 관리</h1>
-          <p className="mt-0.5 text-sm text-slate-500">전체 {trainees.length}명 훈련생</p></div>
-        <button onClick={openCreate}
-          className="flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white active:scale-95">
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className={T.pageTitle}>훈련생 관리</h1>
+          <p className={T.pageSub}>전체 {trainees.length}명 훈련생</p>
+        </div>
+        <button onClick={openCreate} className={`${T.btnPrimary} flex items-center gap-1.5`}>
           <Plus className="h-4 w-4"/>훈련생 등록
         </button>
       </div>
