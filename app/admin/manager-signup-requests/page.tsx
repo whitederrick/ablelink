@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, ChevronDown, ExternalLink, RefreshCw, XCircle } from "lucide-react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 type Request = {
   id: string;
@@ -81,15 +82,15 @@ export default function ManagerSignupRequestsPage() {
   return (
     <div>
       {/* 헤더 */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className={T.pageTitle}>관리자 가입 신청</h1>
-          <p className={T.pageSub}>에이전시 관리자 자체 가입 신청 목록 · 승인 또는 반려</p>
-        </div>
-        <button onClick={() => load()} className={T.btnSecondary + " flex items-center gap-1.5"}>
-          <RefreshCw className="h-4 w-4" />새로고침
-        </button>
-      </div>
+      <PageHeader
+        title="관리자 가입 신청"
+        sub="에이전시 관리자 자체 가입 신청 목록 · 승인 또는 반려"
+        actions={
+          <button onClick={() => load()} className={T.btnSecondary + " flex items-center gap-1.5"}>
+            <RefreshCw className="h-4 w-4" />새로고침
+          </button>
+        }
+      />
 
       {/* 요약 */}
       <div className={T.summaryGrid}>

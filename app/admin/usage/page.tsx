@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 const SERVICE_LABELS: Record<string, string> = {
   GROQ_STT:    "Groq STT",
@@ -58,18 +59,18 @@ export default function UsagePage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className={T.pageTitle}>AI 사용량</h1>
-          <p className={T.pageSub}>월별·에이전시별 AI API 호출 통계</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setYm(prevMonth(ym))} className={T.btnSecondary + " px-2.5"}><ChevronLeft className="h-4 w-4" /></button>
-          <span className="min-w-[90px] text-center text-sm font-black text-slate-900">{fmtYM(ym)}</span>
-          <button onClick={() => setYm(nextMonth(ym))} className={T.btnSecondary + " px-2.5"}><ChevronRight className="h-4 w-4" /></button>
-          <button onClick={() => load(ym)} className={T.btnSecondary + " flex items-center gap-1.5"}><RefreshCw className="h-4 w-4" /></button>
-        </div>
-      </div>
+      <PageHeader
+        title="AI 사용량"
+        sub="월별·에이전시별 AI API 호출 통계"
+        actions={
+          <div className="flex items-center gap-2">
+            <button onClick={() => setYm(prevMonth(ym))} className={T.btnSecondary + " px-2.5"}><ChevronLeft className="h-4 w-4" /></button>
+            <span className="min-w-[90px] text-center text-sm font-black text-slate-900">{fmtYM(ym)}</span>
+            <button onClick={() => setYm(nextMonth(ym))} className={T.btnSecondary + " px-2.5"}><ChevronRight className="h-4 w-4" /></button>
+            <button onClick={() => load(ym)} className={T.btnSecondary + " flex items-center gap-1.5"}><RefreshCw className="h-4 w-4" /></button>
+          </div>
+        }
+      />
 
       {/* 전체 합계 */}
       <div className="mb-5 grid grid-cols-4 gap-3.5">

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 interface AgencySub {
   id: string; name: string; planType: string;
@@ -47,7 +48,7 @@ export default function SubscriptionPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className={T.pageTitle}>구독 관리</h1>
+      <PageHeader title="구독 관리" />
 
       <div className={T.summaryGrid}>
         {[

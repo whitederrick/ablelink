@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { RefreshCw, ChevronDown, Clock, CheckCircle2, X, Send } from "lucide-react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 type Ticket = {
   id: string; agencyId: string; agencyName: string | null;
@@ -82,15 +83,15 @@ export default function AdminSupportPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className={T.pageTitle}>지원 요청</h1>
-          <p className={T.pageSub}>에이전시 관리자가 보낸 문의·수정 요청 목록</p>
-        </div>
-        <button onClick={() => load()} className={T.btnSecondary + " flex items-center gap-1.5"}>
-          <RefreshCw className="h-4 w-4" />새로고침
-        </button>
-      </div>
+      <PageHeader
+        title="지원 요청"
+        sub="에이전시 관리자가 보낸 문의·수정 요청 목록"
+        actions={
+          <button onClick={() => load()} className={T.btnSecondary + " flex items-center gap-1.5"}>
+            <RefreshCw className="h-4 w-4" />새로고침
+          </button>
+        }
+      />
 
       {/* 요약 */}
       <div className={T.summaryGrid}>

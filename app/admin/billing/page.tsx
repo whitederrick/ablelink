@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, CreditCard, AlertCircle } from "lucide-react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 const PLAN_COLORS: Record<string, string> = {
   FREE:     "bg-slate-100 text-slate-600",
@@ -46,15 +47,15 @@ export default function BillingPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className={T.pageTitle}>결제·구독 현황</h1>
-          <p className={T.pageSub}>전체 에이전시의 플랜 및 결제 상태</p>
-        </div>
-        <button onClick={load} className={T.btnSecondary + " flex items-center gap-1.5"}>
-          <RefreshCw className="h-4 w-4" />새로고침
-        </button>
-      </div>
+      <PageHeader
+        title="결제·구독 현황"
+        sub="전체 에이전시의 플랜 및 결제 상태"
+        actions={
+          <button onClick={load} className={T.btnSecondary + " flex items-center gap-1.5"}>
+            <RefreshCw className="h-4 w-4" />새로고침
+          </button>
+        }
+      />
 
       <div className={T.summaryGrid}>
         <div className={T.summaryCard}>

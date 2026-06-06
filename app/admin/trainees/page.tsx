@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, MapPin } from "lucide-react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 interface TraineeSummary {
   siteId: string; siteName: string; workerName: string;
@@ -54,10 +55,10 @@ export default function TraineesPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className={T.pageTitle}>훈련생 현황</h1>
-        <p className={T.pageSub}>※ 훈련생 등록/수정은 한국장애인고용공단에서 관리합니다. 에이전시는 현황만 조회할 수 있습니다.</p>
-      </div>
+      <PageHeader
+        title="훈련생 현황"
+        sub="※ 훈련생 등록/수정은 한국장애인고용공단에서 관리합니다. 에이전시는 현황만 조회할 수 있습니다."
+      />
 
       <div className={T.summaryGrid}>
         {[

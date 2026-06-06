@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Megaphone, Plus, X, RefreshCw } from "lucide-react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 
 type Announcement = {
   id: string; title: string; body: string; type: string;
@@ -62,20 +63,20 @@ export default function AnnouncementsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className={T.pageTitle}>시스템 공지</h1>
-          <p className={T.pageSub}>전체 직무지도원에게 공지를 발송합니다</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={load} className={T.btnSecondary + " flex items-center gap-1.5"}>
-            <RefreshCw className="h-4 w-4" />
-          </button>
-          <button onClick={() => setShowForm(true)} className={T.btnPrimary + " flex items-center gap-2"}>
-            <Plus className="h-4 w-4" />공지 발송
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="시스템 공지"
+        sub="전체 직무지도원에게 공지를 발송합니다"
+        actions={
+          <>
+            <button onClick={load} className={T.btnSecondary + " flex items-center gap-1.5"}>
+              <RefreshCw className="h-4 w-4" />
+            </button>
+            <button onClick={() => setShowForm(true)} className={T.btnPrimary + " flex items-center gap-2"}>
+              <Plus className="h-4 w-4" />공지 발송
+            </button>
+          </>
+        }
+      />
 
       {/* 공지 작성 모달 */}
       {showForm && (

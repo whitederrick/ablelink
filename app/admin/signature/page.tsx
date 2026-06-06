@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { T } from "../_styles";
+import PageHeader from "../_components/PageHeader";
 import { SignaturePad, type SignaturePadHandle } from "../../_components/SignaturePad";
 
 export default function AdminSignaturePage() {
@@ -42,12 +43,10 @@ export default function AdminSignaturePage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className={T.pageTitle}>내 서명 관리</h1>
-        <p className={T.pageSub}>
-          {displayName && `${displayName}님 · `}등록 서명은 문서의 <strong>(위탁기관/공단) 담당자</strong> 서명란에 자동 삽입됩니다.
-        </p>
-      </div>
+      <PageHeader
+        title="내 서명 관리"
+        sub={<>{displayName && `${displayName}님 · `}등록 서명은 문서의 <strong>(위탁기관/공단) 담당자</strong> 서명란에 자동 삽입됩니다.</>}
+      />
 
       <div className={T.card}>
         <p className="mb-3 text-sm font-black text-slate-900">등록된 서명</p>
