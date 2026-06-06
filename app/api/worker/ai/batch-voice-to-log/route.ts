@@ -24,6 +24,19 @@ function datesBetween(from: string, to: string): string[] {
   return dates;
 }
 
+// 이번 달 AI 일괄 사용 여부 (녹음 전 사전 안내용). 개인당 월 1회.
+export async function GET(request: NextRequest) {
+  const session = await getWorkerSessionFromReq(request);
+  if (!session) return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
+  const workerId = BigInt(session.workerId);
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const used = await prisma.apiCallLog.count({
+    where: { workerId, service: "GEMINI_BATCH", success: true, createdAt: { gte: monthStart } },
+  });
+  return NextResponse.json({ success: true, available: used < 1, usedThisMonth: used });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getWorkerSessionFromReq(request);
@@ -53,6 +66,20 @@ export async function POST(request: NextRequest) {
       } else {
         return NextResponse.json({ success: false, message: planCheck.message, reason: planCheck.reason }, { status: 403 });
       }
+    }
+
+    // 개인당 월 1회 (AI 일괄). 비용 방어 — STT/LLM 호출 전에 선차단. 단일 음성 일지는 무제한.
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const batchUsedThisMonth = await prisma.apiCallLog.count({
+      where: { workerId, service: "GEMINI_BATCH", success: true, createdAt: { gte: monthStart } },
+    });
+    if (batchUsedThisMonth >= 1) {
+      return NextResponse.json({
+        success: false,
+        reason: "MONTHLY_LIMIT",
+        message: "AI 일괄 작성은 매월 1회 제공되며, 이번 달은 이미 사용했습니다. 단일 음성 일지는 계속 사용할 수 있어요.",
+      }, { status: 429 });
     }
 
     const formData = await request.formData();
@@ -145,6 +172,27 @@ export async function POST(request: NextRequest) {
     const dateList  = dates.join(", ");
     const traineeList = trainees.map(t => t.name).join(", ");
 
+    // 현장·수행과제 맥락 — AI가 실제 현장/과제 기반으로 구체적으로 쓰게 해 '밋밋함' 방지
+    const ctxAssignment = await prisma.siteAssignment.findFirst({
+      where: { workerId, status: { in: ["ACTIVE", "CONFIRMED", "ASSIGNED"] } },
+      orderBy: { startDate: "desc" },
+      select: { site: { select: { companyName: true, neededActivities: true } } },
+    });
+    const recentTasks = await prisma.traineeLogTask.findMany({
+      where: { log: { attendance: { workerId } } },
+      select: { taskName: true },
+      distinct: ["taskName"],
+      orderBy: { id: "desc" },
+      take: 15,
+    });
+    const ctxLines: string[] = [];
+    if (ctxAssignment?.site?.companyName) ctxLines.push(`현장: ${ctxAssignment.site.companyName}`);
+    if (ctxAssignment?.site?.neededActivities?.length) ctxLines.push(`현장 주요 활동: ${ctxAssignment.site.neededActivities.join(", ")}`);
+    if (recentTasks.length) ctxLines.push(`자주 수행한 과제: ${recentTasks.map(t => t.taskName).join(", ")}`);
+    const contextBlock = ctxLines.length
+      ? `\n현장·과제 맥락(반드시 반영해 구체적으로 작성):\n${ctxLines.join("\n")}\n`
+      : "";
+
     const prompt = `당신은 장애인 직무지도원의 업무일지 작성을 돕는 전문 어시스턴트입니다.
 
 직무지도원이 아래 기간 동안 훈련생들을 지도한 내용을 한 번에 녹음했습니다.
@@ -153,9 +201,10 @@ export async function POST(request: NextRequest) {
 날짜 목록: ${dateList}
 훈련생 목록: ${traineeList}
 총 조합 수: ${dates.length * trainees.length}개
-
+${contextBlock}
 작성 규칙:
 - 각 조합에 대해 ${sentenceCount}문장 일지 작성
+- 위 '현장 주요 활동'과 '자주 수행한 과제'를 반영해 구체적이고 현실적으로 작성(막연하고 밋밋한 표현 지양)
 - 문장당 25~35자 내외로 간결하게
 - 1인칭 서술(예: "○○에게 ~~~을 지도했다.")
 - 발화에서 특정 날짜 또는 훈련생이 명시되면 해당 조합에 반영

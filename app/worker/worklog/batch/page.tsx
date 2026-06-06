@@ -32,6 +32,7 @@ export default function BatchWorklogPage() {
   const [trainees, setTrainees]         = useState<Trainee[]>([]);
   const [siteLoading, setSiteLoading]   = useState(true);
   const [planOk, setPlanOk]             = useState(false);
+  const [monthlyUsed, setMonthlyUsed]   = useState(false); // 이번 달 AI 일괄 사용함(월 1회)
 
   // STEP 1: 날짜 + 훈련생 선택
   const today = todayStr();
@@ -76,6 +77,13 @@ export default function BatchWorklogPage() {
         const ok = ["STANDARD", "PRO"].includes(d.agencyPlanType ?? "") ||
           (d.agencyPlanType === "TRIAL" && d.trialEndsAt && new Date(d.trialEndsAt) > new Date());
         setPlanOk(ok);
+        // 이번 달 AI 일괄 사용 여부(개인당 월 1회) — 녹음 전 사전 안내
+        if (ok) {
+          try {
+            const u = await fetch("/api/worker/ai/batch-voice-to-log", { cache: "no-store" }).then(r => r.json());
+            if (u?.success) setMonthlyUsed(!u.available);
+          } catch {}
+        }
       } catch {
         router.push("/worker/home");
       } finally {
@@ -335,6 +343,26 @@ export default function BatchWorklogPage() {
         <button onClick={() => router.back()} className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white">
           돌아가기
         </button>
+      </div>
+    );
+  }
+
+  if (monthlyUsed) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
+        <p className="text-lg font-black text-slate-900">AI 일괄 작성은 이번 달 이미 사용했어요.</p>
+        <p className="text-sm leading-relaxed text-slate-500">
+          AI 일괄 작성은 <span className="font-black text-slate-700">매월 1회</span> 제공됩니다.<br />
+          단일 음성 일지는 횟수 제한 없이 계속 사용할 수 있어요.
+        </p>
+        <div className="flex gap-2">
+          <button onClick={() => router.back()} className="rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-600">
+            돌아가기
+          </button>
+          <button onClick={() => router.push("/worker/worklog")} className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white">
+            단일 일지 작성
+          </button>
+        </div>
       </div>
     );
   }
