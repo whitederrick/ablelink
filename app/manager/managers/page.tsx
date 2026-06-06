@@ -124,6 +124,7 @@ export default function AdminManagersPage() {
     <div className="space-y-5">
       <PageHeader
         title="기관 담당자 관리"
+        sub={`총 ${total}건 · page ${page} / ${totalPages}`}
         actions={
           <button onClick={() => { setForm({ name: "", email: "", phoneNumber: "", agencyId: "", agencyName: "" }); setModalOpen(true); }}
             className={T.btnPrimary}>+ 신규 등록</button>
@@ -135,8 +136,6 @@ export default function AdminManagersPage() {
           placeholder="담당자명/메일/전화/기관 검색" className={`flex-1 ${T.input}`} />
         <button onClick={() => { setPage(1); fetchList(1); }} className={T.btnSecondary}>검색</button>
       </div>
-
-      <p className="text-sm font-semibold text-slate-400">총 {total}건 (page {page} / {totalPages})</p>
 
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">

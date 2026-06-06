@@ -93,9 +93,9 @@ export default function TraineesPage() {
         }
       />
 
-      <div className="mb-4">
+      <div className="flex gap-2">
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="이름·현장·장애유형 검색..."
-          className="w-full max-w-sm rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/>
+          className={`flex-1 ${T.input}`} />
       </div>
 
       {/* 폼 모달 */}
