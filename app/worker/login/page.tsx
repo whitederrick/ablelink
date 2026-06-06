@@ -100,11 +100,8 @@ export default function WorkerLoginPage() {
             )}
           </button>
 
-          <div className="flex items-center justify-center gap-2 text-sm">
-            <span className="font-semibold text-slate-500">계정이 없으신가요?</span>
-            <Link href="/worker/signup" className="font-black text-sky-600">
-              회원가입
-            </Link>
+          <div className="flex items-center justify-center px-4 text-center text-sm">
+            <span className="font-semibold text-slate-400">계정은 소속 에이전시 초대 또는 시스템 운영자를 통해 발급됩니다.</span>
           </div>
 
           <div className="flex items-center justify-center gap-2 text-sm">
