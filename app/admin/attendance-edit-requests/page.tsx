@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { CheckCircle2, Clock, XCircle, AlertTriangle, RotateCcw } from "lucide-react";
+import PageHeader from "../_components/PageHeader";
 
 type EditReq = {
   id: string;
@@ -73,18 +74,16 @@ export default function AttendanceEditRequestsPage() {
   const pendingCount = requests.filter(r => r.status === "PENDING").length;
 
   return (
-    <div className="p-6 max-w-4xl">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black text-slate-900">출근부 수정 요청 관리</h1>
-          <p className="mt-0.5 text-sm text-slate-500">직무지도원이 제출한 출근 기록 수정 요청을 검토하고 승인 또는 반려합니다.</p>
-        </div>
-        {pendingCount > 0 && (
+    <div className="max-w-4xl">
+      <PageHeader
+        title="출근부 수정 요청 관리"
+        sub="직무지도원이 제출한 출근 기록 수정 요청을 검토하고 승인 또는 반려합니다."
+        actions={pendingCount > 0 && (
           <span className="rounded-full bg-amber-100 px-3 py-1.5 text-sm font-black text-amber-700">
             {pendingCount}건 처리 대기
           </span>
         )}
-      </div>
+      />
 
       {/* 필터 */}
       <div className="mb-4 flex gap-2">

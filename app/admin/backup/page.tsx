@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 import { Download, FileSpreadsheet, Database } from "lucide-react";
+import PageHeader from "../_components/PageHeader";
 
 export default function AdminBackupPage() {
   const [busy, setBusy] = useState("");
@@ -32,10 +33,10 @@ export default function AdminBackupPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-black text-slate-900">데이터 백업</h1>
-        <p className="mt-0.5 text-sm text-slate-500">전 에이전시의 출근부·일지를 전 기간(보관 제한 없음)으로 내려받습니다.</p>
-      </div>
+      <PageHeader
+        title="데이터 백업"
+        sub="전 에이전시의 출근부·일지를 전 기간(보관 제한 없음)으로 내려받습니다."
+      />
 
       <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
         <Database className="mt-0.5 h-4 w-4 flex-shrink-0" />

@@ -123,7 +123,7 @@ export default function AgencyDetailPage() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-slate-900">{agency.name}</h1>
+              <h1 className="text-lg font-black text-slate-900">{agency.name}</h1>
               <span className={`${T.badge} ${PLAN_COLORS[agency.planType] ?? "bg-slate-100 text-slate-600"}`}>
                 {agency.planType}
               </span>

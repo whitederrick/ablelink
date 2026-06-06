@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import PageHeader from "../_components/PageHeader";
 
 type ReviewRow = {
   workerId: string;
@@ -92,26 +93,25 @@ export default function AdminReviewPage() {
   return (
     <div className="space-y-6">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900">확정 현황</h1>
-          <p className="mt-1 text-sm font-semibold text-slate-400">직무지도원별 출근부·일지·평가 확정 상태</p>
-        </div>
-        {/* 월 선택 */}
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-          <button onClick={() => changeMonth(-1)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <span className="min-w-[80px] text-center text-sm font-black text-slate-900">
-            {yearMonth.replace("-", "년 ")}월
-          </span>
-          <button onClick={() => changeMonth(1)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100">
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="확정 현황"
+        sub="직무지도원별 출근부·일지·평가 확정 상태"
+        actions={
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+            <button onClick={() => changeMonth(-1)}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="min-w-[80px] text-center text-sm font-black text-slate-900">
+              {yearMonth.replace("-", "년 ")}월
+            </span>
+            <button onClick={() => changeMonth(1)}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        }
+      />
 
       {/* 요약 */}
       {rows.length > 0 && (
