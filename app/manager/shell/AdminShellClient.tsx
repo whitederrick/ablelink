@@ -13,6 +13,7 @@ type MeResponse =
         role: "ADMIN" | "GOV" | "AGENCY";
         loginId: string;
         agencyName?: string | null;
+        displayName?: string | null;
       };
     }
   | { success: false; message?: string };
@@ -82,15 +83,16 @@ export default function AdminShellClient({ children }: { children: React.ReactNo
     );
   }
 
+  // 무스크롤 구조: 셸 뷰포트 고정(h-screen+overflow-hidden) → 페이지 바깥 스크롤 없음. 본문만 내부 스크롤.
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
       <AdminNav />
       <div className="flex min-w-0 flex-1 flex-col">
         <AdminTopbar
           session={(session as any)?.session}
           onLoggedOut={() => router.replace("/manager/login")}
         />
-        <main className="flex-1 overflow-y-auto p-7">
+        <main className="min-h-0 flex-1 overflow-y-auto p-7">
           {children}
         </main>
       </div>

@@ -89,7 +89,6 @@ const groups: NavGroup[] = [
 
 export default function AdminNav() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   // 현재 플랜 등급. 로딩 전엔 잠금 깜빡임 방지를 위해 전체 허용(99)으로 둔다.
   const [currentRank, setCurrentRank] = useState(99);
 
@@ -103,12 +102,16 @@ export default function AdminNav() {
       .catch(() => {});
   }, []);
 
-  const toggle = (t: string) => setCollapsed(c => ({ ...c, [t]: !c[t] }));
   const isActive = (href: string) =>
     href === "/manager" ? pathname === "/manager" : pathname.startsWith(href);
 
+  // 아코디언: 한 번에 한 카테고리만 펼침(나머지 자동 접힘) → 세로 스크롤 최소화.
+  const activeGroupTitle = groups.find(g => g.items.some(it => isActive(it.href)))?.title ?? groups[0].title;
+  const [openGroup, setOpenGroup] = useState<string | null>(activeGroupTitle);
+  useEffect(() => { setOpenGroup(activeGroupTitle); }, [activeGroupTitle]);
+
   return (
-    <aside className="flex w-[220px] flex-shrink-0 flex-col bg-slate-950 px-3 pb-8 pt-7">
+    <aside className="flex w-[220px] flex-shrink-0 flex-col overflow-y-auto bg-slate-950 px-3 pb-8 pt-7">
       <Link href="/manager" className="mb-6 block px-3 no-underline">
         <span className="text-[22px] font-black tracking-tight text-white">AbleLink</span>
         <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
@@ -118,20 +121,21 @@ export default function AdminNav() {
 
       <div className="mb-5 h-px bg-slate-800" />
 
-      <nav className="flex flex-col gap-6">
+      <nav className="flex flex-col gap-1.5">
         {groups.map(g => {
           // 카테고리 내: FREE→STARTER→STANDARD→PRO 순(동일 등급은 기존 순서 유지 — 안정 정렬)
           const items = [...g.items].sort((a, b) => itemRank(a) - itemRank(b));
+          const open = openGroup === g.title;
           return (
             <div key={g.title}>
               <button
-                onClick={() => toggle(g.title)}
-                className="mb-1.5 flex w-full items-center justify-between px-3 text-[10px] font-black uppercase tracking-widest text-slate-600 transition hover:text-slate-400"
+                onClick={() => setOpenGroup(prev => (prev === g.title ? null : g.title))}
+                className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[13px] font-black tracking-tight text-slate-300 transition hover:bg-white/5 hover:text-white"
               >
                 <span>{g.title}</span>
-                <span className="text-sm leading-none text-slate-600">{collapsed[g.title] ? "+" : "–"}</span>
+                <span className="text-base leading-none text-slate-500">{open ? "–" : "+"}</span>
               </button>
-              <div className={`space-y-0.5 ${collapsed[g.title] ? "hidden" : ""}`}>
+              <div className={`mt-0.5 space-y-0.5 ${open ? "" : "hidden"}`}>
                 {items.map(item => {
                   const active = isActive(item.href);
                   const tier = item.plan ? TIER_META[item.plan] : null;
