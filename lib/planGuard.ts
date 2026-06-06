@@ -3,36 +3,45 @@
 
 import { prisma } from "./prisma";
 
-// STARTER 이상 필요한 기능
+// 등급 재설계 2026-06-06: STARTER는 "기본 운영(규모+데이터 내보내기)"만.
+// 공식문서(PDF·서명)·AI는 STANDARD, 운영 자동화(급여·전자계약·매칭)는 PRO로 상향.
+
+// STARTER 이상 필요한 기능 — 기본 운영
 export type StarterFeature =
-  | "AI_VOICE"        // 음성→AI 일지 (단일·일괄 통합)
-  | "PDF_GENERATE"    // PDF 자동 생성
-  | "PDF_SIGN"        // 전자서명 합성
-  | "CONTRACT_ONLINE" // 온라인 계약서 작성
-  | "DOC_INBOX"       // 문서 인박스
-  | "RECRUIT_POST";   // 매칭: 직무지도 공고 등록·자동배정 (수요측)
+  | "DOC_INBOX"       // 문서 인박스(제출 추적)
+  | "SHEET_EXPORT";   // 출근부·일지 엑셀/CSV 내보내기 (워커 폰 포함)
 
-// STANDARD 이상 필요한 기능
+// STANDARD 이상 필요한 기능 — 공식 문서·AI
 export type StandardFeature =
+  | "AI_VOICE"          // 음성→AI 일지 (단일 무제한 / 일괄 월1회)
+  | "PDF_GENERATE"      // PDF 자동 생성
+  | "PDF_SIGN"          // 전자서명 합성
   | "SITE_MANAGER_SIGN" // 사업체담당자 모바일 사인
-  | "PAYROLL"           // 급여 자동계산
-  | "AUDIT_PACKAGE"     // 감사 대응 서류 패키지
-  | "TRAINEE_REPORT";   // 훈련생 진척도 리포트
+  | "TRAINEE_REPORT"    // 훈련생 진척도 리포트
+  | "AUDIT_PACKAGE";    // 감사 대응 서류 패키지
 
-// PRO 에서만 가능한 기능
+// PRO 에서만 가능한 기능 — 운영 자동화·인재
 export type ProFeature =
-  | "TALENT_SOURCING";  // 매칭: 인재풀 검색·역제안 (방향 B, 프리미엄 소싱)
+  | "PAYROLL"           // 급여 자동계산
+  | "CONTRACT_ONLINE"   // 전자 근로계약서
+  | "RECRUIT_POST"      // 매칭: 직무지도 공고 등록·자동배정 (수요측)
+  | "TALENT_SOURCING";  // 매칭: 인재풀 검색·역제안 (프리미엄 소싱)
 
 export type PremiumFeature = StarterFeature | StandardFeature | ProFeature;
 
 const STANDARD_FEATURES = new Set<PremiumFeature>([
+  "AI_VOICE",
+  "PDF_GENERATE",
+  "PDF_SIGN",
   "SITE_MANAGER_SIGN",
-  "PAYROLL",
-  "AUDIT_PACKAGE",
   "TRAINEE_REPORT",
+  "AUDIT_PACKAGE",
 ]);
 
 const PRO_FEATURES = new Set<PremiumFeature>([
+  "PAYROLL",
+  "CONTRACT_ONLINE",
+  "RECRUIT_POST",
   "TALENT_SOURCING",
 ]);
 

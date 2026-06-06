@@ -20,10 +20,9 @@ const PLANS = [
     id: "STARTER", name: "스타터", price: 49000,
     features: [
       "직무지도원·현장 무제한",
-      "AI 음성 일지(단일·일괄)",
-      "PDF 자동 생성·전자서명",
-      "온라인 계약서·문서 인박스",
-      "매칭: 직무지도 공고 등록·자동 배정",
+      "출근부·일지 엑셀·CSV 내보내기",
+      "문서 인박스(제출 추적)",
+      "기록 보관 1년",
     ],
     recommended: false,
   },
@@ -31,10 +30,10 @@ const PLANS = [
     id: "STANDARD", name: "스탠다드", price: 99000,
     features: [
       "스타터 모든 기능",
+      "PDF 자동 생성·전자서명",
       "사업체담당자 모바일 서명",
-      "급여 자동계산",
-      "감사 대응 서류 패키지",
-      "훈련생 진척도 리포트",
+      "AI 음성 일지(단일·일괄 월 1회)",
+      "훈련생 진척도 리포트·감사 패키지",
     ],
     recommended: true,
   },
@@ -42,9 +41,10 @@ const PLANS = [
     id: "PRO", name: "프로", price: 199000,
     features: [
       "스탠다드 모든 기능",
-      "매칭: 인재풀 검색·역제안(소싱)",
-      "전담 고객 지원·맞춤 온보딩",
-      "맞춤 기능 개발 협의",
+      "급여 자동계산",
+      "전자 근로계약서",
+      "매칭: 공고 자동배정 + 인재풀 소싱",
+      "전담 지원·맞춤 온보딩",
     ],
     recommended: false,
   },
@@ -155,7 +155,7 @@ export default function SubscriptionPage() {
                 <div className="mt-4 flex items-start gap-2 rounded-xl bg-sky-50 p-3">
                   <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-500" />
                   <p className="text-xs font-semibold leading-relaxed text-sky-700">
-                    구독하시면 AI 일지·PDF·전자서명·온라인 계약·매칭 공고 등 유료 기능을 사용할 수 있어요.
+                    구독하시면 엑셀 내보내기·PDF·전자서명·AI 일지·급여·전자계약·매칭 등 유료 기능을 사용할 수 있어요.
                   </p>
                 </div>
               )}

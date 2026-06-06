@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 
-// 필요 플랜(생략 = FREE). planGuard.ts 기능 경계 기준:
-//  - 근로계약서(CONTRACT_ONLINE)·문서 운영/조회(DOC_INBOX/PDF) = STARTER
-//  - 진척도 리포트(TRAINEE_REPORT)·급여(PAYROLL) = STANDARD
+// 필요 플랜(생략 = FREE). planGuard.ts 기능 경계 기준(2026-06-06 재배치):
+//  - 문서 인박스(DOC_INBOX) = STARTER
+//  - 진척도 리포트(TRAINEE_REPORT) = STANDARD
+//  - 근로계약서(CONTRACT_ONLINE)·급여(PAYROLL) = PRO
 //  - (PRO 전용 매칭/인재풀은 아직 네비 미연결)
 type PlanTier = "STARTER" | "STANDARD" | "PRO";
 type NavItem  = { href: string; label: string; plan?: PlanTier };
@@ -57,7 +58,7 @@ const groups: NavGroup[] = [
       { href: "/manager/review",        label: "출근부·일지 확정" },
       { href: "/manager/announcements", label: "공지 게시판" },
       { href: "/manager/notices",       label: "알림 발송(개별)" },
-      { href: "/manager/contracts",     label: "근로계약서", plan: "STARTER" },
+      { href: "/manager/contracts",     label: "근로계약서", plan: "PRO" },
       { href: "/manager/documents",     label: "문서 발송·제출 관리", plan: "STARTER" },
       { href: "/manager/docs",          label: "제출 문서 조회",      plan: "STARTER" },
       { href: "/manager/reports",       label: "훈련생 진척도 리포트", plan: "STANDARD" },
@@ -67,7 +68,7 @@ const groups: NavGroup[] = [
     title: "정산",
     items: [
       { href: "/manager/signature", label: "내 서명" },
-      { href: "/manager/payroll",   label: "급여 관리", plan: "STANDARD" },
+      { href: "/manager/payroll",   label: "급여 관리", plan: "PRO" },
     ],
   },
   {

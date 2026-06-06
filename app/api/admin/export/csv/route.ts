@@ -22,11 +22,10 @@ function isDateOnly(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
-function retentionMonths(plan: string): number | null {
-  if (plan === "FREE" || plan === "TRIAL") return 1;
-  if (plan === "STARTER") return 12;
-  if (plan === "STANDARD") return 36;
-  return null; // PRO = 무제한
+// 2026-06-06: 보관 1년 통일. FREE만 강한 체험판으로 1개월. 1년 경과분은 운영자 백업이 보관(고객 노출 X).
+function retentionMonths(plan: string): number {
+  if (plan === "FREE") return 1; // 강한 체험판
+  return 12;                     // TRIAL·STARTER·STANDARD·PRO = 1년
 }
 
 function escapeCsv(val: unknown): string {
