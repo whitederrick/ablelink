@@ -68,8 +68,9 @@ export async function PATCH(
 
     await prisma.worker.update({ where: { id: workerId }, data: updates });
 
-    // 임시 비밀번호는 응답에 포함하지 않음 — SMS/카카오 알림으로만 전달
-    return NextResponse.json({ success: true, passwordReset: !!tempPassword });
+    // 임시 비밀번호는 화면에 표시 → 매니저가 직무지도원에게 직접 안내(외부 발송 0건, 무료).
+    // 고령 사용자 비번 분실이 잦아 SMS 건당 과금을 피하기 위한 주 동선.
+    return NextResponse.json({ success: true, passwordReset: !!tempPassword, tempPassword });
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[admin workers PATCH]", e);

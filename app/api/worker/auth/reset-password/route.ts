@@ -1,5 +1,6 @@
 // app/api/worker/auth/reset-password/route.ts
-// 비밀번호 찾기: 전화번호 → SMS / 이메일 → SES 임시 비밀번호 발송
+// 비밀번호 찾기: 전화번호 → 알림톡(SMS 대비 저가) / 이메일 → SES 임시 비밀번호 발송
+// 비용 정책: 알림톡 실패 시 SMS 자동 폴백 금지(비용). 미설정 시 발송 보류 → 소속 기관 문의 동선.
 
 export const runtime = "nodejs";
 
@@ -7,9 +8,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
-import { sendSms, isSmsReady } from "@/lib/sms";
+import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
 import { sendSimpleEmail } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rateLimit";
+
+const RESET_PW_TEMPLATE = "KAKAO_RESET_PW_TEMPLATE_CODE";
 
 function generateTempPassword(): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -78,13 +81,19 @@ export async function POST(req: NextRequest) {
       } catch (e: any) {
         console.error("[reset-password] 이메일 발송 실패:", e?.message);
       }
-    } else if (isSmsReady()) {
-      await sendSms({
+    } else if (isAlimtalkReady(RESET_PW_TEMPLATE)) {
+      const appUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";
+      await sendAlimtalk({
         phone: user.phoneNumber,
-        message: `[AbleLink] 임시 비밀번호: ${tempPw}\n로그인 후 반드시 변경해주세요.`,
+        name: user.workerName || "",
+        templateCode: process.env[RESET_PW_TEMPLATE]!,
+        subject: "AbleLink 임시 비밀번호 안내",
+        message: `안녕하세요 ${user.workerName || ""}님,\n\n요청하신 임시 비밀번호를 안내드립니다.\n\n임시 비밀번호: ${tempPw}\n\n로그인 후 반드시 비밀번호를 변경해주세요.\n\n${appUrl}/worker/login`,
+        buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
       });
     } else {
-      console.warn(`[reset-password] SMS/이메일 미설정 — workerId: ${user.id} 초기화 완료`);
+      // 알림톡 미설정/이메일 없음 → 발송 보류. 소속 기관(매니저) 콘솔 초기화로 안내(무료 주 동선).
+      console.warn(`[reset-password] 알림톡 미설정 — workerId: ${user.id} 초기화 완료(발송 보류)`);
     }
 
     return NextResponse.json({ success: true, message: successMsg });

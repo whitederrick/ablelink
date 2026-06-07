@@ -104,10 +104,17 @@ export default function WorkerLoginPage() {
             계정은 에이전시 초대 또는 운영자를 통해 발급됩니다.
           </p>
 
-          <div className="flex items-center justify-center gap-2 text-sm">
-            <span className="font-semibold text-slate-500">비밀번호를 잊으셨나요?</span>
-            <Link href="/worker/reset-password" className="font-black text-slate-600">
-              비밀번호 찾기
+          <div className="space-y-1.5 text-center text-sm">
+            <p className="font-semibold text-slate-500">
+              비밀번호를 잊으셨나요?
+              <br />
+              소속 기관(담당 매니저)에 문의하시면 바로 재설정해 드립니다.
+            </p>
+            <Link
+              href="/worker/reset-password"
+              className="inline-block font-bold text-slate-400 underline underline-offset-2"
+            >
+              직접 찾기 (전화·이메일)
             </Link>
           </div>
         </form>
