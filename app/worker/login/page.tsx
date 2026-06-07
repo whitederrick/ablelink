@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Lock, Sparkles, User } from "lucide-react";
+import { ArrowRight, Lock, User } from "lucide-react";
 
 export default function WorkerLoginPage() {
   const router = useRouter();
@@ -100,15 +100,9 @@ export default function WorkerLoginPage() {
             )}
           </button>
 
-          <div className="flex items-center justify-center px-4 text-center text-sm">
-            <span className="font-semibold text-slate-400">계정은 소속 에이전시 초대 또는 시스템 운영자를 통해 발급됩니다.</span>
-          </div>
-
-          <Link href="/recruit/signup"
-            className="flex flex-col items-center gap-0.5 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-center no-underline transition active:scale-[0.98]">
-            <span className="text-sm font-black text-sky-700">직무지도원으로 지원하시나요?</span>
-            <span className="text-xs font-semibold text-sky-500">직무지도 매칭에서 지원하고 일자리를 찾아보세요 →</span>
-          </Link>
+          <p className="text-center text-xs font-semibold text-slate-400">
+            계정은 에이전시 초대 또는 운영자를 통해 발급됩니다.
+          </p>
 
           <div className="flex items-center justify-center gap-2 text-sm">
             <span className="font-semibold text-slate-500">비밀번호를 잊으셨나요?</span>
@@ -118,16 +112,10 @@ export default function WorkerLoginPage() {
           </div>
         </form>
 
-        {/* AI 배너 */}
-        <div className="mb-4 rounded-3xl border border-sky-100 bg-sky-50 p-4">
-          <p className="flex items-center gap-2 text-sm font-black text-sky-700">
-            <Sparkles className="h-4 w-4" aria-hidden="true" />
-            AI 기능 15일 무료 체험
-          </p>
-          <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-            음성 일지 작성, PDF 자동 생성 등 PREMIUM 기능을 무료로 경험해보세요.
-          </p>
-        </div>
+        {/* AI 배너 — 1줄 홍보 */}
+        <p className="mb-4 rounded-3xl border border-sky-100 bg-sky-50 px-4 py-3 text-center text-xs font-semibold text-sky-700">
+          AI 기반 음성 일지 작성, PDF 자동 생성 등의 서비스가 제공됩니다.
+        </p>
       </section>
     </main>
   );

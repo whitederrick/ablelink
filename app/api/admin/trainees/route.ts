@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { MAX_TRAINEES_PER_WORKER } from "@/lib/rules";
 
 export async function GET(req: NextRequest) {
   try {
@@ -62,6 +63,17 @@ export async function POST(req: NextRequest) {
     const site = await prisma.site.findUnique({ where: { id: BigInt(siteId) } });
     if (!site || site.agencyId !== agencyId)
       return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
+
+    // 직무지도원 1명당(=현장당) 활성 훈련생 한도 (lib/rules.ts, 현재 5명·향후 조정 가능)
+    const activeTrainees = await prisma.trainee.count({
+      where: { currentSiteId: BigInt(siteId), status: "TRAINING" },
+    });
+    if (activeTrainees >= MAX_TRAINEES_PER_WORKER) {
+      return NextResponse.json(
+        { success: false, message: `직무지도원 1명당 훈련생은 최대 ${MAX_TRAINEES_PER_WORKER}명까지 배정할 수 있습니다.` },
+        { status: 400 }
+      );
+    }
 
     const trainee = await prisma.trainee.create({
       data: {
