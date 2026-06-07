@@ -65,6 +65,12 @@ export default function ResetPasswordPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* 가장 빠른 방법 안내 — 소속 기관(매니저) 문의 */}
+            <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs font-semibold text-sky-700">
+              가장 빠른 방법은 <b>소속 기관(담당 매니저)에 문의</b>하는 것입니다. 매니저가 바로
+              임시 비밀번호를 재설정해 안내해 드립니다. 아래는 직접 받기 방법입니다.
+            </div>
+
             {/* 방법 선택 탭 */}
             <div className="flex rounded-2xl border border-slate-200 bg-white p-1">
               {[
@@ -83,7 +89,7 @@ export default function ResetPasswordPage() {
 
             <p className="text-sm font-semibold text-slate-500">
               {mode === "phone"
-                ? "가입 시 등록한 전화번호로 임시 비밀번호를 SMS 발송합니다."
+                ? "가입 시 등록한 전화번호로 임시 비밀번호를 알림톡으로 발송합니다."
                 : "아이디로 사용 중인 이메일로 임시 비밀번호를 발송합니다."}
             </p>
 
