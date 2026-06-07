@@ -12,6 +12,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from "react";
+import PageHeader from "../../_components/PageHeader";
 
 type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
 type IssueFilter = IssueType | "ALL";
@@ -542,10 +543,10 @@ export default function AttendanceInboxClient() {
   return (
     <div className="pb-6">
       {/* ===== Header ===== */}
-      <div className="mb-5 flex items-baseline gap-3">
-        <div className="text-lg font-black text-slate-900" style={{letterSpacing:"-0.3px"}}>근태 인박스</div>
-        <div className="text-sm font-semibold text-slate-400">※ 근태 관련 이슈를 파악하고, 근태 이슈 발생 사유를 확인합니다.</div>
-      </div>
+      <PageHeader
+        title="근태 이슈 확인"
+        sub="근태 관련 이슈를 파악하고, 근태 이슈 발생 사유를 확인합니다."
+      />
 
       {/* ===== Top Filter Bar (시안 구조) ===== */}
       <div className="mb-5 rounded-xl border border-slate-100 bg-white p-4">
@@ -593,7 +594,7 @@ export default function AttendanceInboxClient() {
                   value={customFrom}
                   onChange={(e) => setCustomFrom(e.target.value)}
                   disabled={period !== "CUSTOM"}
-                  className={cx("rounded-xl border px-3 py-2 text-sm", period !== "CUSTOM" ? "opacity-40" : "")}
+                  className={cx("rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100", period !== "CUSTOM" ? "opacity-40" : "")}
                 />
                 <span className="text-slate-500">~</span>
                 <input
@@ -601,7 +602,7 @@ export default function AttendanceInboxClient() {
                   value={customTo}
                   onChange={(e) => setCustomTo(e.target.value)}
                   disabled={period !== "CUSTOM"}
-                  className={cx("rounded-xl border px-3 py-2 text-sm", period !== "CUSTOM" ? "opacity-40" : "")}
+                  className={cx("rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100", period !== "CUSTOM" ? "opacity-40" : "")}
                 />
               </div>
             </div>
