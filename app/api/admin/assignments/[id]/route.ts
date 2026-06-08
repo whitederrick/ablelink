@@ -6,22 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
-
-const VALID_WORK_TYPES = ["AM", "PM", "FULL_DAY", "CUSTOM"] as const;
-type WorkType = typeof VALID_WORK_TYPES[number];
-
-// 기본 근무시간 (관리자 미설정 시)
-const DEFAULT_TIMES: Record<WorkType, { start: string; end: string }> = {
-  AM:       { start: "09:00", end: "13:00" },
-  PM:       { start: "13:00", end: "17:00" },
-  FULL_DAY: { start: "09:00", end: "18:00" },  // 점심 1H 공제 → 8H 인정
-  CUSTOM:   { start: "09:00", end: "18:00" },
-};
-
-function workTimes(wt: WorkType, customStart?: string | null, customEnd?: string | null) {
-  const def = DEFAULT_TIMES[wt];
-  return { start: customStart ?? def.start, end: customEnd ?? def.end };
-}
+import { VALID_WORK_TYPES, type WorkType, computeWorkTimes } from "@/lib/workSchedule";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -78,7 +63,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       },
     });
 
-    const times = workTimes(workType, customWorkStart, customWorkEnd);
+    const times = computeWorkTimes(workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd);
 
     return NextResponse.json({
       success: true,

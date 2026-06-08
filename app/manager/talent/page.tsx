@@ -24,6 +24,8 @@ export default function ManagerTalentPage() {
   const [offerMsg, setOfferMsg] = useState("");
   const [offerSite, setOfferSite] = useState("");
   const [offerSiteId, setOfferSiteId] = useState("");
+  const [offerStart, setOfferStart] = useState("");
+  const [offerEnd, setOfferEnd] = useState("");
   const [sites, setSites] = useState<{ id: string; companyName: string; agencyName: string | null }[]>([]);
   const [sending, setSending] = useState(false);
 
@@ -55,14 +57,16 @@ export default function ManagerTalentPage() {
 
   async function sendOffer() {
     if (!offerTo) return;
+    if (!offerStart || !offerEnd) { alert("직무지도 기간(시작일·종료일)을 입력해주세요."); return; }
+    if (offerStart > offerEnd) { alert("직무지도 시작일이 종료일보다 늦습니다."); return; }
     setSending(true);
     try {
       const r = await fetch("/api/admin/talent/offer", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workerId: offerTo.id, siteName: offerSite.trim() || undefined, siteId: offerSiteId || undefined, message: offerMsg.trim() || undefined }),
+        body: JSON.stringify({ workerId: offerTo.id, siteName: offerSite.trim() || undefined, siteId: offerSiteId || undefined, message: offerMsg.trim() || undefined, serviceStart: offerStart, serviceEnd: offerEnd }),
       });
       const d = await r.json();
-      if (d.success) { alert("제안을 보냈습니다."); setOfferTo(null); setOfferMsg(""); setOfferSite(""); setOfferSiteId(""); }
+      if (d.success) { alert("제안을 보냈습니다."); setOfferTo(null); setOfferMsg(""); setOfferSite(""); setOfferSiteId(""); setOfferStart(""); setOfferEnd(""); }
       else alert(d.message || "제안 전송에 실패했습니다.");
     } finally { setSending(false); }
   }
@@ -126,6 +130,12 @@ export default function ManagerTalentPage() {
               ))}
             </select>
             <input value={offerSite} onChange={(e) => setOfferSite(e.target.value)} placeholder="제안 현장/사업체명 (선택, 텍스트)" className={`mt-2 w-full ${T.input}`} />
+            <label className="mt-3 block text-xs font-bold text-slate-500">직무지도 기간 * — 일정 겹침 판정 기준</label>
+            <div className="mt-1 flex items-center gap-2">
+              <input type="date" value={offerStart} onChange={(e) => setOfferStart(e.target.value)} className={`w-full ${T.input}`} />
+              <span className="text-slate-400">~</span>
+              <input type="date" value={offerEnd} min={offerStart || undefined} onChange={(e) => setOfferEnd(e.target.value)} className={`w-full ${T.input}`} />
+            </div>
             <textarea value={offerMsg} onChange={(e) => setOfferMsg(e.target.value)} rows={4} placeholder="제안 메시지 (근무 조건, 연락 방법 등)" className="mt-2 w-full rounded-xl border border-slate-200 p-3 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" />
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setOfferTo(null)} className={T.btnSecondary}>취소</button>

@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
+import { computeWorkTimes, kstWallTimeToInstant } from "@/lib/workSchedule";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 
 /**
@@ -199,6 +200,16 @@ export async function POST(request: NextRequest) {
         ? true
         : Boolean(isGpsModified);
 
+    // ✅ 출근 시각은 "실제 버튼 누른 시각"이 아니라 근무형태별 표준 시작시각으로 고정 저장한다.
+    //    (출근부에 입력되는 값은 근무형태로 이미 정해져 있음 — 2026-06-08 정책)
+    const workTimes = computeWorkTimes(
+      assignment.workType,
+      assignment.commuteGuidanceIncluded,
+      assignment.customWorkStart,
+      assignment.customWorkEnd,
+    );
+    const fixedStart = kstWallTimeToInstant(todayString, workTimes.start);
+
     // [STEP 5] 출근 기록 저장 (증빙 필드 포함)
     const newAttendance = await prisma.dailyAttendance.create({
       data: {
@@ -208,7 +219,7 @@ export async function POST(request: NextRequest) {
         basePointId: decidedBasePointId,          // ✅ 증빙(없을 수 있음)
         workDate: todayString,
 
-        startTime: new Date(),
+        startTime: fixedStart,
         startLocLat: Number(latitude),
         startLocLon: Number(longitude),
 

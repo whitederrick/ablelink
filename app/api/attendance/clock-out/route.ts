@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
+import { computeWorkTimes, kstWallTimeToInstant } from "@/lib/workSchedule";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 
 /**
@@ -99,7 +100,18 @@ export async function POST(request: NextRequest) {
         workDate: todayString,
         status: action === "CLOCK_OUT" ? "WORKING" : "DONE",
       },
-      include: { site: true },
+      include: {
+        site: true,
+        // ✅ 퇴근 시각도 근무형태별 표준 종료시각으로 고정 저장하기 위해 배정 정보 포함
+        assignment: {
+          select: {
+            workType: true,
+            commuteGuidanceIncluded: true,
+            customWorkStart: true,
+            customWorkEnd: true,
+          },
+        },
+      },
     });
 
     if (!attendance) {
@@ -284,8 +296,17 @@ export async function POST(request: NextRequest) {
         } as any,
       });
     } else {
+      // ✅ 퇴근 시각은 "실제 버튼 누른 시각"이 아니라 근무형태별 표준 종료시각으로 고정 저장한다.
+      const workTimes = computeWorkTimes(
+        attendance.assignment?.workType,
+        attendance.assignment?.commuteGuidanceIncluded ?? true,
+        attendance.assignment?.customWorkStart,
+        attendance.assignment?.customWorkEnd,
+      );
+      const fixedEnd = kstWallTimeToInstant(attendance.workDate, workTimes.end);
+
       const baseUpdateData: any = {
-        endTime: new Date(),
+        endTime: fixedEnd,
         endLocLat: Number(latitude),
         endLocLon: Number(longitude),
         status: "DONE",

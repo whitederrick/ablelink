@@ -41,6 +41,16 @@ export async function POST(req: NextRequest) {
     // 매칭은 직무지도원 직종만 운영 — 서버에서 강제.
     const profession = "JOB_COACH";
 
+    // 직무지도 기간(겹침 판정·자동배정 기간 기준) — 입력 필수, 시작 ≤ 종료.
+    const serviceStart = b.serviceStart ? new Date(b.serviceStart) : null;
+    const serviceEnd = b.serviceEnd ? new Date(b.serviceEnd) : null;
+    if (!serviceStart || isNaN(serviceStart.getTime()) || !serviceEnd || isNaN(serviceEnd.getTime())) {
+      return NextResponse.json({ success: false, message: "직무지도 기간(시작일·종료일)을 입력해주세요." }, { status: 400 });
+    }
+    if (serviceStart > serviceEnd) {
+      return NextResponse.json({ success: false, message: "직무지도 시작일이 종료일보다 늦습니다." }, { status: 400 });
+    }
+
     // 선택: 실제 현장 연결(수락 시 자동 배정). manager는 본인 agency 소속 활성 사이트만.
     let siteId: bigint | null = null;
     if (b.siteId != null && String(b.siteId).trim() !== "") {
@@ -64,6 +74,8 @@ export async function POST(req: NextRequest) {
         siteName: b.siteName?.trim() || null,
         siteId,
         message: b.message?.trim() || null,
+        serviceStart,
+        serviceEnd,
         status: "PENDING",
       },
     });

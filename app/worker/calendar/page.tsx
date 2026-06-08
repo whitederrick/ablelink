@@ -133,6 +133,13 @@ export default function CalendarPage() {
   const [newHolidayReason, setNewHolidayReason] = useState("");
   const [savingHoliday, setSavingHoliday] = useState(false);
 
+  // 출근부 일괄 생성 시트 (출퇴근 버튼 없이 — 시프티 병행 편의 기능)
+  const [bulkSheet, setBulkSheet] = useState(false);
+  const [bulkFrom, setBulkFrom] = useState("");
+  const [bulkTo, setBulkTo] = useState("");
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
+
   const fetchCalendar = useCallback(async () => {
     setLoading(true);
     try {
@@ -151,10 +158,15 @@ export default function CalendarPage() {
     fetchPendingRequests();
   }, [fetchCalendar]);
 
-  // 월 이동 시 기본 휴무일 날짜 초기화
+  // 월 이동 시 기본 휴무일 날짜 / 일괄생성 기간 초기화
   useEffect(() => {
     const padded = String(month).padStart(2, "0");
     setNewHolidayDate(`${year}-${padded}-01`);
+    // 일괄생성 기본 기간: 해당 월 1일 ~ 말일 (서버가 미래일은 자동 제외)
+    const lastDay = new Date(year, month, 0).getDate();
+    setBulkFrom(`${year}-${padded}-01`);
+    setBulkTo(`${year}-${padded}-${String(lastDay).padStart(2, "0")}`);
+    setBulkResult(null);
   }, [year, month]);
 
   function prevMonth() {
@@ -202,6 +214,34 @@ export default function CalendarPage() {
     }
   }
 
+  async function runBulkGenerate() {
+    if (!bulkFrom || !bulkTo) return;
+    setBulkLoading(true);
+    setBulkResult(null);
+    try {
+      const res = await fetch("/api/worker/attendance/bulk-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: bulkFrom, to: bulkTo }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        const s = d.skipped ?? {};
+        const skippedTotal = (s.weekend ?? 0) + (s.krHoliday ?? 0) + (s.customHoliday ?? 0) + (s.existing ?? 0);
+        setBulkResult(
+          `${d.message}${skippedTotal > 0 ? ` (제외: 주말 ${s.weekend ?? 0} · 공휴일 ${s.krHoliday ?? 0} · 휴무 ${s.customHoliday ?? 0} · 기존 ${s.existing ?? 0})` : ""}`,
+        );
+        fetchCalendar();
+      } else {
+        setBulkResult(d.message || "생성 실패");
+      }
+    } catch {
+      setBulkResult("서버 오류");
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
   const firstDay = new Date(year, month - 1, 1).getDay();
   const lastDate = new Date(year, month, 0).getDate();
   const cells: (number | null)[] = [
@@ -243,6 +283,17 @@ export default function CalendarPage() {
             {data.siteName}
           </p>
         )}
+
+        {/* 출퇴근 없이 출근부 일괄 생성 (시프티 병행 편의 기능) */}
+        <div className="px-4 pt-3">
+          <button
+            onClick={() => { setBulkResult(null); setBulkSheet(true); }}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 py-3 text-sm font-black text-sky-700 transition active:scale-[0.98]"
+          >
+            <CalendarDays className="h-4 w-4" aria-hidden="true" />
+            출퇴근 없이 출근부 일괄 작성
+          </button>
+        </div>
 
         {/* 에이전시 휴무일 변경 요청 배너 */}
         {pendingReqs.length > 0 && (
@@ -624,6 +675,78 @@ export default function CalendarPage() {
                 className="w-full rounded-2xl bg-slate-950 py-4 text-sm font-black text-white transition active:scale-[0.97] disabled:opacity-50"
               >
                 {savingHoliday ? "등록 중..." : "휴무일 등록"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 출근부 일괄 생성 시트 */}
+      {bulkSheet && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50"
+          onClick={() => setBulkSheet(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-white px-5 pb-10 pt-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center justify-between">
+              <span className="text-lg font-black text-slate-900">출근부 일괄 작성</span>
+              <button
+                onClick={() => setBulkSheet(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <p className="mb-4 text-sm font-semibold text-slate-400">
+              출퇴근 버튼을 누르지 않아도, 기간을 지정하면 근무형태에 맞는 출퇴근 시각으로 출근부가 자동 작성됩니다.
+              <span className="font-black text-slate-600"> 주말 · 공휴일 · 등록된 현장 휴무일</span>은 자동 제외되며, 이미 작성된 날은 건너뜁니다.
+            </p>
+
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-xs font-black text-slate-600">시작일</label>
+                  <input
+                    type="date"
+                    value={bulkFrom}
+                    onChange={e => { setBulkFrom(e.target.value); setBulkResult(null); }}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-xs font-black text-slate-600">종료일</label>
+                  <input
+                    type="date"
+                    value={bulkTo}
+                    onChange={e => { setBulkTo(e.target.value); setBulkResult(null); }}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+                <p className="text-[12px] font-semibold text-amber-700">
+                  먼저 <span className="font-black">현장 휴무일</span>을 등록한 뒤 일괄 작성하면 휴무일이 정확히 제외됩니다.
+                  미래 날짜는 자동으로 제외됩니다.
+                </p>
+              </div>
+
+              {bulkResult && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                  <p className="text-[12px] font-semibold text-slate-600">{bulkResult}</p>
+                </div>
+              )}
+
+              <button
+                onClick={runBulkGenerate}
+                disabled={bulkLoading || !bulkFrom || !bulkTo}
+                className="w-full rounded-2xl bg-slate-950 py-4 text-sm font-black text-white transition active:scale-[0.97] disabled:opacity-50"
+              >
+                {bulkLoading ? "작성 중..." : "출근부 일괄 작성"}
               </button>
             </div>
           </div>

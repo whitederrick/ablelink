@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { computeWorkTimes } from "@/lib/workSchedule";
 
 type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
 type InboxStatus =
@@ -13,19 +14,34 @@ type InboxStatus =
   | "WORKER_REPLIED"
   | "ADMIN_RESOLVED";
 
-function getWorkTypeDefaultExpectedStartMin(workType: string | null | undefined): number | null {
-  if (!workType) return null;
-  const t = workType.toUpperCase();
-  if (t === "PM") return 13 * 60;
-  if (t === "AM" || t === "FULL_DAY") return 9 * 60;
-  return null;
+function hhmmToMin(hhmm: string | null | undefined): number | null {
+  if (!hhmm) return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
 }
 
-function isoToLocalMin(iso: string | null | undefined): number | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.getHours() * 60 + d.getMinutes();
+// 근무형태별 표준 출근시각(HH:MM) — 단일 출처(lib/workSchedule)에서 계산
+function getExpectedStartHHMM(row: {
+  workType: string | null;
+  commuteGuidanceIncluded: boolean | null;
+  customWorkStart: string | null;
+  customWorkEnd: string | null;
+}): string | null {
+  if (!row.workType) return null;
+  return computeWorkTimes(
+    row.workType,
+    row.commuteGuidanceIncluded ?? true,
+    row.customWorkStart,
+    row.customWorkEnd,
+  ).start;
+}
+
+// 저장된 instant(UTC) → KST 벽시계 분(0~1439). 서버가 UTC 이므로 +9h 후 UTC 필드로 환산.
+function instantToKstMin(d: Date | null | undefined): number | null {
+  if (!d || Number.isNaN(d.getTime())) return null;
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return kst.getUTCHours() * 60 + kst.getUTCMinutes();
 }
 
 function deriveIssueTypes(row: {
@@ -34,6 +50,9 @@ function deriveIssueTypes(row: {
   startDistanceM: number | null;
   rangeM: number | null;
   workType: string | null;
+  commuteGuidanceIncluded: boolean | null;
+  customWorkStart: string | null;
+  customWorkEnd: string | null;
 }): IssueType[] {
   const out: IssueType[] = [];
 
@@ -44,8 +63,10 @@ function deriveIssueTypes(row: {
     out.push("OUT_OF_RANGE");
   }
 
-  const expectedStartMin = getWorkTypeDefaultExpectedStartMin(row.workType);
-  const actualStartMin = row.startTime ? isoToLocalMin(row.startTime.toISOString()) : null;
+  // ✅ 출근 시각은 근무형태별 표준값으로 고정 저장되므로 일치하면 이상 없음.
+  //    관리자 수동수정 등으로 표준과 벗어난 경우에만 이상 표시(KST 기준 비교).
+  const expectedStartMin = hhmmToMin(getExpectedStartHHMM(row));
+  const actualStartMin = instantToKstMin(row.startTime);
   if (expectedStartMin != null && actualStartMin != null) {
     const diff = actualStartMin - expectedStartMin;
     if (diff >= 1 || diff <= -60) out.push("TIME_ANOMALY");
@@ -116,7 +137,15 @@ export async function GET(req: Request) {
         user: { select: { id: true, workerName: true } },
         site: { select: { id: true, companyName: true } },
         // ✅ workType은 Site가 아닌 SiteAssignment에 있음
-        assignment: { select: { id: true, workType: true } },
+        assignment: {
+          select: {
+            id: true,
+            workType: true,
+            commuteGuidanceIncluded: true,
+            customWorkStart: true,
+            customWorkEnd: true,
+          },
+        },
         attendanceIssue: {
           select: {
             status: true,
@@ -134,6 +163,15 @@ export async function GET(req: Request) {
 
     for (const r of rows) {
       const workType = r.assignment?.workType ?? null;
+      const commuteGuidanceIncluded = r.assignment?.commuteGuidanceIncluded ?? true;
+      const customWorkStart = r.assignment?.customWorkStart ?? null;
+      const customWorkEnd = r.assignment?.customWorkEnd ?? null;
+      const expectedStartAt = getExpectedStartHHMM({
+        workType,
+        commuteGuidanceIncluded,
+        customWorkStart,
+        customWorkEnd,
+      });
 
       const derived = deriveIssueTypes({
         startTime: r.startTime,
@@ -141,6 +179,9 @@ export async function GET(req: Request) {
         startDistanceM: r.startDistanceM ?? null,
         rangeM: r.rangeM ?? null,
         workType,
+        commuteGuidanceIncluded,
+        customWorkStart,
+        customWorkEnd,
       });
 
       if (derived.length === 0) continue;
@@ -206,7 +247,7 @@ export async function GET(req: Request) {
         issueTypes: (upserted.issueTypes as any) as IssueType[],
         status: inboxStatus,
         workType,
-        expectedStartAt: null,
+        expectedStartAt,
         clockInAt: r.startTime ? r.startTime.toISOString() : null,
         clockOutAt: r.endTime ? r.endTime.toISOString() : null,
         rangeM: r.rangeM ?? null,

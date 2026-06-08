@@ -1717,6 +1717,9 @@ model TalentOffer {
   // 제안 시 연결한 실제 현장(선택). 후보자 수락 시 이 현장으로 자동 배정(방향 B).
   siteId             BigInt?           @map("site_id")
   message            String?
+  // 직무지도 기간(겹침 판정·자동배정 기간 기준). DB는 nullable(하위호환), 신규 제안은 API/UI에서 입력 필수.
+  serviceStart       DateTime?         @map("service_start") // 직무지도 시작일
+  serviceEnd         DateTime?         @map("service_end")   // 직무지도 종료일
   status             TalentOfferStatus @default(PENDING)
   decidedAt          DateTime?         @map("decided_at")
   createdAt          DateTime          @default(now()) @map("created_at")
