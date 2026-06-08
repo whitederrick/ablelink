@@ -30,6 +30,7 @@ export default function AdminSiteNewPage() {
     gpsLon: "",
     businessContactName: "",
     businessContactPhone: "",
+    businessContactEmail: "",
   });
   const [allowanceRange, setAllowanceRange] = useState(100);
   const [requiredProfession, setRequiredProfession] = useState<string>("JOB_COACH");
@@ -111,6 +112,7 @@ export default function AdminSiteNewPage() {
         allowanceRange,
         businessContactName: form.businessContactName.trim(),
         businessContactPhone: form.businessContactPhone.trim(),
+        businessContactEmail: form.businessContactEmail.trim() || null,
         requiredProfession,
       };
       if (isAdmin) payload.agencyId = agencyId;
@@ -283,6 +285,15 @@ export default function AdminSiteNewPage() {
                 onChange={(e) => setForm((p) => ({ ...p, businessContactPhone: e.target.value }))}
                 className={`w-full ${T.input}`}
                 placeholder="010-0000-0000"
+              />
+            </div>
+            <div>
+              <label className={T.label}>담당자 이메일 (선택)</label>
+              <input
+                value={form.businessContactEmail}
+                onChange={(e) => setForm((p) => ({ ...p, businessContactEmail: e.target.value }))}
+                className={`w-full ${T.input}`}
+                placeholder="문서 이메일 발송 시 사용 (선택)"
               />
             </div>
           </div>

@@ -32,6 +32,10 @@ function toRow(r: any) {
     agencyId: r.agencyId != null ? String(r.agencyId) : null,
     agencyName: r.agency?.name ?? null,
 
+    // ✅ 담당 관리자(Manager 로그인). null = 미지정(공용)
+    ownerManagerId: r.ownerManagerId != null ? String(r.ownerManagerId) : null,
+    ownerManagerName: r.ownerManager?.displayName ?? r.ownerManager?.loginId ?? null,
+
     // 레거시(에이전시측 연락처)
     managerId: r.managerId != null ? String(r.managerId) : null,
     managerName: r.agencyManager?.name ?? null,
@@ -41,6 +45,7 @@ function toRow(r: any) {
     // ✅ 사업체 담당자(현장 연락 담당자)
     businessContactName: r.businessContactName ?? null,
     businessContactPhone: r.businessContactPhone ?? null,
+    businessContactEmail: r.businessContactEmail ?? null,
 
     requiredProfession: r.requiredProfession ?? null,
 
@@ -84,8 +89,10 @@ export async function GET(
         gpsLon: true,
         agencyId: true,
         managerId: true,
+        ownerManagerId: true,
         businessContactName: true,
         businessContactPhone: true,
+        businessContactEmail: true,
         requiredProfession: true,
         basePointConfirmed: true,
         basePointAuthority: true,
@@ -94,6 +101,7 @@ export async function GET(
         isActive: true,
         createdAt: true,
         agency: { select: { id: true, name: true } },
+        ownerManager: { select: { id: true, displayName: true, loginId: true } },
         agencyManager: { select: { id: true, name: true, email: true, phoneNumber: true } },
       },
     });
@@ -151,6 +159,8 @@ export async function PATCH(
       body.businessContactName == null ? undefined : String(body.businessContactName).trim();
     const businessContactPhone =
       body.businessContactPhone == null ? undefined : String(body.businessContactPhone).trim();
+    const businessContactEmail =
+      body.businessContactEmail == null ? undefined : String(body.businessContactEmail).trim();
 
     const data: Prisma.SiteUpdateInput = {};
 
@@ -161,6 +171,9 @@ export async function PATCH(
     if (businessContactPhone !== undefined) {
       if (!businessContactPhone) throw new Error("VALIDATION:businessContactPhone");
       data.businessContactPhone = businessContactPhone;
+    }
+    if (businessContactEmail !== undefined) {
+      data.businessContactEmail = businessContactEmail || null;
     }
 
     if (companyName !== undefined) {
@@ -213,6 +226,25 @@ export async function PATCH(
       if (m.agencyId !== requiredAgencyId) throw new Error("FORBIDDEN");
     }
 
+    // ✅ 담당 관리자(Manager 로그인) 지정/이관/해제
+    //    null/빈값 = 미지정(공용)으로 해제, 값 있으면 같은 에이전시 관리자로 지정/이관
+    if (body.ownerManagerId !== undefined) {
+      const raw = body.ownerManagerId;
+      if (raw === null || String(raw).trim() === "") {
+        data.ownerManager = { disconnect: true };
+      } else if (String(raw).trim() === "self" && session.kind === "manager") {
+        // 목록에서 "내 담당으로 지정" — 요청 관리자 본인으로 지정
+        data.ownerManager = { connect: { id: session.managerId } };
+      } else {
+        let oid: bigint;
+        try { oid = BigInt(String(raw)); } catch { throw new Error("VALIDATION:ownerManagerId"); }
+        const m = await prisma.manager.findUnique({ where: { id: oid }, select: { agencyId: true } });
+        const requiredAgencyId = session.kind === "manager" ? session.agencyId : existing.agencyId;
+        if (!m || m.agencyId !== requiredAgencyId) throw new Error("VALIDATION:ownerManagerId");
+        data.ownerManager = { connect: { id: oid } };
+      }
+    }
+
     const updated = await prisma.site.update({
       where: { id: siteId },
       data,
@@ -225,8 +257,10 @@ export async function PATCH(
         gpsLon: true,
         agencyId: true,
         managerId: true,
+        ownerManagerId: true,
         businessContactName: true,
         businessContactPhone: true,
+        businessContactEmail: true,
         basePointConfirmed: true,
         basePointAuthority: true,
         basePointApprovalStatus: true,
@@ -234,6 +268,7 @@ export async function PATCH(
         isActive: true,
         createdAt: true,
         agency: { select: { id: true, name: true } },
+        ownerManager: { select: { id: true, displayName: true, loginId: true } },
         agencyManager: { select: { id: true, name: true, email: true, phoneNumber: true } },
       },
     });

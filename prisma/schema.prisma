@@ -149,9 +149,16 @@ model Site {
   // ⚠️ managerId(=AgencyManager, 에이전시측 연락처)는 레거시. 현장 담당자는 아래 사업체 담당자로 운영.
   managerId BigInt? @map("manager_id")
 
-  // ✅ 사업체 담당자(현장 회사의 연락 담당자) — 출근부 '사업체담당자' 서명요청에 자동 채움
+  // ✅ 담당 관리자(Manager 로그인). 같은 에이전시 안에서 관리자별로 현장을 구분.
+  //    null = 미지정(공용). 생성자 자동 지정, 변경/이관 가능.
+  ownerManagerId BigInt?  @map("owner_manager_id")
+  ownerManager   Manager? @relation("SiteOwnerManager", fields: [ownerManagerId], references: [id])
+
+  // ✅ 사업체 담당자(현장 회사의 연락 담당자) — 현장 담당자의 단일 출처.
+  //    출근부 '사업체담당자' 서명요청 자동 채움 + 문서 이메일 수신자 + 워커앱 담당자 표시에 사용.
   businessContactName  String? @map("business_contact_name")
   businessContactPhone String? @map("business_contact_phone")
+  businessContactEmail String? @map("business_contact_email")
 
   // ✅ 직무/사이트 pool 매칭 속성
   businessType       String?     @map("business_type") // 사업 유형 (제조/서비스/유통 등)
@@ -508,6 +515,7 @@ model Manager {
   agency Agency @relation(fields: [agencyId], references: [id])
 
   assignedSiteAssignments SiteAssignment[]
+  ownedSites              Site[]                  @relation("SiteOwnerManager")
   submissionRequests      SubmissionRequest[]
   confirmedSiteBasePoints SiteBasePoint[]         @relation("ManagerConfirmedBasePoints")
   documentVersions        DocumentVersion[]

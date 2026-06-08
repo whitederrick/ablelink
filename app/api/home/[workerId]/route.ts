@@ -152,9 +152,9 @@ export async function GET(
         allowanceRange: site?.allowanceRange ?? 100,
 
         agencyName: site?.agency?.name ?? "",
-        managerName: site?.agencyManager?.name ?? "",
-        managerEmail: site?.agencyManager?.email ?? "",
-        managerPhone: site?.agencyManager?.phoneNumber ?? "",
+        managerName: site?.businessContactName ?? site?.agencyManager?.name ?? "",
+        managerEmail: site?.businessContactEmail ?? site?.agencyManager?.email ?? "",
+        managerPhone: site?.businessContactPhone ?? site?.agencyManager?.phoneNumber ?? "",
 
         // ✅ 훈련기간은 SiteAssignment.stepStart/stepEnd 기준
         preTrainingStart: (activeAssignment as any)?.stepStart ?? null,

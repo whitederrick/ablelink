@@ -47,6 +47,10 @@ function toRow(r: any) {
     agencyId: r.agencyId != null ? String(r.agencyId) : null,
     agencyName: r.agency?.name ?? null,
 
+    // ✅ 담당 관리자(Manager 로그인). null = 미지정(공용)
+    ownerManagerId: r.ownerManagerId != null ? String(r.ownerManagerId) : null,
+    ownerManagerName: r.ownerManager?.displayName ?? r.ownerManager?.loginId ?? null,
+
     // 레거시(에이전시측 연락처). 신규 화면은 businessContact* 사용.
     managerId: r.managerId != null ? String(r.managerId) : null,
     managerName: r.agencyManager?.name ?? null,
@@ -56,6 +60,7 @@ function toRow(r: any) {
     // ✅ 사업체 담당자(현장 연락 담당자)
     businessContactName: r.businessContactName ?? null,
     businessContactPhone: r.businessContactPhone ?? null,
+    businessContactEmail: r.businessContactEmail ?? null,
 
     requiredProfession: r.requiredProfession ?? null,
 
@@ -90,24 +95,30 @@ export async function GET(req: NextRequest) {
       agencyId = a ? (parseBigInt(a) ?? undefined) : undefined;
     }
 
-    const where: Prisma.SiteWhereInput = {
-      ...(typeof isActive === "boolean" ? { isActive } : {}),
-      ...(agencyId ? { agencyId } : {}),
-      ...(q
-        ? {
-            OR: [
-              { companyName: { contains: q, mode: "insensitive" } },
-              { address: { contains: q, mode: "insensitive" } },
-              { businessContactName: { contains: q, mode: "insensitive" } },
-              { businessContactPhone: { contains: q, mode: "insensitive" } },
-              { agencyManager: { is: { name: { contains: q, mode: "insensitive" } } } },
-              { agencyManager: { is: { email: { contains: q, mode: "insensitive" } } } },
-              { agencyManager: { is: { phoneNumber: { contains: q, mode: "insensitive" } } } },
-              { agency: { is: { name: { contains: q, mode: "insensitive" } } } },
-            ],
-          }
-        : {}),
-    };
+    const and: Prisma.SiteWhereInput[] = [];
+    if (typeof isActive === "boolean") and.push({ isActive });
+    if (agencyId) and.push({ agencyId });
+
+    // ✅ 관리자(로그인): 본인 담당 현장 + 미지정(공용) 현장만. 운영자(admin)는 전체.
+    if (session.kind === "manager") {
+      and.push({ OR: [{ ownerManagerId: session.managerId }, { ownerManagerId: null }] });
+    }
+
+    if (q) {
+      and.push({
+        OR: [
+          { companyName: { contains: q, mode: "insensitive" } },
+          { address: { contains: q, mode: "insensitive" } },
+          { businessContactName: { contains: q, mode: "insensitive" } },
+          { businessContactPhone: { contains: q, mode: "insensitive" } },
+          { ownerManager: { is: { displayName: { contains: q, mode: "insensitive" } } } },
+          { ownerManager: { is: { loginId: { contains: q, mode: "insensitive" } } } },
+          { agency: { is: { name: { contains: q, mode: "insensitive" } } } },
+        ],
+      });
+    }
+
+    const where: Prisma.SiteWhereInput = and.length ? { AND: and } : {};
 
     const [total, rows] = await Promise.all([
       prisma.site.count({ where }),
@@ -126,11 +137,14 @@ export async function GET(req: NextRequest) {
 
           agencyId: true,
           managerId: true,
+          ownerManagerId: true,
           businessContactName: true,
           businessContactPhone: true,
+          businessContactEmail: true,
           requiredProfession: true,
 
           agency: { select: { id: true, name: true } },
+          ownerManager: { select: { id: true, displayName: true, loginId: true } },
           agencyManager: { select: { id: true, name: true, email: true, phoneNumber: true } },
 
           basePointConfirmed: true,
@@ -175,9 +189,10 @@ export async function POST(req: NextRequest) {
     // 직종(카테고리) — 선택
     const requiredProfession = PROFESSIONS.includes(body.requiredProfession) ? body.requiredProfession : null;
 
-    // ✅ 사업체 담당자(현장 연락 담당자) — 필수
+    // ✅ 사업체 담당자(현장 연락 담당자) — 이름·연락처 필수, 이메일 선택
     const businessContactName = String(body.businessContactName ?? "").trim();
     const businessContactPhone = String(body.businessContactPhone ?? "").trim();
+    const businessContactEmail = String(body.businessContactEmail ?? "").trim() || null;
 
     if (!companyName) throw new Error("VALIDATION:companyName");
     if (!address) throw new Error("VALIDATION:address");
@@ -211,6 +226,18 @@ export async function POST(req: NextRequest) {
       await resolveManagerIdOrThrow(managerId, agencyId);
     }
 
+    // ✅ 담당 관리자(Manager 로그인): 생성한 관리자가 자동 담당. 운영자(admin)는 body.ownerManagerId 선택(없으면 미지정).
+    let ownerManagerId: bigint | null = null;
+    if (session.kind === "manager") {
+      ownerManagerId = session.managerId;
+    } else if (body.ownerManagerId != null && String(body.ownerManagerId).trim() !== "") {
+      const oid = parseBigInt(body.ownerManagerId);
+      if (!oid) throw new Error("VALIDATION:ownerManagerId");
+      const m = await prisma.manager.findUnique({ where: { id: oid }, select: { agencyId: true } });
+      if (!m || m.agencyId !== agencyId) throw new Error("VALIDATION:ownerManagerId");
+      ownerManagerId = oid;
+    }
+
     const created = await prisma.site.create({
       data: {
         companyName,
@@ -220,8 +247,10 @@ export async function POST(req: NextRequest) {
         gpsLon: new Prisma.Decimal(lonStr),
         agencyId,
         managerId,
+        ownerManagerId,
         businessContactName,
         businessContactPhone,
+        businessContactEmail,
         requiredProfession,
       },
       select: {
@@ -233,10 +262,13 @@ export async function POST(req: NextRequest) {
         gpsLon: true,
         agencyId: true,
         managerId: true,
+        ownerManagerId: true,
         businessContactName: true,
         businessContactPhone: true,
+        businessContactEmail: true,
         requiredProfession: true,
         agency: { select: { id: true, name: true } },
+        ownerManager: { select: { id: true, displayName: true, loginId: true } },
         agencyManager: { select: { id: true, name: true, email: true, phoneNumber: true } },
         basePointConfirmed: true,
         basePointAuthority: true,

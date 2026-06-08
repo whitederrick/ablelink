@@ -38,7 +38,6 @@ const groups: NavGroup[] = [
       { href: "/manager/sites",    label: "현장(Site) 관리" },
       { href: "/manager/workers",  label: "직무지도원 관리" },
       { href: "/manager/trainees", label: "훈련생 현황" },
-      { href: "/manager/managers", label: "기관 담당자 관리" },
     ],
   },
   {

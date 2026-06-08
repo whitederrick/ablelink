@@ -93,9 +93,10 @@ export async function GET(request: NextRequest) {
         workerName: user?.workerName ?? "",
         workerPhone: user?.phoneNumber ?? "",
         signatureUrl: user?.signatureUrl ?? null,
-        managerName: manager?.name ?? "",
-        managerEmail: manager?.email ?? "",
-        managerPhone: manager?.phoneNumber ?? "",
+        // 사업체 담당자(단일 출처) 우선, 없으면 레거시(AgencyManager)
+        managerName: site.businessContactName ?? manager?.name ?? "",
+        managerEmail: site.businessContactEmail ?? manager?.email ?? "",
+        managerPhone: site.businessContactPhone ?? manager?.phoneNumber ?? "",
         // 사업체 담당자(현장 연락 담당자) — 출근부 '사업체담당자' 서명 프리필용
         businessContactName: site.businessContactName ?? "",
         businessContactPhone: site.businessContactPhone ?? "",

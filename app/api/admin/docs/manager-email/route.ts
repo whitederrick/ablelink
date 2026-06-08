@@ -27,12 +27,15 @@ export async function GET(request: NextRequest) {
       orderBy: { assignedAt:"desc" },
     });
 
+    // 사업체 담당자(단일 출처) 우선, 없으면 레거시(AgencyManager)·SiteContact fallback
     const email =
+      assignment?.site?.businessContactEmail ||
       assignment?.site?.agencyManager?.email ||
       assignment?.site?.contacts?.[0]?.email ||
       null;
 
     const name =
+      assignment?.site?.businessContactName ||
       assignment?.site?.agencyManager?.name ||
       assignment?.site?.contacts?.[0]?.name ||
       null;

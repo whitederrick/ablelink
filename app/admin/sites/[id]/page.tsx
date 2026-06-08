@@ -15,9 +15,13 @@ type SiteDetail = {
   gpsLat: string;
   gpsLon: string;
   allowanceRange: number;
+  agencyId: string | null;
   agencyName: string;
   businessContactName: string | null;
   businessContactPhone: string | null;
+  businessContactEmail: string | null;
+  ownerManagerId: string | null;
+  ownerManagerName: string | null;
   requiredProfession: string | null;
   basePointConfirmed: boolean;
   basePointApprovalStatus: string;
@@ -69,6 +73,11 @@ export default function AdminSiteDetailPage() {
   // 사업체 담당자 정보(현장 연락 담당자)
   const [businessContactName, setBusinessContactName] = useState("");
   const [businessContactPhone, setBusinessContactPhone] = useState("");
+  const [businessContactEmail, setBusinessContactEmail] = useState("");
+
+  // 담당 관리자(Manager 로그인) — 지정/이관/해제
+  const [ownerManagerId, setOwnerManagerId] = useState("");
+  const [ownerManagers, setOwnerManagers] = useState<{ id: string; name: string }[]>([]);
 
   // 직무지도원 배정
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
@@ -141,6 +150,12 @@ export default function AdminSiteDetailPage() {
       if (!isPreset) setCustomRange(String(range));
       setBusinessContactName(it.businessContactName || "");
       setBusinessContactPhone(it.businessContactPhone || "");
+      setBusinessContactEmail(it.businessContactEmail || "");
+      setOwnerManagerId(it.ownerManagerId || "");
+      fetch(`/api/admin/site-owners?agencyId=${it.agencyId ?? ""}`, { cache: "no-store" })
+        .then(r => r.json())
+        .then(d => { if (d?.success) setOwnerManagers(d.managers || []); })
+        .catch(() => {});
       fetchAssignments();
       fetchWorkerOptions(it.requiredProfession);
     } catch {
@@ -178,6 +193,8 @@ export default function AdminSiteDetailPage() {
           allowanceRange: finalRange,
           businessContactName: businessContactName.trim(),
           businessContactPhone: businessContactPhone.trim(),
+          businessContactEmail: businessContactEmail.trim() || null,
+          ownerManagerId: ownerManagerId || null,
         }),
       });
       const data = await res.json();
@@ -323,7 +340,24 @@ export default function AdminSiteDetailPage() {
         <div className="space-y-3">
           <Field label="담당자 성명 *" value={businessContactName} onChange={setBusinessContactName} />
           <Field label="담당자 연락처 *" value={businessContactPhone} onChange={setBusinessContactPhone} />
+          <Field label="담당자 이메일 (선택)" value={businessContactEmail} onChange={setBusinessContactEmail} />
         </div>
+      </div>
+
+      {/* 담당 관리자(에이전시 측 관리자) — 지정/이관 */}
+      <div className={T.card}>
+        <h2 className="mb-1 text-sm font-black text-slate-900">담당 관리자</h2>
+        <p className="mb-3 text-xs font-semibold text-slate-400">이 현장을 맡는 에이전시 관리자. ‘미지정(공용)’으로 두거나 다른 관리자에게 이관할 수 있습니다.</p>
+        <select
+          value={ownerManagerId}
+          onChange={(e) => setOwnerManagerId(e.target.value)}
+          className={`w-full ${T.select ?? T.input}`}
+        >
+          <option value="">미지정 (공용)</option>
+          {ownerManagers.map((m) => (
+            <option key={m.id} value={m.id}>{m.name}</option>
+          ))}
+        </select>
       </div>
 
       {/* 직무지도원 배정 */}

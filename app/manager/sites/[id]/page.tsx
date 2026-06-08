@@ -18,6 +18,9 @@ type SiteDetail = {
   agencyName: string;
   businessContactName: string | null;
   businessContactPhone: string | null;
+  businessContactEmail: string | null;
+  ownerManagerId: string | null;
+  ownerManagerName: string | null;
   basePointConfirmed: boolean;
   basePointApprovalStatus: string;
   basePointUpdatedAt: string | null;
@@ -56,6 +59,18 @@ export default function ManagerSiteDetailPage() {
   // 사업체 담당자 정보(현장 연락 담당자)
   const [businessContactName, setBusinessContactName] = useState("");
   const [businessContactPhone, setBusinessContactPhone] = useState("");
+  const [businessContactEmail, setBusinessContactEmail] = useState("");
+
+  // 담당 관리자(Manager 로그인) — 지정/이관/해제
+  const [ownerManagerId, setOwnerManagerId] = useState("");
+  const [ownerManagers, setOwnerManagers] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/site-owners", { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => { if (d?.success) setOwnerManagers(d.managers || []); })
+      .catch(() => {});
+  }, []);
 
   async function fetchDetail() {
     setLoading(true);
@@ -77,6 +92,8 @@ export default function ManagerSiteDetailPage() {
       if (!isPreset) setCustomRange(String(range));
       setBusinessContactName(it.businessContactName || "");
       setBusinessContactPhone(it.businessContactPhone || "");
+      setBusinessContactEmail(it.businessContactEmail || "");
+      setOwnerManagerId(it.ownerManagerId || "");
     } catch {
       alert("상세 조회에 실패했습니다.");
     } finally {
@@ -112,6 +129,8 @@ export default function ManagerSiteDetailPage() {
           allowanceRange: finalRange,
           businessContactName: businessContactName.trim(),
           businessContactPhone: businessContactPhone.trim(),
+          businessContactEmail: businessContactEmail.trim() || null,
+          ownerManagerId: ownerManagerId || null,
         }),
       });
       const data = await res.json();
@@ -256,7 +275,24 @@ export default function ManagerSiteDetailPage() {
         <div className="space-y-3">
           <Field label="담당자 성명 *" value={businessContactName} onChange={setBusinessContactName} />
           <Field label="담당자 연락처 *" value={businessContactPhone} onChange={setBusinessContactPhone} />
+          <Field label="담당자 이메일 (선택)" value={businessContactEmail} onChange={setBusinessContactEmail} />
         </div>
+      </div>
+
+      {/* 담당 관리자(우리 쪽 관리자) — 지정/이관 */}
+      <div className={T.card}>
+        <h2 className="mb-1 text-sm font-black text-slate-900">담당 관리자</h2>
+        <p className="mb-3 text-xs font-semibold text-slate-400">이 현장을 맡는 우리 쪽 관리자. ‘미지정(공용)’으로 두거나 다른 관리자에게 이관할 수 있습니다.</p>
+        <select
+          value={ownerManagerId}
+          onChange={(e) => setOwnerManagerId(e.target.value)}
+          className={`w-full ${T.select ?? T.input}`}
+        >
+          <option value="">미지정 (공용)</option>
+          {ownerManagers.map((m) => (
+            <option key={m.id} value={m.id}>{m.name}</option>
+          ))}
+        </select>
       </div>
 
       {/* 저장 버튼 */}

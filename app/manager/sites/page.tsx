@@ -9,6 +9,7 @@ type SiteItem = {
   agencyName: string | null; businessContactName: string | null;
   businessContactPhone: string | null; basePointConfirmed: boolean;
   basePointApprovalStatus: string; isActive: boolean; allowanceRange?: number;
+  ownerManagerId: string | null; ownerManagerName: string | null;
 };
 
 const APPROVAL_CLS: Record<string, { label: string; cls: string }> = {
@@ -51,6 +52,19 @@ export default function AdminSitesPage() {
     if (page !== 1) setPage(1); else fetchList(1);
   }
 
+  async function claimSite(id: string) {
+    try {
+      const res = await fetch(`/api/admin/sites/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerManagerId: "self" }),
+      });
+      const d = await res.json();
+      if (!d?.success) { alert(d?.message || "지정 실패"); return; }
+      fetchList(page);
+    } catch { alert("서버 오류"); }
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -70,15 +84,15 @@ export default function AdminSitesPage() {
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
           <thead>
-            <tr>{["ID", "사업체명", "주소", "담당자", "기관", "GPS 범위", "기준점", "상태"].map(h => (
+            <tr>{["ID", "사업체명", "주소", "사업체 담당자", "담당 관리자", "기관", "GPS 범위", "기준점", "상태"].map(h => (
               <th key={h} className={T.th}>{h}</th>
             ))}</tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className={T.tdCenter}>로딩 중...</td></tr>
+              <tr><td colSpan={9} className={T.tdCenter}>로딩 중...</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={8} className={T.tdCenter}>데이터가 없습니다.</td></tr>
+              <tr><td colSpan={9} className={T.tdCenter}>데이터가 없습니다.</td></tr>
             ) : items.map(it => {
               const approval = APPROVAL_CLS[it.basePointApprovalStatus] || APPROVAL_CLS.ORIGINAL_SET;
               return (
@@ -96,6 +110,18 @@ export default function AdminSitesPage() {
                   <td className={T.td}>
                     <div className="text-slate-700">{it.businessContactName || "-"}</div>
                     {it.businessContactPhone && <div className="text-xs text-slate-400">{it.businessContactPhone}</div>}
+                  </td>
+                  <td className={T.td}>
+                    {it.ownerManagerName ? (
+                      <span className="text-sm font-semibold text-slate-700">{it.ownerManagerName}</span>
+                    ) : (
+                      <button
+                        onClick={() => claimSite(it.id)}
+                        className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-black text-sky-700 active:scale-95"
+                      >
+                        미지정 · 내 담당으로
+                      </button>
+                    )}
                   </td>
                   <td className={`${T.td} text-sm text-slate-500`}>{it.agencyName || "-"}</td>
                   <td className={`${T.td} font-black text-sky-600`}>{it.allowanceRange ?? 100}m</td>
