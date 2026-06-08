@@ -80,9 +80,9 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   const [copied,     setCopied]     = useState(false);
 
   useEffect(() => {
-    fetch("/api/admin/sites?limit=200")
+    fetch("/api/admin/sites?pageSize=100")
       .then(r => r.json())
-      .then(d => { if (d.success && Array.isArray(d.data)) setSites(d.data); })
+      .then(d => { if (d.success && Array.isArray(d.items)) setSites(d.items); })
       .catch(() => {});
   }, []);
 

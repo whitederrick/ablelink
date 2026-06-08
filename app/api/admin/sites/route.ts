@@ -47,10 +47,15 @@ function toRow(r: any) {
     agencyId: r.agencyId != null ? String(r.agencyId) : null,
     agencyName: r.agency?.name ?? null,
 
+    // 레거시(에이전시측 연락처). 신규 화면은 businessContact* 사용.
     managerId: r.managerId != null ? String(r.managerId) : null,
     managerName: r.agencyManager?.name ?? null,
     managerEmail: r.agencyManager?.email ?? null,
     managerPhone: r.agencyManager?.phoneNumber ?? null,
+
+    // ✅ 사업체 담당자(현장 연락 담당자)
+    businessContactName: r.businessContactName ?? null,
+    businessContactPhone: r.businessContactPhone ?? null,
 
     requiredProfession: r.requiredProfession ?? null,
 
@@ -93,6 +98,8 @@ export async function GET(req: NextRequest) {
             OR: [
               { companyName: { contains: q, mode: "insensitive" } },
               { address: { contains: q, mode: "insensitive" } },
+              { businessContactName: { contains: q, mode: "insensitive" } },
+              { businessContactPhone: { contains: q, mode: "insensitive" } },
               { agencyManager: { is: { name: { contains: q, mode: "insensitive" } } } },
               { agencyManager: { is: { email: { contains: q, mode: "insensitive" } } } },
               { agencyManager: { is: { phoneNumber: { contains: q, mode: "insensitive" } } } },
@@ -119,6 +126,8 @@ export async function GET(req: NextRequest) {
 
           agencyId: true,
           managerId: true,
+          businessContactName: true,
+          businessContactPhone: true,
           requiredProfession: true,
 
           agency: { select: { id: true, name: true } },
@@ -166,8 +175,14 @@ export async function POST(req: NextRequest) {
     // 직종(카테고리) — 선택
     const requiredProfession = PROFESSIONS.includes(body.requiredProfession) ? body.requiredProfession : null;
 
+    // ✅ 사업체 담당자(현장 연락 담당자) — 필수
+    const businessContactName = String(body.businessContactName ?? "").trim();
+    const businessContactPhone = String(body.businessContactPhone ?? "").trim();
+
     if (!companyName) throw new Error("VALIDATION:companyName");
     if (!address) throw new Error("VALIDATION:address");
+    if (!businessContactName) throw new Error("VALIDATION:businessContactName");
+    if (!businessContactPhone) throw new Error("VALIDATION:businessContactPhone");
 
     const latStr = String(gpsLatRaw ?? "").trim();
     const lonStr = String(gpsLonRaw ?? "").trim();
@@ -185,16 +200,16 @@ export async function POST(req: NextRequest) {
       }, { status: 403 });
     }
 
-    if (managerIdRaw == null || String(managerIdRaw).trim() === "") {
-      throw new Error("VALIDATION:managerId");
+    // 레거시 에이전시측 연락처(AgencyManager) — 선택. 보내면 검증, 없으면 null.
+    let managerId: bigint | null = null;
+    if (managerIdRaw != null && String(managerIdRaw).trim() !== "") {
+      try {
+        managerId = BigInt(String(managerIdRaw));
+      } catch {
+        throw new Error("VALIDATION:managerId");
+      }
+      await resolveManagerIdOrThrow(managerId, agencyId);
     }
-    let managerId: bigint;
-    try {
-      managerId = BigInt(String(managerIdRaw));
-    } catch {
-      throw new Error("VALIDATION:managerId");
-    }
-    await resolveManagerIdOrThrow(managerId, agencyId);
 
     const created = await prisma.site.create({
       data: {
@@ -205,6 +220,8 @@ export async function POST(req: NextRequest) {
         gpsLon: new Prisma.Decimal(lonStr),
         agencyId,
         managerId,
+        businessContactName,
+        businessContactPhone,
         requiredProfession,
       },
       select: {
@@ -216,6 +233,8 @@ export async function POST(req: NextRequest) {
         gpsLon: true,
         agencyId: true,
         managerId: true,
+        businessContactName: true,
+        businessContactPhone: true,
         requiredProfession: true,
         agency: { select: { id: true, name: true } },
         agencyManager: { select: { id: true, name: true, email: true, phoneNumber: true } },

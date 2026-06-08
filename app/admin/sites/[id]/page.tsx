@@ -16,9 +16,8 @@ type SiteDetail = {
   gpsLon: string;
   allowanceRange: number;
   agencyName: string;
-  managerName: string | null;
-  managerEmail: string | null;
-  managerPhone: string | null;
+  businessContactName: string | null;
+  businessContactPhone: string | null;
   requiredProfession: string | null;
   basePointConfirmed: boolean;
   basePointApprovalStatus: string;
@@ -67,10 +66,9 @@ export default function AdminSiteDetailPage() {
   const [customRange, setCustomRange] = useState("");
   const [useCustom, setUseCustom] = useState(false);
 
-  // 담당자 정보
-  const [managerName, setManagerName] = useState("");
-  const [managerEmail, setManagerEmail] = useState("");
-  const [managerPhone, setManagerPhone] = useState("");
+  // 사업체 담당자 정보(현장 연락 담당자)
+  const [businessContactName, setBusinessContactName] = useState("");
+  const [businessContactPhone, setBusinessContactPhone] = useState("");
 
   // 직무지도원 배정
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
@@ -141,9 +139,8 @@ export default function AdminSiteDetailPage() {
       const isPreset = RANGE_OPTIONS.some(o => o.value === range);
       setUseCustom(!isPreset);
       if (!isPreset) setCustomRange(String(range));
-      setManagerName(it.managerName || "");
-      setManagerEmail(it.managerEmail || "");
-      setManagerPhone(it.managerPhone || "");
+      setBusinessContactName(it.businessContactName || "");
+      setBusinessContactPhone(it.businessContactPhone || "");
       fetchAssignments();
       fetchWorkerOptions(it.requiredProfession);
     } catch {
@@ -161,8 +158,8 @@ export default function AdminSiteDetailPage() {
     if (!companyName.trim()) return alert("사업체명을 입력하세요.");
     if (!address.trim()) return alert("주소를 입력하세요.");
     if (!gpsLat.trim() || !gpsLon.trim()) return alert("GPS 좌표를 입력하세요.");
-    if (!managerName.trim()) return alert("담당자 성명을 입력하세요.");
-    if (!managerEmail.trim()) return alert("담당자 이메일을 입력하세요.");
+    if (!businessContactName.trim()) return alert("사업체 담당자 성명을 입력하세요.");
+    if (!businessContactPhone.trim()) return alert("사업체 담당자 연락처를 입력하세요.");
     if (isNaN(finalRange) || finalRange < 50 || finalRange > 1000) {
       return alert("GPS 허용 범위는 50m ~ 1000m 사이로 설정해주세요.");
     }
@@ -179,9 +176,8 @@ export default function AdminSiteDetailPage() {
           gpsLat: Number(gpsLat),
           gpsLon: Number(gpsLon),
           allowanceRange: finalRange,
-          managerName: managerName.trim(),
-          managerEmail: managerEmail.trim(),
-          managerPhone: managerPhone.trim(),
+          businessContactName: businessContactName.trim(),
+          businessContactPhone: businessContactPhone.trim(),
         }),
       });
       const data = await res.json();
@@ -320,13 +316,13 @@ export default function AdminSiteDetailPage() {
         </div>
       </div>
 
-      {/* 담당자 정보 */}
+      {/* 사업체 담당자 정보 */}
       <div className={T.card}>
-        <h2 className="mb-4 text-sm font-black text-slate-900">담당자 정보</h2>
+        <h2 className="mb-1 text-sm font-black text-slate-900">사업체 담당자 정보</h2>
+        <p className="mb-4 text-xs font-semibold text-slate-400">현장(사업체) 측 담당자. 출근부 ‘사업체담당자’ 서명 요청에 자동 채워집니다.</p>
         <div className="space-y-3">
-          <Field label="성명 *" value={managerName} onChange={setManagerName} />
-          <Field label="이메일 *" value={managerEmail} onChange={setManagerEmail} />
-          <Field label="전화번호 *" value={managerPhone} onChange={setManagerPhone} />
+          <Field label="담당자 성명 *" value={businessContactName} onChange={setBusinessContactName} />
+          <Field label="담당자 연락처 *" value={businessContactPhone} onChange={setBusinessContactPhone} />
         </div>
       </div>
 

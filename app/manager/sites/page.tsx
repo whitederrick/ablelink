@@ -6,8 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 
 type SiteItem = {
   id: string; companyName: string; address: string; detailAddress: string | null;
-  agencyName: string | null; managerName: string | null; managerEmail: string | null;
-  managerPhone: string | null; basePointConfirmed: boolean;
+  agencyName: string | null; businessContactName: string | null;
+  businessContactPhone: string | null; basePointConfirmed: boolean;
   basePointApprovalStatus: string; isActive: boolean; allowanceRange?: number;
 };
 
@@ -94,9 +94,8 @@ export default function AdminSitesPage() {
                     {it.detailAddress && <div className="text-xs text-slate-400">{it.detailAddress}</div>}
                   </td>
                   <td className={T.td}>
-                    <div className="text-slate-700">{it.managerName || "-"}</div>
-                    {it.managerEmail && <div className="text-xs text-slate-400">{it.managerEmail}</div>}
-                    {it.managerPhone && <div className="text-xs text-slate-400">{it.managerPhone}</div>}
+                    <div className="text-slate-700">{it.businessContactName || "-"}</div>
+                    {it.businessContactPhone && <div className="text-xs text-slate-400">{it.businessContactPhone}</div>}
                   </td>
                   <td className={`${T.td} text-sm text-slate-500`}>{it.agencyName || "-"}</td>
                   <td className={`${T.td} font-black text-sky-600`}>{it.allowanceRange ?? 100}m</td>

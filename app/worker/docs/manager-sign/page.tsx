@@ -12,11 +12,13 @@ function ManagerSignContent() {
   const docType     = params.get("dt") ?? "";
   const periodStart = params.get("ps") ?? "";
   const periodEnd   = params.get("pe") ?? "";
+  const contactName = params.get("cn") ?? "";
 
   const padRef = useRef<SignaturePadHandle>(null);
   const [empty,  setEmpty]  = useState(true);
   const [saving, setSaving] = useState(false);
-  const [signerName, setSignerName] = useState("");
+  // 현장에 등록된 사업체 담당자명으로 자동 채움(수정 가능)
+  const [signerName, setSignerName] = useState(contactName);
 
   async function handleSave() {
     const blob = await padRef.current?.getBlob();

@@ -96,6 +96,9 @@ export async function GET(request: NextRequest) {
         managerName: manager?.name ?? "",
         managerEmail: manager?.email ?? "",
         managerPhone: manager?.phoneNumber ?? "",
+        // 사업체 담당자(현장 연락 담당자) — 출근부 '사업체담당자' 서명 프리필용
+        businessContactName: site.businessContactName ?? "",
+        businessContactPhone: site.businessContactPhone ?? "",
         fieldTrainingStart: assignment.startDate?.toISOString() ?? null,
         fieldTrainingEnd: assignment.endDate?.toISOString() ?? null,
         attendanceId: todayAttendance?.id?.toString() ?? null,

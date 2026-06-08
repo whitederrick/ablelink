@@ -28,6 +28,7 @@ interface SiteInfo {
   companyName: string;
   managerEmail: string;
   managerName: string;
+  businessContactName: string;
   workerName: string;
   trainees: { id: string; name: string; gender: string }[];
   trainingType: "PRE" | "FIELD" | "ADAPTATION";
@@ -102,6 +103,7 @@ function DocsContent() {
           companyName:  d.data.companyName,
           managerEmail: d.data.managerEmail || "",
           managerName:  d.data.managerName  || "담당자",
+          businessContactName: d.data.businessContactName || "",
           workerName:    d.data.workerName    || "",
           trainees: (d.data.trainees || []).map((t: any) => ({
             id: String(t.id), name: t.name, gender: t.gender,
@@ -135,7 +137,8 @@ function DocsContent() {
   function openInPersonSign() {
     const firstSignDoc = DOC_TYPES.find(d => NEEDS_MANAGER_SIGN.has(d.id) && docStates[d.id].checked);
     const docType = firstSignDoc?.id || "ATTENDANCE_SHEET";
-    router.push(`/worker/docs/manager-sign?dt=${docType}&ps=${periodStart}&pe=${periodEnd}`);
+    const cn = siteInfo?.businessContactName ? `&cn=${encodeURIComponent(siteInfo.businessContactName)}` : "";
+    router.push(`/worker/docs/manager-sign?dt=${docType}&ps=${periodStart}&pe=${periodEnd}${cn}`);
   }
 
   async function sendDoc(docId: string): Promise<void> {

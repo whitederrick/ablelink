@@ -37,10 +37,10 @@ export default function TraineesPage() {
     setLoading(true);
     Promise.all([
       fetch("/api/admin/trainees").then(r=>r.json()),
-      fetch("/api/admin/sites?limit=200").then(r=>r.json()),
+      fetch("/api/admin/sites?pageSize=100").then(r=>r.json()),
     ]).then(([tRes, sRes])=>{
       if(tRes.success) setTrainees(tRes.trainees);
-      if(sRes.success) setSites(sRes.sites?.map((s:any)=>({id:s.id,companyName:s.companyName}))||[]);
+      if(sRes.success) setSites(sRes.items?.map((s:any)=>({id:s.id,companyName:s.companyName}))||[]);
     }).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
 

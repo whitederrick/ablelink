@@ -146,7 +146,12 @@ model Site {
 
   // “현재 운영 주체”는 참고용으로 유지 가능(하지만 실귀속은 assignment.agencyId)
   agencyId  BigInt? @map("agency_id")
+  // ⚠️ managerId(=AgencyManager, 에이전시측 연락처)는 레거시. 현장 담당자는 아래 사업체 담당자로 운영.
   managerId BigInt? @map("manager_id")
+
+  // ✅ 사업체 담당자(현장 회사의 연락 담당자) — 출근부 '사업체담당자' 서명요청에 자동 채움
+  businessContactName  String? @map("business_contact_name")
+  businessContactPhone String? @map("business_contact_phone")
 
   // ✅ 직무/사이트 pool 매칭 속성
   businessType       String?     @map("business_type") // 사업 유형 (제조/서비스/유통 등)

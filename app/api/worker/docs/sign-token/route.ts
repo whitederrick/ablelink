@@ -53,8 +53,13 @@ export async function POST(request: NextRequest) {
   const assignment = await prisma.siteAssignment.findFirst({
     where: { workerId: BigInt(session.workerId), status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
     orderBy: { assignedAt: "desc" },
+    include: { site: { select: { businessContactName: true } } },
   });
   if (!assignment) return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 404 });
+
+  // 사업체담당자 서명자명 미입력 시 현장에 등록된 사업체 담당자명으로 자동 채움
+  const resolvedSignerName =
+    signerName || (signRole === "company_manager" ? assignment.site?.businessContactName ?? null : null);
 
   // 기존 미사용 토큰 무효화 (같은 조건)
   await prisma.siteSignToken.deleteMany({
@@ -79,7 +84,7 @@ export async function POST(request: NextRequest) {
       periodStart,
       periodEnd,
       signRole,
-      signerName: signerName || null,
+      signerName: resolvedSignerName,
       expiresAt,
     },
   });

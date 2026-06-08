@@ -32,10 +32,15 @@ function toRow(r: any) {
     agencyId: r.agencyId != null ? String(r.agencyId) : null,
     agencyName: r.agency?.name ?? null,
 
+    // 레거시(에이전시측 연락처)
     managerId: r.managerId != null ? String(r.managerId) : null,
     managerName: r.agencyManager?.name ?? null,
     managerEmail: r.agencyManager?.email ?? null,
     managerPhone: r.agencyManager?.phoneNumber ?? null,
+
+    // ✅ 사업체 담당자(현장 연락 담당자)
+    businessContactName: r.businessContactName ?? null,
+    businessContactPhone: r.businessContactPhone ?? null,
 
     requiredProfession: r.requiredProfession ?? null,
 
@@ -79,6 +84,8 @@ export async function GET(
         gpsLon: true,
         agencyId: true,
         managerId: true,
+        businessContactName: true,
+        businessContactPhone: true,
         requiredProfession: true,
         basePointConfirmed: true,
         basePointAuthority: true,
@@ -140,8 +147,21 @@ export async function PATCH(
       body.managerId == null ? undefined : String(body.managerId).trim();
     const allowanceRange =
       body.allowanceRange == null ? undefined : Number(body.allowanceRange);
+    const businessContactName =
+      body.businessContactName == null ? undefined : String(body.businessContactName).trim();
+    const businessContactPhone =
+      body.businessContactPhone == null ? undefined : String(body.businessContactPhone).trim();
 
     const data: Prisma.SiteUpdateInput = {};
+
+    if (businessContactName !== undefined) {
+      if (!businessContactName) throw new Error("VALIDATION:businessContactName");
+      data.businessContactName = businessContactName;
+    }
+    if (businessContactPhone !== undefined) {
+      if (!businessContactPhone) throw new Error("VALIDATION:businessContactPhone");
+      data.businessContactPhone = businessContactPhone;
+    }
 
     if (companyName !== undefined) {
       if (!companyName) throw new Error("VALIDATION:companyName");
@@ -205,6 +225,8 @@ export async function PATCH(
         gpsLon: true,
         agencyId: true,
         managerId: true,
+        businessContactName: true,
+        businessContactPhone: true,
         basePointConfirmed: true,
         basePointAuthority: true,
         basePointApprovalStatus: true,

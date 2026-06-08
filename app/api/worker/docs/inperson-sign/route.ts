@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const docType    = (formData.get("docType")    as string || "").trim();
     const periodStart = (formData.get("periodStart") as string || "").trim();
     const periodEnd   = (formData.get("periodEnd")   as string || "").trim();
-    const signerName  = (formData.get("signerName")  as string || "사업체 담당자").trim();
+    const signerNameRaw = (formData.get("signerName") as string || "").trim();
 
     if (!imageBlob || imageBlob.size === 0) {
       return NextResponse.json({ success: false, message: "서명 이미지가 없습니다." }, { status: 400 });
@@ -40,10 +40,14 @@ export async function POST(request: NextRequest) {
     const assignment = await prisma.siteAssignment.findFirst({
       where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
       orderBy: { assignedAt: "desc" },
+      include: { site: { select: { businessContactName: true } } },
     });
     if (!assignment) {
       return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 404 });
     }
+
+    // 서명자명 미입력 시 현장에 등록된 사업체 담당자명으로 자동 채움
+    const signerName = signerNameRaw || assignment.site?.businessContactName || "사업체 담당자";
 
     // Supabase Storage 업로드
     const fileName = `inperson/${assignment.id}/${docType}_${periodStart}_${Date.now()}.png`;

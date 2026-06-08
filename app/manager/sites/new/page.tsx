@@ -1,8 +1,8 @@
-// app/admin/sites/new/page.tsx
+// app/manager/sites/new/page.tsx
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { T } from "../../_styles";
 import PageHeader from "../../_components/PageHeader";
 import AddressMapPicker from "@/components/AddressMapPicker";
@@ -12,7 +12,6 @@ type MeResponse =
   | { success: false };
 
 type AgencyOption = { id: string; name: string };
-type ManagerItem = { id: string; name: string; email: string; phoneNumber: string | null; agencyName?: string | null };
 
 type AddrItem = { addressName: string; x: string; y: string };
 
@@ -23,15 +22,14 @@ export default function AdminSiteNewPage() {
   const [agencies, setAgencies] = useState<AgencyOption[]>([]);
   const [agencyId, setAgencyId] = useState<string>("");
 
-  const [managers, setManagers] = useState<ManagerItem[]>([]);
-  const [managerId, setManagerId] = useState<string>("");
-
   const [form, setForm] = useState({
     companyName: "",
     address: "",
     detailAddress: "",
     gpsLat: "",
     gpsLon: "",
+    businessContactName: "",
+    businessContactPhone: "",
   });
   const [allowanceRange, setAllowanceRange] = useState(100);
 
@@ -39,9 +37,6 @@ export default function AdminSiteNewPage() {
   const [addrLoading, setAddrLoading] = useState(false);
   const [addrItems, setAddrItems] = useState<AddrItem[]>([]);
   const [mapPick, setMapPick] = useState<{ lat: number; lon: number; address: string } | null>(null);
-
-  const [openMgr, setOpenMgr] = useState(false);
-  const [mgrForm, setMgrForm] = useState({ name: "", email: "", phoneNumber: "" });
 
   const [saving, setSaving] = useState(false);
 
@@ -66,32 +61,6 @@ export default function AdminSiteNewPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
-
-  const canLoadManagers = useMemo(() => {
-    if (!me || (me as any)?.success !== true) return false;
-    if (isAdmin) return !!agencyId;
-    return true;
-  }, [me, isAdmin, agencyId]);
-
-  async function fetchManagers() {
-    if (!canLoadManagers) return;
-    const sp = new URLSearchParams();
-    if (isAdmin) sp.set("agencyId", agencyId);
-    const r = await fetch(`/api/admin/managers?${sp.toString()}`, { cache: "no-store" });
-    const d = await r.json();
-    if (d?.success) {
-      const list = (d.items || []) as ManagerItem[];
-      setManagers(list);
-      if (!managerId && list.length > 0) setManagerId(list[0].id);
-    } else {
-      setManagers([]);
-    }
-  }
-
-  useEffect(() => {
-    fetchManagers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canLoadManagers, agencyId]);
 
   async function searchAddress() {
     if (!addrQ.trim()) return;
@@ -121,41 +90,13 @@ export default function AdminSiteNewPage() {
     setAddrItems([]);
   }
 
-  async function createManager() {
-    if (!mgrForm.name.trim() || !mgrForm.email.trim() || !mgrForm.phoneNumber.trim()) {
-      alert("담당자 성명/이메일/전화는 필수입니다.");
-      return;
-    }
-    try {
-      const payload: any = {
-        name: mgrForm.name.trim(),
-        email: mgrForm.email.trim(),
-        phoneNumber: mgrForm.phoneNumber.trim(),
-      };
-      if (isAdmin) payload.agencyId = agencyId;
-      const r = await fetch("/api/admin/managers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const d = await r.json();
-      if (!d?.success) throw new Error(d?.message || "FAILED");
-      setOpenMgr(false);
-      setMgrForm({ name: "", email: "", phoneNumber: "" });
-      await fetchManagers();
-      if (d?.item?.id) setManagerId(String(d.item.id));
-    } catch (e) {
-      console.error(e);
-      alert("담당자 등록 실패(이메일 중복 등)");
-    }
-  }
-
   async function saveSite() {
     if (saving) return;
     if (!form.companyName.trim()) return alert("사업체명은 필수입니다.");
     if (!form.address.trim()) return alert("주소는 필수입니다.");
     if (!form.gpsLat.trim() || !form.gpsLon.trim()) return alert("좌표(gpsLat/gpsLon)는 필수입니다.");
-    if (!managerId) return alert("담당자를 선택하거나 신규 등록하십시오.");
+    if (!form.businessContactName.trim()) return alert("사업체 담당자 성명은 필수입니다.");
+    if (!form.businessContactPhone.trim()) return alert("사업체 담당자 연락처는 필수입니다.");
     if (isAdmin && !agencyId) return alert("기관을 선택하십시오(ADMIN).");
 
     setSaving(true);
@@ -167,7 +108,8 @@ export default function AdminSiteNewPage() {
         gpsLat: form.gpsLat.trim(),
         gpsLon: form.gpsLon.trim(),
         allowanceRange,
-        managerId,
+        businessContactName: form.businessContactName.trim(),
+        businessContactPhone: form.businessContactPhone.trim(),
       };
       if (isAdmin) payload.agencyId = agencyId;
       const r = await fetch("/api/admin/sites", {
@@ -200,7 +142,7 @@ export default function AdminSiteNewPage() {
             <label className={T.label}>기관</label>
             <select
               value={agencyId}
-              onChange={(e) => { setAgencyId(e.target.value); setManagerId(""); }}
+              onChange={(e) => { setAgencyId(e.target.value); }}
               className={`w-full ${T.select}`}
             >
               {agencies.map((a) => (
@@ -303,72 +245,38 @@ export default function AdminSiteNewPage() {
           </p>
         </div>
 
+        {/* 사업체 담당자(현장 회사의 연락 담당자) — 출근부 '사업체담당자' 서명요청에 자동 채움 */}
         <div className={T.card}>
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-black text-slate-900">담당자 *</p>
-            <button onClick={() => setOpenMgr(true)} className={T.btnSecondary}>+ 신규 등록</button>
+          <p className="mb-1 text-sm font-black text-slate-900">사업체 담당자 *</p>
+          <p className="mb-3 text-xs font-semibold text-slate-400">
+            현장(사업체) 측 담당자입니다. 출근부 ‘사업체담당자’ 서명 요청 시 이 정보가 자동으로 채워집니다.
+          </p>
+          <div className="space-y-3">
+            <div>
+              <label className={T.label}>담당자 성명 *</label>
+              <input
+                value={form.businessContactName}
+                onChange={(e) => setForm((p) => ({ ...p, businessContactName: e.target.value }))}
+                className={`w-full ${T.input}`}
+                placeholder="예: 홍길동 과장"
+              />
+            </div>
+            <div>
+              <label className={T.label}>담당자 연락처 *</label>
+              <input
+                value={form.businessContactPhone}
+                onChange={(e) => setForm((p) => ({ ...p, businessContactPhone: e.target.value }))}
+                className={`w-full ${T.input}`}
+                placeholder="010-0000-0000"
+              />
+            </div>
           </div>
-          <select
-            value={managerId}
-            onChange={(e) => setManagerId(e.target.value)}
-            className={`w-full ${T.select}`}
-            disabled={!canLoadManagers}
-          >
-            <option value="">선택</option>
-            {managers.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} / {m.email} / {m.phoneNumber ?? "-"} (#{m.id})
-              </option>
-            ))}
-          </select>
         </div>
 
         <button onClick={saveSite} disabled={saving} className={`w-full py-4 text-base ${T.btnPrimary}`}>
           {saving ? "저장 중..." : "저장"}
         </button>
       </div>
-
-      {openMgr && (
-        <div className={T.modalOverlay}>
-          <div className={T.modalContent}>
-            <h2 className="mb-5 text-base font-black text-slate-900">담당자 신규 등록</h2>
-            <div className="space-y-3">
-              <div>
-                <label className={T.label}>성명 *</label>
-                <input
-                  value={mgrForm.name}
-                  onChange={(e) => setMgrForm((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="성명"
-                  className={`w-full ${T.input}`}
-                />
-              </div>
-              <div>
-                <label className={T.label}>이메일 *</label>
-                <input
-                  value={mgrForm.email}
-                  onChange={(e) => setMgrForm((p) => ({ ...p, email: e.target.value }))}
-                  placeholder="이메일"
-                  className={`w-full ${T.input}`}
-                />
-              </div>
-              <div>
-                <label className={T.label}>전화번호 *</label>
-                <input
-                  value={mgrForm.phoneNumber}
-                  onChange={(e) => setMgrForm((p) => ({ ...p, phoneNumber: e.target.value }))}
-                  placeholder="전화번호"
-                  className={`w-full ${T.input}`}
-                />
-              </div>
-              <p className="text-xs font-semibold text-slate-400">저장 후 자동으로 선택됩니다.</p>
-            </div>
-            <div className="mt-5 flex gap-2 justify-end">
-              <button onClick={() => setOpenMgr(false)} className={T.btnSecondary}>취소</button>
-              <button onClick={createManager} className={T.btnPrimary}>저장</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <AddressMapPicker
         open={!!mapPick}
