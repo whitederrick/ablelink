@@ -25,16 +25,6 @@ function errToStatus(msg: string) {
   return 500;
 }
 
-async function resolveManagerIdOrThrow(managerId: bigint, agencyId?: bigint | null) {
-  const m = await prisma.agencyManager.findUnique({
-    where: { id: managerId },
-    select: { id: true, agencyId: true },
-  });
-  if (!m) throw new Error("VALIDATION:managerId");
-  if (agencyId != null && m.agencyId !== agencyId) throw new Error("VALIDATION:managerId");
-  return m.id;
-}
-
 function toRow(r: any) {
   return {
     id: String(r.id),
@@ -50,12 +40,6 @@ function toRow(r: any) {
     // ✅ 담당 관리자(Manager 로그인). null = 미지정(공용)
     ownerManagerId: r.ownerManagerId != null ? String(r.ownerManagerId) : null,
     ownerManagerName: r.ownerManager?.displayName ?? r.ownerManager?.loginId ?? null,
-
-    // 레거시(에이전시측 연락처). 신규 화면은 businessContact* 사용.
-    managerId: r.managerId != null ? String(r.managerId) : null,
-    managerName: r.agencyManager?.name ?? null,
-    managerEmail: r.agencyManager?.email ?? null,
-    managerPhone: r.agencyManager?.phoneNumber ?? null,
 
     // ✅ 사업체 담당자(현장 연락 담당자)
     businessContactName: r.businessContactName ?? null,
@@ -136,7 +120,6 @@ export async function GET(req: NextRequest) {
           gpsLon: true,
 
           agencyId: true,
-          managerId: true,
           ownerManagerId: true,
           businessContactName: true,
           businessContactPhone: true,
@@ -145,7 +128,6 @@ export async function GET(req: NextRequest) {
 
           agency: { select: { id: true, name: true } },
           ownerManager: { select: { id: true, displayName: true, loginId: true } },
-          agencyManager: { select: { id: true, name: true, email: true, phoneNumber: true } },
 
           basePointConfirmed: true,
           basePointAuthority: true,
@@ -185,7 +167,6 @@ export async function POST(req: NextRequest) {
     const gpsLatRaw = body.gpsLat;
     const gpsLonRaw = body.gpsLon;
 
-    const managerIdRaw = body.managerId;
     // 직종(카테고리) — 선택
     const requiredProfession = PROFESSIONS.includes(body.requiredProfession) ? body.requiredProfession : null;
 
@@ -215,17 +196,6 @@ export async function POST(req: NextRequest) {
       }, { status: 403 });
     }
 
-    // 레거시 에이전시측 연락처(AgencyManager) — 선택. 보내면 검증, 없으면 null.
-    let managerId: bigint | null = null;
-    if (managerIdRaw != null && String(managerIdRaw).trim() !== "") {
-      try {
-        managerId = BigInt(String(managerIdRaw));
-      } catch {
-        throw new Error("VALIDATION:managerId");
-      }
-      await resolveManagerIdOrThrow(managerId, agencyId);
-    }
-
     // ✅ 담당 관리자(Manager 로그인): 생성한 관리자가 자동 담당. 운영자(admin)는 body.ownerManagerId 선택(없으면 미지정).
     let ownerManagerId: bigint | null = null;
     if (session.kind === "manager") {
@@ -246,7 +216,6 @@ export async function POST(req: NextRequest) {
         gpsLat: new Prisma.Decimal(latStr),
         gpsLon: new Prisma.Decimal(lonStr),
         agencyId,
-        managerId,
         ownerManagerId,
         businessContactName,
         businessContactPhone,
@@ -261,7 +230,6 @@ export async function POST(req: NextRequest) {
         gpsLat: true,
         gpsLon: true,
         agencyId: true,
-        managerId: true,
         ownerManagerId: true,
         businessContactName: true,
         businessContactPhone: true,
@@ -269,7 +237,6 @@ export async function POST(req: NextRequest) {
         requiredProfession: true,
         agency: { select: { id: true, name: true } },
         ownerManager: { select: { id: true, displayName: true, loginId: true } },
-        agencyManager: { select: { id: true, name: true, email: true, phoneNumber: true } },
         basePointConfirmed: true,
         basePointAuthority: true,
         basePointApprovalStatus: true,

@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
     // 배정 대상 site 검증. manager는 본인 agency 소속만, admin(운영자)은 임의 활성 사이트.
     const site = await prisma.site.findUnique({
       where: { id: siteId },
-      select: { agencyId: true, isActive: true, managerId: true },
+      select: { agencyId: true, isActive: true },
     });
     if (!site) throw new Error("NOT_FOUND");
     if (!site.isActive) throw new Error("VALIDATION:siteInactive");

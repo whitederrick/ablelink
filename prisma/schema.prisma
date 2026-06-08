@@ -146,8 +146,6 @@ model Site {
 
   // “현재 운영 주체”는 참고용으로 유지 가능(하지만 실귀속은 assignment.agencyId)
   agencyId  BigInt? @map("agency_id")
-  // ⚠️ managerId(=AgencyManager, 에이전시측 연락처)는 레거시. 현장 담당자는 아래 사업체 담당자로 운영.
-  managerId BigInt? @map("manager_id")
 
   // ✅ 담당 관리자(Manager 로그인). 같은 에이전시 안에서 관리자별로 현장을 구분.
   //    null = 미지정(공용). 생성자 자동 지정, 변경/이관 가능.
@@ -179,7 +177,6 @@ model Site {
   contacts    SiteContact[]
 
   agency        Agency?        @relation(fields: [agencyId], references: [id])
-  agencyManager AgencyManager? @relation(fields: [managerId], references: [id])
   DocumentRun   DocumentRun[]
   workerInvites WorkerInvite[]
   recruitPosts  RecruitPost[]  @relation("RecruitPostSite")
@@ -444,7 +441,6 @@ model Agency {
   customAmount Int?    @map("custom_amount")  // 운영자 협상가(해당 주기 1회 금액, 원). null이면 표준 월정액
   billingNote  String? @map("billing_note")   // 딜 메모(운영자 참고)
 
-  managers              AgencyManager[]
   managerAccounts       Manager[]
   apiCallLogs           ApiCallLog[]
   sites                 Site[]
@@ -464,19 +460,6 @@ model Agency {
 
   @@index([planType])
   @@map("agencies")
-}
-
-model AgencyManager {
-  id          BigInt  @id @default(autoincrement())
-  agencyId    BigInt  @map("agency_id")
-  name        String  @map("name")
-  email       String  @map("email")
-  phoneNumber String? @map("phone_number")
-
-  agency Agency @relation(fields: [agencyId], references: [id])
-  sites  Site[]
-
-  @@map("agency_managers")
 }
 
 // 시스템 운영자 (Ablelink 내부 직원만, ADMIN 역할 전용)

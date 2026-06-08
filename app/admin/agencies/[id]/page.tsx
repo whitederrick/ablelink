@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Users, MapPin, Activity, Cpu } from "lucide-react";
+import { ArrowLeft, Building2, Users, MapPin, Activity, Cpu, UserPlus, Copy } from "lucide-react";
 import { T } from "../../_styles";
 
 const PLAN_COLORS: Record<string, string> = {
@@ -52,27 +52,63 @@ export default function AgencyDetailPage() {
   const [savingDeal, setSavingDeal] = useState(false);
   const [dealMsg,    setDealMsg]    = useState("");
 
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/admin/system/agencies/${id}/detail`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.success) {
-          setAgency(d.agency);
-          setManagers(d.managers);
-          setSites(d.sites);
-          setWorkers(d.workers);
-          setStats(d.stats);
-          setDealCycle(d.agency.billingCycle === "ANNUAL" ? "ANNUAL" : "MONTHLY");
-          setDealAmount(d.agency.customAmount != null ? String(d.agency.customAmount) : "");
-          setDealNote(d.agency.billingNote ?? "");
-        } else {
-          setError(d.message ?? "로드 실패");
-        }
-      })
-      .catch(() => setError("서버 오류"))
-      .finally(() => setLoading(false));
+  // 관리자 초대/토글
+  const [inviting,   setInviting]   = useState(false);
+  const [inviteUrl,  setInviteUrl]  = useState("");
+  const [togglingId, setTogglingId] = useState("");
+
+  const loadDetail = useCallback(async (withSpinner = true) => {
+    if (withSpinner) setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/system/agencies/${id}/detail`, { cache: "no-store" });
+      const d = await res.json();
+      if (d.success) {
+        setAgency(d.agency);
+        setManagers(d.managers);
+        setSites(d.sites);
+        setWorkers(d.workers);
+        setStats(d.stats);
+        setDealCycle(d.agency.billingCycle === "ANNUAL" ? "ANNUAL" : "MONTHLY");
+        setDealAmount(d.agency.customAmount != null ? String(d.agency.customAmount) : "");
+        setDealNote(d.agency.billingNote ?? "");
+      } else {
+        setError(d.message ?? "로드 실패");
+      }
+    } catch { setError("서버 오류"); }
+    finally { if (withSpinner) setLoading(false); }
   }, [id]);
+
+  useEffect(() => { loadDetail(); }, [loadDetail]);
+
+  async function issueInvite() {
+    setInviting(true); setInviteUrl("");
+    try {
+      const res = await fetch(`/api/admin/system/agencies/${id}/manager-invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const d = await res.json();
+      if (d.success) setInviteUrl(d.inviteUrl);
+      else alert(d.message || "초대 발급 실패");
+    } catch { alert("서버 오류"); }
+    finally { setInviting(false); }
+  }
+
+  async function toggleManager(mid: string, next: boolean) {
+    setTogglingId(mid);
+    try {
+      const res = await fetch(`/api/admin/system/managers/${mid}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: next }),
+      });
+      const d = await res.json();
+      if (!d.success) { alert(d.message || "변경 실패"); return; }
+      await loadDetail(false);
+    } catch { alert("서버 오류"); }
+    finally { setTogglingId(""); }
+  }
 
   async function saveDeal() {
     setSavingDeal(true); setDealMsg("");
@@ -250,12 +286,38 @@ export default function AgencyDetailPage() {
       <div className="grid grid-cols-2 gap-4">
         {/* 관리자 */}
         <div className={T.card}>
-          <div className="mb-3 flex items-center gap-2">
-            <Users className="h-4 w-4 text-slate-500" />
-            <p className="text-sm font-black text-slate-700">관리자 계정</p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-slate-500" />
+              <p className="text-sm font-black text-slate-700">관리자 계정</p>
+            </div>
+            <button
+              onClick={issueInvite}
+              disabled={inviting}
+              className="flex items-center gap-1 rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-black text-white active:scale-95 disabled:opacity-50"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              {inviting ? "발급 중..." : "관리자 초대"}
+            </button>
           </div>
+
+          {inviteUrl && (
+            <div className="mb-3 rounded-xl border border-sky-100 bg-sky-50 p-3">
+              <p className="mb-1 text-[11px] font-black text-sky-700">초대 링크(7일 유효) — 대상자에게 전달하세요</p>
+              <div className="flex items-center gap-2">
+                <input readOnly value={inviteUrl} className="flex-1 rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-[11px] text-slate-700" />
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(inviteUrl); }}
+                  className="flex items-center gap-1 rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-[11px] font-black text-sky-700 active:scale-95"
+                >
+                  <Copy className="h-3 w-3" /> 복사
+                </button>
+              </div>
+            </div>
+          )}
+
           {managers.length === 0 ? (
-            <p className="text-sm text-slate-400">관리자가 없습니다.</p>
+            <p className="text-sm text-slate-400">관리자가 없습니다. ‘관리자 초대’로 추가하세요.</p>
           ) : (
             <div className="space-y-2">
               {managers.map(m => (
@@ -263,14 +325,21 @@ export default function AgencyDetailPage() {
                   <div>
                     <p className="text-sm font-black text-slate-900">{m.loginId}</p>
                     {m.displayName && <p className="text-xs text-slate-400">{m.displayName}</p>}
-                  </div>
-                  <div className="text-right">
-                    <span className={`${T.badge} ${m.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
-                      {m.isActive ? "활성" : "비활성"}
-                    </span>
                     <p className="mt-0.5 text-[10px] text-slate-400">
                       {m.lastLoginAt ? `최근 ${fmtDt(m.lastLoginAt)}` : "로그인 없음"}
                     </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`${T.badge} ${m.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
+                      {m.isActive ? "활성" : "비활성"}
+                    </span>
+                    <button
+                      onClick={() => toggleManager(m.id, !m.isActive)}
+                      disabled={togglingId === m.id}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-black text-slate-600 active:scale-95 disabled:opacity-50"
+                    >
+                      {togglingId === m.id ? "..." : m.isActive ? "비활성화" : "활성화"}
+                    </button>
                   </div>
                 </div>
               ))}

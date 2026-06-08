@@ -53,14 +53,6 @@ export async function GET(request: NextRequest) {
       select: { workerName: true, phoneNumber: true, signatureUrl: true },
     });
 
-    // 사이트 담당자 정보
-    const manager = site.managerId
-      ? await prisma.agencyManager.findUnique({
-          where: { id: site.managerId },
-          select: { name: true, email: true, phoneNumber: true },
-        })
-      : null;
-
     const premiumStatus = await getWorkerPremiumStatus(workerId);
     const docAccessStatus = await getWorkerDocAccess(workerId);
 
@@ -93,10 +85,10 @@ export async function GET(request: NextRequest) {
         workerName: user?.workerName ?? "",
         workerPhone: user?.phoneNumber ?? "",
         signatureUrl: user?.signatureUrl ?? null,
-        // 사업체 담당자(단일 출처) 우선, 없으면 레거시(AgencyManager)
-        managerName: site.businessContactName ?? manager?.name ?? "",
-        managerEmail: site.businessContactEmail ?? manager?.email ?? "",
-        managerPhone: site.businessContactPhone ?? manager?.phoneNumber ?? "",
+        // 사업체 담당자(현장 담당자 단일 출처)
+        managerName: site.businessContactName ?? "",
+        managerEmail: site.businessContactEmail ?? "",
+        managerPhone: site.businessContactPhone ?? "",
         // 사업체 담당자(현장 연락 담당자) — 출근부 '사업체담당자' 서명 프리필용
         businessContactName: site.businessContactName ?? "",
         businessContactPhone: site.businessContactPhone ?? "",

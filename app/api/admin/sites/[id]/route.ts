@@ -36,12 +36,6 @@ function toRow(r: any) {
     ownerManagerId: r.ownerManagerId != null ? String(r.ownerManagerId) : null,
     ownerManagerName: r.ownerManager?.displayName ?? r.ownerManager?.loginId ?? null,
 
-    // 레거시(에이전시측 연락처)
-    managerId: r.managerId != null ? String(r.managerId) : null,
-    managerName: r.agencyManager?.name ?? null,
-    managerEmail: r.agencyManager?.email ?? null,
-    managerPhone: r.agencyManager?.phoneNumber ?? null,
-
     // ✅ 사업체 담당자(현장 연락 담당자)
     businessContactName: r.businessContactName ?? null,
     businessContactPhone: r.businessContactPhone ?? null,
@@ -88,7 +82,6 @@ export async function GET(
         allowanceRange: true,
         gpsLon: true,
         agencyId: true,
-        managerId: true,
         ownerManagerId: true,
         businessContactName: true,
         businessContactPhone: true,
@@ -102,7 +95,6 @@ export async function GET(
         createdAt: true,
         agency: { select: { id: true, name: true } },
         ownerManager: { select: { id: true, displayName: true, loginId: true } },
-        agencyManager: { select: { id: true, name: true, email: true, phoneNumber: true } },
       },
     });
     if (!site) throw new Error("NOT_FOUND");
@@ -151,8 +143,6 @@ export async function PATCH(
       body.detailAddress == null ? undefined : String(body.detailAddress).trim();
     const gpsLat = body.gpsLat == null ? undefined : String(body.gpsLat).trim();
     const gpsLon = body.gpsLon == null ? undefined : String(body.gpsLon).trim();
-    const managerIdRaw =
-      body.managerId == null ? undefined : String(body.managerId).trim();
     const allowanceRange =
       body.allowanceRange == null ? undefined : Number(body.allowanceRange);
     const businessContactName =
@@ -203,29 +193,6 @@ export async function PATCH(
       data.allowanceRange = allowanceRange;
     }
 
-    // ✅ managerId 빨간줄(스코프 문제) 해결: 파싱/검증/할당을 if 블록 내부에서 처리
-    if (managerIdRaw !== undefined) {
-      if (!managerIdRaw) throw new Error("VALIDATION:managerId");
-
-      let managerId: bigint;
-      try {
-        managerId = BigInt(managerIdRaw);
-      } catch {
-        throw new Error("VALIDATION:managerId");
-      }
-
-      data.agencyManager = { connect: { id: managerId } };
-
-      const m = await prisma.agencyManager.findUnique({
-        where: { id: managerId },
-        select: { agencyId: true },
-      });
-      if (!m) throw new Error("VALIDATION:managerId");
-      // 담당자는 사이트 귀속 에이전시 소속이어야 함(manager는 본인 agency = 사이트 agency)
-      const requiredAgencyId = session.kind === "manager" ? session.agencyId : existing.agencyId;
-      if (m.agencyId !== requiredAgencyId) throw new Error("FORBIDDEN");
-    }
-
     // ✅ 담당 관리자(Manager 로그인) 지정/이관/해제
     //    null/빈값 = 미지정(공용)으로 해제, 값 있으면 같은 에이전시 관리자로 지정/이관
     if (body.ownerManagerId !== undefined) {
@@ -256,7 +223,6 @@ export async function PATCH(
         gpsLat: true,
         gpsLon: true,
         agencyId: true,
-        managerId: true,
         ownerManagerId: true,
         businessContactName: true,
         businessContactPhone: true,
@@ -269,7 +235,6 @@ export async function PATCH(
         createdAt: true,
         agency: { select: { id: true, name: true } },
         ownerManager: { select: { id: true, displayName: true, loginId: true } },
-        agencyManager: { select: { id: true, name: true, email: true, phoneNumber: true } },
       },
     });
 

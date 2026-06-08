@@ -92,7 +92,7 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     include: {
       assignments: {
         where: { status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
-        include: { site: { include: { trainees: true, agency: true, agencyManager: true } } },
+        include: { site: { include: { trainees: true, agency: true } } },
       },
       attendances: { where: { workDate: today } },
     },

@@ -33,7 +33,6 @@ async function main() {
   const ts = Date.now();
   const agency = await prisma.agency.create({ data: { name: `듀얼_${ts}`, phoneNumber: "02-9", address: "서울", planType: "STANDARD", maxWorkers: 30, maxSites: 30, isActive: true } });
   const manager = await prisma.manager.create({ data: { loginId: `mgr_${ts}`, passwordHash: "x", displayName: "매니저", agencyId: agency.id, isActive: true } });
-  const agencyManager = await prisma.agencyManager.create({ data: { agencyId: agency.id, name: "담당자", email: `c_${ts}@x.com`, phoneNumber: "01000000000" } });
   const admin = await prisma.admin.create({ data: { loginId: `adm_${ts}`, passwordHash: "x", displayName: "운영자", isActive: true } });
   const worker = await prisma.worker.create({ data: { loginId: `w_${ts}`, password: "x", workerName: "워커", phoneNumber: `010${ts}`.slice(0, 11), status: "ACTIVE", planType: "FREE" } });
   await prisma.workerProfession.create({ data: { workerId: worker.id, profession: "JOB_COACH", certNumber: "C1", experienceYears: 1, isPrimary: true, verifyStatus: "VERIFIED" } });
@@ -45,14 +44,14 @@ async function main() {
   try {
     // ── TEST 1: manager 사이트 생성(기존 동작 유지) + 직종 저장 ──
     console.log("\n[TEST 1] manager 사이트 생성 + requiredProfession");
-    const mSite = await (await sitesPOST(req("/api/admin/sites", mgrCookie, "POST", { companyName: `M현장_${ts}`, address: "서울 강남", gpsLat: "37.5", gpsLon: "127.0", managerId: String(agencyManager.id), requiredProfession: "JOB_COACH" }))).json();
+    const mSite = await (await sitesPOST(req("/api/admin/sites", mgrCookie, "POST", { companyName: `M현장_${ts}`, address: "서울 강남", gpsLat: "37.5", gpsLon: "127.0", businessContactName: "담당자", businessContactPhone: "01000000000", requiredProfession: "JOB_COACH" }))).json();
     check("manager 사이트 생성 success", mSite.success === true, mSite);
     check("requiredProfession 저장", mSite.item?.requiredProfession === "JOB_COACH", mSite.item);
     if (mSite.item?.id) created.push(BigInt(mSite.item.id));
 
     // ── TEST 2: admin 사이트 생성(운영자, body.agencyId) ──
     console.log("\n[TEST 2] admin(운영자) 사이트 생성");
-    const aSite = await (await sitesPOST(req("/api/admin/sites", admCookie, "POST", { agencyId: String(agency.id), companyName: `A현장_${ts}`, address: "서울 마포", gpsLat: "37.55", gpsLon: "126.91", managerId: String(agencyManager.id), requiredProfession: "JOB_COACH" }))).json();
+    const aSite = await (await sitesPOST(req("/api/admin/sites", admCookie, "POST", { agencyId: String(agency.id), companyName: `A현장_${ts}`, address: "서울 마포", gpsLat: "37.55", gpsLon: "126.91", businessContactName: "담당자", businessContactPhone: "01000000000", requiredProfession: "JOB_COACH" }))).json();
     check("admin 사이트 생성 success", aSite.success === true, aSite);
     check("admin 사이트 agencyId 귀속", aSite.item?.agencyId === String(agency.id), aSite.item);
     const aSiteId = aSite.item?.id ? BigInt(aSite.item.id) : null;
@@ -94,7 +93,6 @@ async function main() {
     await prisma.workerProfession.deleteMany({ where: { workerId: worker.id } });
     await prisma.site.deleteMany({ where: { id: { in: created } } });
     await prisma.worker.delete({ where: { id: worker.id } }).catch(() => {});
-    await prisma.agencyManager.delete({ where: { id: agencyManager.id } }).catch(() => {});
     await prisma.manager.delete({ where: { id: manager.id } }).catch(() => {});
     await prisma.admin.delete({ where: { id: admin.id } }).catch(() => {});
     await prisma.agency.delete({ where: { id: agency.id } }).catch(() => {});

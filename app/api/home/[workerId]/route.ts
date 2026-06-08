@@ -99,7 +99,7 @@ export async function GET(
         assignments: {
           where: { status: { in: ['ASSIGNED', 'CONFIRMED', 'ACTIVE'] } },
           include: {
-            site: { include: { trainees: true, agency: true, agencyManager: true } }
+            site: { include: { trainees: true, agency: true } }
           }
         },
         // 오늘의 출근 기록 확인
@@ -152,9 +152,9 @@ export async function GET(
         allowanceRange: site?.allowanceRange ?? 100,
 
         agencyName: site?.agency?.name ?? "",
-        managerName: site?.businessContactName ?? site?.agencyManager?.name ?? "",
-        managerEmail: site?.businessContactEmail ?? site?.agencyManager?.email ?? "",
-        managerPhone: site?.businessContactPhone ?? site?.agencyManager?.phoneNumber ?? "",
+        managerName: site?.businessContactName ?? "",
+        managerEmail: site?.businessContactEmail ?? "",
+        managerPhone: site?.businessContactPhone ?? "",
 
         // ✅ 훈련기간은 SiteAssignment.stepStart/stepEnd 기준
         preTrainingStart: (activeAssignment as any)?.stepStart ?? null,

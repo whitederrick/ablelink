@@ -19,15 +19,12 @@ async function main() {
     data: { planType: "STANDARD", maxWorkers: 30, maxSites: 30, isActive: true },
   });
 
-  // 2) 사업체 담당자(연락처) — find-or-create
-  let contact = await prisma.agencyManager.findFirst({ where: { agencyId, email: "test-contact@able-link.co.kr" } });
-  if (!contact) {
-    contact = await prisma.agencyManager.create({
-      data: { agencyId, name: "테스트 사업체담당자", email: "test-contact@able-link.co.kr", phoneNumber: "01000000000" },
-    });
-  }
-
-  // 3) 현장 — find-or-create (서울시청 좌표)
+  // 2) 현장 — find-or-create (서울시청 좌표). 사업체 담당자는 Site에 직접 저장.
+  const businessContact = {
+    businessContactName: "테스트 사업체담당자",
+    businessContactPhone: "01000000000",
+    businessContactEmail: "test-contact@able-link.co.kr",
+  };
   let site = await prisma.site.findFirst({ where: { agencyId, companyName: "테스트 연계현장" } });
   if (!site) {
     site = await prisma.site.create({
@@ -35,13 +32,13 @@ async function main() {
         companyName: "테스트 연계현장",
         address: "서울특별시 중구 세종대로 110",
         gpsLat: 37.5663, gpsLon: 126.9779,
-        agencyId, managerId: contact.id,
+        agencyId, ...businessContact,
         basePointConfirmed: true, basePointSource: "ADDRESS", basePointUpdatedAt: new Date(),
         isActive: true,
       },
     });
   } else {
-    site = await prisma.site.update({ where: { id: site.id }, data: { managerId: contact.id, isActive: true } });
+    site = await prisma.site.update({ where: { id: site.id }, data: { ...businessContact, isActive: true } });
   }
 
   // 4) 훈련생 2명 (없을 때만)
@@ -101,7 +98,7 @@ async function main() {
 
   console.log("✅ 연결 완료");
   console.log(`   worker(${worker.loginId}, id=${worker.id}) → agency(id=${agencyId})`);
-  console.log(`   site=${site.id}(${site.companyName}), 담당자=${contact.name}`);
+  console.log(`   site=${site.id}(${site.companyName}), 사업체담당자=${businessContact.businessContactName}`);
   console.log(`   assignment=${assignment.id} (assignedByManager=${manager.id}/${manager.displayName ?? "manager"})`);
   console.log(`   가려진 기존 ACTIVE 배정: ${shadowed.count}건`);
   console.log("   → 매니저(/manager/signature)에서 서명 등록 후, 워커가 문서 생성 시 담당자 서명에 반영됩니다.");

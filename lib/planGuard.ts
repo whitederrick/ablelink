@@ -72,7 +72,7 @@ const SELF_DOC_FEATURES = new Set<PremiumFeature>([
 
 /**
  * 셀프등록(무소속 운영) 워커 여부.
- * 셀프 현장등록은 AgencyManager(연락처)만 만들고 Manager(로그인 계정)는 만들지 않는다.
+ * 셀프 현장등록은 사업체 담당자(Site.businessContact*)만 채우고 Manager(로그인 계정)는 만들지 않는다.
  * → 활성 배정의 에이전시에 Manager 로그인 계정이 0개면 "직접 운영" 컨텍스트로 간주.
  */
 export async function isSelfManagedWorker(workerId: bigint): Promise<boolean> {
