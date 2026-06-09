@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer } from "@/lib/pdf";
 import { buildDocFileName } from "@/lib/pdf/filename";
 import { sendEmailWithPdf } from "@/lib/email";
+import { getKrHolidayDates } from "@/lib/krHolidays";
 
 // ── 유틸 ──────────────────────────────────────────────────────
 function fmtHHMM(d: Date): string {
@@ -186,11 +187,20 @@ export async function POST(request: NextRequest) {
         orderBy: { attendance: { workDate: "asc" } },
       });
 
+      // 자동 생성 행에서 제외할 휴무일 = 한국 공휴일 + 현장 커스텀 휴무(근무 미인정)
+      const preStart = assignment.stepStart?.toISOString().slice(0, 10) || start;
+      const siteHols = await prisma.siteHoliday.findMany({
+        where: { assignmentId: assignment.id, countAsWorkday: false },
+        select: { date: true },
+      });
+      const holidays = [...new Set([...getKrHolidayDates(preStart, end), ...siteHols.map(h => h.date)])];
+
       payload = {
         traineeName: trainee?.name || "",
         companyName: site.companyName,
         periodPreText:   fmtPeriod(assignment.stepStart?.toISOString().slice(0,10) || start, start),
         periodFieldText: fmtPeriod(start, end),
+        holidays,
         rows: logs.map(l => ({
           section: l.trainingType === "PRE" ? "PRE" : "FIELD",
           date: l.attendance.workDate,
@@ -241,11 +251,19 @@ export async function POST(request: NextRequest) {
         orderBy: { attendance: { workDate: "asc" } },
       });
 
+      // 자동 생성 행에서 제외할 휴무일 = 한국 공휴일 + 현장 커스텀 휴무(근무 미인정)
+      const siteHols = await prisma.siteHoliday.findMany({
+        where: { assignmentId: assignment.id, countAsWorkday: false },
+        select: { date: true },
+      });
+      const holidays = [...new Set([...getKrHolidayDates(start, end), ...siteHols.map(h => h.date)])];
+
       payload = {
         traineeName: trainee?.name || "",
         companyName: site.companyName,
         periodStart: start,
         periodEnd:   end,
+        holidays,
         entries: logs.map(l => ({
           dateISO: l.attendance.workDate,
           attendance: l.evaluation || "출석",

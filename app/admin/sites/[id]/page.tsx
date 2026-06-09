@@ -84,6 +84,7 @@ export default function AdminSiteDetailPage() {
   const [workerOptions, setWorkerOptions] = useState<WorkerOption[]>([]);
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [assignWorkType, setAssignWorkType] = useState("FULL_DAY");
+  const [assignServiceStep, setAssignServiceStep] = useState("FIELD_TRAINING");
   const [assigning, setAssigning] = useState(false);
 
   async function fetchAssignments() {
@@ -111,7 +112,7 @@ export default function AdminSiteDetailPage() {
       const res = await fetch("/api/admin/assignments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteId, workerId: selectedWorkerId, workType: assignWorkType }),
+        body: JSON.stringify({ siteId, workerId: selectedWorkerId, workType: assignWorkType, serviceStep: assignServiceStep }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -402,6 +403,14 @@ export default function AdminSiteDetailPage() {
             {workerOptions.map(w => (
               <option key={w.id} value={w.id}>{w.workerName} / {w.phoneNumber ?? "-"}</option>
             ))}
+          </select>
+          <select
+            value={assignServiceStep}
+            onChange={e => setAssignServiceStep(e.target.value)}
+            className={T.select}
+          >
+            <option value="FIELD_TRAINING">지원고용 현장훈련</option>
+            <option value="ADAPTATION">취업 후 적응지도</option>
           </select>
           <select
             value={assignWorkType}

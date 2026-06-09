@@ -65,7 +65,7 @@ function EvalInner() {
 
   const label1 = evalType === "TRAINING" ? "사전" : "초기";
   const label2 = evalType === "TRAINING" ? "현장" : "후기";
-  const title  = evalType === "TRAINING" ? "훈련생 종합평가" : "적응지도 종합평가";
+  const title  = evalType === "TRAINING" ? "지원고용 훈련생 종합평가" : "취업 후 적응지도 종합평가";
 
   useEffect(() => {
     if (!traineeId) { setLoading(false); return; }

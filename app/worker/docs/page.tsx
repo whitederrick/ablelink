@@ -37,10 +37,10 @@ interface SiteInfo {
 // 전체 문서 목록 (상태 초기화용)
 const ALL_DOC_TYPES = [
   { id: "ATTENDANCE_SHEET",      label: "출근부",          Icon: ClipboardList, desc: "월별 출퇴근 기록",                       needsTrainee: false },
-  { id: "TRAINING_DAILY_LOG",    label: "훈련일지",         Icon: BookOpen,      desc: "지원고용 훈련일지 (일별 작성)",           needsTrainee: true  },
-  { id: "TRAINEE_FINAL_EVAL",    label: "훈련생 종합평가",  Icon: BarChart2,     desc: "지원고용 훈련생 종합 평가기록부 (종료 시)", needsTrainee: true  },
-  { id: "ADAPTATION_DAILY_LOG",  label: "적응지도 일지",    Icon: FileText,      desc: "취업 후 적응지도 일지 (일별 작성)",       needsTrainee: true  },
-  { id: "ADAPTATION_FINAL_EVAL", label: "적응지도 종합평가",Icon: TrendingUp,    desc: "취업 후 적응지도 종합 평가기록부 (종료 시)", needsTrainee: true  },
+  { id: "TRAINING_DAILY_LOG",    label: "지원고용 훈련일지",        Icon: BookOpen,      desc: "일별 작성",           needsTrainee: true  },
+  { id: "TRAINEE_FINAL_EVAL",    label: "지원고용 훈련생 종합평가", Icon: BarChart2,     desc: "훈련 종료 시 작성",   needsTrainee: true  },
+  { id: "ADAPTATION_DAILY_LOG",  label: "취업 후 적응지도 일지",    Icon: FileText,      desc: "일별 작성",           needsTrainee: true  },
+  { id: "ADAPTATION_FINAL_EVAL", label: "취업 후 적응지도 종합평가",Icon: TrendingUp,    desc: "적응지도 종료 시 작성", needsTrainee: true  },
 ];
 
 // 서비스 단계별 문서 세트
@@ -97,7 +97,7 @@ function DocsContent() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/worker/site/current").then(r => r.json()).then(d => {
+    fetch("/api/worker/site/current", { cache: "no-store" }).then(r => r.json()).then(d => {
       if (d.success && d.data) {
         setSiteInfo({
           companyName:  d.data.companyName,
@@ -320,14 +320,14 @@ function DocsContent() {
 
         {/* 서비스 세트 안내 */}
         {siteInfo && (
-          <div className={`mx-4 mt-3 rounded-xl border px-4 py-3 ${isAdaptation ? "border-violet-100 bg-violet-50" : "border-sky-100 bg-sky-50"}`}>
-            <p className={`text-xs font-black ${isAdaptation ? "text-violet-700" : "text-sky-700"}`}>
+          <div className={`mx-4 mt-3 rounded-xl border px-4 py-3 ${isAdaptation ? "border-amber-200 bg-amber-50" : "border-sky-100 bg-sky-50"}`}>
+            <p className={`text-xs font-black ${isAdaptation ? "text-amber-700" : "text-sky-700"}`}>
               현재 서비스: <span className="font-black">{serviceLabel}</span>
             </p>
-            <p className={`mt-0.5 text-[11px] font-semibold ${isAdaptation ? "text-violet-500" : "text-sky-500"}`}>
+            <p className={`mt-0.5 text-[11px] font-semibold ${isAdaptation ? "text-amber-600" : "text-sky-500"}`}>
               {isAdaptation
-                ? "출근부 · 적응지도 일지 (일별) · 적응지도 종합평가 (종료 시) 3종"
-                : "출근부 · 훈련일지 (일별) · 훈련생 종합평가 (훈련 종료 시) 3종"}
+                ? "출근부 · 취업 후 적응지도 일지 (일별) · 취업 후 적응지도 종합평가 (종료 시) 3종"
+                : "출근부 · 지원고용 훈련일지 (일별) · 지원고용 훈련생 종합평가 (종료 시) 3종"}
             </p>
           </div>
         )}
@@ -341,7 +341,13 @@ function DocsContent() {
             </span>
           </div>
           <div className="flex flex-col gap-3">
-            {DOC_TYPES.map(({ id, label, Icon, desc, needsTrainee }) => {
+            {!siteInfo ? (
+              <div className="flex flex-col gap-3">
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="h-16 animate-pulse rounded-xl border border-slate-100 bg-slate-50" />
+                ))}
+              </div>
+            ) : DOC_TYPES.map(({ id, label, Icon, desc, needsTrainee }) => {
               const state = docStates[id];
               const isChecked = state.checked;
               return (
@@ -409,7 +415,7 @@ function DocsContent() {
                           className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-xs font-black text-emerald-700 transition active:scale-[0.97]"
                         >
                           <PenLine className="h-3.5 w-3.5" aria-hidden="true" />
-                          {id === "TRAINEE_FINAL_EVAL" ? "훈련생 종합평가 입력" : "적응지도 종합평가 입력"}
+                          {id === "TRAINEE_FINAL_EVAL" ? "지원고용 훈련생 종합평가 입력" : "취업 후 적응지도 종합평가 입력"}
                         </button>
                       )}
 

@@ -29,6 +29,7 @@ export default function BatchWorklogPage() {
 
   // 사이트 정보
   const [assignmentId, setAssignmentId] = useState<string>("");
+  const [trainingType, setTrainingType] = useState<"PRE" | "FIELD" | "ADAPTATION">("FIELD");
   const [trainees, setTrainees]         = useState<Trainee[]>([]);
   const [siteLoading, setSiteLoading]   = useState(true);
   const [planOk, setPlanOk]             = useState(false);
@@ -72,6 +73,7 @@ export default function BatchWorklogPage() {
         if (!data.success || !data.data) { router.push("/worker/home"); return; }
         const d = data.data;
         setAssignmentId(d.assignmentId);
+        setTrainingType(d.trainingType ?? "FIELD");
         setTrainees(d.trainees ?? []);
         // AI 일지는 STANDARD 이상(2026-06-06 재배치). TRIAL은 전기능 허용.
         const ok = ["STANDARD", "PRO"].includes(d.agencyPlanType ?? "") ||
@@ -241,7 +243,7 @@ export default function BatchWorklogPage() {
           logs: toSave.map(d => ({
             date:         d.date,
             traineeId:    d.traineeId,
-            trainingType: "FIELD",
+            trainingType: trainingType,
             time1on1:     time1on1,
             timeGroup:    0,
             content:      d.content,

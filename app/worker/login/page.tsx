@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Lock, User } from "lucide-react";
+
+const REMEMBER_KEY = "ablelink_worker_last_login_id";
 
 export default function WorkerLoginPage() {
   const router = useRouter();
@@ -11,6 +13,14 @@ export default function WorkerLoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // 마지막 로그인 아이디 자동 채움(비밀번호는 보안상 저장 안 함)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(REMEMBER_KEY);
+      if (saved) setLoginId(saved);
+    } catch { /* localStorage 불가 환경 무시 */ }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,6 +37,7 @@ export default function WorkerLoginPage() {
         setError(data.message || "로그인에 실패했습니다.");
         return;
       }
+      try { localStorage.setItem(REMEMBER_KEY, loginId.trim()); } catch { /* noop */ }
       router.replace("/worker/home"); // 셀프 현장등록 종료 — 현장 없어도 홈(배정 대기 안내)
     } catch {
       setError("서버와 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");

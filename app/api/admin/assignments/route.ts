@@ -35,6 +35,7 @@ function toItem(r: any) {
     statusReason: r.statusReason ?? null,
     assignedByManagerId: r.assignedByManagerId != null ? String(r.assignedByManagerId) : null,
     workType: r.workType ?? "FULL_DAY",
+    serviceStep: r.serviceStep ?? "FIELD_TRAINING",
     commuteGuidanceIncluded: r.commuteGuidanceIncluded ?? true,
     customWorkStart: r.customWorkStart ?? null,
     customWorkEnd: r.customWorkEnd ?? null,
@@ -107,6 +108,7 @@ export async function GET(req: NextRequest) {
           select: { id: true, workerName: true, loginId: true, phoneNumber: true, role: true, status: true },
         },
         workType: true,
+        serviceStep: true,
         commuteGuidanceIncluded: true,
         customWorkStart: true,
         customWorkEnd: true,
@@ -175,6 +177,11 @@ export async function POST(req: NextRequest) {
     const customWorkStart = workType === "CUSTOM" ? (body.customWorkStart ?? null) : null;
     const customWorkEnd   = workType === "CUSTOM" ? (body.customWorkEnd ?? null) : null;
 
+    // 서비스 단계: 지원고용(현장훈련) / 사전훈련 / 취업 후 적응지도. 미지정 시 기본 FIELD_TRAINING.
+    const validSteps = ["PRE_TRAINING", "FIELD_TRAINING", "ADAPTATION"];
+    const rawStep = body.serviceStep != null ? String(body.serviceStep).trim() : null;
+    const serviceStep = validSteps.includes(rawStep ?? "") ? (rawStep as any) : "FIELD_TRAINING";
+
     // manager 로그인 계정(Manager.id) 기록. admin(운영자) 직접 배정은 null.
     const assignedByManagerId = session.kind === "manager" ? session.managerId : null;
 
@@ -186,6 +193,7 @@ export async function POST(req: NextRequest) {
         // 초대·셀프등록 경로와 동일하게 ACTIVE로 생성 (ASSIGNED→ACTIVE 승격 경로가 없어
         // 급여 정산·대시보드·구독 인원(ACTIVE만 집계)에서 누락되던 문제 방지)
         status: "ACTIVE",
+        serviceStep,
         isMainWorker,
         assignedAt: new Date(),
         startDate: body.startDate ? new Date(body.startDate) : new Date(),

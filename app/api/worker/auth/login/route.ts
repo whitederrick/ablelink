@@ -8,9 +8,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { checkRateLimit, resetRateLimit } from "@/lib/rateLimit";
-import { signWorkerToken, WORKER_COOKIE } from "@/app/worker/_lib/session";
-
-const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7일
+import { signWorkerToken, WORKER_COOKIE, workerCookieOptions } from "@/app/worker/_lib/session";
 
 export async function POST(request: Request) {
   try {
@@ -109,14 +107,8 @@ export async function POST(request: Request) {
         : null,
     });
 
-    // 🔐 HttpOnly 쿠키로 토큰 저장 (XSS 방어)
-    res.cookies.set(WORKER_COOKIE, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: SESSION_MAX_AGE,
-      path: "/",
-    });
+    // 🔐 HttpOnly 쿠키로 토큰 저장 (XSS 방어). 90일 + 앱 사용 시 롤링 갱신.
+    res.cookies.set(WORKER_COOKIE, token, workerCookieOptions());
 
     return res;
   } catch (error) {

@@ -5,8 +5,21 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export const WORKER_COOKIE = "ablelink_worker_session";
-const MAX_AGE = 60 * 60 * 24 * 7;
+// 현장을 다니는 직무지도원의 재로그인 부담을 줄이기 위해 90일. 앱을 열 때마다 갱신(롤링)됨.
+export const WORKER_SESSION_MAX_AGE = 60 * 60 * 24 * 90;
+const MAX_AGE = WORKER_SESSION_MAX_AGE;
 const WORKER_TOKEN_AUD = "ablelink-worker";
+
+// 워커 세션 쿠키 옵션(로그인·리프레시 공통)
+export function workerCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    maxAge: WORKER_SESSION_MAX_AGE,
+    path: "/",
+  };
+}
 
 function getSecret() {
   const s = process.env.WORKER_SESSION_SECRET;

@@ -7,6 +7,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { getWorkerPremiumStatus, getWorkerDocAccess } from "@/lib/planGuard";
+import { getKstDateString } from "@/lib/time";
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,8 +17,10 @@ export async function GET(request: NextRequest) {
     }
 
     const workerId = BigInt(session.workerId);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // ⚠️ 서버는 UTC라 new Date()로 비교하면 KST 자정~09시 사이 하루 빠르게 잡혀
+    //    "오늘 시작한 배정"이 미시작으로 제외됨(현장·훈련생 전부 빈값). KST 오늘로 비교.
+    const todayStr = getKstDateString();
+    const today = new Date(`${todayStr}T00:00:00.000Z`);
 
     const assignment = await prisma.siteAssignment.findFirst({
       where: {
@@ -40,8 +43,7 @@ export async function GET(request: NextRequest) {
     const site = assignment.site;
     const agency = assignment.agency;
 
-    // 오늘 출근 기록 조회
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    // 오늘 출근 기록 조회 (KST todayStr 재사용)
     const todayAttendance = await prisma.dailyAttendance.findFirst({
       where: { workerId, assignmentId: assignment.id, workDate: todayStr },
       orderBy: { id: "desc" },
@@ -100,6 +102,9 @@ export async function GET(request: NextRequest) {
           ? "PRE" : (assignment as any)?.serviceStep === "ADAPTATION"
           ? "ADAPTATION" : "FIELD",
       },
+    }, {
+      // 브라우저가 과거(전환 전) 값을 캐시로 먼저 반환해 화면이 잠깐 옛 단계로 보이는 것 방지
+      headers: { "Cache-Control": "no-store, must-revalidate" },
     });
   } catch (error: any) {
     console.error("[worker/site/current]", error);

@@ -50,6 +50,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const updateData: any = { workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd };
     if (body.startDate !== undefined && body.startDate) updateData.startDate = new Date(body.startDate);
     if (body.endDate !== undefined)  updateData.endDate  = body.endDate ? new Date(body.endDate) : null;
+    // 서비스 단계 전환(지원고용 ↔ 적응지도). 미지정 시 기존값 유지.
+    const VALID_STEPS = ["PRE_TRAINING", "FIELD_TRAINING", "ADAPTATION"];
+    if (body.serviceStep !== undefined) {
+      const step = String(body.serviceStep).trim();
+      if (!VALID_STEPS.includes(step)) {
+        return NextResponse.json({ success: false, message: "유효하지 않은 서비스 단계입니다." }, { status: 400 });
+      }
+      updateData.serviceStep = step;
+    }
 
     const updated = await prisma.siteAssignment.update({
       where: { id: assignmentId },
@@ -60,6 +69,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         commuteGuidanceIncluded: true,
         customWorkStart: true,
         customWorkEnd: true,
+        serviceStep: true,
       },
     });
 

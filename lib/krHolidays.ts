@@ -38,3 +38,12 @@ export function getKrHolidays(year: number, month: number): Record<string, strin
   }
   return result;
 }
+
+/** [startYmd, endYmd] 범위 내 공휴일 날짜(YYYY-MM-DD) 목록 */
+export function getKrHolidayDates(startYmd: string, endYmd: string): string[] {
+  return Object.keys(KR_HOLIDAYS).filter((d) => d >= startYmd && d <= endYmd).sort();
+}
+
+export function isKrHoliday(ymd: string): boolean {
+  return ymd in KR_HOLIDAYS;
+}

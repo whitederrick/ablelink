@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
+import SessionRefresh from "./_components/SessionRefresh";
 
 export const metadata: Metadata = {
   title: "AbleLink - 직무지도원",
@@ -31,6 +32,7 @@ export const viewport: Viewport = {
 export default function WorkerLayout({ children }: { children: React.ReactNode }) {
   return (
     <div>
+      <SessionRefresh />
       {children}
       <PWAInstallPrompt />
     </div>

@@ -6,16 +6,24 @@ import PageHeader from "../_components/PageHeader";
 import { CheckCircle2, Copy, Pencil, Send } from "lucide-react";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM";
+type ServiceStep = "PRE_TRAINING" | "FIELD_TRAINING" | "ADAPTATION";
 
 interface Assignment {
   id: string;
   workType: WorkType;
+  serviceStep: ServiceStep;
   commuteGuidanceIncluded: boolean;
   customWorkStart: string | null;
   customWorkEnd: string | null;
   startDate: string | null;
   endDate: string | null;
 }
+
+// 서비스 단계(지원고용/적응지도) — 문서 세트와 일지 종류를 결정. 현장은 지원고용→적응지도로 전환될 수 있음.
+const SERVICE_STEP_OPTIONS: { value: ServiceStep; label: string; desc: string }[] = [
+  { value: "FIELD_TRAINING", label: "지원고용 현장훈련", desc: "훈련일지·훈련생 종합평가" },
+  { value: "ADAPTATION",     label: "취업 후 적응지도", desc: "적응지도 일지·종합평가" },
+];
 
 interface Worker {
   id: string;
@@ -215,6 +223,8 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   onClose: () => void; onSaved: (updated: Assignment) => void;
 }) {
   const [workType, setWorkType] = useState<WorkType>(initial.workType ?? "FULL_DAY");
+  // 적응지도면 ADAPTATION, 그 외(사전/현장훈련)는 지원고용으로 취급
+  const [serviceStep, setServiceStep] = useState<ServiceStep>(initial.serviceStep === "ADAPTATION" ? "ADAPTATION" : "FIELD_TRAINING");
   const [commuteGuidanceIncluded, setCommuteGuidanceIncluded] = useState(initial.commuteGuidanceIncluded ?? true);
   // 관리자가 설정한 실제 시간 (미설정 시 기본값)
   const [workStart, setWorkStart] = useState(
@@ -259,6 +269,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workType,
+          serviceStep,
           commuteGuidanceIncluded: isFullDay ? false : commuteGuidanceIncluded,
           customWorkStart: workStart,
           customWorkEnd:   workEnd,
@@ -269,7 +280,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
       onSaved({
-        ...initial, workType,
+        ...initial, workType, serviceStep,
         commuteGuidanceIncluded: isFullDay ? false : commuteGuidanceIncluded,
         customWorkStart: workStart,
         customWorkEnd:   workEnd,
@@ -285,8 +296,25 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   return (
     <div className={T.modalOverlay}>
       <div className={T.modalContent}>
-        <h2 className="mb-1 text-base font-black text-slate-900">근무형태 설정</h2>
+        <h2 className="mb-1 text-base font-black text-slate-900">배정 설정</h2>
         <p className="mb-5 text-sm font-semibold text-slate-400">{worker.workerName} · {worker.activeAssignment?.siteName}</p>
+
+        {/* 서비스 단계 선택 (지원고용 ↔ 적응지도) */}
+        <div className="mb-4">
+          <label className={T.label}>서비스 단계</label>
+          <div className="grid grid-cols-2 gap-2">
+            {SERVICE_STEP_OPTIONS.map(opt => (
+              <button key={opt.value} type="button" onClick={() => setServiceStep(opt.value)}
+                className={`rounded-xl border px-3 py-2.5 text-left transition active:scale-95 ${
+                  serviceStep === opt.value ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}>
+                <span className={`block text-sm ${serviceStep === opt.value ? "font-black" : "font-semibold"}`}>{opt.label}</span>
+                <span className={`block text-xs ${serviceStep === opt.value ? "text-slate-300" : "text-slate-400"}`}>{opt.desc}</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs font-semibold text-slate-400">현장이 취업 후 적응지도로 전환되면 여기서 변경하세요. 과거 일지는 그대로 보존됩니다.</p>
+        </div>
 
         {/* 근무형태 선택 */}
         <div className="mb-4">
@@ -491,6 +519,7 @@ export default function WorkersPage() {
           const item = data.items.find((i: any) => i.id === assignmentId) ?? data.items[0];
           const asgn: Assignment = {
             id: item.id, workType: (item.workType as WorkType) ?? "FULL_DAY",
+            serviceStep: (item.serviceStep as ServiceStep) ?? "FIELD_TRAINING",
             commuteGuidanceIncluded: item.commuteGuidanceIncluded ?? true,
             customWorkStart: item.customWorkStart ?? null, customWorkEnd: item.customWorkEnd ?? null,
             startDate: item.startDate ?? null, endDate: item.endDate ?? null,

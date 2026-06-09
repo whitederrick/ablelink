@@ -527,7 +527,7 @@ function WorklogForm() {
         </button>
         <div className="flex flex-col items-center gap-0.5">
           <span className="text-base font-black text-slate-900">
-            {isAdaptation ? "적응지도 일지" : `훈련 일지`}
+            {isAdaptation ? "취업 후 적응지도 일지" : "지원고용 훈련일지"}
           </span>
           <span className="text-xs font-semibold text-slate-400">{traineeName || "훈련생 선택"}</span>
         </div>
