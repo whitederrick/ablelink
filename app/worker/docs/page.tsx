@@ -58,7 +58,7 @@ const NEEDS_MANAGER_SIGN = new Set(["ATTENDANCE_SHEET", "TRAINING_DAILY_LOG"]);
 
 type DocState = {
   checked: boolean;
-  traineeId: string;
+  traineeIds: string[];
   loading: boolean;
   result: { success: boolean; msg: string; pdfBase64?: string; fileName?: string } | null;
 };
@@ -76,7 +76,7 @@ function DocsContent() {
   const [submitLoading, setSubmitLoading] = useState(false);
 
   const [docStates, setDocStates] = useState<Record<string, DocState>>(
-    () => Object.fromEntries(ALL_DOC_TYPES.map(d => [d.id, { checked: false, traineeId: "", loading: false, result: null }]))
+    () => Object.fromEntries(ALL_DOC_TYPES.map(d => [d.id, { checked: false, traineeIds: [], loading: false, result: null }]))
   );
 
   useEffect(() => {
@@ -120,11 +120,20 @@ function DocsContent() {
     }));
   }
 
-  function setTrainee(docId: string, traineeId: string) {
-    setDocStates(prev => ({
-      ...prev,
-      [docId]: { ...prev[docId], traineeId },
-    }));
+  function toggleTrainee(docId: string, traineeId: string) {
+    setDocStates(prev => {
+      const cur = prev[docId].traineeIds;
+      const next = cur.includes(traineeId) ? cur.filter(x => x !== traineeId) : [...cur, traineeId];
+      return { ...prev, [docId]: { ...prev[docId], traineeIds: next } };
+    });
+  }
+
+  function toggleAllTrainees(docId: string, ids: string[]) {
+    setDocStates(prev => {
+      const cur = prev[docId].traineeIds;
+      const allSelected = ids.length > 0 && ids.every(id => cur.includes(id));
+      return { ...prev, [docId]: { ...prev[docId], traineeIds: allSelected ? [] : ids } };
+    });
   }
 
   // 현재 서비스 단계에 맞는 문서 세트
@@ -143,13 +152,14 @@ function DocsContent() {
   async function sendDoc(docId: string): Promise<void> {
     const docInfo = ALL_DOC_TYPES.find(d => d.id === docId)!;
     const state = docStates[docId];
-    if (docInfo.needsTrainee && !state.traineeId) {
+    if (docInfo.needsTrainee && state.traineeIds.length === 0) {
       alert(`${docInfo.label}: 훈련생을 선택해주세요.`);
       return;
     }
 
     setDocStates(prev => ({ ...prev, [docId]: { ...prev[docId], loading: true, result: null } }));
     try {
+      // 미리보기는 선택한 훈련생 중 첫 명 기준으로 생성
       const res = await fetch("/api/worker/docs/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -157,7 +167,7 @@ function DocsContent() {
           docType: docId,
           periodStart,
           periodEnd,
-          traineeId: state.traineeId || undefined,
+          traineeId: state.traineeIds[0] || undefined,
           companyManagerSignToken: signToken || undefined,
         }),
       });
@@ -185,15 +195,20 @@ function DocsContent() {
     const checkedDocs = ALL_DOC_TYPES.filter(d => activeDocIds.includes(d.id) && docStates[d.id].checked);
     if (checkedDocs.length === 0) { alert("제출할 문서를 선택해주세요."); return; }
     for (const doc of checkedDocs) {
-      if (doc.needsTrainee && !docStates[doc.id].traineeId) {
+      if (doc.needsTrainee && docStates[doc.id].traineeIds.length === 0) {
         alert(`${doc.label}: 훈련생을 선택해주세요.`);
         return;
       }
     }
-    if (!confirm("선택한 문서를 에이전시에 최종 제출할까요?\n제출하면 담당 매니저가 확인·서명합니다. (수정 후 다시 제출하면 새 버전으로 관리됩니다)")) return;
+    // 훈련생별로 문서를 펼쳐 제출(일지/평가는 훈련생당 1건)
+    const documents = checkedDocs.flatMap(d =>
+      d.needsTrainee
+        ? docStates[d.id].traineeIds.map(tid => ({ docType: d.id, traineeId: tid }))
+        : [{ docType: d.id, traineeId: undefined as string | undefined }]
+    );
+    if (!confirm(`선택한 문서 ${documents.length}건을 에이전시에 최종 제출할까요?\n제출하면 담당 매니저가 확인·서명합니다. (수정 후 다시 제출하면 새 버전으로 관리됩니다)`)) return;
     setSubmitLoading(true);
     try {
-      const documents = checkedDocs.map(d => ({ docType: d.id, traineeId: docStates[d.id].traineeId || undefined }));
       const res = await fetch("/api/worker/docs/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -378,51 +393,77 @@ function DocsContent() {
                   {/* 체크 시 세부 설정 영역 */}
                   {isChecked && (
                     <div className="bg-white px-3.5 pb-3.5 pt-3">
-                      {/* 훈련생 선택 */}
+                      {/* 훈련생 선택 (여러 명 선택 가능 → 훈련생별 문서 생성) */}
                       {needsTrainee && (
                         <div className="mb-3">
-                          <p className="mb-2 text-xs font-black text-slate-600">
-                            훈련생 선택 <span className="font-semibold text-rose-500">*필수</span>
-                          </p>
+                          <div className="mb-2 flex items-center justify-between">
+                            <p className="text-xs font-black text-slate-600">
+                              훈련생 선택 <span className="font-semibold text-rose-500">*필수</span>
+                              <span className="ml-1 font-semibold text-slate-400">(여러 명 가능)</span>
+                            </p>
+                            {siteInfo?.trainees && siteInfo.trainees.length > 1 && (
+                              <button
+                                onClick={() => toggleAllTrainees(id, siteInfo!.trainees.map(t => t.id))}
+                                className="text-[11px] font-black text-sky-600 active:scale-95"
+                              >
+                                {siteInfo.trainees.every(t => state.traineeIds.includes(t.id)) ? "전체 해제" : "전체 선택"}
+                              </button>
+                            )}
+                          </div>
                           {siteInfo?.trainees && siteInfo.trainees.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
-                              {siteInfo.trainees.map(t => (
-                                <button
-                                  key={t.id}
-                                  onClick={() => setTrainee(id, state.traineeId === t.id ? "" : t.id)}
-                                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black transition active:scale-95 ${
-                                    state.traineeId === t.id
-                                      ? "border-slate-950 bg-slate-950 text-white"
-                                      : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-400"
-                                  }`}
-                                >
-                                  <User className="h-3 w-3" aria-hidden="true" />
-                                  {t.name}
-                                </button>
-                              ))}
+                              {siteInfo.trainees.map(t => {
+                                const sel = state.traineeIds.includes(t.id);
+                                return (
+                                  <button
+                                    key={t.id}
+                                    onClick={() => toggleTrainee(id, t.id)}
+                                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black transition active:scale-95 ${
+                                      sel
+                                        ? "border-slate-950 bg-slate-950 text-white"
+                                        : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-400"
+                                    }`}
+                                  >
+                                    {sel ? <Check className="h-3 w-3" aria-hidden="true" /> : <User className="h-3 w-3" aria-hidden="true" />}
+                                    {t.name}
+                                  </button>
+                                );
+                              })}
                             </div>
                           ) : (
                             <p className="text-xs font-semibold text-slate-400">담당 훈련생이 없습니다.</p>
                           )}
+                          {state.traineeIds.length > 1 && (
+                            <p className="mt-1.5 text-[11px] font-semibold text-slate-400">
+                              선택한 {state.traineeIds.length}명에 대해 각각 문서가 생성됩니다.
+                            </p>
+                          )}
                         </div>
                       )}
 
-                      {/* 평가 점수 입력 */}
-                      {(id === "TRAINEE_FINAL_EVAL" || id === "ADAPTATION_FINAL_EVAL") && state.traineeId && (
-                        <button
-                          onClick={() => {
+                      {/* 평가 점수 입력 — 선택한 훈련생별로 각각 */}
+                      {(id === "TRAINEE_FINAL_EVAL" || id === "ADAPTATION_FINAL_EVAL") && state.traineeIds.length > 0 && (
+                        <div className="mb-3 space-y-2">
+                          {state.traineeIds.map(tid => {
                             const isTraining = id === "TRAINEE_FINAL_EVAL";
-                            const t = siteInfo?.trainees?.find(t => t.id === state.traineeId);
-                            const path = isTraining
-                              ? `/worker/evaluation/training?traineeId=${state.traineeId}&traineeName=${encodeURIComponent(t?.name||"")}&periodStart=${periodStart}&periodEnd=${periodEnd}`
-                              : `/worker/evaluation/adaptation?traineeId=${state.traineeId}&traineeName=${encodeURIComponent(t?.name||"")}&periodStart=${periodStart}&periodEnd=${periodEnd}`;
-                            router.push(path);
-                          }}
-                          className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-xs font-black text-emerald-700 transition active:scale-[0.97]"
-                        >
-                          <PenLine className="h-3.5 w-3.5" aria-hidden="true" />
-                          {id === "TRAINEE_FINAL_EVAL" ? "지원고용 훈련생 종합평가 입력" : "취업 후 적응지도 종합평가 입력"}
-                        </button>
+                            const t = siteInfo?.trainees?.find(t => t.id === tid);
+                            return (
+                              <button
+                                key={tid}
+                                onClick={() => {
+                                  const path = isTraining
+                                    ? `/worker/evaluation/training?traineeId=${tid}&traineeName=${encodeURIComponent(t?.name||"")}&periodStart=${periodStart}&periodEnd=${periodEnd}`
+                                    : `/worker/evaluation/adaptation?traineeId=${tid}&traineeName=${encodeURIComponent(t?.name||"")}&periodStart=${periodStart}&periodEnd=${periodEnd}`;
+                                  router.push(path);
+                                }}
+                                className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-xs font-black text-emerald-700 transition active:scale-[0.97]"
+                              >
+                                <PenLine className="h-3.5 w-3.5" aria-hidden="true" />
+                                {t?.name} {isTraining ? "종합평가 입력" : "적응지도 평가 입력"}
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
 
                       {/* 발송 결과 */}
