@@ -55,6 +55,9 @@ export async function GET(req: NextRequest) {
         serviceStep: a.assignment?.serviceStep ?? null,
         startTime: a.startTime ? a.startTime.toISOString() : null,
         endTime: a.endTime ? a.endTime.toISOString() : null,
+        // 실제 출퇴근 버튼 시각(정상 출근 확인용). 출근부는 위 고정시각 사용.
+        actualStartTime: (a as any).actualStartTime ? (a as any).actualStartTime.toISOString() : null,
+        actualEndTime: (a as any).actualEndTime ? (a as any).actualEndTime.toISOString() : null,
         workedMinutes,
         isFinalClosed: a.isFinalClosed,
         isGpsModified: a.isGpsModified,

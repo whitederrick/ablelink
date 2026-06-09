@@ -20,6 +20,7 @@ interface HistoryItem {
   id: string; workDate: string; siteName: string;
   serviceStep: string | null;
   startTime: string | null; endTime: string | null;
+  actualStartTime: string | null; actualEndTime: string | null;
   workedMinutes: number;
   isFinalClosed: boolean; isGpsModified: boolean;
   logStatus: "NONE" | "DRAFT" | "DONE";
@@ -278,6 +279,14 @@ export default function HistoryPage() {
                     <span>퇴근 <strong>{fmtTime(item.endTime)}</strong></span>
                     {item.workedMinutes > 0 && <span className="text-slate-400">{fmtMin(item.workedMinutes)}</span>}
                   </div>
+
+                  {/* 실제 출퇴근 버튼 시각(있을 때만) — 출근부 인정시각과 별개 */}
+                  {(item.actualStartTime || item.actualEndTime) && (
+                    <p className="mt-1 text-[11px] font-semibold text-sky-600">
+                      실제 출퇴근 {fmtTime(item.actualStartTime)} ~ {fmtTime(item.actualEndTime)}
+                      <span className="ml-1 font-medium text-slate-400">(출근부는 근무형태 시각으로 작성)</span>
+                    </p>
+                  )}
 
                   {(item.isGpsModified || item.hasIssue) && (
                     <div className="mt-2 flex flex-wrap gap-1.5">

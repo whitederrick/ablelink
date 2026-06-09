@@ -219,7 +219,8 @@ export async function POST(request: NextRequest) {
         basePointId: decidedBasePointId,          // ✅ 증빙(없을 수 있음)
         workDate: todayString,
 
-        startTime: fixedStart,
+        startTime: fixedStart,                    // 출근부(공단)용 근무형태 고정시각
+        actualStartTime: new Date(),              // 실제 출근 버튼 시각(정상 출근 여부 확인용)
         startLocLat: Number(latitude),
         startLocLon: Number(longitude),
 

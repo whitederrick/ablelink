@@ -306,7 +306,8 @@ export async function POST(request: NextRequest) {
       const fixedEnd = kstWallTimeToInstant(attendance.workDate, workTimes.end);
 
       const baseUpdateData: any = {
-        endTime: fixedEnd,
+        endTime: fixedEnd,                        // 출근부(공단)용 근무형태 고정시각
+        actualEndTime: new Date(),                // 실제 퇴근 버튼 시각(정상 퇴근 여부 확인용)
         endLocLat: Number(latitude),
         endLocLon: Number(longitude),
         status: "DONE",

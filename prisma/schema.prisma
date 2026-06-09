@@ -327,10 +327,13 @@ model DailyAttendance {
   basePointId  BigInt? @map("base_point_id")
 
   workDate    String    @map("work_date") // yyyy-mm-dd
-  startTime   DateTime? @map("start_time")
+  // startTime/endTime = 출근부(공단)용 근무형태 고정시각. actualStartTime/actualEndTime = 실제 버튼 누른 시각(정상 출근 확인용).
+  startTime       DateTime? @map("start_time")
+  actualStartTime DateTime? @map("actual_start_time")
   startLocLat Decimal?  @map("start_loc_lat")
   startLocLon Decimal?  @map("start_loc_lon")
-  endTime     DateTime? @map("end_time")
+  endTime       DateTime? @map("end_time")
+  actualEndTime DateTime? @map("actual_end_time")
   endLocLat   Decimal?  @map("end_loc_lat")
   endLocLon   Decimal?  @map("end_loc_lon")
 
