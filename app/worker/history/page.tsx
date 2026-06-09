@@ -168,6 +168,15 @@ export default function HistoryPage() {
               <span className="text-xl font-black text-emerald-600">{comma(selectedPay.netPay)}원</span>
             </div>
           </div>
+
+          <a
+            href={`/api/worker/payroll/${selectedPay.id}/payslip`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-3.5 text-sm font-black text-white transition active:scale-95"
+          >
+            임금명세서 PDF 받기
+          </a>
         </div>
       </div>
     );

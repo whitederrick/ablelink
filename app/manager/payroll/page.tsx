@@ -673,13 +673,17 @@ export default function PayrollPage() {
                         </td>
                         <td className={`${T.td} text-right font-black text-emerald-600`}>{comma(item.netPay)}원</td>
                         <td className={T.td}>
-                          {selectedRun.status === "DRAFT" && (
-                            <button className={T.btnSecondary} onClick={() => {
-                              setEditItem(item);
-                              setEditGross(String(Math.round(item.grossPay)));
-                              setEditDed(String(Math.round(item.totalDeduction)));
-                            }}>수정</button>
-                          )}
+                          <div className="flex items-center justify-end gap-1.5">
+                            <a className={T.btnSecondary} href={`/api/admin/payroll/items/${item.id}/payslip`}
+                              target="_blank" rel="noopener noreferrer">명세서</a>
+                            {selectedRun.status === "DRAFT" && (
+                              <button className={T.btnSecondary} onClick={() => {
+                                setEditItem(item);
+                                setEditGross(String(Math.round(item.grossPay)));
+                                setEditDed(String(Math.round(item.totalDeduction)));
+                              }}>수정</button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
