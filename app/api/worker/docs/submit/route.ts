@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
     const submitted: { docType: string; traineeName: string | null; versionNo: number }[] = [];
     let workerName = "";
     let ownerManagerId: bigint | null = null;
+    let agencyIdForNotice: bigint | null = null;
 
     for (const d of documents) {
       const docType = String(d?.docType || "");
@@ -116,25 +117,33 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        return { versionNo: version.versionNo, ownerManagerId: site?.ownerManagerId ?? null };
+        return { versionNo: version.versionNo, ownerManagerId: site?.ownerManagerId ?? null, agencyId: site?.agencyId ?? null };
       });
 
       ownerManagerId = res.ownerManagerId;
+      agencyIdForNotice = res.agencyId;
       submitted.push({ docType, traineeName: meta.traineeName, versionNo: res.versionNo });
     }
 
-    // 담당 매니저 알림 — 무엇을 제출했는지 + 재제출(버전업) 표시
+    // 알림 대상: 담당 매니저(있으면) → 없으면 소속 에이전시 매니저 전체.
+    let targetManagerIds: bigint[] = [];
     if (ownerManagerId) {
+      targetManagerIds = [ownerManagerId];
+    } else if (agencyIdForNotice) {
+      const mgrs = await prisma.manager.findMany({ where: { agencyId: agencyIdForNotice }, select: { id: true } });
+      targetManagerIds = mgrs.map(m => m.id);
+    }
+    if (targetManagerIds.length > 0) {
       const lines = submitted.map(s =>
         `· ${DOC_LABELS[s.docType] || s.docType}${s.traineeName ? `(${s.traineeName})` : ""}${s.versionNo > 1 ? ` — 수정본 v${s.versionNo}` : ""}`
       ).join("\n");
       const anyUpdate = submitted.some(s => s.versionNo > 1);
-      await prisma.managerNotice.create({
-        data: {
-          managerId: ownerManagerId,
+      await prisma.managerNotice.createMany({
+        data: targetManagerIds.map(mid => ({
+          managerId: mid,
           title: `[문서 ${anyUpdate ? "재" : ""}제출] ${workerName} · ${periodStart}~${periodEnd}`,
-          body: `${workerName} 직무지도원이 아래 문서를 제출했습니다.\n\n${lines}`,
-        },
+          body: `${workerName} 직무지도원이 아래 문서를 ${anyUpdate ? "재" : ""}제출했습니다.\n\n${lines}`,
+        })),
       });
     }
 
