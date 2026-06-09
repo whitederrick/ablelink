@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Send, Bell, X, Users, User } from "lucide-react";
+import { Send, Users, User, Building2 } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
 
 type Worker  = { id: string; workerName: string; siteName: string };
+type Site    = { id: string; companyName: string };
+type SendMode = "ALL" | "GROUP" | "INDIVIDUAL";
 type Notice = { id: string; workerId: string; workerName: string; title: string; body: string; type: string; read: boolean; createdAt: string };
 
 const TYPE_OPTS = [
@@ -22,7 +24,9 @@ export default function NoticesPage() {
   const [toast, setToast]       = useState("");
 
   // 발송 폼
-  const [targetAll, setTargetAll] = useState(true);
+  const [mode, setMode] = useState<SendMode>("ALL");
+  const [sites, setSites] = useState<Site[]>([]);
+  const [selectedSite, setSelectedSite] = useState("");
   const [selectedWorkers, setSelectedWorkers] = useState<Set<string>>(new Set());
   const [title, setTitle]   = useState("");
   const [body, setBody]     = useState("");
@@ -40,30 +44,36 @@ export default function NoticesPage() {
       .then(d=>{
         if(d.success) setWorkers(d.data?.map((c:any)=>({id:c.id,workerName:c.workerName,siteName:c.currentSiteName??c.siteName??""}))||[]);
       }).catch(()=>{}).finally(()=>setLoading(false));
+    fetch("/api/admin/sites?pageSize=200").then(r=>r.json())
+      .then(d=>{ if(d.success) setSites((d.items||[]).map((s:any)=>({id:String(s.id),companyName:s.companyName}))); }).catch(()=>{});
     loadNotices();
   },[loadNotices]);
 
   async function send() {
     if(!title.trim()||!body.trim()){showToast("제목과 내용을 입력해주세요.");return;}
+    if(mode==="GROUP"&&!selectedSite){showToast("현장을 선택해주세요.");return;}
+    if(mode==="INDIVIDUAL"&&selectedWorkers.size===0){showToast("직무지도원을 선택해주세요.");return;}
     setSending(true);
-    const userIds = targetAll ? undefined : [...selectedWorkers];
+    const payload: any = { audience: mode, title: title.trim(), body: body.trim(), type };
+    if(mode==="GROUP") payload.siteId = selectedSite;
+    if(mode==="INDIVIDUAL") payload.userIds = [...selectedWorkers];
     const res = await fetch("/api/admin/notices",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ userIds, title: title.trim(), body: body.trim(), type }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     setSending(false);
     if(data.success){
-      showToast(`${data.sent}명에게 공지를 발송했습니다.`);
-      setTitle(""); setBody(""); setType("INFO"); setSelectedWorkers(new Set());
+      showToast(`${data.sent}명에게 발송했습니다.`);
+      setTitle(""); setBody(""); setType("INFO"); setSelectedWorkers(new Set()); setSelectedSite("");
       loadNotices();
     } else showToast(data.message||"발송 실패");
   }
 
   return (
     <div>
-      <PageHeader title="알림 발송(개별)" sub="직무지도원에게 공지·안내·반려 알림을 발송합니다." />
+      <PageHeader title="알림 발송(전체/그룹/개별)" sub="직무지도원에게 전체·현장 그룹·개별로 알림을 발송합니다." />
 
       <div className="mb-4 flex gap-2">
         {(["send","history"] as const).map(t=>(
@@ -80,16 +90,25 @@ export default function NoticesPage() {
           <div className="rounded-2xl border border-slate-100 bg-white p-5">
             <p className="mb-3 text-sm font-black text-slate-900">수신 대상</p>
             <div className="flex gap-2 mb-3">
-              <button onClick={()=>setTargetAll(true)}
-                className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition ${targetAll?"border-slate-950 bg-slate-950 text-white":"border-slate-200 bg-white text-slate-600"}`}>
-                <Users className="h-4 w-4"/>전체 직무지도원
-              </button>
-              <button onClick={()=>setTargetAll(false)}
-                className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition ${!targetAll?"border-slate-950 bg-slate-950 text-white":"border-slate-200 bg-white text-slate-600"}`}>
-                <User className="h-4 w-4"/>개별 선택
-              </button>
+              {([
+                { m:"ALL" as SendMode,        icon:<Users className="h-4 w-4"/>,    label:"전체" },
+                { m:"GROUP" as SendMode,      icon:<Building2 className="h-4 w-4"/>, label:"그룹(현장)" },
+                { m:"INDIVIDUAL" as SendMode, icon:<User className="h-4 w-4"/>,     label:"개별" },
+              ]).map(o=>(
+                <button key={o.m} onClick={()=>setMode(o.m)}
+                  className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition ${mode===o.m?"border-slate-950 bg-slate-950 text-white":"border-slate-200 bg-white text-slate-600"}`}>
+                  {o.icon}{o.label}
+                </button>
+              ))}
             </div>
-            {!targetAll&&(
+            {mode==="GROUP"&&(
+              <select value={selectedSite} onChange={e=>setSelectedSite(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400">
+                <option value="">현장 선택…</option>
+                {sites.map(s=><option key={s.id} value={s.id}>{s.companyName}</option>)}
+              </select>
+            )}
+            {mode==="INDIVIDUAL"&&(
               <div className="space-y-1.5 max-h-48 overflow-y-auto">
                 {workers.map(c=>(
                   <label key={c.id} className="flex items-center gap-2.5 cursor-pointer rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
@@ -132,7 +151,7 @@ export default function NoticesPage() {
             <button onClick={send} disabled={sending||!title.trim()||!body.trim()}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3.5 text-sm font-black text-white active:scale-[0.98] disabled:opacity-60">
               {sending?<><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"/>발송 중...</>
-              :<><Send className="h-4 w-4"/>{targetAll?"전체":"선택"} 직무지도원에게 발송</>}
+              :<><Send className="h-4 w-4"/>{mode==="ALL"?"전체":mode==="GROUP"?"현장 그룹":"선택"} 직무지도원에게 발송</>}
             </button>
           </div>
         </div>
