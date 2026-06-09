@@ -5,10 +5,10 @@ import type { DocumentType } from "./index";
 
 const DOC_FILE_LABEL: Record<DocumentType, string> = {
   ATTENDANCE_SHEET:      "출근부",
-  TRAINING_DAILY_LOG:    "훈련일지",
-  TRAINEE_FINAL_EVAL:    "훈련생평가",
-  ADAPTATION_DAILY_LOG:  "적응지도일지",
-  ADAPTATION_FINAL_EVAL: "적응지도평가",
+  TRAINING_DAILY_LOG:    "지원고용훈련일지",
+  TRAINEE_FINAL_EVAL:    "지원고용훈련생종합평가",
+  ADAPTATION_DAILY_LOG:  "취업후적응지도일지",
+  ADAPTATION_FINAL_EVAL: "취업후적응지도종합평가",
 };
 
 // 훈련생 단위로 발급되는 문서(출근부 제외) — 파일명에 훈련생명 필수 포함

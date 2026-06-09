@@ -36,8 +36,8 @@ const GROUP_ATTENDANCE = { group: "출퇴근", docs: [
 const DOC_GROUPS_TRAINING = [
   GROUP_ATTENDANCE,
   { group: "지원고용 훈련 세트", docs: [
-    { id: "training-daily-log"  as DocType, label: "훈련일지",        Icon: BookOpen,  desc: "일별 훈련 기록 (일별 작성)",            needsTrainee: true },
-    { id: "trainee-final-eval"  as DocType, label: "훈련생 종합평가", Icon: BarChart2, desc: "지원고용 훈련생 종합 평가기록부 (종료 시)", needsTrainee: true },
+    { id: "training-daily-log"  as DocType, label: "지원고용 훈련일지",        Icon: BookOpen,  desc: "일별 작성",            needsTrainee: true },
+    { id: "trainee-final-eval"  as DocType, label: "지원고용 훈련생 종합평가", Icon: BarChart2, desc: "훈련 종료 시 작성", needsTrainee: true },
   ]},
 ];
 
@@ -45,8 +45,8 @@ const DOC_GROUPS_TRAINING = [
 const DOC_GROUPS_ADAPTATION = [
   GROUP_ATTENDANCE,
   { group: "취업 후 적응지도 세트", docs: [
-    { id: "adaptation-daily-log"  as DocType, label: "적응지도 일지",    Icon: FileText,   desc: "일별 적응지도 기록 (일별 작성)",              needsTrainee: true },
-    { id: "adaptation-final-eval" as DocType, label: "적응지도 종합평가",Icon: TrendingUp, desc: "취업 후 적응지도 종합 평가기록부 (종료 시)", needsTrainee: true },
+    { id: "adaptation-daily-log"  as DocType, label: "취업 후 적응지도 일지",    Icon: FileText,   desc: "일별 작성",              needsTrainee: true },
+    { id: "adaptation-final-eval" as DocType, label: "취업 후 적응지도 종합평가",Icon: TrendingUp, desc: "적응지도 종료 시 작성", needsTrainee: true },
   ]},
 ];
 
@@ -62,10 +62,10 @@ const PdfViewer = dynamic(() => import("../../_components/PdfViewer"), {
 
 const DOC_LABELS: Record<DocType, string> = {
   "attendance-sheet":      "출근부",
-  "training-daily-log":    "훈련일지",
-  "trainee-final-eval":    "훈련생 종합평가",
-  "adaptation-daily-log":  "적응지도 일지",
-  "adaptation-final-eval": "적응지도 종합평가",
+  "training-daily-log":    "지원고용 훈련일지",
+  "trainee-final-eval":    "지원고용 훈련생 종합평가",
+  "adaptation-daily-log":  "취업 후 적응지도 일지",
+  "adaptation-final-eval": "취업 후 적응지도 종합평가",
 };
 
 const NAV_ITEMS = [
@@ -138,7 +138,7 @@ function DocsViewInner() {
       if (!res.ok) { alert("문서를 불러올 수 없습니다."); return; }
       const blob = await res.blob();
       const cd = res.headers.get("Content-Disposition") || "";
-      let fname = `${DOC_LABELS[docType]}_${periodStart}_${periodEnd}.pdf`;
+      let fname = `${DOC_LABELS[docType].replace(/ /g, "")}_${periodStart}_${periodEnd}.pdf`;
       const m = cd.match(/filename\*=UTF-8''([^;]+)/i);
       if (m) { try { fname = decodeURIComponent(m[1]); } catch { /* keep fallback */ } }
       const u = URL.createObjectURL(blob);
@@ -225,14 +225,14 @@ function DocsViewInner() {
         <div className="space-y-4 px-4 py-4">
 
           {/* 서비스 세트 안내 */}
-          <div className={`rounded-xl border px-4 py-3 ${isAdaptation ? "border-violet-100 bg-violet-50" : "border-sky-100 bg-sky-50"}`}>
-            <p className={`text-xs font-black ${isAdaptation ? "text-violet-700" : "text-sky-700"}`}>
+          <div className={`rounded-xl border px-4 py-3 ${isAdaptation ? "border-amber-200 bg-amber-50" : "border-sky-100 bg-sky-50"}`}>
+            <p className={`text-xs font-black ${isAdaptation ? "text-amber-700" : "text-sky-700"}`}>
               현재 서비스: {serviceLabel}
             </p>
-            <p className={`mt-0.5 text-[11px] font-semibold ${isAdaptation ? "text-violet-500" : "text-sky-500"}`}>
+            <p className={`mt-0.5 text-[11px] font-semibold ${isAdaptation ? "text-amber-600" : "text-sky-500"}`}>
               {isAdaptation
-                ? "출근부 / 적응지도 일지 / 적응지도 종합평가"
-                : "출근부 / 훈련일지 / 훈련생 종합평가"}
+                ? "출근부 / 취업 후 적응지도 일지 / 취업 후 적응지도 종합평가"
+                : "출근부 / 지원고용 훈련일지 / 지원고용 훈련생 종합평가"}
             </p>
           </div>
 
