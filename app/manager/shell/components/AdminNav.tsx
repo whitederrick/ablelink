@@ -35,9 +35,10 @@ const groups: NavGroup[] = [
   {
     title: "현장/인원",
     items: [
-      { href: "/manager/sites",    label: "현장(Site) 관리" },
-      { href: "/manager/workers",  label: "직무지도원 관리" },
-      { href: "/manager/trainees", label: "훈련생 현황" },
+      { href: "/manager/sites",     label: "현장(Site) 관리" },
+      { href: "/manager/workers",   label: "직무지도원 관리" },
+      { href: "/manager/trainees",  label: "훈련생 현황" },
+      { href: "/manager/contracts", label: "근로계약서", plan: "PRO" },
     ],
   },
   {
@@ -52,17 +53,21 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    // 비즈니스 흐름순(아래 수동 순서를 그대로 노출 — 플랜순 자동정렬 미적용).
-    // 리포트(현황 대시보드) → 확정 → 발급·출력 → 제출관리 → 계약 → 소통(공지·알림).
-    title: "문서/소통",
+    // 비즈니스 흐름순(수동 순서 그대로 노출 — 플랜순 자동정렬 미적용).
+    // 리포트(현황 대시보드)·발급·출력은 추후 '문서 허브'로 통합 예정.
+    title: "문서",
     items: [
-      { href: "/manager/reports",       label: "훈련생 진척도 리포트", plan: "STANDARD" }, // 그룹 대시보드
-      { href: "/manager/review",        label: "출근부·일지 확정" },
-      { href: "/manager/docs",          label: "문서 발급·출력",      plan: "STARTER" },
-      { href: "/manager/documents",     label: "문서 발송·제출 관리", plan: "STARTER" },
-      { href: "/manager/contracts",     label: "근로계약서", plan: "PRO" },
+      { href: "/manager/reports",   label: "훈련생 진척도 리포트", plan: "STANDARD" }, // 그룹 대시보드(통합 허브 예정)
+      { href: "/manager/review",    label: "출근부·일지 확정" },
+      { href: "/manager/docs",      label: "문서 발급·출력",      plan: "STARTER" },
+      { href: "/manager/documents", label: "문서 발송·제출 관리", plan: "STARTER" },
+    ],
+  },
+  {
+    title: "소통",
+    items: [
       { href: "/manager/announcements", label: "공지 게시판" },
-      { href: "/manager/notices",       label: "알림 발송(개별)" },
+      { href: "/manager/notices",       label: "알림 발송(전체/그룹/개별)" },
     ],
   },
   {
