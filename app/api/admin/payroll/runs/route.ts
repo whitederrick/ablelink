@@ -7,6 +7,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
+import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const BUSINESS_DEDUCTION_RATE = 0.033; // 사업소득세 3.3%
@@ -126,10 +127,15 @@ export async function POST(req: NextRequest) {
           },
           orderBy: { effectiveFrom: "desc" },
         }),
-        // 출근 기록 조회
+        // 출근 기록 조회 (게이트 판정용 실제시각·확정여부·근무형태 + 연장시간용 logs 포함)
         prisma.dailyAttendance.findMany({
           where: { workerId, workDate: { gte: periodStart, lte: periodEnd }, isFinalClosed: true, assignment: { agencyId } },
-          select: { workDate: true, startTime: true, endTime: true },
+          select: {
+            workDate: true, startTime: true, endTime: true,
+            actualStartTime: true, payrollConfirmedAt: true,
+            assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true } },
+            logs: { select: { extTime1on1: true, extTimeGroup: true } },
+          },
         }),
         // 훈련생 수
         prisma.traineePlacement.count({
@@ -144,11 +150,27 @@ export async function POST(req: NextRequest) {
     }));
 
     for (const { workerId, contract, attendances, traineeCount } of userDataList) {
-      const workedDays = attendances.length;
-      const workedMinutes = attendances.reduce((s, a) => s + minutesBetween(a.startTime, a.endTime), 0);
+      // 급여 게이트: 심한 지각 미컨펌(보정대기) 날은 급여 산정에서 제외(출근부 PDF와 동일 기준).
+      const confirmedAtt = attendances.filter((a) => !isPayrollPending({
+        actualStartTime: a.actualStartTime ?? null,
+        payrollConfirmedAt: a.payrollConfirmedAt ?? null,
+        workType: a.assignment?.workType ?? null,
+        commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded ?? null,
+        customWorkStart: a.assignment?.customWorkStart ?? null,
+        customWorkEnd: a.assignment?.customWorkEnd ?? null,
+      }));
+      const pendingDays = attendances.length - confirmedAtt.length;
+
+      const workedDays = confirmedAtt.length;
+      const workedMinutes = confirmedAtt.reduce((s, a) => s + minutesBetween(a.startTime, a.endTime), 0);
+      const workedHours = +(workedMinutes / 60).toFixed(2);
+      // 연장근로시간(h): 일지에 입력된 연장 지도시간(1:1 + 1:多) 합산.
+      const overtimeHours = confirmedAtt.reduce(
+        (s, a) => s + a.logs.reduce((t, l) => t + Number(l.extTime1on1) + Number(l.extTimeGroup), 0), 0);
 
       let grossPay = 0;
-      let breakdown: Record<string, unknown> = { note: "급여 계약 없음", workedDays, workedMinutes };
+      const calcMethods: Record<string, string> = {};
+      let breakdown: Record<string, unknown> = { note: "급여 계약 없음", workedDays, workedMinutes, pendingDays };
 
       if (contract) {
         const use2PlusRate = traineeCount >= 2 && contract.hourlyRate2Plus != null;
@@ -156,23 +178,36 @@ export async function POST(req: NextRequest) {
           ? Number(contract.hourlyRate2Plus)
           : Number(contract.baseAmount);
 
+        // 통상시급(연장·야간·휴일 가산 기준). 시급제=시급, 일급제=일급/평균소정근로시간, 월급제=월급/209h.
+        let ordinaryWage = 0;
         if (contract.payType === "HOURLY") {
-          grossPay = Math.round((workedMinutes / 60) * rate);
+          grossPay = Math.round(workedHours * rate);
+          ordinaryWage = rate;
+          calcMethods["기본급"] = `${workedHours}시간 × ${rate.toLocaleString()}원`;
           breakdown = {
-            payType: "HOURLY",
-            hourlyRate: rate,
-            traineeCount,
-            used2PlusRate: use2PlusRate,
-            workedMinutes,
-            workedHours: +(workedMinutes / 60).toFixed(2),
-            workedDays,
+            payType: "HOURLY", hourlyRate: rate, traineeCount, used2PlusRate: use2PlusRate,
+            workedMinutes, workedHours, workedDays, pendingDays,
           };
         } else if (contract.payType === "DAILY") {
           grossPay = workedDays * rate;
-          breakdown = { payType: "DAILY", dailyRate: rate, workedDays };
+          const avgDailyH = workedDays > 0 ? workedMinutes / workedDays / 60 : 0;
+          ordinaryWage = avgDailyH > 0 ? Math.round(rate / avgDailyH) : 0;
+          calcMethods["기본급"] = `${workedDays}일 × ${rate.toLocaleString()}원`;
+          breakdown = { payType: "DAILY", dailyRate: rate, workedDays, workedMinutes, pendingDays };
         } else {
           grossPay = rate;
-          breakdown = { payType: "MONTHLY", monthlyRate: rate, workedDays };
+          ordinaryWage = Math.round(rate / 209); // 월 소정근로시간 209h 기준
+          calcMethods["기본급"] = `월 ${rate.toLocaleString()}원`;
+          breakdown = { payType: "MONTHLY", monthlyRate: rate, workedDays, workedMinutes, pendingDays };
+        }
+
+        // 연장근로수당 = 연장시간 × 통상시급 × 1.5 (일지에 입력된 실제 연장 지도시간 기준)
+        if (overtimeHours > 0 && ordinaryWage > 0) {
+          const overtimePay = Math.round(overtimeHours * ordinaryWage * 1.5);
+          grossPay += overtimePay;
+          (breakdown as any).overtimeHours = overtimeHours;
+          (breakdown as any).overtimePay = overtimePay;
+          calcMethods["연장근로수당"] = `${overtimeHours}시간 × ${ordinaryWage.toLocaleString()}원 × 1.5`;
         }
 
         // 주휴수당 가산
@@ -180,7 +215,11 @@ export async function POST(req: NextRequest) {
         if (holidayPay > 0) {
           grossPay += holidayPay;
           (breakdown as any).weeklyHolidayPay = holidayPay;
+          calcMethods["주휴수당"] = `${holidayPay.toLocaleString()}원`;
         }
+
+        (breakdown as any).ordinaryWage = ordinaryWage;
+        (breakdown as any).calcMethods = calcMethods;
       }
 
       // 공제 계산
