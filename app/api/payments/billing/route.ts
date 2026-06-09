@@ -54,8 +54,8 @@ export async function POST(request: NextRequest) {
     // 청구 금액·주기 = 운영자 협상가 우선, 없으면 표준 월정액. (선택한 planType 기준으로 표준가 산출)
     const { amount, cycle } = effectiveBilling({ planType, billingCycle: agencyRow.billingCycle, customAmount: agencyRow.customAmount });
 
-    // 1. 빌링키 발급
-    const billingRes = await fetch(`${TOSS_API}/billing/authorizations/confirm`, {
+    // 1. 빌링키 발급 (토스 빌링키 발급 엔드포인트는 /issue. 과거 /confirm은 404)
+    const billingRes = await fetch(`${TOSS_API}/billing/authorizations/issue`, {
       method: "POST",
       headers: {
         Authorization: tossAuth(),
