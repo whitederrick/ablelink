@@ -53,14 +53,13 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    // 비즈니스 흐름순(수동 순서 그대로 노출 — 플랜순 자동정렬 미적용).
-    // 리포트(현황 대시보드)·발급·출력은 추후 '문서 허브'로 통합 예정.
+    // 제출 문서 확인·확정(워크플로 메인) / 진척도 리포트(운영 대시보드) / 직접 발급(보조).
+    // 옛 '출근부·일지 확정'(review)은 허브로 대체되어 네비에서 제거.
     title: "문서",
     items: [
-      { href: "/manager/reports",   label: "훈련생 진척도 리포트", plan: "STANDARD" }, // 그룹 대시보드(통합 허브 예정)
-      { href: "/manager/review",    label: "출근부·일지 확정" },
-      { href: "/manager/docs",      label: "문서 발급·출력",      plan: "STARTER" },
-      { href: "/manager/documents", label: "제출 문서 확인·확정", plan: "STARTER" },
+      { href: "/manager/documents", label: "제출 문서 확인·확정", plan: "STARTER" }, // 워크플로 메인
+      { href: "/manager/reports",   label: "훈련생 진척도 리포트", plan: "STANDARD" }, // 운영 대시보드(모니터링)
+      { href: "/manager/docs",      label: "직접 발급(임의 출력)", plan: "STARTER" },  // 매니저 직접 PDF 생성(보조)
     ],
   },
   {
