@@ -89,7 +89,8 @@ export async function POST(req: NextRequest) {
             versionNo: maxNo + 1,
             stage: DocumentStage.FINAL,
             pdfUrl: "", // sourceData 재생성 방식 — 파일 미저장
-            sourceData: payload,
+            // undefined(서명 imageUrl 등)·BigInt 제거 → Prisma Json 안전
+            sourceData: JSON.parse(JSON.stringify(payload)),
             createdByUser: { connect: { id: workerId } },
           },
           select: { id: true, versionNo: true },
