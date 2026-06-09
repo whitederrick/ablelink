@@ -51,6 +51,9 @@ type InboxItem = {
   clockInAt?: string | null;
   clockOutAt?: string | null;
 
+  actualClockInAt?: string | null;  // 실제 출근 버튼 시각(지각 판정 근거)
+  actualClockOutAt?: string | null; // 실제 퇴근 버튼 시각
+
   rangeM?: number | null;
   startDistanceM?: number | null;
   endDistanceM?: number | null;
@@ -209,6 +212,9 @@ async function fetchInboxItems(filters: {
 
         clockInAt: it.clockInAt ?? null,
         clockOutAt: it.clockOutAt ?? null,
+
+        actualClockInAt: it.actualClockInAt ?? null,
+        actualClockOutAt: it.actualClockOutAt ?? null,
 
         rangeM: it.rangeM ?? null,
         startDistanceM: it.startDistanceM ?? null,
@@ -491,15 +497,12 @@ export default function AttendanceInboxClient() {
       if (startBad || endBad) set.add("OUT_OF_RANGE");
     }
 
-    // ✅ Step 3) 출퇴근 시간 이상(TIME_ANOMALY)
+    // ✅ Step 3) 지각(TIME_ANOMALY) — 실제 출근 버튼 시각 기준(고정시각 아님).
+    //    실제 시각 없으면(과거 기록·일괄생성) 판정 안 함. 표준보다 15분 이상 늦으면 지각.
     const expectedStartMin = getExpectedStartMin(it);
-    const actualInMin = isoToLocalMin(it.clockInAt);
-
-    if (expectedStartMin != null && actualInMin != null) {
-      const diff = actualInMin - expectedStartMin; // + 지각, - 조기
-      const isLate = diff >= 1; // 1분이라도 늦으면
-      const isTooEarly = diff <= -60; // 1시간 이상 일찍 출근하면
-      if (isLate || isTooEarly) set.add("TIME_ANOMALY");
+    const actualInMin = isoToLocalMin(it.actualClockInAt);
+    if (expectedStartMin != null && actualInMin != null && actualInMin - expectedStartMin >= 15) {
+      set.add("TIME_ANOMALY");
     }
 
     return Array.from(set);
@@ -849,6 +852,29 @@ export default function AttendanceInboxClient() {
                     </div>
                   </div>
                 </div>
+
+                {/* 실제 출퇴근 버튼 시각 + 지각(정상 출근 확인용). 출근부는 근무형태 고정시각 사용 */}
+                {(selected.actualClockInAt || selected.actualClockOutAt) && (() => {
+                  const expMin = getExpectedStartMin(selected);
+                  const actMin = isoToLocalMin(selected.actualClockInAt);
+                  const lateMin = expMin != null && actMin != null ? actMin - expMin : null;
+                  return (
+                    <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 p-3">
+                      <div className="text-xs font-black text-sky-700">실제 출퇴근(버튼)</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-semibold text-slate-700">
+                        <span>출근 {fmtTime(selected.actualClockInAt)}</span>
+                        <span>퇴근 {fmtTime(selected.actualClockOutAt)}</span>
+                        {lateMin != null && lateMin >= 15 && (
+                          <span className="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-black text-purple-700">{lateMin}분 지각</span>
+                        )}
+                        {lateMin != null && lateMin < 15 && (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-black text-emerald-700">정시 출근</span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-[11px] font-medium text-slate-400">출근부는 근무형태 표준시각({selected.expectedStartAt ?? "-"})으로 작성됩니다.</p>
+                    </div>
+                  );
+                })()}
 
                 {/* Actions */}
                 <div className="mb-4 flex flex-wrap gap-2">
