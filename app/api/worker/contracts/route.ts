@@ -61,9 +61,34 @@ export async function GET(req: NextRequest) {
       siteName: contract.siteName,
       workTypeLabel: workTypeLabel + customTimeStr,
       commuteGuidanceIncluded: contract.commuteGuidanceIncluded,
+      // ── 표준양식 항목 ──
+      workLocation: contract.workLocation,
+      jobDescription: contract.jobDescription,
+      workStartTime: contract.workStartTime,
+      workEndTime: contract.workEndTime,
+      breakStartTime: contract.breakStartTime,
+      breakEndTime: contract.breakEndTime,
+      workDaysPerWeek: contract.workDaysPerWeek,
+      weeklyHoliday: contract.weeklyHoliday,
+      wageType: contract.wageType,
+      wageAmount: contract.wageAmount,
+      bonusExists: contract.bonusExists,
+      bonusAmount: contract.bonusAmount,
+      extraPayExists: contract.extraPayExists,
+      extraPayDesc: contract.extraPayDesc,
+      overtimeRate: contract.overtimeRate,
+      wagePayday: contract.wagePayday,
+      wagePayMethod: contract.wagePayMethod,
+      employerBizName: contract.employerBizName || contract.agency.name,
+      employerPhone: contract.employerPhone || contract.agency.phoneNumber,
+      employerAddress: contract.employerAddress || contract.agency.address,
+      employerRepName: contract.employerRepName,
+      workerAddress: contract.workerAddress,
+      specialClauses: Array.isArray(contract.specialClauses) ? contract.specialClauses : [],
       // 직무지도원이 직접 입력한 내용 (관리자가 미입력 시)
       workerFilledSiteName: contract.workerFilledSiteName,
       workerFilledWorkType: contract.workerFilledWorkType,
+      workerFilledAddress: contract.workerFilledAddress,
       workerSignedAt: contract.workerSignedAt?.toISOString() ?? null,
       adminSignedAt: contract.adminSignedAt?.toISOString() ?? null,
       workerSignatureUrl: contract.workerSignatureUrl,
@@ -74,7 +99,7 @@ export async function GET(req: NextRequest) {
 // POST: 직무지도원 서명 처리
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { token, signatureUrl, workerFilledSiteName, workerFilledWorkType } = body;
+  const { token, signatureUrl, workerFilledSiteName, workerFilledWorkType, workerFilledAddress } = body;
 
   if (!token || !signatureUrl) {
     return NextResponse.json({ success: false, message: "필수 항목이 없습니다." }, { status: 400 });
@@ -93,6 +118,9 @@ export async function POST(req: NextRequest) {
   }
   if (workerFilledWorkType && (typeof workerFilledWorkType !== "string" || workerFilledWorkType.length > 100)) {
     return NextResponse.json({ success: false, message: "근무형태 값이 너무 깁니다." }, { status: 400 });
+  }
+  if (workerFilledAddress && (typeof workerFilledAddress !== "string" || workerFilledAddress.length > 200)) {
+    return NextResponse.json({ success: false, message: "주소가 너무 깁니다." }, { status: 400 });
   }
 
   const contract = await prisma.employmentContract.findUnique({
@@ -124,6 +152,7 @@ export async function POST(req: NextRequest) {
       workerSignatureUrl: signatureUrl,
       workerFilledSiteName: workerFilledSiteName || null,
       workerFilledWorkType: workerFilledWorkType || null,
+      workerFilledAddress: workerFilledAddress || null,
     },
   });
 
