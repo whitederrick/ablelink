@@ -494,6 +494,7 @@ function WorklogForm() {
           logDate,
           siteId: siteId || undefined,
           assignmentId: assignmentId || undefined,
+          logId: logId || undefined,  // 수정 모드: 날짜 변경 시 해당 일지를 그 날짜로 이동
         }),
       });
       const data = await res.json();
@@ -591,10 +592,13 @@ function WorklogForm() {
           <div className="flex items-center justify-between">
             <span className="text-sm font-black text-slate-700">날짜</span>
             <input type="date" value={logDate}
-              onChange={e => { if (!attendanceId) setLogDate(e.target.value); }}
-              readOnly={!!attendanceId}
-              className={`rounded-xl border px-3 py-2 text-sm font-semibold text-slate-900 outline-none ${attendanceId ? "border-slate-100 bg-slate-100 text-slate-400 cursor-not-allowed" : "border-slate-200 bg-slate-50 focus:border-sky-400"}`} />
+              onChange={e => { if (!attendanceId || logId) setLogDate(e.target.value); }}
+              readOnly={!!attendanceId && !logId}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold text-slate-900 outline-none ${(attendanceId && !logId) ? "border-slate-100 bg-slate-100 text-slate-400 cursor-not-allowed" : "border-slate-200 bg-slate-50 focus:border-sky-400"}`} />
           </div>
+          {logId && (
+            <p className="mt-1.5 text-[11px] font-semibold text-slate-400">날짜를 변경하면 해당 일지가 그 날짜로 이동됩니다.</p>
+          )}
           {(() => {
             const d = new Date(logDate + "T00:00:00");
             const dow = d.getDay();
