@@ -1,15 +1,30 @@
 // app/api/worker/docs/generate/route.ts
 // PDF 생성 + AWS SES 이메일 발송 (PREMIUM 전용)
-// payload 빌드는 lib/docs/buildDocPayload 공용 출처 사용.
 
 export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess } from "@/lib/planGuard";
+import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer } from "@/lib/pdf";
+import { buildDocFileName } from "@/lib/pdf/filename";
 import { sendEmailWithPdf } from "@/lib/email";
-import { buildDocPayload, DocPayloadError } from "@/lib/docs/buildDocPayload";
+import { getKrHolidayDates } from "@/lib/krHolidays";
+import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
+import { isPayrollPending } from "@/lib/attendance/payrollGate";
+
+// ── 유틸 ──────────────────────────────────────────────────────
+function fmtHHMM(d: Date): string {
+  const kst = new Date(d.getTime() + 9 * 3600000);
+  return `${String(kst.getUTCHours()).padStart(2,"0")}:${String(kst.getUTCMinutes()).padStart(2,"0")}`;
+}
+function fmtDot(s: string) { return s.replace(/-/g, "."); }
+function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`; }
+function scoreLabel(n?: number | null): string {
+  if (!n) return "";
+  return ({ 1:"매우못함", 2:"못함", 3:"보통", 4:"잘함", 5:"매우잘함" } as any)[n] || String(n);
+}
 
 const DOC_LABELS: Record<string, string> = {
   "ATTENDANCE_SHEET":      "직무지도원 출근부",
@@ -19,6 +34,28 @@ const DOC_LABELS: Record<string, string> = {
   "ADAPTATION_FINAL_EVAL": "적응지도 대상자 종합 평가기록부",
 };
 
+const ALLOWED_IMG_HOST = (() => {
+  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "").hostname; } catch { return ""; }
+})();
+
+// ── 서명 이미지 URL → base64 변환 ────────────────────────────
+async function toBase64DataUri(url?: string | null): Promise<string | undefined> {
+  if (!url || !url.startsWith("http")) return url || undefined;
+  try {
+    const host = new URL(url).hostname;
+    if (ALLOWED_IMG_HOST && host !== ALLOWED_IMG_HOST) return undefined;
+  } catch { return undefined; }
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return undefined;
+    const buf = await res.arrayBuffer();
+    const mime = res.headers.get("content-type") || "image/png";
+    if (!mime.startsWith("image/")) return undefined;
+    return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
+  } catch { return undefined; }
+}
+
+// ── 메인 핸들러 ───────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
     const session = await getWorkerSessionFromReq(request);
@@ -31,16 +68,266 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { docType, periodStart, periodEnd, sendEmail, toEmail, traineeId, companyManagerSignToken } = body;
 
-    let built;
-    try {
-      built = await buildDocPayload({ workerId, docType, periodStart, periodEnd, traineeId, companyManagerSignToken });
-    } catch (e: any) {
-      if (e instanceof DocPayloadError) {
-        return NextResponse.json({ success: false, message: e.message, ...(e.extra || {}) }, { status: e.status });
+    if (!docType) return NextResponse.json({ success: false, message: "문서 종류를 선택해주세요." }, { status: 400 });
+
+    // ── 기본 데이터 조회 ────────────────────────────────────
+    const user = await prisma.worker.findUnique({
+      where: { id: workerId },
+      select: { workerName: true, phoneNumber: true, signatureUrl: true, loginId: true },
+    });
+
+    const assignment = await prisma.siteAssignment.findFirst({
+      where: { workerId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] } },
+      include: { site: true },
+      orderBy: { assignedAt: "desc" },
+    });
+
+    if (!assignment?.site) return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 400 });
+
+    const site = assignment.site;
+    const start = periodStart || new Date().toISOString().slice(0,10);
+    const end   = periodEnd   || new Date().toISOString().slice(0,10);
+
+    // 일지 PDF용 근무형태 고정 시간값(훈련시간/측정시간/근무시간/Y·N) — 단일 출처
+    const docTimes = dailyDocTimes(
+      (assignment as any).workType,
+      (assignment as any).commuteGuidanceIncluded,
+      (assignment as any).customWorkStart,
+      (assignment as any).customWorkEnd,
+    );
+
+    // ── 사업체담당자 즉석 서명 확인 ────────────────────────
+    let companyManagerSignatureUrl: string | null = null;
+    let companyManagerSignerName = "";
+    if (companyManagerSignToken) {
+      const tokenRec = await prisma.siteSignToken.findUnique({
+        where: { token: companyManagerSignToken },
+        select: { signatureUrl: true, usedAt: true, signRole: true, signerName: true },
+      });
+      if (tokenRec?.usedAt && tokenRec.signRole === "company_manager") {
+        companyManagerSignatureUrl = tokenRec.signatureUrl;
+        companyManagerSignerName   = tokenRec.signerName || "";
       }
-      throw e;
     }
-    const { payload, fileName, meta } = built;
+
+    // 명시적 토큰 없을 때 같은 기간의 최근 서명 자동 조회
+    if (!companyManagerSignatureUrl) {
+      const recentToken = await prisma.siteSignToken.findFirst({
+        where: {
+          assignmentId: assignment.id,
+          periodStart:  start,
+          periodEnd:    end,
+          signRole:     "company_manager",
+          usedAt:       { not: null },
+        },
+        orderBy: { usedAt: "desc" },
+      });
+      if (recentToken) {
+        companyManagerSignatureUrl = recentToken.signatureUrl;
+        companyManagerSignerName   = recentToken.signerName || "";
+      }
+    }
+
+    // 에이전시 관리자 서명은 관리자가 명시적으로 서명 후 첨부 — 여기서는 자동 삽입 안 함
+    const [workerImg, companyImg] = await Promise.all([
+      toBase64DataUri(user?.signatureUrl),
+      toBase64DataUri(companyManagerSignatureUrl),
+    ]);
+
+    const sigs = {
+      worker:          { name: user?.workerName || "",        imageUrl: workerImg },
+      govAgent:       { name: "",                          imageUrl: undefined as string | undefined },
+      companyManager: { name: companyManagerSignerName,    imageUrl: companyImg },
+      agencyAgent:    { name: "",                          imageUrl: undefined as string | undefined },
+    };
+
+    // ── 문서별 payload 빌드 ──────────────────────────────────
+    let payload: any;
+    let fileName: string;
+
+    if (docType === "ATTENDANCE_SHEET") {
+      const attendances = await prisma.dailyAttendance.findMany({
+        where: { workerId, workDate: { gte: start, lte: end } },
+        include: { logs: { select: { time1on1:true, timeGroup:true, extTime1on1:true, extTimeGroup:true } } },
+        orderBy: { workDate: "asc" },
+      });
+
+      const entries = attendances.map(a => {
+        // 급여 게이트: 심한 지각 + 미컨펌이면 출근부에 기본값 미확정 → "보정대기"
+        const pending = isPayrollPending({
+          actualStartTime: a.actualStartTime ?? null,
+          payrollConfirmedAt: a.payrollConfirmedAt ?? null,
+          workType: (assignment as any).workType ?? null,
+          commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? null,
+          customWorkStart: (assignment as any).customWorkStart ?? null,
+          customWorkEnd: (assignment as any).customWorkEnd ?? null,
+        });
+        return {
+          date: a.workDate,
+          start: pending ? "" : (a.startTime ? fmtHHMM(a.startTime) : ""),
+          end:   pending ? "" : (a.endTime   ? fmtHHMM(a.endTime)   : ""),
+          pending,
+          hours: pending ? 0 : a.logs.reduce((s,l) => s + Number(l.time1on1) + Number(l.extTime1on1), 0),
+          multiHours: pending ? 0 : a.logs.reduce((s,l) => s + Number(l.timeGroup) + Number(l.extTimeGroup), 0),
+        };
+      });
+
+      const totalHours = entries.reduce((s,e) => s + Number(e.hours), 0);
+      const oneToMany  = entries.reduce((s,e) => s + Number(e.multiHours), 0);
+
+      payload = {
+        workerName: user?.workerName || "",
+        workerPhone: user?.phoneNumber || user?.loginId || "",
+        companyName: site.companyName,
+        periodStartYMD: fmtDot(start),
+        periodEndYMD:   fmtDot(end),
+        totalDays: entries.length,
+        totalHours,
+        weeklyHolidayCount: 0,
+        monthlyLeaveCount: 0,
+        allowanceTotalWon: "0",
+        oneToOneHours: totalHours - oneToMany,
+        oneToManyHours: oneToMany,
+        otOneToOneHours: 0,
+        otOneToManyHours: 0,
+        entries,
+        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
+      };
+      fileName = buildDocFileName("ATTENDANCE_SHEET", { companyName: site.companyName, start, end });
+
+    } else if (docType === "TRAINING_DAILY_LOG") {
+      if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
+
+      const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
+      const logs = await prisma.traineeLog.findMany({
+        where: {
+          writerId: workerId, traineeId: BigInt(traineeId),
+          trainingType: { in: ["PRE","FIELD"] },
+          attendance: { workDate: { gte: start, lte: end } },
+        },
+        include: { attendance: true, tasks: true },
+        orderBy: { attendance: { workDate: "asc" } },
+      });
+
+      // 자동 생성 행에서 제외할 휴무일 = 한국 공휴일 + 현장 커스텀 휴무(근무 미인정)
+      const preStart = assignment.stepStart?.toISOString().slice(0, 10) || start;
+      const siteHols = await prisma.siteHoliday.findMany({
+        where: { assignmentId: assignment.id, countAsWorkday: false },
+        select: { date: true },
+      });
+      const holidays = [...new Set([...getKrHolidayDates(preStart, end), ...siteHols.map(h => h.date)])];
+
+      payload = {
+        traineeName: trainee?.name || "",
+        companyName: site.companyName,
+        periodPreText:   fmtPeriod(assignment.stepStart?.toISOString().slice(0,10) || start, start),
+        periodFieldText: fmtPeriod(start, end),
+        holidays,
+        rows: logs.map(l => {
+          const scoreText = scoreLabel(l.tasks[0]?.performanceScore as any);
+          return {
+            section: l.trainingType === "PRE" ? "PRE" : "FIELD",
+            date: l.attendance.workDate,
+            attendanceStatus: l.evaluation || "출석",        // 일지 출결 반영
+            trainingTime: docTimes.trainingTimeH,            // 근무형태 고정(4H/8H)
+            guidanceFlag: docTimes.guidanceYN,               // 출퇴근·휴게 지도 Y/N
+            task: l.tasks[0]?.taskName || "",
+            // 수행정도 = 점수 텍스트만 + 아래 측정시간(근무형태 고정)
+            taskLevelMeasured: `${scoreText}\n(${docTimes.measTimeH})`,
+            evalGuidance: l.content || "",                   // 평가·지도사항 = 일지 내용
+          };
+        }),
+        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
+      };
+      fileName = buildDocFileName("TRAINING_DAILY_LOG", { traineeName: trainee?.name, companyName: site.companyName, start, end });
+
+    } else if (docType === "TRAINEE_FINAL_EVAL") {
+      if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
+      const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
+      const ev = await prisma.traineeEvaluation.findFirst({
+        where: { traineeId: BigInt(traineeId), writerId: workerId, evalType: "TRAINING" },
+        orderBy: { updatedAt: "desc" },
+      });
+      if (!ev) return NextResponse.json({ success: false, message: "종합평가를 먼저 작성해주세요." }, { status: 400 });
+      if (!ev.isConfirmed) return NextResponse.json({ success: false, message: "종합평가를 최종 확정한 후 PDF를 생성할 수 있습니다.\n평가 페이지에서 '최종 확정' 버튼을 눌러주세요.", evalNotConfirmed: true }, { status: 400 });
+
+      payload = {
+        traineeName: trainee?.name || "",
+        companyName: site.companyName,
+        preTrainingStart:  assignment.stepStart?.toISOString().slice(0,10) || start,
+        preTrainingEnd:    start,
+        fieldTrainingStart: start,
+        fieldTrainingEnd:   end,
+        scores:   (ev?.scores as any)   || {},
+        comments: (ev?.comments as any) || {},
+        signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
+      };
+      fileName = buildDocFileName("TRAINEE_FINAL_EVAL", { traineeName: trainee?.name, companyName: site.companyName, start, end });
+
+    } else if (docType === "ADAPTATION_DAILY_LOG") {
+      if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
+      const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
+      const logs = await prisma.traineeLog.findMany({
+        where: {
+          writerId: workerId, traineeId: BigInt(traineeId),
+          trainingType: "ADAPTATION",
+          attendance: { workDate: { gte: start, lte: end } },
+        },
+        include: { attendance: true, tasks: true },
+        orderBy: { attendance: { workDate: "asc" } },
+      });
+
+      // 자동 생성 행에서 제외할 휴무일 = 한국 공휴일 + 현장 커스텀 휴무(근무 미인정)
+      const siteHols = await prisma.siteHoliday.findMany({
+        where: { assignmentId: assignment.id, countAsWorkday: false },
+        select: { date: true },
+      });
+      const holidays = [...new Set([...getKrHolidayDates(start, end), ...siteHols.map(h => h.date)])];
+
+      payload = {
+        traineeName: trainee?.name || "",
+        companyName: site.companyName,
+        periodStart: start,
+        periodEnd:   end,
+        holidays,
+        entries: logs.map(l => ({
+          dateISO: l.attendance.workDate,
+          attendance: l.evaluation || "출석",              // 일지 출결 반영
+          workTime: docTimes.workTimeRange,                 // 근무형태 고정 범위(08:30~13:30 등)
+          guidance: docTimes.guidanceYN,                    // 출퇴근·휴게 지도 Y/N
+          task: l.tasks[0]?.taskName || "",
+          performanceLabel: scoreLabel(l.tasks[0]?.performanceScore as any),  // 점수 텍스트만
+          performanceTime: docTimes.measTimeH,              // 측정시간(근무형태 고정)
+          coaching: l.content || "",                        // 지도사항 = 일지 내용
+        })),
+        signatures: { worker: sigs.worker, govAgent: sigs.govAgent },
+      };
+      fileName = buildDocFileName("ADAPTATION_DAILY_LOG", { traineeName: trainee?.name, companyName: site.companyName, start, end });
+
+    } else if (docType === "ADAPTATION_FINAL_EVAL") {
+      if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
+      const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
+      const ev = await prisma.traineeEvaluation.findFirst({
+        where: { traineeId: BigInt(traineeId), writerId: workerId, evalType: "ADAPTATION" },
+        orderBy: { updatedAt: "desc" },
+      });
+      if (!ev) return NextResponse.json({ success: false, message: "종합평가를 먼저 작성해주세요." }, { status: 400 });
+      if (!ev.isConfirmed) return NextResponse.json({ success: false, message: "종합평가를 최종 확정한 후 PDF를 생성할 수 있습니다.\n평가 페이지에서 '최종 확정' 버튼을 눌러주세요.", evalNotConfirmed: true }, { status: 400 });
+
+      payload = {
+        traineeName: trainee?.name || "",
+        companyName: site.companyName,
+        periodStart: start,
+        periodEnd:   end,
+        scores:   (ev?.scores as any)   || {},
+        comments: (ev?.comments as any) || {},
+        signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
+      };
+      fileName = buildDocFileName("ADAPTATION_FINAL_EVAL", { traineeName: trainee?.name, companyName: site.companyName, start, end });
+
+    } else {
+      return NextResponse.json({ success: false, message: `지원하지 않는 문서: ${docType}` }, { status: 400 });
+    }
 
     // ── PDF 생성 ──────────────────────────────────────────
     const pdfBuffer = await renderPdfToBuffer({ documentType: docType, payload });
@@ -53,8 +340,8 @@ export async function POST(request: NextRequest) {
         await sendEmailWithPdf({
           from: process.env.EMAIL_FROM || "AbleLink <noreply@able-link.co.kr>",
           to: toEmail,
-          subject: `[AbleLink] ${DOC_LABELS[docType] || docType} - ${meta.companyName} (${meta.start} ~ ${meta.end})`,
-          body: `안녕하세요.\n\n${meta.companyName} 직무지도 ${DOC_LABELS[docType] || docType}를 첨부합니다.\n\n■ 직무지도원: ${meta.workerName}\n■ 기간: ${meta.start} ~ ${meta.end}\n\n감사합니다.\nAbleLink`,
+          subject: `[AbleLink] ${DOC_LABELS[docType] || docType} - ${site.companyName} (${start} ~ ${end})`,
+          body: `안녕하세요.\n\n${site.companyName} 직무지도 ${DOC_LABELS[docType]||docType}를 첨부합니다.\n\n■ 직무지도원: ${user?.workerName||""}\n■ 기간: ${start} ~ ${end}\n\n감사합니다.\nAbleLink`,
           pdfBuffer,
           fileName,
         });

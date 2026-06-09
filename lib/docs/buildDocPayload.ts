@@ -1,7 +1,8 @@
 // lib/docs/buildDocPayload.ts
-// 공식문서 PDF payload + 파일명 빌드 단일 출처.
-// /worker/docs/generate(생성)·문서 제출(sourceData 스냅샷)·버전 재생성이 공용으로 사용.
-// ⚠️ 렌더 결과가 바뀌지 않도록 generate 인라인 로직을 그대로 이전한 것.
+// 문서 "제출(submit)" 전용 payload 빌더 — DocumentVersion.sourceData 스냅샷용.
+// ⚠️ 안정성 위해 PDF 생성부(/worker/docs/generate)와는 분리(독립 사본)한다.
+//    generate 의 검증된 payload 로직을 그대로 복사한 것이며, generate 는 절대 건드리지 않음.
+//    generate 의 payload 규칙이 바뀌면 이 파일도 수동으로 맞춰야 한다(렌더러는 공용).
 
 export const runtime = "nodejs";
 
