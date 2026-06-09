@@ -37,6 +37,8 @@ export interface HomeSummary {
     attendanceId: string | null;
     startTime: string | null;
     endTime: string | null;
+    actualStartTime: string | null;
+    actualEndTime: string | null;
     isFinalClosed: boolean;
   };
   premiumAccess: boolean;
@@ -179,6 +181,9 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
       attendanceId: todayAttendance?.id ? todayAttendance.id.toString() : null,
       startTime: todayAttendance?.startTime ? todayAttendance.startTime.toISOString() : null,
       endTime: todayAttendance?.endTime ? todayAttendance.endTime.toISOString() : null,
+      // 실제 버튼 시각(화면 표시용). start/endTime은 출근부용 고정시각.
+      actualStartTime: (todayAttendance as any)?.actualStartTime ? (todayAttendance as any).actualStartTime.toISOString() : null,
+      actualEndTime: (todayAttendance as any)?.actualEndTime ? (todayAttendance as any).actualEndTime.toISOString() : null,
       isFinalClosed: Boolean(todayAttendance?.isFinalClosed),
     },
     premiumAccess: premiumStatus.premium,

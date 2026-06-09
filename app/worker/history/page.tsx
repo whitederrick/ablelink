@@ -51,7 +51,7 @@ function fmtMin(m: number) {
 function comma(n: number) { return Math.round(n).toLocaleString("ko-KR"); }
 
 const stepLabel: Record<string, string> = {
-  PRE_TRAINING: "사전훈련", FIELD_TRAINING: "현장훈련", ADAPTATION: "적응지도",
+  PRE_TRAINING: "지원고용 훈련", FIELD_TRAINING: "지원고용 훈련", ADAPTATION: "취업 후 적응지도",
 };
 const logBadge: Record<string, { classes: string; label: string }> = {
   NONE:  { classes: "bg-slate-100 text-slate-400",    label: "미작성" },

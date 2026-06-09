@@ -45,7 +45,7 @@ function instantToKstMin(d: Date | null | undefined): number | null {
 }
 
 // 지각 판정 임계(분): 실제 출근이 표준보다 이만큼 이상 늦으면 이상 표시
-const LATE_THRESHOLD_MIN = 10;
+const LATE_THRESHOLD_MIN = 15;
 
 function deriveIssueTypes(row: {
   startTime: Date | null;

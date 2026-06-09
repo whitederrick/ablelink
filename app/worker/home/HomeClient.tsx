@@ -52,6 +52,8 @@ interface HomeData {
   attendanceId: string | null;
   workStartTime: string | null;
   workEndTime: string | null;
+  actualStartTime: string | null;  // 실제 버튼 시각(화면 표시용)
+  actualEndTime: string | null;
   isFinalClosed: boolean;
   serviceStep: string | null;
   trainingType: "PRE" | "FIELD" | "ADAPTATION";
@@ -184,6 +186,8 @@ function normalizeHome(raw: any): HomeData {
     attendanceId: raw.attendanceId ? String(raw.attendanceId) : null,
     workStartTime: raw.startTime ?? null,
     workEndTime: raw.endTime ?? null,
+    actualStartTime: raw.actualStartTime ?? null,
+    actualEndTime: raw.actualEndTime ?? null,
     isFinalClosed: raw.isFinalClosed ?? false,
     serviceStep: raw.serviceStep ?? null,
     trainingType: raw.trainingType ?? "FIELD",
@@ -519,8 +523,9 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
   const secStr  = pad2(currentTime.getSeconds());
 
   const cfg = STATUS_CONFIG[status];
-  const startStr = formatHHMM(homeData?.workStartTime ?? null);
-  const endStr   = formatHHMM(homeData?.workEndTime ?? null);
+  // 화면에는 실제 버튼 시각을 우선 표시(없으면 일괄생성 등 → 고정시각). 출근부 PDF만 고정시각 사용.
+  const startStr = formatHHMM(homeData?.actualStartTime ?? homeData?.workStartTime ?? null);
+  const endStr   = formatHHMM(homeData?.actualEndTime ?? homeData?.workEndTime ?? null);
 
   const workTypeLabel = homeData?.workType
     ? (WORK_TYPE_LABEL[homeData.workType] ?? `${homeData.customWorkStart}–${homeData.customWorkEnd}`)

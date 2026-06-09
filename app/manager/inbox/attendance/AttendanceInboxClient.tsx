@@ -499,7 +499,7 @@ export default function AttendanceInboxClient() {
     //    실제 시각 없으면(과거 기록·일괄생성) 판정 안 함. 표준보다 10분 이상 늦으면 지각.
     const expectedStartMin = getExpectedStartMin(it);
     const actualInMin = isoToLocalMin(it.actualClockInAt);
-    if (expectedStartMin != null && actualInMin != null && actualInMin - expectedStartMin >= 10) {
+    if (expectedStartMin != null && actualInMin != null && actualInMin - expectedStartMin >= 15) {
       set.add("TIME_ANOMALY");
     }
 
@@ -862,10 +862,10 @@ export default function AttendanceInboxClient() {
                       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-semibold text-slate-700">
                         <span>출근 {fmtTime(selected.actualClockInAt)}</span>
                         <span>퇴근 {fmtTime(selected.actualClockOutAt)}</span>
-                        {lateMin != null && lateMin >= 10 && (
+                        {lateMin != null && lateMin >= 15 && (
                           <span className="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-black text-purple-700">{lateMin}분 지각</span>
                         )}
-                        {lateMin != null && lateMin < 10 && (
+                        {lateMin != null && lateMin < 15 && (
                           <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-black text-emerald-700">정시 출근</span>
                         )}
                       </div>

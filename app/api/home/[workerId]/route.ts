@@ -183,6 +183,9 @@ export async function GET(
         attendanceId: todayAttendance?.id ? todayAttendance.id.toString() : null,
         startTime: todayAttendance?.startTime ?? null,
         endTime: todayAttendance?.endTime ?? null,
+        // 실제 버튼 시각(화면 표시용). startTime/endTime은 출근부용 고정시각.
+        actualStartTime: (todayAttendance as any)?.actualStartTime ?? null,
+        actualEndTime: (todayAttendance as any)?.actualEndTime ?? null,
         isFinalClosed: isFinalClosed,
         finalizedAt: finalizedAt,
         isMultipleMode: isMultipleMode,
