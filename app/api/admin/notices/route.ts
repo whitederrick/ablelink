@@ -68,8 +68,16 @@ export async function POST(req: NextRequest) {
 
     if (mode === "INDIVIDUAL") {
       kind = "NOTICE_INDIVIDUAL";
-      targetIds = (Array.isArray(userIds) ? userIds : [])
+      const requested = (Array.isArray(userIds) ? userIds : [])
         .map((id: unknown) => parseBigInt(id)).filter((id): id is bigint => id !== null);
+      // ✅ 크로스테넌트 방지: 요청된 워커 중 "내 에이전시 소속"만 대상으로.
+      if (requested.length > 0) {
+        const valid = await prisma.siteAssignment.findMany({
+          where: { agencyId, workerId: { in: requested }, status: { in: [...activeStatuses] } },
+          select: { workerId: true },
+        });
+        targetIds = [...new Map(valid.map(a => [a.workerId.toString(), a.workerId])).values()];
+      }
     } else if (mode === "GROUP") {
       kind = "NOTICE_GROUP";
       const sid = parseBigInt(siteId);

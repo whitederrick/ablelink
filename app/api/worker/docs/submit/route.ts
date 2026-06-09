@@ -58,6 +58,14 @@ export async function POST(req: NextRequest) {
       const { payload, meta } = built;
       workerName = meta.workerName;
 
+      // ✅ 훈련생 소속 검증: 임의 traineeId로 문서 생성/이름노출 방지.
+      if (meta.traineeId != null) {
+        const t = await prisma.trainee.findUnique({ where: { id: meta.traineeId }, select: { currentSiteId: true } });
+        if (!t || t.currentSiteId !== meta.siteId) {
+          return NextResponse.json({ success: false, message: "선택한 훈련생이 현재 현장 소속이 아닙니다." }, { status: 403 });
+        }
+      }
+
       // PDF docType → Prisma DocumentType enum (vocabulary 다름)
       const prismaDocType = PDF_TO_PRISMA_DOCTYPE[docType];
       if (!prismaDocType)
@@ -150,6 +158,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, submitted: submitted.length });
   } catch (e: any) {
     console.error("[worker/docs/submit]", e);
-    return NextResponse.json({ success: false, message: e.message || "제출 오류" }, { status: 500 });
+    return NextResponse.json({ success: false, message: "제출 처리 중 오류가 발생했습니다." }, { status: 500 });
   }
 }

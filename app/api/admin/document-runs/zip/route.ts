@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
         ...(q ? { OR: [{ worker: { workerName: { contains: q } } }, { site: { companyName: { contains: q } } }] } : {}),
       },
       orderBy: { updatedAt: "desc" },
-      take: 300,
+      take: 50, // PDF 순차 렌더 — 서버리스 타임아웃 방지 상한(초과분은 검색으로 좁혀 받기)
       select: {
         id: true, docType: true, traineeId: true, periodStart: true, periodEnd: true,
         worker: { select: { workerName: true } },
