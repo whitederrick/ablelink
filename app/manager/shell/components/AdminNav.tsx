@@ -52,15 +52,17 @@ const groups: NavGroup[] = [
     ],
   },
   {
+    // 비즈니스 흐름순(아래 수동 순서를 그대로 노출 — 플랜순 자동정렬 미적용).
+    // 리포트(현황 대시보드) → 확정 → 발급·출력 → 제출관리 → 계약 → 소통(공지·알림).
     title: "문서/소통",
     items: [
+      { href: "/manager/reports",       label: "훈련생 진척도 리포트", plan: "STANDARD" }, // 그룹 대시보드
       { href: "/manager/review",        label: "출근부·일지 확정" },
+      { href: "/manager/docs",          label: "문서 발급·출력",      plan: "STARTER" },
+      { href: "/manager/documents",     label: "문서 발송·제출 관리", plan: "STARTER" },
+      { href: "/manager/contracts",     label: "근로계약서", plan: "PRO" },
       { href: "/manager/announcements", label: "공지 게시판" },
       { href: "/manager/notices",       label: "알림 발송(개별)" },
-      { href: "/manager/contracts",     label: "근로계약서", plan: "PRO" },
-      { href: "/manager/documents",     label: "문서 발송·제출 관리", plan: "STARTER" },
-      { href: "/manager/docs",          label: "제출 문서 조회",      plan: "STARTER" },
-      { href: "/manager/reports",       label: "훈련생 진척도 리포트", plan: "STANDARD" },
     ],
   },
   {
@@ -122,8 +124,8 @@ export default function AdminNav() {
 
       <nav className="flex flex-col gap-1.5">
         {groups.map(g => {
-          // 카테고리 내: FREE→STARTER→STANDARD→PRO 순(동일 등급은 기존 순서 유지 — 안정 정렬)
-          const items = [...g.items].sort((a, b) => itemRank(a) - itemRank(b));
+          // 메뉴는 정의된 수동 순서를 그대로 노출(비즈니스 흐름 우선). 잠금 배지는 유지.
+          const items = g.items;
           const open = openGroup === g.title;
           return (
             <div key={g.title}>

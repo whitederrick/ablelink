@@ -217,7 +217,7 @@ export default function AdminDocsPage() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <PageHeader title="제출 문서 조회" />
+      <PageHeader title="문서 발급·출력" />
 
       {/* 직무지도원 선택 */}
       <div className={T.card}>
