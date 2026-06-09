@@ -83,8 +83,8 @@
 | `KAKAO_ALIMTALK_SENDER_PHONE` | ⚡ | 발신 번호 |
 | `KAKAO_CONTRACT_TEMPLATE_CODE` | ⚡ | 계약서 서명 요청 템플릿 코드 |
 | `KAKAO_SIGNUP_TEMPLATE_CODE` | ⚡ | 신규 가입 안내 템플릿 코드 |
-| `KAKAO_CONTRACT_SIGNED_TEMPLATE_CODE` | ⚡ | 서명 완료 알림 템플릿 코드 |
-| `KAKAO_CONTRACT_EXPIRY_TEMPLATE_CODE` | ⚡ | 계약 만료 D-30/7/1 템플릿 코드 |
+| `KAKAO_CONTRACT_SIGNED_TEMPLATE_CODE` | ⚡ | 서명 완료 알림 템플릿 코드 (**미사용** — 앱 내 알림으로 대체, 향후 활성화 대비 보존) |
+| `KAKAO_CONTRACT_EXPIRY_TEMPLATE_CODE` | ⚡ | 계약 만료 D-30/7/1 템플릿 코드 (**미사용** — 앱 내 알림으로 대체, 향후 활성화 대비 보존) |
 | `KAKAO_REST_API_KEY` | ⚡ | 카카오 REST API 키 |
 
 > 미설정 시 SMS/알림톡 발송 비활성화 (콘솔 로그로 대체)
