@@ -533,6 +533,8 @@ model DocumentRun {
   assignmentId BigInt  @map("assignment_id")
   siteId       BigInt  @map("site_id")
   workerId BigInt  @map("worker_id")
+  // 일지·평가 등 훈련생 단위 문서는 traineeId로 구분. 출근부 등 비훈련생 문서는 null.
+  traineeId BigInt? @map("trainee_id")
 
   docType     DocumentType @map("doc_type")
   periodStart DateTime     @map("period_start")
@@ -568,7 +570,7 @@ model DocumentRun {
 
   currentVersion DocumentVersion? @relation("DocumentRunCurrentVersion", fields: [currentVersionId], references: [id])
 
-  @@unique([assignmentId, docType, periodStart])
+  @@unique([assignmentId, docType, periodStart, traineeId])
   @@index([agencyId, docType, periodStart])
   @@index([assignmentId, docType])
   @@map("document_runs")
