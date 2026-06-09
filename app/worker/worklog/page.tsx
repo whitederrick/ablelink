@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CalendarDays, CheckCircle2, ChevronLeft, Home,
-  Info, Loader2, Mic, Square,
+  Info, Loader2, Mic, Square, Trash2,
 } from "lucide-react";
 
 // ─── 타입 ──────────────────────────────────────────────────────────
@@ -290,6 +290,7 @@ function WorklogForm() {
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [loadingLog, setLoadingLog] = useState(false);
 
@@ -437,6 +438,19 @@ function WorklogForm() {
     setIsRecording(false);
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setRecordingSec(0);
+  }
+
+  async function deleteLog() {
+    if (!logId) return;
+    if (!confirm("이 일지를 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.")) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/worker/logs/${logId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!data.success) { alert(data.message || "삭제에 실패했습니다."); return; }
+      try { localStorage.removeItem(draftKey); } catch {}
+      router.replace("/worker/logs"); // 삭제 후 목록으로(뒤로가기로 삭제된 일지 재진입 방지)
+    } catch { alert("서버와 연결할 수 없습니다."); } finally { setDeleting(false); }
   }
 
   async function handleSave(isComplete: boolean) {
@@ -823,6 +837,15 @@ function WorklogForm() {
           className="min-h-12 w-full rounded-2xl bg-slate-700 text-base font-black text-white transition active:scale-[0.97] disabled:opacity-70">
           임시저장
         </button>
+
+        {/* 수정 모드: 일지 삭제 */}
+        {logId && (
+          <button onClick={deleteLog} disabled={deleting || saving}
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 text-base font-black text-rose-600 transition active:scale-[0.97] disabled:opacity-60">
+            <Trash2 className="h-5 w-5" />
+            {deleting ? "삭제 중..." : "일지 삭제"}
+          </button>
+        )}
       </div>
     </div>
   );
