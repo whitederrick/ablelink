@@ -7,6 +7,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 
+const DOC_LABEL: Record<string, string> = {
+  ATTENDANCE_SHEET:              "출근부",
+  TRAINING_DAILY_LOG:            "지원고용 훈련일지",
+  TRAINEE_COMPREHENSIVE_EVAL:    "훈련생 종합평가",
+  POST_EMPLOY_ADAPT_LOG:         "적응지도 일지",
+  ADAPTATION_COMPREHENSIVE_EVAL: "적응지도 종합평가",
+  CHECKLIST:                     "체크리스트",
+};
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const scope = await requireManagerSession(req);
@@ -17,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const run = await prisma.documentRun.findUnique({
       where: { id: runId },
-      select: { id: true, agencyId: true, workerId: true, signStage: true, docType: true, periodStart: true, periodEnd: true },
+      select: { id: true, agencyId: true, workerId: true, traineeId: true, signStage: true, docType: true, periodStart: true, periodEnd: true },
     });
     if (!run) return NextResponse.json({ success: false, message: "문서를 찾을 수 없습니다." }, { status: 404 });
     if (run.agencyId !== scope.agencyId) return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
@@ -48,13 +57,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (action === "request-changes") {
       const reason = String(body?.reason || "").trim();
       await prisma.documentRun.update({ where: { id: runId }, data: { signStage: "CHANGES_REQUESTED" } });
-      // 직무지도원에게 수정요청 알림 + 딥링크
+
+      // 어떤 문서인지 구체 명시: 문서명(+훈련생) + 기간
+      const docLabel = DOC_LABEL[run.docType] ?? run.docType;
+      let traineeName = "";
+      if (run.traineeId != null) {
+        const t = await prisma.trainee.findUnique({ where: { id: run.traineeId }, select: { name: true } });
+        traineeName = t?.name ? `(${t.name})` : "";
+      }
+      const ps = run.periodStart.toISOString().slice(0, 10);
+      const pe = run.periodEnd.toISOString().slice(0, 10);
+      const docTitle = `${docLabel}${traineeName} · ${ps}~${pe}`;
+
       await (prisma as any).workerNotice.create({
         data: {
           workerId: run.workerId,
           agencyId: run.agencyId,
-          title: "[문서 수정요청] 제출 문서 수정이 필요합니다",
-          body: reason || "제출하신 문서에 수정이 필요합니다. 내용을 수정 후 다시 제출해주세요.",
+          title: `[수정요청] ${docTitle}`,
+          body: `다음 문서의 수정이 필요합니다.\n\n■ 문서: ${docTitle}\n■ 사유: ${reason || "(사유 미입력)"}\n\n해당 문서를 수정 후 다시 제출해주세요.`,
           type: "WARN",
           kind: "NOTICE_INDIVIDUAL",
           link: "/worker/docs",
