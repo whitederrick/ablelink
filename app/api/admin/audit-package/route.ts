@@ -10,6 +10,7 @@ import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
+import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import JSZip from "jszip";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -99,7 +100,10 @@ export async function GET(request: NextRequest) {
     // 출근부용 데이터
     const attendances = await prisma.dailyAttendance.findMany({
       where: { workerId, workDate: { gte: start, lte: end } },
-      include: { logs: { select: { time1on1: true, timeGroup: true, extTime1on1: true, extTimeGroup: true } } },
+      include: {
+        logs: { select: { time1on1: true, timeGroup: true, extTime1on1: true, extTimeGroup: true } },
+        assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true } },
+      },
       orderBy: { workDate: "asc" },
     });
 
@@ -114,13 +118,24 @@ export async function GET(request: NextRequest) {
 
     // 1) 출근부
     {
-      const entries = attendances.map(a => ({
-        date: a.workDate,
-        start: a.startTime ? fmtHHMM(a.startTime) : "",
-        end:   a.endTime   ? fmtHHMM(a.endTime)   : "",
-        hours: a.logs.reduce((s, l) => s + Number(l.time1on1) + Number(l.extTime1on1), 0),
-        multiHours: a.logs.reduce((s, l) => s + Number(l.timeGroup) + Number(l.extTimeGroup), 0),
-      }));
+      const entries = attendances.map(a => {
+        const pending = isPayrollPending({
+          actualStartTime: a.actualStartTime ?? null,
+          payrollConfirmedAt: a.payrollConfirmedAt ?? null,
+          workType: a.assignment?.workType ?? null,
+          commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded ?? null,
+          customWorkStart: a.assignment?.customWorkStart ?? null,
+          customWorkEnd: a.assignment?.customWorkEnd ?? null,
+        });
+        return {
+          date: a.workDate,
+          start: pending ? "" : (a.startTime ? fmtHHMM(a.startTime) : ""),
+          end:   pending ? "" : (a.endTime   ? fmtHHMM(a.endTime)   : ""),
+          pending,
+          hours: pending ? 0 : a.logs.reduce((s, l) => s + Number(l.time1on1) + Number(l.extTime1on1), 0),
+          multiHours: pending ? 0 : a.logs.reduce((s, l) => s + Number(l.timeGroup) + Number(l.extTimeGroup), 0),
+        };
+      });
       const totalHours  = entries.reduce((s, e) => s + e.hours,      0);
       const oneToMany   = entries.reduce((s, e) => s + e.multiHours, 0);
       const payload = {

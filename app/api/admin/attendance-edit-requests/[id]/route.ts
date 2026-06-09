@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { kstWallTimeToInstant } from "@/lib/workSchedule";
 
 export async function PATCH(
   req: NextRequest,
@@ -49,26 +50,20 @@ export async function PATCH(
       });
 
       // 2. 출근 기록에 제안된 시간 적용
-      const updateData: any = {};
+      //    ⚠️ KST 벽시계 → UTC instant 보정(kstWallTimeToInstant). 다른 곳과 동일 출처를 써야 9시간 어긋남 방지.
+      //    승인 = 에이전시 컨펌 → payrollConfirmedAt 설정 → 출근부 급여 게이트 통과(보정대기 해제).
+      const updateData: any = { payrollConfirmedAt: now };
       if (request.proposedStart) {
-        const [h, m] = request.proposedStart.split(":").map(Number);
-        const newStart = new Date(request.attendance.workDate + "T00:00:00");
-        newStart.setHours(h, m, 0, 0);
-        updateData.startTime = newStart;
+        updateData.startTime = kstWallTimeToInstant(request.attendance.workDate, request.proposedStart);
       }
       if (request.proposedEnd) {
-        const [h, m] = request.proposedEnd.split(":").map(Number);
-        const newEnd = new Date(request.attendance.workDate + "T00:00:00");
-        newEnd.setHours(h, m, 0, 0);
-        updateData.endTime = newEnd;
+        updateData.endTime = kstWallTimeToInstant(request.attendance.workDate, request.proposedEnd);
         updateData.status  = "DONE";
       }
-      if (Object.keys(updateData).length > 0) {
-        await prisma.dailyAttendance.update({
-          where: { id: request.attendanceId },
-          data: updateData,
-        });
-      }
+      await prisma.dailyAttendance.update({
+        where: { id: request.attendanceId },
+        data: updateData,
+      });
 
       return NextResponse.json({ success: true, message: "수정 요청이 승인되었습니다. 출근 기록이 업데이트되었습니다." });
     } else {

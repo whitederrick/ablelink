@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer } from "@/lib/pdf";
 import { sendEmailWithPdf } from "@/lib/email";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
+import { isPayrollPending } from "@/lib/attendance/payrollGate";
 
 function fmtHHMM(d: Date) {
   const kst = new Date(d.getTime() + 9*3600000);
@@ -114,16 +115,30 @@ export async function POST(request: NextRequest) {
     if (docType === "ATTENDANCE_SHEET") {
       const attendances = await prisma.dailyAttendance.findMany({
         where: { workerId, workDate:{ gte:start, lte:end } },
-        include: { logs:{ select:{ time1on1:true, timeGroup:true, extTime1on1:true, extTimeGroup:true } } },
+        include: {
+          logs:{ select:{ time1on1:true, timeGroup:true, extTime1on1:true, extTimeGroup:true } },
+          assignment:{ select:{ workType:true, commuteGuidanceIncluded:true, customWorkStart:true, customWorkEnd:true } },
+        },
         orderBy: { workDate:"asc" },
       });
-      const entries = attendances.map(a => ({
-        date: a.workDate,
-        start: a.startTime ? fmtHHMM(a.startTime) : "",
-        end:   a.endTime   ? fmtHHMM(a.endTime)   : "",
-        hours:      a.logs.reduce((s,l) => s+Number(l.time1on1)+Number(l.extTime1on1), 0),
-        multiHours: a.logs.reduce((s,l) => s+Number(l.timeGroup)+Number(l.extTimeGroup), 0),
-      }));
+      const entries = attendances.map(a => {
+        const pending = isPayrollPending({
+          actualStartTime: a.actualStartTime ?? null,
+          payrollConfirmedAt: a.payrollConfirmedAt ?? null,
+          workType: a.assignment?.workType ?? null,
+          commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded ?? null,
+          customWorkStart: a.assignment?.customWorkStart ?? null,
+          customWorkEnd: a.assignment?.customWorkEnd ?? null,
+        });
+        return {
+          date: a.workDate,
+          start: pending ? "" : (a.startTime ? fmtHHMM(a.startTime) : ""),
+          end:   pending ? "" : (a.endTime   ? fmtHHMM(a.endTime)   : ""),
+          pending,
+          hours:      pending ? 0 : a.logs.reduce((s,l) => s+Number(l.time1on1)+Number(l.extTime1on1), 0),
+          multiHours: pending ? 0 : a.logs.reduce((s,l) => s+Number(l.timeGroup)+Number(l.extTimeGroup), 0),
+        };
+      });
       const totalHours = entries.reduce((s,e) => s+Number(e.hours), 0);
       const oneToMany  = entries.reduce((s,e) => s+Number(e.multiHours), 0);
       payload = {

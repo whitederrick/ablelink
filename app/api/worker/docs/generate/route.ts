@@ -12,6 +12,7 @@ import { buildDocFileName } from "@/lib/pdf/filename";
 import { sendEmailWithPdf } from "@/lib/email";
 import { getKrHolidayDates } from "@/lib/krHolidays";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
+import { isPayrollPending } from "@/lib/attendance/payrollGate";
 
 // ── 유틸 ──────────────────────────────────────────────────────
 function fmtHHMM(d: Date): string {
@@ -151,13 +152,25 @@ export async function POST(request: NextRequest) {
         orderBy: { workDate: "asc" },
       });
 
-      const entries = attendances.map(a => ({
-        date: a.workDate,
-        start: a.startTime ? fmtHHMM(a.startTime) : "",
-        end:   a.endTime   ? fmtHHMM(a.endTime)   : "",
-        hours: a.logs.reduce((s,l) => s + Number(l.time1on1) + Number(l.extTime1on1), 0),
-        multiHours: a.logs.reduce((s,l) => s + Number(l.timeGroup) + Number(l.extTimeGroup), 0),
-      }));
+      const entries = attendances.map(a => {
+        // 급여 게이트: 심한 지각 + 미컨펌이면 출근부에 기본값 미확정 → "보정대기"
+        const pending = isPayrollPending({
+          actualStartTime: a.actualStartTime ?? null,
+          payrollConfirmedAt: a.payrollConfirmedAt ?? null,
+          workType: (assignment as any).workType ?? null,
+          commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? null,
+          customWorkStart: (assignment as any).customWorkStart ?? null,
+          customWorkEnd: (assignment as any).customWorkEnd ?? null,
+        });
+        return {
+          date: a.workDate,
+          start: pending ? "" : (a.startTime ? fmtHHMM(a.startTime) : ""),
+          end:   pending ? "" : (a.endTime   ? fmtHHMM(a.endTime)   : ""),
+          pending,
+          hours: pending ? 0 : a.logs.reduce((s,l) => s + Number(l.time1on1) + Number(l.extTime1on1), 0),
+          multiHours: pending ? 0 : a.logs.reduce((s,l) => s + Number(l.timeGroup) + Number(l.extTimeGroup), 0),
+        };
+      });
 
       const totalHours = entries.reduce((s,e) => s + Number(e.hours), 0);
       const oneToMany  = entries.reduce((s,e) => s + Number(e.multiHours), 0);

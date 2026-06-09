@@ -337,6 +337,10 @@ model DailyAttendance {
   endLocLat   Decimal?  @map("end_loc_lat")
   endLocLon   Decimal?  @map("end_loc_lon")
 
+  // 급여 보호 게이트: 심한 지각(실제 출근이 표준보다 30분+ 지각)인 날은 에이전시 컨펌 전까지
+  // 출근부에 기본값을 확정하지 않는다. 보정 승인/명시적 확정 시각이 들어오면 set → 그때부터 출근부 확정.
+  payrollConfirmedAt DateTime? @map("payroll_confirmed_at")
+
   startDistanceM Float?   @map("start_distance_m")
   endDistanceM   Float?   @map("end_distance_m")
   withinRange    Boolean? @map("within_range")
