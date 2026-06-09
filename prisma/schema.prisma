@@ -466,6 +466,7 @@ model Agency {
   workerReviews         WorkerReview[]
   recruitPosts          RecruitPost[]
   talentOffers          TalentOffer[]
+  contractClauses       AgencyContractClause[]
 
   @@index([planType])
   @@map("agencies")
@@ -783,6 +784,35 @@ model EmploymentContract {
   pdfUrl    String? @map("pdf_url")
   adminMemo String? @map("admin_memo")
 
+  // ── 고용노동부 표준근로계약서(단시간근로자) 항목 — 2026-06-10 추가 ──
+  workLocation    String? @map("work_location")     // 2. 근무장소
+  jobDescription  String? @map("job_description")    // 3. 업무의 내용
+  workStartTime   String? @map("work_start_time")    // 4. 소정근로 시작 "HH:MM"
+  workEndTime     String? @map("work_end_time")      // 4. 소정근로 종료
+  breakStartTime  String? @map("break_start_time")   // 4. 휴게 시작
+  breakEndTime    String? @map("break_end_time")     // 4. 휴게 종료
+  workDaysPerWeek Int?    @map("work_days_per_week")  // 5. 주 N일 근무
+  weeklyHoliday   String? @map("weekly_holiday")     // 5. 주휴일 요일(예: "일")
+  wageType        String? @map("wage_type")          // 6. HOURLY|DAILY|MONTHLY
+  wageAmount      Int?    @map("wage_amount")         // 6. 임금액(원)
+  bonusExists     Boolean @default(false) @map("bonus_exists")     // 6. 상여금 유무
+  bonusAmount     Int?    @map("bonus_amount")        // 6. 상여금액
+  extraPayExists  Boolean @default(false) @map("extra_pay_exists") // 6. 기타급여 유무
+  extraPayDesc    String? @map("extra_pay_desc")      // 6. 기타급여 내역
+  overtimeRate    Int?    @map("overtime_rate")       // 6. 초과근로 가산임금률(%)
+  wagePayday      String? @map("wage_payday")         // 6. 임금지급일(예: "25")
+  wagePayMethod   String? @map("wage_pay_method")     // 6. DIRECT|ACCOUNT
+  // 사업주(갑) 스냅샷 — 작성 시점 에이전시 정보 보존
+  employerBizName String? @map("employer_biz_name")  // 사업체명
+  employerPhone   String? @map("employer_phone")     // 전화
+  employerAddress String? @map("employer_address")   // 주소
+  employerRepName String? @map("employer_rep_name")  // 대표자
+  // 근로자(을) 추가 정보
+  workerAddress       String? @map("worker_address")         // 근로자 주소(관리자 입력)
+  workerFilledAddress String? @map("worker_filled_address")  // 서명 시 직접 입력 주소
+  // 특약 조항 스냅샷(작성 시점 보존): [{ title, body }]
+  specialClauses Json? @map("special_clauses")
+
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
   createdByManagerId BigInt?  @map("created_by_manager_id")
@@ -794,6 +824,23 @@ model EmploymentContract {
   @@index([workerId, status])
   @@index([signToken])
   @@map("employment_contracts")
+}
+
+// 에이전시별 근로계약서 특약 조항 마스터 (등록/수정/삭제) — 2026-06-10
+model AgencyContractClause {
+  id        BigInt   @id @default(autoincrement())
+  agencyId  BigInt   @map("agency_id")
+  title     String
+  body      String
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  agency Agency @relation(fields: [agencyId], references: [id])
+
+  @@index([agencyId, isActive])
+  @@map("agency_contract_clauses")
 }
 
 enum ContractStatus {
