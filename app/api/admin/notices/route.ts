@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 export async function GET(req: NextRequest) {
   try {
@@ -46,6 +47,10 @@ export async function POST(req: NextRequest) {
   try {
     const scope    = await requireManagerSession(req);
     const agencyId = scope.agencyId;
+
+    // 레이트리밋(알림 폭주 방지)
+    const rl = await checkRateLimit(`notice-send:${scope.managerId}`);
+    if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
 
     const body = await req.json().catch(() => ({}));
     // audience: "ALL"(전체) | "GROUP"(현장 단위) | "INDIVIDUAL"(개별)

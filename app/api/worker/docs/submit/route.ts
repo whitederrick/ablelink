@@ -11,6 +11,9 @@ import { prisma } from "@/lib/prisma";
 import { DocumentStage } from "@prisma/client";
 import { buildDocPayload, DocPayloadError } from "@/lib/docs/buildDocPayload";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
+import { checkRateLimit } from "@/lib/rateLimit";
+
+const MAX_VERSIONS_PER_RUN = 20; // 보존: run당 최근 N개 버전만 유지(과도 누적·PII 적재 방지)
 
 const DOC_LABELS: Record<string, string> = {
   ATTENDANCE_SHEET:      "출근부",
@@ -25,6 +28,10 @@ export async function POST(req: NextRequest) {
     const session = await getWorkerSessionFromReq(req);
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
     const workerId = BigInt(session.workerId);
+
+    // 레이트리밋(남용·버전 폭주 방지)
+    const rl = await checkRateLimit(`doc-submit:${session.workerId}`);
+    if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
 
     const body = await req.json().catch(() => ({}));
     const { periodStart, periodEnd, documents, companyManagerSignToken } = body;
@@ -42,6 +49,7 @@ export async function POST(req: NextRequest) {
     let workerName = "";
     let ownerManagerId: bigint | null = null;
     let agencyIdForNotice: bigint | null = null;
+    const runIds: bigint[] = [];
 
     for (const d of documents) {
       const docType = String(d?.docType || "");
@@ -125,12 +133,28 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        return { versionNo: version.versionNo, ownerManagerId: site?.ownerManagerId ?? null, agencyId: site?.agencyId ?? null };
+        return { runId: run.id, versionNo: version.versionNo, ownerManagerId: site?.ownerManagerId ?? null, agencyId: site?.agencyId ?? null };
       });
 
       ownerManagerId = res.ownerManagerId;
       agencyIdForNotice = res.agencyId;
+      runIds.push(res.runId);
       submitted.push({ docType, traineeName: meta.traineeName, versionNo: res.versionNo });
+    }
+
+    // 보존: run당 오래된 버전(최근 N개 초과)을 정리(과도 누적·PII 적재 방지). best-effort.
+    for (const rid of new Set(runIds)) {
+      try {
+        const old = await prisma.documentVersion.findMany({
+          where: { runId: rid },
+          orderBy: { versionNo: "desc" },
+          select: { id: true },
+          skip: MAX_VERSIONS_PER_RUN,
+        });
+        if (old.length > 0) {
+          await prisma.documentVersion.deleteMany({ where: { id: { in: old.map(v => v.id) } } });
+        }
+      } catch (e) { console.error("[submit version prune]", e); }
     }
 
     // 알림 대상: 담당 매니저(있으면) → 없으면 소속 에이전시 매니저 전체.
