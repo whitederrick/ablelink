@@ -37,6 +37,21 @@ export default function ManagerDocumentsHub() {
   const [toast, setToast] = useState("");
   const [preview, setPreview] = useState<Item | null>(null);
   const [zipping, setZipping] = useState(false);
+  const [versions, setVersions] = useState<{ id: string; versionNo: number; createdAt: string }[]>([]);
+  const [viewVersionId, setViewVersionId] = useState<string | null>(null);
+
+  function openPreview(item: Item) {
+    setPreview(item);
+    setViewVersionId(item.currentVersionId);
+    setVersions([]);
+    // 버전 이력 조회(과거 버전 포함)
+    fetch(`/api/admin/document-versions?runId=${item.id}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) setVersions((d.items || []).map((v: any) => ({ id: String(v.id), versionNo: v.versionNo, createdAt: v.createdAt })));
+      })
+      .catch(() => {});
+  }
 
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(""), 3000); };
 
@@ -196,7 +211,7 @@ export default function ManagerDocumentsHub() {
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
-                    <button onClick={() => setPreview(item)} className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 active:scale-95">문서 보기</button>
+                    <button onClick={() => openPreview(item)} className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 active:scale-95">문서 보기</button>
                     <button onClick={() => downloadPdf(item)} className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 active:scale-95">다운로드</button>
                     {item.signStage === "SUBMITTED" && (
                       <>
@@ -241,8 +256,28 @@ export default function ManagerDocumentsHub() {
                 <button onClick={() => setPreview(null)} className="rounded-lg px-2 py-1.5 text-sm font-black text-slate-400 active:scale-95">✕</button>
               </div>
             </div>
-            {preview.currentVersionId ? (
-              <iframe src={`/api/admin/document-versions/${preview.currentVersionId}/pdf`} className="flex-1 border-0 bg-slate-100" title="문서 미리보기" />
+            {/* 버전 이력 — 과거 버전 조회 */}
+            {versions.length > 1 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-100 bg-slate-50 px-4 py-2">
+                <span className="shrink-0 text-[11px] font-black text-slate-400">버전</span>
+                {versions.map(v => {
+                  const isLatest = v.id === preview.currentVersionId;
+                  const active = v.id === viewVersionId;
+                  return (
+                    <button
+                      key={v.id}
+                      onClick={() => setViewVersionId(v.id)}
+                      title={new Date(v.createdAt).toLocaleString("ko-KR")}
+                      className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-black transition ${active ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
+                    >
+                      v{v.versionNo}{isLatest ? " (최신)" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {viewVersionId ? (
+              <iframe src={`/api/admin/document-versions/${viewVersionId}/pdf`} className="flex-1 border-0 bg-slate-100" title="문서 미리보기" />
             ) : (
               <div className="flex flex-1 items-center justify-center text-sm font-semibold text-slate-400">조회할 버전이 없습니다.</div>
             )}
