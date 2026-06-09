@@ -10,6 +10,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { DocumentStage } from "@prisma/client";
 import { buildDocPayload, DocPayloadError } from "@/lib/docs/buildDocPayload";
+import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 
 const DOC_LABELS: Record<string, string> = {
   ATTENDANCE_SHEET:      "출근부",
@@ -56,12 +57,17 @@ export async function POST(req: NextRequest) {
       const { payload, meta } = built;
       workerName = meta.workerName;
 
+      // PDF docType → Prisma DocumentType enum (vocabulary 다름)
+      const prismaDocType = PDF_TO_PRISMA_DOCTYPE[docType];
+      if (!prismaDocType)
+        return NextResponse.json({ success: false, message: `지원하지 않는 문서: ${docType}` }, { status: 400 });
+
       const res = await prisma.$transaction(async (tx) => {
         const site = await tx.site.findUnique({ where: { id: meta.siteId }, select: { agencyId: true, ownerManagerId: true } });
 
         // DocumentRun upsert(현장×문서종류×기간×훈련생) — nullable traineeId 때문에 findFirst+create.
         let run = await tx.documentRun.findFirst({
-          where: { assignmentId: meta.assignmentId, docType: docType as any, periodStart: pStart, traineeId: meta.traineeId },
+          where: { assignmentId: meta.assignmentId, docType: prismaDocType, periodStart: pStart, traineeId: meta.traineeId },
           select: { id: true },
         });
         if (!run) {
@@ -72,7 +78,7 @@ export async function POST(req: NextRequest) {
               site: { connect: { id: meta.siteId } },
               worker: { connect: { id: workerId } },
               traineeId: meta.traineeId,
-              docType: docType as any,
+              docType: prismaDocType,
               periodStart: pStart,
               periodEnd: pEnd,
               openAt: now,

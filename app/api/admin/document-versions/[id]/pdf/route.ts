@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
+import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -45,7 +46,9 @@ export async function GET(
     const agencyId = v.run?.assignment?.site?.agencyId ?? null;
     if (!agencyId || agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
 
-    const docType = v.run?.docType as DocumentType | undefined;
+    // Prisma DocumentType → PDF 렌더 docType(vocabulary 다름)
+    const rawDocType = v.run?.docType as string | undefined;
+    const docType = (rawDocType ? (PRISMA_TO_PDF_DOCTYPE[rawDocType] ?? rawDocType) : undefined) as DocumentType | undefined;
     if (!docType) {
       if (v.pdfUrl) return NextResponse.redirect(v.pdfUrl);
       throw new Error("VALIDATION:docType");
