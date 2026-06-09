@@ -17,7 +17,6 @@ import {
   Mail,
   MapPin,
   PenLine,
-  Send,
   Smartphone,
   TrendingUp,
   User,
@@ -74,7 +73,6 @@ function DocsContent() {
   const [periodEnd, setPeriodEnd] = useState("");
   const [signToken, setSignToken] = useState<string | null>(null);
   const [signStatus, setSignStatus] = useState<"none" | "done">("none");
-  const [bulkLoading, setBulkLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
 
   const [docStates, setDocStates] = useState<Record<string, DocState>>(
@@ -161,8 +159,6 @@ function DocsContent() {
           periodEnd,
           traineeId: state.traineeId || undefined,
           companyManagerSignToken: signToken || undefined,
-          sendEmail: !!siteInfo?.managerEmail,
-          toEmail: siteInfo?.managerEmail || undefined,
         }),
       });
       const data = await res.json();
@@ -182,22 +178,6 @@ function DocsContent() {
         [docId]: { ...prev[docId], loading: false, result: { success: false, msg: "서버와 연결할 수 없습니다." } },
       }));
     }
-  }
-
-  async function handleBulkSend() {
-    const checkedDocs = ALL_DOC_TYPES.filter(d => activeDocIds.includes(d.id) && docStates[d.id].checked);
-    if (checkedDocs.length === 0) { alert("발송할 문서를 선택해주세요."); return; }
-    for (const doc of checkedDocs) {
-      if (doc.needsTrainee && !docStates[doc.id].traineeId) {
-        alert(`${doc.label}: 훈련생을 선택해주세요.`);
-        return;
-      }
-    }
-    setBulkLoading(true);
-    for (const doc of checkedDocs) {
-      await sendDoc(doc.id);
-    }
-    setBulkLoading(false);
   }
 
   // 에이전시에 최종 제출(인앱) — 선택 문서를 기간 묶음으로 제출. 기존 이메일 발송과 별개.
@@ -253,7 +233,7 @@ function DocsContent() {
           >
             <ChevronLeft className="h-5 w-5" aria-hidden="true" />
           </button>
-          <h1 className="text-base font-black text-slate-900">문서 발송</h1>
+          <h1 className="text-base font-black text-slate-900">문서 제출</h1>
           <button
             onClick={() => router.push("/worker/docs/view")}
             className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition active:scale-95"
@@ -477,13 +457,13 @@ function DocsContent() {
                       {/* 개별 발송 버튼 */}
                       <button
                         onClick={() => sendDoc(id)}
-                        disabled={state.loading || bulkLoading}
+                        disabled={state.loading}
                         className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-black text-slate-700 transition active:scale-[0.97] disabled:opacity-50"
                       >
                         {state.loading ? (
                           <><Clock className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> 생성 중...</>
                         ) : (
-                          <><Send className="h-3.5 w-3.5" aria-hidden="true" /> {label} 개별 발송</>
+                          <><FileText className="h-3.5 w-3.5" aria-hidden="true" /> 미리보기 (PDF 확인)</>
                         )}
                       </button>
                     </div>
@@ -499,7 +479,7 @@ function DocsContent() {
           <>
             <button
               onClick={submitDocs}
-              disabled={submitLoading || bulkLoading}
+              disabled={submitLoading}
               className="mx-4 mt-4 flex min-h-14 w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-base font-black text-white shadow-lg shadow-emerald-600/20 transition active:scale-[0.97] disabled:opacity-70"
             >
               {submitLoading ? (
@@ -514,25 +494,10 @@ function DocsContent() {
           </>
         )}
 
-        {/* 이메일 발송 (선택) */}
-        {checkedCount > 0 && (
-          <button
-            onClick={handleBulkSend}
-            disabled={bulkLoading || submitLoading}
-            className="mx-4 mt-3 flex min-h-12 w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-600 transition active:scale-[0.97] disabled:opacity-70"
-          >
-            {bulkLoading ? (
-              <><Clock className="h-5 w-5 animate-spin" aria-hidden="true" /> 발송 중...</>
-            ) : (
-              <><Mail className="h-5 w-5" aria-hidden="true" /> 이메일로도 보내기</>
-            )}
-          </button>
-        )}
-
         {/* 안내 */}
         <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4 text-center">
           <p className="text-xs font-semibold leading-relaxed text-slate-400">
-            PDF가 자동 생성되어 에이전시 담당자에게 발송됩니다.<br />
+'에이전시에 최종 제출'을 누르면 담당 매니저 앱으로 전달됩니다.<br />
             직무지도원 서명은 등록된 서명이 자동 삽입됩니다.
           </p>
         </div>
