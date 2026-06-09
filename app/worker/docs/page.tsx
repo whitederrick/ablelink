@@ -75,6 +75,7 @@ function DocsContent() {
   const [signToken, setSignToken] = useState<string | null>(null);
   const [signStatus, setSignStatus] = useState<"none" | "done">("none");
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
 
   const [docStates, setDocStates] = useState<Record<string, DocState>>(
     () => Object.fromEntries(ALL_DOC_TYPES.map(d => [d.id, { checked: false, traineeId: "", loading: false, result: null }]))
@@ -199,6 +200,35 @@ function DocsContent() {
     setBulkLoading(false);
   }
 
+  // 에이전시에 최종 제출(인앱) — 선택 문서를 기간 묶음으로 제출. 기존 이메일 발송과 별개.
+  async function submitDocs() {
+    const checkedDocs = ALL_DOC_TYPES.filter(d => activeDocIds.includes(d.id) && docStates[d.id].checked);
+    if (checkedDocs.length === 0) { alert("제출할 문서를 선택해주세요."); return; }
+    for (const doc of checkedDocs) {
+      if (doc.needsTrainee && !docStates[doc.id].traineeId) {
+        alert(`${doc.label}: 훈련생을 선택해주세요.`);
+        return;
+      }
+    }
+    if (!confirm("선택한 문서를 에이전시에 최종 제출할까요?\n제출하면 담당 매니저가 확인·서명합니다. (수정 후 다시 제출하면 새 버전으로 관리됩니다)")) return;
+    setSubmitLoading(true);
+    try {
+      const documents = checkedDocs.map(d => ({ docType: d.id, traineeId: docStates[d.id].traineeId || undefined }));
+      const res = await fetch("/api/worker/docs/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ periodStart, periodEnd, documents, companyManagerSignToken: signToken || undefined }),
+      });
+      const data = await res.json();
+      if (data.success) alert(`${data.submitted}건을 에이전시에 제출했습니다. 담당 매니저에게 알림이 전송되었습니다.`);
+      else alert(data.message || "제출에 실패했습니다.");
+    } catch {
+      alert("서버와 연결할 수 없습니다.");
+    } finally {
+      setSubmitLoading(false);
+    }
+  }
+
   function handleDownload(docId: string) {
     const r = docStates[docId].result;
     if (!r?.pdfBase64 || !r?.fileName) return;
@@ -210,10 +240,6 @@ function DocsContent() {
 
   const checkedCount = DOC_TYPES.filter(d => docStates[d.id].checked).length;
   const needsManagerSignChecked = DOC_TYPES.some(d => NEEDS_MANAGER_SIGN.has(d.id) && docStates[d.id].checked);
-  const singleDoc = checkedCount === 1 ? ALL_DOC_TYPES.find(d => docStates[d.id].checked) : null;
-  const mainBtnLabel = singleDoc
-    ? `${singleDoc.label} 발송`
-    : `선택 문서 일괄 발송 (${checkedCount}개)`;
 
   return (
     <div className="min-h-dvh bg-slate-50">
@@ -468,17 +494,37 @@ function DocsContent() {
           </div>
         </div>
 
-        {/* 메인 발송 버튼 */}
+        {/* 최종 제출(인앱) — 담당 매니저 확인·서명 워크플로 */}
+        {checkedCount > 0 && (
+          <>
+            <button
+              onClick={submitDocs}
+              disabled={submitLoading || bulkLoading}
+              className="mx-4 mt-4 flex min-h-14 w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-base font-black text-white shadow-lg shadow-emerald-600/20 transition active:scale-[0.97] disabled:opacity-70"
+            >
+              {submitLoading ? (
+                <><Clock className="h-5 w-5 animate-spin" aria-hidden="true" /> 제출 중...</>
+              ) : (
+                <><Check className="h-5 w-5" aria-hidden="true" /> 에이전시에 최종 제출 ({checkedCount}개)</>
+              )}
+            </button>
+            <p className="mx-4 mt-1.5 text-center text-[11px] font-semibold text-slate-400">
+              제출하면 담당 매니저가 앱에서 확인·서명합니다. 수정 후 재제출 시 새 버전으로 관리됩니다.
+            </p>
+          </>
+        )}
+
+        {/* 이메일 발송 (선택) */}
         {checkedCount > 0 && (
           <button
             onClick={handleBulkSend}
-            disabled={bulkLoading}
-            className="mx-4 mt-4 flex min-h-14 w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-2xl bg-slate-950 text-base font-black text-white shadow-lg shadow-slate-950/20 transition active:scale-[0.97] disabled:opacity-70"
+            disabled={bulkLoading || submitLoading}
+            className="mx-4 mt-3 flex min-h-12 w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-600 transition active:scale-[0.97] disabled:opacity-70"
           >
             {bulkLoading ? (
               <><Clock className="h-5 w-5 animate-spin" aria-hidden="true" /> 발송 중...</>
             ) : (
-              <><Mail className="h-5 w-5" aria-hidden="true" /> {mainBtnLabel}</>
+              <><Mail className="h-5 w-5" aria-hidden="true" /> 이메일로도 보내기</>
             )}
           </button>
         )}
