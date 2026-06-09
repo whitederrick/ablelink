@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Lock } from "lucide-react";
 import PageHeader from "./_components/PageHeader";
 
 interface DashboardData {
@@ -145,6 +145,9 @@ export default function AdminDashboardPage() {
   const [popup, setPopup] = useState<null | "attendance_gps" | "attendance_time" | "doc_pending" | "doc_overdue" | "assign_ending" | "unassigned_site">(null);
   const [pendingEditReqs, setPendingEditReqs] = useState(0);
   const [announcements, setAnnouncements] = useState<{ id: string; title: string; body: string; type: string; createdAt: string }[]>([]);
+  // 훈련생 진척도 요약(기존 리포트 API 재사용, 클라 집계). 플랜 잠금 시 reportLocked.
+  const [report, setReport] = useState<{ total: number; training: number; avgLogRate: number; avgScore: number | null } | null>(null);
+  const [reportLocked, setReportLocked] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -168,6 +171,23 @@ export default function AdminDashboardPage() {
     fetch("/api/admin/announcements")
       .then(r => r.json())
       .then(d => { if (d.success) setAnnouncements(d.announcements); })
+      .catch(() => {});
+    // 이번 달 진척도 요약. 403=플랜 미달 → 잠금 표시.
+    fetch("/api/admin/trainee-report")
+      .then(async r => ({ status: r.status, json: await r.json() }))
+      .then(({ status, json }) => {
+        if (status === 403) { setReportLocked(true); return; }
+        if (!json.success) return;
+        const rows: any[] = json.data ?? [];
+        const total = rows.length;
+        const training = rows.filter(r => r.status === "TRAINING").length;
+        const avgLogRate = total > 0 ? Math.round(rows.reduce((s, r) => s + r.logRate, 0) / total) : 0;
+        const scored = rows.filter(r => r.avgScore !== null);
+        const avgScore = scored.length > 0
+          ? Math.round(scored.reduce((s, r) => s + r.avgScore, 0) / scored.length * 10) / 10
+          : null;
+        setReport({ total, training, avgLogRate, avgScore });
+      })
       .catch(() => {});
   }, []);
 
@@ -203,8 +223,10 @@ export default function AdminDashboardPage() {
     { label: "미배정 Site",     value: s?.unassignedSiteCount ?? 0, unit: "건", urgent: (s?.unassignedSiteCount ?? 0) > 0, onClick: () => router.push("/manager/sites") },
   ];
 
+  const reportMonth = d?.today ? Number(d.today.slice(5, 7)) : new Date().getMonth() + 1;
+
   return (
-    <div className="max-w-[1200px] space-y-6">
+    <div className="max-w-[1200px] space-y-4">
       {/* 헤더 */}
       <PageHeader
         title="업무 현황 요약"
@@ -245,11 +267,8 @@ export default function AdminDashboardPage() {
         ))}
       </div>
 
-      {/* 메인 그리드 — 좌/우 카드 섹션 동일 폭(50/50) */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-
-        {/* 좌측 */}
-        <div className="space-y-4">
+      {/* 1행: 액션 섹션 가로 3열 — 근태 / 문서 / 배정·계약 */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
 
           {/* 근태 현황 */}
           <Section title="근태 현황" sub="근무 중 직무지도원 근태 현황" count={s?.unconfirmedCount} onMore={() => router.push("/manager/inbox/attendance")}>
@@ -354,10 +373,10 @@ export default function AdminDashboardPage() {
               )}
             />
           </Section>
-        </div>
+      </div>
 
-        {/* 우측 */}
-        <div className="space-y-4">
+      {/* 2행: 운영 리스크 · 오늘 출근 현황 · 공지사항 가로 3열 */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
 
           {/* 운영 리스크 */}
           <Section title="운영 리스크 알림">
@@ -373,27 +392,6 @@ export default function AdminDashboardPage() {
                   );
                 })}
               </div>
-            )}
-          </Section>
-
-          {/* 공지사항 — 운영자 시스템 공지 실데이터 */}
-          <Section title="공지사항">
-            {announcements.length === 0 ? (
-              <EmptyRow text="등록된 공지가 없습니다" />
-            ) : (
-              announcements.map(a => (
-                <div key={a.id} className="border-b border-slate-50 py-2 last:border-b-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-slate-700">
-                      <span className={`mr-1 ${a.type === "URGENT" ? "text-rose-600" : a.type === "MAINTENANCE" ? "text-amber-600" : "text-sky-600"}`}>
-                        [{a.type === "URGENT" ? "긴급" : a.type === "MAINTENANCE" ? "점검" : "공지"}]
-                      </span>
-                      {a.title}
-                    </p>
-                    <span className="flex-shrink-0 text-[10px] font-semibold text-slate-300">{a.createdAt.slice(0, 10)}</span>
-                  </div>
-                </div>
-              ))
             )}
           </Section>
 
@@ -422,8 +420,67 @@ export default function AdminDashboardPage() {
               </div>
             )}
           </Section>
-        </div>
+
+          {/* 공지사항 — 운영자 시스템 공지 실데이터 */}
+          <Section title="공지사항">
+            {announcements.length === 0 ? (
+              <EmptyRow text="등록된 공지가 없습니다" />
+            ) : (
+              announcements.map(a => (
+                <div key={a.id} className="border-b border-slate-50 py-2 last:border-b-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-semibold text-slate-700">
+                      <span className={`mr-1 ${a.type === "URGENT" ? "text-rose-600" : a.type === "MAINTENANCE" ? "text-amber-600" : "text-sky-600"}`}>
+                        [{a.type === "URGENT" ? "긴급" : a.type === "MAINTENANCE" ? "점검" : "공지"}]
+                      </span>
+                      {a.title}
+                    </p>
+                    <span className="flex-shrink-0 text-[10px] font-semibold text-slate-300">{a.createdAt.slice(0, 10)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </Section>
       </div>
+
+      {/* 하단: 훈련생 진척도 리포트 요약 — 모니터링 성격. 더 보기 → /manager/reports */}
+      <Section
+        title="훈련생 진척도 리포트"
+        sub={`${reportMonth}월 기준 요약`}
+        onMore={reportLocked ? undefined : () => router.push("/manager/reports")}
+      >
+        {reportLocked ? (
+          <div className="flex items-center gap-2 py-3 text-sm font-semibold text-slate-400">
+            <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+            STANDARD 플랜 이상에서 훈련생 진척도를 확인할 수 있습니다.
+          </div>
+        ) : !report ? (
+          <EmptyRow text="불러오는 중..." />
+        ) : (
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-center">
+              <p className="text-2xl font-black leading-none text-slate-900">{report.total}<span className="ml-0.5 text-xs font-semibold text-slate-400">명</span></p>
+              <p className="mt-1.5 text-[11px] font-semibold text-slate-500">전체 훈련생</p>
+            </div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-center">
+              <p className="text-2xl font-black leading-none text-sky-600">{report.training}<span className="ml-0.5 text-xs font-semibold text-slate-400">명</span></p>
+              <p className="mt-1.5 text-[11px] font-semibold text-slate-500">훈련 중</p>
+            </div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-center">
+              <p className={`text-2xl font-black leading-none ${report.avgLogRate >= 80 ? "text-emerald-600" : report.avgLogRate >= 60 ? "text-amber-500" : "text-rose-500"}`}>
+                {report.avgLogRate}<span className="ml-0.5 text-xs font-semibold text-slate-400">%</span>
+              </p>
+              <p className="mt-1.5 text-[11px] font-semibold text-slate-500">평균 일지 작성률</p>
+            </div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-center">
+              <p className={`text-2xl font-black leading-none ${report.avgScore === null ? "text-slate-300" : report.avgScore >= 4 ? "text-emerald-600" : report.avgScore >= 3 ? "text-sky-600" : "text-amber-500"}`}>
+                {report.avgScore ?? "-"}<span className="ml-0.5 text-xs font-semibold text-slate-400">/5</span>
+              </p>
+              <p className="mt-1.5 text-[11px] font-semibold text-slate-500">평균 수행 점수</p>
+            </div>
+          </div>
+        )}
+      </Section>
     </div>
   );
 }

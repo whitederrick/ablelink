@@ -30,6 +30,7 @@ const groups: NavGroup[] = [
     title: "개요",
     items: [
       { href: "/manager", label: "대시보드" },
+      { href: "/manager/reports", label: "훈련생 진척도 리포트", plan: "STANDARD" }, // 모니터링/분석 성격 — 개요 밑으로
     ],
   },
   {
@@ -53,12 +54,12 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    // 제출 문서 확인·확정(워크플로 메인) / 진척도 리포트(운영 대시보드) / 직접 발급(보조).
+    // 제출 문서 확인·확정(워크플로 메인) / 직접 발급(보조).
+    // 진척도 리포트는 모니터링 성격이라 [개요]로 이동.
     // 옛 '출근부·일지 확정'(review)은 허브로 대체되어 네비에서 제거.
     title: "문서",
     items: [
       { href: "/manager/documents", label: "제출 문서 확인·확정", plan: "STARTER" }, // 워크플로 메인
-      { href: "/manager/reports",   label: "훈련생 진척도 리포트", plan: "STANDARD" }, // 운영 대시보드(모니터링)
       { href: "/manager/docs",      label: "문서 조회·출력", plan: "STARTER" },  // 매니저 직접 PDF 조회·출력(보조)
     ],
   },
