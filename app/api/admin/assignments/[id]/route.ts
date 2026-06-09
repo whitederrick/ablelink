@@ -48,6 +48,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // 수동 계약기간(전자계약서 PRO 전용 대비) — 배정 기간이 접근 판정의 계약기간 역할
     const updateData: any = { workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd };
+    if (body.attendanceButtonExempt !== undefined) updateData.attendanceButtonExempt = body.attendanceButtonExempt === true;
     if (body.startDate !== undefined && body.startDate) updateData.startDate = new Date(body.startDate);
     if (body.endDate !== undefined)  updateData.endDate  = body.endDate ? new Date(body.endDate) : null;
     // 서비스 단계 전환(지원고용 ↔ 적응지도). 미지정 시 기존값 유지.

@@ -37,6 +37,7 @@ function toItem(r: any) {
     workType: r.workType ?? "FULL_DAY",
     serviceStep: r.serviceStep ?? "FIELD_TRAINING",
     commuteGuidanceIncluded: r.commuteGuidanceIncluded ?? true,
+    attendanceButtonExempt: r.attendanceButtonExempt ?? false,
     customWorkStart: r.customWorkStart ?? null,
     customWorkEnd: r.customWorkEnd ?? null,
     site: r.site
@@ -110,6 +111,7 @@ export async function GET(req: NextRequest) {
         workType: true,
         serviceStep: true,
         commuteGuidanceIncluded: true,
+        attendanceButtonExempt: true,
         customWorkStart: true,
         customWorkEnd: true,
       },
@@ -176,6 +178,7 @@ export async function POST(req: NextRequest) {
     const commuteGuidanceIncluded = workType === "FULL_DAY" ? false : (body.commuteGuidanceIncluded !== false);
     const customWorkStart = workType === "CUSTOM" ? (body.customWorkStart ?? null) : null;
     const customWorkEnd   = workType === "CUSTOM" ? (body.customWorkEnd ?? null) : null;
+    const attendanceButtonExempt = body.attendanceButtonExempt === true; // 시프티 병행: 출퇴근 버튼 면제
 
     // 서비스 단계: 지원고용(현장훈련) / 사전훈련 / 취업 후 적응지도. 미지정 시 기본 FIELD_TRAINING.
     const validSteps = ["PRE_TRAINING", "FIELD_TRAINING", "ADAPTATION"];
@@ -202,6 +205,7 @@ export async function POST(req: NextRequest) {
         statusReason: memo,
         workType,
         commuteGuidanceIncluded,
+        attendanceButtonExempt,
         customWorkStart,
         customWorkEnd,
       },

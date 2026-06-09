@@ -13,6 +13,7 @@ interface Assignment {
   workType: WorkType;
   serviceStep: ServiceStep;
   commuteGuidanceIncluded: boolean;
+  attendanceButtonExempt?: boolean;
   customWorkStart: string | null;
   customWorkEnd: string | null;
   startDate: string | null;
@@ -226,6 +227,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   // 적응지도면 ADAPTATION, 그 외(사전/현장훈련)는 지원고용으로 취급
   const [serviceStep, setServiceStep] = useState<ServiceStep>(initial.serviceStep === "ADAPTATION" ? "ADAPTATION" : "FIELD_TRAINING");
   const [commuteGuidanceIncluded, setCommuteGuidanceIncluded] = useState(initial.commuteGuidanceIncluded ?? true);
+  const [attendanceButtonExempt, setAttendanceButtonExempt] = useState(initial.attendanceButtonExempt ?? false);
   // 관리자가 설정한 실제 시간 (미설정 시 기본값)
   const [workStart, setWorkStart] = useState(
     initial.customWorkStart ?? WORK_TYPE_DEFAULTS[initial.workType ?? "FULL_DAY"].start
@@ -271,6 +273,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
           workType,
           serviceStep,
           commuteGuidanceIncluded: isFullDay ? false : commuteGuidanceIncluded,
+          attendanceButtonExempt,
           customWorkStart: workStart,
           customWorkEnd:   workEnd,
           startDate: cStart || undefined,
@@ -282,6 +285,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
       onSaved({
         ...initial, workType, serviceStep,
         commuteGuidanceIncluded: isFullDay ? false : commuteGuidanceIncluded,
+        attendanceButtonExempt,
         customWorkStart: workStart,
         customWorkEnd:   workEnd,
         startDate: cStart ? new Date(cStart).toISOString() : initial.startDate,
@@ -385,6 +389,22 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
               </div>
             </>
           )}
+        </div>
+
+        {/* 출퇴근 버튼 면제(시프티 병행) */}
+        <div className="mb-5">
+          <label className={T.label}>출퇴근 버튼 면제</label>
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <input type="checkbox" checked={attendanceButtonExempt}
+              onChange={e => setAttendanceButtonExempt(e.target.checked)}
+              className="h-4 w-4 accent-slate-950" />
+            <div>
+              <span className="text-sm font-black text-slate-900">출퇴근 버튼 없이 자동 작성 (시프티 병행)</span>
+              <p className="mt-0.5 text-xs font-semibold text-slate-400">
+                매일 근무형태 기준으로 출근부가 자동 생성되고, 버튼을 눌러도 지각·이슈가 발생하지 않습니다.
+              </p>
+            </div>
+          </label>
         </div>
 
         {error && <p className="mb-3 text-sm font-semibold text-rose-600">{error}</p>}
@@ -521,6 +541,7 @@ export default function WorkersPage() {
             id: item.id, workType: (item.workType as WorkType) ?? "FULL_DAY",
             serviceStep: (item.serviceStep as ServiceStep) ?? "FIELD_TRAINING",
             commuteGuidanceIncluded: item.commuteGuidanceIncluded ?? true,
+            attendanceButtonExempt: item.attendanceButtonExempt ?? false,
             customWorkStart: item.customWorkStart ?? null, customWorkEnd: item.customWorkEnd ?? null,
             startDate: item.startDate ?? null, endDate: item.endDate ?? null,
           };
