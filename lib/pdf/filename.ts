@@ -10,6 +10,7 @@ const DOC_FILE_LABEL: Record<DocumentType, string> = {
   ADAPTATION_DAILY_LOG:  "취업후적응지도일지",
   ADAPTATION_FINAL_EVAL: "취업후적응지도종합평가",
   PAYSLIP:               "임금명세서",
+  EMPLOYMENT_CONTRACT:   "근로계약서",
 };
 
 // 훈련생 단위로 발급되는 문서(출근부 제외) — 파일명에 훈련생명 필수 포함

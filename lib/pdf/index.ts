@@ -16,7 +16,8 @@ export type DocumentType =
   | "ADAPTATION_DAILY_LOG"
   | "ADAPTATION_FINAL_EVAL"
   | "TRAINEE_FINAL_EVAL"
-  | "PAYSLIP";
+  | "PAYSLIP"
+  | "EMPLOYMENT_CONTRACT";
 
 const DOC_TYPE_MAP: Record<string, DocumentType> = {
   "attendance-sheet":      "ATTENDANCE_SHEET",

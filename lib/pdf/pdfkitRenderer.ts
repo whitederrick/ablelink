@@ -754,7 +754,146 @@ function payslip(p: any): Promise<Buffer> {
   return toBuffer(doc);
 }
 
-export type PdfDocType = "ATTENDANCE_SHEET" | "TRAINING_DAILY_LOG" | "ADAPTATION_DAILY_LOG" | "TRAINEE_FINAL_EVAL" | "ADAPTATION_FINAL_EVAL" | "PAYSLIP";
+// ── 근로계약서 (고용노동부 단시간근로자 표준근로계약서) ──────────
+// payload: {
+//   employerBizName, employerPhone, employerAddress, employerRepName,
+//   workerName, workerPhone, workerAddress,
+//   contractStartText, contractEndText,           // "YYYY년 M월 D일"
+//   workLocation, jobDescription,
+//   workStartTime, workEndTime, breakStartTime, breakEndTime,  // "HH:MM"
+//   workDaysPerWeek, weeklyHoliday,
+//   wageType('HOURLY'|'DAILY'|'MONTHLY'), wageAmount,
+//   bonusExists, bonusAmount, extraPayExists, extraPayDesc,
+//   overtimeRate, wagePayday, wagePayMethod('DIRECT'|'ACCOUNT'),
+//   specialClauses:[{title,body}],
+//   dateText,                                      // 작성일 "YYYY년 M월 D일"
+//   signatures:{ employer:{imageUrl?}, worker:{imageUrl?} }
+// }
+function employmentContract(p: any): Promise<Buffer> {
+  const doc = newDoc(20);
+  const x = mm(20), W = mm(170);
+  const won = (n: any) => (n == null || n === "" ? "" : `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}`);
+  const hm = (t?: string) => {
+    if (!t) return "    시      분";
+    const [h, m] = String(t).split(":");
+    return `${h ?? "  "}시 ${m ?? "  "}분`;
+  };
+
+  // 제목 박스
+  doc.font("Batang-Bold").fontSize(17).fillColor("#000");
+  const tTxt = "단시간근로자 표준근로계약서";
+  const tW = doc.widthOfString(tTxt);
+  const boxW = tW + mm(16), boxH = mm(11);
+  const boxX = x + (W - boxW) / 2;
+  let y = mm(15);
+  doc.lineWidth(1).rect(boxX, y, boxW, boxH).stroke("#000");
+  doc.text(tTxt, boxX, y + (boxH - doc.heightOfString(tTxt)) / 2, { width: boxW, align: "center" });
+  y += boxH + mm(8);
+
+  // 본문 줄 렌더 헬퍼
+  const line = (text: string, opts: { size?: number; bold?: boolean; indent?: number; gap?: number; lineGap?: number } = {}) => {
+    const { size = 10.5, bold = false, indent = 0, gap = 4, lineGap = 3 } = opts;
+    const lx = x + indent, lw = W - indent;
+    doc.font(bold ? "KR-Bold" : "KR").fontSize(size).fillColor("#000");
+    doc.text(text, lx, y, { width: lw, lineGap });
+    y = y + doc.heightOfString(text, { width: lw, lineGap }) + gap;
+  };
+
+  // 도입부
+  const emp = p.employerBizName || "_____________";
+  const wkr = p.workerName || "__________";
+  line(`${emp}(이하 "사업주"라 함)과(와) ${wkr}(이하 "근로자"라 함)은 다음과 같이 근로계약을 체결한다.`, { gap: 8 });
+
+  // 1. 근로계약기간
+  const startT = p.contractStartText || "      년    월    일";
+  const endT = p.contractEndText || "      년    월    일";
+  line(`1. 근로계약기간 : ${startT}부터 ${endT}까지`);
+  line(`※ 근로계약기간을 정하지 않는 경우에는 "근로개시일"만 기재`, { size: 8.5, indent: mm(4), gap: 6 });
+
+  // 2~3
+  line(`2. 근 무 장 소 : ${p.workLocation || ""}`);
+  line(`3. 업무의 내용 : ${p.jobDescription || ""}`);
+
+  // 4. 소정근로시간
+  const brk = (p.breakStartTime || p.breakEndTime)
+    ? `${hm(p.breakStartTime)} ~ ${hm(p.breakEndTime)}`
+    : "    시  분 ~   시  분";
+  line(`4. 소정근로시간 : ${hm(p.workStartTime)}부터 ${hm(p.workEndTime)}까지 (휴게시간 : ${brk})`);
+
+  // 5. 근무일/휴일
+  const days = p.workDaysPerWeek != null ? `${p.workDaysPerWeek}` : "  ";
+  const wh = p.weeklyHoliday || "  ";
+  line(`5. 근무일/휴일 : 매주 ${days}일(또는 매일단위) 근무, 주휴일 매주 ${wh}요일`);
+
+  // 6. 임금
+  line(`6. 임 금`);
+  const wtLabel: Record<string, string> = { HOURLY: "시간급", DAILY: "일급", MONTHLY: "월급" };
+  const wtMark = (k: string) => (p.wageType === k ? "●" : "○");
+  const amt = won(p.wageAmount);
+  line(`- ${wtMark("HOURLY")}시간급  ${wtMark("DAILY")}일급  ${wtMark("MONTHLY")}월급 : ${amt ? amt + " 원" : "                원"} ${p.wageType ? `(${wtLabel[p.wageType]})` : "(해당사항에 ●표)"}`, { indent: mm(4) });
+  line(`- 상여금 : ${p.bonusExists ? `있음 ( ● )  ${won(p.bonusAmount)} 원` : "있음 (   )            원,  없음 ( ● )"}`, { indent: mm(4) });
+  line(`- 기타급여(제수당 등) : ${p.extraPayExists ? `있음 : ${p.extraPayDesc || ""}` : "있음 (   ) 내역별 기재,  없음 ( ● )"}`, { indent: mm(4) });
+  line(`- 초과근로에 대한 가산임금률 : ${p.overtimeRate != null ? p.overtimeRate : "    "} %`, { indent: mm(4) });
+  line(`- 임금지급일 : 매월 ${p.wagePayday || "    "} 일 (휴일의 경우는 전일 지급)`, { indent: mm(4) });
+  const pm = p.wagePayMethod;
+  line(`- 지급방법 : 근로자에게 직접지급 (${pm === "DIRECT" ? "●" : " "}),  근로자 명의 예금통장에 입금 (${pm === "ACCOUNT" ? "●" : " "})`, { indent: mm(4) });
+
+  // 7~9
+  line(`7. 연차유급휴가 : 통상근로자의 근로시간에 비례하여 연차유급휴가 부여`);
+  line(`8. 근로계약서 교부`);
+  line(`- "사업주"는 근로계약을 체결함과 동시에 본 계약서를 사본하여 "근로자"의 교부요구와 관계없이 "근로자"에게 교부함(근로기준법 제17조 이행)`, { indent: mm(4) });
+  line(`9. 기 타`);
+  line(`- 이 계약에 정함이 없는 사항은 근로기준법령에 의함`, { indent: mm(4), gap: 6 });
+
+  // 특약사항
+  const clauses: { title: string; body: string }[] = Array.isArray(p.specialClauses) ? p.specialClauses : [];
+  if (clauses.length) {
+    if (y + mm(20) > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
+    line(`10. 특약사항`, { bold: true, gap: 4 });
+    clauses.forEach((c, i) => {
+      if (y + mm(14) > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
+      line(`${i + 1}) ${c.title}`, { indent: mm(4), bold: true, gap: 2, size: 10 });
+      if (c.body) line(c.body, { indent: mm(8), size: 9.5, gap: 4 });
+    });
+  }
+
+  // 작성일
+  y += mm(4);
+  if (y + mm(50) > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
+  doc.font("KR").fontSize(11).fillColor("#000").text(p.dateText || "          년      월      일", x, y, { width: W, align: "center" });
+  y += mm(12);
+
+  // 서명 블록 (사업주 / 근로자)
+  const sig = p.signatures ?? {};
+  const drawSignName = (label: string, value: string, imageUrl?: string) => {
+    const labelTxt = `${label} : ${value || ""}`;
+    doc.font("KR").fontSize(10.5).fillColor("#000").text(labelTxt, x + mm(6), y, { width: W - mm(40) });
+    // "(서명)" + 이미지
+    const sx = x + W - mm(34);
+    doc.text("(서명)", sx, y, { width: mm(34), align: "left" });
+    if (imageUrl && imageUrl.startsWith("data:image")) {
+      try {
+        const img = Buffer.from(imageUrl.split(",")[1], "base64");
+        doc.image(img, sx + mm(12), y - mm(2.5), { fit: [mm(22), mm(9)] });
+      } catch { /* 무시 */ }
+    }
+    y += mm(7);
+  };
+
+  doc.font("KR-Bold").fontSize(10.5).fillColor("#000").text("(사업주)", x, y); y += mm(6.5);
+  drawSignName("사 업 체 명", p.employerBizName + (p.employerPhone ? `      (전화 : ${p.employerPhone})` : ""));
+  drawSignName("주        소", p.employerAddress);
+  drawSignName("대  표  자", p.employerRepName, sig.employer?.imageUrl);
+  y += mm(3);
+  doc.font("KR-Bold").fontSize(10.5).fillColor("#000").text("(근로자)", x, y); y += mm(6.5);
+  drawSignName("주        소", p.workerAddress);
+  drawSignName("연  락  처", p.workerPhone);
+  drawSignName("성        명", p.workerName, sig.worker?.imageUrl);
+
+  return toBuffer(doc);
+}
+
+export type PdfDocType = "ATTENDANCE_SHEET" | "TRAINING_DAILY_LOG" | "ADAPTATION_DAILY_LOG" | "TRAINEE_FINAL_EVAL" | "ADAPTATION_FINAL_EVAL" | "PAYSLIP" | "EMPLOYMENT_CONTRACT";
 
 export function renderPdfKit(documentType: PdfDocType, payload: any): Promise<Buffer> {
   switch (documentType) {
@@ -764,6 +903,7 @@ export function renderPdfKit(documentType: PdfDocType, payload: any): Promise<Bu
     case "TRAINEE_FINAL_EVAL": return finalEval("TRAINEE", payload);
     case "ADAPTATION_FINAL_EVAL": return finalEval("ADAPTATION", payload);
     case "PAYSLIP": return payslip(payload);
+    case "EMPLOYMENT_CONTRACT": return employmentContract(payload);
     default: throw new Error(`Unsupported documentType: ${documentType}`);
   }
 }

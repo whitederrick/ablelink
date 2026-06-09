@@ -93,6 +93,15 @@ export async function POST(req: NextRequest) {
       contractStart, contractEnd,
       siteName, workType, commuteGuidanceIncluded,
       customWorkStart, customWorkEnd, adminMemo,
+      // ── 표준양식 항목 ──
+      workLocation, jobDescription,
+      workStartTime, workEndTime, breakStartTime, breakEndTime,
+      workDaysPerWeek, weeklyHoliday,
+      wageType, wageAmount, bonusExists, bonusAmount,
+      extraPayExists, extraPayDesc, overtimeRate, wagePayday, wagePayMethod,
+      employerBizName, employerPhone, employerAddress, employerRepName,
+      workerAddress,
+      clauseIds,  // 선택한 특약 조항 id 배열 → 스냅샷
     } = body;
 
     if (!contractStart || !contractEnd) {
@@ -193,6 +202,35 @@ export async function POST(req: NextRequest) {
       }, { status: 403 });
     }
 
+    // ─── 사업주(갑) 정보: 미입력 시 에이전시 정보로 자동 채움(스냅샷 보존) ──
+    const agencyRow = await prisma.agency.findUnique({
+      where: { id: agencyId },
+      select: { name: true, phoneNumber: true, address: true },
+    });
+
+    // ─── 특약 조항 스냅샷: 선택한 조항 id → {title, body} 배열(작성 시점 보존) ──
+    let clauseSnapshot: { title: string; body: string }[] = [];
+    if (Array.isArray(clauseIds) && clauseIds.length > 0) {
+      const ids = clauseIds
+        .map((v: any) => { try { return BigInt(v); } catch { return null; } })
+        .filter((v: bigint | null): v is bigint => v !== null);
+      if (ids.length > 0) {
+        const clauses = await prisma.agencyContractClause.findMany({
+          where: { id: { in: ids }, agencyId },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          select: { title: true, body: true },
+        });
+        clauseSnapshot = clauses.map(c => ({ title: c.title, body: c.body }));
+      }
+    }
+
+    const toInt = (v: any): number | null => {
+      if (v === null || v === undefined || v === "") return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.round(n) : null;
+    };
+    const str = (v: any): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+
     // ─── 계약서 생성 ────────────────────────────────────────────
     const signToken = randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7일
@@ -209,6 +247,31 @@ export async function POST(req: NextRequest) {
         customWorkStart: workType === "CUSTOM" ? customWorkStart : null,
         customWorkEnd:   workType === "CUSTOM" ? customWorkEnd   : null,
         adminMemo: adminMemo || null,
+        // 표준양식 항목
+        workLocation:   str(workLocation),
+        jobDescription: str(jobDescription),
+        workStartTime:  str(workStartTime),
+        workEndTime:    str(workEndTime),
+        breakStartTime: str(breakStartTime),
+        breakEndTime:   str(breakEndTime),
+        workDaysPerWeek: toInt(workDaysPerWeek),
+        weeklyHoliday:  str(weeklyHoliday),
+        wageType:       str(wageType),
+        wageAmount:     toInt(wageAmount),
+        bonusExists:    bonusExists === true,
+        bonusAmount:    toInt(bonusAmount),
+        extraPayExists: extraPayExists === true,
+        extraPayDesc:   str(extraPayDesc),
+        overtimeRate:   toInt(overtimeRate),
+        wagePayday:     str(wagePayday),
+        wagePayMethod:  str(wagePayMethod),
+        // 사업주 스냅샷(자동채움+수정값)
+        employerBizName: str(employerBizName) ?? agencyRow?.name ?? null,
+        employerPhone:   str(employerPhone) ?? agencyRow?.phoneNumber ?? null,
+        employerAddress: str(employerAddress) ?? agencyRow?.address ?? null,
+        employerRepName: str(employerRepName),
+        workerAddress:   str(workerAddress),
+        specialClauses:  clauseSnapshot.length > 0 ? clauseSnapshot : undefined,
         signToken,
         tokenExpiresAt: expiresAt,
         status: "PENDING",
