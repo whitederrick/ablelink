@@ -30,6 +30,8 @@ export interface PayrollGateInput {
   commuteGuidanceIncluded: boolean | null;
   customWorkStart: string | null;
   customWorkEnd: string | null;
+  // 출퇴근 버튼 면제 배정이면 실제시각 무시 → 보정대기/지각 판정 안 함.
+  exempt?: boolean | null;
 }
 
 /** 표준 대비 실제 지각(분). 실제시각/표준 없으면 null. */
@@ -49,6 +51,7 @@ export function lateMinutes(a: PayrollGateInput): number | null {
  *  - 보정 대기인 날은 출근부 PDF에 기본값을 박지 않고 "보정대기"로 표시한다.
  */
 export function isPayrollPending(a: PayrollGateInput): boolean {
+  if (a.exempt) return false;        // 버튼 면제 배정 → 실제시각 무시(보정대기 없음)
   if (a.payrollConfirmedAt) return false;
   const late = lateMinutes(a);
   return late != null && late >= SERIOUS_LATE_MIN;

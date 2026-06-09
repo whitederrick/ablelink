@@ -161,6 +161,7 @@ export async function POST(request: NextRequest) {
           commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? null,
           customWorkStart: (assignment as any).customWorkStart ?? null,
           customWorkEnd: (assignment as any).customWorkEnd ?? null,
+          exempt: (assignment as any).attendanceButtonExempt ?? false,
         });
         return {
           date: a.workDate,

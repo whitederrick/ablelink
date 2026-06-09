@@ -149,6 +149,7 @@ export async function GET(req: Request) {
             commuteGuidanceIncluded: true,
             customWorkStart: true,
             customWorkEnd: true,
+            attendanceButtonExempt: true,
           },
         },
         attendanceIssue: {
@@ -167,6 +168,8 @@ export async function GET(req: Request) {
     const items: any[] = [];
 
     for (const r of rows) {
+      // 출퇴근 버튼 면제 배정 → 실제 버튼시각 무시(지각·범위 등 근태 이슈 미발생)
+      if (r.assignment?.attendanceButtonExempt) continue;
       const workType = r.assignment?.workType ?? null;
       const commuteGuidanceIncluded = r.assignment?.commuteGuidanceIncluded ?? true;
       const customWorkStart = r.assignment?.customWorkStart ?? null;

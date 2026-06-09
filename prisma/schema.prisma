@@ -236,6 +236,8 @@ model SiteAssignment {
   // CUSTOM 근무형태일 때 관리자가 직접 설정하는 시작/종료 시각 (HH:MM)
   customWorkStart         String? @map("custom_work_start")
   customWorkEnd           String? @map("custom_work_end")
+  // 출퇴근 버튼 면제(시프티 병행): true면 매일 자동으로 출근부 생성 + 실제 버튼시각 무시(지각·보정대기·근태이슈 미발생)
+  attendanceButtonExempt  Boolean @default(false) @map("attendance_button_exempt")
 
   assignedAt  DateTime  @default(now()) @map("assigned_at")
   confirmedAt DateTime? @map("confirmed_at")

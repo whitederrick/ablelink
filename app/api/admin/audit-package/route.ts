@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
       where: { workerId, workDate: { gte: start, lte: end } },
       include: {
         logs: { select: { time1on1: true, timeGroup: true, extTime1on1: true, extTimeGroup: true } },
-        assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true } },
+        assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true } },
       },
       orderBy: { workDate: "asc" },
     });
@@ -126,6 +126,7 @@ export async function GET(request: NextRequest) {
           commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded ?? null,
           customWorkStart: a.assignment?.customWorkStart ?? null,
           customWorkEnd: a.assignment?.customWorkEnd ?? null,
+          exempt: a.assignment?.attendanceButtonExempt ?? false,
         });
         return {
           date: a.workDate,

@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
           select: {
             workDate: true, startTime: true, endTime: true,
             actualStartTime: true, payrollConfirmedAt: true,
-            assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true } },
+            assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true } },
             logs: { select: { extTime1on1: true, extTimeGroup: true } },
           },
         }),
@@ -158,6 +158,7 @@ export async function POST(req: NextRequest) {
         commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded ?? null,
         customWorkStart: a.assignment?.customWorkStart ?? null,
         customWorkEnd: a.assignment?.customWorkEnd ?? null,
+        exempt: a.assignment?.attendanceButtonExempt ?? false,
       }));
       const pendingDays = attendances.length - confirmedAtt.length;
 
