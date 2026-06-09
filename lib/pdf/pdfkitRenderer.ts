@@ -674,7 +674,87 @@ function rangeDot(a?: string, b?: string): string {
   return aa || bb;
 }
 
-export type PdfDocType = "ATTENDANCE_SHEET" | "TRAINING_DAILY_LOG" | "ADAPTATION_DAILY_LOG" | "TRAINEE_FINAL_EVAL" | "ADAPTATION_FINAL_EVAL";
+// ── 급여명세서(임금명세서) ── 고용노동부 양식 기준
+// payload: { agencyName, workerName, workerBirth?, yearMonth, payDate?,
+//   workedDays, workedHours, overtimeHours,
+//   payRows:[{name,amount,method?}], deductRows:[{name,amount}],
+//   grossPay, totalDeduction, netPay }
+function payslip(p: any): Promise<Buffer> {
+  const doc = newDoc(18);
+  const x = mm(18), W = doc.page.width - mm(36);
+  const won = (n: any) => `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}원`;
+
+  let y = title(doc, "임 금 명 세 서", mm(16), 19, { x, w: W, gap: mm(5) });
+
+  // ── 기본 정보 (2열) ──
+  const lc = mm(28), vc = (W - lc * 2) / 2;
+  const info: [string, string, string, string][] = [
+    ["성    명", p.workerName ?? "", "생년월일", p.workerBirth ?? ""],
+    ["귀속월", p.yearMonth ?? "", "지급일", p.payDate ?? ""],
+    ["사업체(기관)", p.agencyName ?? "", "근로일수", `${p.workedDays ?? 0} 일`],
+    ["총 근로시간", `${p.workedHours ?? 0} 시간`, "연장근로시간", `${p.overtimeHours ?? 0} 시간`],
+  ];
+  for (const [l1, v1, l2, v2] of info) {
+    cell(doc, x, y, lc, mm(8), l1, { size: 9.5, bold: true, fill: "#f4f4f4" });
+    cell(doc, x + lc, y, vc, mm(8), v1, { size: 9.5 });
+    cell(doc, x + lc + vc, y, lc, mm(8), l2, { size: 9.5, bold: true, fill: "#f4f4f4" });
+    cell(doc, x + lc * 2 + vc, y, W - lc * 2 - vc, mm(8), v2, { size: 9.5 });
+    y += mm(8);
+  }
+
+  // ── 임금 지급내역 ──
+  y += mm(4);
+  doc.font("Batang-Bold").fontSize(12).fillColor("#000").text("■ 임금 지급내역", x, y); y += mm(7);
+  const payRows: { name: string; amount: number; method?: string }[] = Array.isArray(p.payRows) ? p.payRows : [];
+  const c1 = mm(38), c3 = mm(64), c2 = W - c1 - c3;
+  cell(doc, x, y, c1, mm(8), "임금 항목", { size: 9.5, bold: true, fill: "#f0f0f0" });
+  cell(doc, x + c1, y, c2, mm(8), "지급 금액", { size: 9.5, bold: true, fill: "#f0f0f0" });
+  cell(doc, x + c1 + c2, y, c3, mm(8), "계산 방법", { size: 9.5, bold: true, fill: "#f0f0f0" });
+  y += mm(8);
+  for (const r of payRows) {
+    const h = mm(8);
+    cell(doc, x, y, c1, h, r.name, { size: 9 });
+    cell(doc, x + c1, y, c2, h, won(r.amount), { size: 9, align: "right" });
+    cell(doc, x + c1 + c2, y, c3, h, r.method ?? "", { size: 8, align: "left" });
+    y += h;
+  }
+  cell(doc, x, y, c1, mm(8), "지급액 계", { size: 9.5, bold: true, fill: "#f4f4f4" });
+  cell(doc, x + c1, y, c2, mm(8), won(p.grossPay), { size: 9.5, bold: true, align: "right" });
+  cell(doc, x + c1 + c2, y, c3, mm(8), "", { fill: "#f4f4f4" });
+  y += mm(8);
+
+  // ── 공제내역 ──
+  y += mm(4);
+  doc.font("Batang-Bold").fontSize(12).fillColor("#000").text("■ 공제내역", x, y); y += mm(7);
+  const deductRows: { name: string; amount: number }[] = Array.isArray(p.deductRows) ? p.deductRows : [];
+  const dc1 = W / 2;
+  cell(doc, x, y, dc1, mm(8), "공제 항목", { size: 9.5, bold: true, fill: "#f0f0f0" });
+  cell(doc, x + dc1, y, W - dc1, mm(8), "공제 금액", { size: 9.5, bold: true, fill: "#f0f0f0" });
+  y += mm(8);
+  for (const r of deductRows) {
+    cell(doc, x, y, dc1, mm(8), r.name, { size: 9 });
+    cell(doc, x + dc1, y, W - dc1, mm(8), won(r.amount), { size: 9, align: "right" });
+    y += mm(8);
+  }
+  cell(doc, x, y, dc1, mm(8), "공제액 계", { size: 9.5, bold: true, fill: "#f4f4f4" });
+  cell(doc, x + dc1, y, W - dc1, mm(8), won(p.totalDeduction), { size: 9.5, bold: true, align: "right" });
+  y += mm(8);
+
+  // ── 실지급액 ──
+  y += mm(5);
+  cell(doc, x, y, dc1, mm(11), "실 지급액", { size: 12, bold: true, fill: "#eef3fb" });
+  cell(doc, x + dc1, y, W - dc1, mm(11), won(p.netPay), { size: 13, bold: true, align: "right", fill: "#eef3fb" });
+  y += mm(11);
+
+  // 발급 기관
+  y += mm(8);
+  doc.font("KR").fontSize(10).fillColor("#000")
+    .text(`발급: ${p.agencyName ?? ""}`, x, y, { width: W, align: "right" });
+
+  return toBuffer(doc);
+}
+
+export type PdfDocType = "ATTENDANCE_SHEET" | "TRAINING_DAILY_LOG" | "ADAPTATION_DAILY_LOG" | "TRAINEE_FINAL_EVAL" | "ADAPTATION_FINAL_EVAL" | "PAYSLIP";
 
 export function renderPdfKit(documentType: PdfDocType, payload: any): Promise<Buffer> {
   switch (documentType) {
@@ -683,6 +763,7 @@ export function renderPdfKit(documentType: PdfDocType, payload: any): Promise<Bu
     case "ADAPTATION_DAILY_LOG": return dailyLog("ADAPTATION", payload);
     case "TRAINEE_FINAL_EVAL": return finalEval("TRAINEE", payload);
     case "ADAPTATION_FINAL_EVAL": return finalEval("ADAPTATION", payload);
+    case "PAYSLIP": return payslip(payload);
     default: throw new Error(`Unsupported documentType: ${documentType}`);
   }
 }
