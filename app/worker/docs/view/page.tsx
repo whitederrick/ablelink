@@ -103,13 +103,15 @@ function DocsViewInner() {
   const needsTrainee = DOC_GROUPS.flatMap(g => g.docs).find(d => d.id === docType)?.needsTrainee ?? false;
 
   useEffect(() => {
-    fetch("/api/worker/site/current", { cache: "no-store" }).then(r => r.json()).then(d => {
-      if (d.success && d.data) {
-        setTrainingType(d.data.trainingType || "FIELD");
-        if (d.data.trainees)
-          setTrainees(d.data.trainees.map((t: any) => ({ id: String(t.id), name: t.name, gender: t.gender || "M" })));
-      }
-    }).catch(() => {}).finally(() => setLoaded(true));
+    fetch("/api/worker/docs/context", { cache: "no-store" })
+      .then(async r => { try { return await r.json(); } catch { return null; } })
+      .then(d => {
+        if (d?.success && d.data) {
+          setTrainingType(d.data.trainingType || "FIELD");
+          if (d.data.trainees)
+            setTrainees(d.data.trainees.map((t: any) => ({ id: String(t.id), name: t.name, gender: t.gender || "M" })));
+        }
+      }).catch(() => {}).finally(() => setLoaded(true));
   }, []);
 
   function selectDoc(id: DocType) {
