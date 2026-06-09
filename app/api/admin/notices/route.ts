@@ -48,44 +48,63 @@ export async function POST(req: NextRequest) {
     const agencyId = scope.agencyId;
 
     const body = await req.json().catch(() => ({}));
-    const { userIds, title, body: msgBody, type = "INFO", yearMonth } = body;
+    // audience: "ALL"(전체) | "GROUP"(현장 단위) | "INDIVIDUAL"(개별)
+    const { userIds, siteId, audience, title, body: msgBody, type = "INFO", yearMonth, link } = body;
 
     if (!title || !msgBody)
       return NextResponse.json({ success: false, message: "title, body 필수" }, { status: 400 });
 
-    // userIds가 없으면 소속 전체 직무지도원에게 발송
+    // 발송 범위 결정 — 명시적 audience 우선, 없으면 입력값으로 추론(하위호환).
+    const mode: "ALL" | "GROUP" | "INDIVIDUAL" =
+      audience === "ALL" || audience === "GROUP" || audience === "INDIVIDUAL"
+        ? audience
+        : Array.isArray(userIds) && userIds.length > 0 ? "INDIVIDUAL"
+        : siteId ? "GROUP"
+        : "ALL";
+
+    const activeStatuses = ["ASSIGNED", "CONFIRMED", "ACTIVE"] as const;
     let targetIds: bigint[] = [];
-    if (Array.isArray(userIds) && userIds.length > 0) {
-      targetIds = userIds.map((id: unknown) => parseBigInt(id)).filter((id): id is bigint => id !== null);
-    } else {
+    let kind: "NOTICE_ALL" | "NOTICE_GROUP" | "NOTICE_INDIVIDUAL" = "NOTICE_ALL";
+
+    if (mode === "INDIVIDUAL") {
+      kind = "NOTICE_INDIVIDUAL";
+      targetIds = (Array.isArray(userIds) ? userIds : [])
+        .map((id: unknown) => parseBigInt(id)).filter((id): id is bigint => id !== null);
+    } else if (mode === "GROUP") {
+      kind = "NOTICE_GROUP";
+      const sid = parseBigInt(siteId);
+      if (!sid) return NextResponse.json({ success: false, message: "siteId가 필요합니다." }, { status: 400 });
       const assignments = await prisma.siteAssignment.findMany({
-        where: { agencyId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+        where: { agencyId, siteId: sid, status: { in: [...activeStatuses] } },
         select: { workerId: true },
       });
-      const unique = new Map<string, bigint>();
-      for (const a of assignments) unique.set(a.workerId.toString(), a.workerId);
-      targetIds = [...unique.values()];
+      targetIds = [...new Map(assignments.map(a => [a.workerId.toString(), a.workerId])).values()];
+    } else {
+      kind = "NOTICE_ALL";
+      const assignments = await prisma.siteAssignment.findMany({
+        where: { agencyId, status: { in: [...activeStatuses] } },
+        select: { workerId: true },
+      });
+      targetIds = [...new Map(assignments.map(a => [a.workerId.toString(), a.workerId])).values()];
     }
 
     if (targetIds.length === 0)
       return NextResponse.json({ success: false, message: "대상 직무지도원이 없습니다." }, { status: 404 });
 
     const noticeType = ["INFO", "WARN", "REJECT"].includes(type) ? type : "INFO";
-    const created = await Promise.all(
-      targetIds.map(uid =>
-        (prisma as any).workerNotice.create({
-          data: {
-            workerId: uid, agencyId,
-            title: String(title).slice(0, 100),
-            body:  String(msgBody).slice(0, 500),
-            type:  noticeType,
-            yearMonth: yearMonth || null,
-          },
-        })
-      )
-    );
+    const result = await (prisma as any).workerNotice.createMany({
+      data: targetIds.map(uid => ({
+        workerId: uid, agencyId,
+        title: String(title).slice(0, 100),
+        body:  String(msgBody).slice(0, 1000),
+        type:  noticeType,
+        kind,
+        yearMonth: yearMonth || null,
+        link: typeof link === "string" && link ? link.slice(0, 300) : null,
+      })),
+    });
 
-    return NextResponse.json({ success: true, sent: created.length });
+    return NextResponse.json({ success: true, sent: result.count });
   } catch (e: any) {
     if (e instanceof Response) return e;
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });

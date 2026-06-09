@@ -52,6 +52,30 @@ export async function POST(req: NextRequest) {
         createdByManagerId: scope.managerId,
       },
     });
+
+    // 공지를 직무지도원 통합 알림 피드(WorkerNotice)로 fan-out(kind=ANNOUNCEMENT).
+    // 게시판 1행(AgencyAnnouncement)은 매니저 편집용으로 유지, 워커 수신은 알림 피드로 통일.
+    try {
+      const assignments = await prisma.siteAssignment.findMany({
+        where: { agencyId: scope.agencyId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+        select: { workerId: true },
+      });
+      const targetIds = [...new Map(assignments.map(a => [a.workerId.toString(), a.workerId])).values()];
+      if (targetIds.length > 0) {
+        await (prisma as any).workerNotice.createMany({
+          data: targetIds.map(uid => ({
+            workerId: uid, agencyId: scope.agencyId,
+            title: title.slice(0, 100),
+            body: body.slice(0, 1000),
+            type: type === "URGENT" ? "WARN" : "INFO",
+            kind: "ANNOUNCEMENT",
+          })),
+        });
+      }
+    } catch (fanErr) {
+      console.error("[agency-announcements fan-out]", fanErr);
+    }
+
     return NextResponse.json({ success: true, id: row.id.toString() });
   } catch (e: any) {
     if (e instanceof Response) return e;

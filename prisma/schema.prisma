@@ -1500,7 +1500,9 @@ model WorkerNotice {
   agencyId  BigInt    @map("agency_id")
   title     String
   body      String
-  type      String    @default("INFO") // INFO | WARN | REJECT
+  type      String    @default("INFO") // INFO | WARN | REJECT (심각도)
+  // 뱃지 구분: ANNOUNCEMENT(공지) | NOTICE_ALL(전체) | NOTICE_GROUP(그룹) | NOTICE_INDIVIDUAL(개별/시스템)
+  kind      String    @default("NOTICE_INDIVIDUAL")
   yearMonth String?   @map("year_month") // 관련 기간 (YYYY-MM)
   link      String?   // 바로가기 경로(예: /worker/review/attendance). 처리필요 요청 알림용.
   readAt    DateTime? @map("read_at")
