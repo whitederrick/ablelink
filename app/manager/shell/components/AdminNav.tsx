@@ -60,7 +60,7 @@ const groups: NavGroup[] = [
       { href: "/manager/reports",   label: "훈련생 진척도 리포트", plan: "STANDARD" }, // 그룹 대시보드(통합 허브 예정)
       { href: "/manager/review",    label: "출근부·일지 확정" },
       { href: "/manager/docs",      label: "문서 발급·출력",      plan: "STARTER" },
-      { href: "/manager/documents", label: "문서 발송·제출 관리", plan: "STARTER" },
+      { href: "/manager/documents", label: "제출 문서 확인·확정", plan: "STARTER" },
     ],
   },
   {
