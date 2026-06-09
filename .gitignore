@@ -44,6 +44,8 @@ next-env.d.ts
 
 # local artifacts
 /pdf-output/
+/scripts/_pdfout/
+/scripts/_tmp-*
 /backups/
 /ablelink_project.bundle
 ablelink@*
