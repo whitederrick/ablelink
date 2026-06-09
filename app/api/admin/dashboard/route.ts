@@ -55,12 +55,13 @@ export async function GET(req: Request) {
           attendanceIssue: { select: { status: true } },
         },
       }),
-      // 3. 보고서 현황 (최근 50건)
+      // 3. 제출 문서 현황 — 매니저 처리 대기(제출완료/확정/수정요청) 최근 50건
       prisma.documentRun.findMany({
-        where: { status: "OPEN", agencyId: scope.agencyId },
+        where: { agencyId: scope.agencyId, signStage: { in: ["SUBMITTED", "CONFIRMED", "CHANGES_REQUESTED"] } },
         take: 50,
+        orderBy: { updatedAt: "desc" },
         select: {
-          id: true, docType: true, dueAt: true, currentVersionId: true,
+          id: true, docType: true, dueAt: true, currentVersionId: true, signStage: true,
           worker: { select: { workerName: true } },
           site: { select: { companyName: true } },
         },
@@ -102,8 +103,8 @@ export async function GET(req: Request) {
     const todayDone = todayAttendances.filter(a => a.isFinalClosed).length;
     const logDoneCount = todayAttendances.filter(a => a.logs.length > 0 && a.logs.every(l => l.isCompleted)).length;
     const logPendingCount = todayAttendances.filter(a => !a.logs.every(l => l.isCompleted) || a.logs.length === 0).length;
-    const docPendingSubmit = docRunsOpen.filter(r => !r.currentVersionId && r.dueAt > now).length;
-    const docOverdue = docRunsOpen.filter(r => !r.currentVersionId && r.dueAt <= now).length;
+    const docPendingSubmit = docRunsOpen.filter(r => r.signStage === "SUBMITTED").length;     // 확정 대기
+    const docOverdue = docRunsOpen.filter(r => r.signStage === "CONFIRMED").length;           // 서명 대기
     const endingIn5 = endingSoonAssignments.filter(a => a.endDate && a.endDate <= in5Days).length;
     const unassignedSites = allActiveSites.filter(s => s.assignments.length === 0);
 
@@ -124,13 +125,12 @@ export async function GET(req: Request) {
       }
     }
 
-    for (const r of docRunsOpen.filter(r => !r.currentVersionId && r.dueAt <= now).slice(0, 8)) {
-      const daysOver = Math.ceil((now.getTime() - r.dueAt.getTime()) / 86400000);
+    for (const r of docRunsOpen.filter(r => r.signStage === "SUBMITTED").slice(0, 8)) {
       riskAlerts.push({
-        type: "document", label: "[보고서]",
-        target: r.site?.companyName || "-",
-        detail: `${docTypeLabel(r.docType)} 미제출(D+${daysOver}) — 『${r.worker?.workerName || ""}』`,
-        severity: daysOver >= 7 ? "high" : "medium",
+        type: "document", label: "[문서]",
+        target: r.worker?.workerName || "-",
+        detail: `${docTypeLabel(r.docType)} 확정 대기 — 『${r.site?.companyName || ""}』`,
+        severity: "medium",
       });
     }
 
@@ -185,6 +185,7 @@ export async function GET(req: Request) {
           dueAt: r.dueAt.toISOString(),
           isOverdue: r.dueAt <= now,
           hasVersion: !!r.currentVersionId,
+          signStage: r.signStage,
         })),
         assignmentAlerts: endingSoonAssignments.slice(0, 8).map(a => ({
           id: a.id.toString(),

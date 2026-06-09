@@ -21,7 +21,7 @@ interface DashboardData {
   docList: Array<{
     id: string; docType: string; docTypeLabel: string;
     workerName: string; siteName: string; dueAt: string;
-    isOverdue: boolean; hasVersion: boolean;
+    isOverdue: boolean; hasVersion: boolean; signStage: string;
   }>;
   assignmentAlerts: Array<{
     id: string; workerName: string; siteName: string;
@@ -186,8 +186,8 @@ export default function AdminDashboardPage() {
 
   const gpsIssues = d?.attendanceIssueList.filter(i => i.issueTypes.includes("OUT_OF_RANGE")) ?? [];
   const timeIssues = d?.attendanceIssueList.filter(i => i.issueTypes.includes("MISSING_CLOCK_IN") || i.issueTypes.includes("MISSING_CLOCK_OUT") || i.issueTypes.includes("TIME_ANOMALY")) ?? [];
-  const docPendingList = d?.docList.filter(r => !r.isOverdue) ?? [];
-  const docOverdueList = d?.docList.filter(r => r.isOverdue) ?? [];
+  const docPendingList = d?.docList.filter(r => r.signStage === "SUBMITTED") ?? [];   // 확정 대기
+  const docOverdueList = d?.docList.filter(r => r.signStage === "CONFIRMED") ?? [];   // 서명 대기
 
   // 정렬: daily(매일 챙겨야 하는 것)를 앞, 기간·마감성(보고서·배정 종료)을 뒤로.
   const SUMMARY_CARDS = [
@@ -197,8 +197,8 @@ export default function AdminDashboardPage() {
     { label: "출근부 수정 요청", value: pendingEditReqs,             unit: "건", urgent: pendingEditReqs > 0, onClick: () => router.push("/manager/attendance-edit-requests") },
     { label: "일지 미완료",     value: s?.logPendingCount ?? 0,     unit: "건", urgent: (s?.logPendingCount ?? 0) > 0, onClick: undefined, sub: `완료: ${s?.logDoneCount ?? 0}건` },
     // ── 기간·마감성 ──
-    { label: "보고서 제출 대기", value: s?.docPendingSubmit ?? 0,   unit: "건", urgent: false, onClick: () => router.push("/manager/documents") },
-    { label: "보고서 미제출",   value: s?.docOverdue ?? 0,          unit: "건", urgent: (s?.docOverdue ?? 0) > 0, onClick: () => router.push("/manager/documents") },
+    { label: "문서 확정 대기", value: s?.docPendingSubmit ?? 0,    unit: "건", urgent: (s?.docPendingSubmit ?? 0) > 0, onClick: () => router.push("/manager/documents") },
+    { label: "문서 서명 대기", value: s?.docOverdue ?? 0,          unit: "건", urgent: false, onClick: () => router.push("/manager/documents") },
     { label: "배정 종료 임박",  value: s?.endingIn5 ?? 0,           unit: "명", urgent: (s?.endingIn5 ?? 0) > 0, onClick: undefined, sub: `D-10: ${s?.endingIn10 ?? 0}명` },
     { label: "미배정 Site",     value: s?.unassignedSiteCount ?? 0, unit: "건", urgent: (s?.unassignedSiteCount ?? 0) > 0, onClick: () => router.push("/manager/sites") },
   ];
@@ -285,11 +285,11 @@ export default function AdminDashboardPage() {
             />
           </Section>
 
-          {/* 보고서 제출 현황 */}
-          <Section title="보고서 제출 현황" sub="직무지도원 문서 제출 현황" count={(s?.docPendingSubmit ?? 0) + (s?.docOverdue ?? 0)} onMore={() => router.push("/manager/documents")}>
+          {/* 제출 문서 현황 */}
+          <Section title="제출 문서 현황" sub="직무지도원이 제출한 문서 확정·서명 대기" count={(s?.docPendingSubmit ?? 0) + (s?.docOverdue ?? 0)} onMore={() => router.push("/manager/documents")}>
             <ActionRow
-              label="보고서 제출 대기"
-              count={s?.docPendingSubmit ?? 0} urgent={false}
+              label="확정 대기"
+              count={s?.docPendingSubmit ?? 0} urgent={(s?.docPendingSubmit ?? 0) > 0}
               onCountClick={() => setPopup(p => p === "doc_pending" ? null : "doc_pending")}
               showPopup={popup === "doc_pending"}
               popupItems={docPendingList}
@@ -303,8 +303,8 @@ export default function AdminDashboardPage() {
               )}
             />
             <ActionRow
-              label="보고서 미제출"
-              count={s?.docOverdue ?? 0} urgent={(s?.docOverdue ?? 0) > 0}
+              label="서명 대기"
+              count={s?.docOverdue ?? 0} urgent={false}
               onCountClick={() => setPopup(p => p === "doc_overdue" ? null : "doc_overdue")}
               showPopup={popup === "doc_overdue"}
               popupItems={docOverdueList}
