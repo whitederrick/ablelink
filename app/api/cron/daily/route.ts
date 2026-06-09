@@ -4,6 +4,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { computeWorkTimes, kstWallTimeToInstant } from "@/lib/workSchedule";
+import { getKrHolidays } from "@/lib/krHolidays";
 
 export const runtime = "nodejs";
 
@@ -25,6 +27,7 @@ export async function GET(req: NextRequest) {
   let autoConfirmed  = 0;
   let tokensCleared  = 0;
   let expiryNotified = 0;
+  let exemptCreated  = 0;
   const errors: string[] = [];
 
   // ── 1. 전일 미확정 출근 자동 확정 ──────────────────────────────
@@ -99,11 +102,62 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified}`, errors);
+  // ── 4. 출퇴근 버튼 면제 배정: 전일 출근부 자동 생성 (시프티 병행) ──
+  try {
+    const [yy, mm, dd] = yesterday.split("-").map(Number);
+    const dow = new Date(Date.UTC(yy, mm - 1, dd)).getUTCDay(); // 0=일, 6=토
+    const isWeekend = dow === 0 || dow === 6;
+    const isKrHoliday = Object.prototype.hasOwnProperty.call(getKrHolidays(yy, mm), yesterday);
+
+    if (!isWeekend && !isKrHoliday) {
+      const exemptAssignments = await prisma.siteAssignment.findMany({
+        where: { attendanceButtonExempt: true, status: { in: ["ACTIVE", "CONFIRMED", "ASSIGNED"] } },
+        select: {
+          id: true, workerId: true, siteId: true,
+          workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true,
+        },
+      });
+
+      for (const a of exemptAssignments) {
+        try {
+          // 현장 커스텀 휴무(근무 미인정)면 스킵
+          const customHol = await prisma.siteHoliday.findFirst({
+            where: { assignmentId: a.id, date: yesterday, countAsWorkday: false },
+            select: { id: true },
+          });
+          if (customHol) continue;
+          // 이미 출근부가 있으면 스킵
+          const exists = await prisma.dailyAttendance.findFirst({
+            where: { assignmentId: a.id, workDate: yesterday },
+            select: { id: true },
+          });
+          if (exists) continue;
+
+          const times = computeWorkTimes(a.workType, a.commuteGuidanceIncluded, a.customWorkStart, a.customWorkEnd);
+          await prisma.dailyAttendance.create({
+            data: {
+              workerId: a.workerId,
+              siteId: a.siteId,
+              assignmentId: a.id,
+              workDate: yesterday,
+              startTime: kstWallTimeToInstant(yesterday, times.start),
+              endTime: kstWallTimeToInstant(yesterday, times.end),
+              status: "DONE",
+              isFinalClosed: true,   // 면제 배정: 워커 확정 불필요 → 자동 확정
+              finalizedAt: now,
+            },
+          });
+          exemptCreated++;
+        } catch (e: any) { errors.push(`면제생성[${a.id}]: ${e.message}`); }
+      }
+    }
+  } catch (e: any) { errors.push(`면제출근부: ${e.message}`); }
+
+  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated}`, errors);
 
   return NextResponse.json({
     success: true, yesterday,
-    autoConfirmed, tokensCleared, expiryNotified,
+    autoConfirmed, tokensCleared, expiryNotified, exemptCreated,
     errors,
   });
 }
