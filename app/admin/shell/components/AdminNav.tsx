@@ -48,6 +48,7 @@ const groups: NavGroup[] = [
     items: [
       { href: "/admin/announcements", label: "시스템 공지" },
       { href: "/admin/attendances",   label: "근태 현황·교정" },
+      { href: "/admin/surveys",       label: "만족도 조사 결과" },
       { href: "/admin/support",       label: "지원 요청" },
     ],
   },

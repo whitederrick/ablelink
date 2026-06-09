@@ -78,6 +78,7 @@ model Worker {
 
   evaluations         TraineeEvaluation[]
   employmentContracts EmploymentContract[]
+  satisfactionSurveys SatisfactionSurvey[]
 
   notificationSettings WorkerNotificationSetting?
   notices              WorkerNotice[]
@@ -467,6 +468,7 @@ model Agency {
   recruitPosts          RecruitPost[]
   talentOffers          TalentOffer[]
   contractClauses       AgencyContractClause[]
+  satisfactionSurveys   SatisfactionSurvey[]
 
   @@index([planType])
   @@map("agencies")
@@ -841,6 +843,45 @@ model AgencyContractClause {
 
   @@index([agencyId, isActive])
   @@map("agency_contract_clauses")
+}
+
+// 직무지도원 만족도 조사 (사업체 담당자 → 직무지도원 평가) — PRO, 2026-06-10
+// 요청(에이전시/운영자) + 응답(사업체 담당자 토큰) 단일 레코드.
+model SatisfactionSurvey {
+  id        BigInt @id @default(autoincrement())
+  agencyId  BigInt @map("agency_id")
+  workerId  BigInt @map("worker_id") // 평가 대상 직무지도원
+  contractId BigInt? @map("contract_id") // 연결 계약(자동발송 시)
+
+  // 수신자(사업체 담당자) — 알림톡 발송 대상
+  recipientName  String? @map("recipient_name")
+  recipientPhone String  @map("recipient_phone")
+  siteName       String? @map("site_name") // 맥락 표시용
+
+  token   String @unique // 응답 페이지 일회용 토큰(UUID)
+  status  String @default("PENDING") // PENDING | RESPONDED | EXPIRED | CANCELLED
+  auto    Boolean @default(false) @map("auto") // 계약 종료 자동발송 여부
+
+  // 응답
+  scores       Json?   // { professionalism, diligence, communication, support } (각 1~5)
+  overallScore Int?    @map("overall_score") // 종합 만족도 1~5
+  comment      String?
+  sharedWithAgency Boolean @default(false) @map("shared_with_agency") // 운영자→에이전시 전달 여부
+
+  sentAt      DateTime? @map("sent_at")
+  respondedAt DateTime? @map("responded_at")
+  expiresAt   DateTime  @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdByManagerId BigInt? @map("created_by_manager_id")
+
+  agency Agency @relation(fields: [agencyId], references: [id])
+  worker Worker @relation(fields: [workerId], references: [id])
+
+  @@index([agencyId, status])
+  @@index([workerId])
+  @@index([token])
+  @@map("satisfaction_surveys")
 }
 
 enum ContractStatus {

@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computeWorkTimes, kstWallTimeToInstant } from "@/lib/workSchedule";
 import { getKrHolidays } from "@/lib/krHolidays";
+import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
+import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
 
@@ -28,6 +30,7 @@ export async function GET(req: NextRequest) {
   let tokensCleared  = 0;
   let expiryNotified = 0;
   let exemptCreated  = 0;
+  let surveysSent    = 0;
   const errors: string[] = [];
 
   // ── 1. 전일 미확정 출근 자동 확정 ──────────────────────────────
@@ -153,11 +156,59 @@ export async function GET(req: NextRequest) {
     }
   } catch (e: any) { errors.push(`면제출근부: ${e.message}`); }
 
-  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated}`, errors);
+  // ── 5. 계약 종료 자동 만족도 조사 (기본 OFF: SURVEY_AUTO_SEND=true + 알림톡 설정 시) ──
+  // 전일 계약 종료(SIGNED/COMPLETED) 직무지도원에 대해, 사업체 담당자(현장 businessContact)에게 자동 발송.
+  try {
+    if (process.env.SURVEY_AUTO_SEND === "true" && isAlimtalkReady("KAKAO_SURVEY_TEMPLATE_CODE")) {
+      const dayStart = new Date(`${yesterday}T00:00:00.000Z`);
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      const ended = await prisma.employmentContract.findMany({
+        where: { status: { in: ["SIGNED", "COMPLETED"] }, contractEnd: { gte: dayStart, lt: dayEnd } },
+        select: { id: true, agencyId: true, workerId: true, siteName: true, user: { select: { workerName: true } } },
+      });
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";
+      for (const c of ended) {
+        try {
+          // 이미 이 계약 종료로 생성된 조사가 있으면 스킵
+          const dup = await prisma.satisfactionSurvey.findFirst({ where: { contractId: c.id }, select: { id: true } });
+          if (dup) continue;
+          // 사업체 담당자 연락처: 현장(현장명 일치)에서 조회
+          const site = c.siteName
+            ? await prisma.site.findFirst({
+                where: { agencyId: c.agencyId, companyName: c.siteName },
+                select: { businessContactName: true, businessContactPhone: true },
+              })
+            : null;
+          const phone = site?.businessContactPhone;
+          if (!phone) continue; // 연락처 없으면 자동발송 불가 → 스킵
+          const token = randomUUID();
+          await prisma.satisfactionSurvey.create({
+            data: {
+              agencyId: c.agencyId, workerId: c.workerId, contractId: c.id,
+              recipientName: site?.businessContactName || null, recipientPhone: phone,
+              siteName: c.siteName || null, token, status: "PENDING", auto: true,
+              expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), sentAt: now,
+            },
+          });
+          const surveyUrl = `${baseUrl}/survey/${token}`;
+          await sendAlimtalk({
+            phone, name: site?.businessContactName || "담당자",
+            templateCode: process.env.KAKAO_SURVEY_TEMPLATE_CODE!,
+            subject: "직무지도원 만족도 조사",
+            message: `안녕하세요.\n\n${c.user?.workerName ?? "직무지도원"} 직무지도원에 대한 만족도 조사를 요청드립니다.\n아래 링크에서 평가해 주세요.\n\n${surveyUrl}\n\n링크는 14일간 유효합니다.`,
+            buttons: [{ name: "만족도 평가하기", linkType: "WL", linkMo: surveyUrl, linkPc: surveyUrl }],
+          });
+          surveysSent++;
+        } catch (e: any) { errors.push(`만족도자동[${c.id}]: ${e.message}`); }
+      }
+    }
+  } catch (e: any) { errors.push(`만족도자동: ${e.message}`); }
+
+  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent}`, errors);
 
   return NextResponse.json({
     success: true, yesterday,
-    autoConfirmed, tokensCleared, expiryNotified, exemptCreated,
+    autoConfirmed, tokensCleared, expiryNotified, exemptCreated, surveysSent,
     errors,
   });
 }

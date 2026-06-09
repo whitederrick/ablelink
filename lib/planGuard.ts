@@ -25,7 +25,8 @@ export type ProFeature =
   | "PAYROLL"           // 급여 자동계산
   | "CONTRACT_ONLINE"   // 전자 근로계약서
   | "RECRUIT_POST"      // 매칭: 직무지도 공고 등록·자동배정 (수요측)
-  | "TALENT_SOURCING";  // 매칭: 인재풀 검색·역제안 (프리미엄 소싱)
+  | "TALENT_SOURCING"   // 매칭: 인재풀 검색·역제안 (프리미엄 소싱)
+  | "SATISFACTION_SURVEY"; // 직무지도원 만족도 조사
 
 export type PremiumFeature = StarterFeature | StandardFeature | ProFeature;
 
@@ -43,6 +44,7 @@ const PRO_FEATURES = new Set<PremiumFeature>([
   "CONTRACT_ONLINE",
   "RECRUIT_POST",
   "TALENT_SOURCING",
+  "SATISFACTION_SURVEY",
 ]);
 
 export interface PlanCheckResult {

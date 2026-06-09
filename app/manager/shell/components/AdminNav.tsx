@@ -40,6 +40,7 @@ const groups: NavGroup[] = [
       { href: "/manager/workers",   label: "직무지도원 관리" },
       { href: "/manager/trainees",  label: "훈련생 현황" },
       { href: "/manager/contracts", label: "근로계약서", plan: "PRO" },
+      { href: "/manager/surveys",   label: "만족도 조사", plan: "PRO" },
     ],
   },
   {
