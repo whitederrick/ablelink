@@ -426,9 +426,8 @@ function dailyLog(kind: "TRAINING" | "ADAPTATION", p: any): Promise<Buffer> {
     cell(doc, x + c1, y, c2, hh, "사업체명", { bold: true, size: 9, fill: "#d9d9d9" });
     cell(doc, x + c1 + c2, y, c3, hh, "적응지도기간", { bold: true, size: 9, fill: "#d9d9d9" });
     y += hh;
-    // 지도일수 = 평일 - 휴무(공휴일·커스텀휴무). 표의 자동생성 행 수와 동일 기준.
-    const metaHols = new Set<string>((p.holidays ?? []).map((h: string) => normYmd(h)).filter(Boolean));
-    const wd = p.workingDays != null ? p.workingDays : workingDaysList(normYmd(p.periodStart), normYmd(p.periodEnd), metaHols).length || null;
+    // 지도일수 = 실제 작성된 일지 수(표에 보이는 행 수와 동일).
+    const wd = p.workingDays != null ? p.workingDays : ((Array.isArray(p.entries) ? p.entries.length : 0) || null);
     const days = wd != null ? ` (${wd})일` : "";
     cell(doc, x, y, c1, 24, p.traineeName ?? "", { size: 9 });
     cell(doc, x + c1, y, c2, 24, p.companyName ?? "", { size: 9 });
@@ -465,14 +464,10 @@ function dailyLog(kind: "TRAINING" | "ADAPTATION", p: any): Promise<Buffer> {
     const widths = r0.map((f) => W * f);
     // 근무시간 헤더는 원본처럼 1줄. 출퇴근만 4줄.
     const headers = ["구\n분", "지도\n일자", "출석/결석/\n지각/조퇴", "근무시간", "출퇴근\n지도 및\n휴게시간\n지도 여부", "수행과제", "수행정도\n(측정시간)", "지도사항"];
-    const TIME_TPL = "  :      ~      :  ";  // 빈 근무시간 셀 입력 양식(원본)
+    const TIME_TPL = "  :      ~      :  ";  // 근무시간 미지정 시 입력 양식(원본)
 
-    // 적응지도 기간의 평일(주말·공휴일 제외)만큼 행 생성 + 실제 일지 데이터 병합 (훈련일지와 동일 기준).
-    const holidays = new Set<string>((p.holidays ?? []).map((h: string) => normYmd(h)).filter(Boolean));
-    const byDate = new Map<string, any>();
-    for (const e of entries) { const k = normYmd(e.dateISO ?? e.date ?? ""); if (k) byDate.set(k, e); }
-    const days = workingDaysList(normYmd(p.periodStart), normYmd(p.periodEnd), holidays);
-
+    // 행 = 실제 작성된 일지(엔트리)만. 출근일인데 일지 없는 날(빈 행)은 만들지 않음.
+    // 근무시간·측정시간·Y/N 등 고정값은 생성 라우트가 근무형태로 계산해 엔트리에 담아줌.
     const mkRow = (dateText: string, e: any): DailyRow => ({
       sectionKey: "ADAPT",
       sectionLabel: "적응지도",
@@ -487,10 +482,8 @@ function dailyLog(kind: "TRAINING" | "ADAPTATION", p: any): Promise<Buffer> {
       ],
       lefts: [false, false, false, false, true, false, true],
     });
-    const source: DailyRow[] = days.length
-      ? days.map((d) => mkRow(mdSlash(d), byDate.get(d) ?? {}))
-      : (entries.length ? entries : [{}]).map((e) =>
-          mkRow(String(e.dateMD ?? (e.dateISO ? mdSlash(normYmd(e.dateISO)) : "")), e));
+    const source: DailyRow[] = (entries.length ? entries : [{}]).map((e) =>
+      mkRow(String(e.dateMD ?? (e.dateISO ? mdSlash(normYmd(e.dateISO)) : "")), e));
 
     y = dailyLogTable(doc, x, y, widths, headers, source, { size: 9, headerSize: 7.5, headerH: 52, headerLineGap: 0, minRowH: 36, mergedLabel: "적응지도" });
     // 특이사항 행 (세로 라벨 + 내용 span) — 내용 길이에 따라 높이 확장
@@ -511,45 +504,22 @@ function dailyLog(kind: "TRAINING" | "ADAPTATION", p: any): Promise<Buffer> {
     // 헤더 폰트 9pt(상단과 동일). 지도여부는 2글자씩 줄바꿈(줄간격 음수로 셀밖 방지).
     const headers = ["구\n분", "훈련\n일자", "출석/결석/\n지각/조퇴", "훈련\n시간", "출퇴\n근\n지도\n및\n휴게\n시간\n지도\n여부", "수행과제", "수행정도\n(측정시간)", "평가 및 지도사항"];
 
-    // 사전·현장 기간의 평일 수만큼 행 생성(주말·공휴일 제외) + 실제 일지 데이터 병합.
-    // → 구분 칸의 '사전훈련'/'현장훈련'이 기간 날짜 수에 맞게 채워짐.
-    const holidays = new Set<string>((p.holidays ?? []).map((h: string) => normYmd(h)).filter(Boolean));
-    const byDate = new Map<string, any>();
-    for (const r of rowsData) { const k = normYmd(r.date); if (k) byDate.set(k, r); }
-    const preR = parseRange(p.periodPreText);
-    const fieldR = parseRange(p.periodFieldText);
-    const built: { section: "PRE" | "FIELD"; date: string }[] = [];
-    const seen = new Set<string>();
-    if (preR) for (const d of workingDaysList(preR[0], preR[1], holidays)) { if (!seen.has(d)) { seen.add(d); built.push({ section: "PRE", date: d }); } }
-    if (fieldR) for (const d of workingDaysList(fieldR[0], fieldR[1], holidays)) { if (!seen.has(d)) { seen.add(d); built.push({ section: "FIELD", date: d }); } }
-
-    const source: DailyRow[] = built.length
-      ? built.map((b) => {
-          const r = byDate.get(b.date) ?? {};
-          return {
-            sectionKey: b.section,
-            sectionLabel: b.section === "PRE" ? "사전훈련" : "현장훈련",
-            cells: [
-              fmtTrainingDate(b.date),
-              String(r.attendanceStatus ?? ""),
-              String(r.trainingTime ?? ""),
-              String(r.guidanceFlag ?? ""),
-              String(r.task ?? ""),
-              String(r.taskLevelMeasured ?? ""),
-              String(r.evalGuidance ?? ""),
-            ],
-            lefts: [false, false, false, false, true, false, true],
-          };
-        })
-      : (rowsData.length ? rowsData : [{}]).map((r) => ({
-          sectionKey: r.section === "PRE" ? "PRE" : "FIELD",
-          sectionLabel: r.section === "PRE" ? "사전훈련" : "현장훈련",
-          cells: [
-            String(r.date ?? ""), String(r.attendanceStatus ?? ""), String(r.trainingTime ?? ""),
-            String(r.guidanceFlag ?? ""), String(r.task ?? ""), String(r.taskLevelMeasured ?? ""), String(r.evalGuidance ?? ""),
-          ],
-          lefts: [false, false, false, false, true, false, true],
-        }));
+    // 행 = 실제 작성된 일지만(빈 행 없음). 구분(사전/현장훈련)·시간·Y/N·측정시간은
+    // 생성 라우트가 근무형태로 계산해 행에 담아줌.
+    const source: DailyRow[] = (rowsData.length ? rowsData : [{}]).map((r) => ({
+      sectionKey: r.section === "PRE" ? "PRE" : "FIELD",
+      sectionLabel: r.section === "PRE" ? "사전훈련" : "현장훈련",
+      cells: [
+        r.date ? fmtTrainingDate(normYmd(r.date)) : "",
+        String(r.attendanceStatus ?? ""),
+        String(r.trainingTime ?? ""),
+        String(r.guidanceFlag ?? ""),
+        String(r.task ?? ""),
+        String(r.taskLevelMeasured ?? ""),
+        String(r.evalGuidance ?? ""),
+      ],
+      lefts: [false, false, false, false, true, false, true],
+    }));
     y = dailyLogTable(doc, x, y, widths, headers, source, { size: 9, headerSize: 9, headerH: 92, headerLineGap: -1.5, minRowH: 40 });
     y += 18;
     // (서명)은 우측 끝에 붙이지 않고 여백을 둬 실제 서명 공간 확보

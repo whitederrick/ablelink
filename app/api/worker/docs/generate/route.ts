@@ -11,6 +11,7 @@ import { renderPdfToBuffer } from "@/lib/pdf";
 import { buildDocFileName } from "@/lib/pdf/filename";
 import { sendEmailWithPdf } from "@/lib/email";
 import { getKrHolidayDates } from "@/lib/krHolidays";
+import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 
 // ── 유틸 ──────────────────────────────────────────────────────
 function fmtHHMM(d: Date): string {
@@ -85,6 +86,14 @@ export async function POST(request: NextRequest) {
     const site = assignment.site;
     const start = periodStart || new Date().toISOString().slice(0,10);
     const end   = periodEnd   || new Date().toISOString().slice(0,10);
+
+    // 일지 PDF용 근무형태 고정 시간값(훈련시간/측정시간/근무시간/Y·N) — 단일 출처
+    const docTimes = dailyDocTimes(
+      (assignment as any).workType,
+      (assignment as any).commuteGuidanceIncluded,
+      (assignment as any).customWorkStart,
+      (assignment as any).customWorkEnd,
+    );
 
     // ── 사업체담당자 즉석 서명 확인 ────────────────────────
     let companyManagerSignatureUrl: string | null = null;
@@ -201,16 +210,20 @@ export async function POST(request: NextRequest) {
         periodPreText:   fmtPeriod(assignment.stepStart?.toISOString().slice(0,10) || start, start),
         periodFieldText: fmtPeriod(start, end),
         holidays,
-        rows: logs.map(l => ({
-          section: l.trainingType === "PRE" ? "PRE" : "FIELD",
-          date: l.attendance.workDate,
-          attendanceStatus: l.evaluation || "출석",
-          trainingTime: `${Number(l.totalRecognizedTime)}H`,
-          guidanceFlag: "Y",
-          task: l.tasks[0]?.taskName || "",
-          taskLevelMeasured: scoreLabel(l.tasks[0]?.performanceScore as any),
-          evalGuidance: l.content || "",
-        })),
+        rows: logs.map(l => {
+          const scoreText = scoreLabel(l.tasks[0]?.performanceScore as any);
+          return {
+            section: l.trainingType === "PRE" ? "PRE" : "FIELD",
+            date: l.attendance.workDate,
+            attendanceStatus: l.evaluation || "출석",        // 일지 출결 반영
+            trainingTime: docTimes.trainingTimeH,            // 근무형태 고정(4H/8H)
+            guidanceFlag: docTimes.guidanceYN,               // 출퇴근·휴게 지도 Y/N
+            task: l.tasks[0]?.taskName || "",
+            // 수행정도 = 점수 텍스트만 + 아래 측정시간(근무형태 고정)
+            taskLevelMeasured: `${scoreText}\n(${docTimes.measTimeH})`,
+            evalGuidance: l.content || "",                   // 평가·지도사항 = 일지 내용
+          };
+        }),
         signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
       };
       fileName = buildDocFileName("TRAINING_DAILY_LOG", { traineeName: trainee?.name, companyName: site.companyName, start, end });
@@ -266,13 +279,13 @@ export async function POST(request: NextRequest) {
         holidays,
         entries: logs.map(l => ({
           dateISO: l.attendance.workDate,
-          attendance: l.evaluation || "출석",
-          workTime: l.attendance.startTime ? `${fmtHHMM(l.attendance.startTime)}~${fmtHHMM(l.attendance.endTime!)}` : "",
-          guidance: "Y",
+          attendance: l.evaluation || "출석",              // 일지 출결 반영
+          workTime: docTimes.workTimeRange,                 // 근무형태 고정 범위(08:30~13:30 등)
+          guidance: docTimes.guidanceYN,                    // 출퇴근·휴게 지도 Y/N
           task: l.tasks[0]?.taskName || "",
-          performanceLabel: scoreLabel(l.tasks[0]?.performanceScore as any),
-          performanceTime: "",
-          coaching: l.content || "",
+          performanceLabel: scoreLabel(l.tasks[0]?.performanceScore as any),  // 점수 텍스트만
+          performanceTime: docTimes.measTimeH,              // 측정시간(근무형태 고정)
+          coaching: l.content || "",                        // 지도사항 = 일지 내용
         })),
         signatures: { worker: sigs.worker, govAgent: sigs.govAgent },
       };

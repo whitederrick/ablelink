@@ -8,6 +8,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer } from "@/lib/pdf";
 import { sendEmailWithPdf } from "@/lib/email";
+import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 
 function fmtHHMM(d: Date) {
   const kst = new Date(d.getTime() + 9*3600000);
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest) {
     };
 
     const site = assignment.site;
+    const docTimes = dailyDocTimes((assignment as any).workType, (assignment as any).commuteGuidanceIncluded, (assignment as any).customWorkStart, (assignment as any).customWorkEnd);
     let payload: any;
     let fileName: string;
 
@@ -150,8 +152,8 @@ export async function POST(request: NextRequest) {
         rows: logs.map(l=>({
           section: l.trainingType==="PRE"?"PRE":"FIELD",
           date: l.attendance.workDate, attendanceStatus: l.evaluation||"출석",
-          trainingTime:`${Number(l.totalRecognizedTime)}H`, guidanceFlag:"Y",
-          task:l.tasks[0]?.taskName||"", taskLevelMeasured:scoreLabel(l.tasks[0]?.performanceScore),
+          trainingTime:docTimes.trainingTimeH, guidanceFlag:docTimes.guidanceYN,
+          task:l.tasks[0]?.taskName||"", taskLevelMeasured:`${scoreLabel(l.tasks[0]?.performanceScore)}\n(${docTimes.measTimeH})`,
           evalGuidance:l.content||"",
         })),
         signatures: { govAgent: sigs.govAgent, companyManager: { name:"", imageUrl:undefined }, worker: sigs.worker },
@@ -185,8 +187,8 @@ export async function POST(request: NextRequest) {
         periodStart: start, periodEnd: end,
         entries: logs.map(l=>({
           dateISO: l.attendance.workDate, attendance: l.evaluation||"출석",
-          workTime:"", guidance:"Y", task:l.tasks[0]?.taskName||"",
-          performanceLabel:scoreLabel(l.tasks[0]?.performanceScore), performanceTime:"", coaching:l.content||"",
+          workTime:docTimes.workTimeRange, guidance:docTimes.guidanceYN, task:l.tasks[0]?.taskName||"",
+          performanceLabel:scoreLabel(l.tasks[0]?.performanceScore), performanceTime:docTimes.measTimeH, coaching:l.content||"",
         })),
         signatures: { worker: sigs.worker, govAgent: sigs.govAgent },
       };

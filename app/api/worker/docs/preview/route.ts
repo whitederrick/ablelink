@@ -8,6 +8,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType, type DocumentType } from "@/lib/pdf";
 import { buildDocFileName, contentDisposition } from "@/lib/pdf/filename";
+import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 
 function fmtHHMM(d: Date): string {
   const kst = new Date(d.getTime() + 9*3600000);
@@ -73,6 +74,7 @@ export async function GET(request: NextRequest) {
 
     const site = assignment.site;
     const start = periodStart, end = periodEnd;
+    const docTimes = dailyDocTimes((assignment as any).workType, (assignment as any).commuteGuidanceIncluded, (assignment as any).customWorkStart, (assignment as any).customWorkEnd);
     let payload: any;
 
     if (docType === "ATTENDANCE_SHEET") {
@@ -108,9 +110,9 @@ export async function GET(request: NextRequest) {
         periodPreText:fmtPeriod(assignment.stepStart?.toISOString().slice(0,10)||start,start),
         periodFieldText:fmtPeriod(start,end),
         rows:logs.map(l=>({ section:l.trainingType==="PRE"?"PRE":"FIELD", date:l.attendance.workDate,
-          attendanceStatus:l.evaluation||"출석", trainingTime:`${Number(l.totalRecognizedTime)}H`,
-          guidanceFlag:"Y", task:l.tasks[0]?.taskName||"",
-          taskLevelMeasured:scoreLabel(l.tasks[0]?.performanceScore), evalGuidance:l.content||"" })),
+          attendanceStatus:l.evaluation||"출석", trainingTime:docTimes.trainingTimeH,
+          guidanceFlag:docTimes.guidanceYN, task:l.tasks[0]?.taskName||"",
+          taskLevelMeasured:`${scoreLabel(l.tasks[0]?.performanceScore)}\n(${docTimes.measTimeH})`, evalGuidance:l.content||"" })),
         signatures:{ govAgent:sigs.govAgent, companyManager:{name:"",imageUrl:undefined}, worker:sigs.worker },
       };
     } else if (docType === "ADAPTATION_DAILY_LOG") {
@@ -123,8 +125,8 @@ export async function GET(request: NextRequest) {
       payload = {
         traineeName:trainee?.name||"", companyName:site.companyName, periodStart:start, periodEnd:end,
         entries:logs.map(l=>({ dateISO:l.attendance.workDate, attendance:l.evaluation||"출석",
-          workTime:"", guidance:"Y", task:l.tasks[0]?.taskName||"",
-          performanceLabel:scoreLabel(l.tasks[0]?.performanceScore), performanceTime:"", coaching:l.content||"" })),
+          workTime:docTimes.workTimeRange, guidance:docTimes.guidanceYN, task:l.tasks[0]?.taskName||"",
+          performanceLabel:scoreLabel(l.tasks[0]?.performanceScore), performanceTime:docTimes.measTimeH, coaching:l.content||"" })),
         signatures:{ worker:sigs.worker, govAgent:sigs.govAgent },
       };
     } else if (docType === "TRAINEE_FINAL_EVAL") {
