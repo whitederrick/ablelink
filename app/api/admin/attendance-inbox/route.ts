@@ -44,9 +44,13 @@ function instantToKstMin(d: Date | null | undefined): number | null {
   return kst.getUTCHours() * 60 + kst.getUTCMinutes();
 }
 
+// 지각 판정 임계(분): 실제 출근이 표준보다 이만큼 이상 늦으면 이상 표시
+const LATE_THRESHOLD_MIN = 10;
+
 function deriveIssueTypes(row: {
   startTime: Date | null;
   endTime: Date | null;
+  actualStartTime: Date | null;
   startDistanceM: number | null;
   rangeM: number | null;
   workType: string | null;
@@ -63,13 +67,12 @@ function deriveIssueTypes(row: {
     out.push("OUT_OF_RANGE");
   }
 
-  // ✅ 출근 시각은 근무형태별 표준값으로 고정 저장되므로 일치하면 이상 없음.
-  //    관리자 수동수정 등으로 표준과 벗어난 경우에만 이상 표시(KST 기준 비교).
+  // ✅ 지각 판정은 출근부 고정시각이 아니라 "실제 출근 버튼 시각" 기준.
+  //    실제 시각이 없으면(과거 기록·기간 일괄생성 등) 판정하지 않음 → 오탐 방지.
   const expectedStartMin = hhmmToMin(getExpectedStartHHMM(row));
-  const actualStartMin = instantToKstMin(row.startTime);
-  if (expectedStartMin != null && actualStartMin != null) {
-    const diff = actualStartMin - expectedStartMin;
-    if (diff >= 1 || diff <= -60) out.push("TIME_ANOMALY");
+  const actualStartMin = instantToKstMin(row.actualStartTime);
+  if (expectedStartMin != null && actualStartMin != null && actualStartMin - expectedStartMin >= LATE_THRESHOLD_MIN) {
+    out.push("TIME_ANOMALY");
   }
 
   return out;
@@ -131,6 +134,8 @@ export async function GET(req: Request) {
         workDate: true,
         startTime: true,
         endTime: true,
+        actualStartTime: true,
+        actualEndTime: true,
         rangeM: true,
         startDistanceM: true,
         endDistanceM: true,
@@ -176,6 +181,7 @@ export async function GET(req: Request) {
       const derived = deriveIssueTypes({
         startTime: r.startTime,
         endTime: r.endTime,
+        actualStartTime: r.actualStartTime ?? null,
         startDistanceM: r.startDistanceM ?? null,
         rangeM: r.rangeM ?? null,
         workType,
@@ -250,6 +256,9 @@ export async function GET(req: Request) {
         expectedStartAt,
         clockInAt: r.startTime ? r.startTime.toISOString() : null,
         clockOutAt: r.endTime ? r.endTime.toISOString() : null,
+        // 실제 출퇴근 버튼 시각(지각 판정 근거). 위 clockIn/OutAt은 출근부 고정시각.
+        actualClockInAt: r.actualStartTime ? r.actualStartTime.toISOString() : null,
+        actualClockOutAt: r.actualEndTime ? r.actualEndTime.toISOString() : null,
         rangeM: r.rangeM ?? null,
         startDistanceM: r.startDistanceM ?? null,
         endDistanceM: r.endDistanceM ?? null,
