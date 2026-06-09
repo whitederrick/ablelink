@@ -43,20 +43,21 @@ export async function GET(request: NextRequest) {
     const site = assignment.site;
     const agency = assignment.agency;
 
-    // 오늘 출근 기록 조회 (KST todayStr 재사용)
-    const todayAttendance = await prisma.dailyAttendance.findFirst({
-      where: { workerId, assignmentId: assignment.id, workDate: todayStr },
-      orderBy: { id: "desc" },
-    });
-
-    // 직무지도원 정보 조회
-    const user = await prisma.worker.findUnique({
-      where: { id: workerId },
-      select: { workerName: true, phoneNumber: true, signatureUrl: true },
-    });
-
-    const premiumStatus = await getWorkerPremiumStatus(workerId);
-    const docAccessStatus = await getWorkerDocAccess(workerId);
+    // 배정 이후 독립적인 4개 조회는 병렬로(순차 round-trip 줄여 로딩 단축)
+    const [todayAttendance, user, premiumStatus, docAccessStatus] = await Promise.all([
+      // 오늘 출근 기록 (KST todayStr 재사용)
+      prisma.dailyAttendance.findFirst({
+        where: { workerId, assignmentId: assignment.id, workDate: todayStr },
+        orderBy: { id: "desc" },
+      }),
+      // 직무지도원 정보
+      prisma.worker.findUnique({
+        where: { id: workerId },
+        select: { workerName: true, phoneNumber: true, signatureUrl: true },
+      }),
+      getWorkerPremiumStatus(workerId),
+      getWorkerDocAccess(workerId),
+    ]);
 
     return NextResponse.json({
       success: true,
