@@ -45,7 +45,7 @@ export interface HomeSummary {
   premiumReason: string | null;
   premiumMessage: string | null;
   docAccess: boolean;
-  notices: { id: string; title: string; body: string; type: string; yearMonth: string | null; link: string | null; read: boolean; createdAt: string }[];
+  notices: { id: string; title: string; body: string; type: string; kind: string; yearMonth: string | null; link: string | null; read: boolean; createdAt: string }[];
   unreadCount: number;
   alarm: { clockInAlertMinutes: number; clockOutAlertMinutes: number };
   // 놓친 업무
@@ -112,14 +112,16 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
 
   // ── 알림 + 알람설정 ──
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // 홈 알림 잔존 규칙: 미확인은 계속 노출, 확인(읽음)한 것은 5일까지만.
+  const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
   const rawNotices: any[] = await (prisma as any).workerNotice.findMany({
-    where: { workerId },
+    where: { workerId, OR: [{ readAt: null }, { readAt: { gte: fiveDaysAgo } }] },
     orderBy: { createdAt: "desc" },
     take: 20,
-    select: { id: true, title: true, body: true, type: true, yearMonth: true, link: true, readAt: true, createdAt: true },
+    select: { id: true, title: true, body: true, type: true, kind: true, yearMonth: true, link: true, readAt: true, createdAt: true },
   });
   const notices = rawNotices.map((n: any) => ({
-    id: n.id.toString(), title: n.title, body: n.body, type: n.type,
+    id: n.id.toString(), title: n.title, body: n.body, type: n.type, kind: n.kind ?? "NOTICE_INDIVIDUAL",
     yearMonth: n.yearMonth, link: n.link ?? null, read: n.readAt !== null, createdAt: n.createdAt.toISOString(),
   }));
   const unreadCount = rawNotices.filter((n: any) => !n.readAt).length;

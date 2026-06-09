@@ -15,8 +15,8 @@ export async function GET(req: NextRequest) {
     const notices: any[] = await (prisma as any).workerNotice.findMany({
       where: { workerId: BigInt(session.workerId) },
       orderBy: { createdAt: "desc" },
-      take: 20,
-      select: { id: true, title: true, body: true, type: true, yearMonth: true, link: true, readAt: true, createdAt: true },
+      take: 50,
+      select: { id: true, title: true, body: true, type: true, kind: true, yearMonth: true, link: true, readAt: true, createdAt: true },
     });
 
     return NextResponse.json({
@@ -26,9 +26,11 @@ export async function GET(req: NextRequest) {
         title:     n.title,
         body:      n.body,
         type:      n.type,
+        kind:      n.kind ?? "NOTICE_INDIVIDUAL",
         yearMonth: n.yearMonth,
         link:      n.link ?? null,
         read:      n.readAt !== null,
+        readAt:    n.readAt ? n.readAt.toISOString() : null,
         createdAt: n.createdAt.toISOString(),
       })),
       unreadCount: notices.filter((n: any) => !n.readAt).length,
