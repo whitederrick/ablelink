@@ -59,7 +59,7 @@ const groups: NavGroup[] = [
     items: [
       { href: "/manager/documents", label: "제출 문서 확인·확정", plan: "STARTER" }, // 워크플로 메인
       { href: "/manager/reports",   label: "훈련생 진척도 리포트", plan: "STANDARD" }, // 운영 대시보드(모니터링)
-      { href: "/manager/docs",      label: "직접 발급(임의 출력)", plan: "STARTER" },  // 매니저 직접 PDF 생성(보조)
+      { href: "/manager/docs",      label: "문서 조회·출력", plan: "STARTER" },  // 매니저 직접 PDF 조회·출력(보조)
     ],
   },
   {

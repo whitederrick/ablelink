@@ -51,8 +51,6 @@ export default function AdminDocsPage() {
   const [managerEmail,  setManagerEmail]  = useState("");
   const [sending,       setSending]       = useState(false);
   const [sendResult,    setSendResult]    = useState<{ success: boolean; msg: string } | null>(null);
-  const [signing,       setSigning]       = useState(false);
-  const [signResult,    setSignResult]    = useState<{ success: boolean; msg: string } | null>(null);
   const [auditLoading,  setAuditLoading]  = useState(false);
 
   useEffect(() => {
@@ -114,28 +112,7 @@ export default function AdminDocsPage() {
     if (!selectedWorker) { alert("직무지도원을 선택해주세요."); return; }
     if (needsTrainee && !traineeId) { alert("훈련생을 선택해주세요."); return; }
     setIframeKey(k => k + 1);
-    setSignResult(null);
     setMode("view");
-  }
-
-  async function handleSign() {
-    if (!toEmail) { alert("수신 이메일을 입력해주세요."); return; }
-    setSigning(true); setSignResult(null);
-    try {
-      const res = await fetch("/api/admin/docs/sign", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workerId: selectedWorker, docType, periodStart, periodEnd, traineeId: traineeId || undefined, toEmail }),
-      });
-      const d = await res.json();
-      if (d.success && d.pdfBase64) {
-        const blob = new Blob([Uint8Array.from(atob(d.pdfBase64), c => c.charCodeAt(0))], { type: "application/pdf" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url; a.download = d.fileName || "signed.pdf"; a.click();
-        URL.revokeObjectURL(url);
-      }
-      setSignResult({ success: d.success, msg: d.message || (d.success ? "서명 완료" : "서명 실패") });
-    } catch { setSignResult({ success: false, msg: "서버 연결 실패" }); }
-    finally { setSigning(false); }
   }
 
   const docLabel = DOC_GROUPS.flatMap(g => g.docs).find(d => d.id === docType)?.label || "문서";
@@ -192,21 +169,8 @@ export default function AdminDocsPage() {
             </p>
           )}
 
-          <div className="mt-3 border-t border-slate-100 pt-3">
-            <p className="mb-2 text-xs font-black text-slate-500">에이전시 담당자 서명 후 발송</p>
-            <button onClick={handleSign} disabled={signing}
-              className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-indigo-700 disabled:opacity-60">
-              {signing ? "서명 생성 중..." : "✍️ 내 서명 넣어 발송 (서명완료 PDF)"}
-            </button>
-            {signResult && (
-              <p className={`mt-2 text-xs font-semibold ${signResult.success ? "text-emerald-600" : "text-rose-600"}`}>
-                {signResult.success ? "✅" : "❌"} {signResult.msg}
-              </p>
-            )}
-          </div>
-
           <div className="mt-3 flex gap-2">
-            <button onClick={() => { setMode("select"); setSendResult(null); setSignResult(null); }}
+            <button onClick={() => { setMode("select"); setSendResult(null); }}
               className={`flex-1 ${T.btnSecondary}`}>← 목록으로</button>
             <button onClick={handleDownload} className={`flex-[2] ${T.btnPrimary}`}>📥 PDF 다운로드</button>
           </div>
@@ -217,7 +181,7 @@ export default function AdminDocsPage() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <PageHeader title="문서 발급·출력" />
+      <PageHeader title="문서 조회·출력" sub="제출 워크플로 없이 출근부·일지를 직접 조회·출력하고 감사용 ZIP을 받습니다. (서명은 '제출 문서 확인·확정'에서)" />
 
       {/* 직무지도원 선택 */}
       <div className={T.card}>

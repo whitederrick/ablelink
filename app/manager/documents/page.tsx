@@ -157,7 +157,7 @@ export default function ManagerDocumentsHub() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="제출 문서 확인" sub="직무지도원이 제출한 출근부·일지를 확인하고 확정·서명합니다." />
+      <PageHeader title="제출 문서 확인·확정" sub="직무지도원이 제출한 출근부·일지를 확인하고 확정·서명합니다." />
 
       {/* 상태 요약 */}
       <div className="grid grid-cols-4 gap-2">
