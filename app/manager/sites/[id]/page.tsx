@@ -67,7 +67,7 @@ export default function ManagerSiteDetailPage() {
 
   useEffect(() => {
     fetch("/api/admin/site-owners", { cache: "no-store" })
-      .then(r => r.json())
+      .then(async r => { try { return await r.json(); } catch { return null; } })  // dev 컴파일 중 빈/HTML 응답 방어
       .then(d => { if (d?.success) setOwnerManagers(d.managers || []); })
       .catch(() => {});
   }, []);
@@ -76,8 +76,10 @@ export default function ManagerSiteDetailPage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/sites/${siteId}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
+      // dev 라우트 컴파일 중 빈/HTML 응답이 와도 "Unexpected end of JSON input"로 깨지지 않게 안전 파싱
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : null;
+      if (!res.ok || !data?.success) throw new Error(data?.message || "조회 실패");
       const it: SiteDetail = data.item;
       setItem(it);
       setCompanyName(it.companyName || "");

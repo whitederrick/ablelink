@@ -91,6 +91,7 @@ function DocsViewInner() {
   const [selectedTrainee, setSelectedTrainee] = useState("");
   const [trainees,        setTrainees]        = useState<{id: string; name: string; gender: string}[]>([]);
   const [trainingType,    setTrainingType]    = useState<"PRE"|"FIELD"|"ADAPTATION">("FIELD");
+  const [loaded,          setLoaded]          = useState(false); // 서비스 단계 로드 완료(전엔 기본값 노출 방지)
   const [mode,            setMode]            = useState<"select" | "view">("select");
   const [iframeKey,       setIframeKey]       = useState(0);
 
@@ -102,13 +103,13 @@ function DocsViewInner() {
   const needsTrainee = DOC_GROUPS.flatMap(g => g.docs).find(d => d.id === docType)?.needsTrainee ?? false;
 
   useEffect(() => {
-    fetch("/api/worker/site/current").then(r => r.json()).then(d => {
+    fetch("/api/worker/site/current", { cache: "no-store" }).then(r => r.json()).then(d => {
       if (d.success && d.data) {
         setTrainingType(d.data.trainingType || "FIELD");
         if (d.data.trainees)
           setTrainees(d.data.trainees.map((t: any) => ({ id: String(t.id), name: t.name, gender: t.gender || "M" })));
       }
-    });
+    }).catch(() => {}).finally(() => setLoaded(true));
   }, []);
 
   function selectDoc(id: DocType) {
@@ -224,6 +225,14 @@ function DocsViewInner() {
 
         <div className="space-y-4 px-4 py-4">
 
+          {!loaded ? (
+            <div className="space-y-3">
+              <div className="h-14 animate-pulse rounded-xl bg-slate-100" />
+              <div className="h-16 animate-pulse rounded-xl bg-slate-100" />
+              <div className="h-16 animate-pulse rounded-xl bg-slate-100" />
+            </div>
+          ) : (
+          <>
           {/* 서비스 세트 안내 */}
           <div className={`rounded-xl border px-4 py-3 ${isAdaptation ? "border-amber-200 bg-amber-50" : "border-sky-100 bg-sky-50"}`}>
             <p className={`text-xs font-black ${isAdaptation ? "text-amber-700" : "text-sky-700"}`}>
@@ -265,6 +274,8 @@ function DocsViewInner() {
               </div>
             </div>
           ))}
+          </>
+          )}
 
           {/* 훈련생 선택 */}
           {needsTrainee && (
