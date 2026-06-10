@@ -67,7 +67,7 @@ export default function AdminSurveysPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="만족도 조사 결과" sub="모든 에이전시의 직무지도원 만족도 조사 결과를 조회하고, 에이전시에 전달할 수 있습니다." />
+      <PageHeader title="직무지도원 만족도 평가 결과" sub="모든 에이전시의 직무지도원 만족도 평가 결과를 조회하고, 에이전시에 전달할 수 있습니다." />
 
       <StatCardRow
         cols={3}

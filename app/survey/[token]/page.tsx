@@ -77,7 +77,7 @@ export default function SurveyResponsePage() {
       <div style={S.card}>
         <div style={S.header}>
           {data.agencyName && <div style={S.badge}>{data.agencyName}</div>}
-          <h1 style={S.title}>직무지도원 만족도 조사</h1>
+          <h1 style={S.title}>직무지도원 만족도 평가</h1>
           <p style={S.sub}><strong>{data.workerName}</strong> 직무지도원{data.siteName ? ` · ${data.siteName}` : ""}</p>
         </div>
         <div style={{ padding: "20px 24px" }}>

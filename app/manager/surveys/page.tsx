@@ -68,7 +68,7 @@ function RequestModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
     <div className={T.modalOverlay} onClick={() => !saving && onClose()}>
       <div className={T.modalContent} onClick={e => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-black text-slate-900">만족도 조사 요청</h2>
+          <h2 className="text-base font-black text-slate-900">직무지도원 만족도 평가 요청</h2>
           <button onClick={() => !saving && onClose()} className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-slate-50"><X className="h-4 w-4" /></button>
         </div>
         <div className="space-y-3">
@@ -101,7 +101,7 @@ function RequestModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
         {error && <p className="mt-3 text-sm font-semibold text-rose-600">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={() => !saving && onClose()} disabled={saving} className={T.btnSecondary}>취소</button>
-          <button onClick={submit} disabled={saving} className={T.btnPrimary}>{saving ? "발송 중..." : "조사 요청 발송"}</button>
+          <button onClick={submit} disabled={saving} className={T.btnPrimary}>{saving ? "발송 중..." : "평가 요청 발송"}</button>
         </div>
       </div>
     </div>
@@ -144,9 +144,9 @@ export default function ManagerSurveysPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="직무지도원 만족도 조사 (Pro+)"
-        sub="사업체 담당자에게 직무지도원 만족도 조사를 발송합니다. 결과는 운영자가 관리하며 공유 시 점수가 표시됩니다."
-        actions={<button onClick={() => setShowReq(true)} className={T.btnPrimary}>+ 조사 요청</button>}
+        title="직무지도원 만족도 평가 (Pro+)"
+        sub="사업체 담당자에게 직무지도원 만족도 평가를 발송합니다. 결과는 운영자가 관리하며 공유 시 점수가 표시됩니다."
+        actions={<button onClick={() => setShowReq(true)} className={T.btnPrimary}>+ 평가 요청</button>}
       />
       {lastUrl && (
         <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
