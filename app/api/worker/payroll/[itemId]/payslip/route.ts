@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ item
     const item = await prisma.payrollItem.findUnique({
       where: { id: BigInt(itemId) },
       include: {
-        user: { select: { workerName: true } },
+        user: { select: { workerName: true, birthDate: true } },
         run: { select: { status: true, yearMonth: true, finalizedAt: true, agency: { select: { name: true } } } },
       },
     });
@@ -35,6 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ item
       {
         agencyName: item.run.agency?.name ?? "",
         workerName: item.user?.workerName ?? "",
+        workerBirth: item.user?.birthDate ?? "",
         yearMonth: item.run.yearMonth,
         payDate: item.run.finalizedAt ? item.run.finalizedAt.toISOString().slice(0, 10) : "",
       },

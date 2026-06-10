@@ -915,6 +915,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
             <div className="grid grid-cols-2 gap-2.5">
               <QuickAction icon={FileText}  label="문서 보기"   sub="출근부·일지 PDF" onClick={() => router.push("/worker/docs/view")} />
               <QuickAction icon={PenLine}  label="내 근로계약서" sub="계약서 조회·PDF" onClick={() => router.push("/worker/contracts")} />
+              <QuickAction icon={CircleDollarSign} label="급여명세서" sub="월별 급여 조회·PDF" onClick={() => router.push("/worker/payroll")} />
               <QuickAction icon={ClipboardList} label="일지 목록" sub="작성한 일지" onClick={() => router.push("/worker/logs")} />
               <QuickAction icon={CheckCircle2} label="출근부 확정" sub="월별 확정" onClick={() => router.push("/worker/review/attendance")} />
               <QuickAction icon={PenLine} label="일지 확정" sub="월별 확정" onClick={() => router.push("/worker/review/logs")} />

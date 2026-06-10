@@ -44,6 +44,8 @@ model Worker {
   accountNumber   String? @map("account_number")
   accountHolder   String? @map("account_holder")
   passbookImageUrl String? @map("passbook_image_url")
+  // 생년월일(YYYY-MM-DD) — 임금명세서 기재용 (2026-06-10)
+  birthDate       String? @map("birth_date")
 
   // 온보딩: 이메일로 loginId 변경 시 인증 코드 보관
   pendingLoginId      String?   @map("pending_login_id")

@@ -129,6 +129,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ run
       data: { status: "FINALIZED", finalizedAt: new Date() },
     });
 
+    // 전자교부 알림: 대상 직무지도원에게 앱 내 알림(WorkerNotice) 생성. (알림톡·이메일 미사용 — 앱내 무료)
+    try {
+      const items = await prisma.payrollItem.findMany({ where: { runId: run.id }, select: { workerId: true } });
+      if (items.length > 0) {
+        await (prisma as any).workerNotice.createMany({
+          data: items.map((it) => ({
+            workerId: it.workerId,
+            agencyId: run.agencyId,
+            title: `${run.yearMonth} 급여명세서 발급`,
+            body: `${run.yearMonth} 급여명세서가 발급되었습니다. ‘급여명세서’ 메뉴에서 확인·다운로드할 수 있습니다.`,
+            type: "INFO",
+            kind: "NOTICE_INDIVIDUAL",
+            yearMonth: run.yearMonth,
+            link: "/worker/payroll",
+          })),
+        });
+      }
+    } catch (e) {
+      console.error("[payroll finalize notice]", e);
+    }
+
     return NextResponse.json({
       success: true,
       status: finalized.status,

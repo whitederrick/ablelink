@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     where:  { id: BigInt(session.workerId) },
     select: {
       id: true, workerName: true, phoneNumber: true, loginId: true, isTemporary: true,
-      bankName: true, accountNumber: true, accountHolder: true, passbookImageUrl: true,
+      bankName: true, accountNumber: true, accountHolder: true, passbookImageUrl: true, birthDate: true,
     },
   });
   if (!user) return NextResponse.json({ success: false, message: "사용자를 찾을 수 없습니다." }, { status: 404 });
@@ -34,7 +34,7 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { workerName, phoneNumber, currentPassword, newPassword, bankName, accountNumber, accountHolder } = body;
+    const { workerName, phoneNumber, currentPassword, newPassword, bankName, accountNumber, accountHolder, birthDate } = body;
 
     const user = await prisma.worker.findUnique({
       where:  { id: BigInt(session.workerId) },
@@ -78,6 +78,13 @@ export async function PATCH(req: NextRequest) {
     if (bankName !== undefined)      updates.bankName = bankStr(bankName);
     if (accountNumber !== undefined) updates.accountNumber = bankStr(accountNumber);
     if (accountHolder !== undefined) updates.accountHolder = bankStr(accountHolder);
+    if (birthDate !== undefined) {
+      const bd = bankStr(birthDate);
+      if (bd && !/^\d{4}-\d{2}-\d{2}$/.test(bd)) {
+        return NextResponse.json({ success: false, message: "생년월일은 YYYY-MM-DD 형식이어야 합니다." }, { status: 400 });
+      }
+      updates.birthDate = bd;
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ success: false, message: "변경할 내용이 없습니다." }, { status: 400 });

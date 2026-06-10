@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
+import { computeWeeklyHoliday, scheduledMinutesForWorkType } from "@/lib/payroll/weeklyHoliday";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const BUSINESS_DEDUCTION_RATE = 0.033; // 사업소득세 3.3%
@@ -117,7 +118,7 @@ export async function POST(req: NextRequest) {
     // 유저별 3개 쿼리를 모든 유저에 걸쳐 동시 실행
     const userDataList = await Promise.all(userIds.map(async (workerId) => {
       const userSiteIds = assignments.filter(a => a.workerId === workerId).map(a => a.siteId);
-      const [contract, attendances, traineeCount] = await Promise.all([
+      const [contract, attendances, traineeCount, empContract] = await Promise.all([
         // 유효 급여 계약 조회
         prisma.payContract.findFirst({
           where: {
@@ -145,11 +146,21 @@ export async function POST(req: NextRequest) {
             OR: [{ endDate: null }, { endDate: { gte: periodStartDate } }],
           },
         }),
+        // 근로계약서(주휴 소정근로일수 출처) — 해당 월 겹치는 계약 최신
+        prisma.employmentContract.findFirst({
+          where: {
+            agencyId, workerId,
+            contractStart: { lte: periodEndDate },
+            contractEnd: { gte: periodStartDate },
+          },
+          orderBy: { contractStart: "desc" },
+          select: { workDaysPerWeek: true },
+        }),
       ]);
-      return { workerId, contract, attendances, traineeCount };
+      return { workerId, contract, attendances, traineeCount, empContract };
     }));
 
-    for (const { workerId, contract, attendances, traineeCount } of userDataList) {
+    for (const { workerId, contract, attendances, traineeCount, empContract } of userDataList) {
       // 급여 게이트: 심한 지각 미컨펌(보정대기) 날은 급여 산정에서 제외(출근부 PDF와 동일 기준).
       const confirmedAtt = attendances.filter((a) => !isPayrollPending({
         actualStartTime: a.actualStartTime ?? null,
@@ -211,12 +222,34 @@ export async function POST(req: NextRequest) {
           calcMethods["연장근로수당"] = `${overtimeHours}시간 × ${ordinaryWage.toLocaleString()}원 × 1.5`;
         }
 
-        // 주휴수당 가산
-        const holidayPay = contract.weeklyHolidayPay ? Number(contract.weeklyHolidayPay) : 0;
-        if (holidayPay > 0) {
-          grossPay += holidayPay;
-          (breakdown as any).weeklyHolidayPay = holidayPay;
-          calcMethods["주휴수당"] = `${holidayPay.toLocaleString()}원`;
+        // 주휴수당: 근로소득(EMPLOYMENT) 단시간 근로자만 — 2조건(주 개근 + 4주평균 15h↑) 판정 후 자동 산식.
+        //   소정근로는 근무형태 기준(휴게·출퇴근지도 제외). 통상시급은 위 ordinaryWage 재사용.
+        //   PayContract.weeklyHolidayPay(고정액)가 있으면 수동 오버라이드.
+        if (contract.incomeType === "EMPLOYMENT" && ordinaryWage > 0) {
+          const days = confirmedAtt.map((a) => ({
+            dateISO: a.workDate,
+            scheduledMinutes: scheduledMinutesForWorkType(
+              a.assignment?.workType ?? null,
+              a.assignment?.customWorkStart ?? null,
+              a.assignment?.customWorkEnd ?? null,
+            ),
+          }));
+          const wh = computeWeeklyHoliday({
+            days,
+            workDaysPerWeek: empContract?.workDaysPerWeek ?? 5,
+            ordinaryWage,
+            flatWeeklyHolidayPay: contract.weeklyHolidayPay ? Number(contract.weeklyHolidayPay) : null,
+          });
+          if (wh.totalHolidayPay > 0) {
+            grossPay += wh.totalHolidayPay;
+            (breakdown as any).weeklyHolidayPay = wh.totalHolidayPay;
+            (breakdown as any).weeklyHolidayDetail = {
+              eligibleWeeks: wh.eligibleWeeks,
+              avgWeeklyHours: +(wh.avgWeeklyMinutes / 60).toFixed(1),
+              meets15h: wh.meets15h,
+            };
+            calcMethods["주휴수당"] = wh.calcMethod;
+          }
         }
 
         (breakdown as any).ordinaryWage = ordinaryWage;

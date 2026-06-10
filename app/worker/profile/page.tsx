@@ -13,6 +13,7 @@ export default function WorkerProfilePage() {
 
   const [workerName,        setUserName]        = useState("");
   const [phoneNumber,     setPhoneNumber]     = useState("");
+  const [birthDate,       setBirthDate]       = useState("");
   const [loginId,         setLoginId]         = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword,     setNewPassword]     = useState("");
@@ -54,6 +55,7 @@ export default function WorkerProfilePage() {
         if (d.success) {
           setUserName(d.user.workerName);
           setPhoneNumber(d.user.phoneNumber);
+          setBirthDate(d.user.birthDate ?? "");
           setLoginId(d.user.loginId ?? "");
           setIsTemp(d.user.isTemporary ?? false);
           setBankName(d.user.bankName ?? "");
@@ -101,6 +103,7 @@ export default function WorkerProfilePage() {
         body:    JSON.stringify({
           workerName:        workerName.trim() || undefined,
           phoneNumber:     phoneNumber || undefined,
+          birthDate,
           currentPassword: currentPassword || undefined,
           newPassword:     newPassword     || undefined,
           bankName,
@@ -253,6 +256,18 @@ export default function WorkerProfilePage() {
               placeholder="010-1234-5678"
               inputMode="numeric"
               className={INPUT_CLS} />
+          </div>
+
+          {/* 생년월일 */}
+          <div>
+            <label className="mb-2 flex items-center gap-1.5 text-sm font-black text-slate-700">
+              <User className="h-3.5 w-3.5 text-slate-400" />
+              생년월일
+            </label>
+            <input type="date" value={birthDate}
+              onChange={e => setBirthDate(e.target.value)}
+              className={INPUT_CLS} />
+            <p className="mt-1 text-xs font-semibold text-slate-400">급여명세서에 기재됩니다.</p>
           </div>
 
           {/* 보유 자격 관리 */}
