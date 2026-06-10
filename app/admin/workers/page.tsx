@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Search, KeyRound, UserX, UserCheck } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { KeyRound, UserX, UserCheck } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
 import { T } from "../_styles";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
 
 type Worker = {
   id: string; loginId: string; workerName: string; phoneNumber: string;
@@ -11,9 +15,12 @@ type Worker = {
   agencyId: string|null; agencyName: string|null; createdAt: string;
 };
 
-const STATUS_COLORS: Record<string,string> = {
-  ACTIVE:"bg-emerald-100 text-emerald-700", RESIGNED:"bg-rose-100 text-rose-700", PAUSED:"bg-amber-100 text-amber-700",
+const WK_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  ACTIVE: { label: "활성", tone: "emerald" },
+  PAUSED: { label: "일시정지", tone: "amber" },
+  RESIGNED: { label: "퇴직", tone: "rose" },
 };
+const PAGE_SIZE = 20;
 
 export default function WorkersPage() {
   const [workers, setWorkers]   = useState<Worker[]>([]);
@@ -51,7 +58,7 @@ export default function WorkersPage() {
     const res=await fetch("/api/admin/system/workers",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({workerName:cName.trim(),phoneNumber:cPhone.replace(/-/g,""),password:cPw,planType:cPlan})});
     const data=await res.json(); setProcessing(false);
-    if(data.success){showToast(data.message);setCreating(false);setCName("");setCPhone("");setCPw("");setCPlan("FREE");load(q);}
+    if(data.success){showToast(data.message);setCreating(false);setCName("");setCPhone("");setCPw("");setCPlan("FREE");load();}
     else showToast(data.message||"생성 실패");
   }
 
@@ -72,15 +79,28 @@ export default function WorkersPage() {
     const res=await fetch("/api/admin/assignments",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({siteId,workerId:assignFor.id,startDate:assignStart||undefined,endDate:assignEnd||undefined})});
     const data=await res.json(); setProcessing(false);
-    if(data.success){showToast("사이트에 배정되었습니다.");setAssignFor(null);load(q);}
+    if(data.success){showToast("사이트에 배정되었습니다.");setAssignFor(null);load();}
     else showToast(data.message||"배정 실패");
   }
-  const load = useCallback((query="")=>{
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
+
+  const load = useCallback(()=>{
     setLoading(true);
-    fetch(`/api/admin/system/workers?q=${encodeURIComponent(query)}`)
+    fetch(`/api/admin/system/workers`)
       .then(r=>r.json()).then(d=>{if(d.success)setWorkers(d.workers);}).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
   useEffect(()=>{load();},[load]);
+
+  const filtered = useMemo(()=>{
+    const query = q.trim().toLowerCase();
+    return workers
+      .filter(w => statusFilter.length===0 || statusFilter.includes(w.status))
+      .filter(w => !query || w.workerName.toLowerCase().includes(query) || (w.phoneNumber??"").includes(query) || (w.loginId??"").toLowerCase().includes(query) || (w.agencyName??"").toLowerCase().includes(query));
+  },[workers,q,statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length/PAGE_SIZE));
+  const pageItems = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  useEffect(()=>{setPage(1);},[q,statusFilter]);
 
   async function doAction(){
     if(!actionId||!actionType)return;
@@ -96,24 +116,44 @@ export default function WorkersPage() {
     }
     const res=await fetch(`/api/admin/system/workers/${actionId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     const data=await res.json(); setProcessing(false);
-    if(data.success){showToast(data.message);setActionId(null);setActionType(null);setNewPw("");setMemo("");load(q);}
+    if(data.success){showToast(data.message);setActionId(null);setActionType(null);setNewPw("");setMemo("");load();}
     else showToast(data.message||"실패");
   }
 
   return (
     <div>
-      <PageHeader title="전체 직무지도원" sub={`전체 ${workers.length}명 · 비밀번호 초기화 및 상태 변경`} />
+      <PageHeader
+        title="전체 직무지도원"
+        sub="비밀번호 초기화·상태 변경·등급 부여·사이트 배정"
+        actions={
+          <button onClick={()=>setCreating(true)} className={`${T.btnPrimary}`}>+ 신규 직무지도원</button>
+        }
+      />
 
-      <div className="mb-4 flex gap-2">
-        <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&load(q)}
-          placeholder="이름·전화번호·아이디 검색..."
-          className={`flex-1 ${T.input}`}/>
-        <button onClick={()=>load(q)} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white active:scale-95">
-          <Search className="h-4 w-4"/>
-        </button>
-        <button onClick={()=>setCreating(true)} className="ml-auto rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50 active:scale-95">
-          + 신규 직무지도원
-        </button>
+      <StatCardRow
+        className="mb-5"
+        cols={4}
+        items={[
+          { label: "전체", value: workers.length },
+          { label: "활성", value: workers.filter(w=>w.status==="ACTIVE").length, tone: "emerald" },
+          { label: "일시정지", value: workers.filter(w=>w.status==="PAUSED").length, tone: "amber" },
+          { label: "퇴직", value: workers.filter(w=>w.status==="RESIGNED").length, tone: "rose" },
+        ]}
+      />
+
+      <div className="mb-4">
+        <ListToolbar
+          query={q}
+          onQueryChange={setQ}
+          placeholder="이름·전화번호·아이디·에이전시 검색"
+          filters={[
+            { value: "ACTIVE", label: "활성", count: workers.filter(w=>w.status==="ACTIVE").length },
+            { value: "PAUSED", label: "일시정지", count: workers.filter(w=>w.status==="PAUSED").length },
+            { value: "RESIGNED", label: "퇴직", count: workers.filter(w=>w.status==="RESIGNED").length },
+          ] as FilterChip[]}
+          selected={statusFilter}
+          onToggleFilter={(v)=>setStatusFilter(p=>p.includes(v)?p.filter(x=>x!==v):[...p,v])}
+        />
       </div>
 
       {creating&&(
@@ -240,8 +280,8 @@ export default function WorkersPage() {
               ))}
             </tr></thead>
             <tbody className="divide-y divide-slate-50">
-              {workers.length===0?(<tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">직무지도원이 없습니다.</td></tr>)
-              :workers.map(c=>(
+              {filtered.length===0?(<tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">{workers.length===0?"직무지도원이 없습니다.":"조건에 맞는 직무지도원이 없습니다."}</td></tr>)
+              :pageItems.map(c=>(
                 <tr key={c.id} className={`hover:bg-slate-50 transition ${c.status!=="ACTIVE"?"opacity-60":""}`}>
                   <td className="px-4 py-3"><p className="font-semibold text-slate-900">{c.workerName}</p><p className="text-xs text-slate-400">{c.loginId}</p></td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{c.phoneNumber}</td>
@@ -249,7 +289,7 @@ export default function WorkersPage() {
                   <td className="px-4 py-3">{c.siteName?<span className="text-xs text-slate-600">{c.siteName}</span>:<span className="text-slate-300 text-xs">없음</span>}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col items-start gap-1">
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${STATUS_COLORS[c.status]??"bg-slate-100 text-slate-600"}`}>{c.status}</span>
+                      <StatusBadge status={c.status} map={WK_BADGE} />
                       {c.planType && c.planType!=="FREE" && (
                         <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-black text-indigo-700">{c.planType}</span>
                       )}
@@ -273,6 +313,7 @@ export default function WorkersPage() {
               ))}
             </tbody>
           </table>
+          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
         </div>
       )}
       {toast&&<div className="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg z-50">{toast}</div>}

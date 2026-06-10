@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "../_components/PageHeader";
 import { T } from "../_styles";
-import { Search, MapPin, Users, Building2 } from "lucide-react";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import { StatCardRow } from "../_components/StatCard";
+import { MapPin, Users, Building2 } from "lucide-react";
+
+const PAGE_SIZE = 20;
 
 const PROF_LABEL: Record<string, string> = {
   JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사",
@@ -25,30 +30,59 @@ export default function SitesPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ]           = useState("");
 
-  const load = useCallback((query="")=>{
+  const [linkFilter, setLinkFilter] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
+
+  const load = useCallback(()=>{
     setLoading(true);
-    fetch(`/api/admin/system/sites?q=${encodeURIComponent(query)}`)
+    fetch(`/api/admin/system/sites`)
       .then(r=>r.json()).then(d=>{if(d.success)setSites(d.sites);}).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
   useEffect(()=>{load();},[load]);
+
+  const linked = sites.filter(s=>s.agencyId).length;
+  const filtered = useMemo(()=>{
+    const query = q.trim().toLowerCase();
+    return sites
+      .filter(s => linkFilter.length===0 || linkFilter.includes(s.agencyId ? "linked" : "unlinked"))
+      .filter(s => !query || s.companyName.toLowerCase().includes(query) || (s.address??"").toLowerCase().includes(query) || (s.agencyName??"").toLowerCase().includes(query));
+  },[sites,q,linkFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length/PAGE_SIZE));
+  const pageItems = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  useEffect(()=>{setPage(1);},[q,linkFilter]);
 
   return (
     <div>
       <PageHeader
         title="전체 현장(Site)"
-        sub={`전체 ${sites.length}개 현장 현황`}
+        sub="모든 에이전시 현장 현황"
         actions={
-          <Link href="/admin/sites/new" className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white no-underline active:scale-95">+ 현장 생성</Link>
+          <Link href="/admin/sites/new" className={`${T.btnPrimary} no-underline`}>+ 현장 생성</Link>
         }
       />
 
-      <div className="mb-4 flex gap-2">
-        <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&load(q)}
-          placeholder="현장명 검색..."
-          className={`flex-1 ${T.input}`}/>
-        <button onClick={()=>load(q)} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white active:scale-95">
-          <Search className="h-4 w-4"/>
-        </button>
+      <StatCardRow
+        className="mb-5"
+        cols={3}
+        items={[
+          { label: "전체 현장", value: sites.length },
+          { label: "에이전시 연결", value: linked, tone: "emerald" },
+          { label: "미연결", value: sites.length - linked, tone: "slate" },
+        ]}
+      />
+
+      <div className="mb-4">
+        <ListToolbar
+          query={q}
+          onQueryChange={setQ}
+          placeholder="현장명·주소·에이전시 검색"
+          filters={[
+            { value: "linked", label: "연결", count: linked },
+            { value: "unlinked", label: "미연결", count: sites.length - linked },
+          ] as FilterChip[]}
+          selected={linkFilter}
+          onToggleFilter={(v)=>setLinkFilter(p=>p.includes(v)?p.filter(x=>x!==v):[...p,v])}
+        />
       </div>
 
       {loading?(
@@ -62,8 +96,8 @@ export default function SitesPage() {
               ))}
             </tr></thead>
             <tbody className="divide-y divide-slate-50">
-              {sites.length===0?(<tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">현장이 없습니다.</td></tr>)
-              :sites.map(s=>(
+              {filtered.length===0?(<tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">{sites.length===0?"현장이 없습니다.":"조건에 맞는 현장이 없습니다."}</td></tr>)
+              :pageItems.map(s=>(
                 <tr key={s.id} onClick={()=>router.push(`/admin/sites/${s.id}`)} className="cursor-pointer hover:bg-slate-50 transition">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -95,6 +129,7 @@ export default function SitesPage() {
               ))}
             </tbody>
           </table>
+          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
         </div>
       )}
     </div>
