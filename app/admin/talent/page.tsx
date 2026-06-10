@@ -91,29 +91,29 @@ export default function ManagerTalentPage() {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {loading ? (
-          <p className={`col-span-2 ${T.empty}`}>불러오는 중…</p>
+          <p className={`col-span-full ${T.empty}`}>불러오는 중…</p>
         ) : cands.length === 0 ? (
-          <p className={`col-span-2 ${T.empty}`}>구직 중인 후보자가 없습니다.</p>
+          <p className={`col-span-full ${T.empty}`}>구직 중인 후보자가 없습니다.</p>
         ) : (
           cands.map((c) => {
             const primary = c.professions.find((p) => p.isPrimary) ?? c.professions[0];
             return (
               <div key={c.id} className={T.card}>
                 <div className="flex items-center justify-between">
-                  <p className="text-base font-black text-slate-900">{c.name}</p>
-                  {c.ratingCount > 0 && <span className="text-xs font-black text-amber-500">★ {c.ratingAvg.toFixed(1)}</span>}
+                  <p className="text-[17px] font-black text-slate-900">{c.name}</p>
+                  {c.ratingCount > 0 && <span className="text-sm font-black text-amber-500">★ {c.ratingAvg.toFixed(1)}</span>}
                 </div>
-                <p className="mt-0.5 text-xs font-semibold text-slate-400">{c.region ?? "지역 미입력"}</p>
+                <p className="mt-0.5 text-sm font-semibold text-slate-400">{c.region ?? "지역 미입력"}</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {c.professions.map((p) => (
-                    <span key={p.profession} className={`rounded px-1.5 py-0.5 text-[11px] font-black ${p.verifyStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
+                    <span key={p.profession} className={`rounded-md px-2 py-0.5 text-xs font-black ${p.verifyStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
                       {PROF_LABEL[p.profession] ?? p.profession} {p.experienceYears}년{p.verifyStatus === "VERIFIED" ? " ✓" : ""}
                     </span>
                   ))}
                 </div>
-                {c.bio && <p className="mt-2 line-clamp-2 text-xs font-semibold text-slate-500">{c.bio}</p>}
+                {c.bio && <p className="mt-2 line-clamp-2 text-sm font-semibold text-slate-500">{c.bio}</p>}
                 <button onClick={() => setOfferTo(c)} className={`mt-3 w-full ${T.btnPrimary}`}>제안 보내기</button>
               </div>
             );
