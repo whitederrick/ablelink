@@ -18,7 +18,7 @@ const CONTRACT_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   COMPLETED: { label: "계약 완료",       tone: "emerald" },
   CANCELLED: { label: "취소",            tone: "slate" },
 };
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 interface ContractItem {
   id: string; workerId: string; workerName: string; userPhone: string;

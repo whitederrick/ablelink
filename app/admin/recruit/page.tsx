@@ -13,7 +13,7 @@ import { StatCardRow } from "../_components/StatCard";
 const PROF_LABEL: Record<string, string> = {
   JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사",
 };
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 interface Post {
   id: string; title: string; companyName: string; agencyName: string | null; profession: string;

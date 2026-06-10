@@ -14,7 +14,7 @@ const SURVEY_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   EXPIRED: { label: "만료", tone: "slate" },
   CANCELLED: { label: "취소", tone: "slate" },
 };
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 10;
 
 type Status = "PENDING" | "RESPONDED" | "EXPIRED" | "CANCELLED";
 interface Survey {

@@ -13,7 +13,7 @@ const EDITREQ_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   APPROVED: { label: "승인", tone: "emerald" },
   REJECTED: { label: "반려", tone: "rose" },
 };
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 
 type EditReq = {
   id: string;

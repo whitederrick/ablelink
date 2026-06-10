@@ -14,7 +14,7 @@ const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   DROPOUT:   { label: "중도포기",  tone: "rose" },
   GRADUATED: { label: "수료",      tone: "slate" },
 };
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 function ScoreBar({ value, max = 5 }: { value: number | null; max?: number }) {
   if (value === null) return <span className="text-xs font-semibold text-slate-300">-</span>;

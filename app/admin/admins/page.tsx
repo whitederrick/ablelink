@@ -8,7 +8,7 @@ import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import { StatCardRow } from "../_components/StatCard";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 type AdminAccount = {
   id: string;

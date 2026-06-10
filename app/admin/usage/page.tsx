@@ -119,9 +119,9 @@ export default function UsagePage() {
               <tr>
                 <th className={T.th}>에이전시</th>
                 {Object.entries(SERVICE_LABELS).map(([key, label]) => (
-                  <th key={key} className={T.th}>{label}</th>
+                  <th key={key} className={T.th.replace("text-left", "text-right")}>{label}</th>
                 ))}
-                <th className={T.th}>합계</th>
+                <th className={T.th.replace("text-left", "text-right")}>합계</th>
               </tr>
             </thead>
             <tbody>

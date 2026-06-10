@@ -20,7 +20,7 @@ const WK_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   PAUSED: { label: "일시정지", tone: "amber" },
   RESIGNED: { label: "퇴직", tone: "rose" },
 };
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 export default function WorkersPage() {
   const [workers, setWorkers]   = useState<Worker[]>([]);

@@ -10,7 +10,7 @@ import Pagination from "../_components/Pagination";
 import { StatCardRow } from "../_components/StatCard";
 import { MapPin, Users, Building2 } from "lucide-react";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 const PROF_LABEL: Record<string, string> = {
   JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사",

@@ -4,8 +4,11 @@ import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import Pagination from "../_components/Pagination";
 import { StatCardRow } from "../_components/StatCard";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+
+const LIST_PAGE_SIZE = 10;
 import { List, Map as MapIcon, CalendarDays, Download, Wrench, Search, AlertTriangle } from "lucide-react";
 
 const AttendanceMap = dynamic(() => import("./AttendanceMap"), { ssr: false });
@@ -242,6 +245,8 @@ export default function AttendancesPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [csvLoading, setCsvLoading] = useState(false);
+  const [listPage, setListPage] = useState(1);
+  useEffect(() => { setListPage(1); }, [items, viewMode]);
 
   async function downloadCsv(type: "attendance" | "logs") {
     setCsvLoading(true);
@@ -383,7 +388,7 @@ export default function AttendancesPage() {
               </tr>
             </thead>
             <tbody>
-              {items.map(row => (
+              {items.slice((listPage - 1) * LIST_PAGE_SIZE, listPage * LIST_PAGE_SIZE).map(row => (
                 <tr key={row.id} className={T.trBase}>
                   <td className={`${T.td}`}>{row.workDate}</td>
                   <td className={T.td}>
@@ -418,6 +423,7 @@ export default function AttendancesPage() {
               ))}
             </tbody>
           </table>
+          <Pagination className="border-t border-slate-100 px-4 py-3" page={listPage} totalPages={Math.max(1, Math.ceil(items.length / LIST_PAGE_SIZE))} total={items.length} onPageChange={setListPage} />
         </div>
       )}
     </div>

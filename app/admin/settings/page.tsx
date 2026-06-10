@@ -108,18 +108,13 @@ export default function SettingsPage() {
           <h2 className="text-base font-black text-slate-900">환경변수 현황</h2>
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">Vercel 대시보드에서 관리</span>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-1.5">
           {ENV_SETTINGS.map(s=>(
-            <div key={s.key} className="flex items-start gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500"/>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-black text-slate-900">{s.label}</p>
-                  <code className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-mono text-slate-600">{s.key}</code>
-                </div>
-                <p className="mt-0.5 text-xs text-slate-500">{s.desc}</p>
-                <p className="mt-1 text-xs font-semibold text-slate-400">{s.value}</p>
-              </div>
+            <div key={s.key} title={s.desc} className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+              <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-500"/>
+              <p className="flex-shrink-0 text-sm font-black text-slate-900">{s.label}</p>
+              <code className="flex-shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-mono text-slate-600">{s.key}</code>
+              <span className="ml-auto truncate text-xs font-semibold text-slate-400">{s.value}</span>
             </div>
           ))}
         </div>

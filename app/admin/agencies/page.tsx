@@ -5,8 +5,11 @@ import { ChevronDown, Plus, X, ExternalLink } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
 import AgencyDetail from "./AgencyDetail";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
+
+const PAGE_SIZE = 10;
 
 type Agency = {
   id: string; name: string; planType: string; trialEndsAt: string | null;
@@ -36,6 +39,7 @@ export default function AgenciesPage() {
   const [toast, setToast]       = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [detailId, setDetailId] = useState<string|null>(null);
+  const [page, setPage]         = useState(1);
   const [form, setForm] = useState({ name:"", planType:"FREE", managerLoginId:"", managerPassword:"", managerDisplayName:"" });
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),3000); };
@@ -71,6 +75,9 @@ export default function AgenciesPage() {
   }, [agencies, search, planFilter]);
   const togglePlan = (v: string) => setPlanFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
   const planCnt = (p: string) => agencies.filter(a => a.planType === p).length;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [search, planFilter]);
 
   return (
     <div>
@@ -145,7 +152,7 @@ export default function AgenciesPage() {
         <div className="space-y-2">
           {filtered.length===0?(
             <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">{agencies.length===0?"에이전시가 없습니다.":"조건에 맞는 에이전시가 없습니다."}</p></div>
-          ):filtered.map(a=>(
+          ):pageItems.map(a=>(
             <div key={a.id} className="rounded-xl border border-slate-200 bg-white">
               <div className="flex items-center gap-2.5 px-3.5 py-2.5">
                 <button onClick={() => setDetailId(a.id)} className="shrink-0 max-w-[200px] truncate text-[15px] font-black text-slate-900 hover:text-sky-600 hover:underline">{a.name}</button>
@@ -186,17 +193,17 @@ export default function AgenciesPage() {
               )}
             </div>
           ))}
+          {filtered.length > 0 && (
+            <Pagination className="pt-2" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+          )}
         </div>
       )}
 
       {/* 에이전시 상세 모달 */}
       {detailId && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 sm:p-6" onClick={() => setDetailId(null)}>
-          <div className="my-auto w-full max-w-5xl rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="mb-2 flex justify-end">
-              <button onClick={() => setDetailId(null)} className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"><X className="h-5 w-5" /></button>
-            </div>
-            <AgencyDetail id={detailId} onClose={() => setDetailId(null)} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-5" onClick={() => setDetailId(null)}>
+          <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <AgencyDetail key={detailId} id={detailId} onClose={() => setDetailId(null)} />
           </div>
         </div>
       )}

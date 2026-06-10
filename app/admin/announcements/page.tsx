@@ -201,7 +201,7 @@ export default function AnnouncementsPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         {/* 목록 — 컴팩트 단일라인 행 */}
         <div>
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {loading ? (
               <p className={T.empty}>불러오는 중…</p>
             ) : pageItems.length === 0 ? (
@@ -211,7 +211,7 @@ export default function AnnouncementsPage() {
                 <button
                   key={a.id}
                   onClick={() => setSelectedId(a.id)}
-                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2 text-left transition hover:border-slate-300 ${
+                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-1.5 text-left transition hover:border-slate-300 ${
                     selectedId === a.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"
                   }`}
                 >

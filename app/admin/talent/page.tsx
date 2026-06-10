@@ -42,6 +42,18 @@ function sortCands(list: Cand[], key: SortKey): Cand[] {
   }
 }
 
+function PanelPager({ page, total, size, onPage }: { page: number; total: number; size: number; onPage: (p: number) => void }) {
+  const pages = Math.ceil(total / size);
+  if (pages <= 1) return null;
+  return (
+    <div className="mt-2 flex items-center justify-end gap-2 text-xs font-semibold text-slate-500">
+      <button onClick={() => onPage(Math.max(1, page - 1))} disabled={page <= 1} className="rounded-lg border border-slate-200 px-2 py-1 disabled:opacity-40">‹</button>
+      <span>{page}/{pages}</span>
+      <button onClick={() => onPage(Math.min(pages, page + 1))} disabled={page >= pages} className="rounded-lg border border-slate-200 px-2 py-1 disabled:opacity-40">›</button>
+    </div>
+  );
+}
+
 export default function ManagerTalentPage() {
   const router = useRouter();
   const [cands, setCands] = useState<Cand[]>([]);
@@ -54,6 +66,9 @@ export default function ManagerTalentPage() {
   const [detailFor, setDetailFor] = useState<Cand | null>(null);
   const [detail, setDetail] = useState<CandDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [expPage, setExpPage] = useState(1);
+  const [revPage, setRevPage] = useState(1);
+  const PANEL = 5;
   const [offerMsg, setOfferMsg] = useState("");
   const [offerSite, setOfferSite] = useState("");
   const [offerSiteId, setOfferSiteId] = useState("");
@@ -89,7 +104,7 @@ export default function ManagerTalentPage() {
   useEffect(() => { load(); }, [verifiedOnly]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function openDetail(c: Cand) {
-    setDetailFor(c); setDetail(null); setDetailLoading(true);
+    setDetailFor(c); setDetail(null); setDetailLoading(true); setExpPage(1); setRevPage(1);
     try {
       const r = await fetch(`/api/admin/talent/${c.id}`);
       const d = await r.json();
@@ -247,8 +262,9 @@ export default function ManagerTalentPage() {
                     {detail.experiences.length === 0 ? (
                       <p className="text-sm font-semibold text-slate-400">등록된 경력 이력이 없습니다.</p>
                     ) : (
+                      <>
                       <ul className="space-y-2">
-                        {detail.experiences.map((e, i) => (
+                        {detail.experiences.slice((expPage - 1) * PANEL, expPage * PANEL).map((e, i) => (
                           <li key={i} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-black text-slate-800">{e.orgName}{e.title ? ` · ${e.title}` : ""}</p>
@@ -259,6 +275,8 @@ export default function ManagerTalentPage() {
                           </li>
                         ))}
                       </ul>
+                      <PanelPager page={expPage} total={detail.experiences.length} size={PANEL} onPage={setExpPage} />
+                      </>
                     )}
                   </section>
 
@@ -268,8 +286,9 @@ export default function ManagerTalentPage() {
                     {detail.reviews.length === 0 ? (
                       <p className="text-sm font-semibold text-slate-400">아직 등록된 후기가 없습니다.</p>
                     ) : (
+                      <>
                       <ul className="space-y-2">
-                        {detail.reviews.map((r, i) => (
+                        {detail.reviews.slice((revPage - 1) * PANEL, revPage * PANEL).map((r, i) => (
                           <li key={i} className="rounded-xl border border-slate-100 px-3 py-2">
                             <div className="flex items-center justify-between">
                               <span className="text-sm font-black text-amber-500">{"★".repeat(r.rating)}<span className="text-slate-200">{"★".repeat(5 - r.rating)}</span></span>
@@ -279,6 +298,8 @@ export default function ManagerTalentPage() {
                           </li>
                         ))}
                       </ul>
+                      <PanelPager page={revPage} total={detail.reviews.length} size={PANEL} onPage={setRevPage} />
+                      </>
                     )}
                   </section>
                 </>

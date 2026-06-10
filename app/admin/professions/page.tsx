@@ -15,7 +15,7 @@ const PVERIFY_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   VERIFIED: { label: "승인됨", tone: "emerald" },
   REJECTED: { label: "반려됨", tone: "rose" },
 };
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 10;
 
 interface Item {
   id: string; profession: string; certNumber: string | null; certDocUrl: string | null; certifiedAt: string | null;
@@ -124,12 +124,12 @@ export default function AdminProfessionsPage() {
                   <td className={T.td}>{it.experienceYears}년</td>
                   <td className={T.td}>{it.createdAt.slice(0, 10)}</td>
                   <td className={T.td}>
-                    <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => setDetail(it)} className={T.btnSecondary}>상세·증빙</button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button onClick={() => setDetail(it)} className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">상세·증빙</button>
                       {it.verifyStatus === "PENDING" ? (
                         <>
-                          <button onClick={() => decide(it.id, "reject")} className={T.btnSecondary}>반려</button>
-                          <button onClick={() => decide(it.id, "approve")} className={T.btnPrimary}>승인</button>
+                          <button onClick={() => decide(it.id, "reject")} className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-[13px] font-semibold text-rose-600 hover:bg-rose-50 active:scale-95">반려</button>
+                          <button onClick={() => decide(it.id, "approve")} className="inline-flex items-center justify-center rounded-lg bg-slate-950 px-2.5 py-1 text-[13px] font-black text-white hover:bg-slate-800 active:scale-95">승인</button>
                         </>
                       ) : (
                         <StatusBadge status={it.verifyStatus} map={PVERIFY_BADGE} />
