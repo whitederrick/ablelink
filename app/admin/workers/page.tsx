@@ -172,8 +172,7 @@ export default function WorkersPage() {
               <option value="FREE">등급: FREE</option>
               <option value="STARTER">등급: STARTER</option>
               <option value="STANDARD">등급: STANDARD</option>
-              <option value="PRO">등급: PRO</option>
-              <option value="PREMIUM">등급: PREMIUM (전체)</option>
+              <option value="PRO">등급: PRO (전체)</option>
             </select>
             <div className="flex gap-2">
               <button onClick={()=>{setCreating(false);setCName("");setCPhone("");setCPw("");setCPlan("FREE");}}
@@ -202,8 +201,7 @@ export default function WorkersPage() {
                   <option value="FREE">FREE (회수)</option>
                   <option value="STARTER">STARTER</option>
                   <option value="STANDARD">STANDARD</option>
-                  <option value="PRO">PRO</option>
-                  <option value="PREMIUM">PREMIUM (전체)</option>
+                  <option value="PRO">PRO (전체)</option>
                 </select>
                 <textarea value={memo} onChange={e=>setMemo(e.target.value)} rows={2} placeholder="부여 사유 (감사 로그 기록)"
                   className="mb-4 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold outline-none"/>
@@ -288,10 +286,10 @@ export default function WorkersPage() {
                   <td className="px-4 py-3 text-[15px] font-medium text-slate-800">{c.agencyName || <span className="text-slate-400">미배정</span>}</td>
                   <td className="px-4 py-3 text-[15px] font-medium text-slate-800">{c.siteName || <span className="text-slate-400">없음</span>}</td>
                   <td className="px-4 py-3">
-                    <div className="flex flex-col items-start gap-1">
+                    <div className="flex items-center gap-1.5">
                       <StatusBadge status={c.status} map={WK_BADGE} />
                       {c.planType && c.planType!=="FREE" && (
-                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[13px] font-black text-indigo-700">{c.planType}</span>
+                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[13px] font-black text-indigo-700">{c.planType==="PREMIUM"?"PRO":c.planType}</span>
                       )}
                     </div>
                   </td>

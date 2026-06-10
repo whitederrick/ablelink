@@ -63,8 +63,9 @@ export default function SettingsPage() {
     <div>
       <PageHeader title="운영 설정값" sub="DB 운영 파라미터(즉시 적용) 및 환경 변수 현황" />
 
+      <div className="grid items-start gap-6 lg:grid-cols-2">
       {/* 운영 파라미터 (DB 저장 — 즉시 적용) */}
-      <div className="mb-6 rounded-2xl border border-slate-100 bg-white p-6">
+      <div className="rounded-2xl border border-slate-100 bg-white p-6">
         <h2 className="mb-1 text-base font-black text-slate-900">운영 파라미터</h2>
         <p className="mb-4 text-xs text-slate-500">DB에 저장되어 재배포 없이 즉시 적용됩니다.</p>
         <div className="space-y-4">
@@ -124,6 +125,7 @@ export default function SettingsPage() {
           · 환경변수 변경: Vercel 대시보드 → 프로젝트 → Settings → Environment Variables<br/>
           · 변경 후 반드시 Redeploy가 필요합니다.
         </p>
+      </div>
       </div>
 
       {toast&&<div className="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg z-50">{toast}</div>}

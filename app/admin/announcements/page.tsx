@@ -33,7 +33,7 @@ export default function AnnouncementsPage() {
   const [form, setForm] = useState({ title: "", body: "", type: "INFO", audience: "MANAGERS" });
   const [sending, setSending] = useState(false);
   const [toast, setToast]     = useState("");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
@@ -67,6 +67,8 @@ export default function AnnouncementsPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   useEffect(() => { setPage(1); }, [query, typeFilter]);
+
+  const selected = list.find(a => a.id === selectedId) ?? null;
 
   const filters: FilterChip[] = [
     { value: "INFO", label: "일반", count: list.filter(a => a.type === "INFO").length },
@@ -196,43 +198,60 @@ export default function AnnouncementsPage() {
         </div>
       )}
 
-      {loading ? (
-        <div className="flex h-40 items-center justify-center">
-          <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* 목록 — 컴팩트 단일라인 행 */}
+        <div>
+          <div className="space-y-1.5">
+            {loading ? (
+              <p className={T.empty}>불러오는 중…</p>
+            ) : pageItems.length === 0 ? (
+              <p className={T.empty}>{list.length === 0 ? "발송된 공지가 없습니다." : "조건에 맞는 공지가 없습니다."}</p>
+            ) : (
+              pageItems.map(a => (
+                <button
+                  key={a.id}
+                  onClick={() => setSelectedId(a.id)}
+                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2.5 text-left transition hover:border-slate-300 ${
+                    selectedId === a.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"
+                  }`}
+                >
+                  <span className="shrink-0"><StatusBadge status={a.type} map={SYS_BADGE} /></span>
+                  <span className="shrink-0"><StatusBadge status={a.audience ?? "MANAGERS"} map={AUDIENCE_BADGE} /></span>
+                  <span className="flex-1 truncate text-[15px] font-black text-slate-900">{a.title}</span>
+                  <span className="shrink-0 text-[13px] font-semibold text-slate-500">{(a.audience ?? "MANAGERS") === "ALL" ? `직무지도원 ${a.sentCount}명` : "관리자 전용"}</span>
+                  <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{a.createdAt.slice(2, 10)}</span>
+                </button>
+              ))
+            )}
+          </div>
+          {filtered.length > 0 && (
+            <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+          )}
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
-          <p className="text-sm text-slate-400">{list.length === 0 ? "발송된 공지가 없습니다." : "조건에 맞는 공지가 없습니다."}</p>
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          {pageItems.map(a => (
-            <div key={a.id} className="rounded-xl border border-slate-100 bg-white">
-              <button
-                onClick={() => setExpanded(expanded === a.id ? null : a.id)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left"
-              >
-                <span className="flex-shrink-0"><StatusBadge status={a.type} map={SYS_BADGE} /></span>
-                <span className="flex-shrink-0"><StatusBadge status={a.audience ?? "MANAGERS"} map={AUDIENCE_BADGE} /></span>
-                <span className="flex-1 text-[15px] font-semibold text-slate-800 truncate">{a.title}</span>
-                <span className="flex-shrink-0 text-[13px] text-slate-500">{(a.audience ?? "MANAGERS") === "ALL" ? `직무지도원 ${a.sentCount}명` : "관리자 전용"}</span>
-                <span className="flex-shrink-0 text-[13px] text-slate-500 ml-3">
-                  {new Date(a.createdAt).toLocaleString("ko-KR")}
-                </span>
-              </button>
-              {expanded === a.id && (
-                <div className="border-t border-slate-100 px-4 pb-4 pt-3">
-                  <p className="whitespace-pre-wrap text-sm text-slate-700">{a.body}</p>
-                  {a.adminLogin && (
-                    <p className="mt-2 text-xs text-slate-400">발송자: {a.adminLogin}</p>
-                  )}
-                </div>
-              )}
+
+        {/* 상세(우측 패널) */}
+        <div className="lg:sticky lg:top-4 h-fit">
+          {selected ? (
+            <div className={T.card}>
+              <div className="mb-2 flex items-center gap-1.5">
+                <StatusBadge status={selected.type} map={SYS_BADGE} />
+                <StatusBadge status={selected.audience ?? "MANAGERS"} map={AUDIENCE_BADGE} />
+                <span className="ml-auto text-[11px] font-semibold text-slate-300">{new Date(selected.createdAt).toLocaleString("ko-KR")}</span>
+              </div>
+              <p className="text-base font-black text-slate-900">{selected.title}</p>
+              <p className="mt-2 whitespace-pre-line text-sm font-semibold leading-relaxed text-slate-600">{selected.body}</p>
+              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 text-xs text-slate-400">
+                <span>{(selected.audience ?? "MANAGERS") === "ALL" ? `직무지도원 ${selected.sentCount}명 + 전체 관리자 전송` : "에이전시 관리자 전용"}</span>
+                {selected.adminLogin && <span>발송자: {selected.adminLogin}</span>}
+              </div>
             </div>
-          ))}
-          <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+          ) : (
+            <div className={`${T.card} text-center`}>
+              <p className="py-6 text-sm font-semibold text-slate-300">목록에서 공지를 선택하면<br />상세 내용이 표시됩니다.</p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {toast && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg z-50">

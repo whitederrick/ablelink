@@ -306,7 +306,7 @@ export default function AttendancesPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="근태 현황·교정" />
+      <PageHeader title="근태 현황 관리" />
 
       <StatCardRow
         cols={4}
@@ -387,8 +387,8 @@ export default function AttendancesPage() {
                 <tr key={row.id} className={T.trBase}>
                   <td className={`${T.td}`}>{row.workDate}</td>
                   <td className={T.td}>
-                    <div className="font-black text-slate-900">{row.user?.workerName || "-"}</div>
-                    <div className="text-xs text-slate-400">{row.user?.phoneNumber}</div>
+                    <span className="font-semibold text-slate-800">{row.user?.workerName || "-"}</span>
+                    {row.user?.phoneNumber && <span className="ml-1.5 text-[13px] text-slate-500">{row.user.phoneNumber}</span>}
                   </td>
                   <td className={T.td}>{row.site?.companyName || "-"}</td>
                   <td className={`${T.td} ${row.startTime ? "font-semibold text-emerald-600" : "text-slate-300"}`}>

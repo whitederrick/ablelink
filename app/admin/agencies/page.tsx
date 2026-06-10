@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { Building2, Users, MapPin, ChevronDown, Plus, X, ExternalLink } from "lucide-react";
-import Link from "next/link";
 import PageHeader from "../_components/PageHeader";
+import AgencyDetail from "./AgencyDetail";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
@@ -35,6 +35,7 @@ export default function AgenciesPage() {
   const [processing, setProcessing] = useState(false);
   const [toast, setToast]       = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [detailId, setDetailId] = useState<string|null>(null);
   const [form, setForm] = useState({ name:"", planType:"FREE", managerLoginId:"", managerPassword:"", managerDisplayName:"" });
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),3000); };
@@ -152,7 +153,7 @@ export default function AgenciesPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[15px] font-semibold text-slate-800">{a.name}</span>
+                    <button onClick={() => setDetailId(a.id)} className="text-[15px] font-semibold text-slate-800 hover:text-sky-600 hover:underline">{a.name}</button>
                     <StatusBadge status={a.planType} map={PLAN_BADGE} />
                     {a.trialEndsAt&&<span className="text-[13px] text-slate-500">체험 ~{new Date(a.trialEndsAt).toLocaleDateString("ko-KR")}</span>}
                     {a.nextBillingAt&&<span className="text-[13px] text-emerald-600">다음결제 {new Date(a.nextBillingAt).toLocaleDateString("ko-KR")}</span>}
@@ -165,10 +166,10 @@ export default function AgenciesPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <Link href={`/admin/agencies/${a.id}`}
+                  <button onClick={() => setDetailId(a.id)}
                     className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
                     상세 <ExternalLink className="h-3 w-3"/>
-                  </Link>
+                  </button>
                   <button onClick={()=>editId===a.id?setEditId(null):openEdit(a)}
                     className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
                     플랜 변경 <ChevronDown className={`h-3 w-3 transition ${editId===a.id?"rotate-180":""}`}/>
@@ -197,6 +198,18 @@ export default function AgenciesPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 에이전시 상세 모달 */}
+      {detailId && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 sm:p-8" onClick={() => setDetailId(null)}>
+          <div className="my-auto w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8" onClick={e => e.stopPropagation()}>
+            <div className="mb-2 flex justify-end">
+              <button onClick={() => setDetailId(null)} className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"><X className="h-5 w-5" /></button>
+            </div>
+            <AgencyDetail id={detailId} onClose={() => setDetailId(null)} />
+          </div>
         </div>
       )}
 
