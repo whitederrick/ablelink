@@ -1118,6 +1118,8 @@ model SystemAnnouncement {
   title     String
   body      String
   type      String   @default("INFO") // INFO | MAINTENANCE | URGENT
+  // 발송 대상: MANAGERS=에이전시 관리자만(기본) | ALL=관리자+전체 직무지도원
+  audience  String   @default("MANAGERS")
   adminId   BigInt?  @map("admin_id")
   sentCount Int      @default(0) @map("sent_count")
   createdAt DateTime @default(now()) @map("created_at")

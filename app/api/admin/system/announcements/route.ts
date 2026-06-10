@@ -21,6 +21,7 @@ export async function GET(req: Request) {
         title:     a.title,
         body:      a.body,
         type:      a.type,
+        audience:  a.audience ?? "MANAGERS",
         sentCount: a.sentCount,
         adminLogin: a.admin?.loginId ?? null,
         createdAt: a.createdAt.toISOString(),
@@ -36,26 +37,29 @@ export async function POST(req: NextRequest) {
   try {
     const scope = await requireAdminSession(req);
 
-    const { title, body, type = "INFO" } = await req.json();
+    const { title, body, type = "INFO", audience = "MANAGERS" } = await req.json();
     if (!title?.trim() || !body?.trim())
       return NextResponse.json({ success: false, message: "제목과 내용은 필수입니다." }, { status: 400 });
 
     const noticeType = ["INFO","MAINTENANCE","URGENT"].includes(type) ? type : "INFO";
+    // 대상: MANAGERS=에이전시 관리자만(기본, 직무지도원 미발송) | ALL=관리자+전체 직무지도원
+    const toAll = audience === "ALL";
 
-    // 활성 에이전시 내 모든 직무지도원에게 WorkerNotice 생성
-    // groupBy로 중복 제거 후 workerId 목록 조회
-    const grouped = await prisma.siteAssignment.groupBy({
-      by: ["workerId", "agencyId"],
-      where: {
-        status:   { in: ["ACTIVE", "ASSIGNED", "CONFIRMED"] },
-        agency:   { isActive: true },
-        agencyId: { not: null },
-      },
-    });
-
-    const targets = grouped
-      .filter(r => r.agencyId != null)
-      .map(r => ({ workerId: r.workerId, agencyId: r.agencyId as bigint }));
+    // 전체 발송일 때만 활성 에이전시 직무지도원에게 WorkerNotice 생성(중복 제거)
+    let targets: { workerId: bigint; agencyId: bigint }[] = [];
+    if (toAll) {
+      const grouped = await prisma.siteAssignment.groupBy({
+        by: ["workerId", "agencyId"],
+        where: {
+          status:   { in: ["ACTIVE", "ASSIGNED", "CONFIRMED"] },
+          agency:   { isActive: true },
+          agencyId: { not: null },
+        },
+      });
+      targets = grouped
+        .filter(r => r.agencyId != null)
+        .map(r => ({ workerId: r.workerId, agencyId: r.agencyId as bigint }));
+    }
 
     const announcement = await prisma.systemAnnouncement.create({
       data: {
@@ -63,11 +67,12 @@ export async function POST(req: NextRequest) {
         body:  body.trim(),
         type:  noticeType,
         adminId: scope.adminId,
-        sentCount: targets.length,
+        sentCount: targets.length, // 직무지도원 알림 발송 수(관리자만 발송 시 0)
+        audience: toAll ? "ALL" : "MANAGERS",
       },
     });
 
-    // WorkerNotice 일괄 생성
+    // 직무지도원 알림 fan-out (전체 발송일 때만)
     if (targets.length > 0) {
       await (prisma as any).workerNotice.createMany({
         data: targets.map(t => ({
@@ -82,7 +87,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true, id: announcement.id.toString(), sentCount: targets.length });
+    return NextResponse.json({
+      success: true,
+      id: announcement.id.toString(),
+      audience: toAll ? "ALL" : "MANAGERS",
+      sentCount: targets.length,
+    });
   } catch (e: any) {
     if (e instanceof Response) return e;
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });

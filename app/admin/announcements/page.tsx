@@ -11,6 +11,7 @@ import { StatCardRow } from "../_components/StatCard";
 
 type Announcement = {
   id: string; title: string; body: string; type: string;
+  audience?: string;
   sentCount: number; adminLogin: string | null; createdAt: string;
 };
 
@@ -19,13 +20,17 @@ const SYS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   MAINTENANCE: { label: "점검", tone: "amber" },
   URGENT: { label: "긴급", tone: "rose" },
 };
+const AUDIENCE_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  MANAGERS: { label: "관리자만", tone: "slate" },
+  ALL: { label: "전체 사용자", tone: "violet" },
+};
 const PAGE_SIZE = 12;
 
 export default function AnnouncementsPage() {
   const [list, setList]       = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: "", body: "", type: "INFO" });
+  const [form, setForm] = useState({ title: "", body: "", type: "INFO", audience: "MANAGERS" });
   const [sending, setSending] = useState(false);
   const [toast, setToast]     = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -81,9 +86,11 @@ export default function AnnouncementsPage() {
     const data = await res.json();
     setSending(false);
     if (data.success) {
-      showToast(`발송 완료 — ${data.sentCount}명에게 알림이 전달됐습니다.`);
+      showToast(data.audience === "ALL"
+        ? `전체 발송 완료 — 직무지도원 ${data.sentCount}명 + 전체 에이전시 관리자에게 전달됐습니다.`
+        : `발송 완료 — 에이전시 관리자에게 전달됐습니다.`);
       setShowForm(false);
-      setForm({ title: "", body: "", type: "INFO" });
+      setForm({ title: "", body: "", type: "INFO", audience: "MANAGERS" });
       load();
     } else {
       showToast(data.message ?? "발송 실패");
@@ -94,7 +101,7 @@ export default function AnnouncementsPage() {
     <div>
       <PageHeader
         title="시스템 공지"
-        sub="전체 직무지도원에게 공지를 발송합니다"
+        sub="에이전시 관리자(기본) 또는 전체 사용자에게 공지를 발송합니다"
         actions={
           <>
             <button onClick={load} className={T.btnSecondary + " flex items-center gap-1.5"}>
@@ -141,6 +148,18 @@ export default function AnnouncementsPage() {
             </div>
             <div className="space-y-4">
               <div>
+                <label className={T.label}>발송 대상</label>
+                <select value={form.audience} onChange={e => setForm(f => ({ ...f, audience: e.target.value }))} className={T.select + " w-full"}>
+                  <option value="MANAGERS">에이전시 관리자만 (기본)</option>
+                  <option value="ALL">전체 사용자 (관리자 + 전체 직무지도원)</option>
+                </select>
+                <p className="mt-1 text-[11px] font-semibold text-slate-400">
+                  {form.audience === "ALL"
+                    ? "전체 직무지도원 앱 알림함에도 전달됩니다."
+                    : "에이전시 관리자만 시스템 공지사항에서 확인합니다. 직무지도원에게는 전달되지 않습니다."}
+                </p>
+              </div>
+              <div>
                 <label className={T.label}>공지 유형</label>
                 <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={T.select + " w-full"}>
                   <option value="INFO">일반 공지</option>
@@ -160,12 +179,11 @@ export default function AnnouncementsPage() {
                   rows={5}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 resize-none" />
               </div>
-              <p className="text-xs text-slate-400">활성 에이전시에 배정된 모든 직무지도원의 알림함에 전달됩니다.</p>
             </div>
             <div className="mt-5 flex gap-2">
               <button onClick={() => setShowForm(false)} className={T.btnSecondary + " flex-1"}>취소</button>
               <button onClick={send} disabled={sending} className={T.btnPrimary + " flex-1"}>
-                {sending ? "발송 중..." : "전체 발송"}
+                {sending ? "발송 중..." : form.audience === "ALL" ? "전체 발송" : "관리자에게 발송"}
               </button>
             </div>
           </div>
@@ -189,8 +207,9 @@ export default function AnnouncementsPage() {
                 className="flex w-full items-center gap-3 px-4 py-3 text-left"
               >
                 <span className="flex-shrink-0"><StatusBadge status={a.type} map={SYS_BADGE} /></span>
+                <span className="flex-shrink-0"><StatusBadge status={a.audience ?? "MANAGERS"} map={AUDIENCE_BADGE} /></span>
                 <span className="flex-1 text-sm font-semibold text-slate-800 truncate">{a.title}</span>
-                <span className="flex-shrink-0 text-xs text-slate-400">{a.sentCount}명 발송</span>
+                <span className="flex-shrink-0 text-xs text-slate-400">{(a.audience ?? "MANAGERS") === "ALL" ? `직무지도원 ${a.sentCount}명` : "관리자 전용"}</span>
                 <span className="flex-shrink-0 text-xs text-slate-400 ml-3">
                   {new Date(a.createdAt).toLocaleString("ko-KR")}
                 </span>

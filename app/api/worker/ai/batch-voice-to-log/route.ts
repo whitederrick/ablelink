@@ -11,6 +11,7 @@ import { checkPlanAccess, startTrialIfNeeded } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { logApiCall } from "@/lib/logApiCall";
 import { buildContextLines } from "@/lib/worker/aiContext";
+import { getConfigNumber } from "@/lib/systemConfig";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
@@ -32,10 +33,17 @@ export async function GET(request: NextRequest) {
   const workerId = BigInt(session.workerId);
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const limit = await getConfigNumber("AI_BATCH_MONTHLY_LIMIT");
   const used = await prisma.apiCallLog.count({
     where: { workerId, service: "GEMINI_BATCH", success: true, createdAt: { gte: monthStart } },
   });
-  return NextResponse.json({ success: true, available: used < 1, usedThisMonth: used });
+  return NextResponse.json({
+    success: true,
+    available: used < limit,
+    usedThisMonth: used,
+    limit,
+    remaining: Math.max(0, limit - used),
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -69,17 +77,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 개인당 월 1회 (AI 일괄). 비용 방어 — STT/LLM 호출 전에 선차단. 단일 음성 일지는 무제한.
+    // 개인당 월 N회 (AI 일괄, 운영자 설정값). 비용 방어 — STT/LLM 호출 전에 선차단. 단일 음성 일지는 무제한.
+    const monthlyLimit = await getConfigNumber("AI_BATCH_MONTHLY_LIMIT");
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const batchUsedThisMonth = await prisma.apiCallLog.count({
       where: { workerId, service: "GEMINI_BATCH", success: true, createdAt: { gte: monthStart } },
     });
-    if (batchUsedThisMonth >= 1) {
+    if (batchUsedThisMonth >= monthlyLimit) {
       return NextResponse.json({
         success: false,
         reason: "MONTHLY_LIMIT",
-        message: "AI 일괄 작성은 매월 1회 제공되며, 이번 달은 이미 사용했습니다. 단일 음성 일지는 계속 사용할 수 있어요.",
+        message: `AI 일괄 작성은 매월 ${monthlyLimit}회 제공되며, 이번 달 ${monthlyLimit}회를 모두 사용했습니다. 단일 음성 일지는 계속 사용할 수 있어요.`,
       }, { status: 429 });
     }
 

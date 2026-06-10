@@ -33,7 +33,9 @@ export default function BatchWorklogPage() {
   const [trainees, setTrainees]         = useState<Trainee[]>([]);
   const [siteLoading, setSiteLoading]   = useState(true);
   const [planOk, setPlanOk]             = useState(false);
-  const [monthlyUsed, setMonthlyUsed]   = useState(false); // 이번 달 AI 일괄 사용함(월 1회)
+  const [monthlyUsed, setMonthlyUsed]   = useState(false); // 이번 달 AI 일괄 한도 소진
+  const [monthlyLimit, setMonthlyLimit] = useState(2);     // 운영자 설정 월 허용 횟수
+  const [monthlyRemaining, setMonthlyRemaining] = useState(2); // 이번 달 잔여 횟수
 
   // STEP 1: 날짜 + 훈련생 선택
   const today = todayStr();
@@ -83,7 +85,11 @@ export default function BatchWorklogPage() {
         if (ok) {
           try {
             const u = await fetch("/api/worker/ai/batch-voice-to-log", { cache: "no-store" }).then(r => r.json());
-            if (u?.success) setMonthlyUsed(!u.available);
+            if (u?.success) {
+              setMonthlyUsed(!u.available);
+              if (typeof u.limit === "number") setMonthlyLimit(u.limit);
+              if (typeof u.remaining === "number") setMonthlyRemaining(u.remaining);
+            }
           } catch {}
         }
       } catch {
@@ -352,9 +358,9 @@ export default function BatchWorklogPage() {
   if (monthlyUsed) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-lg font-black text-slate-900">AI 일괄 작성은 이번 달 이미 사용했어요.</p>
+        <p className="text-lg font-black text-slate-900">이번 달 AI 일괄 작성 횟수를 모두 사용했어요.</p>
         <p className="text-sm leading-relaxed text-slate-500">
-          AI 일괄 작성은 <span className="font-black text-slate-700">매월 1회</span> 제공됩니다.<br />
+          AI 일괄 작성은 <span className="font-black text-slate-700">매월 {monthlyLimit}회</span> 제공됩니다.<br />
           단일 음성 일지는 횟수 제한 없이 계속 사용할 수 있어요.
         </p>
         <div className="flex gap-2">
@@ -394,6 +400,17 @@ export default function BatchWorklogPage() {
       </div>
 
       <div className="mx-auto max-w-lg px-4 pt-5 space-y-4">
+
+        {/* 이번 달 잔여 횟수 사전 안내 */}
+        {step === 1 && (
+          <div className="flex items-center gap-2 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
+            <span className="text-base">🎙️</span>
+            <p className="text-xs font-semibold leading-relaxed text-sky-700">
+              AI 일괄 작성은 매월 <span className="font-black">{monthlyLimit}회</span> 제공됩니다.
+              이번 달 <span className="font-black">{monthlyRemaining}회</span> 남았어요. (단일 음성 일지는 무제한)
+            </p>
+          </div>
+        )}
 
         {/* ── STEP 1: 날짜 + 훈련생 ──────────────────────────── */}
         {step === 1 && (
