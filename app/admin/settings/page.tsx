@@ -36,6 +36,20 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
     } finally { setBusy(false); }
   }
 
+  async function uploadExcel(file: File) {
+    if (!Number.isInteger(Number(year))) { onToast("연도를 입력하세요."); return; }
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("year", String(year));
+      fd.append("file", file);
+      const d = await fetch("/api/admin/payroll/income-tax/upload", { method: "POST", body: fd }).then(r => r.json());
+      if (d.success) { onToast(`${d.year}년 간이세액표 ${d.rowCount}구간 저장(엑셀)`); load(); }
+      else onToast(d.message || "업로드 실패");
+    } catch { onToast("업로드 실패"); }
+    finally { setBusy(false); }
+  }
+
   return (
     <div className="mb-6 rounded-2xl border border-slate-100 bg-white p-6">
       <h2 className="mb-1 text-base font-black text-slate-900">근로소득 간이세액표</h2>
@@ -57,12 +71,18 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
       <div className="flex flex-wrap items-center gap-2">
         <input type="number" value={year} onChange={e => setYear(e.target.value)} placeholder="연도"
           className="h-10 w-28 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-sky-400" />
+        <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 ${busy ? "opacity-40 pointer-events-none" : ""}`}>
+          엑셀(.xlsx) 업로드
+          <input type="file" accept=".xlsx" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadExcel(f); e.currentTarget.value = ""; }} />
+        </label>
+        <span className="text-xs font-semibold text-slate-400">또는 아래에 붙여넣기 →</span>
         <button onClick={save} disabled={busy} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white disabled:opacity-40">
-          {busy ? "저장 중…" : "표 등록/갱신"}
+          {busy ? "저장 중…" : "붙여넣기 등록"}
         </button>
       </div>
-      <textarea value={text} onChange={e => setText(e.target.value)} rows={6}
-        placeholder={"홈택스 간이세액표 붙여넣기 (탭 구분)\n예) 1,430\t1,440\t7,420\t3,000\t...\n각 행: 월급여(이상,천원) 월급여(미만,천원) 가족1명 가족2명 ..."}
+      <textarea value={text} onChange={e => setText(e.target.value)} rows={5}
+        placeholder={"권장: 위 '엑셀(.xlsx) 업로드' 사용. \n또는 홈택스 표를 복사해 여기에 붙여넣기(탭/공백 구분, 빈칸 '-' 무관).\n각 행: 월급여(이상,천원) 월급여(미만,천원) 가족1명 가족2명 …"}
         className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-mono text-xs text-slate-800 outline-none focus:border-sky-400" />
     </div>
   );

@@ -14,27 +14,46 @@ export interface TaxBracket {
  *  - 유효 숫자 칸이 3개 미만이면 헤더로 보고 스킵.
  *  - 월급여는 천원 단위 → ×1000으로 원 단위 저장.
  */
-export function parseHometaxTable(text: string): TaxBracket[] {
+// 셀 값 → 숫자(콤마 제거). 숫자형/숫자문자열만 인정, 그 외(헤더·"-"·빈칸)는 NaN.
+function cellToNum(v: any): number {
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const s = v.replace(/,/g, "").trim();
+    return /^\d+(\.\d+)?$/.test(s) ? Number(s) : NaN;
+  }
+  return NaN;
+}
+
+// 한 행의 숫자열 → 구간. [이상(천원), 미만(천원), 가족1, 가족2 …]. 헤더/초과식 행은 제외.
+function bracketFromNums(nums: number[]): TaxBracket | null {
+  if (nums.length < 3) return null;
+  // nums[0]=월급여(천원). 헤더(가족수 1·2·3…)는 작고, "10,000천원 초과" 식 행은 세액(수십만↑)이 앞에 옴 → 범위로 거른다.
+  if (nums[0] < 100 || nums[0] > 100000) return null;
+  const taxes = nums.slice(2);
+  if (taxes.length === 0) return null;
+  return { from: Math.round(nums[0] * 1000), taxes };
+}
+
+// 셀 행렬(엑셀 업로드 등) → 구간 목록.
+export function bracketsFromMatrix(rows: any[][]): TaxBracket[] {
   const out: TaxBracket[] = [];
-  // 범위표기(~)는 구분자로, 그 외 탭/공백으로 토큰화. 콤마(천단위)는 숫자 내부에서 제거.
-  const lines = String(text ?? "").replace(/[~∼－—-]/g, " ").split(/\r?\n/);
-  for (const raw of lines) {
-    if (!raw.trim()) continue;
-    // 탭/공백으로 토큰 분리 후, 콤마 제거하고 순수 숫자만 추출(헤더 글자·빈칸 자동 무시)
-    const nums = raw
-      .split(/[\t ]+/)
-      .map(c => c.replace(/,/g, "").trim())
-      .filter(c => /^\d+(\.\d+)?$/.test(c))
-      .map(Number);
-    // 이상 + 미만 + 세액(1개↑) 필요. nums[0](월급여 천원)이 너무 작으면 헤더(가족수 1·2·3…) → 스킵.
-    if (nums.length < 3) continue;
-    if (nums[0] < 100) continue;
-    const taxes = nums.slice(2);
-    if (taxes.length === 0) continue;
-    out.push({ from: Math.round(nums[0] * 1000), taxes });
+  for (const row of rows) {
+    if (!Array.isArray(row)) continue;
+    const nums = row.map(cellToNum).filter((n): n is number => Number.isFinite(n));
+    const b = bracketFromNums(nums);
+    if (b) out.push(b);
   }
   out.sort((a, b) => a.from - b.from);
   return out;
+}
+
+export function parseHometaxTable(text: string): TaxBracket[] {
+  // 범위표기(~,—)는 구분자로 치환, 줄/탭/공백으로 토큰화 → 행렬로 환원 후 공통 처리.
+  const rows = String(text ?? "")
+    .replace(/[~∼－—]/g, " ")
+    .split(/\r?\n/)
+    .map(line => line.split(/[\t ]+/));
+  return bracketsFromMatrix(rows);
 }
 
 /**
