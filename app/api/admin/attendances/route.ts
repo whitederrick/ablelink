@@ -45,14 +45,6 @@ function asIso(d: any) {
   return d?.toISOString?.() ?? d ?? null;
 }
 
-function kstStart(dateStr: string) {
-  // dateStr: YYYY-MM-DD
-  return new Date(`${dateStr}T00:00:00.000+09:00`);
-}
-function kstEnd(dateStr: string) {
-  return new Date(`${dateStr}T23:59:59.999+09:00`);
-}
-
 function toItem(r: any) {
   return {
     id: String(r.id),
@@ -140,22 +132,12 @@ export async function GET(req: NextRequest) {
     // ✅ requireAdminSession이 agencyId를 직접 제공
     const agencyId: bigint | undefined = scope.agencyId ?? undefined;
 
-    // 기간 파싱(assignment 오버랩 및 startTime 필터용)
-    let fromDt: Date | null = null;
-    let toDt: Date | null = null;
-
-    // 우선순위: (from/to) > (yearMonth)
+    // 기간 형식 검증(실제 필터는 아래 where.workDate에서 from/to 문자열로 적용)
     if (from || to) {
       if (from && !isDateOnly(from)) throw new Error("VALIDATION:from");
       if (to && !isDateOnly(to)) throw new Error("VALIDATION:to");
-      fromDt = from ? kstStart(from) : null;
-      toDt = to ? kstEnd(to) : null;
     } else if (yearMonth) {
       if (!isYearMonth(yearMonth)) throw new Error("VALIDATION:yearMonth");
-      const start = `${yearMonth}-01`;
-      const end = `${yearMonth}-31`;
-      fromDt = kstStart(start);
-      toDt = kstEnd(end);
     }
 
     const where: Prisma.DailyAttendanceWhereInput = {};
