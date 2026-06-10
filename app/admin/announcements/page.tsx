@@ -1,23 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Megaphone, Plus, X, RefreshCw } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
 
 type Announcement = {
   id: string; title: string; body: string; type: string;
   sentCount: number; adminLogin: string | null; createdAt: string;
 };
 
-const TYPE_COLORS: Record<string, string> = {
-  INFO:        "bg-sky-100 text-sky-700",
-  MAINTENANCE: "bg-amber-100 text-amber-700",
-  URGENT:      "bg-rose-100 text-rose-700",
+const SYS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  INFO: { label: "일반", tone: "sky" },
+  MAINTENANCE: { label: "점검", tone: "amber" },
+  URGENT: { label: "긴급", tone: "rose" },
 };
-const TYPE_LABELS: Record<string, string> = {
-  INFO: "일반", MAINTENANCE: "점검", URGENT: "긴급",
-};
+const PAGE_SIZE = 12;
 
 export default function AnnouncementsPage() {
   const [list, setList]       = useState<Announcement[]>([]);
@@ -27,6 +29,9 @@ export default function AnnouncementsPage() {
   const [sending, setSending] = useState(false);
   const [toast, setToast]     = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3500); };
 
@@ -40,6 +45,30 @@ export default function AnnouncementsPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  const counts = useMemo(() => ({
+    total: list.length,
+    urgent: list.filter(a => a.type === "URGENT").length,
+    sent: list.reduce((s, a) => s + (a.sentCount || 0), 0),
+  }), [list]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return list
+      .filter(a => typeFilter.length === 0 || typeFilter.includes(a.type))
+      .filter(a => !q || a.title.toLowerCase().includes(q) || a.body.toLowerCase().includes(q));
+  }, [list, query, typeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [query, typeFilter]);
+
+  const filters: FilterChip[] = [
+    { value: "INFO", label: "일반", count: list.filter(a => a.type === "INFO").length },
+    { value: "MAINTENANCE", label: "점검", count: list.filter(a => a.type === "MAINTENANCE").length },
+    { value: "URGENT", label: "긴급", count: list.filter(a => a.type === "URGENT").length },
+  ];
+  const toggleType = (v: string) => setTypeFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   async function send() {
     if (!form.title.trim() || !form.body.trim()) { showToast("제목과 내용을 입력해주세요."); return; }
@@ -77,6 +106,27 @@ export default function AnnouncementsPage() {
           </>
         }
       />
+
+      <StatCardRow
+        className="mb-5"
+        cols={3}
+        items={[
+          { label: "전체 공지", value: counts.total },
+          { label: "긴급", value: counts.urgent, tone: "rose" },
+          { label: "누적 발송", value: counts.sent, tone: "sky" },
+        ]}
+      />
+
+      <div className="mb-4">
+        <ListToolbar
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="제목·내용 검색"
+          filters={filters}
+          selected={typeFilter}
+          onToggleFilter={toggleType}
+        />
+      </div>
 
       {/* 공지 작성 모달 */}
       {showForm && (
@@ -126,21 +176,19 @@ export default function AnnouncementsPage() {
         <div className="flex h-40 items-center justify-center">
           <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
         </div>
-      ) : list.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
-          <p className="text-sm text-slate-400">발송된 공지가 없습니다.</p>
+          <p className="text-sm text-slate-400">{list.length === 0 ? "발송된 공지가 없습니다." : "조건에 맞는 공지가 없습니다."}</p>
         </div>
       ) : (
         <div className="space-y-1.5">
-          {list.map(a => (
+          {pageItems.map(a => (
             <div key={a.id} className="rounded-xl border border-slate-100 bg-white">
               <button
                 onClick={() => setExpanded(expanded === a.id ? null : a.id)}
                 className="flex w-full items-center gap-3 px-4 py-3 text-left"
               >
-                <span className={`${T.badge} ${TYPE_COLORS[a.type] ?? "bg-slate-100 text-slate-600"} flex-shrink-0`}>
-                  {TYPE_LABELS[a.type] ?? a.type}
-                </span>
+                <span className="flex-shrink-0"><StatusBadge status={a.type} map={SYS_BADGE} /></span>
                 <span className="flex-1 text-sm font-semibold text-slate-800 truncate">{a.title}</span>
                 <span className="flex-shrink-0 text-xs text-slate-400">{a.sentCount}명 발송</span>
                 <span className="flex-shrink-0 text-xs text-slate-400 ml-3">
@@ -157,6 +205,7 @@ export default function AnnouncementsPage() {
               )}
             </div>
           ))}
+          <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
         </div>
       )}
 
