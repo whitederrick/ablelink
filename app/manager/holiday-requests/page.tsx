@@ -221,16 +221,16 @@ export default function HolidayRequestsPage() {
             <tbody>
               {pageItems.map(row => (
                 <tr key={row.id} className={T.trBase}>
-                  <td className={T.td + " tabular-nums font-semibold"}>{row.date}</td>
-                  <td className={T.td + " font-semibold text-slate-900"}>{row.workerName}</td>
-                  <td className={T.td + " text-slate-500"}>{row.siteName}</td>
-                  <td className={T.td + " text-slate-500 max-w-[160px] truncate"}>{row.reason ?? "-"}</td>
+                  <td className={T.td + " tabular-nums"}>{row.date}</td>
+                  <td className={T.td}>{row.workerName}</td>
+                  <td className={T.td}>{row.siteName}</td>
+                  <td className={T.td + " max-w-[160px] truncate"}>{row.reason ?? "-"}</td>
                   <td className={T.td}>
                     <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
                       <button
                         onClick={() => setWorkday(row, true)}
                         disabled={savingWorkday === row.id}
-                        className={`px-2.5 py-1 text-xs font-bold transition disabled:opacity-50 ${
+                        className={`min-h-9 px-3 text-[13px] font-bold transition disabled:opacity-50 ${
                           row.countAsWorkday ? "bg-emerald-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
                         }`}
                       >
@@ -239,7 +239,7 @@ export default function HolidayRequestsPage() {
                       <button
                         onClick={() => setWorkday(row, false)}
                         disabled={savingWorkday === row.id}
-                        className={`border-l border-slate-200 px-2.5 py-1 text-xs font-bold transition disabled:opacity-50 ${
+                        className={`min-h-9 border-l border-slate-200 px-3 text-[13px] font-bold transition disabled:opacity-50 ${
                           !row.countAsWorkday ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
                         }`}
                       >
@@ -249,12 +249,12 @@ export default function HolidayRequestsPage() {
                   </td>
                   <td className={T.td}>
                     {row.pendingRequest ? (
-                      <span className="flex items-center gap-1 text-xs font-semibold text-amber-600">
+                      <span className="flex items-center gap-1 font-semibold text-amber-600">
                         <Clock className="h-3.5 w-3.5" />
                         {REQ_TYPE_LABELS[row.pendingRequest.requestType]} 대기
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-300">없음</span>
+                      <span className="text-slate-400">없음</span>
                     )}
                   </td>
                   <td className={T.td}>

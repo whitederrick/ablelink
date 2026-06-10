@@ -214,27 +214,27 @@ export default function ManagerDocumentsHub() {
           {pageItems.map(item => {
             return (
               <div key={item.id} className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-[15px] font-medium text-slate-800">
                   <StatusBadge status={item.signStage} map={DOC_BADGE} />
-                  <span className="shrink-0 text-[15px] font-black text-slate-900">{item.docLabel}</span>
-                  {item.traineeName && <span className="shrink-0 text-sm font-semibold text-slate-500">· {item.traineeName}</span>}
+                  <span className="shrink-0 font-semibold">{item.docLabel}</span>
+                  {item.traineeName && <span className="shrink-0">· {item.traineeName}</span>}
                   {item.versionNo && item.versionNo > 1 && (
-                    <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-black text-amber-700">v{item.versionNo}</span>
+                    <span className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-[13px] font-black text-amber-700">v{item.versionNo}</span>
                   )}
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-400">
+                  <span className="min-w-0 flex-1 truncate text-[13px] text-slate-500">
                     {item.workerName} · {item.siteName} · {item.periodStart}~{item.periodEnd}
                   </span>
                   <div className="flex shrink-0 items-center justify-end gap-1.5">
-                    <button onClick={() => openPreview(item)} className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 active:scale-95">문서 보기</button>
-                    <button onClick={() => downloadPdf(item)} className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 active:scale-95">다운로드</button>
+                    <button onClick={() => openPreview(item)} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 active:scale-95">문서 보기</button>
+                    <button onClick={() => downloadPdf(item)} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 active:scale-95">다운로드</button>
                     {item.signStage === "SUBMITTED" && (
                       <>
-                        <button disabled={busy === item.id} onClick={() => handleConfirm(item)} className="rounded-xl bg-slate-950 px-3 py-1.5 text-xs font-black text-white active:scale-95 disabled:opacity-50">확정</button>
-                        <button disabled={busy === item.id} onClick={() => handleRequestChanges(item)} className="rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-black text-rose-600 active:scale-95 disabled:opacity-50">수정요청</button>
+                        <button disabled={busy === item.id} onClick={() => handleConfirm(item)} className="inline-flex min-h-10 items-center rounded-xl bg-slate-950 px-3 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">확정</button>
+                        <button disabled={busy === item.id} onClick={() => handleRequestChanges(item)} className="inline-flex min-h-10 items-center rounded-xl border border-rose-200 bg-white px-3 text-[13px] font-bold text-rose-600 active:scale-95 disabled:opacity-50">수정요청</button>
                       </>
                     )}
                     {item.signStage === "CONFIRMED" && (
-                      <button disabled={busy === item.id} onClick={() => handleSign(item)} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-black text-white active:scale-95 disabled:opacity-50">서명</button>
+                      <button disabled={busy === item.id} onClick={() => handleSign(item)} className="inline-flex min-h-10 items-center rounded-xl bg-emerald-600 px-3 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">서명</button>
                     )}
                   </div>
                 </div>

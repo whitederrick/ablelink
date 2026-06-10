@@ -684,12 +684,12 @@ export default function AttendanceInboxClient() {
                         )}
                       >
                         <div className="mb-0 flex items-center gap-3">
-                          <div className="min-w-0 flex-1 truncate text-sm">
-                            <span className="font-semibold">{it.workerName}</span>
+                          <div className="min-w-0 flex-1 truncate text-[15px] font-medium text-slate-800">
+                            {it.workerName}
                             <span className="text-slate-300"> · </span>
-                            <span className="text-slate-700">{it.siteName}</span>
+                            {it.siteName}
                             <span className="text-slate-300"> · </span>
-                            <span className="text-slate-500">{fmtYmdDots(it.workDate)}</span>
+                            {fmtYmdDots(it.workDate)}
                           </div>
 
                           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">

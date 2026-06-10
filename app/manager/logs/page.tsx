@@ -149,15 +149,15 @@ export default function ManagerLogsPage() {
             <div key={l.id} className={`rounded-2xl border bg-white ${l.isCompleted?"border-emerald-100":"border-slate-100"}`}>
               <button onClick={()=>setExpandId(expandId===l.id?null:l.id)}
                 className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
-                <div className="flex flex-1 min-w-0 items-center gap-2">
-                  <span className="shrink-0 text-[15px] font-black text-slate-900">
+                <div className="flex flex-1 min-w-0 items-center gap-2 text-[15px] font-medium text-slate-800">
+                  <span className="shrink-0 font-semibold">
                     {l.workDate} ({DOW[new Date(l.workDate+"T00:00:00").getDay()]})
                   </span>
-                  <span className="shrink-0 text-sm font-semibold text-slate-600">{l.workerName}</span>
-                  <span className="shrink-0 text-sm text-slate-400">→ {l.traineeName}</span>
-                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{TYPE_LABELS[l.trainingType]??l.trainingType}</span>
+                  <span className="shrink-0">{l.workerName}</span>
+                  <span className="shrink-0">→ {l.traineeName}</span>
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[13px] font-semibold text-slate-600">{TYPE_LABELS[l.trainingType]??l.trainingType}</span>
                   <StatusBadge status={l.isCompleted?"confirmed":"pending"} map={LOG_BADGE} />
-                  <span className="truncate text-xs text-slate-400">
+                  <span className="truncate text-[13px] text-slate-500">
                     {l.siteName} · {l.totalTime}h · {l.attendance}{l.taskName?` · ${l.taskName}`:""}
                   </span>
                 </div>
