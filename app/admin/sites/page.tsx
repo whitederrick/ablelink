@@ -54,7 +54,7 @@ export default function SitesPage() {
   return (
     <div>
       <PageHeader
-        title="전체 현장"
+        title="현장(Site) 현황 관리"
         sub="모든 에이전시 현장 현황"
         actions={
           <Link href="/admin/sites/new" className={`${T.btnPrimary} no-underline`}>+ 현장 생성</Link>

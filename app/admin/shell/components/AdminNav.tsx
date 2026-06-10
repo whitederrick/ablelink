@@ -25,8 +25,8 @@ const groups: NavGroup[] = [
   {
     title: "에이전시 데이터 관리",
     items: [
-      { href: "/admin/workers",     label: "전체 직무지도원" },
-      { href: "/admin/sites",       label: "전체 현장" },
+      { href: "/admin/workers",     label: "직무지도원 현황 관리" },
+      { href: "/admin/sites",       label: "현장(Site) 현황 관리" },
       { href: "/admin/attendances", label: "근태 현황 관리" },
       { href: "/admin/surveys",     label: "만족도 조사 결과" },
     ],
