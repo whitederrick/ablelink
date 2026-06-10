@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
@@ -45,7 +46,7 @@ export default function AttendanceEditRequestsPage() {
   const [query, setQuery]         = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>(["PENDING"]);
   const [page, setPage]           = useState(1);
-  const [actionId, setActionId]   = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState("");
   const [processing, setProcessing] = useState(false);
   const [toast, setToast]         = useState("");
@@ -73,7 +74,6 @@ export default function AttendanceEditRequestsPage() {
     setProcessing(false);
     if (data.success) {
       showToast(data.message);
-      setActionId(null);
       setAdminNote("");
       load();
     } else {
@@ -98,6 +98,8 @@ export default function AttendanceEditRequestsPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   useEffect(() => { setPage(1); }, [query, statusFilter]);
+
+  const selected = requests.find(r => r.id === selectedId) ?? null;
 
   const filters: FilterChip[] = [
     { value: "PENDING", label: "대기", count: counts.pending },
@@ -135,119 +137,112 @@ export default function AttendanceEditRequestsPage() {
         />
       </div>
 
-      {loading ? (
-        <div className="flex h-40 items-center justify-center">
-          <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* 좌: 목록 */}
+        <div>
+          <div className="space-y-1.5">
+            {loading ? (
+              <p className={T.empty}>불러오는 중…</p>
+            ) : pageItems.length === 0 ? (
+              <p className={T.empty}>{requests.length === 0 ? "접수된 요청이 없습니다." : "조건에 맞는 요청이 없습니다."}</p>
+            ) : (
+              pageItems.map(req => (
+                <button
+                  key={req.id}
+                  onClick={() => { setSelectedId(req.id); setAdminNote(""); }}
+                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2 text-left transition hover:border-slate-300 ${
+                    selectedId === req.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"
+                  }`}
+                >
+                  <StatusBadge status={req.status} map={EDITREQ_BADGE} />
+                  <span className="shrink-0 text-[15px] font-black text-slate-900">{req.workerName}</span>
+                  <span className="flex-1 truncate text-[13px] font-semibold text-slate-500">{req.siteName} · {req.workDate.slice(5)}({dowLabel(req.workDate)})</span>
+                  <span className="shrink-0 w-[56px] text-right text-xs font-semibold text-slate-400">{req.createdAt.slice(2, 10)}</span>
+                </button>
+              ))
+            )}
+          </div>
+          {filtered.length > 0 && (
+            <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+          )}
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
-          <p className="text-sm font-semibold text-slate-400">조건에 맞는 요청이 없습니다.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {pageItems.map(req => (
-            <div key={req.id}
-              className={`rounded-2xl border bg-white p-5 ${
-                req.status === "PENDING"  ? "border-amber-200" :
-                req.status === "APPROVED" ? "border-emerald-100" : "border-rose-100"
-              }`}>
+
+        {/* 우: 상세 + 검토 처리 */}
+        <div className="lg:sticky lg:top-4 h-fit">
+          {selected ? (
+            <div className={`${T.card} space-y-4`}>
               {/* 헤더 */}
-              <div className="mb-3 flex items-center gap-2 text-[15px] font-medium text-slate-800">
-                <span className="shrink-0">{req.workerName} ({req.userPhone})</span>
-                <StatusBadge status={req.status} map={EDITREQ_BADGE} />
-                <span className="truncate">
-                  {req.siteName} · {req.workDate} ({dowLabel(req.workDate)})
-                  {req.isFinalClosed && <span className="ml-1 font-semibold text-emerald-600">[확정됨]</span>}
-                </span>
-                <span className="ml-auto shrink-0 text-[13px] text-slate-500">
-                  {new Date(req.createdAt).toLocaleDateString("ko-KR")} 요청
-                </span>
+              <div className="flex items-center gap-2">
+                <StatusBadge status={selected.status} map={EDITREQ_BADGE} />
+                <span className="text-[15px] font-black text-slate-900">{selected.workerName}</span>
+                <span className="text-[13px] font-semibold text-slate-400">{selected.userPhone}</span>
+                <span className="ml-auto text-[11px] font-semibold text-slate-300">{new Date(selected.createdAt).toLocaleDateString("ko-KR")} 요청</span>
               </div>
+              <p className="-mt-2 text-[13px] font-semibold text-slate-500">
+                {selected.siteName} · {selected.workDate} ({dowLabel(selected.workDate)})
+                {selected.isFinalClosed && <span className="ml-1 font-bold text-emerald-600">[확정됨]</span>}
+              </p>
 
               {/* 현재 vs 요청 시간 */}
-              <div className="mb-3 grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-slate-50 p-3">
                   <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-400">현재 기록</p>
-                  <p className="text-sm font-semibold text-slate-700">
-                    {req.currentStart || "미기록"} ~ {req.currentEnd || "미기록"}
-                  </p>
-                  {req.isGpsModified && (
-                    <div className="mt-1 flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3 text-amber-500" />
-                      <span className="text-[10px] text-amber-600">GPS 수동 조정됨</span>
-                    </div>
+                  <p className="text-sm font-semibold text-slate-700">{selected.currentStart || "미기록"} ~ {selected.currentEnd || "미기록"}</p>
+                  {selected.isGpsModified && (
+                    <div className="mt-1 flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-amber-500" /><span className="text-[10px] text-amber-600">GPS 수동 조정됨</span></div>
                   )}
                 </div>
-                <div className={`rounded-xl p-3 ${req.proposedStart || req.proposedEnd ? "bg-sky-50" : "bg-slate-50"}`}>
+                <div className={`rounded-xl p-3 ${selected.proposedStart || selected.proposedEnd ? "bg-sky-50" : "bg-slate-50"}`}>
                   <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-400">수정 요청</p>
-                  <p className="text-sm font-semibold text-sky-700">
-                    {req.proposedStart || "변경 없음"} ~ {req.proposedEnd || "변경 없음"}
-                  </p>
+                  <p className="text-sm font-semibold text-sky-700">{selected.proposedStart || "변경 없음"} ~ {selected.proposedEnd || "변경 없음"}</p>
                 </div>
               </div>
 
               {/* 수정 사유 */}
-              <div className="mb-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                 <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-400">수정 사유</p>
-                <p className="text-sm font-semibold text-slate-700">{req.reason}</p>
+                <p className="text-sm font-semibold text-slate-700">{selected.reason}</p>
               </div>
 
-              {/* 관리자 메모 (처리된 경우) */}
-              {req.adminNote && (
-                <div className="mb-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+              {/* 관리자 메모(처리된 경우) */}
+              {selected.adminNote && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                   <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-400">관리자 메모</p>
-                  <p className="text-sm font-semibold text-slate-700">{req.adminNote}</p>
+                  <p className="text-sm font-semibold text-slate-700">{selected.adminNote}</p>
                 </div>
               )}
 
-              {/* 처리 버튼 (PENDING만) */}
-              {req.status === "PENDING" && (
-                actionId === req.id ? (
-                  <div className="space-y-3">
-                    <textarea
-                      value={adminNote}
-                      onChange={e => setAdminNote(e.target.value)}
-                      placeholder="승인/반려 메모 (선택사항)"
-                      rows={2}
-                      className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-sm text-slate-700 outline-none focus:border-sky-400"
-                    />
-                    <div className="flex gap-2">
-                      <button onClick={() => { setActionId(null); setAdminNote(""); }}
-                        className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 active:scale-95">
-                        취소
-                      </button>
-                      <button onClick={() => handleAction(req.id, "reject")} disabled={processing}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 py-2.5 text-sm font-black text-rose-600 active:scale-95 disabled:opacity-60">
-                        <XCircle className="h-4 w-4" />반려
-                      </button>
-                      <button onClick={() => handleAction(req.id, "approve")} disabled={processing}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">
-                        <CheckCircle2 className="h-4 w-4" />승인
-                      </button>
-                    </div>
+              {/* 검토·처리 (PENDING만) */}
+              {selected.status === "PENDING" ? (
+                <div className="space-y-2 border-t border-slate-100 pt-4">
+                  <textarea value={adminNote} onChange={e => setAdminNote(e.target.value)}
+                    placeholder="승인/반려 메모 (선택사항)" rows={2}
+                    className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-sm text-slate-700 outline-none focus:border-sky-400" />
+                  <div className="flex gap-2">
+                    <button onClick={() => handleAction(selected.id, "reject")} disabled={processing}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 py-2.5 text-sm font-black text-rose-600 active:scale-95 disabled:opacity-60">
+                      <XCircle className="h-4 w-4" />반려
+                    </button>
+                    <button onClick={() => handleAction(selected.id, "approve")} disabled={processing}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">
+                      <CheckCircle2 className="h-4 w-4" />승인
+                    </button>
                   </div>
-                ) : (
-                  <button onClick={() => { setActionId(req.id); setAdminNote(""); }}
-                    className="w-full rounded-xl bg-slate-950 py-3 text-sm font-black text-white active:scale-[0.98]">
-                    검토 및 처리
-                  </button>
-                )
-              )}
-
-              {/* 처리 결과 */}
-              {req.status !== "PENDING" && req.reviewedAt && (
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                  {req.status === "APPROVED"
-                    ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                    : <XCircle className="h-3.5 w-3.5 text-rose-500" />}
-                  {new Date(req.reviewedAt).toLocaleDateString("ko-KR")} 처리됨
+                </div>
+              ) : selected.reviewedAt && (
+                <div className="flex items-center gap-1.5 border-t border-slate-100 pt-3 text-[12px] font-semibold text-slate-400">
+                  {selected.status === "APPROVED" ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <XCircle className="h-3.5 w-3.5 text-rose-500" />}
+                  {new Date(selected.reviewedAt).toLocaleDateString("ko-KR")} 처리됨
                 </div>
               )}
             </div>
-          ))}
-          <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+          ) : (
+            <div className={`${T.card} text-center`}>
+              <p className="py-6 text-sm font-semibold text-slate-300">목록에서 요청을 선택하면<br />상세 내용과 검토·처리가 표시됩니다.</p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {toast && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg z-50">

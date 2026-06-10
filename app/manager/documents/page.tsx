@@ -3,6 +3,7 @@
 // 매니저 문서 허브 — 직무지도원이 제출한 문서를 한 곳에서 조회 → 확정 → 서명.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
@@ -211,39 +212,48 @@ export default function ManagerDocumentsHub() {
           {items.length === 0 && <p className="mt-1 text-xs font-semibold text-slate-300">직무지도원이 앱에서 문서를 제출하면 여기에 표시됩니다.</p>}
         </div>
       ) : (
-        <div className="space-y-2">
-          {pageItems.map(item => {
-            return (
-              <div key={item.id} className="rounded-2xl border border-slate-100 bg-white px-4 py-2">
-                <div className="flex items-center gap-2 text-[15px] font-medium text-slate-800">
-                  <StatusBadge status={item.signStage} map={DOC_BADGE} />
-                  <span className="shrink-0 font-semibold">{item.docLabel}</span>
-                  {item.traineeName && <span className="shrink-0">· {item.traineeName}</span>}
-                  {item.versionNo && item.versionNo > 1 && (
-                    <span className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-[13px] font-black text-amber-700">v{item.versionNo}</span>
-                  )}
-                  <span className="min-w-0 flex-1 truncate text-[13px] text-slate-500">
+        <>
+        <div className={T.tableWrap}>
+          <table className="w-full">
+            <thead>
+              <tr>{["상태", "문서", "직무지도원 · 현장 · 기간", "작업"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr>
+            </thead>
+            <tbody>
+              {pageItems.map(item => (
+                <tr key={item.id} className={T.trBase}>
+                  <td className={T.td}><StatusBadge status={item.signStage} map={DOC_BADGE} /></td>
+                  <td className={T.td}>
+                    <span className="font-semibold text-slate-900">{item.docLabel}</span>
+                    {item.traineeName && <span className="text-[13px] text-slate-500"> · {item.traineeName}</span>}
+                    {item.versionNo && item.versionNo > 1 && (
+                      <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[12px] font-black text-amber-700">v{item.versionNo}</span>
+                    )}
+                  </td>
+                  <td className={`${T.td} max-w-[260px] truncate text-[13px] text-slate-500`}>
                     {item.workerName} · {item.siteName} · {item.periodStart}~{item.periodEnd}
-                  </span>
-                  <div className="flex shrink-0 items-center justify-end gap-1.5">
-                    <button onClick={() => openPreview(item)} className="inline-flex min-h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 active:scale-95">문서 보기</button>
-                    <button onClick={() => downloadPdf(item)} className="inline-flex min-h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 active:scale-95">다운로드</button>
-                    {item.signStage === "SUBMITTED" && (
-                      <>
-                        <button disabled={busy === item.id} onClick={() => handleConfirm(item)} className="inline-flex min-h-8 items-center rounded-lg bg-slate-950 px-3 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">확정</button>
-                        <button disabled={busy === item.id} onClick={() => handleRequestChanges(item)} className="inline-flex min-h-8 items-center rounded-lg border border-rose-200 bg-white px-3 text-[13px] font-bold text-rose-600 active:scale-95 disabled:opacity-50">수정요청</button>
-                      </>
-                    )}
-                    {item.signStage === "CONFIRMED" && (
-                      <button disabled={busy === item.id} onClick={() => handleSign(item)} className="inline-flex min-h-8 items-center rounded-lg bg-emerald-600 px-3 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">서명</button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+                  </td>
+                  <td className={T.td}>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => openPreview(item)} className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-700 active:scale-95">문서 보기</button>
+                      <button onClick={() => downloadPdf(item)} className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-700 active:scale-95">다운로드</button>
+                      {item.signStage === "SUBMITTED" && (
+                        <>
+                          <button disabled={busy === item.id} onClick={() => handleConfirm(item)} className="inline-flex h-8 items-center rounded-lg bg-slate-950 px-2.5 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">확정</button>
+                          <button disabled={busy === item.id} onClick={() => handleRequestChanges(item)} className="inline-flex h-8 items-center rounded-lg border border-rose-200 bg-white px-2.5 text-[13px] font-bold text-rose-600 active:scale-95 disabled:opacity-50">수정요청</button>
+                        </>
+                      )}
+                      {item.signStage === "CONFIRMED" && (
+                        <button disabled={busy === item.id} onClick={() => handleSign(item)} className="inline-flex h-8 items-center rounded-lg bg-emerald-600 px-2.5 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">서명</button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+        <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+        </>
       )}
 
       {/* 문서 보기 모달 */}

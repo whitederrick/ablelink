@@ -144,21 +144,26 @@ export default function ManagerLogsPage() {
       ):pageItems.length===0?(
         <p className={T.empty}>조건에 맞는 일지가 없습니다.</p>
       ):(
-        <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-          {pageItems.map(l=>(
-            <button key={l.id} onClick={()=>setDetail(l)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-slate-50">
-              <span className="shrink-0 text-[15px] font-semibold text-slate-800">
-                {l.workDate.slice(5)} ({DOW[new Date(l.workDate+"T00:00:00").getDay()]})
-              </span>
-              <span className="shrink-0 text-[15px] font-medium text-slate-800">{l.workerName} → {l.traineeName}</span>
-              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[13px] font-semibold text-slate-600">{TYPE_LABELS[l.trainingType]??l.trainingType}</span>
-              <StatusBadge status={l.isCompleted?"confirmed":"pending"} map={LOG_BADGE} />
-              <span className="min-w-0 flex-1 truncate text-[13px] text-slate-500">
-                {l.siteName} · {l.totalTime}h · {l.attendance}{l.taskName?` · ${l.taskName}`:""}
-              </span>
-            </button>
-          ))}
+        <div className={T.tableWrap}>
+          <table className="w-full">
+            <thead>
+              <tr>
+                {["날짜", "작성자 → 훈련생", "유형", "상태", "현장 · 시간 · 출결 · 과제", ""].map(h => <th key={h} className={T.th}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {pageItems.map(l => (
+                <tr key={l.id} onClick={() => setDetail(l)} className={`${T.trBase} cursor-pointer hover:bg-slate-50`}>
+                  <td className={`${T.td} whitespace-nowrap`}>{l.workDate.slice(5)} ({DOW[new Date(l.workDate + "T00:00:00").getDay()]})</td>
+                  <td className={T.td}>{l.workerName} <span className="text-slate-400">→</span> {l.traineeName}</td>
+                  <td className={T.td}><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[13px] font-semibold text-slate-600">{TYPE_LABELS[l.trainingType] ?? l.trainingType}</span></td>
+                  <td className={T.td}><StatusBadge status={l.isCompleted ? "confirmed" : "pending"} map={LOG_BADGE} /></td>
+                  <td className={`${T.td} max-w-[280px] truncate text-[13px] text-slate-500`}>{l.siteName} · {l.totalTime}h · {l.attendance}{l.taskName ? ` · ${l.taskName}` : ""}</td>
+                  <td className={T.td}><span className="text-[13px] font-semibold text-sky-600">상세</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

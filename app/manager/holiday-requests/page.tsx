@@ -172,7 +172,7 @@ export default function HolidayRequestsPage() {
       />
 
       <StatCardRow
-        className="mb-5"
+        className="mb-4"
         cols={3}
         items={[
           { label: "이번 달 커스텀 휴무일", value: rows.length },
@@ -181,7 +181,7 @@ export default function HolidayRequestsPage() {
         ]}
       />
 
-      <div className="mb-4">
+      <div className="mb-3">
         <ListToolbar
           query={search}
           onQueryChange={setSearch}
@@ -193,9 +193,8 @@ export default function HolidayRequestsPage() {
       </div>
 
       {/* 안내 */}
-      <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-        <span className="font-black">근무 인정</span>은 관리자가 직접 확인 후 결정하며 즉시 반영되어 급여 계산에 사용됩니다(직무지도원 수락 불필요).
-        <span className="ml-1 font-black">휴무일 삭제</span>는 직무지도원이 수락해야 반영됩니다.
+      <div className="mb-3 rounded-lg border border-sky-100 bg-sky-50 px-3 py-1.5 text-[12px] leading-snug text-sky-800">
+        <span className="font-black">근무 인정</span>=관리자 결정 즉시 반영(급여 반영, 수락 불필요) · <span className="font-black">휴무일 삭제</span>=직무지도원 수락 필요
       </div>
 
       {loading ? (
