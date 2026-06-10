@@ -117,7 +117,7 @@ export default function AdminsPage() {
   return (
     <div>
       <PageHeader
-        title="운영자 계정 관리"
+        title="시스템 운영자 관리"
         sub="시스템 운영자 및 에이전시 관리자 계정을 관리합니다."
         actions={
           <button onClick={() => setShowCreate(true)}

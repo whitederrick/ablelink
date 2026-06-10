@@ -306,7 +306,7 @@ export default function AttendancesPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="근태 현황" />
+      <PageHeader title="근태 현황·교정" />
 
       <StatCardRow
         cols={4}

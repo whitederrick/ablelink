@@ -63,7 +63,7 @@ export default function AdminProfessionsPage() {
   return (
     <div>
       <PageHeader
-        title="직종 자격 검증"
+        title="자격 검증"
         sub="마켓플레이스 인력의 직무지도원·요양보호사·활동지원사 자격 증빙을 검증합니다."
       />
 

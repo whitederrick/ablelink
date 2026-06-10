@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2, Users, MapPin, CreditCard, TrendingUp } from "lucide-react";
+import Link from "next/link";
+import { Building2, Users, MapPin, CreditCard, UserCog, UserPlus, Bell, ClipboardCheck, Sparkles, Settings, ArrowRight } from "lucide-react";
 import PageHeader from "./_components/PageHeader";
 
 interface SystemStats {
@@ -11,6 +12,27 @@ interface SystemStats {
   traineeCount: number;
   activeSubscriptions: number;
 }
+
+// 통계 카드 → 해당 목록 화면으로 이동
+const STAT_CARDS = [
+  { key: "agencyCount",          icon: Building2,  label: "에이전시",   href: "/admin/agencies", color: "text-violet-600 bg-violet-50" },
+  { key: "workerCount",          icon: Users,      label: "직무지도원", href: "/admin/workers",  color: "text-sky-600 bg-sky-50" },
+  { key: "siteCount",            icon: MapPin,     label: "현장(Site)", href: "/admin/sites",    color: "text-emerald-600 bg-emerald-50" },
+  { key: "traineeCount",         icon: Users,      label: "훈련생",     href: "/admin/sites",    color: "text-amber-600 bg-amber-50" },
+  { key: "activeSubscriptions",  icon: CreditCard, label: "유료 구독",  href: "/admin/billing",  color: "text-rose-600 bg-rose-50" },
+] as const;
+
+// 주요 메뉴 바로가기
+const QUICK_LINKS = [
+  { href: "/admin/agencies",                label: "에이전시 관리",      desc: "에이전시 생성·플랜·한도",        icon: Building2 },
+  { href: "/admin/manager-signup-requests", label: "에이전시 관리자 관리", desc: "가입 신청 검토·승인",            icon: UserPlus },
+  { href: "/admin/admins",                  label: "시스템 운영자 관리",  desc: "운영자·관리자 계정",             icon: UserCog },
+  { href: "/admin/talent",                  label: "인재풀 관리",        desc: "구직 직무지도원·공고·자격검증",   icon: Sparkles },
+  { href: "/admin/billing",                 label: "구독/사용량 현황",    desc: "결제·구독·AI 사용량",            icon: CreditCard },
+  { href: "/admin/announcements",           label: "시스템 공지",        desc: "관리자·전체 사용자 공지 발송",    icon: Bell },
+  { href: "/admin/attendances",             label: "근태 현황·교정",     desc: "전체 에이전시 근태 조회·교정",    icon: ClipboardCheck },
+  { href: "/admin/settings",                label: "시스템 설정",        desc: "운영 설정값·간이세액표·카테고리",  icon: Settings },
+];
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<SystemStats | null>(null);
@@ -26,7 +48,7 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <PageHeader title="시스템 대시보드" sub="AbleLink 전체 운영 현황" />
+      <PageHeader title="시스템 대시보드" sub="AbleLink 전체 운영 현황 · 카드를 누르면 해당 화면으로 이동합니다" />
 
       {loading ? (
         <div className="flex h-40 items-center justify-center">
@@ -34,34 +56,38 @@ export default function AdminDashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-          {[
-            { icon: Building2,  label: "에이전시",   value: stats?.agencyCount ?? 0,        color: "text-violet-600 bg-violet-50" },
-            { icon: Users,      label: "직무지도원", value: stats?.workerCount ?? 0,          color: "text-sky-600 bg-sky-50" },
-            { icon: MapPin,     label: "현장(Site)", value: stats?.siteCount ?? 0,           color: "text-emerald-600 bg-emerald-50" },
-            { icon: Users,      label: "훈련생",     value: stats?.traineeCount ?? 0,        color: "text-amber-600 bg-amber-50" },
-            { icon: CreditCard, label: "유료 구독",  value: stats?.activeSubscriptions ?? 0, color: "text-rose-600 bg-rose-50" },
-          ].map(card => (
-            <div key={card.label} className="rounded-2xl border border-slate-100 bg-white p-5">
+          {STAT_CARDS.map(card => (
+            <Link key={card.label} href={card.href}
+              className="group rounded-2xl border border-slate-100 bg-white p-5 no-underline transition hover:border-slate-300 hover:shadow-sm">
               <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${card.color}`}>
                 <card.icon className="h-5 w-5" />
               </div>
-              <p className="text-2xl font-black text-slate-900">{card.value.toLocaleString()}</p>
-              <p className="mt-0.5 text-sm font-semibold text-slate-500">{card.label}</p>
-            </div>
+              <p className="text-2xl font-black text-slate-900">{((stats?.[card.key] ?? 0) as number).toLocaleString()}</p>
+              <p className="mt-0.5 flex items-center gap-1 text-sm font-semibold text-slate-500">
+                {card.label}
+                <ArrowRight className="h-3.5 w-3.5 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" />
+              </p>
+            </Link>
           ))}
         </div>
       )}
 
-      <div className="mt-8 rounded-2xl border border-slate-100 bg-white p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingUp className="h-5 w-5 text-slate-400" />
-          <h2 className="text-base font-black text-slate-900">시스템 안내</h2>
-        </div>
-        <div className="space-y-2 text-sm font-semibold text-slate-500">
-          <p>· 에이전시 관리 → 에이전시 계정 생성/관리, 구독 플랜 설정</p>
-          <p>· 구독 관리 → 결제 현황 및 플랜 변경</p>
-          <p>· 전체 현황 → 모든 에이전시의 현장/직무지도원/근태 조회</p>
-          <p>· 에이전시 관리자 계정은 <a href="/manager/login" className="text-sky-600 underline">/manager/login</a>에서 로그인합니다.</p>
+      {/* 주요 메뉴 바로가기 */}
+      <div className="mt-8">
+        <h2 className="mb-3 text-base font-black text-slate-900">바로가기</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {QUICK_LINKS.map(q => (
+            <Link key={q.href} href={q.href}
+              className="group flex items-start gap-3 rounded-2xl border border-slate-100 bg-white p-4 no-underline transition hover:border-slate-300 hover:shadow-sm">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                <q.icon className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[15px] font-black text-slate-900">{q.label}</p>
+                <p className="mt-0.5 text-[13px] font-medium text-slate-500">{q.desc}</p>
+              </div>
+            </Link>
+          ))}
         </div>
       </div>
     </div>

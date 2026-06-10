@@ -63,7 +63,7 @@ export default function ManagerRecruitPage() {
   return (
     <div>
       <PageHeader
-        title="직무지도 모집 공고"
+        title="직무지도 공고"
         sub="직무지도원을 모집할 공고를 등록하고 신청자를 관리합니다."
         actions={<Link href="/admin/recruit/new" className={`${T.btnPrimary} no-underline`}>+ 새 공고</Link>}
       />

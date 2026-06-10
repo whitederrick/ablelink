@@ -15,58 +15,63 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    title: "에이전시 관리",
+    title: "에이전시 운영 관리",
     items: [
-      { href: "/admin/agencies",                 label: "에이전시 목록·생성" },
-      { href: "/admin/manager-signup-requests",  label: "관리자 가입 신청" },
-      { href: "/admin/admins",                   label: "운영자 계정 관리" },
+      { href: "/admin/agencies",                 label: "에이전시 관리" },
+      { href: "/admin/manager-signup-requests",  label: "에이전시 관리자 관리" },
+      { href: "/admin/admins",                   label: "시스템 운영자 관리" },
     ],
   },
   {
-    title: "전체 데이터 현황",
+    title: "에이전시 데이터 관리",
     items: [
       { href: "/admin/workers",     label: "전체 직무지도원" },
       { href: "/admin/sites",       label: "전체 현장" },
+      { href: "/admin/attendances", label: "근태 현황·교정" },
+      { href: "/admin/surveys",     label: "만족도 조사 결과" },
     ],
   },
   {
-    title: "구독·사용량",
+    title: "구독/사용량 현황",
     items: [
       { href: "/admin/billing",       label: "결제·구독 현황" },
       { href: "/admin/usage",         label: "AI 사용량" },
     ],
   },
   {
-    title: "직무지도 매칭",
+    title: "인재풀 관리",
     items: [
+      { href: "/admin/talent",      label: "인재풀 검색" },
       { href: "/admin/recruit",     label: "직무지도 공고" },
-      { href: "/admin/talent",      label: "후보자 풀(구직)" },
       { href: "/admin/professions", label: "자격 검증" },
     ],
   },
   {
-    title: "운영 도구",
+    title: "소통·지원",
     items: [
       { href: "/admin/announcements", label: "시스템 공지" },
-      { href: "/admin/attendances",   label: "근태 현황·교정" },
-      { href: "/admin/surveys",       label: "만족도 조사 결과" },
       { href: "/admin/support",       label: "지원 요청" },
     ],
   },
   {
-    title: "시스템",
+    title: "시스템 설정",
     items: [
-      { href: "/admin/backup",        label: "데이터 백업" },
-      { href: "/admin/logs",          label: "감사 로그" },
-      { href: "/admin/settings",      label: "시스템 설정" },
+      { href: "/admin/settings",                    label: "운영 설정값" },
+      { href: "/admin/settings/income-tax",         label: "근로소득 간이세액표" },
+      { href: "/admin/settings/categories",         label: "공지 카테고리 관리" },
+      { href: "/admin/backup",                      label: "데이터 백업" },
+      { href: "/admin/logs",                        label: "감사 로그" },
     ],
   },
 ];
 
 export default function AdminNav() {
   const pathname = usePathname();
-  const isActive = (href: string) =>
-    href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+  const isActive = (href: string) => {
+    // /admin·/admin/settings는 하위 라우트가 있어 정확히 일치할 때만 활성
+    if (href === "/admin" || href === "/admin/settings") return pathname === href;
+    return pathname === href || pathname.startsWith(href + "/");
+  };
 
   // 아코디언: 한 번에 한 카테고리만 펼침(나머지 자동 접힘) → 세로 스크롤 최소화. (에이전시 매니저와 동일)
   const activeGroupTitle = groups.find(g => g.items.some(it => isActive(it.href)))?.title ?? groups[0].title;
