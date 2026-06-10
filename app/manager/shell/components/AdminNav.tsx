@@ -82,7 +82,6 @@ const groups: NavGroup[] = [
   {
     title: "정산",
     items: [
-      { href: "/manager/signature", label: "내 서명" },
       { href: "/manager/payroll",   label: "급여 관리", plan: "PRO" },
     ],
   },
@@ -90,6 +89,7 @@ const groups: NavGroup[] = [
     title: "구독/지원",
     items: [
       { href: "/manager/settings",     label: "사업주 정보 관리" },
+      { href: "/manager/signature",    label: "관리자 서명" },
       { href: "/manager/subscription", label: "구독 관리" },
       { href: "/manager/support",      label: "운영자 문의" },
     ],

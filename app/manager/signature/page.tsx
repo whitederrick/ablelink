@@ -78,7 +78,7 @@ export default function ManagerSignaturePage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="내 서명 관리"
+        title="관리자 서명"
         sub={<>{displayName && `${displayName}님 · `}등록 서명은 문서의 <strong>(위탁기관/공단) 담당자</strong> 서명란에 자동 삽입됩니다.</>}
       />
 
