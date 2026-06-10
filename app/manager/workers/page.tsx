@@ -677,23 +677,21 @@ export default function WorkersPage() {
                 <tr key={c.id}
                   className={`${T.trBase} ${c.activeAssignment ? "cursor-pointer hover:bg-slate-50" : ""}`}
                   onClick={() => c.activeAssignment && openEdit(c)}>
-                  <td className={T.td}><span className="font-black text-slate-900">{c.workerName}</span></td>
-                  <td className={`${T.td} text-slate-500`}>{c.phoneNumber}</td>
-                  <td className={`${T.td} text-xs text-slate-400`}>{maskLoginId(c.loginId)}</td>
+                  <td className={T.td}>{c.workerName}</td>
+                  <td className={T.td}>{c.phoneNumber}</td>
+                  <td className={T.td}>{maskLoginId(c.loginId)}</td>
                   <td className={T.td}>
                     {c.activeAssignment?.siteName
-                      ? <span className="text-slate-700">{c.activeAssignment.siteName}</span>
-                      : <span className="italic text-slate-300">미배정</span>}
+                      ? c.activeAssignment.siteName
+                      : <span className="text-slate-400">미배정</span>}
                   </td>
-                  <td className={`${T.td} text-slate-500`}>{c.activeAssignment?.agencyName || "-"}</td>
+                  <td className={T.td}>{c.activeAssignment?.agencyName || "-"}</td>
                   <td className={T.td}>
-                    {c.activeAssignment ? (
-                      <span className={`text-xs ${cachedAsgn ? "font-black text-sky-600" : "text-slate-400"}`}>
-                        {workTypeLabel}
-                      </span>
-                    ) : <span className="text-slate-300">-</span>}
+                    {c.activeAssignment
+                      ? <span className={cachedAsgn ? "text-sky-600" : "text-slate-400"}>{workTypeLabel}</span>
+                      : "-"}
                   </td>
-                  <td className={`${T.td} text-xs text-slate-400`}>{c.activeAssignment?.startDate?.slice(0, 10) || "-"}</td>
+                  <td className={T.td}>{c.activeAssignment?.startDate?.slice(0, 10) || "-"}</td>
                   <td className={T.td}>
                     <StatusBadge status={c.planType} map={PLAN_BADGE} />
                   </td>
@@ -703,9 +701,9 @@ export default function WorkersPage() {
                   <td className={T.td} onClick={e => e.stopPropagation()}>
                     <button
                       onClick={() => setInfoEditTarget(c)}
-                      className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                      className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-600 hover:bg-slate-50"
                     >
-                      <Pencil className="h-3 w-3" />
+                      <Pencil className="h-3.5 w-3.5" />
                       수정
                     </button>
                   </td>

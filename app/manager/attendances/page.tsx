@@ -317,16 +317,15 @@ export default function AttendancesPage() {
             <tbody>
               {pageItems.map(row => (
                 <tr key={row.id} className={T.trBase}>
-                  <td className={`${T.td} text-xs text-slate-500`}>{row.workDate}</td>
+                  <td className={T.td}>{row.workDate}</td>
                   <td className={T.td}>
-                    <span className="font-black text-slate-900">{row.user?.workerName || "-"}</span>
-                    {row.user?.phoneNumber && <span className="ml-1.5 text-xs text-slate-400">({row.user.phoneNumber})</span>}
+                    {row.user?.workerName || "-"}{row.user?.phoneNumber ? ` (${row.user.phoneNumber})` : ""}
                   </td>
                   <td className={T.td}>{row.site?.companyName || "-"}</td>
-                  <td className={`${T.td} ${row.startTime ? "font-semibold text-emerald-600" : "text-slate-300"}`}>
+                  <td className={`${T.td} ${row.startTime ? "font-semibold text-emerald-600" : ""}`}>
                     {formatTime(row.startTime)}
                   </td>
-                  <td className={`${T.td} ${row.endTime ? "text-slate-700" : "text-slate-300"}`}>
+                  <td className={T.td}>
                     {formatTime(row.endTime)}
                   </td>
                   <td className={T.td}>
@@ -336,10 +335,10 @@ export default function AttendancesPage() {
                     {row.isGpsModified
                       ? <StatusBadge status="gps" map={ATT_BADGE} />
                       : row.withinRange === true
-                      ? <span className="text-sm font-semibold text-emerald-600">정상</span>
-                      : <span className="text-slate-300">-</span>}
+                      ? <span className="font-semibold text-emerald-600">정상</span>
+                      : "-"}
                   </td>
-                  <td className={`${T.td} ${row.startDistanceM && row.startDistanceM > 100 ? "font-semibold text-orange-600" : "text-slate-700"}`}>
+                  <td className={`${T.td} ${row.startDistanceM && row.startDistanceM > 100 ? "font-semibold text-orange-600" : ""}`}>
                     {row.startDistanceM != null ? `${Math.round(row.startDistanceM)}m` : "-"}
                   </td>
                 </tr>

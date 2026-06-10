@@ -718,15 +718,15 @@ export default function AdminContractsPage() {
             : pageItems.map(c => {
               return (
                 <tr key={c.id} className={T.trBase}>
-                  <td className={T.td}><span className="font-black text-slate-900">{c.workerName}</span>{c.userPhone && <span className="ml-1.5 text-xs text-slate-400">({c.userPhone})</span>}</td>
-                  <td className={`${T.td} whitespace-nowrap text-xs text-slate-500`}>{c.contractStart?.slice(0, 10)} ~ {c.contractEnd?.slice(0, 10)}</td>
-                  <td className={`${T.td} text-slate-600`}>{c.workLocation || c.siteName || <span className="text-slate-300">미지정</span>}</td>
+                  <td className={T.td}>{c.workerName}{c.userPhone ? ` (${c.userPhone})` : ""}</td>
+                  <td className={`${T.td} whitespace-nowrap`}>{c.contractStart?.slice(0, 10)} ~ {c.contractEnd?.slice(0, 10)}</td>
+                  <td className={T.td}>{c.workLocation || c.siteName || <span className="text-slate-400">미지정</span>}</td>
                   <td className={T.td}><StatusBadge status={c.status} map={STATUS_BADGE} /></td>
-                  <td className={`${T.td} text-xs text-slate-400`}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
+                  <td className={T.td}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>
                     <div className="flex gap-1.5">
-                      <button onClick={() => setDetailId(c.id)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50">상세</button>
-                      {c.status === "PENDING" && <button onClick={() => copyLink(c.signToken)} className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100">링크</button>}
+                      <button onClick={() => setDetailId(c.id)} className="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-3 text-[13px] font-bold text-slate-600 hover:bg-slate-50">상세</button>
+                      {c.status === "PENDING" && <button onClick={() => copyLink(c.signToken)} className="inline-flex min-h-10 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 text-[13px] font-bold text-sky-700 hover:bg-sky-100">링크</button>}
                     </div>
                   </td>
                 </tr>

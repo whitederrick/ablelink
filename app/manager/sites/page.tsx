@@ -96,35 +96,34 @@ export default function AdminSitesPage() {
               const approval = APPROVAL_CLS[it.basePointApprovalStatus] || APPROVAL_CLS.ORIGINAL_SET;
               return (
                 <tr key={it.id} className={T.trBase}>
-                  <td className={`${T.td} text-xs text-slate-400`}>{it.id}</td>
+                  <td className={T.td}>{it.id}</td>
                   <td className={T.td}>
-                    <Link href={`/manager/sites/${it.id}`} className="font-black text-sky-600 hover:underline">
+                    <Link href={`/manager/sites/${it.id}`} className="font-semibold text-sky-600 hover:underline">
                       {it.companyName}
                     </Link>
                   </td>
-                  <td className={`${T.td} text-slate-700`}>
-                    {it.address}{it.detailAddress ? <span className="text-slate-400"> {it.detailAddress}</span> : ""}
+                  <td className={T.td}>
+                    {it.address}{it.detailAddress ? ` ${it.detailAddress}` : ""}
                   </td>
                   <td className={T.td}>
-                    <span className="text-slate-700">{it.businessContactName || "-"}</span>
-                    {it.businessContactPhone && <span className="ml-1.5 text-slate-400">({it.businessContactPhone})</span>}
+                    {it.businessContactName || "-"}{it.businessContactPhone ? ` (${it.businessContactPhone})` : ""}
                   </td>
                   <td className={T.td}>
                     {it.ownerManagerName ? (
-                      <span className="text-sm font-semibold text-slate-700">{it.ownerManagerName}</span>
+                      it.ownerManagerName
                     ) : (
                       <button
                         onClick={() => claimSite(it.id)}
-                        className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-black text-sky-700 active:scale-95"
+                        className="inline-flex min-h-10 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 text-[13px] font-bold text-sky-700 active:scale-95"
                       >
                         미지정 · 내 담당으로
                       </button>
                     )}
                   </td>
-                  <td className={`${T.td} text-sm text-slate-500`}>{it.agencyName || "-"}</td>
-                  <td className={`${T.td} font-black text-sky-600`}>{it.allowanceRange ?? 100}m</td>
+                  <td className={T.td}>{it.agencyName || "-"}</td>
+                  <td className={T.td}>{it.allowanceRange ?? 100}m</td>
                   <td className={T.td}>
-                    <span className={`text-sm font-semibold ${it.basePointConfirmed ? "text-emerald-600" : "text-slate-400"}`}>
+                    <span className={it.basePointConfirmed ? "font-semibold text-emerald-600" : "text-slate-500"}>
                       {it.basePointConfirmed ? "확정" : "미확정"}
                     </span>
                   </td>
