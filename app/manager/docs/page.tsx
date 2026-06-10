@@ -7,6 +7,9 @@ import { useEffect, useState, useMemo } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+
+const PAGE_SIZE = 10;
 
 type DocType =
   | "attendance-sheet"
@@ -16,12 +19,12 @@ type DocType =
   | "adaptation-final-eval";
 
 // 문서 정의 + 서비스 단계 적용 여부(출근부는 공통, 훈련/적응은 단계별)
-const DOC_DEFS: { id: DocType; label: string; needsTrainee: boolean; kind: "COMMON" | "TRAINING" | "ADAPTATION" }[] = [
-  { id: "attendance-sheet",     label: "출근부",          needsTrainee: false, kind: "COMMON" },
-  { id: "training-daily-log",   label: "훈련일지",        needsTrainee: true,  kind: "TRAINING" },
-  { id: "trainee-final-eval",   label: "훈련생 종합평가", needsTrainee: true,  kind: "TRAINING" },
-  { id: "adaptation-daily-log", label: "적응지도 일지",   needsTrainee: true,  kind: "ADAPTATION" },
-  { id: "adaptation-final-eval",label: "적응 종합평가",   needsTrainee: true,  kind: "ADAPTATION" },
+const DOC_DEFS: { id: DocType; label: string; short: string; needsTrainee: boolean; kind: "COMMON" | "TRAINING" | "ADAPTATION" }[] = [
+  { id: "attendance-sheet",     label: "출근부",          short: "출근부",   needsTrainee: false, kind: "COMMON" },
+  { id: "training-daily-log",   label: "훈련일지",        short: "훈련일지", needsTrainee: true,  kind: "TRAINING" },
+  { id: "trainee-final-eval",   label: "훈련생 종합평가", short: "훈련평가", needsTrainee: true,  kind: "TRAINING" },
+  { id: "adaptation-daily-log", label: "적응지도 일지",   short: "적응일지", needsTrainee: true,  kind: "ADAPTATION" },
+  { id: "adaptation-final-eval",label: "적응 종합평가",   short: "적응평가", needsTrainee: true,  kind: "ADAPTATION" },
 ];
 
 function docActive(kind: "COMMON" | "TRAINING" | "ADAPTATION", serviceStep: string): boolean {
@@ -99,6 +102,10 @@ export default function AdminDocsPage() {
     const q = query.trim().toLowerCase();
     return workers.filter(c => !q || c.workerName.toLowerCase().includes(q) || c.siteName.toLowerCase().includes(q));
   }, [workers, query]);
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [query]);
 
   function previewUrl() {
     const p = new URLSearchParams({ workerId: selectedWorker, docType, periodStart, periodEnd, ...(traineeId ? { traineeId } : {}) });
@@ -152,8 +159,8 @@ export default function AdminDocsPage() {
   return (
     <div>
       <PageHeader
-        title="문서 조회·출력 (Starter+)"
-        sub="기간을 정하고 직무지도원의 문서를 선택하면 우측에서 바로 조회·출력·발송할 수 있습니다. (서명은 ‘제출 문서 확인·확정’)"
+        title="문서 조회"
+        sub="기간을 정하고 직무지도원의 문서를 선택하면 우측에서 바로 조회·미리보기할 수 있습니다. (확정·서명·발송은 ‘일지 관리’)"
       />
 
       {/* 상단: 기간 + 검색 */}
@@ -173,43 +180,58 @@ export default function AdminDocsPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        {/* 좌측: 직무지도원 + 문서 뱃지 목록 */}
-        <div className="space-y-2.5">
+        {/* 좌측: 게시판(제목줄 + 직무지도원 행 + 문서 버튼 한 줄) */}
+        <div>
           {loadingWorkers ? (
             <p className={T.empty}>불러오는 중…</p>
           ) : filtered.length === 0 ? (
             <p className={T.empty}>{workers.length === 0 ? "배정된 직무지도원이 없습니다." : "조건에 맞는 직무지도원이 없습니다."}</p>
-          ) : filtered.map(c => {
-            const isAdapt = c.serviceStep === "ADAPTATION";
-            return (
-              <div key={c.workerId}
-                className={`rounded-2xl border bg-white p-3.5 transition ${selectedWorker === c.workerId ? "border-slate-950 ring-2 ring-slate-100" : "border-slate-200"}`}>
-                <div className="flex flex-wrap items-center gap-2 text-[15px] font-medium text-slate-800">
-                  <span className="font-semibold">{c.workerName}</span>
-                  <span className="text-[13px] text-slate-500">📍 {c.siteName}</span>
-                  <span className={`${T.badge} ${isAdapt ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>
-                    {isAdapt ? "적응지도" : "지원고용"}
-                  </span>
-                  <span className="mx-0.5 h-5 w-px shrink-0 bg-slate-200" />
-                  {DOC_DEFS.map(doc => {
-                    const active = docActive(doc.kind, c.serviceStep);
-                    const selected = selectedWorker === c.workerId && docType === doc.id;
+          ) : (
+            <div className={T.tableWrap}>
+              <table className="w-full">
+                <thead>
+                  <tr>{["구분", "직무지도원", "현장", "문서"].map(h => (
+                    <th key={h} className="border-b border-slate-100 bg-slate-50 px-2.5 py-2 text-left text-[13px] font-black text-slate-500 whitespace-nowrap">{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody>
+                  {pageItems.map(c => {
+                    const isAdapt = c.serviceStep === "ADAPTATION";
                     return (
-                      <button key={doc.id} disabled={!active}
-                        onClick={() => pickDoc(c.workerId, doc.id)}
-                        className={`inline-flex min-h-9 items-center rounded-lg border px-3 text-[13px] font-bold transition ${
-                          selected ? "border-slate-950 bg-slate-950 text-white"
-                          : active ? "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                          : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
-                        }`}>
-                        {doc.label}
-                      </button>
+                      <tr key={c.workerId} className={`${T.trBase} ${selectedWorker === c.workerId ? "bg-slate-50" : ""}`}>
+                        <td className="px-2.5 py-1.5 align-middle whitespace-nowrap">
+                          <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[12px] font-black ${isAdapt ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>{isAdapt ? "적응지도" : "지원훈련"}</span>
+                        </td>
+                        <td className="px-2.5 py-1.5 align-middle whitespace-nowrap text-[14px] font-bold text-slate-800">{c.workerName}</td>
+                        <td className="px-2.5 py-1.5 align-middle whitespace-nowrap text-[13px] text-slate-500">{c.siteName}</td>
+                        <td className="px-2.5 py-1.5 align-middle">
+                          <div className="flex flex-nowrap items-center gap-1">
+                            {DOC_DEFS.map(doc => {
+                              const active = docActive(doc.kind, c.serviceStep);
+                              const selected = selectedWorker === c.workerId && docType === doc.id;
+                              return (
+                                <button key={doc.id} disabled={!active} onClick={() => pickDoc(c.workerId, doc.id)}
+                                  className={`inline-flex h-7 shrink-0 items-center rounded-md border px-2 text-[12px] font-bold transition ${
+                                    selected ? "border-slate-950 bg-slate-950 text-white"
+                                    : active ? "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                                    : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
+                                  }`}>
+                                  {doc.short}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      </tr>
                     );
                   })}
-                </div>
-              </div>
-            );
-          })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {filtered.length > 0 && (
+            <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+          )}
         </div>
 
         {/* 우측: 선택 문서 상세(미리보기 + 발송/다운로드 + 감사 ZIP) */}
@@ -221,40 +243,37 @@ export default function AdminDocsPage() {
           ) : (
             <>
               <div className={T.card}>
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-black text-slate-900">{worker?.workerName} · {curDoc?.label}</p>
-                    <p className="text-xs font-semibold text-slate-400">{periodStart} ~ {periodEnd}</p>
+                {/* 헤더: 직무지도원·현장·문서 + 훈련생 선택(옆) + 다운로드 */}
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      <p className="text-sm font-black text-slate-900">{worker?.workerName}{worker?.siteName && worker.siteName !== "-" ? ` · ${worker.siteName}` : ""} · {curDoc?.label}</p>
+                      {needsTrainee && (
+                        <div className="flex flex-wrap items-center gap-1.5 border-l border-slate-200 pl-3">
+                          <span className="text-[12px] font-black text-slate-500">훈련생</span>
+                          {(worker?.trainees || []).length === 0 ? (
+                            <span className="text-xs font-semibold text-slate-400">담당 훈련생 없음</span>
+                          ) : (worker?.trainees || []).map(t => (
+                            <button key={t.id} onClick={() => setTraineeId(t.id)}
+                              className={`inline-flex h-7 items-center rounded-md border px-2 text-[12px] font-bold transition ${
+                                traineeId === t.id ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                              }`}>
+                              {t.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-xs font-semibold text-slate-400">{periodStart} ~ {periodEnd}</p>
                   </div>
-                  {ready && <button onClick={handleDownload} className={T.btnPrimary}>📥 PDF 다운로드</button>}
+                  {ready && <button onClick={handleDownload} className={`${T.btnPrimary} shrink-0`}>📥 PDF 다운로드</button>}
                 </div>
-
-                {/* 훈련생 선택(필요 문서) */}
-                {needsTrainee && (
-                  <div className="mb-3">
-                    <p className="mb-1.5 text-[11px] font-black uppercase tracking-wider text-slate-400">훈련생 선택</p>
-                    {(worker?.trainees || []).length === 0 ? (
-                      <p className="text-xs font-semibold text-slate-400">담당 훈련생이 없습니다.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {(worker?.trainees || []).map(t => (
-                          <button key={t.id} onClick={() => setTraineeId(t.id)}
-                            className={`rounded-lg border px-2.5 py-1 text-xs font-bold transition ${
-                              traineeId === t.id ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                            }`}>
-                            {t.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {/* 미리보기 */}
                 {ready ? (
-                  <iframe src={previewUrl()} className="h-[480px] w-full rounded-xl border border-slate-200 bg-slate-100" title="문서 미리보기" />
+                  <iframe src={previewUrl()} className="h-[340px] w-full rounded-xl border border-slate-200 bg-slate-100" title="문서 미리보기" />
                 ) : (
-                  <div className="flex h-[120px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50">
+                  <div className="flex h-[100px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50">
                     <p className="text-sm font-semibold text-slate-400">훈련생을 선택하면 미리보기가 표시됩니다.</p>
                   </div>
                 )}

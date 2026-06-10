@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
+import { injectManagerSignature } from "@/lib/docs/managerSig";
 import JSZip from "jszip";
 
 const DOC_LABEL: Record<string, string> = {
@@ -40,6 +41,7 @@ export async function GET(req: NextRequest) {
       take: 50, // PDF 순차 렌더 — 서버리스 타임아웃 방지 상한(초과분은 검색으로 좁혀 받기)
       select: {
         id: true, docType: true, traineeId: true, periodStart: true, periodEnd: true,
+        managerSignatureUrl: true, managerSignerName: true,
         worker: { select: { workerName: true } },
         site: { select: { companyName: true } },
         currentVersion: { select: { sourceData: true } },
@@ -63,10 +65,14 @@ export async function GET(req: NextRequest) {
     for (const r of runs) {
       if (!r.currentVersion?.sourceData) continue;
       const renderType = (PRISMA_TO_PDF_DOCTYPE[r.docType] ?? r.docType) as DocumentType;
-      const payload = {
+      const basePayload = {
         ...((r.currentVersion.sourceData ?? {}) as any),
         companyName: (r.currentVersion.sourceData as any)?.companyName ?? r.site?.companyName ?? "",
       };
+      const payload = await injectManagerSignature(basePayload, {
+        managerSignatureUrl: r.managerSignatureUrl,
+        managerSignerName: r.managerSignerName,
+      });
       let buf: Buffer;
       try {
         buf = await renderPdfToBuffer({ documentType: renderType, payload });

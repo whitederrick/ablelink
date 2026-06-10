@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
+import { injectManagerSignature } from "@/lib/docs/managerSig";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -35,6 +36,8 @@ export async function GET(
         run: {
           select: {
             docType: true,
+            managerSignatureUrl: true,
+            managerSignerName: true,
             assignment: { select: { site: { select: { companyName: true, agencyId: true } } } },
           },
         },
@@ -54,10 +57,15 @@ export async function GET(
       throw new Error("VALIDATION:docType");
     }
 
-    const payload = {
+    const basePayload = {
       ...((v.sourceData ?? {}) as any),
       companyName: (v.sourceData as any)?.companyName ?? v.run?.assignment?.site?.companyName ?? "",
     };
+    // 제출 후 추가된 매니저 서명을 스냅샷에 합쳐 렌더(스냅샷 자체에는 비어 있음).
+    const payload = await injectManagerSignature(basePayload, {
+      managerSignatureUrl: v.run?.managerSignatureUrl,
+      managerSignerName: v.run?.managerSignerName,
+    });
 
     const pdfBuffer = await renderPdfToBuffer({ documentType: docType, payload });
 

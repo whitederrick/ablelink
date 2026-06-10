@@ -25,6 +25,9 @@ export default function AgencySettingsPage() {
   const [addrDetail, setAddrDetail] = useState("");
   const [businessNumber, setBusinessNumber] = useState("");
   const [representativeName, setRepresentativeName] = useState("");
+  // 장애인고용공단 담당자 — 일지 관리 '문서 발송' 기본 수신자
+  const [govEmail, setGovEmail] = useState("");
+  const [govName, setGovName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -62,6 +65,8 @@ export default function AgencySettingsPage() {
           setAddress(d.data.address || "");
           setBusinessNumber(d.data.businessNumber || "");
           setRepresentativeName(d.data.representativeName || "");
+          setGovEmail(d.data.govContactEmail || "");
+          setGovName(d.data.govContactName || "");
           setSigUrl(d.data.representativeSignatureUrl || null);
         }
       })
@@ -100,7 +105,7 @@ export default function AgencySettingsPage() {
       const r = await fetch("/api/admin/agency-profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumber, address: fullAddress, businessNumber, representativeName }),
+        body: JSON.stringify({ phoneNumber, address: fullAddress, businessNumber, representativeName, govContactEmail: govEmail, govContactName: govName }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.message);
@@ -265,6 +270,16 @@ export default function AgencySettingsPage() {
             )}
             <input value={address} readOnly placeholder="검색 후 선택된 주소" className={`mt-2 w-full ${T.input} bg-slate-50`} />
             <input value={addrDetail} onChange={e => setAddrDetail(e.target.value)} placeholder="상세주소 (동/호 등, 선택)" className={`mt-2 w-full ${T.input}`} />
+          </div>
+
+          {/* 장애인고용공단 담당자 — 일지 관리 '문서 발송' 기본 수신자 */}
+          <div className="border-t border-slate-100 pt-4">
+            <label className={T.label}>장애인고용공단 담당자</label>
+            <p className="mb-2 text-[11px] font-semibold text-slate-400">‘일지 관리 → 문서 발송’의 기본 수신자로 채워집니다. (발송 시 수정 가능)</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <input value={govName} onChange={e => setGovName(e.target.value)} placeholder="담당자명 (예: 김공단)" className={`w-full ${T.input}`} />
+              <input value={govEmail} onChange={e => setGovEmail(e.target.value)} placeholder="이메일 (예: officer@kead.or.kr)" type="email" inputMode="email" className={`w-full ${T.input}`} />
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-3">

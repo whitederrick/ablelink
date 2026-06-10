@@ -53,13 +53,13 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    // 제출 문서 확인·확정(워크플로 메인) / 직접 발급(보조).
+    // 일지 관리(워크플로 메인: 조회·확정·서명·발송) / 문서 조회(보조).
     // 진척도 리포트는 모니터링 성격이라 [개요]로 이동.
     // 옛 '출근부·일지 확정'(review)은 허브로 대체되어 네비에서 제거.
     title: "문서",
     items: [
-      { href: "/manager/documents", label: "제출 문서 확인·확정", plan: "STARTER" }, // 워크플로 메인
-      { href: "/manager/docs",      label: "문서 조회·출력", plan: "STARTER" },  // 매니저 직접 PDF 조회·출력(보조)
+      { href: "/manager/documents", label: "일지 관리", plan: "STARTER" }, // 워크플로 메인(조회·확정·서명·발송)
+      { href: "/manager/docs",      label: "문서 조회", plan: "STARTER" },  // 매니저 직접 PDF 조회(보조)
     ],
   },
   {
