@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
             where: { agencyId: { in: agencyIds } },
             orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
             take: 30,
-            select: { id: true, title: true, body: true, type: true, pinned: true, createdAt: true },
+            select: { id: true, title: true, body: true, type: true, pinned: true, createdAt: true, category: { select: { name: true, tone: true } } },
           })
         : Promise.resolve([] as any[]),
     ]);
@@ -34,11 +34,15 @@ export async function GET(req: NextRequest) {
     const items = [
       ...agency.map((a: any) => ({
         id: `A${a.id}`, scope: "AGENCY" as const, scopeLabel: "소속 기관",
-        title: a.title, body: a.body, type: a.type, pinned: a.pinned, createdAt: a.createdAt.toISOString(),
+        title: a.title, body: a.body, type: a.type,
+        categoryName: a.category?.name ?? null, categoryTone: a.category?.tone ?? null,
+        pinned: a.pinned, createdAt: a.createdAt.toISOString(),
       })),
       ...system.map((a: any) => ({
         id: `S${a.id}`, scope: "SYSTEM" as const, scopeLabel: "운영자",
-        title: a.title, body: a.body, type: a.type, pinned: false, createdAt: a.createdAt.toISOString(),
+        title: a.title, body: a.body, type: a.type,
+        categoryName: null, categoryTone: null,
+        pinned: false, createdAt: a.createdAt.toISOString(),
       })),
     ].sort((x, y) => {
       if (x.pinned !== y.pinned) return x.pinned ? -1 : 1; // 고정 우선

@@ -1,10 +1,21 @@
 "use client";
 
 // 알림 목록 게시판 — 발송한 알림 이력을 게시판으로 열람. 상단 "+ 알림 발송" 버튼으로 발송(모달).
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Send, Users, User, Building2, X } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
+
+const NOTICE_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  INFO:   { label: "안내", tone: "sky" },
+  WARN:   { label: "주의", tone: "amber" },
+  REJECT: { label: "반려", tone: "rose" },
+};
+const NOTICE_PAGE_SIZE = 10;
 
 type Worker  = { id: string; workerName: string; siteName: string };
 type Site    = { id: string; companyName: string };
@@ -132,6 +143,12 @@ export default function NoticesPage() {
   const [showSend, setShowSend] = useState(false);
   const [toast, setToast]       = useState("");
 
+  // 조회조건
+  const [query, setQuery] = useState("");
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [readFilter, setReadFilter] = useState<"all" | "unread" | "read">("all");
+  const [page, setPage] = useState(1);
+
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),3000); };
 
   const loadNotices = useCallback(()=>{
@@ -147,6 +164,29 @@ export default function NoticesPage() {
     loadNotices();
   },[loadNotices]);
 
+  const stats = useMemo(() => ({
+    total: notices.length,
+    unread: notices.filter(n => !n.read).length,
+    read: notices.filter(n => n.read).length,
+  }), [notices]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return notices
+      .filter(n => selectedTypes.length === 0 || selectedTypes.includes(n.type))
+      .filter(n => readFilter === "all" || (readFilter === "unread" ? !n.read : n.read))
+      .filter(n => !q || n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q) || (n.workerName ?? "").toLowerCase().includes(q));
+  }, [notices, query, selectedTypes, readFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / NOTICE_PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * NOTICE_PAGE_SIZE, page * NOTICE_PAGE_SIZE);
+  useEffect(() => { if (page > totalPages) setPage(1); }, [page, totalPages]);
+
+  const filters: FilterChip[] = TYPE_OPTS.map(o => ({
+    value: o.val, label: o.label, count: notices.filter(n => n.type === o.val).length,
+  }));
+  const toggleType = (v: string) => { setPage(1); setSelectedTypes(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]); };
+
   return (
     <div>
       <PageHeader
@@ -155,6 +195,39 @@ export default function NoticesPage() {
         actions={<button onClick={()=>setShowSend(true)} className={T.btnPrimary}>+ 알림 발송</button>}
       />
 
+      <StatCardRow
+        className="mb-5"
+        cols={3}
+        items={[
+          { label: "전체 알림", value: stats.total },
+          { label: "미확인", value: stats.unread, tone: "rose" },
+          { label: "확인 완료", value: stats.read, tone: "emerald" },
+        ]}
+      />
+
+      <div className="mb-4">
+        <ListToolbar
+          query={query}
+          onQueryChange={v => { setQuery(v); setPage(1); }}
+          placeholder="제목·내용·수신자 검색"
+          filters={filters}
+          selected={selectedTypes}
+          onToggleFilter={toggleType}
+          extra={
+            <div className="flex gap-1">
+              {([["all","전체"],["unread","미확인"],["read","확인"]] as const).map(([v, label]) => (
+                <button key={v} onClick={() => { setReadFilter(v); setPage(1); }}
+                  className={`rounded-xl border px-3 py-2 text-xs font-bold transition ${
+                    readFilter === v ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          }
+        />
+      </div>
+
       <div className="space-y-2.5">
         {loading ? (
           <p className={T.empty}>불러오는 중…</p>
@@ -162,15 +235,15 @@ export default function NoticesPage() {
           <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
             <p className="text-sm font-semibold text-slate-400">발송한 알림이 없습니다. ‘+ 알림 발송’으로 보내보세요.</p>
           </div>
-        ) : notices.map(n=>{
-          const t = TYPE_OPTS.find(o=>o.val===n.type);
-          return (
+        ) : pageItems.length===0 ? (
+          <p className={T.empty}>조건에 맞는 알림이 없습니다.</p>
+        ) : pageItems.map(n=>(
             <div key={n.id} className={T.card}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-black text-slate-900">{n.title}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${t?.cls??"bg-slate-100 text-slate-600"}`}>{t?.label??n.type}</span>
+                    <StatusBadge status={n.type} map={NOTICE_BADGE} />
                     {!n.read&&<span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-black text-rose-600">미확인</span>}
                   </div>
                   <p className="mt-0.5 text-xs text-slate-500">수신: {n.workerName}</p>
@@ -179,9 +252,12 @@ export default function NoticesPage() {
                 <p className="shrink-0 text-[11px] text-slate-400">{new Date(n.createdAt).toLocaleDateString("ko-KR")}</p>
               </div>
             </div>
-          );
-        })}
+        ))}
       </div>
+
+      {filtered.length > 0 && (
+        <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+      )}
 
       {showSend && <SendModal workers={workers} sites={sites} onClose={()=>setShowSend(false)} onSent={(n)=>{ showToast(`${n}명에게 발송했습니다.`); loadNotices(); }} />}
       {toast&&<div className="fixed bottom-8 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg">{toast}</div>}

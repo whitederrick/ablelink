@@ -553,27 +553,8 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
       <header className="bg-slate-950 px-5 pb-5 pt-safe-top text-white">
         <div className="mx-auto max-w-md">
           <div className="flex items-center justify-between py-4">
-            {/* 로고 + 현장 */}
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xl font-black tracking-tight text-white">AbleLink</span>
-              {homeData?.siteName && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <button
-                    onClick={() => router.push("/worker/site")}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-300"
-                  >
-                    <MapPin className="h-3 w-3 text-sky-400" aria-hidden="true" />
-                    {homeData.siteName}
-                  </button>
-                  {/* 서비스 단계 뱃지 (지원고용 훈련 / 취업 후 적응지도) — 어두운 헤더에서 잘 보이게 솔리드 */}
-                  <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ${
-                    homeData.trainingType === "ADAPTATION" ? "bg-amber-400 text-slate-950" : "bg-sky-400 text-slate-950"
-                  }`}>
-                    {homeData.trainingType === "ADAPTATION" ? "취업 후 적응지도" : "지원고용 훈련"}
-                  </span>
-                </div>
-              )}
-            </div>
+            {/* 로고 (현장·서비스단계 뱃지는 아래 날짜 줄로 이동 — 상단 높이 축소) */}
+            <span className="text-xl font-black tracking-tight text-white">AbleLink</span>
 
             {/* 알림 + 프로필 */}
             <div className="flex items-center gap-2">
@@ -679,9 +660,28 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
             </div> {/* 알림+프로필 flex wrap 닫기 */}
           </div>
 
-          {/* 날짜 + 상태 */}
-          <div className="flex items-center justify-between pb-1">
-            <span className="text-base font-bold text-slate-300">{nowDateStr()}</span>
+          {/* 날짜 + 현장·서비스단계 + 상태 (로고 아래에서 이동 — 상단 높이 축소) */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-base font-bold text-slate-300">{nowDateStr()}</span>
+              {homeData?.siteName && (
+                <>
+                  <button
+                    onClick={() => router.push("/worker/site")}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-300"
+                  >
+                    <MapPin className="h-3 w-3 text-sky-400" aria-hidden="true" />
+                    {homeData.siteName}
+                  </button>
+                  {/* 서비스 단계 뱃지 (지원고용 훈련 / 취업 후 적응지도) */}
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ${
+                    homeData.trainingType === "ADAPTATION" ? "bg-amber-400 text-slate-950" : "bg-sky-400 text-slate-950"
+                  }`}>
+                    {homeData.trainingType === "ADAPTATION" ? "취업 후 적응지도" : "지원고용 훈련"}
+                  </span>
+                </>
+              )}
+            </div>
             <span className={`rounded-full px-3 py-1 text-xs font-black ${isExempt ? "bg-sky-100 text-sky-600" : cfg.badge}`}>
               {isExempt ? "자동 기록" : cfg.label}
             </span>

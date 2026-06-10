@@ -19,10 +19,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const row = await ownOr404(scope.agencyId, id);
     if (!row) return NextResponse.json({ success: false, message: "공지를 찾을 수 없습니다." }, { status: 404 });
     const b = await req.json().catch(() => ({}));
-    await prisma.agencyAnnouncement.update({
-      where: { id: row.id },
-      data: { pinned: typeof b?.pinned === "boolean" ? b.pinned : !row.pinned },
-    });
+    const data: any = {};
+    // pinned만 보내면 토글, 본문 수정 필드가 오면 함께 반영
+    if (typeof b?.title === "string" && b.title.trim()) data.title = b.title.trim();
+    if (typeof b?.body === "string" && b.body.trim()) data.body = b.body.trim();
+    if (typeof b?.type === "string" && ["INFO", "WARN", "URGENT"].includes(b.type)) data.type = b.type;
+    // 카테고리 변경(우선). null이면 카테고리 해제 후 type 폴백.
+    if (b?.categoryId !== undefined) {
+      if (b.categoryId === null || b.categoryId === "") {
+        data.categoryId = null;
+      } else if (/^\d+$/.test(String(b.categoryId))) {
+        const cat = await prisma.announcementCategory.findUnique({ where: { id: BigInt(String(b.categoryId)) }, select: { id: true, tone: true } });
+        if (cat) {
+          data.categoryId = cat.id;
+          data.type = cat.tone === "rose" ? "URGENT" : cat.tone === "amber" ? "WARN" : "INFO";
+        }
+      }
+    }
+    if (typeof b?.pinned === "boolean") data.pinned = b.pinned;
+    // 아무 필드도 없으면 기존처럼 고정 토글
+    if (Object.keys(data).length === 0) data.pinned = !row.pinned;
+    await prisma.agencyAnnouncement.update({ where: { id: row.id }, data });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     if (e instanceof Response) return e;

@@ -6,12 +6,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 
+// 카테고리 톤 → 레거시 type(폴백/팬아웃용) 매핑
+function toneToType(tone: string | undefined): string {
+  if (tone === "rose") return "URGENT";
+  if (tone === "amber") return "WARN";
+  return "INFO";
+}
+
 function serialize(a: any) {
   return {
     id: a.id.toString(),
     title: a.title,
     body: a.body,
     type: a.type,
+    categoryId: a.categoryId != null ? a.categoryId.toString() : null,
+    category: a.category ? { id: a.category.id.toString(), name: a.category.name, tone: a.category.tone } : null,
     pinned: a.pinned,
     createdAt: a.createdAt.toISOString(),
   };
@@ -24,6 +33,7 @@ export async function GET(req: NextRequest) {
       where: { agencyId: scope.agencyId },
       orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
       take: 100,
+      include: { category: true },
     });
     return NextResponse.json({ success: true, announcements: rows.map(serialize) });
   } catch (e: any) {
@@ -40,7 +50,14 @@ export async function POST(req: NextRequest) {
     const title = String(b?.title ?? "").trim();
     const body = String(b?.body ?? "").trim();
     if (!title || !body) return NextResponse.json({ success: false, message: "제목과 내용은 필수입니다." }, { status: 400 });
-    const type = ["INFO", "WARN", "URGENT"].includes(b?.type) ? b.type : "INFO";
+
+    // 카테고리 우선(운영자 전역 관리). 없으면 레거시 type 사용.
+    let categoryId: bigint | null = null;
+    let type = ["INFO", "WARN", "URGENT"].includes(b?.type) ? b.type : "INFO";
+    if (b?.categoryId != null && /^\d+$/.test(String(b.categoryId))) {
+      const cat = await prisma.announcementCategory.findUnique({ where: { id: BigInt(String(b.categoryId)) }, select: { id: true, tone: true } });
+      if (cat) { categoryId = cat.id; type = toneToType(cat.tone); } // type은 폴백/팬아웃 강도용으로 동기화
+    }
 
     const row = await prisma.agencyAnnouncement.create({
       data: {
@@ -48,6 +65,7 @@ export async function POST(req: NextRequest) {
         title: title.slice(0, 150),
         body: body.slice(0, 4000),
         type,
+        categoryId,
         pinned: b?.pinned === true,
         createdByManagerId: scope.managerId,
       },

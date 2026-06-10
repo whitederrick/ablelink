@@ -1,8 +1,114 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, CheckCircle2 } from "lucide-react";
+import { Settings, CheckCircle2, Plus, Trash2, GripVertical } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
+
+const CAT_TONES = ["sky", "amber", "rose", "emerald", "violet", "slate"] as const;
+const TONE_SWATCH: Record<string, string> = {
+  sky: "bg-sky-100 text-sky-700", amber: "bg-amber-100 text-amber-700", rose: "bg-rose-100 text-rose-700",
+  emerald: "bg-emerald-100 text-emerald-700", violet: "bg-violet-100 text-violet-700", slate: "bg-slate-200 text-slate-600",
+};
+type Category = { id: string; name: string; tone: string; sortOrder: number; isActive: boolean };
+
+function AnnouncementCategoryManager({ onToast }: { onToast: (m: string) => void }) {
+  const [cats, setCats] = useState<Category[]>([]);
+  const [newName, setNewName] = useState("");
+  const [newTone, setNewTone] = useState<string>("sky");
+  const [busy, setBusy] = useState(false);
+
+  const load = () => fetch("/api/admin/announcement-categories").then(r => r.json())
+    .then(d => { if (d.success) setCats(d.categories); }).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  async function add() {
+    if (!newName.trim()) { onToast("카테고리 이름을 입력하세요."); return; }
+    setBusy(true);
+    try {
+      const d = await fetch("/api/admin/announcement-categories", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName.trim(), tone: newTone }),
+      }).then(r => r.json());
+      if (d.success) { setNewName(""); setNewTone("sky"); onToast("카테고리를 추가했습니다."); load(); }
+      else onToast(d.message || "추가 실패");
+    } finally { setBusy(false); }
+  }
+  async function patch(id: string, body: any) {
+    const d = await fetch(`/api/admin/announcement-categories/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).then(r => r.json());
+    if (d.success) load(); else onToast(d.message || "변경 실패");
+  }
+  async function remove(c: Category) {
+    if (!confirm(`'${c.name}' 카테고리를 삭제할까요? 이 카테고리로 지정된 공지는 기본 표시로 돌아갑니다.`)) return;
+    const d = await fetch(`/api/admin/announcement-categories/${c.id}`, { method: "DELETE" }).then(r => r.json());
+    if (d.success) { onToast("삭제했습니다."); load(); } else onToast(d.message || "삭제 실패");
+  }
+  async function move(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= cats.length) return;
+    const a = cats[i], b = cats[j];
+    await Promise.all([
+      fetch(`/api/admin/announcement-categories/${a.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sortOrder: b.sortOrder }) }),
+      fetch(`/api/admin/announcement-categories/${b.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sortOrder: a.sortOrder }) }),
+    ]);
+    load();
+  }
+
+  return (
+    <div className="mb-6 rounded-2xl border border-slate-100 bg-white p-6">
+      <h2 className="mb-1 text-base font-black text-slate-900">공지 카테고리 관리</h2>
+      <p className="mb-4 text-xs text-slate-500">매니저가 공지 작성 시 선택하는 카테고리를 전역으로 관리합니다. 비활성 카테고리는 새 작성에서 숨겨집니다.</p>
+
+      {/* 추가 */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
+        <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="새 카테고리 이름"
+          onKeyDown={e => { if (e.key === "Enter") add(); }}
+          className="h-10 flex-1 min-w-[160px] rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-sky-400" />
+        <div className="flex gap-1">
+          {CAT_TONES.map(t => (
+            <button key={t} onClick={() => setNewTone(t)} title={t}
+              className={`h-7 w-7 rounded-lg border-2 ${TONE_SWATCH[t]} ${newTone === t ? "border-slate-900" : "border-transparent"}`} />
+          ))}
+        </div>
+        <button onClick={add} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white disabled:opacity-40">
+          <Plus className="h-4 w-4" /> 추가
+        </button>
+      </div>
+
+      {/* 목록 */}
+      {cats.length === 0 ? (
+        <p className="text-sm font-semibold text-slate-300">등록된 카테고리가 없습니다.</p>
+      ) : (
+        <div className="space-y-2">
+          {cats.map((c, i) => (
+            <div key={c.id} className={`flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 p-3 ${c.isActive ? "bg-white" : "bg-slate-50 opacity-70"}`}>
+              <GripVertical className="h-4 w-4 text-slate-300" />
+              <input defaultValue={c.name} onBlur={e => { const v = e.target.value.trim(); if (v && v !== c.name) patch(c.id, { name: v }); }}
+                className="h-9 w-36 rounded-lg border border-slate-200 px-2.5 text-sm font-bold text-slate-900 outline-none focus:border-sky-400" />
+              <div className="flex gap-1">
+                {CAT_TONES.map(t => (
+                  <button key={t} onClick={() => patch(c.id, { tone: t })} title={t}
+                    className={`h-6 w-6 rounded-md border-2 ${TONE_SWATCH[t]} ${c.tone === t ? "border-slate-900" : "border-transparent"}`} />
+                ))}
+              </div>
+              <span className={`ml-1 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-black ${TONE_SWATCH[c.tone]}`}>{c.name}</span>
+              <div className="ml-auto flex items-center gap-1.5">
+                <button disabled={i === 0} onClick={() => move(i, -1)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-500 disabled:opacity-30">↑</button>
+                <button disabled={i === cats.length - 1} onClick={() => move(i, 1)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-500 disabled:opacity-30">↓</button>
+                <button onClick={() => patch(c.id, { isActive: !c.isActive })}
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-black ${c.isActive ? "border-emerald-200 bg-emerald-50 text-emerald-600" : "border-slate-200 bg-white text-slate-400"}`}>
+                  {c.isActive ? "활성" : "비활성"}
+                </button>
+                <button onClick={() => remove(c)} className="rounded-lg border border-rose-200 px-2 py-1 text-rose-500 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface SettingItem {
   key: string;
@@ -96,6 +202,9 @@ export default function SettingsPage() {
           })}
         </div>
       </div>
+
+      {/* 공지 카테고리 관리 */}
+      <AnnouncementCategoryManager onToast={showToast} />
 
       {/* 환경변수 현황 */}
       <div className="rounded-2xl border border-slate-100 bg-white p-6">

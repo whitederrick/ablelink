@@ -1,9 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Search, ChevronDown, ChevronUp, Download } from "lucide-react";
+// 훈련 일지 열람 — 표준 게시판: PageHeader(CSV) → StatCardRow → ListToolbar(검색 + 상태필터 + 월/직무지도원) → 목록(클릭 펼침 상세) → Pagination.
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, Download } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
 
 type Log = {
   id: string; traineeId: string; traineeName: string;
@@ -16,6 +21,8 @@ type Worker = { id: string; workerName: string };
 
 const TYPE_LABELS: Record<string,string> = { PRE:"사전훈련", FIELD:"현장훈련", ADAPTATION:"적응지도" };
 const DOW = ["일","월","화","수","목","금","토"];
+const LOG_BADGE = { confirmed: { label: "확정", tone: "emerald" as const }, pending: { label: "미확정", tone: "amber" as const } };
+const LOG_PAGE_SIZE = 12;
 
 function nowYM() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
 
@@ -24,12 +31,14 @@ export default function ManagerLogsPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandId, setExpandId] = useState<string|null>(null);
-  const [workerId, setWorkerId]   = useState("");
-  const [completed, setCompleted] = useState("");
-  const [ym, setYm]             = useState(nowYM());
-  const [toast, setToast]       = useState("");
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),2500); };
+  // 서버 조회조건(월·직무지도원)
+  const [workerId, setWorkerId]   = useState("");
+  const [ym, setYm]             = useState(nowYM());
+  // 클라이언트 조회조건
+  const [query, setQuery] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
 
   useEffect(()=>{
     fetch("/api/admin/workers?pageSize=200")
@@ -45,14 +54,13 @@ export default function ManagerLogsPage() {
       dateFrom:  `${ym}-01`,
       dateTo:    `${ym}-${String(last).padStart(2,"0")}`,
       ...(workerId   ? { workerId }   : {}),
-      ...(completed ? { completed } : {}),
     });
     fetch(`/api/admin/logs?${params}`)
       .then(r=>r.json())
       .then(d=>{ if(d.success) setLogs(d.logs); })
       .catch(()=>{})
       .finally(()=>setLoading(false));
-  },[ym, workerId, completed]);
+  },[ym, workerId]);
 
   useEffect(()=>{ load(); },[load]);
 
@@ -63,6 +71,26 @@ export default function ManagerLogsPage() {
   }
 
   const confirmed = logs.filter(l=>l.isCompleted).length;
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return logs
+      .filter(l => selectedStatus.length === 0 || selectedStatus.includes(l.isCompleted ? "confirmed" : "pending"))
+      .filter(l => !q
+        || (l.traineeName ?? "").toLowerCase().includes(q)
+        || (l.workerName ?? "").toLowerCase().includes(q)
+        || (l.content ?? "").toLowerCase().includes(q));
+  }, [logs, query, selectedStatus]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / LOG_PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * LOG_PAGE_SIZE, page * LOG_PAGE_SIZE);
+  useEffect(() => { if (page > totalPages) setPage(1); }, [page, totalPages]);
+
+  const filters: FilterChip[] = [
+    { value: "confirmed", label: "확정", count: confirmed },
+    { value: "pending", label: "미확정", count: logs.length - confirmed },
+  ];
+  const toggleStatus = (v: string) => { setPage(1); setSelectedStatus(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]); };
 
   return (
     <div>
@@ -76,31 +104,35 @@ export default function ManagerLogsPage() {
         }
       />
 
-      {/* 필터 */}
-      <div className="mb-4 flex flex-wrap gap-2">
-        <input type="month" value={ym} onChange={e=>setYm(e.target.value)}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/>
-        <select value={workerId} onChange={e=>setWorkerId(e.target.value)}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400">
-          <option value="">전체 직무지도원</option>
-          {workers.map(c=><option key={c.id} value={c.id}>{c.workerName}</option>)}
-        </select>
-        <select value={completed} onChange={e=>setCompleted(e.target.value)}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400">
-          <option value="">전체 상태</option>
-          <option value="true">확정</option>
-          <option value="false">미확정</option>
-        </select>
-        <button onClick={load}
-          className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white active:scale-95">
-          <Search className="h-4 w-4"/>
-        </button>
-      </div>
+      <StatCardRow
+        className="mb-5"
+        cols={3}
+        items={[
+          { label: "전체 일지", value: logs.length },
+          { label: "확정", value: confirmed, tone: "emerald" },
+          { label: "미확정", value: logs.length - confirmed, tone: "amber" },
+        ]}
+      />
 
-      <div className="mb-3 flex gap-3 text-sm font-semibold text-slate-500">
-        <span>전체 <b className="text-slate-900">{logs.length}</b>건</span>
-        <span>확정 <b className="text-emerald-600">{confirmed}</b>건</span>
-        <span>미확정 <b className="text-amber-600">{logs.length-confirmed}</b>건</span>
+      <div className="mb-4">
+        <ListToolbar
+          query={query}
+          onQueryChange={v => { setQuery(v); setPage(1); }}
+          placeholder="훈련생·작성자·내용 검색"
+          filters={filters}
+          selected={selectedStatus}
+          onToggleFilter={toggleStatus}
+          extra={
+            <>
+              <input type="month" value={ym} onChange={e=>{ setYm(e.target.value); setPage(1); }}
+                className={T.input}/>
+              <select value={workerId} onChange={e=>{ setWorkerId(e.target.value); setPage(1); }} className={T.select}>
+                <option value="">전체 직무지도원</option>
+                {workers.map(c=><option key={c.id} value={c.id}>{c.workerName}</option>)}
+              </select>
+            </>
+          }
+        />
       </div>
 
       {loading?(
@@ -109,9 +141,11 @@ export default function ManagerLogsPage() {
         <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
           <p className="text-sm text-slate-400">일지가 없습니다.</p>
         </div>
+      ):pageItems.length===0?(
+        <p className={T.empty}>조건에 맞는 일지가 없습니다.</p>
       ):(
         <div className="space-y-2">
-          {logs.map(l=>(
+          {pageItems.map(l=>(
             <div key={l.id} className={`rounded-2xl border bg-white ${l.isCompleted?"border-emerald-100":"border-slate-100"}`}>
               <button onClick={()=>setExpandId(expandId===l.id?null:l.id)}
                 className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
@@ -123,9 +157,7 @@ export default function ManagerLogsPage() {
                     <span className="text-sm font-semibold text-slate-600">{l.workerName}</span>
                     <span className="text-sm text-slate-400">→ {l.traineeName}</span>
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">{TYPE_LABELS[l.trainingType]??l.trainingType}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${l.isCompleted?"bg-emerald-100 text-emerald-700":"bg-amber-100 text-amber-700"}`}>
-                      {l.isCompleted?"확정":"미확정"}
-                    </span>
+                    <StatusBadge status={l.isCompleted?"confirmed":"pending"} map={LOG_BADGE} />
                   </div>
                   <p className="mt-0.5 text-xs text-slate-400">
                     {l.siteName} · {l.totalTime}h · {l.attendance}
@@ -147,7 +179,10 @@ export default function ManagerLogsPage() {
           ))}
         </div>
       )}
-      {toast&&<div className="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg z-50">{toast}</div>}
+
+      {filtered.length > 0 && (
+        <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+      )}
     </div>
   );
 }
