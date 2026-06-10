@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import { StatCardRow } from "../_components/StatCard";
+
+const PAGE_SIZE = 20;
 
 const SERVICE_LABELS: Record<string, string> = {
   GROQ_STT:    "Groq STT",
@@ -39,6 +44,8 @@ export default function UsagePage() {
   const [totals, setTotals]     = useState<Record<string, number>>({});
   const [perAgency, setPerAgency] = useState<PerAgency>({});
   const [loading, setLoading]   = useState(true);
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
 
   function load(yearMonth: string) {
     setLoading(true);
@@ -53,9 +60,21 @@ export default function UsagePage() {
 
   useEffect(() => { load(ym); }, [ym]);
 
-  const services = Object.keys(totals);
-  const agencyRows = Object.entries(perAgency);
   const totalCalls = Object.values(totals).reduce((a, b) => a + b, 0);
+
+  const sortedRows = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return Object.entries(perAgency)
+      .filter(([, ag]) => !query || ag.name.toLowerCase().includes(query))
+      .sort((a, b) => {
+        const sumA = Object.values(a[1].calls).reduce((x, y) => x + y, 0);
+        const sumB = Object.values(b[1].calls).reduce((x, y) => x + y, 0);
+        return sumB - sumA;
+      });
+  }, [perAgency, q]);
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+  const pageRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [q, ym]);
 
   return (
     <div>
@@ -72,25 +91,24 @@ export default function UsagePage() {
         }
       />
 
-      {/* 전체 합계 */}
-      <div className="mb-5 grid grid-cols-4 gap-3.5">
-        <div className={T.summaryCard}>
-          <p className={T.summaryNum + " text-slate-900"}>{totalCalls.toLocaleString()}</p>
-          <p className={T.summaryLabel}>총 호출</p>
-        </div>
-        {Object.entries(SERVICE_LABELS).map(([key, label]) => (
-          <div key={key} className={T.summaryCard}>
-            <p className={T.summaryNum + " text-slate-900"}>{(totals[key] ?? 0).toLocaleString()}</p>
-            <p className={T.summaryLabel}>{label}</p>
-          </div>
-        ))}
+      <StatCardRow
+        className="mb-5"
+        cols={4}
+        items={[
+          { label: "총 호출", value: totalCalls.toLocaleString() },
+          ...Object.entries(SERVICE_LABELS).map(([key, label]) => ({ label, value: (totals[key] ?? 0).toLocaleString() })),
+        ]}
+      />
+
+      <div className="mb-4">
+        <ListToolbar query={q} onQueryChange={setQ} placeholder="에이전시명 검색" />
       </div>
 
       {loading ? (
         <div className="flex h-40 items-center justify-center">
           <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
         </div>
-      ) : agencyRows.length === 0 ? (
+      ) : sortedRows.length === 0 ? (
         <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
           <p className="text-sm text-slate-400">해당 월에 AI 사용 기록이 없습니다.</p>
         </div>
@@ -107,12 +125,7 @@ export default function UsagePage() {
               </tr>
             </thead>
             <tbody>
-              {agencyRows
-                .sort((a, b) => {
-                  const sumA = Object.values(a[1].calls).reduce((x, y) => x + y, 0);
-                  const sumB = Object.values(b[1].calls).reduce((x, y) => x + y, 0);
-                  return sumB - sumA;
-                })
+              {pageRows
                 .map(([id, ag]) => {
                   const sum = Object.values(ag.calls).reduce((a, b) => a + b, 0);
                   return (
@@ -137,6 +150,7 @@ export default function UsagePage() {
                 })}
             </tbody>
           </table>
+          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={sortedRows.length} onPageChange={setPage} />
         </div>
       )}
     </div>
