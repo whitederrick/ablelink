@@ -213,9 +213,9 @@ export default function ManagerDocumentsHub() {
         <div className="space-y-2">
           {pageItems.map(item => {
             return (
-              <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
+              <div key={item.id} className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <StatusBadge status={item.signStage} map={DOC_BADGE} />
                       <span className="text-sm font-black text-slate-900">{item.docLabel}</span>
@@ -224,11 +224,11 @@ export default function ManagerDocumentsHub() {
                         <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-black text-amber-700">v{item.versionNo}</span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                    <p className="mt-1 truncate text-xs font-semibold text-slate-500">
                       {item.workerName} · {item.siteName} · {item.periodStart}~{item.periodEnd}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                     <button onClick={() => openPreview(item)} className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 active:scale-95">문서 보기</button>
                     <button onClick={() => downloadPdf(item)} className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 active:scale-95">다운로드</button>
                     {item.signStage === "SUBMITTED" && (

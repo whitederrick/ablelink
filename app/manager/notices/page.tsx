@@ -35,6 +35,8 @@ function SendModal({ workers, sites, onClose, onSent }: {
   const [mode, setMode] = useState<SendMode>("ALL");
   const [selectedSite, setSelectedSite] = useState("");
   const [selectedWorkers, setSelectedWorkers] = useState<Set<string>>(new Set());
+  const [indivQuery, setIndivQuery] = useState("");
+  const [indivSite, setIndivSite] = useState("");
   const [title, setTitle]   = useState("");
   const [body, setBody]     = useState("");
   const [type, setType]     = useState("INFO");
@@ -56,6 +58,22 @@ function SendModal({ workers, sites, onClose, onSent }: {
       onSent(data.sent); onClose();
     } catch(e:any){ setError(e.message); }
     finally { setSending(false); }
+  }
+
+  // 개별 발송: 검색 + 현장 필터로 조회(직무지도원이 많아도 체크박스 나열 대신 조회식)
+  const indivSiteOptions = Array.from(new Set(workers.map(w => w.siteName).filter(Boolean)));
+  const indivFiltered = workers.filter(w =>
+    (!indivSite || w.siteName === indivSite) &&
+    (!indivQuery.trim() || w.workerName.includes(indivQuery.trim()) || (w.siteName ?? "").includes(indivQuery.trim()))
+  );
+  const allFilteredSelected = indivFiltered.length > 0 && indivFiltered.every(w => selectedWorkers.has(w.id));
+  function toggleAllFiltered() {
+    setSelectedWorkers(prev => {
+      const next = new Set(prev);
+      if (allFilteredSelected) indivFiltered.forEach(w => next.delete(w.id));
+      else indivFiltered.forEach(w => next.add(w.id));
+      return next;
+    });
   }
 
   return (
@@ -89,16 +107,38 @@ function SendModal({ workers, sites, onClose, onSent }: {
               </select>
             )}
             {mode==="INDIVIDUAL"&&(
-              <div className="max-h-48 space-y-1.5 overflow-y-auto">
-                {workers.map(c=>(
-                  <label key={c.id} className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-100 bg-white px-3 py-2.5">
-                    <input type="checkbox" checked={selectedWorkers.has(c.id)}
-                      onChange={e=>{ const next = new Set(selectedWorkers); if(e.target.checked) next.add(c.id); else next.delete(c.id); setSelectedWorkers(next); }}
-                      className="h-4 w-4 accent-slate-950"/>
-                    <span className="text-sm font-semibold text-slate-800">{c.workerName}</span>
-                    {c.siteName&&<span className="text-xs text-slate-400">{c.siteName}</span>}
-                  </label>
-                ))}
+              <div className="space-y-2">
+                {/* 조회: 이름 검색 + 현장 필터 (체크박스 나열 대신) */}
+                <div className="flex gap-2">
+                  <input value={indivQuery} onChange={e=>setIndivQuery(e.target.value)}
+                    placeholder="이름·현장 검색" className={`flex-1 ${T.input}`} />
+                  <select value={indivSite} onChange={e=>setIndivSite(e.target.value)} className={`w-40 ${T.input}`}>
+                    <option value="">전체 현장</option>
+                    {indivSiteOptions.map(s=><option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-semibold text-slate-500">
+                    선택 {selectedWorkers.size}명 · 조회 {indivFiltered.length}명
+                  </span>
+                  <button type="button" onClick={toggleAllFiltered}
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                    {allFilteredSelected ? "조회결과 전체해제" : "조회결과 전체선택"}
+                  </button>
+                </div>
+                <div className="max-h-56 space-y-1.5 overflow-y-auto">
+                  {indivFiltered.length === 0 ? (
+                    <p className="py-6 text-center text-sm font-semibold text-slate-400">조건에 맞는 직무지도원이 없습니다.</p>
+                  ) : indivFiltered.map(c=>(
+                    <label key={c.id} className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-100 bg-white px-3 py-2.5">
+                      <input type="checkbox" checked={selectedWorkers.has(c.id)}
+                        onChange={e=>{ const next = new Set(selectedWorkers); if(e.target.checked) next.add(c.id); else next.delete(c.id); setSelectedWorkers(next); }}
+                        className="h-4 w-4 accent-slate-950"/>
+                      <span className="text-sm font-semibold text-slate-800">{c.workerName}</span>
+                      {c.siteName&&<span className="ml-auto text-xs text-slate-400">{c.siteName}</span>}
+                    </label>
+                  ))}
+                </div>
               </div>
             )}
           </div>
