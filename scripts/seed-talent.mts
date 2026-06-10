@@ -8,10 +8,13 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+type Exp = { org: string; title?: string; start: string; end?: string; desc?: string };
+type Rev = { rating: number; comment?: string; ym: string };
 type Sample = {
   name: string; phone: string; region: string; years: number; birth: string;
   verify: "VERIFIED" | "PENDING"; ratingAvg: number; ratingCount: number;
   premium?: boolean; bio: string;
+  experiences?: Exp[]; reviews?: Rev[];
 };
 
 const SAMPLES: Sample[] = [
@@ -43,13 +46,13 @@ async function main() {
         workerName: s.name, phoneNumber: s.phone, status: "ACTIVE",
         openToOffers: true, residenceAddress: s.region, bio: s.bio, birthDate: s.birth,
         ratingAvg: s.ratingAvg, ratingCount: s.ratingCount,
-        planType: s.premium ? "PREMIUM" : "FREE",
+        planType: s.premium ? "PRO" : "FREE",
       },
       create: {
         loginId, password: hash, workerName: s.name, phoneNumber: s.phone,
         status: "ACTIVE", openToOffers: true, residenceAddress: s.region, bio: s.bio, birthDate: s.birth,
         ratingAvg: s.ratingAvg, ratingCount: s.ratingCount,
-        planType: s.premium ? "PREMIUM" : "FREE",
+        planType: s.premium ? "PRO" : "FREE",
       },
     });
     await prisma.workerProfession.upsert({
@@ -57,6 +60,45 @@ async function main() {
       update: { experienceYears: s.years, isPrimary: true, isActive: true, verifyStatus: s.verify },
       create: { workerId: worker.id, profession: "JOB_COACH", experienceYears: s.years, isPrimary: true, isActive: true, verifyStatus: s.verify },
     });
+
+    // 경력 이력 — 명시값 없으면 연차 기반 자동 생성 (재실행 안전: 기존 삭제 후 재삽입)
+    const city = s.region.split(/\s+/)[0] ?? "";
+    const ORG_POOL = ["○○제조", "△△물류센터", "□□카페", "◇◇사무지원센터", "공공기관 행정지원"];
+    const exps: Exp[] = s.experiences ?? (s.years >= 3
+      ? [
+          { org: `${city} ${ORG_POOL[i % ORG_POOL.length]}`, title: "직무지도원", start: `${2025 - Math.min(s.years, 6)}-03`, end: `${2024}-02`, desc: "지원고용 현장훈련·출퇴근 지도·훈련일지 작성" },
+          { org: `${city} ${ORG_POOL[(i + 2) % ORG_POOL.length]}`, title: "적응지도 담당", start: `${2024}-03`, desc: "취업 후 적응지도·사업체 담당자 협업" },
+        ]
+      : s.years >= 1
+      ? [{ org: `${city} ${ORG_POOL[i % ORG_POOL.length]}`, title: "직무지도원", start: `${2025 - s.years}-06`, desc: "현장훈련 보조·일지 작성" }]
+      : []);
+    await prisma.workerExperience.deleteMany({ where: { workerId: worker.id } });
+    if (exps.length > 0) {
+      await prisma.workerExperience.createMany({
+        data: exps.map(e => ({
+          workerId: worker.id, profession: "JOB_COACH" as const, orgName: e.org, title: e.title ?? null,
+          startDate: new Date(`${e.start}-01T00:00:00Z`), endDate: e.end ? new Date(`${e.end}-01T00:00:00Z`) : null,
+          description: e.desc ?? null,
+        })),
+      });
+    }
+
+    // 후기 — 명시값 없으면 ratingCount/ratingAvg 기반 자동 생성
+    const COMMENTS = ["성실하고 소통이 원활했습니다.", "훈련생 적응을 꼼꼼히 도와주셨어요.", "일지·평가 문서가 정확했습니다.", "사업체와의 조율이 매끄러웠습니다."];
+    const revs: Rev[] = s.reviews ?? Array.from({ length: Math.min(s.ratingCount, 6) }, (_, k) => ({
+      rating: Math.max(3, Math.min(5, Math.round(s.ratingAvg + (k % 2 === 0 ? 0 : -0.3)))),
+      comment: k < 3 ? COMMENTS[k % COMMENTS.length] : undefined,
+      ym: `2025-${String(((k % 6) + 1)).padStart(2, "0")}`,
+    }));
+    await prisma.workerReview.deleteMany({ where: { workerId: worker.id } });
+    if (revs.length > 0) {
+      await prisma.workerReview.createMany({
+        data: revs.map(r => ({
+          workerId: worker.id, rating: r.rating, comment: r.comment ?? null,
+          createdAt: new Date(`${r.ym}-15T00:00:00Z`), updatedAt: new Date(`${r.ym}-15T00:00:00Z`),
+        })),
+      });
+    }
     n++;
     console.log(`  ✓ ${s.name} (${s.region.split(/\s+/).slice(0, 2).join(" ")}) · ${s.years}년 · ${s.verify} · ★${s.ratingAvg}`);
   }
