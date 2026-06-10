@@ -148,6 +148,7 @@ export default function NoticesPage() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [readFilter, setReadFilter] = useState<"all" | "unread" | "read">("all");
   const [page, setPage] = useState(1);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),3000); };
 
@@ -181,6 +182,7 @@ export default function NoticesPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / NOTICE_PAGE_SIZE));
   const pageItems = filtered.slice((page - 1) * NOTICE_PAGE_SIZE, page * NOTICE_PAGE_SIZE);
   useEffect(() => { if (page > totalPages) setPage(1); }, [page, totalPages]);
+  const selected = notices.find(n => n.id === selectedId) ?? null;
 
   const filters: FilterChip[] = TYPE_OPTS.map(o => ({
     value: o.val, label: o.label, count: notices.filter(n => n.type === o.val).length,
@@ -228,36 +230,60 @@ export default function NoticesPage() {
         />
       </div>
 
-      <div className="space-y-2.5">
-        {loading ? (
-          <p className={T.empty}>불러오는 중…</p>
-        ) : notices.length===0 ? (
-          <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
-            <p className="text-sm font-semibold text-slate-400">발송한 알림이 없습니다. ‘+ 알림 발송’으로 보내보세요.</p>
-          </div>
-        ) : pageItems.length===0 ? (
-          <p className={T.empty}>조건에 맞는 알림이 없습니다.</p>
-        ) : pageItems.map(n=>(
-            <div key={n.id} className={T.card}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-black text-slate-900">{n.title}</span>
-                    <StatusBadge status={n.type} map={NOTICE_BADGE} />
-                    {!n.read&&<span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-black text-rose-600">미확인</span>}
-                  </div>
-                  <p className="mt-0.5 text-xs text-slate-500">수신: {n.workerName}</p>
-                  <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-600">{n.body}</p>
-                </div>
-                <p className="shrink-0 text-[11px] text-slate-400">{new Date(n.createdAt).toLocaleDateString("ko-KR")}</p>
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* 목록 */}
+        <div>
+          <div className="space-y-2.5">
+            {loading ? (
+              <p className={T.empty}>불러오는 중…</p>
+            ) : notices.length===0 ? (
+              <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
+                <p className="text-sm font-semibold text-slate-400">발송한 알림이 없습니다. ‘+ 알림 발송’으로 보내보세요.</p>
               </div>
-            </div>
-        ))}
-      </div>
+            ) : pageItems.length===0 ? (
+              <p className={T.empty}>조건에 맞는 알림이 없습니다.</p>
+            ) : pageItems.map(n=>(
+                <button key={n.id} onClick={() => setSelectedId(n.id)}
+                  className={`block w-full rounded-2xl border bg-white p-4 text-left transition hover:border-slate-300 ${selectedId === n.id ? "border-slate-950 ring-2 ring-slate-100" : "border-slate-200"}`}>
+                  <div className="flex items-center gap-1.5">
+                    <StatusBadge status={n.type} map={NOTICE_BADGE} />
+                    {n.read
+                      ? <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-black text-emerald-600">확인</span>
+                      : <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-black text-rose-600">미확인</span>}
+                    <span className="ml-auto text-[11px] font-semibold text-slate-300">{n.createdAt.slice(0, 10)}</span>
+                  </div>
+                  <p className={`mt-1.5 text-sm ${n.read ? "font-semibold text-slate-700" : "font-black text-slate-900"}`}>{n.title}</p>
+                  <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-400">수신: {n.workerName}</p>
+                </button>
+            ))}
+          </div>
+          {filtered.length > 0 && (
+            <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+          )}
+        </div>
 
-      {filtered.length > 0 && (
-        <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
-      )}
+        {/* 상세(우측 패널) */}
+        <div className="lg:sticky lg:top-4 h-fit">
+          {selected ? (
+            <div className={T.card}>
+              <div className="mb-2 flex items-center gap-1.5">
+                <StatusBadge status={selected.type} map={NOTICE_BADGE} />
+                {selected.read
+                  ? <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-black text-emerald-600">확인</span>
+                  : <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-black text-rose-600">미확인</span>}
+                <span className="ml-auto text-[11px] font-semibold text-slate-300">{selected.createdAt.slice(0, 10)}</span>
+              </div>
+              <p className="text-base font-black text-slate-900">{selected.title}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">수신: {selected.workerName}</p>
+              <p className="mt-2 whitespace-pre-line text-sm font-semibold leading-relaxed text-slate-600">{selected.body}</p>
+            </div>
+          ) : (
+            <div className={`${T.card} text-center`}>
+              <p className="py-6 text-sm font-semibold text-slate-300">목록에서 알림을 선택하면<br />상세 내용이 표시됩니다.</p>
+            </div>
+          )}
+        </div>
+      </div>
 
       {showSend && <SendModal workers={workers} sites={sites} onClose={()=>setShowSend(false)} onSent={(n)=>{ showToast(`${n}명에게 발송했습니다.`); loadNotices(); }} />}
       {toast&&<div className="fixed bottom-8 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg">{toast}</div>}

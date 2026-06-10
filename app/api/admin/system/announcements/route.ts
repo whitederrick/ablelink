@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
           title:     `[시스템 공지] ${title.trim()}`.slice(0, 100),
           body:      body.trim().slice(0, 500),
           type:      noticeType === "URGENT" ? "WARN" : "INFO",
+          kind:      "SYSTEM", // 매니저 '알림 목록'에서 제외(시스템 공지사항 화면에서만 노출)
         })),
         skipDuplicates: true,
       });

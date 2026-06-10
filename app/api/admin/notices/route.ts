@@ -16,8 +16,14 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const limit = Math.min(100, Number(searchParams.get("limit") ?? 50));
 
+    // 매니저가 직무지도원에게 보낸 알림만. 시스템 공지(kind=SYSTEM, 레거시 "[시스템 공지]" 제목)는
+    // 별도 '시스템 공지사항' 화면에서만 노출하므로 여기서 제외한다.
     const notices = await (prisma as any).workerNotice.findMany({
-      where: { agencyId },
+      where: {
+        agencyId,
+        kind: { not: "SYSTEM" },
+        NOT: { title: { startsWith: "[시스템 공지]" } },
+      },
       include: { user: { select: { id: true, workerName: true } } },
       orderBy: { createdAt: "desc" },
       take: limit,
@@ -33,7 +39,7 @@ export async function GET(req: NextRequest) {
         body:       n.body,
         type:       n.type,
         yearMonth:  n.yearMonth,
-        read:       n.read,
+        read:       n.readAt != null,
         createdAt:  n.createdAt?.toISOString() ?? "",
       })),
     });

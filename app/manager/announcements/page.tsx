@@ -168,7 +168,7 @@ export default function AgencyAnnouncementsPage() {
         />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_400px]">
+      <div className="grid gap-5 lg:grid-cols-2">
         {/* 목록 */}
         <div>
           <div className="space-y-2.5">
