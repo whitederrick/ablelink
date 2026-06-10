@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import Pagination from "../_components/Pagination";
+import ListToolbar from "../_components/ListToolbar";
 import { useEffect, useMemo, useState } from "react";
 
 type SiteItem = {
@@ -69,17 +71,14 @@ export default function AdminSitesPage() {
     <div className="space-y-5">
       <PageHeader
         title="현장(Site) 관리"
-        sub={`총 ${total}건 · page ${page} / ${totalPages}`}
+        sub="사업체(현장) 등록·검색 및 기준점·담당자 관리"
         actions={
           <Link href="/manager/sites/new" className={T.btnPrimary}>신규 등록</Link>
         }
       />
 
-      <div className="flex gap-2">
-        <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && onSearch()}
-          placeholder="사업체명/주소/담당자명/메일/전화/기관 검색" className={`flex-1 ${T.input}`} />
-        <button onClick={onSearch} className={T.btnSecondary}>검색</button>
-      </div>
+      <ListToolbar query={q} onQueryChange={setQ} onSearch={onSearch}
+        placeholder="사업체명/주소/담당자명/메일/전화/기관 검색" />
 
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
@@ -140,13 +139,7 @@ export default function AdminSitesPage() {
         </table>
       </div>
 
-      <div className="flex items-center gap-3">
-        <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}
-          className={`${T.btnSecondary} disabled:opacity-40`}>이전</button>
-        <span className="text-sm font-semibold text-slate-400">{page} / {totalPages}</span>
-        <button disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-          className={`${T.btnSecondary} disabled:opacity-40`}>다음</button>
-      </div>
+      <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
     </div>
   );
 }

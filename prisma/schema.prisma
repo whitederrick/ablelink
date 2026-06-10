@@ -1012,6 +1012,15 @@ model InsuranceRates {
   @@map("insurance_rates")
 }
 
+// 운영자가 조정하는 시스템 파라미터(하드코딩 지양). 키는 lib/systemConfig.ts CONFIG_REGISTRY에 정의.
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_configs")
+}
+
 model AttendanceIssue {
   id                BigInt @id @default(autoincrement())
   dailyAttendanceId BigInt @unique @map("daily_attendance_id")

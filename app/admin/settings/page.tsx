@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Settings, CheckCircle2 } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
 
 interface SettingItem {
@@ -13,16 +13,41 @@ interface SettingItem {
   warning?: string;
 }
 
+interface ConfigItem {
+  key: string; label: string; description: string;
+  type: "number" | "string"; value: string; min?: number; max?: number;
+}
+
 export default function SettingsPage() {
-  const [autoFinalize, setAutoFinalize] = useState("60");
-  const [saved, setSaved]   = useState(false);
+  const [configs, setConfigs] = useState<ConfigItem[]>([]);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [savingKey, setSavingKey] = useState<string | null>(null);
   const [toast, setToast]   = useState("");
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),3000); };
 
-  useEffect(()=>{
-    fetch("/api/admin/system/stats").then(r=>r.json()).catch(()=>{});
-  },[]);
+  function loadConfigs() {
+    fetch("/api/admin/system/config").then(r=>r.json()).then(d=>{
+      if (d.success) {
+        setConfigs(d.items);
+        setDraft(Object.fromEntries(d.items.map((c: ConfigItem) => [c.key, c.value])));
+      }
+    }).catch(()=>{});
+  }
+  useEffect(()=>{ loadConfigs(); },[]);
+
+  async function saveConfig(key: string) {
+    setSavingKey(key);
+    try {
+      const d = await fetch("/api/admin/system/config", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value: draft[key] }),
+      }).then(r=>r.json());
+      if (d.success) { showToast("저장되었습니다."); loadConfigs(); }
+      else showToast(d.message || "저장 실패");
+    } catch { showToast("오류가 발생했습니다."); }
+    finally { setSavingKey(null); }
+  }
 
   const ENV_SETTINGS: SettingItem[] = [
     { key:"ADMIN_SESSION_SECRET",     label:"Admin 세션 시크릿",       desc:"관리자 JWT 서명 키",           value:"설정됨 (보안상 미표시)", type:"readonly" },
@@ -37,23 +62,38 @@ export default function SettingsPage() {
     <div>
       <PageHeader title="시스템 설정" sub="운영 파라미터 및 환경 변수 현황" />
 
-      {/* 운영 파라미터 */}
+      {/* 운영 파라미터 (DB 저장 — 즉시 적용) */}
       <div className="mb-6 rounded-2xl border border-slate-100 bg-white p-6">
-        <h2 className="mb-4 text-base font-black text-slate-900">운영 파라미터</h2>
+        <h2 className="mb-1 text-base font-black text-slate-900">운영 파라미터</h2>
+        <p className="mb-4 text-xs text-slate-500">DB에 저장되어 재배포 없이 즉시 적용됩니다.</p>
         <div className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-black text-slate-700">자동 마감 시간 (분)</label>
-            <p className="mb-2 text-xs text-slate-500">퇴근 처리 후 N분이 지나면 자동으로 최종 확정됩니다. 환경변수 AUTO_FINALIZE_MINUTES에서 설정.</p>
-            <div className="flex items-center gap-3">
-              <input type="number" min="10" max="1440" value={autoFinalize} onChange={e=>setAutoFinalize(e.target.value)}
-                className="w-32 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/>
-              <span className="text-sm text-slate-500">분 (현재 환경변수 기준값: AUTO_FINALIZE_MINUTES)</span>
-            </div>
-            <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2">
-              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0"/>
-              <p className="text-[11px] font-semibold text-amber-700">실제 적용은 Vercel 환경변수 AUTO_FINALIZE_MINUTES를 변경해야 합니다.</p>
-            </div>
-          </div>
+          {configs.length === 0 ? (
+            <p className="text-sm font-semibold text-slate-300">불러오는 중...</p>
+          ) : configs.map(c => {
+            const changed = (draft[c.key] ?? "") !== c.value;
+            return (
+              <div key={c.key} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-black text-slate-900">{c.label}</p>
+                  <code className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-mono text-slate-600">{c.key}</code>
+                </div>
+                <p className="mt-0.5 mb-2 text-xs text-slate-500">{c.description}</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type={c.type === "number" ? "number" : "text"}
+                    min={c.min} max={c.max}
+                    value={draft[c.key] ?? ""}
+                    onChange={e => setDraft(p => ({ ...p, [c.key]: e.target.value }))}
+                    className="w-40 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"
+                  />
+                  <button onClick={() => saveConfig(c.key)} disabled={!changed || savingKey === c.key}
+                    className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white disabled:opacity-40">
+                    {savingKey === c.key ? "저장 중..." : "저장"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
