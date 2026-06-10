@@ -484,10 +484,7 @@ export default function PayrollPage() {
                 <tbody>
                   {cPageItems.map(c => (
                     <tr key={c.id} className={T.trBase}>
-                      <td className={T.td}>
-                        <div className="font-black text-slate-900">{c.workerName}</div>
-                        <div className="text-xs text-slate-400">{maskLoginId(c.loginId)}</div>
-                      </td>
+                      <td className={T.td}>{c.workerName} <span className="text-[13px] text-slate-500">({maskLoginId(c.loginId)})</span></td>
                       <td className={T.td}>
                         <div className="flex flex-wrap gap-1">
                           <span className={`${T.badge} ${c.workerType === "INTERNAL" ? "bg-amber-50 text-amber-600" : "bg-slate-50 text-slate-600"}`}>
@@ -500,17 +497,17 @@ export default function PayrollPage() {
                         </div>
                       </td>
                       <td className={`${T.td}`}>
-                        <div className="font-black text-slate-900">
+                        <div className="font-semibold">
                           {comma(c.baseAmount)}원{c.payType === "HOURLY" ? "/h" : c.payType === "DAILY" ? "/일" : "/월"}
                         </div>
                         {c.hourlyRate2Plus != null && (
-                          <div className="text-[11px] text-slate-500">2명+: {comma(c.hourlyRate2Plus)}원/h</div>
+                          <div className="text-[13px] text-slate-500">2명+: {comma(c.hourlyRate2Plus)}원/h</div>
                         )}
                         {c.weeklyHolidayPay != null && (
-                          <div className="text-[11px] text-slate-500">주휴: +{comma(c.weeklyHolidayPay)}원</div>
+                          <div className="text-[13px] text-slate-500">주휴: +{comma(c.weeklyHolidayPay)}원</div>
                         )}
                       </td>
-                      <td className={`${T.td} text-xs text-slate-500`}>{c.effectiveFrom} ~ {c.effectiveTo || "현재"}</td>
+                      <td className={`${T.td} whitespace-nowrap`}>{c.effectiveFrom} ~ {c.effectiveTo || "현재"}</td>
                       <td className={T.td}>
                         <button className={T.btnDanger} onClick={() => handleDeleteContract(c.id)}>삭제</button>
                       </td>
@@ -591,7 +588,7 @@ export default function PayrollPage() {
                 <tbody>
                   {dPageItems.map(d => (
                     <tr key={d.id} className={T.trBase}>
-                      <td className={`${T.td} font-black text-slate-900`}>{d.name}</td>
+                      <td className={T.td}>{d.name}</td>
                       <td className={T.td}>
                         <span className={`${T.badge} bg-slate-50 text-slate-600`}>
                           {d.type === "FIXED" ? "고정" : "비율"}
@@ -671,11 +668,11 @@ export default function PayrollPage() {
                 <tbody>
                   {rPageItems.map(r => (
                     <tr key={r.id} className={T.trBase}>
-                      <td className={`${T.td} font-black text-slate-900`}>{r.yearMonth}</td>
+                      <td className={`${T.td} font-semibold`}>{r.yearMonth}</td>
                       <td className={T.td}><StatusBadge status={r.status} map={RUN_STATUS_BADGE} /></td>
-                      <td className={`${T.td} text-slate-600`}>{r.itemCount}명</td>
-                      <td className={`${T.td} text-xs text-slate-400`}>{r.createdAt.slice(0, 10)}</td>
-                      <td className={`${T.td} text-xs text-slate-400`}>{r.finalizedAt ? r.finalizedAt.slice(0, 10) : "-"}</td>
+                      <td className={T.td}>{r.itemCount}명</td>
+                      <td className={T.td}>{r.createdAt.slice(0, 10)}</td>
+                      <td className={T.td}>{r.finalizedAt ? r.finalizedAt.slice(0, 10) : "-"}</td>
                       <td className={T.td}>
                         <button className={T.btnSecondary} onClick={() => loadRunDetail(r.id)}>상세 보기</button>
                       </td>
@@ -735,10 +732,9 @@ export default function PayrollPage() {
                     return (
                       <tr key={item.id} className={T.trBase}>
                         <td className={T.td}>
-                          <div className="font-black text-slate-900">{item.workerName}</div>
-                          <div className="text-xs text-slate-400">{maskLoginId(item.loginId)}</div>
+                          <div className="font-semibold">{item.workerName} <span className="text-[13px] font-normal text-slate-500">({maskLoginId(item.loginId)})</span></div>
                           {bd?.payType && (
-                            <div className="mt-0.5 text-[11px] text-slate-500">
+                            <div className="mt-0.5 text-[13px] text-slate-500">
                               <span className={`mr-1 ${T.badge} ${incType === "EMPLOYMENT" ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>
                                 {incType === "EMPLOYMENT" ? "근로소득" : "사업소득"}
                               </span>

@@ -162,7 +162,7 @@ export default function ManagerCalendarPage() {
           {/* 요일 헤더 */}
           <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
             {DOW_HEADER.map((d, i) => (
-              <div key={d} className={`py-2.5 text-center text-sm font-black ${i === 0 ? "text-rose-400" : i === 6 ? "text-blue-400" : "text-slate-500"}`}>{d}</div>
+              <div key={d} className={`py-2.5 text-center text-[15px] font-black ${i === 0 ? "text-rose-400" : i === 6 ? "text-blue-400" : "text-slate-500"}`}>{d}</div>
             ))}
           </div>
           {/* 날짜 그리드 */}
@@ -174,12 +174,12 @@ export default function ManagerCalendarPage() {
                 const r = day ? recordMap[dateStr] : undefined;
                 const isToday = dateStr === today;
                 return (
-                  <div key={di} className={`relative min-h-[84px] border-r border-slate-50 p-2 last:border-0 ${day ? dayColor(dateStr) : "bg-slate-50/50"} ${isToday ? "ring-2 ring-inset ring-slate-900/70" : ""}`}>
+                  <div key={di} className={`relative min-h-[100px] border-r border-slate-50 p-2 last:border-0 ${day ? dayColor(dateStr) : "bg-slate-50/50"} ${isToday ? "ring-2 ring-inset ring-slate-900/70" : ""}`}>
                     {day && (
                       <>
-                        <p className={`text-sm font-black ${isWeekend ? (di === 0 ? "text-rose-400" : "text-blue-400") : "text-slate-700"}`}>{day}</p>
+                        <p className={`text-[17px] font-black ${isWeekend ? (di === 0 ? "text-rose-400" : "text-blue-400") : "text-slate-800"}`}>{day}</p>
                         {r && (
-                          <div className="mt-1 text-[11px] font-bold leading-tight text-slate-600">
+                          <div className="mt-1 text-[13px] font-semibold leading-tight text-slate-700">
                             {r.status === "WORKING"
                               ? <span className="text-sky-700">근무중 {hhMM(r.startTime)}~</span>
                               : <span>{hhMM(r.startTime)}~{hhMM(r.endTime)}</span>}
@@ -200,7 +200,7 @@ export default function ManagerCalendarPage() {
       )}
 
       {/* 범례 */}
-      <div className="mt-3 flex flex-wrap gap-4 text-[11px] font-semibold text-slate-500">
+      <div className="mt-3 flex flex-wrap gap-4 text-[13px] font-semibold text-slate-500">
         {[["bg-sky-50 border border-sky-200", "근무중"], ["bg-amber-50 border border-amber-200", "마감중"], ["bg-emerald-50 border border-emerald-200", "확정"]].map(([cls, label]) => (
           <div key={label} className="flex items-center gap-1.5">
             <div className={`h-3 w-3 rounded ${cls}`} />

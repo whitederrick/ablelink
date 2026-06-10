@@ -206,9 +206,9 @@ export default function ManagerSupportPage() {
                   className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
                 >
                   <StatusBadge status={t.category} map={CAT_BADGE} />
-                  <span className="flex-1 text-sm font-semibold text-slate-900 truncate">{t.title}</span>
+                  <span className="flex-1 truncate text-[15px] font-semibold text-slate-800">{t.title}</span>
                   <StatusBadge status={t.status} map={SUP_STATUS} />
-                  <span className="flex-shrink-0 text-xs text-slate-400 ml-2">
+                  <span className="ml-2 flex-shrink-0 text-[13px] font-medium text-slate-500">
                     {new Date(t.createdAt).toLocaleDateString("ko-KR")}
                   </span>
                   <ChevronDown className={`h-4 w-4 flex-shrink-0 text-slate-400 transition ${expanded === t.id ? "rotate-180" : ""}`} />
