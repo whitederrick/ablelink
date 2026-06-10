@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { RefreshCw, ChevronLeft, ChevronRight, Send, Clock } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import { StatCardRow } from "../_components/StatCard";
+
+const HOL_PAGE_SIZE = 15;
 
 type PendingReq = {
   id: string; requestType: "DELETE" | "CHANGE_WORKDAY";
@@ -43,6 +48,8 @@ export default function HolidayRequestsPage() {
   const [rows, setRows]       = useState<HolidayRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [page, setPage]       = useState(1);
   const [toast, setToast]     = useState("");
 
   // 삭제 요청 폼 상태
@@ -120,10 +127,32 @@ export default function HolidayRequestsPage() {
     }
   }
 
-  const filtered = rows.filter(r =>
-    !search || r.workerName.includes(search) || r.siteName.includes(search)
-  );
   const pendingCount = rows.filter(r => r.pendingRequest).length;
+
+  function matchStatus(r: HolidayRow, keys: string[]) {
+    if (keys.length === 0) return true;
+    return keys.some(k =>
+      k === "workday" ? r.countAsWorkday :
+      k === "nonworkday" ? !r.countAsWorkday :
+      k === "pending" ? !!r.pendingRequest : false);
+  }
+  const filtered = useMemo(() => {
+    const q = search.trim();
+    return rows
+      .filter(r => !q || r.workerName.includes(q) || r.siteName.includes(q))
+      .filter(r => matchStatus(r, statusFilter));
+  }, [rows, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / HOL_PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * HOL_PAGE_SIZE, page * HOL_PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [search, statusFilter, ym]);
+
+  const filters: FilterChip[] = [
+    { value: "workday", label: "근무인정", count: rows.filter(r => r.countAsWorkday).length },
+    { value: "nonworkday", label: "미인정", count: rows.filter(r => !r.countAsWorkday).length },
+    { value: "pending", label: "요청대기", count: pendingCount },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   return (
     <div>
@@ -142,27 +171,25 @@ export default function HolidayRequestsPage() {
         }
       />
 
-      {/* 요약 */}
-      <div className="mb-5 grid grid-cols-3 gap-3.5">
-        <div className={T.summaryCard}>
-          <p className={T.summaryNum + " text-slate-900"}>{rows.length}</p>
-          <p className={T.summaryLabel}>이번 달 커스텀 휴무일</p>
-        </div>
-        <div className={T.summaryCard}>
-          <p className={T.summaryNum + " text-emerald-600"}>{rows.filter(r => r.countAsWorkday).length}</p>
-          <p className={T.summaryLabel}>근무 인정</p>
-        </div>
-        <div className={T.summaryCard}>
-          <p className={T.summaryNum + " text-amber-600"}>{pendingCount}</p>
-          <p className={T.summaryLabel}>처리 대기 요청</p>
-        </div>
-      </div>
+      <StatCardRow
+        className="mb-5"
+        cols={3}
+        items={[
+          { label: "이번 달 커스텀 휴무일", value: rows.length },
+          { label: "근무 인정", value: rows.filter(r => r.countAsWorkday).length, tone: "emerald" },
+          { label: "처리 대기 요청", value: pendingCount, tone: "amber" },
+        ]}
+      />
 
-      {/* 검색 */}
       <div className="mb-4">
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="직무지도원 이름 또는 현장명 검색..."
-          className={T.input + " w-64"} />
+        <ListToolbar
+          query={search}
+          onQueryChange={setSearch}
+          placeholder="직무지도원·현장명 검색"
+          filters={filters}
+          selected={statusFilter}
+          onToggleFilter={toggleStatus}
+        />
       </div>
 
       {/* 안내 */}
@@ -192,7 +219,7 @@ export default function HolidayRequestsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(row => (
+              {pageItems.map(row => (
                 <tr key={row.id} className={T.trBase}>
                   <td className={T.td + " tabular-nums font-semibold"}>{row.date}</td>
                   <td className={T.td + " font-semibold text-slate-900"}>{row.workerName}</td>
@@ -242,6 +269,7 @@ export default function HolidayRequestsPage() {
               ))}
             </tbody>
           </table>
+          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
         </div>
       )}
 
