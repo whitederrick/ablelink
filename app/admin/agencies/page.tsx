@@ -152,12 +152,12 @@ export default function AgenciesPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-black text-slate-900">{a.name}</span>
+                    <span className="text-[15px] font-semibold text-slate-800">{a.name}</span>
                     <StatusBadge status={a.planType} map={PLAN_BADGE} />
-                    {a.trialEndsAt&&<span className="text-[10px] text-slate-400">체험 ~{new Date(a.trialEndsAt).toLocaleDateString("ko-KR")}</span>}
-                    {a.nextBillingAt&&<span className="text-[10px] text-emerald-600">다음결제 {new Date(a.nextBillingAt).toLocaleDateString("ko-KR")}</span>}
+                    {a.trialEndsAt&&<span className="text-[13px] text-slate-500">체험 ~{new Date(a.trialEndsAt).toLocaleDateString("ko-KR")}</span>}
+                    {a.nextBillingAt&&<span className="text-[13px] text-emerald-600">다음결제 {new Date(a.nextBillingAt).toLocaleDateString("ko-KR")}</span>}
                   </div>
-                  <div className="mt-1 flex items-center gap-4 text-xs text-slate-400">
+                  <div className="mt-1 flex items-center gap-4 text-[13px] text-slate-500">
                     <span className="flex items-center gap-1"><Users className="h-3 w-3"/>{a.managerCount}명 관리자</span>
                     <span className="flex items-center gap-1"><MapPin className="h-3 w-3"/>{a.siteCount}개소</span>
                     <span>한도 {a.maxWorkers||"∞"}명/{a.maxSites||"∞"}개소</span>

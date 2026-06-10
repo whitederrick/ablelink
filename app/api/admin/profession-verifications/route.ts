@@ -41,6 +41,8 @@ export async function GET(req: NextRequest) {
         id: r.id.toString(),
         profession: r.profession,
         certNumber: r.certNumber ?? null,
+        certDocUrl: r.certDocUrl ?? null,
+        certifiedAt: r.certifiedAt?.toISOString() ?? null,
         experienceYears: r.experienceYears,
         verifyStatus: r.verifyStatus,
         createdAt: r.createdAt.toISOString(),

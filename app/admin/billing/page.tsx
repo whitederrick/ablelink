@@ -118,8 +118,7 @@ export default function BillingPage() {
               ) : pageItems.map(r => (
                 <tr key={r.id} className={T.trBase}>
                   <td className={T.td}>
-                    <span className="font-semibold text-slate-900">{r.name}</span>
-                    {!r.isActive && <span className="ml-1.5 text-xs text-slate-400">(비활성)</span>}
+                    {r.name}{!r.isActive && <span className="ml-1.5 text-[13px] text-slate-500">(비활성)</span>}
                   </td>
                   <td className={T.td}>
                     <StatusBadge status={r.planType} map={PLAN_BADGE} />

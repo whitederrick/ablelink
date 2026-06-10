@@ -115,19 +115,19 @@ export default function ManagerRecruitPage() {
               pageItems.map((p) => (
                 <tr key={p.id} className={T.trBase}>
                   <td className={T.td}>
-                    <Link href={`/admin/recruit/${p.id}`} className="font-bold text-slate-900 hover:text-sky-600">{p.title}</Link>
-                    <span className="ml-1.5 text-xs text-slate-400">{p.companyName}{p.taskName ? ` · ${p.taskName}` : ""}</span>
+                    <Link href={`/admin/recruit/${p.id}`} className="font-semibold text-sky-600 hover:underline">{p.title}</Link>
+                    <span className="ml-1.5 text-[13px] text-slate-500">{p.companyName}{p.taskName ? ` · ${p.taskName}` : ""}</span>
                   </td>
                   <td className={T.td}>
                     {p.agencyName
-                      ? <span className="font-semibold text-slate-600">{p.agencyName}</span>
-                      : <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-black text-emerald-600">Able-Link(운영자)</span>}
+                      ? p.agencyName
+                      : <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[13px] font-black text-emerald-600">Able-Link(운영자)</span>}
                   </td>
                   <td className={T.td}>{PROF_LABEL[p.profession] ?? p.profession}</td>
                   <td className={T.td}>{p.region ?? "-"}</td>
                   <td className={T.td}>{p.headcount}명</td>
                   <td className={T.td}>
-                    <Link href={`/admin/recruit/${p.id}`} className="font-black text-sky-600 hover:underline">{p.applicationCount ?? 0}건</Link>
+                    <Link href={`/admin/recruit/${p.id}`} className="font-semibold text-sky-600 hover:underline">{p.applicationCount ?? 0}건</Link>
                   </td>
                   <td className={T.td}>
                     <span className={`${T.badge} ${p.status === "OPEN" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"}`}>
