@@ -217,7 +217,7 @@ export default function AdminDocsPage() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <PageHeader title="문서 조회" />
+      <PageHeader title="문서 조회" sub="직무지도원이 작성한 공식 문서를 조회하고 다운로드합니다." />
 
       {/* 직무지도원 선택 */}
       <div className={T.card}>

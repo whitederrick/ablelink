@@ -186,7 +186,7 @@ export default function AdminDocumentsPage() {
     <div className="space-y-4">
       <PageHeader
         title="문서 운영"
-        sub="직무지도원별 문서 발송 건 생성 및 제출 이력 관리"
+        sub="직무지도원별 공식 문서를 생성·발송하고 제출 이력을 관리합니다."
       />
 
       {/* 배정 + 설정 */}

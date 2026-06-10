@@ -103,7 +103,7 @@ export default function AnnouncementsPage() {
     <div>
       <PageHeader
         title="시스템 공지"
-        sub="평상시에는 에이전시 관리자에게, 시스템 점검·중단 등 긴급 시에는 전체 사용자에게 발송합니다"
+        sub="시스템 공지를 발송합니다. 평상시에는 에이전시 관리자에게, 긴급 시(점검·중단)에는 전체 사용자에게 전달됩니다."
         actions={
           <>
             <button onClick={load} className={T.btnSecondary + " flex items-center gap-1.5"}>

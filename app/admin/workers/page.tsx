@@ -124,7 +124,7 @@ export default function WorkersPage() {
     <div>
       <PageHeader
         title="직무지도원 현황 관리"
-        sub="비밀번호 초기화·상태 변경·등급 부여·사이트 배정"
+        sub="직무지도원 계정을 조회하고 비밀번호 초기화·상태 변경·등급 부여·현장 배정을 관리합니다."
         actions={
           <button onClick={()=>setCreating(true)} className={`${T.btnPrimary}`}>+ 신규 직무지도원</button>
         }

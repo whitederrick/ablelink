@@ -102,7 +102,7 @@ export default function ManagerSignupRequestsPage() {
 
   return (
     <div>
-      <PageHeader title="에이전시 관리자 관리" sub="에이전시 관리자 자체 가입 신청 목록 · 승인 또는 반려" />
+      <PageHeader title="에이전시 관리자 관리" sub="에이전시 관리자의 가입 신청을 검토하고 승인 또는 반려합니다." />
 
       <StatCardRow
         className="mb-5"

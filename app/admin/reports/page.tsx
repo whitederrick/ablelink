@@ -125,7 +125,7 @@ export default function TraineeReportPage() {
     <div className="space-y-5">
       <PageHeader
         title="훈련생 진척도 리포트"
-        sub="훈련생별 출근 일지 작성률과 수행 점수를 월별로 확인합니다. (STANDARD+)"
+        sub="훈련생별 출근 일지 작성률과 수행 점수를 월별로 확인합니다."
       />
 
       <StatCardRow

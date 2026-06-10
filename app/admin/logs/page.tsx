@@ -55,7 +55,7 @@ export default function LogsPage() {
 
   return (
     <div>
-      <PageHeader title="감사 로그" sub="시스템 운영자의 모든 데이터 변경 이력" />
+      <PageHeader title="감사 로그" sub="시스템 운영자의 모든 데이터 변경 이력을 조회합니다." />
 
       <div className="mb-4">
         <ListToolbar

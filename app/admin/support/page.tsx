@@ -106,7 +106,7 @@ export default function AdminSupportPage() {
 
   return (
     <div>
-      <PageHeader title="지원 요청" sub="에이전시 관리자가 보낸 문의·수정 요청 목록" />
+      <PageHeader title="지원 요청" sub="에이전시 관리자가 보낸 문의·수정 요청을 확인하고 회신합니다." />
 
       <StatCardRow
         className="mb-5"

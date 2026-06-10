@@ -328,7 +328,7 @@ export default function AdminContractsPage() {
     <div className="space-y-5">
       <PageHeader
         title="근로계약서 관리"
-        sub="전자계약서 생성 및 발송 관리"
+        sub="직무지도원 전자 근로계약서를 생성하고 발송·서명 상태를 관리합니다."
         actions={<button onClick={() => setShowCreate(true)} className={T.btnPrimary}>+ 계약서 생성</button>}
       />
 

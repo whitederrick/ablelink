@@ -122,7 +122,7 @@ export default function AdminReviewPage() {
       {/* 헤더 */}
       <PageHeader
         title="확정 현황"
-        sub="직무지도원별 출근부·일지·평가 확정 상태"
+        sub="직무지도원별 출근부·일지·평가의 확정 상태를 확인합니다."
         actions={
           <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
             <button onClick={() => changeMonth(-1)}

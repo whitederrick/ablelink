@@ -69,7 +69,7 @@ export default function BillingPage() {
 
   return (
     <div>
-      <PageHeader title="결제·구독 현황" sub="전체 에이전시의 플랜 및 결제 상태" />
+      <PageHeader title="결제·구독 현황" sub="전체 에이전시의 구독 플랜과 결제·연체 상태를 확인합니다." />
 
       <StatCardRow
         className="mb-5"

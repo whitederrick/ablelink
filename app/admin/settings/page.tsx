@@ -61,7 +61,7 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <PageHeader title="운영 설정값" sub="DB 운영 파라미터(즉시 적용) 및 환경 변수 현황" />
+      <PageHeader title="운영 설정값" sub="운영 파라미터(즉시 적용)와 환경 변수 현황을 관리합니다." />
 
       <div className="grid items-start gap-6 lg:grid-cols-2">
       {/* 운영 파라미터 (DB 저장 — 즉시 적용) */}

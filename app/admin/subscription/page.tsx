@@ -48,7 +48,7 @@ export default function SubscriptionPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="구독 관리" />
+      <PageHeader title="구독 관리" sub="구독 플랜과 결제 내역을 관리합니다." />
 
       <div className={T.summaryGrid}>
         {[

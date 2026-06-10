@@ -83,7 +83,7 @@ export default function AgenciesPage() {
     <div>
       <PageHeader
         title="에이전시 관리"
-        sub={`전체 ${agencies.length}개 · 플랜 변경 및 신규 생성`}
+        sub="에이전시를 등록하고 상세 정보 및 구독 플랜을 관리합니다."
         actions={
           <button onClick={()=>setShowCreate(true)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white active:scale-95">
             <Plus className="h-4 w-4" />에이전시 생성

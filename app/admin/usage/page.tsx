@@ -80,7 +80,7 @@ export default function UsagePage() {
     <div>
       <PageHeader
         title="AI 사용량"
-        sub="월별·에이전시별 AI API 호출 통계"
+        sub="월별·에이전시별 AI API 호출량을 확인합니다."
         actions={
           <div className="flex items-center gap-2">
             <button onClick={() => setYm(prevMonth(ym))} className={T.btnSecondary + " px-2.5"}><ChevronLeft className="h-4 w-4" /></button>
