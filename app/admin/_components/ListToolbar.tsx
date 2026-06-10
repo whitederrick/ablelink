@@ -60,7 +60,7 @@ export default function ListToolbar({
               <button
                 key={f.value}
                 onClick={() => onToggleFilter?.(f.value)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                className={`inline-flex min-h-10 items-center rounded-full border px-3.5 text-[13px] font-bold transition ${
                   active
                     ? "border-slate-950 bg-slate-950 text-white"
                     : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
