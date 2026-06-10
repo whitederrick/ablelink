@@ -2,6 +2,7 @@
 // 에이전시 구독 플랜 체크 유틸리티
 
 import { prisma } from "./prisma";
+import { getConfigNumber } from "./systemConfig";
 
 // 등급 재설계 2026-06-06: STARTER는 "기본 운영(규모+데이터 내보내기)"만.
 // 공식문서(PDF·서명)·AI는 STANDARD, 운영 자동화(급여·전자계약·매칭)는 PRO로 상향.
@@ -309,7 +310,8 @@ export async function startTrialIfNeeded(agencyId: bigint): Promise<void> {
   if (!agency || agency.planType !== "FREE") return;
 
   const now = new Date();
-  const trialEndsAt = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+  const trialDays = await getConfigNumber("TRIAL_DAYS");
+  const trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
 
   await prisma.agency.update({
     where: { id: agencyId },

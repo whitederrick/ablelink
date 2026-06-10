@@ -7,6 +7,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
 import { requireManagerSession } from "@/lib/managerScope";
+import { getConfigNumber } from "@/lib/systemConfig";
 
 export async function PATCH(
   request: NextRequest,
@@ -39,8 +40,9 @@ export async function PATCH(
 
     // TRIAL 시작 처리
     if (planType === "TRIAL") {
+      const trialDays = await getConfigNumber("TRIAL_DAYS");
       updateData.trialStartedAt = now;
-      updateData.trialEndsAt = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+      updateData.trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
     }
 
     // 유료 구독 전환

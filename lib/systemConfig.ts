@@ -35,6 +35,18 @@ export const CONFIG_REGISTRY: ConfigSpec[] = [
     description: "문서 제출 run당 보존하는 최근 버전 개수(초과분 자동 정리).",
     type: "number", default: "20", min: 5, max: 100,
   },
+  {
+    key: "TRIAL_DAYS",
+    label: "무료 체험 기간(일)",
+    description: "FREE→TRIAL 전환 시 부여하는 무료 체험 일수.",
+    type: "number", default: "15", min: 1, max: 90,
+  },
+  {
+    key: "LATE_THRESHOLD_MIN",
+    label: "지각 판정 임계(분)",
+    description: "실제 출근이 표준 출근시각보다 이만큼 이상 늦으면 근태 이상(지각)으로 표시.",
+    type: "number", default: "15", min: 1, max: 120,
+  },
 ];
 
 const SPEC_BY_KEY = Object.fromEntries(CONFIG_REGISTRY.map(s => [s.key, s]));

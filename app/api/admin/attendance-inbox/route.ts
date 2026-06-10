@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { computeWorkTimes } from "@/lib/workSchedule";
+import { getConfigNumber } from "@/lib/systemConfig";
 
 type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
 type InboxStatus =
@@ -44,9 +45,7 @@ function instantToKstMin(d: Date | null | undefined): number | null {
   return kst.getUTCHours() * 60 + kst.getUTCMinutes();
 }
 
-// 지각 판정 임계(분): 실제 출근이 표준보다 이만큼 이상 늦으면 이상 표시
-const LATE_THRESHOLD_MIN = 15;
-
+// 지각 판정 임계(분): 실제 출근이 표준보다 이만큼 이상 늦으면 이상 표시(운영자 설정값, 기본 15)
 function deriveIssueTypes(row: {
   startTime: Date | null;
   endTime: Date | null;
@@ -57,7 +56,7 @@ function deriveIssueTypes(row: {
   commuteGuidanceIncluded: boolean | null;
   customWorkStart: string | null;
   customWorkEnd: string | null;
-}): IssueType[] {
+}, lateThresholdMin: number): IssueType[] {
   const out: IssueType[] = [];
 
   if (!row.startTime) out.push("MISSING_CLOCK_IN");
@@ -71,7 +70,7 @@ function deriveIssueTypes(row: {
   //    실제 시각이 없으면(과거 기록·기간 일괄생성 등) 판정하지 않음 → 오탐 방지.
   const expectedStartMin = hhmmToMin(getExpectedStartHHMM(row));
   const actualStartMin = instantToKstMin(row.actualStartTime);
-  if (expectedStartMin != null && actualStartMin != null && actualStartMin - expectedStartMin >= LATE_THRESHOLD_MIN) {
+  if (expectedStartMin != null && actualStartMin != null && actualStartMin - expectedStartMin >= lateThresholdMin) {
     out.push("TIME_ANOMALY");
   }
 
@@ -93,6 +92,7 @@ function mapIssueStatusToInboxStatus(issue: {
 export async function GET(req: Request) {
   try {
     const scope = await requireManagerSession(req);
+    const lateThresholdMin = await getConfigNumber("LATE_THRESHOLD_MIN");
 
     // 소속 기관만 조회
     const agencyId = scope.agencyId;
@@ -191,7 +191,7 @@ export async function GET(req: Request) {
         commuteGuidanceIncluded,
         customWorkStart,
         customWorkEnd,
-      });
+      }, lateThresholdMin);
 
       if (derived.length === 0) continue;
 

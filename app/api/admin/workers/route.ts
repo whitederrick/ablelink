@@ -110,6 +110,7 @@ export async function GET(req: NextRequest) {
             select: {
               id: true,
               startDate: true,
+              serviceStep: true,
               site: { select: { companyName: true } },
               agency: { select: { name: true } },
             },
@@ -136,6 +137,7 @@ export async function GET(req: NextRequest) {
           siteName: u.assignments[0].site?.companyName || "-",
           agencyName: u.assignments[0].agency?.name || "-",
           startDate: u.assignments[0].startDate.toISOString(),
+          serviceStep: String(u.assignments[0].serviceStep),
         } : null,
       })),
     });
