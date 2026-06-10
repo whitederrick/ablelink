@@ -44,7 +44,7 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
       fd.append("year", String(year));
       fd.append("file", file);
       const d = await fetch("/api/admin/payroll/income-tax/upload", { method: "POST", body: fd }).then(r => r.json());
-      if (d.success) { onToast(`${d.year}년 간이세액표 ${d.rowCount}구간 저장(엑셀)`); load(); }
+      if (d.success) { onToast(`${d.year}년 간이세액표 ${d.rowCount}구간 저장(엑셀${d.sheet ? ` · '${d.sheet}' 시트` : ""})`); load(); }
       else onToast(d.message || "업로드 실패");
     } catch { onToast("업로드 실패"); }
     finally { setBusy(false); }

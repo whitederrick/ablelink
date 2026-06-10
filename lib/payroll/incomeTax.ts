@@ -83,6 +83,46 @@ export function localIncomeTax(incomeTax: number): number {
   return Math.floor((Number(incomeTax) || 0) * 0.1);
 }
 
+export interface BonusTaxResult {
+  months: number;          // 지급대상기간 월수(1~12)
+  ordinaryTotal: number;   // 기간 내 상여외 급여 합계
+  perMonth: number;        // (상여 + 상여외급여합계) ÷ 월수
+  perMonthTax: number;     // ㉮: perMonth의 간이세액표 세액(자녀공제·비율 반영)
+  grossOnPeriod: number;   // ㉮ × 월수
+  alreadyWithheld: number; // ㉰: 기간 상여외 급여에 이미 원천징수한 세액
+  bonusTax: number;        // 상여 원천징수 소득세 = max(0, ㉮×월수 − ㉰)
+  bonusLocalTax: number;   // 상여분 주민세 = 소득세 10%
+}
+
+/**
+ * 상여 등 원천징수세액(원칙: 지급대상기간 있는 상여).
+ *  bonusTax = (㉮ × 월수) − 기징수세액,  ㉮ = 간이세액표((상여 + 상여외급여합계) ÷ 월수).
+ *  - monthlyPay: 월 상여외 급여(과세). 상여외급여합계 미지정 시 monthlyPay × 월수로 산정.
+ *  - alreadyWithheld 미지정 시 (월급여 세액 × 월수)로 산정.
+ *  - 지급대상기간 없는/특례 상여는 호출측에서 months(또는 합계)만 맞춰 전달.
+ */
+export function computeBonusTax(
+  brackets: TaxBracket[],
+  opts: {
+    bonus: number; monthlyPay: number; months: number; dependents: number;
+    childUnder20?: number; rate?: number; ordinaryTotal?: number; alreadyWithheld?: number;
+  },
+): BonusTaxResult {
+  const months = Math.max(1, Math.min(12, Math.round(opts.months || 1)));
+  const taxOpts = { childUnder20: opts.childUnder20 ?? 0, rate: opts.rate ?? 100 };
+  const ordinaryTotal = opts.ordinaryTotal != null ? opts.ordinaryTotal : (Number(opts.monthlyPay) || 0) * months;
+  const perMonth = ((Number(opts.bonus) || 0) + ordinaryTotal) / months;
+  const perMonthTax = computeIncomeTax(brackets, perMonth, opts.dependents, taxOpts).tax;
+  const grossOnPeriod = perMonthTax * months;
+  const monthlyTax = computeIncomeTax(brackets, Number(opts.monthlyPay) || 0, opts.dependents, taxOpts).tax;
+  const alreadyWithheld = opts.alreadyWithheld != null ? opts.alreadyWithheld : monthlyTax * months;
+  const bonusTax = Math.max(0, Math.round(grossOnPeriod - alreadyWithheld));
+  return {
+    months, ordinaryTotal, perMonth, perMonthTax, grossOnPeriod,
+    alreadyWithheld, bonusTax, bonusLocalTax: localIncomeTax(bonusTax),
+  };
+}
+
 /**
  * 8세 이상 20세 이하 자녀 추가공제액(간이세액표 금액에서 차감).
  *  1명 12,500 / 2명 29,160 / 3명↑ 29,160 + (초과 1명당 25,000).

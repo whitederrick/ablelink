@@ -730,8 +730,13 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
   }));
   const [saving, setSaving] = useState(false);
   const [taxNote, setTaxNote] = useState("");
+  const [bonusAmount, setBonusAmount] = useState(0);
+  const [bonusMonths, setBonusMonths] = useState(1);
+  const [bonusNote, setBonusNote] = useState("");
 
   const gross = payLines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
+  // 상여 계산 기준 = 상여 외 급여(상여 라인 제외)
+  const regularGross = payLines.filter(l => l.key !== "bonus").reduce((s, l) => s + (Number(l.amount) || 0), 0);
   const totalDed = deductLines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
   const net = gross - totalDed;
   const totalHours = +payLines.reduce((s, l) => s + (Number(l.hours) || 0), 0).toFixed(1);
@@ -765,6 +770,25 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
         setTaxNote("등록된 간이세액표가 없습니다. 운영자가 [시스템 설정 > 근로소득 간이세액표]에 등록해야 자동 조회됩니다. (소득세 수동 입력 가능)");
       }
     } catch { setTaxNote("조회 실패"); }
+  }
+
+  async function applyBonus() {
+    if (!bonusAmount) { setBonusNote("상여 금액을 입력하세요."); return; }
+    try {
+      const qs = `bonus=${bonusAmount}&monthlyPay=${regularGross}&months=${bonusMonths}&dependents=${basic.dependents}&childUnder20=${basic.childUnder20}&rate=${basic.withholdingRate}&year=${year}`;
+      const d = await fetch(`/api/admin/payroll/income-tax/bonus?${qs}`).then(r => r.json());
+      if (!d.success || !d.hasTable) { setBonusNote("등록된 간이세액표가 없어 상여 세액을 계산할 수 없습니다. (운영자 등록 필요)"); return; }
+      // 지급내역에 상여 라인 추가/갱신
+      setPayLines(prev => [...prev.filter(l => l.key !== "bonus"), { key: "bonus", name: "상여", hours: 0, amount: bonusAmount, method: `지급대상기간 ${d.months}개월` }]);
+      // 공제내역에 상여소득세·상여주민세 추가/갱신
+      setDeductLines(prev => {
+        const next = prev.filter(l => l.key !== "bonusTax" && l.key !== "bonusLocalTax");
+        next.push({ key: "bonusTax", name: "상여소득세", amount: d.bonusTax });
+        next.push({ key: "bonusLocalTax", name: "상여주민세", amount: d.bonusLocalTax });
+        return next;
+      });
+      setBonusNote(`상여 ${comma(bonusAmount)}원 · ${d.months}개월: 월환산세액 ${comma(d.perMonthTax)} × ${d.months} − 기징수 ${comma(d.alreadyWithheld)} = 상여소득세 ${comma(d.bonusTax)}원 (주민세 ${comma(d.bonusLocalTax)}원)`);
+    } catch { setBonusNote("계산 실패"); }
   }
 
   async function save() {
@@ -813,6 +837,22 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
         </div>
         {taxNote && <p className="mb-4 rounded-xl bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700">{taxNote}</p>}
         {!taxNote && <p className="mb-4 text-[11px] font-semibold text-slate-400">※ 공제대상가족수=본인+배우자+자녀 등. 8~20세 자녀는 추가공제(1명 12,500·2명 29,160·3명↑ +25,000/명). 비율 80/100/120% 선택.</p>}
+
+        {/* 상여 (지급대상기간 원천징수) */}
+        <div className="mb-5 rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+          <p className="mb-2 text-sm font-black text-slate-900">상여 (지급대상기간 원천징수)</p>
+          <div className="flex flex-wrap items-end gap-2">
+            <div><label className={T.label}>상여 금액(원)</label>
+              <input type="number" value={bonusAmount || ""} onChange={e => setBonusAmount(Number(e.target.value) || 0)} className={`w-40 ${T.input}`} /></div>
+            <div><label className={T.label}>지급대상기간(월)</label>
+              <input type="number" min={1} max={12} value={bonusMonths} onChange={e => setBonusMonths(Math.max(1, Math.min(12, Number(e.target.value) || 1)))} className={`w-28 ${T.input}`} /></div>
+            <button onClick={applyBonus} className={T.btnSecondary}>상여 세액 계산·반영</button>
+          </div>
+          {bonusNote && <p className="mt-2 text-xs font-semibold text-amber-700">{bonusNote}</p>}
+          <p className="mt-1 text-[11px] font-semibold text-slate-400">
+            상여외 급여 {comma(regularGross)}원 기준 · 공식 (㉮×월수)−기징수. 지급대상기간이 없으면 1월~지급월까지의 개월수를 입력. 계산 시 지급내역에 ‘상여’, 공제내역에 ‘상여소득세·상여주민세’가 추가됩니다.
+          </p>
+        </div>
 
         <div className="grid gap-5 lg:grid-cols-2">
           {/* 지급내역 */}

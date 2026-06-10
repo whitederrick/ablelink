@@ -30,31 +30,35 @@ export async function POST(req: NextRequest) {
     const buf = Buffer.from(await file.arrayBuffer());
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buf as any);
-    const ws = wb.worksheets[0];
-    if (!ws) return NextResponse.json({ success: false, message: "시트를 찾을 수 없습니다." }, { status: 400 });
+    if (wb.worksheets.length === 0) return NextResponse.json({ success: false, message: "시트를 찾을 수 없습니다." }, { status: 400 });
 
-    // 모든 행을 셀 값 행렬로 환원 (row.values는 1-base, 0 인덱스는 null)
-    const rows: any[][] = [];
-    ws.eachRow({ includeEmpty: false }, (row) => {
-      const vals = Array.isArray(row.values) ? row.values.slice(1) : [];
-      rows.push(vals.map((v: any) => {
-        if (v == null) return null;
-        if (typeof v === "object") return v.result ?? v.text ?? v.value ?? null; // 수식/리치텍스트 셀
-        return v;
-      }));
-    });
+    const cellVal = (v: any) => {
+      if (v == null) return null;
+      if (typeof v === "object") return v.result ?? v.text ?? v.value ?? null; // 수식/리치텍스트 셀
+      return v;
+    };
 
-    const brackets = bracketsFromMatrix(rows);
-    if (brackets.length === 0) {
-      return NextResponse.json({ success: false, message: "표 데이터를 인식하지 못했습니다. 간이세액표 시트인지 확인하세요." }, { status: 400 });
+    // 모든 시트(소득령 별표2 / 간이세액표 등)를 훑어 구간이 가장 많이 나오는 시트를 자동 선택.
+    let brackets: ReturnType<typeof bracketsFromMatrix> = [];
+    let usedSheet = "";
+    for (const ws of wb.worksheets) {
+      const rows: any[][] = [];
+      ws.eachRow({ includeEmpty: false }, (row) => {
+        const vals = Array.isArray(row.values) ? row.values.slice(1) : [];
+        rows.push(vals.map(cellVal));
+      });
+      const b = bracketsFromMatrix(rows);
+      if (b.length > brackets.length) { brackets = b; usedSheet = ws.name; }
     }
-
+    if (brackets.length === 0) {
+      return NextResponse.json({ success: false, message: "표 데이터를 인식하지 못했습니다. '간이세액표' 시트가 포함된 파일인지 확인하세요." }, { status: 400 });
+    }
     await prisma.incomeTaxTable.upsert({
       where: { year },
       create: { year, data: brackets as any, rowCount: brackets.length },
       update: { data: brackets as any, rowCount: brackets.length },
     });
-    return NextResponse.json({ success: true, year, rowCount: brackets.length });
+    return NextResponse.json({ success: true, year, rowCount: brackets.length, sheet: usedSheet });
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[income-tax/upload]", e);
