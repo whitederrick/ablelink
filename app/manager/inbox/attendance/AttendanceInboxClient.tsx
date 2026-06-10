@@ -13,6 +13,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import PageHeader from "../../_components/PageHeader";
+import Pagination from "../../_components/Pagination";
 
 type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
 type IssueFilter = IssueType | "ALL";
@@ -263,17 +264,6 @@ async function patchJson<T>(url: string, body?: any) {
   });
 }
 
-function buildPageWindow(totalPages: number, page: number, windowSize: number) {
-  const half = Math.floor(windowSize / 2);
-  let start = Math.max(1, page - half);
-  let end = Math.min(totalPages, start + windowSize - 1);
-  start = Math.max(1, end - windowSize + 1);
-
-  const pages: number[] = [];
-  for (let i = start; i <= end; i++) pages.push(i);
-  return pages;
-}
-
 function Chip({
   children,
   active,
@@ -365,7 +355,6 @@ export default function AttendanceInboxClient() {
     return items.slice(start, start + pageSize);
   }, [items, page]);
 
-  const pageWindow = useMemo(() => buildPageWindow(totalPages, page, 10), [totalPages, page]);
 
   /** load */
   useEffect(() => {
@@ -741,40 +730,8 @@ export default function AttendanceInboxClient() {
                 )}
               </div>
 
-              {/* pagination */}
-              <div className="mt-3 flex items-center justify-between px-1">
-                <div className="text-xs text-slate-400">
-                  페이지 {page} / {totalPages}
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    className="rounded-lg border px-2 py-1 text-xs hover:bg-black/5"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page <= 1}
-                  >
-                    이전
-                  </button>
-                  {pageWindow.map((p) => (
-                    <button
-                      key={p}
-                      className={cx(
-                        "rounded-lg border px-2 py-1 text-xs",
-                        p === page ? "bg-slate-950 text-white border-slate-950" : "hover:bg-slate-50"
-                      )}
-                      onClick={() => setPage(p)}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                  <button
-                    className="rounded-lg border px-2 py-1 text-xs hover:bg-black/5"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages}
-                  >
-                    다음
-                  </button>
-                </div>
-              </div>
+              {/* pagination — 공용 컴포넌트 */}
+              <Pagination className="mt-3 px-1" page={page} totalPages={totalPages} total={items.length} onPageChange={setPage} />
             </div>
           </div>
         </div>

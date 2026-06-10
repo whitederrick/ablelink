@@ -5,10 +5,19 @@ import dynamic from "next/dynamic";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import Pagination from "../_components/Pagination";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import StatusBadge from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
 import { List, Map as MapIcon, CalendarDays, Download } from "lucide-react";
 
 const LIST_PAGE_SIZE = 20;
+// 근태 상태 뱃지 매핑(공통 톤)
+const ATT_BADGE = {
+  done: { label: "종료", tone: "emerald" as const },
+  working: { label: "근무중", tone: "sky" as const },
+  before: { label: "출근전", tone: "slate" as const },
+  gps: { label: "이탈", tone: "amber" as const },
+};
 
 const AttendanceMap = dynamic(() => import("./AttendanceMap"), { ssr: false });
 
@@ -147,6 +156,7 @@ export default function AttendancesPage() {
   const [loading, setLoading] = useState(false);
   const [csvLoading, setCsvLoading] = useState(false);
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
 
   async function downloadCsv(type: "attendance" | "logs") {
     setCsvLoading(true);
@@ -197,14 +207,21 @@ export default function AttendancesPage() {
 
   useEffect(() => { fetchData(); }, [yearMonth]);
 
-  // 검색은 클라이언트 필터(직무지도원/현장명) — 서버 q 미지원이라 일관 처리
+  // 검색(직무지도원/현장명) + 상태 멀티필터 — 클라이언트 처리(서버 q 미지원 일관화)
+  function matchStatus(i: AttendanceItem, keys: string[]) {
+    if (keys.length === 0) return true;
+    return keys.some(k =>
+      k === "done" ? i.isFinalClosed :
+      k === "working" ? (!!i.startTime && !i.isFinalClosed) :
+      k === "before" ? !i.startTime :
+      k === "gps" ? i.isGpsModified : false);
+  }
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return items;
     return items.filter(i =>
-      (i.user?.workerName ?? "").toLowerCase().includes(q) ||
-      (i.site?.companyName ?? "").toLowerCase().includes(q));
-  }, [items, search]);
+      (!q || (i.user?.workerName ?? "").toLowerCase().includes(q) || (i.site?.companyName ?? "").toLowerCase().includes(q))
+      && matchStatus(i, statusFilter));
+  }, [items, search, statusFilter]);
 
   const clockedIn = filtered.filter(i => i.startTime).length;
   const finalized = filtered.filter(i => i.isFinalClosed).length;
@@ -213,7 +230,15 @@ export default function AttendancesPage() {
   // 목록 페이징(월 데이터 클라 분할). 지도·월별현황은 전체 사용.
   const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE));
   const pageItems = filtered.slice((page - 1) * LIST_PAGE_SIZE, page * LIST_PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [yearMonth, search, viewMode]);
+  useEffect(() => { setPage(1); }, [yearMonth, search, viewMode, statusFilter]);
+
+  const statusFilters: FilterChip[] = [
+    { value: "working", label: "근무중", count: items.filter(i => i.startTime && !i.isFinalClosed).length },
+    { value: "done", label: "종료", count: items.filter(i => i.isFinalClosed).length },
+    { value: "before", label: "출근전", count: items.filter(i => !i.startTime).length },
+    { value: "gps", label: "GPS이탈", count: items.filter(i => i.isGpsModified).length },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   const VIEW_TABS: { mode: ViewMode; label: string; Icon: any }[] = [
     { mode: "list",    label: "목록",    Icon: List },
@@ -235,44 +260,37 @@ export default function AttendancesPage() {
         ]}
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)}
-          className={`w-auto ${T.input}`} />
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="직무지도원 이름 / 현장명 검색"
-          className={`flex-1 ${T.input}`} />
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => downloadCsv("attendance")}
-            disabled={csvLoading}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
-            근태 CSV
-          </button>
-          <button
-            onClick={() => downloadCsv("logs")}
-            disabled={csvLoading}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
-            일지 CSV
-          </button>
-        </div>
-        <div className="ml-auto flex gap-1.5">
-          {VIEW_TABS.map(({ mode, label, Icon }) => (
-            <button key={mode} onClick={() => setViewMode(mode)}
-              className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition active:scale-95 ${
-                viewMode === mode
-                  ? "border-slate-950 bg-slate-950 font-black text-white"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-              }`}>
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              {label}
+      <ListToolbar
+        query={search}
+        onQueryChange={setSearch}
+        placeholder="직무지도원 이름 / 현장명 검색"
+        filters={statusFilters}
+        selected={statusFilter}
+        onToggleFilter={toggleStatus}
+        extra={
+          <>
+            <input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)} className={`w-auto ${T.input}`} />
+            <button onClick={() => downloadCsv("attendance")} disabled={csvLoading}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 active:scale-95 disabled:opacity-50">
+              <Download className="h-4 w-4" />근태 CSV
             </button>
-          ))}
-        </div>
-      </div>
+            <button onClick={() => downloadCsv("logs")} disabled={csvLoading}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 active:scale-95 disabled:opacity-50">
+              <Download className="h-4 w-4" />일지 CSV
+            </button>
+            <div className="flex gap-1.5">
+              {VIEW_TABS.map(({ mode, label, Icon }) => (
+                <button key={mode} onClick={() => setViewMode(mode)}
+                  className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition active:scale-95 ${
+                    viewMode === mode ? "border-slate-950 bg-slate-950 font-black text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}>
+                  <Icon className="h-4 w-4" />{label}
+                </button>
+              ))}
+            </div>
+          </>
+        }
+      />
 
       {loading ? (
         <div className="flex flex-col items-center gap-3 py-10">
@@ -312,15 +330,11 @@ export default function AttendancesPage() {
                     {formatTime(row.endTime)}
                   </td>
                   <td className={T.td}>
-                    {row.isFinalClosed
-                      ? <span className={`${T.badge} bg-emerald-50 text-emerald-600`}>종료</span>
-                      : row.startTime
-                      ? <span className={`${T.badge} bg-sky-50 text-sky-600`}>근무중</span>
-                      : <span className={`${T.badge} bg-slate-100 text-slate-400`}>출근전</span>}
+                    <StatusBadge status={row.isFinalClosed ? "done" : row.startTime ? "working" : "before"} map={ATT_BADGE} />
                   </td>
                   <td className={T.td}>
                     {row.isGpsModified
-                      ? <span className={`${T.badge} bg-orange-50 text-orange-600`}>이탈</span>
+                      ? <StatusBadge status="gps" map={ATT_BADGE} />
                       : row.withinRange === true
                       ? <span className="text-sm font-semibold text-emerald-600">정상</span>
                       : <span className="text-slate-300">-</span>}
