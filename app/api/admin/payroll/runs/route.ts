@@ -9,7 +9,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { computeWeeklyHoliday, scheduledMinutesForWorkType } from "@/lib/payroll/weeklyHoliday";
-import { lookupIncomeTax, localIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
+import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const SERVICE_STEP_LABEL: Record<string, string> = {
@@ -295,12 +295,14 @@ export async function POST(req: NextRequest) {
 
       // 기본사항
       const wa = assignments.find(a => a.workerId === workerId);
-      const dependents = 1; // 공제대상가족수 기본 1(본인). 그리드에서 변경 가능.
+      const dependents = 1;      // 공제대상가족수 기본 1(본인). 그리드에서 변경 가능.
+      const childUnder20 = 0;    // 8~20세 자녀수(추가공제). 그리드에서 입력.
+      const withholdingRate = 100; // 원천징수 선택비율 80/100/120. 그리드에서 변경.
       const basicInfo = {
         job: "직무지도",
         placementType: wa?.serviceStep ? (SERVICE_STEP_LABEL[wa.serviceStep] ?? "") : "",
         placementDate: wa?.startDate ? new Date(wa.startDate).toISOString().slice(0, 10) : "",
-        dependents,
+        dependents, childUnder20, withholdingRate,
       };
 
       // ── 공제 계산 ──
@@ -317,10 +319,10 @@ export async function POST(req: NextRequest) {
       if (incomeType === "BUSINESS") {
         pushDed("bizTax", "사업소득세(3.3%)", Math.round(grossPay * BUSINESS_DEDUCTION_RATE));
       } else {
-        // 근로소득: 소득세(간이세액표 자동조회) + 주민세(소득세 10%) + 4대보험(근로자 부담분)
-        const incomeTax = lookupIncomeTax(taxBrackets, grossPay, dependents) ?? 0;
-        pushDed("incomeTax", "소득세", incomeTax);
-        pushDed("localTax", "주민세", localIncomeTax(incomeTax));
+        // 근로소득: 소득세(간이세액표 → 8~20세 자녀공제 → 원천징수비율) + 주민세(소득세 10%) + 4대보험
+        const taxR = computeIncomeTax(taxBrackets, grossPay, dependents, { childUnder20, rate: withholdingRate });
+        pushDed("incomeTax", "소득세", taxR.tax);
+        pushDed("localTax", "주민세", taxR.localTax);
         if (insuranceRates) {
           pushDed("pension", "국민연금", Math.round(grossPay * Number(insuranceRates.nationalPension)));
           pushDed("health", "건강보험", Math.round(grossPay * Number(insuranceRates.healthInsurance)));

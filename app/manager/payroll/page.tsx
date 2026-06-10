@@ -725,6 +725,8 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
     placementType: bd.basicInfo?.placementType ?? "",
     placementDate: bd.basicInfo?.placementDate ?? "",
     dependents: Number(bd.basicInfo?.dependents) || 1,
+    childUnder20: Number(bd.basicInfo?.childUnder20) || 0,
+    withholdingRate: Number(bd.basicInfo?.withholdingRate) || 100,
   }));
   const [saving, setSaving] = useState(false);
   const [taxNote, setTaxNote] = useState("");
@@ -741,7 +743,8 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
 
   async function refetchTax() {
     try {
-      const res = await fetch(`/api/admin/payroll/income-tax/lookup?pay=${gross}&dependents=${basic.dependents}&year=${year}`);
+      const qs = `pay=${gross}&dependents=${basic.dependents}&childUnder20=${basic.childUnder20}&rate=${basic.withholdingRate}&year=${year}`;
+      const res = await fetch(`/api/admin/payroll/income-tax/lookup?${qs}`);
       const d = await res.json();
       if (d.success && d.hasTable) {
         setDeductLines(prev => {
@@ -755,9 +758,11 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
           setOrAdd("incomeTax", "소득세", d.incomeTax);
           return next;
         });
-        setTaxNote(`${d.year}년 간이세액표 적용 (과세급여 ${comma(gross)}원·가족 ${basic.dependents}명): 소득세 ${comma(d.incomeTax)}원 / 주민세 ${comma(d.localTax)}원`);
+        const creditNote = d.childCredit ? ` − 자녀공제 ${comma(d.childCredit)}` : "";
+        const rateNote = d.rate !== 100 ? ` × ${d.rate}%` : "";
+        setTaxNote(`${d.year}년 간이세액표 (과세급여 ${comma(gross)}원·가족 ${basic.dependents}명): 표 ${comma(d.base)}${creditNote}${rateNote} → 소득세 ${comma(d.incomeTax)}원 / 주민세 ${comma(d.localTax)}원`);
       } else {
-        setTaxNote("등록된 간이세액표가 없습니다. 운영자에게 등록을 요청하거나 소득세를 수동 입력하세요.");
+        setTaxNote("등록된 간이세액표가 없습니다. 운영자가 [시스템 설정 > 근로소득 간이세액표]에 등록해야 자동 조회됩니다. (소득세 수동 입력 가능)");
       }
     } catch { setTaxNote("조회 실패"); }
   }
@@ -783,7 +788,7 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
         </div>
 
         {/* 기본사항 */}
-        <div className="mb-5 grid grid-cols-2 gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 sm:grid-cols-4">
+        <div className="mb-2 grid grid-cols-2 gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 sm:grid-cols-4">
           <div><label className={T.label}>업무</label>
             <input value={basic.job} onChange={e => setBasic(b => ({ ...b, job: e.target.value }))} className={`w-full ${T.input}`} /></div>
           <div><label className={T.label}>배치형태</label>
@@ -791,15 +796,23 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
           <div><label className={T.label}>배치일</label>
             <input type="date" value={basic.placementDate} onChange={e => setBasic(b => ({ ...b, placementDate: e.target.value }))} className={`w-full ${T.input}`} /></div>
           <div><label className={T.label}>공제대상가족수</label>
-            <div className="flex gap-1.5">
-              <input type="number" min={1} max={11} value={basic.dependents}
-                onChange={e => setBasic(b => ({ ...b, dependents: Math.max(1, Math.min(11, Number(e.target.value) || 1)) }))}
-                className={`w-full ${T.input}`} />
-              <button onClick={refetchTax} className={`${T.btnSecondary} whitespace-nowrap`} title="과세급여·가족수로 소득세 재조회">세액조회</button>
-            </div>
+            <input type="number" min={1} max={11} value={basic.dependents}
+              onChange={e => setBasic(b => ({ ...b, dependents: Math.max(1, Math.min(11, Number(e.target.value) || 1)) }))}
+              className={`w-full ${T.input}`} /></div>
+          <div><label className={T.label}>8~20세 자녀수</label>
+            <input type="number" min={0} value={basic.childUnder20}
+              onChange={e => setBasic(b => ({ ...b, childUnder20: Math.max(0, Number(e.target.value) || 0) }))}
+              className={`w-full ${T.input}`} /></div>
+          <div><label className={T.label}>원천징수 비율</label>
+            <select value={basic.withholdingRate} onChange={e => setBasic(b => ({ ...b, withholdingRate: Number(e.target.value) }))} className={`w-full ${T.select}`}>
+              <option value={80}>80%</option><option value={100}>100%</option><option value={120}>120%</option>
+            </select></div>
+          <div className="flex items-end sm:col-span-2">
+            <button onClick={refetchTax} className={`${T.btnPrimary} w-full`} title="과세급여·가족수·자녀수·비율로 소득세 자동 산정">소득세 자동 조회 (간이세액표)</button>
           </div>
         </div>
         {taxNote && <p className="mb-4 rounded-xl bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700">{taxNote}</p>}
+        {!taxNote && <p className="mb-4 text-[11px] font-semibold text-slate-400">※ 공제대상가족수=본인+배우자+자녀 등. 8~20세 자녀는 추가공제(1명 12,500·2명 29,160·3명↑ +25,000/명). 비율 80/100/120% 선택.</p>}
 
         <div className="grid gap-5 lg:grid-cols-2">
           {/* 지급내역 */}
