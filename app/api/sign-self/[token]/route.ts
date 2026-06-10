@@ -43,6 +43,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const imgCheck = await validateSignatureImage(imageBlob!);
     if (!imgCheck.valid) return NextResponse.json({ success: false, message: imgCheck.error }, { status: 400 });
 
+    // 사업주(갑) 대표자 서명 — data URI로 agency.representativeSignatureUrl에 저장.
+    // (계약서 PDF 렌더러가 data:image 만 임베드하므로 스토리지 URL이 아닌 data URI로 보관)
+    if (payload.scope === "agency-rep") {
+      if (!payload.agencyId) {
+        return NextResponse.json({ success: false, message: "대상 에이전시 정보가 없습니다." }, { status: 400 });
+      }
+      const buf = Buffer.from(await imageBlob!.arrayBuffer());
+      const dataUrl = `data:${imgCheck.mime};base64,${buf.toString("base64")}`;
+      if (dataUrl.length > 1_500_000) {
+        return NextResponse.json({ success: false, message: "서명 이미지가 너무 큽니다." }, { status: 400 });
+      }
+      await prisma.agency.update({
+        where: { id: BigInt(payload.agencyId) },
+        data: { representativeSignatureUrl: dataUrl },
+      });
+      await consumeSelfSignToken(token); // 일회용
+      return NextResponse.json({ success: true });
+    }
+
     if (payload.scope !== "manager") {
       return NextResponse.json({ success: false, message: "지원하지 않는 서명 유형입니다." }, { status: 400 });
     }

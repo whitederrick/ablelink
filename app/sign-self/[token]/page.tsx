@@ -12,6 +12,7 @@ export default function SelfSignPage() {
   const padRef = useRef<SignaturePadHandle>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "expired" | "done">("loading");
   const [name, setName] = useState<string | null>(null);
+  const [scope, setScope] = useState<string | null>(null);
   const [empty, setEmpty] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -20,7 +21,7 @@ export default function SelfSignPage() {
     fetch(`/api/sign-self/${token}`)
       .then(r => r.json())
       .then(d => {
-        if (d.success) { setName(d.name); setPhase("ready"); }
+        if (d.success) { setName(d.name); setScope(d.scope ?? null); setPhase("ready"); }
         else setPhase("expired");
       })
       .catch(() => setPhase("expired"));
@@ -79,9 +80,9 @@ export default function SelfSignPage() {
     <div className="min-h-dvh bg-slate-50 px-4 py-6">
       <div className="mx-auto max-w-md">
         <div className="mb-4 text-center">
-          <h1 className="text-xl font-black text-slate-900">서명 입력</h1>
+          <h1 className="text-xl font-black text-slate-900">{scope === "agency-rep" ? "대표자 서명 입력" : "서명 입력"}</h1>
           <p className="mt-1 text-sm font-semibold text-slate-400">
-            {name ? `${name}님` : "관리자"} · 화면 칸에 손가락으로 서명해주세요
+            {name ? `${name}님` : scope === "agency-rep" ? "사업주 대표자" : "관리자"} · 화면 칸에 손가락으로 서명해주세요
           </p>
         </div>
 
@@ -108,7 +109,9 @@ export default function SelfSignPage() {
         </div>
 
         <p className="mt-4 text-center text-xs font-semibold text-slate-400">
-          제출하면 PC에서 작성 중인 문서의 관리자 서명으로 저장됩니다.
+          {scope === "agency-rep"
+            ? "제출하면 사업주 정보의 대표자 서명으로 저장되어 근로계약서에 자동 삽입됩니다."
+            : "제출하면 PC에서 작성 중인 문서의 관리자 서명으로 저장됩니다."}
         </p>
       </div>
     </div>

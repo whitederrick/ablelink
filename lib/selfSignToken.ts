@@ -17,9 +17,10 @@ const redis =
     : null;
 
 export interface SelfSignPayload {
-  scope: "manager"; // 향후 운영자(admin) 확장 여지
-  id: string;       // 계정 id (문자열)
-  name?: string;    // 표시용 이름
+  scope: "manager" | "agency-rep"; // manager=본인 서명, agency-rep=사업주 대표자 서명
+  id: string;        // 발급 계정 id (문자열)
+  name?: string;     // 표시용 이름
+  agencyId?: string; // agency-rep 스코프에서 대상 에이전시 id
 }
 
 // 로컬(Redis 미설정) 폴백 — 단일 인스턴스 dev에서만 유효

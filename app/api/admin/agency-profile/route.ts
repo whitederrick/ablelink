@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { isValidBRN, formatBRN } from "@/lib/validateBRN";
 
 export async function GET(req: NextRequest) {
   try {
@@ -56,11 +57,11 @@ export async function PATCH(req: NextRequest) {
     }
     if (businessNumber !== undefined) {
       const bn = str(businessNumber);
-      // 사업자등록번호 형식(10자리 숫자, 하이픈 허용) 가벼운 검증
-      if (bn && !/^\d{3}-?\d{2}-?\d{5}$/.test(bn)) {
-        return NextResponse.json({ success: false, message: "사업자등록번호는 10자리 숫자여야 합니다. (예: 123-45-67890)" }, { status: 400 });
+      // 사업자등록번호 형식 + 국세청 체크섬 검증
+      if (bn && !isValidBRN(bn)) {
+        return NextResponse.json({ success: false, message: "유효하지 않은 사업자등록번호입니다. 10자리를 확인해주세요. (예: 123-45-67890)" }, { status: 400 });
       }
-      data.businessNumber = bn;
+      data.businessNumber = bn ? formatBRN(bn) : null;
     }
 
     try {
