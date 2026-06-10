@@ -206,7 +206,7 @@ export async function POST(req: NextRequest) {
     // ─── 사업주(갑) 정보: 미입력 시 에이전시 정보로 자동 채움(스냅샷 보존) ──
     const agencyRow = await prisma.agency.findUnique({
       where: { id: agencyId },
-      select: { name: true, phoneNumber: true, address: true },
+      select: { name: true, phoneNumber: true, address: true, representativeName: true, representativeSignatureUrl: true },
     });
 
     // ─── 특약 조항 스냅샷: 선택한 조항 id → {title, body} 배열(작성 시점 보존) ──
@@ -270,8 +270,11 @@ export async function POST(req: NextRequest) {
         employerBizName: str(employerBizName) ?? agencyRow?.name ?? null,
         employerPhone:   str(employerPhone) ?? agencyRow?.phoneNumber ?? null,
         employerAddress: str(employerAddress) ?? agencyRow?.address ?? null,
-        employerRepName: str(employerRepName),
+        employerRepName: str(employerRepName) ?? agencyRow?.representativeName ?? null,
         workerAddress:   str(workerAddress),
+        // 사업주(갑) 서명: 에이전시에 등록된 대표자 서명을 스냅샷으로 자동 삽입(있으면).
+        adminSignatureUrl: agencyRow?.representativeSignatureUrl ?? null,
+        adminSignedAt:     agencyRow?.representativeSignatureUrl ? new Date() : null,
         specialClauses:  clauseSnapshot.length > 0 ? clauseSnapshot : undefined,
         signToken,
         tokenExpiresAt: expiresAt,

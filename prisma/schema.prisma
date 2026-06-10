@@ -438,6 +438,8 @@ model Agency {
 
   // 대표자명 — 근로계약서 사업주(갑) 자동입력용 (2026-06-10)
   representativeName String? @map("representative_name")
+  // 대표자 서명(data URI) — 계약서 사업주(갑) 서명란 자동 삽입 (2026-06-10)
+  representativeSignatureUrl String? @map("representative_signature_url")
 
   // ✅ 구독 관리
   planType   AgencyPlanType @default(FREE) @map("plan_type")

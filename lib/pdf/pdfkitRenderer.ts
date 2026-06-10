@@ -864,18 +864,27 @@ function employmentContract(p: any): Promise<Buffer> {
   y += mm(12);
 
   // 서명 블록 (사업주 / 근로자)
+  // "(서명)"은 실제 서명이 들어가는 행(대표자·성명)에만 두고, 서명 이미지는 그 "(서명)" 위에 겹쳐 그린다(일지 방식과 동일).
   const sig = p.signatures ?? {};
-  const drawSignName = (label: string, value: string, imageUrl?: string) => {
+  const drawSignName = (label: string, value: string, sign?: { imageUrl?: string } | undefined) => {
     const labelTxt = `${label} : ${value || ""}`;
-    doc.font("KR").fontSize(10.5).fillColor("#000").text(labelTxt, x + mm(6), y, { width: W - mm(40) });
-    // "(서명)" + 이미지
-    const sx = x + W - mm(34);
-    doc.text("(서명)", sx, y, { width: mm(34), align: "left" });
-    if (imageUrl && imageUrl.startsWith("data:image")) {
-      try {
-        const img = Buffer.from(imageUrl.split(",")[1], "base64");
-        doc.image(img, sx + mm(12), y - mm(2.5), { fit: [mm(22), mm(9)] });
-      } catch { /* 무시 */ }
+    const startX = x + mm(6);
+    doc.font("KR").fontSize(10.5).fillColor("#000").text(labelTxt, startX, y, { width: W - mm(40) });
+    if (sign) {
+      const tail = "(서명)";
+      // "(서명)"은 이름 바로 뒤(약간 여백)에 배치. 이름 폭을 측정해 그 다음에 둔다.
+      const nameW = doc.widthOfString(labelTxt);
+      const sx = startX + nameW + mm(7);
+      doc.font("KR").fontSize(10.5).fillColor("#000").text(tail, sx, y);
+      // 서명 이미지: "(서명)" 텍스트 중앙에 겹쳐 그림
+      if (sign.imageUrl && sign.imageUrl.startsWith("data:image")) {
+        try {
+          const img = Buffer.from(sign.imageUrl.split(",")[1], "base64");
+          const tailW = doc.widthOfString(tail);
+          const imgW = mm(32.3), imgH = mm(13.3);
+          doc.image(img, sx + tailW / 2 - imgW / 2, y - mm(4.5), { fit: [imgW, imgH], align: "center", valign: "center" });
+        } catch { /* 무시 */ }
+      }
     }
     y += mm(7);
   };
@@ -883,12 +892,12 @@ function employmentContract(p: any): Promise<Buffer> {
   doc.font("KR-Bold").fontSize(10.5).fillColor("#000").text("(사업주)", x, y); y += mm(6.5);
   drawSignName("사 업 체 명", p.employerBizName + (p.employerPhone ? `      (전화 : ${p.employerPhone})` : ""));
   drawSignName("주        소", p.employerAddress);
-  drawSignName("대  표  자", p.employerRepName, sig.employer?.imageUrl);
+  drawSignName("대  표  자", p.employerRepName, sig.employer);
   y += mm(3);
   doc.font("KR-Bold").fontSize(10.5).fillColor("#000").text("(근로자)", x, y); y += mm(6.5);
   drawSignName("주        소", p.workerAddress);
   drawSignName("연  락  처", p.workerPhone);
-  drawSignName("성        명", p.workerName, sig.worker?.imageUrl);
+  drawSignName("성        명", p.workerName, sig.worker);
 
   return toBuffer(doc);
 }

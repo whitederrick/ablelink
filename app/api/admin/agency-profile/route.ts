@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const scope = await requireManagerSession(req);
     const a = await prisma.agency.findUnique({
       where: { id: scope.agencyId },
-      select: { name: true, phoneNumber: true, address: true, businessNumber: true, representativeName: true },
+      select: { name: true, phoneNumber: true, address: true, businessNumber: true, representativeName: true, representativeSignatureUrl: true },
     });
     if (!a) return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
     return NextResponse.json({
@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
         address: a.address,
         businessNumber: a.businessNumber,
         representativeName: a.representativeName,
+        representativeSignatureUrl: a.representativeSignatureUrl,
       },
     });
   } catch (e: any) {
@@ -37,7 +38,7 @@ export async function PATCH(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
     const body = await req.json().catch(() => ({}));
-    const { phoneNumber, address, businessNumber, representativeName } = body;
+    const { phoneNumber, address, businessNumber, representativeName, representativeSignatureUrl } = body;
 
     const str = (v: any): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
@@ -45,6 +46,14 @@ export async function PATCH(req: NextRequest) {
     if (phoneNumber !== undefined)        data.phoneNumber = str(phoneNumber);
     if (address !== undefined)            data.address = str(address);
     if (representativeName !== undefined)  data.representativeName = str(representativeName);
+    if (representativeSignatureUrl !== undefined) {
+      // data URI(PNG) 또는 null. 과대 페이로드 방지(약 1MB 상한).
+      const sig = typeof representativeSignatureUrl === "string" && representativeSignatureUrl.startsWith("data:image") ? representativeSignatureUrl : null;
+      if (sig && sig.length > 1_500_000) {
+        return NextResponse.json({ success: false, message: "서명 이미지가 너무 큽니다." }, { status: 400 });
+      }
+      data.representativeSignatureUrl = sig;
+    }
     if (businessNumber !== undefined) {
       const bn = str(businessNumber);
       // 사업자등록번호 형식(10자리 숫자, 하이픈 허용) 가벼운 검증
