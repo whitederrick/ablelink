@@ -1,9 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, ChevronDown, ExternalLink, RefreshCw, XCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckCircle2, ChevronDown, ExternalLink, XCircle } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
+
+const REQ_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  PENDING: { label: "검토 중", tone: "amber" },
+  APPROVED: { label: "승인됨", tone: "emerald" },
+  REJECTED: { label: "반려됨", tone: "rose" },
+};
+const PAGE_SIZE = 10;
 
 type Request = {
   id: string;
@@ -24,18 +35,12 @@ type Request = {
   createdAt: string;
 };
 
-type Filter = "" | "PENDING" | "APPROVED" | "REJECTED";
-
-const STATUS_INFO: Record<string, { label: string; badge: string }> = {
-  PENDING:  { label: "검토 중",  badge: "bg-amber-100 text-amber-700" },
-  APPROVED: { label: "승인됨",   badge: "bg-emerald-100 text-emerald-700" },
-  REJECTED: { label: "반려됨",   badge: "bg-rose-100 text-rose-700" },
-};
-
 export default function ManagerSignupRequestsPage() {
   const [items, setItems]       = useState<Request[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [filter, setFilter]     = useState<Filter>("");
+  const [query, setQuery]       = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [page, setPage]         = useState(1);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
   const [note, setNote]         = useState("");
@@ -44,17 +49,26 @@ export default function ManagerSignupRequestsPage() {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3500); };
 
-  const load = useCallback((s = filter) => {
+  const load = useCallback(() => {
     setLoading(true);
-    const q = s ? `?status=${s}&pageSize=100` : "?pageSize=100";
-    fetch(`/api/admin/system/manager-signup-requests${q}`)
+    fetch(`/api/admin/system/manager-signup-requests?pageSize=200`)
       .then(r => r.json())
       .then(d => { if (d.success) setItems(d.items ?? []); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [filter]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return items
+      .filter(r => statusFilter.length === 0 || statusFilter.includes(r.status))
+      .filter(r => !q || r.agencyName.toLowerCase().includes(q) || (r.businessNumber ?? "").includes(q) || (r.loginId ?? "").toLowerCase().includes(q));
+  }, [items, query, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [query, statusFilter]);
 
   async function doAction(id: string, action: "approve" | "reject") {
     setProcessing(true);
@@ -79,56 +93,37 @@ export default function ManagerSignupRequestsPage() {
   const approved = items.filter(r => r.status === "APPROVED").length;
   const rejected = items.filter(r => r.status === "REJECTED").length;
 
+  const filters: FilterChip[] = [
+    { value: "PENDING", label: "검토 중", count: pending },
+    { value: "APPROVED", label: "승인됨", count: approved },
+    { value: "REJECTED", label: "반려됨", count: rejected },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
+
   return (
     <div>
-      {/* 헤더 */}
-      <PageHeader
-        title="관리자 가입 신청"
-        sub="에이전시 관리자 자체 가입 신청 목록 · 승인 또는 반려"
-        actions={
-          <button onClick={() => load()} className={T.btnSecondary + " flex items-center gap-1.5"}>
-            <RefreshCw className="h-4 w-4" />새로고침
-          </button>
-        }
+      <PageHeader title="관리자 가입 신청" sub="에이전시 관리자 자체 가입 신청 목록 · 승인 또는 반려" />
+
+      <StatCardRow
+        className="mb-5"
+        cols={4}
+        items={[
+          { label: "전체", value: items.length },
+          { label: "검토 중", value: pending, tone: "amber" },
+          { label: "승인됨", value: approved, tone: "emerald" },
+          { label: "반려됨", value: rejected, tone: "rose" },
+        ]}
       />
 
-      {/* 요약 */}
-      <div className={T.summaryGrid}>
-        <div className={T.summaryCard}>
-          <p className={T.summaryNum + " text-slate-900"}>{items.length}</p>
-          <p className={T.summaryLabel}>전체</p>
-        </div>
-        <div className={T.summaryCard}>
-          <p className={T.summaryNum + " text-amber-600"}>{pending}</p>
-          <p className={T.summaryLabel}>검토 중</p>
-        </div>
-        <div className={T.summaryCard}>
-          <p className={T.summaryNum + " text-emerald-600"}>{approved}</p>
-          <p className={T.summaryLabel}>승인됨</p>
-        </div>
-        <div className={T.summaryCard}>
-          <p className={T.summaryNum + " text-rose-500"}>{rejected}</p>
-          <p className={T.summaryLabel}>반려됨</p>
-        </div>
-      </div>
-
-      {/* 필터 */}
-      <div className="mb-4 flex gap-2">
-        {(["", "PENDING", "APPROVED", "REJECTED"] as Filter[]).map(s => (
-          <button key={s} onClick={() => { setFilter(s); load(s); }}
-            className={`rounded-xl px-3 py-1.5 text-sm font-semibold transition active:scale-95 ${
-              filter === s
-                ? "bg-slate-950 text-white"
-                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-            }`}>
-            {s === "" ? "전체" : STATUS_INFO[s].label}
-            {s === "PENDING" && pending > 0 && (
-              <span className="ml-1.5 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-black text-white">
-                {pending}
-              </span>
-            )}
-          </button>
-        ))}
+      <div className="mb-4">
+        <ListToolbar
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="기관명·사업자번호·아이디 검색"
+          filters={filters}
+          selected={statusFilter}
+          onToggleFilter={toggleStatus}
+        />
       </div>
 
       {/* 목록 */}
@@ -136,16 +131,13 @@ export default function ManagerSignupRequestsPage() {
         <div className="flex h-40 items-center justify-center">
           <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
         </div>
-      ) : items.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
-          <p className="text-sm text-slate-400">
-            {filter ? `${STATUS_INFO[filter].label} 신청이 없습니다.` : "가입 신청이 없습니다."}
-          </p>
+          <p className="text-sm text-slate-400">{items.length === 0 ? "가입 신청이 없습니다." : "조건에 맞는 신청이 없습니다."}</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {items.map(req => {
-            const si = STATUS_INFO[req.status];
+          {pageItems.map(req => {
             const isExpanded = expanded === req.id;
             const isActing   = actionId === req.id;
             return (
@@ -156,7 +148,7 @@ export default function ManagerSignupRequestsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-black text-sm text-slate-900">{req.agencyName}</span>
-                      <span className={`${T.badge} ${si.badge}`}>{si.label}</span>
+                      <StatusBadge status={req.status} map={REQ_BADGE} />
                       {req.ntsVerified && (
                         <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-600">
                           국세청 검증 ✓
@@ -292,6 +284,7 @@ export default function ManagerSignupRequestsPage() {
               </div>
             );
           })}
+          <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
         </div>
       )}
 
