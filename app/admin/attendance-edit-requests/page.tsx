@@ -1,8 +1,19 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { CheckCircle2, Clock, XCircle, AlertTriangle, RotateCcw } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
+
+const EDITREQ_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  PENDING: { label: "대기", tone: "amber" },
+  APPROVED: { label: "승인", tone: "emerald" },
+  REJECTED: { label: "반려", tone: "rose" },
+};
+const PAGE_SIZE = 8;
 
 type EditReq = {
   id: string;
@@ -28,12 +39,12 @@ type EditReq = {
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 function dowLabel(dateStr: string) { return DOW[new Date(dateStr + "T00:00:00").getDay()]; }
 
-type FilterStatus = "PENDING" | "ALL";
-
 export default function AttendanceEditRequestsPage() {
   const [requests, setRequests]   = useState<EditReq[]>([]);
   const [loading, setLoading]     = useState(true);
-  const [filter, setFilter]       = useState<FilterStatus>("PENDING");
+  const [query, setQuery]         = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>(["PENDING"]);
+  const [page, setPage]           = useState(1);
   const [actionId, setActionId]   = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState("");
   const [processing, setProcessing] = useState(false);
@@ -70,36 +81,58 @@ export default function AttendanceEditRequestsPage() {
     }
   }
 
-  const filtered = requests.filter(r => filter === "PENDING" ? r.status === "PENDING" : true);
-  const pendingCount = requests.filter(r => r.status === "PENDING").length;
+  const counts = useMemo(() => ({
+    total: requests.length,
+    pending: requests.filter(r => r.status === "PENDING").length,
+    approved: requests.filter(r => r.status === "APPROVED").length,
+    rejected: requests.filter(r => r.status === "REJECTED").length,
+  }), [requests]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return requests
+      .filter(r => statusFilter.length === 0 || statusFilter.includes(r.status))
+      .filter(r => !q || r.workerName.toLowerCase().includes(q) || (r.siteName ?? "").toLowerCase().includes(q) || (r.reason ?? "").toLowerCase().includes(q));
+  }, [requests, query, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [query, statusFilter]);
+
+  const filters: FilterChip[] = [
+    { value: "PENDING", label: "대기", count: counts.pending },
+    { value: "APPROVED", label: "승인", count: counts.approved },
+    { value: "REJECTED", label: "반려", count: counts.rejected },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <PageHeader
         title="출근부 수정 요청 관리"
         sub="직무지도원이 제출한 출근 기록 수정 요청을 검토하고 승인 또는 반려합니다."
-        actions={pendingCount > 0 && (
-          <span className="rounded-full bg-amber-100 px-3 py-1.5 text-sm font-black text-amber-700">
-            {pendingCount}건 처리 대기
-          </span>
-        )}
       />
 
-      {/* 필터 */}
-      <div className="mb-4 flex gap-2">
-        {([["PENDING", "승인 대기"], ["ALL", "전체"]] as const).map(([val, label]) => (
-          <button key={val} onClick={() => setFilter(val)}
-            className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
-              filter === val ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-600"
-            }`}>
-            {label}
-            {val === "PENDING" && pendingCount > 0 && (
-              <span className="ml-1.5 rounded-full bg-amber-400 px-1.5 py-px text-[10px] font-black text-white">
-                {pendingCount}
-              </span>
-            )}
-          </button>
-        ))}
+      <StatCardRow
+        className="mb-5"
+        cols={4}
+        items={[
+          { label: "전체", value: counts.total },
+          { label: "승인 대기", value: counts.pending, tone: "amber" },
+          { label: "승인", value: counts.approved, tone: "emerald" },
+          { label: "반려", value: counts.rejected, tone: "rose" },
+        ]}
+      />
+
+      <div className="mb-4">
+        <ListToolbar
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="직무지도원·현장·사유 검색"
+          filters={filters}
+          selected={statusFilter}
+          onToggleFilter={toggleStatus}
+        />
       </div>
 
       {loading ? (
@@ -108,40 +141,27 @@ export default function AttendanceEditRequestsPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
-          <p className="text-sm font-semibold text-slate-400">
-            {filter === "PENDING" ? "처리 대기 중인 요청이 없습니다." : "요청 내역이 없습니다."}
-          </p>
+          <p className="text-sm font-semibold text-slate-400">조건에 맞는 요청이 없습니다.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(req => (
+          {pageItems.map(req => (
             <div key={req.id}
               className={`rounded-2xl border bg-white p-5 ${
                 req.status === "PENDING"  ? "border-amber-200" :
                 req.status === "APPROVED" ? "border-emerald-100" : "border-rose-100"
               }`}>
               {/* 헤더 */}
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-black text-slate-900">{req.workerName}</span>
-                    <span className="text-xs font-semibold text-slate-400">{req.userPhone}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${
-                      req.status === "PENDING"  ? "bg-amber-100 text-amber-700" :
-                      req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" :
-                                                  "bg-rose-100 text-rose-700"
-                    }`}>
-                      {req.status === "PENDING" ? "대기" : req.status === "APPROVED" ? "승인" : "반려"}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                    {req.siteName} · {req.workDate} ({dowLabel(req.workDate)})
-                    {req.isFinalClosed && <span className="ml-1 text-emerald-600">[확정됨]</span>}
-                  </p>
-                </div>
-                <p className="text-[11px] text-slate-400 shrink-0">
+              <div className="mb-3 flex items-center gap-2 text-[15px] font-medium text-slate-800">
+                <span className="shrink-0">{req.workerName} ({req.userPhone})</span>
+                <StatusBadge status={req.status} map={EDITREQ_BADGE} />
+                <span className="truncate">
+                  {req.siteName} · {req.workDate} ({dowLabel(req.workDate)})
+                  {req.isFinalClosed && <span className="ml-1 font-semibold text-emerald-600">[확정됨]</span>}
+                </span>
+                <span className="ml-auto shrink-0 text-[13px] text-slate-500">
                   {new Date(req.createdAt).toLocaleDateString("ko-KR")} 요청
-                </p>
+                </span>
               </div>
 
               {/* 현재 vs 요청 시간 */}
@@ -225,6 +245,7 @@ export default function AttendanceEditRequestsPage() {
               )}
             </div>
           ))}
+          <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
         </div>
       )}
 

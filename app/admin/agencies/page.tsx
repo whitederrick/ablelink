@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Building2, Users, MapPin, ChevronDown, Plus, X, ExternalLink } from "lucide-react";
+import { ChevronDown, Plus, X, ExternalLink } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
 import AgencyDetail from "./AgencyDetail";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
@@ -146,38 +146,26 @@ export default function AgenciesPage() {
           {filtered.length===0?(
             <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">{agencies.length===0?"에이전시가 없습니다.":"조건에 맞는 에이전시가 없습니다."}</p></div>
           ):filtered.map(a=>(
-            <div key={a.id} className="rounded-2xl border border-slate-100 bg-white p-4">
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 flex-shrink-0">
-                  <Building2 className="h-5 w-5 text-slate-500"/>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button onClick={() => setDetailId(a.id)} className="text-[15px] font-semibold text-slate-800 hover:text-sky-600 hover:underline">{a.name}</button>
-                    <StatusBadge status={a.planType} map={PLAN_BADGE} />
-                    {a.trialEndsAt&&<span className="text-[13px] text-slate-500">체험 ~{new Date(a.trialEndsAt).toLocaleDateString("ko-KR")}</span>}
-                    {a.nextBillingAt&&<span className="text-[13px] text-emerald-600">다음결제 {new Date(a.nextBillingAt).toLocaleDateString("ko-KR")}</span>}
-                  </div>
-                  <div className="mt-1 flex items-center gap-4 text-[13px] text-slate-500">
-                    <span className="flex items-center gap-1"><Users className="h-3 w-3"/>{a.managerCount}명 관리자</span>
-                    <span className="flex items-center gap-1"><MapPin className="h-3 w-3"/>{a.siteCount}개소</span>
-                    <span>한도 {a.maxWorkers||"∞"}명/{a.maxSites||"∞"}개소</span>
-                    <span>가입 {new Date(a.createdAt).toLocaleDateString("ko-KR")}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <button onClick={() => setDetailId(a.id)}
-                    className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
-                    상세 <ExternalLink className="h-3 w-3"/>
-                  </button>
-                  <button onClick={()=>editId===a.id?setEditId(null):openEdit(a)}
-                    className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
-                    플랜 변경 <ChevronDown className={`h-3 w-3 transition ${editId===a.id?"rotate-180":""}`}/>
-                  </button>
-                </div>
+            <div key={a.id} className="rounded-xl border border-slate-200 bg-white">
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                <button onClick={() => setDetailId(a.id)} className="shrink-0 max-w-[200px] truncate text-[15px] font-black text-slate-900 hover:text-sky-600 hover:underline">{a.name}</button>
+                <StatusBadge status={a.planType} map={PLAN_BADGE} />
+                <span className="shrink-0 text-[13px] font-semibold text-slate-500">관리자 {a.managerCount} · 현장 {a.siteCount}</span>
+                <span className="shrink-0 text-[13px] text-slate-400">한도 {a.maxWorkers||"∞"}/{a.maxSites||"∞"}</span>
+                {a.trialEndsAt&&<span className="shrink-0 text-[13px] text-amber-600">체험~{new Date(a.trialEndsAt).toLocaleDateString("ko-KR").slice(2)}</span>}
+                {a.nextBillingAt&&<span className="shrink-0 text-[13px] text-emerald-600">결제 {new Date(a.nextBillingAt).toLocaleDateString("ko-KR").slice(2)}</span>}
+                <span className="ml-auto shrink-0 text-xs font-semibold text-slate-400">가입 {new Date(a.createdAt).toLocaleDateString("ko-KR").slice(2)}</span>
+                <button onClick={() => setDetailId(a.id)}
+                  className="shrink-0 flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
+                  상세 <ExternalLink className="h-3 w-3"/>
+                </button>
+                <button onClick={()=>editId===a.id?setEditId(null):openEdit(a)}
+                  className="shrink-0 flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
+                  플랜 <ChevronDown className={`h-3 w-3 transition ${editId===a.id?"rotate-180":""}`}/>
+                </button>
               </div>
               {editId===a.id&&(
-                <div className="mt-4 border-t border-slate-100 pt-4">
+                <div className="border-t border-slate-100 px-3.5 pb-3.5 pt-3.5">
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div><label className="mb-1 block text-[11px] font-semibold text-slate-500">플랜</label>
                       <select value={editPlan} onChange={e=>setEditPlan(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400">
@@ -203,8 +191,8 @@ export default function AgenciesPage() {
 
       {/* 에이전시 상세 모달 */}
       {detailId && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 sm:p-8" onClick={() => setDetailId(null)}>
-          <div className="my-auto w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 sm:p-6" onClick={() => setDetailId(null)}>
+          <div className="my-auto w-full max-w-5xl rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="mb-2 flex justify-end">
               <button onClick={() => setDetailId(null)} className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"><X className="h-5 w-5" /></button>
             </div>

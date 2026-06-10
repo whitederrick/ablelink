@@ -1,12 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
 import { X } from "lucide-react";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM" | "";
 type ContractStatus = "PENDING" | "SIGNED" | "COMPLETED" | "CANCELLED";
+
+const CONTRACT_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  PENDING:   { label: "서명 대기",       tone: "amber" },
+  SIGNED:    { label: "직무지도원 서명", tone: "sky" },
+  COMPLETED: { label: "계약 완료",       tone: "emerald" },
+  CANCELLED: { label: "취소",            tone: "slate" },
+};
+const PAGE_SIZE = 20;
 
 interface ContractItem {
   id: string; workerId: string; workerName: string; userPhone: string;
@@ -19,13 +31,6 @@ interface SearchResult {
   id: string; workerName: string; phoneNumber: string; email: string;
   siteName: string | null; contractStart: string | null; contractEnd: string | null;
 }
-
-const STATUS_CLS: Record<ContractStatus, { label: string; cls: string }> = {
-  PENDING:   { label: "서명 대기",      cls: "bg-amber-50 text-amber-600" },
-  SIGNED:    { label: "직무지도원 서명", cls: "bg-sky-50 text-sky-600" },
-  COMPLETED: { label: "계약 완료",      cls: "bg-emerald-50 text-emerald-600" },
-  CANCELLED: { label: "취소",           cls: "bg-slate-100 text-slate-500" },
-};
 
 const WORK_TYPE_LABELS: Record<string, string> = {
   AM: "오전 4H (09:00~12:00)", PM: "오후 4H (13:00~17:00)",
@@ -282,8 +287,30 @@ export default function AdminContractsPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [lastCreatedUrl, setLastCreatedUrl] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return contracts
+      .filter(c => statusFilter.length === 0 || statusFilter.includes(c.status))
+      .filter(c => !q || c.workerName.toLowerCase().includes(q) || (c.userPhone ?? "").includes(q) || (c.siteName ?? "").toLowerCase().includes(q));
+  }, [contracts, query, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [query, statusFilter]);
+
+  const statusCount = (s: string) => contracts.filter(c => c.status === s).length;
+  const filters: FilterChip[] = [
+    { value: "PENDING",   label: "서명 대기", count: statusCount("PENDING") },
+    { value: "SIGNED",    label: "지도원 서명", count: statusCount("SIGNED") },
+    { value: "COMPLETED", label: "완료",      count: statusCount("COMPLETED") },
+    { value: "CANCELLED", label: "취소",      count: statusCount("CANCELLED") },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   useEffect(() => {
     fetch("/api/admin/contracts")
@@ -303,6 +330,25 @@ export default function AdminContractsPage() {
         title="근로계약서 관리"
         sub="전자계약서 생성 및 발송 관리"
         actions={<button onClick={() => setShowCreate(true)} className={T.btnPrimary}>+ 계약서 생성</button>}
+      />
+
+      <StatCardRow
+        cols={4}
+        items={[
+          { label: "전체", value: contracts.length },
+          { label: "서명 대기", value: statusCount("PENDING"), tone: "amber" },
+          { label: "계약 완료", value: statusCount("COMPLETED"), tone: "emerald" },
+          { label: "취소", value: statusCount("CANCELLED"), tone: "slate" },
+        ]}
+      />
+
+      <ListToolbar
+        query={query}
+        onQueryChange={setQuery}
+        placeholder="직무지도원·전화번호·사업체 검색"
+        filters={filters}
+        selected={statusFilter}
+        onToggleFilter={toggleStatus}
       />
 
       {lastCreatedUrl && (
@@ -328,31 +374,31 @@ export default function AdminContractsPage() {
           <tbody>
             {loading ? (
               <tr><td colSpan={7} className={T.tdCenter}>로딩 중...</td></tr>
-            ) : contracts.length === 0 ? (
-              <tr><td colSpan={7} className={T.tdCenter}>계약서가 없습니다.</td></tr>
-            ) : contracts.map(c => {
-              const st = STATUS_CLS[c.status] ?? { label: c.status, cls: "bg-slate-100 text-slate-500" };
-              return (
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={7} className={T.tdCenter}>{contracts.length === 0 ? "계약서가 없습니다." : "조건에 맞는 계약서가 없습니다."}</td></tr>
+            ) : pageItems.map(c => (
                 <tr key={c.id} className={T.trBase}>
                   <td className={T.td}>
-                    <div className="font-black text-slate-900">{c.workerName}</div>
-                    <div className="text-xs text-slate-400">{c.userPhone}</div>
+                    <span className="font-semibold text-slate-800">{c.workerName}</span>
+                    {c.userPhone && <span className="ml-1.5 text-[13px] text-slate-500">{c.userPhone}</span>}
                   </td>
-                  <td className={`${T.td}`}>
-                    {c.contractStart?.slice(0, 10)}<br />~ {c.contractEnd?.slice(0, 10)}
+                  <td className={`${T.td} whitespace-nowrap`}>
+                    {c.contractStart?.slice(0, 10)} ~ {c.contractEnd?.slice(0, 10)}
                   </td>
                   <td className={`${T.td}`}>{c.siteName || <span className="text-slate-300">미지정</span>}</td>
                   <td className={`${T.td}`}>{c.workType ? (WORK_TYPE_LABELS[c.workType] ?? c.workType) : <span className="text-slate-300">미지정</span>}</td>
-                  <td className={T.td}><span className={`${T.badge} ${st.cls}`}>{st.label}</span></td>
+                  <td className={T.td}><StatusBadge status={c.status} map={CONTRACT_BADGE} /></td>
                   <td className={`${T.td}`}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>
                     <button onClick={() => copyLink(c.signToken)} className={T.btnSecondary}>링크 복사</button>
                   </td>
                 </tr>
-              );
-            })}
+              ))}
           </tbody>
         </table>
+        {filtered.length > 0 && (
+          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+        )}
       </div>
 
       {showCreate && (

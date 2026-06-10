@@ -493,6 +493,9 @@ model Admin {
   loginId      String    @unique @map("login_id")
   passwordHash String    @map("password_hash")
   displayName  String?   @map("display_name")
+  email        String?
+  phone        String?
+  note         String?   // 운영자 메모(담당 업무·비고 등)
   isActive     Boolean   @default(true) @map("is_active")
   lastLoginAt  DateTime? @map("last_login_at")
   createdAt    DateTime  @default(now()) @map("created_at")

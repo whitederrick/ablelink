@@ -274,18 +274,18 @@ export default function WorkersPage() {
           <table className="w-full text-sm">
             <thead><tr className="border-b border-slate-100 bg-slate-50">
               {["이름/아이디","연락처","소속 에이전시","현장","상태","작업"].map(h=>(
-                <th key={h} className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">{h}</th>
+                <th key={h} className="px-4 py-2 text-left text-xs font-black uppercase tracking-wide text-slate-500">{h}</th>
               ))}
             </tr></thead>
             <tbody className="divide-y divide-slate-50">
               {filtered.length===0?(<tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">{workers.length===0?"직무지도원이 없습니다.":"조건에 맞는 직무지도원이 없습니다."}</td></tr>)
               :pageItems.map(c=>(
                 <tr key={c.id} className={`hover:bg-slate-50 transition ${c.status!=="ACTIVE"?"opacity-60":""}`}>
-                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800">{c.workerName} <span className="text-[13px] text-slate-500">({c.loginId})</span></td>
-                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800">{c.phoneNumber}</td>
-                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800">{c.agencyName || <span className="text-slate-400">미배정</span>}</td>
-                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800">{c.siteName || <span className="text-slate-400">없음</span>}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2 text-[15px] font-medium text-slate-800">{c.workerName} <span className="text-[13px] text-slate-500">({c.loginId})</span></td>
+                  <td className="px-4 py-2 text-[15px] font-medium text-slate-800">{c.phoneNumber}</td>
+                  <td className="px-4 py-2 text-[15px] font-medium text-slate-800">{c.agencyName || <span className="text-slate-400">미배정</span>}</td>
+                  <td className="px-4 py-2 text-[15px] font-medium text-slate-800">{c.siteName || <span className="text-slate-400">없음</span>}</td>
+                  <td className="px-4 py-2">
                     <div className="flex items-center gap-1.5">
                       <StatusBadge status={c.status} map={WK_BADGE} />
                       {c.planType && c.planType!=="FREE" && (
@@ -293,7 +293,7 @@ export default function WorkersPage() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2">
                     <div className="flex gap-1.5">
                       <button onClick={()=>{setActionId(c.id);setActionType("pw");}} title="비밀번호 초기화"
                         className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 active:scale-95"><KeyRound className="h-4 w-4"/></button>
@@ -311,7 +311,7 @@ export default function WorkersPage() {
               ))}
             </tbody>
           </table>
-          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+          <Pagination className="border-t border-slate-100 px-4 py-2" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
         </div>
       )}
       {toast&&<div className="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg z-50">{toast}</div>}

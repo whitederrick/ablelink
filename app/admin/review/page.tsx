@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import { StatCardRow } from "../_components/StatCard";
+
+const PAGE_SIZE = 20;
 
 type ReviewRow = {
   workerId: string;
@@ -38,6 +43,9 @@ export default function AdminReviewPage() {
   const [yearMonth, setYearMonth]   = useState(nowYM());
   const [rows, setRows]             = useState<ReviewRow[]>([]);
   const [loading, setLoading]       = useState(false);
+  const [search, setSearch]         = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [page, setPage]             = useState(1);
   const [rejectModal, setRejectModal] = useState<RejectModal>(null);
   const [rejectMsg, setRejectMsg]   = useState("");
   const [sending, setSending]       = useState(false);
@@ -84,11 +92,30 @@ export default function AdminReviewPage() {
       .finally(() => setLoading(false));
   }, [yearMonth]);
 
-  const fullyDone = rows.filter(r =>
+  const isDone = (r: ReviewRow) =>
     r.attendance.confirmed >= r.attendance.total &&
     r.logs.confirmed >= r.logs.total &&
-    (r.evaluations.total === 0 || r.evaluations.confirmed >= r.evaluations.total)
-  ).length;
+    (r.evaluations.total === 0 || r.evaluations.confirmed >= r.evaluations.total);
+  const fullyDone = rows.filter(isDone).length;
+
+  const filtered = useMemo(() => {
+    const q = search.trim();
+    return rows
+      .filter(r => statusFilter.length === 0 ||
+        (statusFilter.includes("DONE") && isDone(r)) ||
+        (statusFilter.includes("PENDING") && !isDone(r)))
+      .filter(r => !q || r.workerName.includes(q) || (r.siteName ?? "").includes(q));
+  }, [rows, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [search, statusFilter, yearMonth]);
+
+  const filters: FilterChip[] = [
+    { value: "DONE", label: "확정 완료", count: fullyDone },
+    { value: "PENDING", label: "미확정 있음", count: rows.length - fullyDone },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   return (
     <div className="space-y-6">
@@ -113,23 +140,23 @@ export default function AdminReviewPage() {
         }
       />
 
-      {/* 요약 */}
-      {rows.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-2xl border border-slate-100 bg-white px-4 py-4 text-center">
-            <p className="text-2xl font-black text-slate-900">{rows.length}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-400">직무지도원 수</p>
-          </div>
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4 text-center">
-            <p className="text-2xl font-black text-emerald-600">{fullyDone}</p>
-            <p className="mt-1 text-xs font-semibold text-emerald-500">전체 확정 완료</p>
-          </div>
-          <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4 text-center">
-            <p className="text-2xl font-black text-amber-600">{rows.length - fullyDone}</p>
-            <p className="mt-1 text-xs font-semibold text-amber-500">미확정 있음</p>
-          </div>
-        </div>
-      )}
+      <StatCardRow
+        cols={3}
+        items={[
+          { label: "직무지도원 수", value: rows.length },
+          { label: "전체 확정 완료", value: fullyDone, tone: "emerald" },
+          { label: "미확정 있음", value: rows.length - fullyDone, tone: "amber" },
+        ]}
+      />
+
+      <ListToolbar
+        query={search}
+        onQueryChange={setSearch}
+        placeholder="직무지도원·사업체 검색"
+        filters={filters}
+        selected={statusFilter}
+        onToggleFilter={toggleStatus}
+      />
 
       {/* 테이블 */}
       <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
@@ -137,9 +164,9 @@ export default function AdminReviewPage() {
           <div className="flex h-48 items-center justify-center">
             <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
           </div>
-        ) : rows.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="flex h-48 items-center justify-center">
-            <p className="text-sm font-semibold text-slate-400">해당 기간에 데이터가 없습니다.</p>
+            <p className="text-sm font-semibold text-slate-400">{rows.length === 0 ? "해당 기간에 데이터가 없습니다." : "조건에 맞는 데이터가 없습니다."}</p>
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -155,7 +182,7 @@ export default function AdminReviewPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {rows.map(r => {
+              {pageItems.map(r => {
                 const allDone =
                   r.attendance.confirmed >= r.attendance.total &&
                   r.logs.confirmed >= r.logs.total &&
@@ -196,6 +223,9 @@ export default function AdminReviewPage() {
               })}
             </tbody>
           </table>
+        )}
+        {filtered.length > 0 && (
+          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
         )}
       </div>
 

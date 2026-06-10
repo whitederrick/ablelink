@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
 
-const STATUS_LABELS: Record<string, string> = {
-  TRAINING: "훈련중", EMPLOYED: "취업", DROPOUT: "중도포기", GRADUATED: "수료",
+const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  TRAINING:  { label: "훈련중",    tone: "sky" },
+  EMPLOYED:  { label: "취업",      tone: "emerald" },
+  DROPOUT:   { label: "중도포기",  tone: "rose" },
+  GRADUATED: { label: "수료",      tone: "slate" },
 };
-const STATUS_COLORS: Record<string, string> = {
-  TRAINING: "bg-sky-50 text-sky-700",
-  EMPLOYED: "bg-emerald-50 text-emerald-700",
-  DROPOUT:  "bg-rose-50 text-rose-700",
-  GRADUATED:"bg-slate-100 text-slate-500",
-};
+const PAGE_SIZE = 20;
 
 function ScoreBar({ value, max = 5 }: { value: number | null; max?: number }) {
   if (value === null) return <span className="text-xs font-semibold text-slate-300">-</span>;
@@ -68,6 +70,8 @@ export default function TraineeReportPage() {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
   const [search,  setSearch]  = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [page,    setPage]    = useState(1);
 
   async function load(y: number, m: number) {
     setLoading(true); setError(null);
@@ -82,12 +86,27 @@ export default function TraineeReportPage() {
 
   useEffect(() => { load(year, month); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = data.filter(r =>
-    !search ||
-    r.traineeName.includes(search) ||
-    r.workerName.includes(search) ||
-    r.siteName.includes(search)
-  );
+  const filtered = useMemo(() => data
+    .filter(r => statusFilter.length === 0 || statusFilter.includes(r.status))
+    .filter(r =>
+      !search ||
+      r.traineeName.includes(search) ||
+      r.workerName.includes(search) ||
+      r.siteName.includes(search)
+    ), [data, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
+
+  const statusCount = (s: string) => data.filter(r => r.status === s).length;
+  const filters: FilterChip[] = [
+    { value: "TRAINING",  label: "훈련중",   count: statusCount("TRAINING") },
+    { value: "EMPLOYED",  label: "취업",     count: statusCount("EMPLOYED") },
+    { value: "DROPOUT",   label: "중도포기", count: statusCount("DROPOUT") },
+    { value: "GRADUATED", label: "수료",     count: statusCount("GRADUATED") },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   const avgLogRate = filtered.length > 0
     ? Math.round(filtered.reduce((s, r) => s + r.logRate, 0) / filtered.length)
@@ -109,52 +128,37 @@ export default function TraineeReportPage() {
         sub="훈련생별 출근 일지 작성률과 수행 점수를 월별로 확인합니다. (STANDARD+)"
       />
 
-      {/* 검색/기간 필터 */}
-      <div className={`${T.card} flex flex-wrap items-center gap-3`}>
-        <select value={year} onChange={e => setYear(Number(e.target.value))} className={`w-auto ${T.select}`}>
-          {yearOptions.map(y => <option key={y} value={y}>{y}년</option>)}
-        </select>
-        <select value={month} onChange={e => setMonth(Number(e.target.value))} className={`w-auto ${T.select}`}>
-          {monthOptions.map(m => <option key={m} value={m}>{m}월</option>)}
-        </select>
-        <button
-          onClick={() => load(year, month)}
-          disabled={loading}
-          className={T.btnPrimary}
-        >
-          {loading ? "조회 중..." : "조회"}
-        </button>
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="훈련생·직무지도원·사업장 검색"
-          className={`ml-auto w-64 ${T.input}`}
-        />
-      </div>
+      <StatCardRow
+        cols={4}
+        items={[
+          { label: "전체 훈련생", value: filtered.length },
+          { label: "훈련 중", value: trainingCount, tone: "sky" },
+          { label: "평균 일지 작성률", value: `${avgLogRate}%`, tone: avgLogRate >= 80 ? "emerald" : avgLogRate >= 60 ? "amber" : "rose" },
+          { label: "평균 수행 점수 (/5)", value: avgScore ?? "-", tone: avgScore === null ? "slate" : avgScore >= 4 ? "emerald" : avgScore >= 3 ? "sky" : "amber" },
+        ]}
+      />
 
-      {/* 요약 카드 */}
-      <div className={T.summaryGrid}>
-        <div className={T.summaryCard}>
-          <p className={`${T.summaryNum} text-slate-900`}>{filtered.length}</p>
-          <p className={T.summaryLabel}>전체 훈련생</p>
-        </div>
-        <div className={T.summaryCard}>
-          <p className={`${T.summaryNum} text-sky-600`}>{trainingCount}</p>
-          <p className={T.summaryLabel}>훈련 중</p>
-        </div>
-        <div className={T.summaryCard}>
-          <p className={`${T.summaryNum} ${avgLogRate >= 80 ? "text-emerald-600" : avgLogRate >= 60 ? "text-amber-500" : "text-rose-500"}`}>
-            {avgLogRate}%
-          </p>
-          <p className={T.summaryLabel}>평균 일지 작성률</p>
-        </div>
-        <div className={T.summaryCard}>
-          <p className={`${T.summaryNum} ${avgScore === null ? "text-slate-300" : avgScore >= 4 ? "text-emerald-600" : avgScore >= 3 ? "text-sky-600" : "text-amber-500"}`}>
-            {avgScore ?? "-"}
-          </p>
-          <p className={T.summaryLabel}>평균 수행 점수 (/5)</p>
-        </div>
-      </div>
+      <ListToolbar
+        query={search}
+        onQueryChange={setSearch}
+        placeholder="훈련생·직무지도원·사업장 검색"
+        filters={filters}
+        selected={statusFilter}
+        onToggleFilter={toggleStatus}
+        extra={
+          <>
+            <select value={year} onChange={e => setYear(Number(e.target.value))} className={`w-auto ${T.select}`}>
+              {yearOptions.map(y => <option key={y} value={y}>{y}년</option>)}
+            </select>
+            <select value={month} onChange={e => setMonth(Number(e.target.value))} className={`w-auto ${T.select}`}>
+              {monthOptions.map(m => <option key={m} value={m}>{m}월</option>)}
+            </select>
+            <button onClick={() => load(year, month)} disabled={loading} className={T.btnPrimary}>
+              {loading ? "조회 중..." : "조회"}
+            </button>
+          </>
+        }
+      />
 
       {/* 에러 */}
       {error && (
@@ -179,7 +183,7 @@ export default function TraineeReportPage() {
                 <tr><td colSpan={9} className={T.tdCenter}>조회 중...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className={T.tdCenter}>데이터가 없습니다.</td></tr>
-              ) : filtered.map(row => (
+              ) : pageItems.map(row => (
                 <tr key={row.traineeId} className={T.trBase}>
                   <td className={T.td}>
                     <p className="font-black text-slate-900">{row.traineeName}</p>
@@ -189,9 +193,7 @@ export default function TraineeReportPage() {
                     <span className="text-xs font-semibold text-slate-600">{row.disabilityType}</span>
                   </td>
                   <td className={T.td}>
-                    <span className={`${T.badge} ${STATUS_COLORS[row.status] || "bg-slate-100 text-slate-500"}`}>
-                      {STATUS_LABELS[row.status] || row.status}
-                    </span>
+                    <StatusBadge status={row.status} map={STATUS_BADGE} />
                   </td>
                   <td className={T.td}>
                     <p className="font-semibold text-slate-800">{row.siteName}</p>
@@ -225,6 +227,9 @@ export default function TraineeReportPage() {
               ))}
             </tbody>
           </table>
+          {filtered.length > 0 && (
+            <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+          )}
         </div>
       )}
     </div>

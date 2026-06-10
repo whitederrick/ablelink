@@ -17,7 +17,7 @@ export async function PATCH(
     const adminId = parseBigInt(id);
     if (!adminId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const body = await req.json();
-    const { action, newPassword, displayName, isActive, agencyId } = body;
+    const { action, newPassword, displayName, isActive, agencyId, email, phone, note } = body;
 
     const admin = await prisma.admin.findUnique({ where: { id: adminId } });
     if (!admin) return NextResponse.json({ success: false, message: "계정을 찾을 수 없습니다." }, { status: 404 });
@@ -39,6 +39,9 @@ export async function PATCH(
     if (action === "update") {
       const updateData: any = {};
       if (displayName !== undefined) updateData.displayName = displayName?.trim() || null;
+      if (email !== undefined)       updateData.email = email?.trim() || null;
+      if (phone !== undefined)       updateData.phone = phone?.trim() || null;
+      if (note !== undefined)        updateData.note = note?.trim() || null;
       if (isActive !== undefined)    updateData.isActive = isActive;
       if (agencyId !== undefined) {
         updateData.agencyId = agencyId ? BigInt(agencyId) : null;

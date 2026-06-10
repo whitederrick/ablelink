@@ -21,6 +21,9 @@ export async function GET(req: Request) {
         id:          a.id.toString(),
         loginId:     a.loginId,
         displayName: a.displayName ?? "",
+        email:       a.email ?? "",
+        phone:       a.phone ?? "",
+        note:        a.note ?? "",
         isActive:    a.isActive,
         lastLoginAt: a.lastLoginAt?.toISOString() ?? null,
         createdAt:   a.createdAt.toISOString(),
@@ -37,7 +40,7 @@ export async function POST(req: NextRequest) {
     const scope = await requireAdminSession(req);
 
     const body = await req.json();
-    const { loginId, password, displayName } = body;
+    const { loginId, password, displayName, email, phone, note } = body;
 
     if (!loginId?.trim() || !password)
       return NextResponse.json({ success: false, message: "loginId와 password는 필수입니다." }, { status: 400 });
@@ -54,6 +57,9 @@ export async function POST(req: NextRequest) {
         loginId:     loginId.trim(),
         passwordHash,
         displayName: displayName?.trim() || null,
+        email:       email?.trim() || null,
+        phone:       phone?.trim() || null,
+        note:        note?.trim() || null,
       },
     });
 

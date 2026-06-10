@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, MapPin } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
 
 interface TraineeSummary {
   siteId: string; siteName: string; workerName: string;
@@ -13,20 +16,18 @@ interface TraineeSummary {
   }>;
 }
 
-const STATUS_CLS: Record<string, string> = {
-  TRAINING: "bg-sky-50 text-sky-700",
-  EMPLOYED: "bg-emerald-50 text-emerald-700",
-  DROPOUT:  "bg-rose-50 text-rose-700",
-  GRADUATED:"bg-slate-100 text-slate-500",
-};
-const STATUS_LABELS: Record<string, string> = {
-  TRAINING: "훈련중", EMPLOYED: "취업", DROPOUT: "중도포기", GRADUATED: "수료",
+const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  TRAINING:  { label: "훈련중",    tone: "sky" },
+  EMPLOYED:  { label: "취업",      tone: "emerald" },
+  DROPOUT:   { label: "중도포기",  tone: "rose" },
+  GRADUATED: { label: "수료",      tone: "slate" },
 };
 
 export default function TraineesPage() {
   const [sites, setSites] = useState<TraineeSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -48,10 +49,29 @@ export default function TraineesPage() {
   const trainingCount = sites.reduce((s, site) => s + site.trainees.filter(t => t.status === "TRAINING").length, 0);
   const employedCount = sites.reduce((s, site) => s + site.trainees.filter(t => t.status === "EMPLOYED").length, 0);
 
-  const filteredSites = sites.filter(s =>
-    s.siteName.includes(search) || s.workerName.includes(search) ||
-    s.trainees.some(t => t.name.includes(search))
-  );
+  const statusCount = (st: string) => sites.reduce((s, site) => s + site.trainees.filter(t => t.status === st).length, 0);
+  const filters: FilterChip[] = [
+    { value: "TRAINING",  label: "훈련중",   count: statusCount("TRAINING") },
+    { value: "EMPLOYED",  label: "취업",     count: statusCount("EMPLOYED") },
+    { value: "DROPOUT",   label: "중도포기", count: statusCount("DROPOUT") },
+    { value: "GRADUATED", label: "수료",     count: statusCount("GRADUATED") },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
+
+  // 검색(현장/직무지도원/훈련생명) + 상태칩으로 훈련생 필터링, 매칭 0인 현장은 숨김
+  const filteredSites = useMemo(() => {
+    return sites
+      .map(site => {
+        const trainees = site.trainees.filter(t => statusFilter.length === 0 || statusFilter.includes(t.status));
+        return { ...site, trainees };
+      })
+      .filter(site => {
+        if (site.trainees.length === 0) return false;
+        if (!search) return true;
+        return site.siteName.includes(search) || site.workerName.includes(search) ||
+          site.trainees.some(t => t.name.includes(search));
+      });
+  }, [sites, search, statusFilter]);
 
   return (
     <div className="space-y-5">
@@ -60,23 +80,24 @@ export default function TraineesPage() {
         sub="※ 훈련생 등록/수정은 한국장애인고용공단에서 관리합니다. 에이전시는 현황만 조회할 수 있습니다."
       />
 
-      <div className={T.summaryGrid}>
-        {[
-          { label: "전체 훈련생", value: totalTrainees, cls: "text-slate-900" },
-          { label: "훈련중",     value: trainingCount, cls: "text-sky-600" },
-          { label: "취업",       value: employedCount, cls: "text-emerald-600" },
-          { label: "담당 Site",  value: sites.length,  cls: "text-slate-500" },
-        ].map((item, i) => (
-          <div key={i} className={T.summaryCard}>
-            <p className={`${T.summaryNum} ${item.cls}`}>{item.value}</p>
-            <p className={T.summaryLabel}>{item.label}</p>
-          </div>
-        ))}
-      </div>
+      <StatCardRow
+        cols={4}
+        items={[
+          { label: "전체 훈련생", value: totalTrainees },
+          { label: "훈련중", value: trainingCount, tone: "sky" },
+          { label: "취업", value: employedCount, tone: "emerald" },
+          { label: "담당 현장", value: sites.length, tone: "slate" },
+        ]}
+      />
 
-      <input value={search} onChange={e => setSearch(e.target.value)}
+      <ListToolbar
+        query={search}
+        onQueryChange={setSearch}
         placeholder="현장명 / 직무지도원 / 훈련생 이름 검색"
-        className={`max-w-md ${T.input}`} />
+        filters={filters}
+        selected={statusFilter}
+        onToggleFilter={toggleStatus}
+      />
 
       {loading ? (
         <p className={T.empty}>로딩 중...</p>
@@ -125,9 +146,7 @@ export default function TraineesPage() {
                           <td className={`${T.td} text-sky-600`}>{t.logCount}건</td>
                           <td className={`${T.td}`}>{t.lastLogDate || "-"}</td>
                           <td className={T.td}>
-                            <span className={`${T.badge} ${STATUS_CLS[t.status] || "bg-slate-100 text-slate-500"}`}>
-                              {STATUS_LABELS[t.status] || t.status}
-                            </span>
+                            <StatusBadge status={t.status} map={STATUS_BADGE} />
                           </td>
                         </tr>
                       ))}

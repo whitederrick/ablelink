@@ -193,6 +193,9 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
         </div>
       </div>
 
+      {/* 가로 2열: 좌(구독·딜·AI) / 우(관리자·현장·직무지도원) */}
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="space-y-4">
       {/* 구독 정보 */}
       <div className={T.card}>
         <p className="mb-3 text-sm font-black text-slate-700">구독 정보</p>
@@ -283,8 +286,9 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
           </div>
         </div>
       )}
+      </div>{/* /좌측 컬럼 */}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-4">
         {/* 관리자 */}
         <div className={T.card}>
           <div className="mb-3 flex items-center justify-between gap-2">
@@ -367,7 +371,6 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
             </div>
           )}
         </div>
-      </div>
 
       {/* 직무지도원 */}
       <div className={T.card}>
@@ -378,7 +381,7 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
         {workers.length === 0 ? (
           <p className="text-sm text-slate-400">배정된 직무지도원이 없습니다.</p>
         ) : (
-          <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto">
+          <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
             {workers.map(c => (
               <div key={c.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
                 <p className="text-sm font-semibold text-slate-800">{c.workerName}</p>
@@ -390,6 +393,8 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
           </div>
         )}
       </div>
+      </div>{/* /우측 컬럼 */}
+      </div>{/* /가로 2열 */}
     </div>
   );
 }
