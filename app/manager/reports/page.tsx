@@ -176,18 +176,16 @@ export default function TraineeReportPage() {
               ) : filtered.map(row => (
                 <tr key={row.traineeId} className={T.trBase}>
                   <td className={T.td}>
-                    <p className="font-black text-slate-900">{row.traineeName}</p>
-                    <p className="text-xs font-semibold text-slate-400">{row.gender === "M" ? "남" : "여"}</p>
+                    <span className="text-[15px] font-black text-slate-900">{row.traineeName}</span>
+                    <span className="ml-1.5 text-sm font-semibold text-slate-400">({row.gender === "M" ? "남" : "여"})</span>
                   </td>
-                  <td className={T.td}>
-                    <span className="text-xs font-semibold text-slate-600">{row.disabilityType}</span>
-                  </td>
+                  <td className={`${T.td} text-sm font-semibold text-slate-600`}>{row.disabilityType}</td>
                   <td className={T.td}>
                     <StatusBadge status={row.status} map={STATUS_BADGE} />
                   </td>
                   <td className={T.td}>
-                    <p className="font-semibold text-slate-800">{row.siteName}</p>
-                    <p className="text-xs font-semibold text-slate-400">{row.workerName}</p>
+                    <span className="text-[15px] font-semibold text-slate-800">{row.siteName}</span>
+                    <span className="ml-1.5 text-sm font-semibold text-slate-400">· {row.workerName}</span>
                   </td>
                   <td className={`${T.td} text-center font-black`}>
                     {row.totalWorkDays}일
@@ -205,7 +203,7 @@ export default function TraineeReportPage() {
                     {row.evalAvg !== null ? (
                       <div>
                         <ScoreBar value={row.evalAvg} />
-                        <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                        <p className="mt-1 text-xs font-semibold text-slate-400">
                           {row.evalType === "TRAINING" ? "훈련" : "적응"} · {row.evalPeriod}
                         </p>
                       </div>
