@@ -4,7 +4,11 @@ import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import Pagination from "../_components/Pagination";
+import { StatCardRow } from "../_components/StatCard";
 import { List, Map as MapIcon, CalendarDays, Download } from "lucide-react";
+
+const LIST_PAGE_SIZE = 20;
 
 const AttendanceMap = dynamic(() => import("./AttendanceMap"), { ssr: false });
 
@@ -140,9 +144,9 @@ export default function AttendancesPage() {
   const [yearMonth, setYearMonth] = useState(getDefaultYearMonth());
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<AttendanceItem[]>([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [csvLoading, setCsvLoading] = useState(false);
+  const [page, setPage] = useState(1);
 
   async function downloadCsv(type: "attendance" | "logs") {
     setCsvLoading(true);
@@ -185,18 +189,31 @@ export default function AttendancesPage() {
       const from = `${yearMonth}-01`;
       const to = `${yearMonth}-${pad2(new Date(y, m, 0).getDate())}`;
       const params = new URLSearchParams({ from, to, pageSize: "500", page: "1" });
-      if (search.trim()) params.set("q", search.trim());
       const res = await fetch(`/api/admin/attendances?${params}`);
       const data = await res.json();
-      if (data.success) { setItems(data.items || []); setTotal(data.total || 0); }
+      if (data.success) setItems(data.items || []);
     } catch {} finally { setLoading(false); }
   }
 
   useEffect(() => { fetchData(); }, [yearMonth]);
 
-  const clockedIn = items.filter(i => i.startTime).length;
-  const finalized = items.filter(i => i.isFinalClosed).length;
-  const gpsIssues = items.filter(i => i.isGpsModified).length;
+  // 검색은 클라이언트 필터(직무지도원/현장명) — 서버 q 미지원이라 일관 처리
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(i =>
+      (i.user?.workerName ?? "").toLowerCase().includes(q) ||
+      (i.site?.companyName ?? "").toLowerCase().includes(q));
+  }, [items, search]);
+
+  const clockedIn = filtered.filter(i => i.startTime).length;
+  const finalized = filtered.filter(i => i.isFinalClosed).length;
+  const gpsIssues = filtered.filter(i => i.isGpsModified).length;
+
+  // 목록 페이징(월 데이터 클라 분할). 지도·월별현황은 전체 사용.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * LIST_PAGE_SIZE, page * LIST_PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [yearMonth, search, viewMode]);
 
   const VIEW_TABS: { mode: ViewMode; label: string; Icon: any }[] = [
     { mode: "list",    label: "목록",    Icon: List },
@@ -208,28 +225,22 @@ export default function AttendancesPage() {
     <div className="space-y-5">
       <PageHeader title="근태 현황" />
 
-      <div className={T.summaryGrid}>
-        {[
-          { label: "전체 기록", value: total,     cls: "text-slate-900" },
-          { label: "출근 완료", value: clockedIn,  cls: "text-sky-600" },
-          { label: "최종 종료", value: finalized,  cls: "text-emerald-600" },
-          { label: "GPS 이탈",  value: gpsIssues,  cls: "text-orange-600" },
-        ].map((item, i) => (
-          <div key={i} className={T.summaryCard}>
-            <p className={`${T.summaryNum} ${item.cls}`}>{item.value}</p>
-            <p className={T.summaryLabel}>{item.label}</p>
-          </div>
-        ))}
-      </div>
+      <StatCardRow
+        cols={4}
+        items={[
+          { label: "전체 기록", value: filtered.length },
+          { label: "출근 완료", value: clockedIn, tone: "sky" },
+          { label: "최종 종료", value: finalized, tone: "emerald" },
+          { label: "GPS 이탈", value: gpsIssues, tone: "amber" },
+        ]}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)}
           className={`w-auto ${T.input}`} />
         <input value={search} onChange={e => setSearch(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && fetchData()}
           placeholder="직무지도원 이름 / 현장명 검색"
           className={`flex-1 ${T.input}`} />
-        <button onClick={fetchData} className={T.btnSecondary}>검색</button>
         <div className="flex gap-1.5">
           <button
             onClick={() => downloadCsv("attendance")}
@@ -269,12 +280,13 @@ export default function AttendancesPage() {
           <p className="text-sm font-semibold text-slate-400">로딩 중...</p>
         </div>
       ) : viewMode === "map" ? (
-        <AttendanceMap items={items} />
+        <AttendanceMap items={filtered} />
       ) : viewMode === "monthly" ? (
-        <MonthlyView items={items} yearMonth={yearMonth} />
-      ) : items.length === 0 ? (
+        <MonthlyView items={filtered} yearMonth={yearMonth} />
+      ) : filtered.length === 0 ? (
         <div className={T.tableWrap}><p className={T.empty}>해당 기간에 근태 기록이 없습니다.</p></div>
       ) : (
+        <>
         <div className={T.tableWrap}>
           <table className="w-full border-collapse">
             <thead>
@@ -285,7 +297,7 @@ export default function AttendancesPage() {
               </tr>
             </thead>
             <tbody>
-              {items.map(row => (
+              {pageItems.map(row => (
                 <tr key={row.id} className={T.trBase}>
                   <td className={`${T.td} text-xs text-slate-500`}>{row.workDate}</td>
                   <td className={T.td}>
@@ -321,6 +333,8 @@ export default function AttendancesPage() {
             </tbody>
           </table>
         </div>
+        <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+        </>
       )}
     </div>
   );
