@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo } from "react";
-import { Plus, Pencil, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
+
+const SITE_PAGE_SIZE = 10;
 
 type Trainee = {
   id: string; siteId: string; siteName: string; name: string; gender: string;
@@ -31,7 +34,7 @@ export default function TraineesPage() {
   const [loading, setLoading]   = useState(true);
   const [query, setQuery]       = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [page, setPage]         = useState(1);
   const [form, setForm]         = useState<typeof EMPTY & { id?: string }>(EMPTY);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving]     = useState(false);
@@ -73,11 +76,6 @@ export default function TraineesPage() {
     else showToast(data.message||"저장 실패");
   }
 
-  function toggle(id: string) {
-    const next = new Set(expanded);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setExpanded(next);
-  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -95,9 +93,13 @@ export default function TraineesPage() {
   ];
   const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
-  // 사이트별 그룹
+  // 사이트별 그룹 (사이트 1행 = 사이트명+인원 + 훈련생 칩 나열)
   const bysite: Record<string,Trainee[]> = {};
   for(const t of filtered) (bysite[t.siteId]??=[]).push(t);
+  const siteEntries = Object.entries(bysite);
+  const siteTotalPages = Math.max(1, Math.ceil(siteEntries.length / SITE_PAGE_SIZE));
+  const pageEntries = siteEntries.slice((page - 1) * SITE_PAGE_SIZE, page * SITE_PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [query, statusFilter]);
 
   return (
     <div className="space-y-5">
@@ -194,37 +196,29 @@ export default function TraineesPage() {
 
       {loading?(
         <div className="flex h-40 items-center justify-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950"/></div>
+      ):filtered.length===0?(
+        <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">{trainees.length===0?"훈련생이 없습니다.":"조건에 맞는 훈련생이 없습니다."}</p></div>
       ):(
-        <div className="space-y-3">
-          {Object.entries(bysite).map(([sid, ts])=>{
-            const isOpen = expanded.has(sid);
-            return (
-              <div key={sid} className="rounded-2xl border border-slate-100 bg-white overflow-hidden">
-                <button onClick={()=>toggle(sid)} className="flex w-full items-center gap-3 px-5 py-3.5 text-left">
-                  <span className="flex-1 font-black text-slate-900">{ts[0].siteName}</span>
-                  <span className="text-sm text-slate-400">{ts.length}명</span>
-                  {isOpen?<ChevronUp className="h-4 w-4 text-slate-400"/>:<ChevronDown className="h-4 w-4 text-slate-400"/>}
-                </button>
-                {isOpen&&(
-                  <div className="border-t border-slate-100 divide-y divide-slate-50">
-                    {ts.map(t=>(
-                      <div key={t.id} className="flex items-center gap-2 px-5 py-3">
-                        <span className="font-bold text-slate-900">{t.name}</span>
-                        <span className="text-xs text-slate-400">{t.gender==="M"?"남":"여"}</span>
-                        <StatusBadge status={t.status} map={STATUS_BADGE} />
-                        <span className="truncate text-sm text-slate-500">{t.disabilityType} · {t.severity}{t.phoneNumber?` · ${t.phoneNumber}`:""}</span>
-                        <button onClick={()=>openEdit(t)}
-                          className="ml-auto shrink-0 rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 active:scale-95">
-                          <Pencil className="h-3.5 w-3.5"/>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+        <div className="space-y-2.5">
+          {pageEntries.map(([sid, ts])=>(
+            <div key={sid} className="rounded-2xl border border-slate-100 bg-white px-5 py-3.5">
+              {/* 현장명 (인원) + 훈련생 칩 우측 나열, 이름 클릭 → 상세 */}
+              <div className="flex flex-wrap items-center gap-2 text-[15px] font-medium text-slate-800">
+                <span className="shrink-0 font-semibold">{ts[0].siteName}</span>
+                <span className="shrink-0 text-[13px] font-semibold text-slate-500">({ts.length}명)</span>
+                <span className="mx-0.5 h-5 w-px shrink-0 bg-slate-200" />
+                {ts.map(t=>(
+                  <button key={t.id} onClick={()=>openEdit(t)}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-50 active:scale-95">
+                    {t.name}
+                    <span className="text-[12px] font-medium text-slate-400">{t.gender==="M"?"남":"여"}</span>
+                    <StatusBadge status={t.status} map={STATUS_BADGE} />
+                  </button>
+                ))}
               </div>
-            );
-          })}
-          {filtered.length===0&&<div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">{trainees.length===0?"훈련생이 없습니다.":"조건에 맞는 훈련생이 없습니다."}</p></div>}
+            </div>
+          ))}
+          <Pagination className="mt-2" page={page} totalPages={siteTotalPages} total={siteEntries.length} onPageChange={setPage} />
         </div>
       )}
       {toast&&<div className="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg z-50">{toast}</div>}

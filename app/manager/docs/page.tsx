@@ -184,21 +184,20 @@ export default function AdminDocsPage() {
             return (
               <div key={c.workerId}
                 className={`rounded-2xl border bg-white p-3.5 transition ${selectedWorker === c.workerId ? "border-slate-950 ring-2 ring-slate-100" : "border-slate-200"}`}>
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-slate-900">{c.workerName}</span>
-                  <span className="text-xs font-semibold text-slate-400">📍 {c.siteName}</span>
-                  <span className={`ml-auto ${T.badge} ${isAdapt ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>
+                <div className="flex flex-wrap items-center gap-2 text-[15px] font-medium text-slate-800">
+                  <span className="font-semibold">{c.workerName}</span>
+                  <span className="text-[13px] text-slate-500">📍 {c.siteName}</span>
+                  <span className={`${T.badge} ${isAdapt ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>
                     {isAdapt ? "적응지도" : "지원고용"}
                   </span>
-                </div>
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <span className="mx-0.5 h-5 w-px shrink-0 bg-slate-200" />
                   {DOC_DEFS.map(doc => {
                     const active = docActive(doc.kind, c.serviceStep);
                     const selected = selectedWorker === c.workerId && docType === doc.id;
                     return (
                       <button key={doc.id} disabled={!active}
                         onClick={() => pickDoc(c.workerId, doc.id)}
-                        className={`rounded-lg border px-2.5 py-1 text-xs font-bold transition ${
+                        className={`inline-flex min-h-9 items-center rounded-lg border px-3 text-[13px] font-bold transition ${
                           selected ? "border-slate-950 bg-slate-950 text-white"
                           : active ? "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                           : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
