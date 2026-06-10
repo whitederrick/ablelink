@@ -323,7 +323,7 @@ export default function AdminDocumentsPage() {
                         <a href={`/api/admin/document-versions/${v.id}/pdf`} target="_blank" rel="noreferrer"
                           className="font-semibold text-sky-600 hover:underline">열기</a>
                       </td>
-                      <td className={`${T.td} text-slate-400`}>{new Date(v.createdAt).toLocaleString("ko-KR")}</td>
+                      <td className={`${T.td}`}>{new Date(v.createdAt).toLocaleString("ko-KR")}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -370,10 +370,10 @@ export default function AdminDocumentsPage() {
                     <tr><td colSpan={4} className={T.tdCenter}>{logsLoading ? "조회 중..." : "발송 이력이 없습니다."}</td></tr>
                   ) : logs.map(l => (
                     <tr key={l.id} className={T.trBase}>
-                      <td className={`${T.td} text-slate-400`}>{new Date(l.submittedAt).toLocaleString("ko-KR")}</td>
+                      <td className={`${T.td}`}>{new Date(l.submittedAt).toLocaleString("ko-KR")}</td>
                       <td className={T.td}>{stageBadge(l.stage)}</td>
-                      <td className={`${T.td} text-slate-600`}>{l.sentToEmail ?? "-"}</td>
-                      <td className={`${T.td} text-slate-600`}>{l.emailStatus ?? "-"}</td>
+                      <td className={`${T.td}`}>{l.sentToEmail ?? "-"}</td>
+                      <td className={`${T.td}`}>{l.emailStatus ?? "-"}</td>
                     </tr>
                   ))}
                 </tbody>

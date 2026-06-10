@@ -83,10 +83,10 @@ function CorrectionTool() {
               <tbody>
                 {rows.map(r => (
                   <tr key={r.id} className={T.trBase}>
-                    <td className={T.td + " tabular-nums font-semibold"}>{r.workDate}</td>
+                    <td className={T.td + " tabular-nums"}>{r.workDate}</td>
                     <td className={T.td}>{r.workerName}</td>
-                    <td className={T.td + " text-slate-600"}>{r.siteName}</td>
-                    <td className={T.td + " text-slate-500 text-xs"}>{r.agencyName}</td>
+                    <td className={T.td}>{r.siteName}</td>
+                    <td className={T.td}>{r.agencyName}</td>
                     <td className={T.td + " tabular-nums"}>{r.startTime ?? "-"}</td>
                     <td className={T.td + " tabular-nums"}>
                       {r.endTime ?? (r.status === "WORKING"
@@ -385,7 +385,7 @@ export default function AttendancesPage() {
             <tbody>
               {items.map(row => (
                 <tr key={row.id} className={T.trBase}>
-                  <td className={`${T.td} text-xs text-slate-500`}>{row.workDate}</td>
+                  <td className={`${T.td}`}>{row.workDate}</td>
                   <td className={T.td}>
                     <div className="font-black text-slate-900">{row.user?.workerName || "-"}</div>
                     <div className="text-xs text-slate-400">{row.user?.phoneNumber}</div>

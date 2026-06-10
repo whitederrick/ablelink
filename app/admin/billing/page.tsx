@@ -124,7 +124,7 @@ export default function BillingPage() {
                   <td className={T.td}>
                     <StatusBadge status={r.planType} map={PLAN_BADGE} />
                   </td>
-                  <td className={T.td + " text-slate-500 tabular-nums"}>{fmt(r.subscribedAt)}</td>
+                  <td className={T.td + " tabular-nums"}>{fmt(r.subscribedAt)}</td>
                   <td className={T.td + " tabular-nums"}>
                     {r.nextBillingAt ? (
                       <span className={r.isBillingOverdue ? "font-black text-rose-600" : "text-slate-700"}>

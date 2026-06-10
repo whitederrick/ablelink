@@ -197,10 +197,10 @@ export default function TraineeReportPage() {
                     <p className="font-semibold text-slate-800">{row.siteName}</p>
                     <p className="text-xs font-semibold text-slate-400">{row.workerName}</p>
                   </td>
-                  <td className={`${T.td} text-center font-black`}>
+                  <td className={`${T.td} text-center`}>
                     {row.totalWorkDays}일
                   </td>
-                  <td className={`${T.td} text-center font-black`}>
+                  <td className={`${T.td} text-center`}>
                     {row.daysWithLog}일
                   </td>
                   <td className={T.td}>

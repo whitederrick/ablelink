@@ -118,12 +118,12 @@ export default function TraineesPage() {
                     <tbody>
                       {site.trainees.map(t => (
                         <tr key={t.id} className={T.trBase}>
-                          <td className={`${T.td} font-black text-slate-900`}>{t.name}</td>
-                          <td className={`${T.td} text-slate-500`}>{t.gender === "M" ? "남" : "여"}</td>
-                          <td className={`${T.td} text-slate-600`}>{t.disabilityType || "-"}</td>
-                          <td className={`${T.td} text-slate-600`}>{t.severity || "-"}</td>
-                          <td className={`${T.td} font-black text-sky-600`}>{t.logCount}건</td>
-                          <td className={`${T.td} text-xs text-slate-400`}>{t.lastLogDate || "-"}</td>
+                          <td className={`${T.td}`}>{t.name}</td>
+                          <td className={`${T.td}`}>{t.gender === "M" ? "남" : "여"}</td>
+                          <td className={`${T.td}`}>{t.disabilityType || "-"}</td>
+                          <td className={`${T.td}`}>{t.severity || "-"}</td>
+                          <td className={`${T.td} text-sky-600`}>{t.logCount}건</td>
+                          <td className={`${T.td}`}>{t.lastLogDate || "-"}</td>
                           <td className={T.td}>
                             <span className={`${T.badge} ${STATUS_CLS[t.status] || "bg-slate-100 text-slate-500"}`}>
                               {STATUS_LABELS[t.status] || t.status}

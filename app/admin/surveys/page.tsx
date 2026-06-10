@@ -98,15 +98,15 @@ export default function AdminSurveysPage() {
               return (
                 <Fragment key={s.id}>
                   <tr className={`${T.trBase} cursor-pointer`} onClick={() => setOpenId(open ? null : s.id)}>
-                    <td className={`${T.td} font-semibold text-slate-700`}>{s.agencyName}</td>
-                    <td className={`${T.td} font-black text-slate-900`}>{s.workerName}</td>
+                    <td className={`${T.td}`}>{s.agencyName}</td>
+                    <td className={`${T.td}`}>{s.workerName}</td>
                     <td className={T.td}><div className="text-slate-700">{s.siteName || "-"}</div><div className="text-xs text-slate-400">{s.recipientName || ""} {s.recipientPhone}</div></td>
                     <td className={T.td}><StatusBadge status={s.status} map={SURVEY_BADGE} />{s.auto && <span className="ml-1 text-[10px] text-slate-400">자동</span>}</td>
                     <td className={`${T.td} font-black ${s.overallScore ? "text-slate-800" : "text-slate-300"}`}>{s.overallScore ? `${s.overallScore}/5` : "-"}</td>
                     <td className={T.td}>{s.status === "RESPONDED" && (
                       <button onClick={(e) => { e.stopPropagation(); toggleShare(s); }} className={`rounded-lg px-2.5 py-1 text-xs font-bold ${s.sharedWithAgency ? "bg-emerald-50 text-emerald-600" : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}>{s.sharedWithAgency ? "전달됨 ✓" : "전달하기"}</button>
                     )}</td>
-                    <td className={`${T.td} text-xs text-slate-400`}>{s.respondedAt ? s.respondedAt.slice(0, 10) : "-"}</td>
+                    <td className={`${T.td}`}>{s.respondedAt ? s.respondedAt.slice(0, 10) : "-"}</td>
                   </tr>
                   {open && s.status === "RESPONDED" && (
                     <tr><td colSpan={7} className="bg-slate-50 px-5 py-4">

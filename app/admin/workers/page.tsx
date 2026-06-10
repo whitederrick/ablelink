@@ -283,30 +283,30 @@ export default function WorkersPage() {
               {filtered.length===0?(<tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">{workers.length===0?"직무지도원이 없습니다.":"조건에 맞는 직무지도원이 없습니다."}</td></tr>)
               :pageItems.map(c=>(
                 <tr key={c.id} className={`hover:bg-slate-50 transition ${c.status!=="ACTIVE"?"opacity-60":""}`}>
-                  <td className="px-4 py-3"><p className="font-semibold text-slate-900">{c.workerName}</p><p className="text-xs text-slate-400">{c.loginId}</p></td>
-                  <td className="px-4 py-3 text-slate-600 text-xs">{c.phoneNumber}</td>
-                  <td className="px-4 py-3">{c.agencyName?<span className="text-sm font-semibold text-slate-700">{c.agencyName}</span>:<span className="text-slate-300 text-xs">미배정</span>}</td>
-                  <td className="px-4 py-3">{c.siteName?<span className="text-xs text-slate-600">{c.siteName}</span>:<span className="text-slate-300 text-xs">없음</span>}</td>
+                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800">{c.workerName} <span className="text-[13px] text-slate-500">({c.loginId})</span></td>
+                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800">{c.phoneNumber}</td>
+                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800">{c.agencyName || <span className="text-slate-400">미배정</span>}</td>
+                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800">{c.siteName || <span className="text-slate-400">없음</span>}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col items-start gap-1">
                       <StatusBadge status={c.status} map={WK_BADGE} />
                       {c.planType && c.planType!=="FREE" && (
-                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-black text-indigo-700">{c.planType}</span>
+                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[13px] font-black text-indigo-700">{c.planType}</span>
                       )}
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
                       <button onClick={()=>{setActionId(c.id);setActionType("pw");}} title="비밀번호 초기화"
-                        className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 active:scale-95"><KeyRound className="h-3.5 w-3.5"/></button>
+                        className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 active:scale-95"><KeyRound className="h-4 w-4"/></button>
                       <button onClick={()=>{setActionId(c.id);setActionType("status");setNewStatus(c.status==="ACTIVE"?"RESIGNED":"ACTIVE");}} title="상태 변경"
-                        className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 active:scale-95">
-                        {c.status==="ACTIVE"?<UserX className="h-3.5 w-3.5 text-rose-500"/>:<UserCheck className="h-3.5 w-3.5 text-emerald-600"/>}
+                        className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 active:scale-95">
+                        {c.status==="ACTIVE"?<UserX className="h-4 w-4 text-rose-500"/>:<UserCheck className="h-4 w-4 text-emerald-600"/>}
                       </button>
                       <button onClick={()=>{setActionId(c.id);setActionType("plan");setNewPlan(c.planType||"FREE");}} title="구독 등급 부여"
-                        className="rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-black text-indigo-600 hover:bg-slate-50 active:scale-95">등급</button>
+                        className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 px-3 text-[13px] font-bold text-indigo-600 hover:bg-slate-50 active:scale-95">등급</button>
                       <button onClick={()=>openAssign(c)} title="사이트 배정"
-                        className="rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-black text-sky-600 hover:bg-slate-50 active:scale-95">배정</button>
+                        className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 px-3 text-[13px] font-bold text-sky-600 hover:bg-slate-50 active:scale-95">배정</button>
                     </div>
                   </td>
                 </tr>

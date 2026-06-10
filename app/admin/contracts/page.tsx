@@ -95,11 +95,11 @@ function WorkerSearchPopup({ onSelect, onClose }: {
                   {results.map(r => (
                     <tr key={r.id} onClick={() => { onSelect(r); onClose(); }}
                       className={`${T.trBase} cursor-pointer hover:bg-sky-50`}>
-                      <td className={`${T.td} font-black text-slate-900`}>{r.workerName}</td>
-                      <td className={`${T.td} text-slate-600`}>{r.phoneNumber}</td>
-                      <td className={`${T.td} text-xs text-slate-400`}>{r.email || "-"}</td>
-                      <td className={`${T.td} text-slate-600`}>{r.siteName || <span className="text-slate-300">미지정</span>}</td>
-                      <td className={`${T.td} whitespace-nowrap text-xs text-slate-400`}>{formatPeriod(r.contractStart, r.contractEnd)}</td>
+                      <td className={`${T.td}`}>{r.workerName}</td>
+                      <td className={`${T.td}`}>{r.phoneNumber}</td>
+                      <td className={`${T.td}`}>{r.email || "-"}</td>
+                      <td className={`${T.td}`}>{r.siteName || <span className="text-slate-300">미지정</span>}</td>
+                      <td className={`${T.td} whitespace-nowrap`}>{formatPeriod(r.contractStart, r.contractEnd)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -338,13 +338,13 @@ export default function AdminContractsPage() {
                     <div className="font-black text-slate-900">{c.workerName}</div>
                     <div className="text-xs text-slate-400">{c.userPhone}</div>
                   </td>
-                  <td className={`${T.td} text-xs text-slate-500`}>
+                  <td className={`${T.td}`}>
                     {c.contractStart?.slice(0, 10)}<br />~ {c.contractEnd?.slice(0, 10)}
                   </td>
-                  <td className={`${T.td} text-slate-600`}>{c.siteName || <span className="text-slate-300">미지정</span>}</td>
-                  <td className={`${T.td} text-xs text-slate-600`}>{c.workType ? (WORK_TYPE_LABELS[c.workType] ?? c.workType) : <span className="text-slate-300">미지정</span>}</td>
+                  <td className={`${T.td}`}>{c.siteName || <span className="text-slate-300">미지정</span>}</td>
+                  <td className={`${T.td}`}>{c.workType ? (WORK_TYPE_LABELS[c.workType] ?? c.workType) : <span className="text-slate-300">미지정</span>}</td>
                   <td className={T.td}><span className={`${T.badge} ${st.cls}`}>{st.label}</span></td>
-                  <td className={`${T.td} text-xs text-slate-400`}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
+                  <td className={`${T.td}`}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>
                     <button onClick={() => copyLink(c.signToken)} className={T.btnSecondary}>링크 복사</button>
                   </td>

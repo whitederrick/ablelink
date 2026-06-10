@@ -130,7 +130,7 @@ export default function UsagePage() {
                   const sum = Object.values(ag.calls).reduce((a, b) => a + b, 0);
                   return (
                     <tr key={id} className={T.trBase}>
-                      <td className={T.td + " font-semibold text-slate-900"}>{ag.name}</td>
+                      <td className={T.td}>{ag.name}</td>
                       {Object.keys(SERVICE_LABELS).map(key => (
                         <td key={key} className={T.td + " tabular-nums text-right"}>
                           {ag.calls[key] != null ? (
@@ -142,7 +142,7 @@ export default function UsagePage() {
                           )}
                         </td>
                       ))}
-                      <td className={T.td + " font-black text-slate-900 tabular-nums text-right"}>
+                      <td className={T.td + " tabular-nums text-right"}>
                         {sum.toLocaleString()}
                       </td>
                     </tr>
