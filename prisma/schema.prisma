@@ -1128,6 +1128,18 @@ model SystemAnnouncement {
   @@map("system_announcements")
 }
 
+// 시스템 공지 매니저별 읽음(확인) 상태.
+model SystemAnnouncementRead {
+  id             BigInt   @id @default(autoincrement())
+  announcementId BigInt   @map("announcement_id")
+  managerId      BigInt   @map("manager_id")
+  readAt         DateTime @default(now()) @map("read_at")
+
+  @@unique([announcementId, managerId])
+  @@index([managerId])
+  @@map("system_announcement_reads")
+}
+
 // 에이전시 공지 게시판 (매니저 작성 → 소속 직무지도원 열람). 알림 fan-out 없이 게시판 1행.
 model AgencyAnnouncement {
   id                 BigInt   @id @default(autoincrement())

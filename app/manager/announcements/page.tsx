@@ -138,7 +138,7 @@ export default function AgencyAnnouncementsPage() {
   return (
     <div>
       <PageHeader
-        title="공지사항 게시판"
+        title="에이전시 공지사항"
         sub="소속 직무지도원 앱의 ‘공지사항’에 게시됩니다. 개별 통지가 필요하면 ‘알림 발송’ 메뉴를 이용하세요."
         actions={
           <button onClick={openCreate} className={`inline-flex items-center gap-1.5 ${T.btnPrimary}`}>

@@ -39,11 +39,6 @@ interface DashboardData {
   }>;
 }
 
-const SEVERITY_CLS: Record<string, { text: string; bg: string; border: string }> = {
-  high:   { text: "text-rose-600",   bg: "bg-rose-50",   border: "border-l-rose-500" },
-  medium: { text: "text-orange-600", bg: "bg-orange-50", border: "border-l-orange-500" },
-  low:    { text: "text-slate-500",  bg: "bg-slate-50",  border: "border-l-slate-300" },
-};
 const LOG_CLS: Record<string, string> = {
   완료: "text-emerald-600", 임시저장: "text-amber-600", 미작성: "text-rose-600",
 };
@@ -144,7 +139,7 @@ export default function AdminDashboardPage() {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [popup, setPopup] = useState<null | "attendance_gps" | "attendance_time" | "doc_pending" | "doc_overdue" | "assign_ending" | "unassigned_site">(null);
   const [pendingEditReqs, setPendingEditReqs] = useState(0);
-  const [announcements, setAnnouncements] = useState<{ id: string; title: string; body: string; type: string; createdAt: string }[]>([]);
+  const [announcements, setAnnouncements] = useState<{ id: string; title: string; body: string; type: string; createdAt: string; read?: boolean }[]>([]);
   // 훈련생 진척도 요약(기존 리포트 API 재사용, 클라 집계). 플랜 잠금 시 reportLocked.
   const [report, setReport] = useState<{ total: number; training: number; avgLogRate: number; avgScore: number | null } | null>(null);
   const [reportLocked, setReportLocked] = useState(false);
@@ -378,19 +373,17 @@ export default function AdminDashboardPage() {
       {/* 2행: 운영 리스크 · 오늘 출근 현황 · 공지사항 가로 3열 */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
 
-          {/* 운영 리스크 */}
-          <Section title="운영 리스크 알림">
+          {/* 운영 리스크 — 단순 목록 */}
+          <Section title="운영 리스크 알림" count={d?.riskAlerts.length}>
             {!d?.riskAlerts.length ? <EmptyRow text="리스크 알림 없음" /> : (
-              <div className="space-y-1.5">
-                {d.riskAlerts.map((alert, i) => {
-                  const cls = SEVERITY_CLS[alert.severity] ?? SEVERITY_CLS.low;
-                  return (
-                    <div key={i} className={`rounded-lg border-l-4 p-2.5 ${cls.bg} ${cls.border}`}>
-                      <span className={`text-xs font-black ${cls.text}`}>{alert.label}</span>
-                      <span className="ml-1.5 text-xs font-semibold text-slate-600">{alert.detail}</span>
-                    </div>
-                  );
-                })}
+              <div>
+                {d.riskAlerts.slice(0, 5).map((alert, i) => (
+                  <div key={i} className="flex items-center gap-2 border-b border-slate-50 py-2 last:border-b-0">
+                    <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${alert.severity === "high" ? "bg-rose-500" : alert.severity === "medium" ? "bg-amber-500" : "bg-slate-300"}`} />
+                    <span className="text-sm font-bold text-slate-700">{alert.label}</span>
+                    <span className="truncate text-xs font-semibold text-slate-400">{alert.detail}</span>
+                  </div>
+                ))}
               </div>
             )}
           </Section>
@@ -403,7 +396,7 @@ export default function AdminDashboardPage() {
           >
             {!d?.todayList.length ? <EmptyRow text="오늘 출근 기록 없음" /> : (
               <div>
-                {d.todayList.slice(0, 6).map(row => (
+                {d.todayList.slice(0, 5).map(row => (
                   <div key={row.id} className="flex items-center justify-between border-b border-slate-50 py-2 last:border-b-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-black text-slate-900">{row.workerName}</span>
@@ -421,23 +414,29 @@ export default function AdminDashboardPage() {
             )}
           </Section>
 
-          {/* 공지사항 — 운영자 시스템 공지 실데이터 */}
-          <Section title="공지사항">
+          {/* 시스템 공지사항 — 운영자 시스템 공지(미확인 우선) */}
+          <Section
+            title="시스템 공지사항"
+            count={announcements.filter(a => a.read === false).length}
+            onMore={() => router.push("/manager/system-notices")}
+          >
             {announcements.length === 0 ? (
               <EmptyRow text="등록된 공지가 없습니다" />
             ) : (
-              announcements.map(a => (
-                <div key={a.id} className="border-b border-slate-50 py-2 last:border-b-0">
+              announcements.slice(0, 5).map(a => (
+                <button key={a.id} onClick={() => router.push("/manager/system-notices")}
+                  className="block w-full border-b border-slate-50 py-2 text-left last:border-b-0 transition hover:bg-slate-50">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-slate-700">
+                    <p className={`truncate text-sm ${a.read === false ? "font-black text-slate-900" : "font-semibold text-slate-700"}`}>
                       <span className={`mr-1 ${a.type === "URGENT" ? "text-rose-600" : a.type === "MAINTENANCE" ? "text-amber-600" : "text-sky-600"}`}>
                         [{a.type === "URGENT" ? "긴급" : a.type === "MAINTENANCE" ? "점검" : "공지"}]
                       </span>
                       {a.title}
+                      {a.read === false && <span className="ml-1.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-black text-rose-600">미확인</span>}
                     </p>
                     <span className="flex-shrink-0 text-[10px] font-semibold text-slate-300">{a.createdAt.slice(0, 10)}</span>
                   </div>
-                </div>
+                </button>
               ))
             )}
           </Section>
@@ -457,26 +456,22 @@ export default function AdminDashboardPage() {
         ) : !report ? (
           <EmptyRow text="불러오는 중..." />
         ) : (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-center">
-              <p className="text-2xl font-black leading-none text-slate-900">{report.total}<span className="ml-0.5 text-xs font-semibold text-slate-400">명</span></p>
-              <p className="mt-1.5 text-[11px] font-semibold text-slate-500">전체 훈련생</p>
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-2 px-1 py-1">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-lg font-black leading-none text-slate-900">{report.total}<span className="ml-0.5 text-[11px] font-semibold text-slate-400">명</span></span>
+              <span className="text-[11px] font-semibold text-slate-500">전체 훈련생</span>
             </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-center">
-              <p className="text-2xl font-black leading-none text-sky-600">{report.training}<span className="ml-0.5 text-xs font-semibold text-slate-400">명</span></p>
-              <p className="mt-1.5 text-[11px] font-semibold text-slate-500">훈련 중</p>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-lg font-black leading-none text-sky-600">{report.training}<span className="ml-0.5 text-[11px] font-semibold text-slate-400">명</span></span>
+              <span className="text-[11px] font-semibold text-slate-500">훈련 중</span>
             </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-center">
-              <p className={`text-2xl font-black leading-none ${report.avgLogRate >= 80 ? "text-emerald-600" : report.avgLogRate >= 60 ? "text-amber-500" : "text-rose-500"}`}>
-                {report.avgLogRate}<span className="ml-0.5 text-xs font-semibold text-slate-400">%</span>
-              </p>
-              <p className="mt-1.5 text-[11px] font-semibold text-slate-500">평균 일지 작성률</p>
+            <div className="flex items-baseline gap-1.5">
+              <span className={`text-lg font-black leading-none ${report.avgLogRate >= 80 ? "text-emerald-600" : report.avgLogRate >= 60 ? "text-amber-500" : "text-rose-500"}`}>{report.avgLogRate}<span className="ml-0.5 text-[11px] font-semibold text-slate-400">%</span></span>
+              <span className="text-[11px] font-semibold text-slate-500">평균 일지 작성률</span>
             </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-center">
-              <p className={`text-2xl font-black leading-none ${report.avgScore === null ? "text-slate-300" : report.avgScore >= 4 ? "text-emerald-600" : report.avgScore >= 3 ? "text-sky-600" : "text-amber-500"}`}>
-                {report.avgScore ?? "-"}<span className="ml-0.5 text-xs font-semibold text-slate-400">/5</span>
-              </p>
-              <p className="mt-1.5 text-[11px] font-semibold text-slate-500">평균 수행 점수</p>
+            <div className="flex items-baseline gap-1.5">
+              <span className={`text-lg font-black leading-none ${report.avgScore === null ? "text-slate-300" : report.avgScore >= 4 ? "text-emerald-600" : report.avgScore >= 3 ? "text-sky-600" : "text-amber-500"}`}>{report.avgScore ?? "-"}<span className="ml-0.5 text-[11px] font-semibold text-slate-400">/5</span></span>
+              <span className="text-[11px] font-semibold text-slate-500">평균 수행 점수</span>
             </div>
           </div>
         )}
