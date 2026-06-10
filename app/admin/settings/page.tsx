@@ -17,7 +17,6 @@ type TaxYear = { year: number; rowCount: number; updatedAt: string; childCredit:
 function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
   const [years, setYears] = useState<TaxYear[]>([]);
   const [year, setYear] = useState(String(new Date().getFullYear()));
-  const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   // 자녀공제(별표2) 수동 입력 — 기본값=현행 별표2. 엑셀/붙여넣기에서 자동추출되면 그 값이 우선 저장됨.
   const [cc, setCc] = useState({ c1: "20830", c2: "45830", extra: "33330" });
@@ -46,20 +45,6 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
     .then(d => { if (d.success) setYears(d.data); }).catch(() => {});
   useEffect(() => { load(); }, []);
 
-  async function save() {
-    if (!text.trim()) { onToast("간이세액표를 붙여넣어 주세요."); return; }
-    setBusy(true);
-    try {
-      const childCredit = { c1: Number(cc.c1), c2: Number(cc.c2), extraPer: Number(cc.extra) };
-      const d = await fetch("/api/admin/payroll/income-tax", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ year: Number(year), text, childCredit }),
-      }).then(r => r.json());
-      if (d.success) { onToast(`${d.year}년 간이세액표 ${d.rowCount}구간 저장`); showVerify(d); setText(""); load(); }
-      else onToast(d.message || "저장 실패");
-    } finally { setBusy(false); }
-  }
-
   async function uploadExcel(file: File) {
     if (!Number.isInteger(Number(year))) { onToast("연도를 입력하세요."); return; }
     setBusy(true);
@@ -67,6 +52,8 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
       const fd = new FormData();
       fd.append("year", String(year));
       fd.append("file", file);
+      // 별표2 시트가 없는 파일 폴백용 자녀공제값
+      fd.append("c1", cc.c1); fd.append("c2", cc.c2); fd.append("extraPer", cc.extra);
       const d = await fetch("/api/admin/payroll/income-tax/upload", { method: "POST", body: fd }).then(r => r.json());
       if (d.success) { onToast(`${d.year}년 간이세액표 ${d.rowCount}구간 저장(엑셀)`); showVerify(d); load(); }
       else onToast(d.message || "업로드 실패");
@@ -78,12 +65,36 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
     <div className="mb-6 rounded-2xl border border-slate-100 bg-white p-6">
       <h2 className="mb-1 text-base font-black text-slate-900">근로소득 간이세액표</h2>
       <p className="mb-4 text-xs text-slate-500">
-        매년 홈택스(근로소득 간이세액표)에서 표를 받아 등록합니다. 엑셀에서 데이터 영역을 복사(탭 구분)해 아래에 붙여넣으세요.
-        에이전시 급여계산 시 소득세 자동 조회(주민세=소득세 10%)에 사용되며, 관리자가 수동 보정할 수 있습니다.
+        매년 홈택스에서 받은 <b>엑셀(.xlsx) 원본을 그대로 업로드</b>하면 됩니다. ‘소득령 별표2’ + ‘간이세액표’가 한 파일에 여러 시트로 있어도
+        자동으로 세액표 시트를 찾고 자녀공제(별표2)를 추출합니다. 급여계산 시 소득세 자동 조회(주민세=소득세 10%)에 사용됩니다.
       </p>
 
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input type="number" value={year} onChange={e => setYear(e.target.value)} placeholder="연도"
+          className="h-10 w-28 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-sky-400" />
+        <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white hover:bg-slate-800 ${busy ? "opacity-40 pointer-events-none" : ""}`}>
+          {busy ? "처리 중…" : "엑셀(.xlsx) 원본 업로드"}
+          <input type="file" accept=".xlsx" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadExcel(f); e.currentTarget.value = ""; }} />
+        </label>
+        <span className="text-xs font-semibold text-slate-400">연도 선택 후 엑셀 파일을 고르면 바로 등록됩니다.</span>
+      </div>
+
+      {/* 자녀공제(별표2) — 별표2 시트가 있으면 자동추출(우선), 없는 파일일 때만 아래 값 폴백 */}
+      <div className="mb-1 flex flex-wrap items-end gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
+        <span className="text-xs font-black text-slate-700">8~20세 자녀공제 폴백값</span>
+        {([["c1", "1명"], ["c2", "2명"], ["extra", "3명초과/명"]] as const).map(([k, label]) => (
+          <label key={k} className="flex items-center gap-1 text-[11px] font-bold text-slate-500">
+            {label}
+            <input type="number" value={(cc as any)[k]} onChange={e => setCc(s => ({ ...s, [k]: e.target.value }))}
+              className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold outline-none focus:border-sky-400" />
+          </label>
+        ))}
+        <span className="text-[11px] font-semibold text-slate-400">파일에 ‘별표2’ 시트가 있으면 자동 추출값이 우선됩니다. 기본=현행 별표2.</span>
+      </div>
+
       {years.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-1.5">
+        <div className="mb-1 mt-2 flex flex-wrap gap-1.5">
           {years.map(y => (
             <span key={y.year} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600">
               {y.year}년 · {y.rowCount.toLocaleString()}구간
@@ -92,36 +103,6 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
           ))}
         </div>
       )}
-
-      {/* 자녀공제(별표2) — 엑셀/별표2 붙여넣기 시 자동추출, 없으면 아래 값 사용 */}
-      <div className="mb-2 flex flex-wrap items-end gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
-        <span className="text-xs font-black text-slate-700">8~20세 자녀공제(별표2)</span>
-        {([["c1", "1명"], ["c2", "2명"], ["extra", "3명초과/명"]] as const).map(([k, label]) => (
-          <label key={k} className="flex items-center gap-1 text-[11px] font-bold text-slate-500">
-            {label}
-            <input type="number" value={(cc as any)[k]} onChange={e => setCc(s => ({ ...s, [k]: e.target.value }))}
-              className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold outline-none focus:border-sky-400" />
-          </label>
-        ))}
-        <span className="text-[11px] font-semibold text-slate-400">엑셀(별표2 시트)·붙여넣기에서 자동 인식되면 그 값이 우선 저장됩니다.</span>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <input type="number" value={year} onChange={e => setYear(e.target.value)} placeholder="연도"
-          className="h-10 w-28 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-sky-400" />
-        <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 ${busy ? "opacity-40 pointer-events-none" : ""}`}>
-          엑셀(.xlsx) 업로드
-          <input type="file" accept=".xlsx" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) uploadExcel(f); e.currentTarget.value = ""; }} />
-        </label>
-        <span className="text-xs font-semibold text-slate-400">또는 아래에 붙여넣기 →</span>
-        <button onClick={save} disabled={busy} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white disabled:opacity-40">
-          {busy ? "저장 중…" : "붙여넣기 등록"}
-        </button>
-      </div>
-      <textarea value={text} onChange={e => setText(e.target.value)} rows={5}
-        placeholder={"권장: 위 '엑셀(.xlsx) 업로드' 사용. \n또는 홈택스 표를 복사해 여기에 붙여넣기(탭/공백 구분, 빈칸 '-' 무관).\n각 행: 월급여(이상,천원) 월급여(미만,천원) 가족1명 가족2명 …"}
-        className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-mono text-xs text-slate-800 outline-none focus:border-sky-400" />
 
       {verify && (
         <div className={`mt-2 rounded-xl px-3 py-2 text-xs font-semibold ${verify.ok ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>

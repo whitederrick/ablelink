@@ -57,7 +57,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "표 데이터를 인식하지 못했습니다. '간이세액표' 시트가 포함된 파일인지 확인하세요." }, { status: 400 });
     }
 
-    const childCredit = extractChildCreditFromText(textParts.join("\n"));
+    // 별표2 텍스트에서 자동추출 우선, 없으면 폼으로 받은 수동 자녀공제값 폴백.
+    let childCredit = extractChildCreditFromText(textParts.join("\n"));
+    if (!childCredit) {
+      const c1 = Number(form.get("c1")), c2 = Number(form.get("c2")), extraPer = Number(form.get("extraPer"));
+      if ([c1, c2, extraPer].every(n => Number.isFinite(n))) childCredit = { c1, c2, extraPer };
+    }
     const meta = childCredit ? { childCredit } : undefined;
 
     await prisma.incomeTaxTable.upsert({
