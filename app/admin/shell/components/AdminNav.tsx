@@ -44,7 +44,7 @@ const groups: NavGroup[] = [
       { href: "/admin/talent",      label: "인재풀 검색" },
       { href: "/admin/recruit",     label: "직무지도 공고" },
       { href: "/admin/professions", label: "자격 검증" },
-      { href: "/admin/eval-forms",  label: "직무지도원 평가 질문지" },
+      { href: "/admin/eval-forms",  label: "직무지도원 평가 관리" },
     ],
   },
   {

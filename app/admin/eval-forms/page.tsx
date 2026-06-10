@@ -60,9 +60,9 @@ export default function EvalFormsPage() {
   return (
     <div>
       <PageHeader
-        title="직무지도원 평가 질문지"
+        title="직무지도원 평가 관리"
         sub="직무지도원 평가에 사용할 질문지를 등록·관리합니다. 카테고리·문항·배점(100점 만점)과 주관식 의견란을 구성하세요."
-        actions={<button onClick={() => setCreating(true)} className={`${T.btnPrimary} inline-flex items-center gap-1.5`}><Plus className="h-4 w-4" />새 질문지</button>}
+        actions={<button onClick={() => setCreating(true)} className={`${T.btnPrimary} inline-flex items-center gap-1.5`}><Plus className="h-4 w-4" />평가표 등록</button>}
       />
 
       <StatCardRow
