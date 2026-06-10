@@ -21,8 +21,8 @@ const SYS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   URGENT: { label: "긴급", tone: "rose" },
 };
 const AUDIENCE_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
-  MANAGERS: { label: "관리자만", tone: "slate" },
-  ALL: { label: "전체 사용자", tone: "violet" },
+  MANAGERS: { label: "관리자", tone: "slate" },
+  ALL: { label: "전체(긴급)", tone: "rose" },
 };
 const PAGE_SIZE = 12;
 
@@ -101,7 +101,7 @@ export default function AnnouncementsPage() {
     <div>
       <PageHeader
         title="시스템 공지"
-        sub="에이전시 관리자(기본) 또는 전체 사용자에게 공지를 발송합니다"
+        sub="평상시에는 에이전시 관리자에게, 시스템 점검·중단 등 긴급 시에는 전체 사용자에게 발송합니다"
         actions={
           <>
             <button onClick={load} className={T.btnSecondary + " flex items-center gap-1.5"}>
@@ -150,14 +150,19 @@ export default function AnnouncementsPage() {
               <div>
                 <label className={T.label}>발송 대상</label>
                 <select value={form.audience} onChange={e => setForm(f => ({ ...f, audience: e.target.value }))} className={T.select + " w-full"}>
-                  <option value="MANAGERS">에이전시 관리자만 (기본)</option>
-                  <option value="ALL">전체 사용자 (관리자 + 전체 직무지도원)</option>
+                  <option value="MANAGERS">에이전시 관리자 (일반 공지·기본)</option>
+                  <option value="ALL">전체 — 관리자 + 모든 직무지도원 (긴급·시스템 점검)</option>
                 </select>
-                <p className="mt-1 text-[11px] font-semibold text-slate-400">
-                  {form.audience === "ALL"
-                    ? "전체 직무지도원 앱 알림함에도 전달됩니다."
-                    : "에이전시 관리자만 시스템 공지사항에서 확인합니다. 직무지도원에게는 전달되지 않습니다."}
-                </p>
+                {form.audience === "ALL" ? (
+                  <p className="mt-1 rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] font-bold text-rose-600">
+                    ⚠️ 긴급 전체 공지 — 시스템 점검·서비스 중단 등 모든 사용자에게 즉시 알려야 할 때만 사용하세요.
+                    전체 에이전시 관리자 + <strong>모든 직무지도원 앱 알림함</strong>까지 전송됩니다.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-[11px] font-semibold text-slate-400">
+                    각 에이전시 관리자만 ‘시스템 공지사항’에서 확인합니다. 직무지도원에게는 전달되지 않습니다.
+                  </p>
+                )}
               </div>
               <div>
                 <label className={T.label}>공지 유형</label>
@@ -182,8 +187,9 @@ export default function AnnouncementsPage() {
             </div>
             <div className="mt-5 flex gap-2">
               <button onClick={() => setShowForm(false)} className={T.btnSecondary + " flex-1"}>취소</button>
-              <button onClick={send} disabled={sending} className={T.btnPrimary + " flex-1"}>
-                {sending ? "발송 중..." : form.audience === "ALL" ? "전체 발송" : "관리자에게 발송"}
+              <button onClick={send} disabled={sending}
+                className={`flex-1 ${form.audience === "ALL" ? "rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-rose-700 disabled:opacity-60" : T.btnPrimary}`}>
+                {sending ? "발송 중..." : form.audience === "ALL" ? "🚨 전체 긴급 발송" : "관리자에게 발송"}
               </button>
             </div>
           </div>

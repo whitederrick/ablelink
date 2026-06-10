@@ -23,7 +23,7 @@ const TONE_CLS: Record<string, string> = {
   sky: "bg-sky-50 text-sky-600", amber: "bg-amber-50 text-amber-600", rose: "bg-rose-50 text-rose-600",
   emerald: "bg-emerald-50 text-emerald-600", violet: "bg-violet-50 text-violet-600", slate: "bg-slate-100 text-slate-500",
 };
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 
 // 공지 1건의 카테고리 뱃지 — 카테고리 있으면 우선, 없으면 레거시 type 폴백
 function CatBadge({ it }: { it: Item }) {
@@ -169,9 +169,9 @@ export default function AgencyAnnouncementsPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        {/* 목록 */}
+        {/* 목록 — 컴팩트 단일라인 행 */}
         <div>
-          <div className="space-y-2.5">
+          <div className="space-y-1.5">
             {loading ? (
               <p className={T.empty}>불러오는 중…</p>
             ) : pageItems.length === 0 ? (
@@ -181,17 +181,15 @@ export default function AgencyAnnouncementsPage() {
                 <button
                   key={it.id}
                   onClick={() => setSelectedId(it.id)}
-                  className={`block w-full rounded-2xl border bg-white p-4 text-left transition hover:border-slate-300 ${
-                    selectedId === it.id ? "border-slate-950 ring-2 ring-slate-100" : "border-slate-200"
+                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2.5 text-left transition hover:border-slate-300 ${
+                    selectedId === it.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"
                   }`}
                 >
-                  <div className="flex items-center gap-1.5">
-                    {it.pinned && <Pin className="h-3.5 w-3.5 fill-rose-500 text-rose-500" />}
-                    <CatBadge it={it} />
-                    <span className="ml-auto text-[11px] font-semibold text-slate-300">{it.createdAt.slice(0, 10)}</span>
-                  </div>
-                  <p className="mt-1.5 text-sm font-black text-slate-900">{it.title}</p>
-                  <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-400">{it.body}</p>
+                  {it.pinned && <Pin className="h-3.5 w-3.5 shrink-0 fill-rose-500 text-rose-500" />}
+                  <CatBadge it={it} />
+                  <span className="flex-1 truncate text-sm font-black text-slate-900">{it.title}</span>
+                  <span className="shrink-0 text-xs font-semibold text-slate-400">소속 전체</span>
+                  <span className="shrink-0 w-[68px] text-right text-[11px] font-semibold text-slate-300">{it.createdAt.slice(2, 10)}</span>
                 </button>
               ))
             )}

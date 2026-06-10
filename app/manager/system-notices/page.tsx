@@ -114,9 +114,9 @@ export default function SystemNoticesPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        {/* 목록 */}
+        {/* 목록 — 컴팩트 단일라인 행 */}
         <div>
-          <div className="space-y-2.5">
+          <div className="space-y-1.5">
             {loading ? (
               <p className={T.empty}>불러오는 중…</p>
             ) : pageItems.length === 0 ? (
@@ -124,14 +124,13 @@ export default function SystemNoticesPage() {
             ) : (
               pageItems.map(it => (
                 <button key={it.id} onClick={() => select(it)}
-                  className={`block w-full rounded-2xl border bg-white p-4 text-left transition hover:border-slate-300 ${selectedId === it.id ? "border-slate-950 ring-2 ring-slate-100" : "border-slate-200"}`}>
-                  <div className="flex items-center gap-1.5">
-                    <StatusBadge status={it.type} map={SYS_BADGE} />
-                    {!it.read && <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-black text-rose-600">미확인</span>}
-                    <span className="ml-auto text-[11px] font-semibold text-slate-300">{it.createdAt.slice(0, 10)}</span>
-                  </div>
-                  <p className={`mt-1.5 text-sm ${it.read ? "font-semibold text-slate-700" : "font-black text-slate-900"}`}>{it.title}</p>
-                  <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-400">{it.body}</p>
+                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2.5 text-left transition hover:border-slate-300 ${selectedId === it.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"}`}>
+                  <StatusBadge status={it.type} map={SYS_BADGE} />
+                  {it.read
+                    ? <span className="shrink-0 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-black text-emerald-600">확인</span>
+                    : <span className="shrink-0 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-black text-rose-600">미확인</span>}
+                  <span className={`flex-1 truncate text-sm ${it.read ? "font-semibold text-slate-700" : "font-black text-slate-900"}`}>{it.title}</span>
+                  <span className="shrink-0 w-[68px] text-right text-[11px] font-semibold text-slate-300">{it.createdAt.slice(2, 10)}</span>
                 </button>
               ))
             )}
