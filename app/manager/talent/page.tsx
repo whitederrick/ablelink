@@ -1,7 +1,7 @@
 "use client";
 
 // 에이전시 — 구직중 후보자 풀 검색 + 제안(컨택) 보내기 (방향 B)
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
@@ -10,9 +10,30 @@ import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 // 매칭은 현재 직무지도원 직종만 운영 → 직종 필터 미노출(서버도 JOB_COACH 강제).
 const PROF_LABEL: Record<string, string> = { JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사" };
 
+type SortKey = "rating" | "experience" | "reviews" | "ageDesc" | "ageAsc";
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "rating",     label: "평점 높은순" },
+  { value: "experience", label: "경력 많은순" },
+  { value: "reviews",    label: "리뷰 많은순" },
+  { value: "ageDesc",    label: "나이 많은순" },
+  { value: "ageAsc",     label: "나이 적은순" },
+];
+
 interface Cand {
-  id: string; name: string; region: string | null; bio: string | null; ratingAvg: number; ratingCount: number;
+  id: string; name: string; region: string | null; bio: string | null; ratingAvg: number; ratingCount: number; age: number | null;
   professions: { profession: string; experienceYears: number; isPrimary: boolean; verifyStatus: string }[];
+}
+
+const maxExp = (c: Cand) => c.professions.reduce((m, p) => Math.max(m, p.experienceYears), 0);
+function sortCands(list: Cand[], key: SortKey): Cand[] {
+  const arr = [...list];
+  switch (key) {
+    case "experience": return arr.sort((a, b) => maxExp(b) - maxExp(a) || b.ratingAvg - a.ratingAvg);
+    case "reviews":    return arr.sort((a, b) => b.ratingCount - a.ratingCount || b.ratingAvg - a.ratingAvg);
+    case "ageDesc":    return arr.sort((a, b) => (b.age ?? -1) - (a.age ?? -1));
+    case "ageAsc":     return arr.sort((a, b) => (a.age ?? 999) - (b.age ?? 999));
+    default:           return arr.sort((a, b) => b.ratingAvg - a.ratingAvg || b.ratingCount - a.ratingCount);
+  }
 }
 
 export default function ManagerTalentPage() {
@@ -21,6 +42,8 @@ export default function ManagerTalentPage() {
   const [loading, setLoading] = useState(true);
   const [region, setRegion] = useState("");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<SortKey>("rating");
+  const sorted = useMemo(() => sortCands(cands, sortBy), [cands, sortBy]);
   const [offerTo, setOfferTo] = useState<Cand | null>(null);
   const [offerMsg, setOfferMsg] = useState("");
   const [offerSite, setOfferSite] = useState("");
@@ -88,6 +111,11 @@ export default function ManagerTalentPage() {
           filters={[{ value: "verified", label: "검증된 자격만" }] as FilterChip[]}
           selected={verifiedOnly ? ["verified"] : []}
           onToggleFilter={() => setVerifiedOnly(v => !v)}
+          extra={
+            <select value={sortBy} onChange={e => setSortBy(e.target.value as SortKey)} className={`w-auto ${T.select}`}>
+              {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          }
         />
       </div>
 
@@ -97,15 +125,15 @@ export default function ManagerTalentPage() {
         ) : cands.length === 0 ? (
           <p className={`col-span-full ${T.empty}`}>구직 중인 후보자가 없습니다.</p>
         ) : (
-          cands.map((c) => {
+          sorted.map((c) => {
             const primary = c.professions.find((p) => p.isPrimary) ?? c.professions[0];
             return (
               <div key={c.id} className={T.card}>
                 <div className="flex items-center justify-between">
                   <p className="text-[17px] font-black text-slate-900">{c.name}</p>
-                  {c.ratingCount > 0 && <span className="text-sm font-black text-amber-500">★ {c.ratingAvg.toFixed(1)}</span>}
+                  {c.ratingCount > 0 && <span className="text-sm font-black text-amber-500">★ {c.ratingAvg.toFixed(1)} <span className="font-semibold text-slate-400">({c.ratingCount})</span></span>}
                 </div>
-                <p className="mt-0.5 text-sm font-semibold text-slate-400">{c.region ?? "지역 미입력"}</p>
+                <p className="mt-0.5 text-sm font-semibold text-slate-400">{c.region ?? "지역 미입력"}{c.age != null ? ` · ${c.age}세` : ""}</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {c.professions.map((p) => (
                     <span key={p.profession} className={`rounded-md px-2 py-0.5 text-xs font-black ${p.verifyStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>

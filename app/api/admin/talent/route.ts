@@ -40,10 +40,22 @@ export async function GET(req: NextRequest) {
       orderBy: [{ ratingAvg: "desc" }, { id: "desc" }],
       take: 100,
       select: {
-        id: true, workerName: true, residenceAddress: true, bio: true, ratingAvg: true, ratingCount: true,
+        id: true, workerName: true, residenceAddress: true, bio: true, ratingAvg: true, ratingCount: true, birthDate: true,
         professions: { select: { profession: true, experienceYears: true, isPrimary: true, verifyStatus: true } },
       },
     });
+
+    // 생년월일(YYYY-MM-DD) → 만 나이. 정렬·표시용(연락처 등 PII는 계속 비노출).
+    const ageOf = (b: string | null): number | null => {
+      if (!b) return null;
+      const d = new Date(b);
+      if (Number.isNaN(d.getTime())) return null;
+      const now = new Date();
+      let a = now.getFullYear() - d.getFullYear();
+      const m = now.getMonth() - d.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+      return a >= 0 && a < 120 ? a : null;
+    };
 
     return NextResponse.json({
       success: true,
@@ -55,6 +67,7 @@ export async function GET(req: NextRequest) {
         bio: w.bio ?? null,
         ratingAvg: Number(w.ratingAvg),
         ratingCount: w.ratingCount,
+        age: ageOf(w.birthDate ?? null),
         professions: w.professions.map((p) => ({ profession: p.profession, experienceYears: p.experienceYears, isPrimary: p.isPrimary, verifyStatus: p.verifyStatus })),
       })),
     });

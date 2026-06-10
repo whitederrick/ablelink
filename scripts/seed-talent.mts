@@ -9,25 +9,25 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 type Sample = {
-  name: string; phone: string; region: string; years: number;
+  name: string; phone: string; region: string; years: number; birth: string;
   verify: "VERIFIED" | "PENDING"; ratingAvg: number; ratingCount: number;
   premium?: boolean; bio: string;
 };
 
 const SAMPLES: Sample[] = [
-  { name: "김지훈", phone: "01045000001", region: "서울특별시 강남구 테헤란로 123", years: 5, verify: "VERIFIED", ratingAvg: 4.8, ratingCount: 12, premium: true,
+  { name: "김지훈", phone: "01045000001", region: "서울특별시 강남구 테헤란로 123", years: 5, birth: "1991-03-12", verify: "VERIFIED", ratingAvg: 4.8, ratingCount: 12, premium: true,
     bio: "중증 지적장애인 직무지도 5년. 제조·사무 직무 적응 지원 전문. 출퇴근 지도와 훈련일지 작성에 강점이 있습니다." },
-  { name: "이수민", phone: "01045000002", region: "경기도 성남시 분당구 판교로 45", years: 3, verify: "VERIFIED", ratingAvg: 4.5, ratingCount: 8,
+  { name: "이수민", phone: "01045000002", region: "경기도 성남시 분당구 판교로 45", years: 3, birth: "1996-07-25", verify: "VERIFIED", ratingAvg: 4.5, ratingCount: 8,
     bio: "발달장애 청년 직무 적응·출퇴근 지도 경험 다수. 사업체 담당자와의 소통을 중요하게 생각합니다." },
-  { name: "박준영", phone: "01045000003", region: "인천광역시 부평구 부평대로 77", years: 7, verify: "VERIFIED", ratingAvg: 4.9, ratingCount: 20, premium: true,
+  { name: "박준영", phone: "01045000003", region: "인천광역시 부평구 부평대로 77", years: 7, birth: "1984-11-03", verify: "VERIFIED", ratingAvg: 4.9, ratingCount: 20, premium: true,
     bio: "지원고용·취업 후 적응지도 통합 운영. 카페·물류 직무 매칭 성공 사례 다수 보유." },
-  { name: "최은영", phone: "01045000004", region: "서울특별시 노원구 동일로 1234", years: 1, verify: "PENDING", ratingAvg: 0, ratingCount: 0,
+  { name: "최은영", phone: "01045000004", region: "서울특별시 노원구 동일로 1234", years: 1, birth: "1999-02-18", verify: "PENDING", ratingAvg: 0, ratingCount: 0,
     bio: "사회복지사 2급. 신규 직무지도원으로 성실하게 배우며 현장에 빠르게 적응하겠습니다." },
-  { name: "정민재", phone: "01045000005", region: "부산광역시 해운대구 센텀중앙로 90", years: 4, verify: "VERIFIED", ratingAvg: 4.2, ratingCount: 6,
+  { name: "정민재", phone: "01045000005", region: "부산광역시 해운대구 센텀중앙로 90", years: 4, birth: "1988-09-30", verify: "VERIFIED", ratingAvg: 4.2, ratingCount: 6,
     bio: "지적·자폐성 장애 직무지도. 외식업 적응지원에 강점이 있으며 보호자 상담 경험이 풍부합니다." },
-  { name: "한서연", phone: "01045000006", region: "대구광역시 수성구 동대구로 22", years: 2, verify: "PENDING", ratingAvg: 4.0, ratingCount: 3,
+  { name: "한서연", phone: "01045000006", region: "대구광역시 수성구 동대구로 22", years: 2, birth: "1994-05-08", verify: "PENDING", ratingAvg: 4.0, ratingCount: 3,
     bio: "특수교육 전공. 훈련일지·종합평가 문서화가 꼼꼼하고 데이터 기반 지도를 지향합니다." },
-  { name: "오태경", phone: "01045000007", region: "경기도 고양시 일산동구 중앙로 1100", years: 6, verify: "VERIFIED", ratingAvg: 4.7, ratingCount: 15, premium: true,
+  { name: "오태경", phone: "01045000007", region: "경기도 고양시 일산동구 중앙로 1100", years: 6, birth: "1980-12-21", verify: "VERIFIED", ratingAvg: 4.7, ratingCount: 15, premium: true,
     bio: "공공기관 사무보조 직무지도 다수. 장기 근속으로 이어진 매칭 사례를 다수 보유하고 있습니다." },
 ];
 
@@ -41,13 +41,13 @@ async function main() {
       where: { loginId },
       update: {
         workerName: s.name, phoneNumber: s.phone, status: "ACTIVE",
-        openToOffers: true, residenceAddress: s.region, bio: s.bio,
+        openToOffers: true, residenceAddress: s.region, bio: s.bio, birthDate: s.birth,
         ratingAvg: s.ratingAvg, ratingCount: s.ratingCount,
         planType: s.premium ? "PREMIUM" : "FREE",
       },
       create: {
         loginId, password: hash, workerName: s.name, phoneNumber: s.phone,
-        status: "ACTIVE", openToOffers: true, residenceAddress: s.region, bio: s.bio,
+        status: "ACTIVE", openToOffers: true, residenceAddress: s.region, bio: s.bio, birthDate: s.birth,
         ratingAvg: s.ratingAvg, ratingCount: s.ratingCount,
         planType: s.premium ? "PREMIUM" : "FREE",
       },
