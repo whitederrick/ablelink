@@ -1901,3 +1901,48 @@ model TalentOffer {
   @@index([createdByManagerId])
   @@map("talent_offers")
 }
+
+// ------------------------------------------------------
+// 직무지도원 평가 질문지 (시스템 운영자 관리)
+//  - 100점 만점 / 카테고리·문항 구성 / 평가자 주관식 의견란 옵션
+// ------------------------------------------------------
+model JobCoachEvalForm {
+  id             BigInt   @id @default(autoincrement())
+  title          String
+  description    String?
+  isActive       Boolean  @default(false) @map("is_active")        // 활성 질문지(평가 시 사용)
+  includeOpinion Boolean  @default(true)  @map("include_opinion")  // 평가자 주관식 의견란 포함
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt      @map("updated_at")
+
+  categories JobCoachEvalCategory[]
+
+  @@index([isActive])
+  @@map("jobcoach_eval_forms")
+}
+
+model JobCoachEvalCategory {
+  id        BigInt @id @default(autoincrement())
+  formId    BigInt @map("form_id")
+  name      String
+  sortOrder Int    @default(0) @map("sort_order")
+
+  form      JobCoachEvalForm      @relation(fields: [formId], references: [id], onDelete: Cascade)
+  questions JobCoachEvalQuestion[]
+
+  @@index([formId, sortOrder])
+  @@map("jobcoach_eval_categories")
+}
+
+model JobCoachEvalQuestion {
+  id         BigInt @id @default(autoincrement())
+  categoryId BigInt @map("category_id")
+  text       String
+  maxScore   Int    @default(0) @map("max_score") // 문항 배점(카테고리·전체 합계 100)
+  sortOrder  Int    @default(0) @map("sort_order")
+
+  category JobCoachEvalCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId, sortOrder])
+  @@map("jobcoach_eval_questions")
+}
