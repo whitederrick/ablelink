@@ -170,13 +170,17 @@ export function childTaxCredit(childCount: number, cfg: ChildCreditConfig = DEFA
   return cfg.c2 + (n - 2) * cfg.extraPer;
 }
 
-/** 별표2 텍스트(엑셀 시트/붙여넣기)에서 자녀공제액 추출. 없으면 null. */
+/**
+ * 별표2 텍스트(엑셀 시트)에서 8~20세 자녀공제액 추출. 없으면 null.
+ * 셀마다 공백이 끼는 경우("1 명", "20,830 원", "자 녀")까지 대비해 공백을 모두 제거 후 매칭.
+ */
 export function extractChildCreditFromText(text: string): ChildCreditConfig | null {
-  const t = String(text ?? "");
+  const t = String(text ?? "").replace(/\s+/g, ""); // 모든 공백 제거(콤마·숫자·한글만 남김)
   const won = (re: RegExp) => { const m = t.match(re); return m ? Number(m[1].replace(/,/g, "")) : NaN; };
-  const c1 = won(/자녀가?\s*1\s*명[^:：]*[:：]\s*([\d,]+)\s*원/);
-  const c2 = won(/자녀가?\s*2\s*명[^:：]*[:：]\s*([\d,]+)\s*원/);
-  const extraPer = won(/2\s*명\s*초과[^:：\d]*1\s*명당\s*([\d,]+)\s*원/);
+  // "…자녀가1명인경우:20,830원" 형태. 8세이상20세이하의 숫자에 걸리지 않도록 '명' 직후부터 첫 금액을 캡처.
+  const c1 = won(/자녀(?:가)?1명[^0-9]{0,8}([\d,]{2,})원/);
+  const c2 = won(/자녀(?:가)?2명[^0-9]{0,8}([\d,]{2,})원/);
+  const extraPer = won(/2명초과자녀?1명당([\d,]{2,})원/);
   if (!Number.isFinite(c1) && !Number.isFinite(c2)) return null;
   return {
     c1: Number.isFinite(c1) ? c1 : DEFAULT_CHILD_CREDIT.c1,

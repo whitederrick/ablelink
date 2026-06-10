@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
-import { parseHometaxTable, extractChildCreditFromText, summarizeBrackets, type ChildCreditConfig } from "@/lib/payroll/incomeTax";
+import { parseHometaxTable, extractChildCreditFromText, summarizeBrackets } from "@/lib/payroll/incomeTax";
 
 export async function GET(req: NextRequest) {
   try {
@@ -38,19 +38,21 @@ export async function POST(req: NextRequest) {
     if (brackets.length === 0) {
       return NextResponse.json({ success: false, message: "표를 인식하지 못했습니다. 홈택스 표를 엑셀에서 복사(탭 구분)해 붙여넣어 주세요." }, { status: 400 });
     }
-    // 자녀공제: 붙여넣은 별표2 텍스트에서 추출 우선(연도 정확), 없으면 수동 입력값.
-    let childCredit: ChildCreditConfig | null = extractChildCreditFromText(text);
-    if (!childCredit && b?.childCredit && [b.childCredit.c1, b.childCredit.c2, b.childCredit.extraPer].every((n: any) => Number.isFinite(Number(n)))) {
-      childCredit = { c1: Number(b.childCredit.c1), c2: Number(b.childCredit.c2), extraPer: Number(b.childCredit.extraPer) };
+    // 자녀공제는 반드시 붙여넣은 '별표2' 텍스트에서 추출. 없으면 임의값 저장 없이 거부.
+    const childCredit = extractChildCreditFromText(text);
+    if (!childCredit) {
+      return NextResponse.json({
+        success: false,
+        message: "8~20세 자녀공제(별표2)를 인식하지 못했습니다. 별표2 내용까지 포함해 붙여넣거나 원본 엑셀을 업로드해주세요.",
+      }, { status: 400 });
     }
-    const meta = childCredit ? { childCredit } : undefined;
 
     await prisma.incomeTaxTable.upsert({
       where: { year },
-      create: { year, data: brackets as any, meta: meta as any, rowCount: brackets.length },
-      update: { data: brackets as any, ...(meta ? { meta: meta as any } : {}), rowCount: brackets.length },
+      create: { year, data: brackets as any, meta: { childCredit } as any, rowCount: brackets.length },
+      update: { data: brackets as any, meta: { childCredit } as any, rowCount: brackets.length },
     });
-    return NextResponse.json({ success: true, year, rowCount: brackets.length, childCredit: childCredit ?? null, summary: summarizeBrackets(brackets) });
+    return NextResponse.json({ success: true, year, rowCount: brackets.length, childCredit, summary: summarizeBrackets(brackets) });
   } catch (e: any) {
     if (e instanceof Response) return e;
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });

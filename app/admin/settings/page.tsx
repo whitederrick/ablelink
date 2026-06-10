@@ -18,8 +18,6 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
   const [years, setYears] = useState<TaxYear[]>([]);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [busy, setBusy] = useState(false);
-  // 자녀공제(별표2) 수동 입력 — 기본값=현행 별표2. 엑셀/붙여넣기에서 자동추출되면 그 값이 우선 저장됨.
-  const [cc, setCc] = useState({ c1: "20830", c2: "45830", extra: "33330" });
   const [verify, setVerify] = useState<{ ok: boolean; text: string } | null>(null);
 
   function showVerify(d: any) {
@@ -52,8 +50,6 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
       const fd = new FormData();
       fd.append("year", String(year));
       fd.append("file", file);
-      // 별표2 시트가 없는 파일 폴백용 자녀공제값
-      fd.append("c1", cc.c1); fd.append("c2", cc.c2); fd.append("extraPer", cc.extra);
       const d = await fetch("/api/admin/payroll/income-tax/upload", { method: "POST", body: fd }).then(r => r.json());
       if (d.success) { onToast(`${d.year}년 간이세액표 ${d.rowCount}구간 저장(엑셀)`); showVerify(d); load(); }
       else onToast(d.message || "업로드 실패");
@@ -80,18 +76,9 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
         <span className="text-xs font-semibold text-slate-400">연도 선택 후 엑셀 파일을 고르면 바로 등록됩니다.</span>
       </div>
 
-      {/* 자녀공제(별표2) — 별표2 시트가 있으면 자동추출(우선), 없는 파일일 때만 아래 값 폴백 */}
-      <div className="mb-1 flex flex-wrap items-end gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
-        <span className="text-xs font-black text-slate-700">8~20세 자녀공제 폴백값</span>
-        {([["c1", "1명"], ["c2", "2명"], ["extra", "3명초과/명"]] as const).map(([k, label]) => (
-          <label key={k} className="flex items-center gap-1 text-[11px] font-bold text-slate-500">
-            {label}
-            <input type="number" value={(cc as any)[k]} onChange={e => setCc(s => ({ ...s, [k]: e.target.value }))}
-              className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold outline-none focus:border-sky-400" />
-          </label>
-        ))}
-        <span className="text-[11px] font-semibold text-slate-400">파일에 ‘별표2’ 시트가 있으면 자동 추출값이 우선됩니다. 기본=현행 별표2.</span>
-      </div>
+      <p className="mb-1 text-[11px] font-semibold text-slate-400">
+        ※ 8~20세 자녀공제는 파일의 ‘별표2’ 시트에서 자동으로 가져옵니다. 별표2를 인식하지 못하면 등록을 거부하니, 홈택스 원본(별표2 포함)을 올려주세요.
+      </p>
 
       {years.length > 0 && (
         <div className="mb-1 mt-2 flex flex-wrap gap-1.5">
