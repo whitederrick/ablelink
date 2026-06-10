@@ -65,7 +65,7 @@ export default function ManagerRecruitPage() {
       <PageHeader
         title="직무지도 공고"
         sub="직무지도원을 모집할 공고를 등록하고 신청자를 관리합니다."
-        actions={<Link href="/admin/recruit/new" className={`${T.btnPrimary} no-underline`}>+ 새 공고</Link>}
+        actions={<Link href="/admin/recruit/new" className={`${T.btnPrimary} no-underline`}>+ 신규 공고 등록</Link>}
       />
 
       <StatCardRow
@@ -110,7 +110,7 @@ export default function ManagerRecruitPage() {
             {loading ? (
               <tr><td colSpan={8} className={T.empty}>불러오는 중…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={8} className={T.empty}>{posts.length===0?"등록한 공고가 없습니다. ‘새 공고’로 등록해보세요.":"조건에 맞는 공고가 없습니다."}</td></tr>
+              <tr><td colSpan={8} className={T.empty}>{posts.length===0?"등록한 공고가 없습니다. ‘신규 공고 등록’으로 등록해보세요.":"조건에 맞는 공고가 없습니다."}</td></tr>
             ) : (
               pageItems.map((p) => (
                 <tr key={p.id} className={T.trBase}>

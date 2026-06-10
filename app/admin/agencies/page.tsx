@@ -86,7 +86,7 @@ export default function AgenciesPage() {
         sub="에이전시를 등록하고 상세 정보 및 구독 플랜을 관리합니다."
         actions={
           <button onClick={()=>setShowCreate(true)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white active:scale-95">
-            <Plus className="h-4 w-4" />에이전시 생성
+            <Plus className="h-4 w-4" />에이전시 등록
           </button>
         }
       />
@@ -96,7 +96,7 @@ export default function AgenciesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-5">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-base font-black text-slate-900">신규 에이전시 생성</p>
+              <p className="text-base font-black text-slate-900">에이전시 등록</p>
               <button onClick={()=>setShowCreate(false)}><X className="h-5 w-5 text-slate-400"/></button>
             </div>
             <div className="space-y-3">
@@ -118,7 +118,7 @@ export default function AgenciesPage() {
             </div>
             <div className="mt-4 flex gap-2">
               <button onClick={()=>setShowCreate(false)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 active:scale-95">취소</button>
-              <button onClick={createAgency} disabled={processing} className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">{processing?"생성 중...":"에이전시 생성"}</button>
+              <button onClick={createAgency} disabled={processing} className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">{processing?"등록 중...":"에이전시 등록"}</button>
             </div>
           </div>
         </div>

@@ -134,7 +134,7 @@ export default function AdminsPage() {
         actions={
           <button onClick={() => setShowCreate(true)}
             className="flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white active:scale-95">
-            <Plus className="h-4 w-4" />운영자 생성
+            <Plus className="h-4 w-4" />운영자 등록
           </button>
         }
       />
@@ -166,7 +166,7 @@ export default function AdminsPage() {
       {/* 계정 생성 폼 */}
       {showCreate && (
         <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 p-5 space-y-4">
-          <p className="text-base font-black text-slate-900">신규 운영자 생성</p>
+          <p className="text-base font-black text-slate-900">운영자 등록</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-600">아이디 *</label>
@@ -212,7 +212,7 @@ export default function AdminsPage() {
             </button>
             <button onClick={createAdmin} disabled={processing}
               className="flex-1 rounded-xl bg-slate-950 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">
-              {processing ? "생성 중..." : "운영자 생성"}
+              {processing ? "등록 중..." : "운영자 등록"}
             </button>
           </div>
         </div>

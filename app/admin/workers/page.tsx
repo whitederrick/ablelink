@@ -126,7 +126,7 @@ export default function WorkersPage() {
         title="직무지도원 현황 관리"
         sub="직무지도원 계정을 조회하고 비밀번호 초기화·상태 변경·등급 부여·현장 배정을 관리합니다."
         actions={
-          <button onClick={()=>setCreating(true)} className={`${T.btnPrimary}`}>+ 신규 직무지도원</button>
+          <button onClick={()=>setCreating(true)} className={`${T.btnPrimary}`}>+ 직무지도원 등록</button>
         }
       />
 
@@ -159,7 +159,7 @@ export default function WorkersPage() {
       {creating&&(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-5">
           <div className="w-full max-w-xs rounded-2xl bg-white p-6 shadow-2xl">
-            <p className="mb-1 text-base font-black text-slate-900">신규 직무지도원 생성</p>
+            <p className="mb-1 text-base font-black text-slate-900">직무지도원 등록</p>
             <p className="mb-4 text-xs font-semibold leading-relaxed text-slate-400">자가가입 종료에 따라 운영자가 직접 발급(promo 온보딩). 전화번호가 로그인 아이디가 됩니다.</p>
             <input value={cName} onChange={e=>setCName(e.target.value)} placeholder="이름"
               className="mb-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400"/>

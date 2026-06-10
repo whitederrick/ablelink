@@ -77,7 +77,7 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
   const [mgrPage,    setMgrPage]    = useState(1);
   const [sitePage,   setSitePage]   = useState(1);
   const [workerPage, setWorkerPage] = useState(1);
-  const PANEL_SIZE = 6;
+  const PANEL_SIZE = 5;
 
   const loadDetail = useCallback(async (withSpinner = true) => {
     if (withSpinner) setLoading(true);
@@ -209,25 +209,53 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
         ))}
       </div>
 
-      {/* 상단: 구독 정보 | 결제 딜 | AI 사용량(좁게·세로) */}
-      <div className="grid items-start gap-3 lg:grid-cols-[1.1fr_1.1fr_0.7fr]">
-        {/* 구독 정보 */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="mb-2.5 text-sm font-black text-slate-700">구독 정보</p>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-            <div><p className="text-xs font-semibold text-slate-400">구독 시작</p><p className="mt-0.5 font-semibold text-slate-800">{fmt(agency.subscribedAt)}</p></div>
-            <div><p className="text-xs font-semibold text-slate-400">다음 결제</p><p className="mt-0.5 font-semibold text-slate-800">{fmt(agency.nextBillingAt)}</p></div>
-            <div><p className="text-xs font-semibold text-slate-400">체험 종료</p><p className="mt-0.5 font-semibold text-slate-800">{fmt(agency.trialEndsAt)}</p></div>
-            <div><p className="text-xs font-semibold text-slate-400">일지 기록 수</p><p className="mt-0.5 font-semibold text-slate-800">{(stats?.logCount ?? 0).toLocaleString()}</p></div>
-            <div><p className="text-xs font-semibold text-slate-400">최대 직무지도원</p><p className="mt-0.5 font-semibold text-slate-800">{agency.maxWorkers || "무제한"}</p></div>
-            <div><p className="text-xs font-semibold text-slate-400">최대 현장</p><p className="mt-0.5 font-semibold text-slate-800">{agency.maxSites || "무제한"}</p></div>
+      {/* 상단: 좌(구독 정보 + AI 사용량) | 우(결제 딜 설정) */}
+      <div className="grid items-start gap-3 lg:grid-cols-[1.2fr_1fr]">
+        {/* 좌측: 구독 정보 + AI 사용량 */}
+        <div className="space-y-3">
+          {/* 구독 정보 — 한 행씩 3개 */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="mb-2.5 text-sm font-black text-slate-700">구독 정보</p>
+            <div className="grid grid-cols-3 gap-x-3 gap-y-2.5 text-sm">
+              <div><p className="text-xs font-semibold text-slate-400">구독 시작</p><p className="mt-0.5 font-semibold text-slate-800">{fmt(agency.subscribedAt)}</p></div>
+              <div><p className="text-xs font-semibold text-slate-400">다음 결제</p><p className="mt-0.5 font-semibold text-slate-800">{fmt(agency.nextBillingAt)}</p></div>
+              <div><p className="text-xs font-semibold text-slate-400">체험 종료</p><p className="mt-0.5 font-semibold text-slate-800">{fmt(agency.trialEndsAt)}</p></div>
+              <div><p className="text-xs font-semibold text-slate-400">일지 기록 수</p><p className="mt-0.5 font-semibold text-slate-800">{(stats?.logCount ?? 0).toLocaleString()}</p></div>
+              <div><p className="text-xs font-semibold text-slate-400">최대 직무지도원</p><p className="mt-0.5 font-semibold text-slate-800">{agency.maxWorkers || "무제한"}</p></div>
+              <div><p className="text-xs font-semibold text-slate-400">최대 현장</p><p className="mt-0.5 font-semibold text-slate-800">{agency.maxSites || "무제한"}</p></div>
+            </div>
+          </div>
+
+          {/* AI 사용량 — 항목 나란히 */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="mb-2.5 flex items-center gap-1.5">
+              <Cpu className="h-4 w-4 text-slate-500" />
+              <p className="text-sm font-black text-slate-700">AI 사용량 (누적)</p>
+            </div>
+            {!stats || stats.apiUsage.length === 0 ? (
+              <p className="text-xs text-slate-400">사용 기록 없음</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {stats.apiUsage.map(u => (
+                  <div key={u.service} className="rounded-lg bg-slate-50 px-2.5 py-2 text-center">
+                    <p className="text-base font-black text-slate-900">{u.count.toLocaleString()}</p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-slate-400">{u.service}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* 결제 딜 설정 (건바이건) */}
+        {/* 우측: 결제 딜 설정 (저장 버튼 우측 상단) */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-sm font-black text-slate-700">결제 딜 설정</p>
-          <p className="mb-2.5 text-[11px] text-slate-400">협상가 입력 시 표준 월정액 대신 청구. 비우면 표준. 다음 결제부터 적용.</p>
+          <div className="mb-2.5 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-sm font-black text-slate-700">결제 딜 설정</p>
+              <p className="text-[11px] text-slate-400">협상가 입력 시 표준 월정액 대신 청구. 비우면 표준. 다음 결제부터 적용.</p>
+            </div>
+            <button onClick={saveDeal} disabled={savingDeal} className={`${T.btnPrimary} shrink-0 py-1.5`}>{savingDeal ? "저장 중..." : "딜 저장"}</button>
+          </div>
           <div className="space-y-2 text-sm">
             <div className="flex items-center gap-2">
               <span className="w-12 shrink-0 text-xs font-semibold text-slate-400">주기</span>
@@ -251,31 +279,8 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
                 placeholder="협상 근거 등"
                 className="w-full rounded-xl border border-slate-200 px-2.5 py-1.5 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400" />
             </div>
-            <div className="flex items-center gap-2 pt-0.5">
-              <button onClick={saveDeal} disabled={savingDeal} className={T.btnPrimary + " py-1.5"}>{savingDeal ? "저장 중..." : "딜 저장"}</button>
-              {dealMsg && <span className="text-[11px] font-semibold text-slate-500">{dealMsg}</span>}
-            </div>
+            {dealMsg && <p className="text-[11px] font-semibold text-slate-500">{dealMsg}</p>}
           </div>
-        </div>
-
-        {/* AI 사용량 (좁게·세로 배치) */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="mb-2.5 flex items-center gap-1.5">
-            <Cpu className="h-4 w-4 text-slate-500" />
-            <p className="text-sm font-black text-slate-700">AI 사용량</p>
-          </div>
-          {!stats || stats.apiUsage.length === 0 ? (
-            <p className="text-xs text-slate-400">사용 기록 없음</p>
-          ) : (
-            <div className="space-y-1.5">
-              {stats.apiUsage.map(u => (
-                <div key={u.service} className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5">
-                  <span className="text-[11px] font-semibold text-slate-400">{u.service}</span>
-                  <span className="text-sm font-black text-slate-900">{u.count.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 

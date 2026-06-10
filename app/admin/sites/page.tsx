@@ -57,7 +57,7 @@ export default function SitesPage() {
         title="현장(Site) 현황 관리"
         sub="전체 에이전시의 현장을 조회하고 상세 정보를 관리합니다."
         actions={
-          <Link href="/admin/sites/new" className={`${T.btnPrimary} no-underline`}>+ 현장 생성</Link>
+          <Link href="/admin/sites/new" className={`${T.btnPrimary} no-underline`}>+ 현장(Site) 등록</Link>
         }
       />
 
