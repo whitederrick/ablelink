@@ -287,11 +287,11 @@ export default function NoticesPage() {
                   className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2.5 text-left transition hover:border-slate-300 ${selectedId === n.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"}`}>
                   <StatusBadge status={n.type} map={NOTICE_BADGE} />
                   {n.read
-                    ? <span className="shrink-0 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-black text-emerald-600">확인</span>
-                    : <span className="shrink-0 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-black text-rose-600">미확인</span>}
-                  <span className={`flex-1 truncate text-sm ${n.read ? "font-semibold text-slate-700" : "font-black text-slate-900"}`}>{n.title}</span>
-                  <span className="shrink-0 max-w-[88px] truncate text-xs font-semibold text-slate-400">{n.workerName}</span>
-                  <span className="shrink-0 w-[68px] text-right text-[11px] font-semibold text-slate-300">{n.createdAt.slice(2, 10)}</span>
+                    ? <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-600">확인</span>
+                    : <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-black text-rose-600">미확인</span>}
+                  <span className={`flex-1 truncate text-[15px] ${n.read ? "font-semibold text-slate-700" : "font-black text-slate-900"}`}>{n.title}</span>
+                  <span className="shrink-0 max-w-[96px] truncate text-[13px] font-semibold text-slate-500">{n.workerName}</span>
+                  <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{n.createdAt.slice(2, 10)}</span>
                 </button>
             ))}
           </div>

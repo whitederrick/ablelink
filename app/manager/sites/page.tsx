@@ -102,13 +102,12 @@ export default function AdminSitesPage() {
                       {it.companyName}
                     </Link>
                   </td>
-                  <td className={T.td}>
-                    <div className="text-slate-700">{it.address}</div>
-                    {it.detailAddress && <div className="text-xs text-slate-400">{it.detailAddress}</div>}
+                  <td className={`${T.td} text-slate-700`}>
+                    {it.address}{it.detailAddress ? <span className="text-slate-400"> {it.detailAddress}</span> : ""}
                   </td>
                   <td className={T.td}>
-                    <div className="text-slate-700">{it.businessContactName || "-"}</div>
-                    {it.businessContactPhone && <div className="text-xs text-slate-400">{it.businessContactPhone}</div>}
+                    <span className="text-slate-700">{it.businessContactName || "-"}</span>
+                    {it.businessContactPhone && <span className="ml-1.5 text-slate-400">({it.businessContactPhone})</span>}
                   </td>
                   <td className={T.td}>
                     {it.ownerManagerName ? (

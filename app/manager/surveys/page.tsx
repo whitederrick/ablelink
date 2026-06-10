@@ -184,7 +184,7 @@ export default function ManagerSurveysPage() {
               return (
                 <tr key={s.id} className={T.trBase}>
                   <td className={`${T.td} font-black text-slate-900`}>{s.workerName}</td>
-                  <td className={T.td}><div className="text-slate-700">{s.siteName || "-"}</div><div className="text-xs text-slate-400">{s.recipientName || ""} {s.recipientPhone}</div></td>
+                  <td className={T.td}><span className="text-slate-700">{s.siteName || "-"}</span><span className="ml-1.5 text-xs text-slate-400">{s.recipientName || ""}{s.recipientPhone ? ` (${s.recipientPhone})` : ""}</span></td>
                   <td className={T.td}><StatusBadge status={s.status} map={STATUS_BADGE} />{s.auto && <span className="ml-1 text-[10px] text-slate-400">자동</span>}</td>
                   <td className={T.td}>{s.status === "RESPONDED" ? (s.sharedWithAgency && s.overallScore != null ? <span className="font-black text-slate-800">종합 {s.overallScore}/5</span> : <span className="text-xs text-slate-400">운영자 확인</span>) : "-"}</td>
                   <td className={`${T.td} text-xs text-slate-400`}>{s.createdAt.slice(0, 10)}</td>

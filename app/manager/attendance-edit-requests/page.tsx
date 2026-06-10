@@ -152,21 +152,17 @@ export default function AttendanceEditRequestsPage() {
                 req.status === "APPROVED" ? "border-emerald-100" : "border-rose-100"
               }`}>
               {/* 헤더 */}
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-black text-slate-900">{req.workerName}</span>
-                    <span className="text-xs font-semibold text-slate-400">{req.userPhone}</span>
-                    <StatusBadge status={req.status} map={EDITREQ_BADGE} />
-                  </div>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                    {req.siteName} · {req.workDate} ({dowLabel(req.workDate)})
-                    {req.isFinalClosed && <span className="ml-1 text-emerald-600">[확정됨]</span>}
-                  </p>
-                </div>
-                <p className="text-[11px] text-slate-400 shrink-0">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="shrink-0 font-black text-slate-900">{req.workerName}</span>
+                <span className="shrink-0 text-xs font-semibold text-slate-400">({req.userPhone})</span>
+                <StatusBadge status={req.status} map={EDITREQ_BADGE} />
+                <span className="truncate text-xs font-semibold text-slate-500">
+                  {req.siteName} · {req.workDate} ({dowLabel(req.workDate)})
+                  {req.isFinalClosed && <span className="ml-1 text-emerald-600">[확정됨]</span>}
+                </span>
+                <span className="ml-auto shrink-0 text-[11px] text-slate-400">
                   {new Date(req.createdAt).toLocaleDateString("ko-KR")} 요청
-                </p>
+                </span>
               </div>
 
               {/* 현재 vs 요청 시간 */}

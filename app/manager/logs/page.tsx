@@ -149,20 +149,17 @@ export default function ManagerLogsPage() {
             <div key={l.id} className={`rounded-2xl border bg-white ${l.isCompleted?"border-emerald-100":"border-slate-100"}`}>
               <button onClick={()=>setExpandId(expandId===l.id?null:l.id)}
                 className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-black text-slate-900">
-                      {l.workDate} ({DOW[new Date(l.workDate+"T00:00:00").getDay()]})
-                    </span>
-                    <span className="text-sm font-semibold text-slate-600">{l.workerName}</span>
-                    <span className="text-sm text-slate-400">→ {l.traineeName}</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">{TYPE_LABELS[l.trainingType]??l.trainingType}</span>
-                    <StatusBadge status={l.isCompleted?"confirmed":"pending"} map={LOG_BADGE} />
-                  </div>
-                  <p className="mt-0.5 text-xs text-slate-400">
-                    {l.siteName} · {l.totalTime}h · {l.attendance}
-                    {l.taskName?` · ${l.taskName}`:""}
-                  </p>
+                <div className="flex flex-1 min-w-0 items-center gap-2">
+                  <span className="shrink-0 text-[15px] font-black text-slate-900">
+                    {l.workDate} ({DOW[new Date(l.workDate+"T00:00:00").getDay()]})
+                  </span>
+                  <span className="shrink-0 text-sm font-semibold text-slate-600">{l.workerName}</span>
+                  <span className="shrink-0 text-sm text-slate-400">→ {l.traineeName}</span>
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{TYPE_LABELS[l.trainingType]??l.trainingType}</span>
+                  <StatusBadge status={l.isCompleted?"confirmed":"pending"} map={LOG_BADGE} />
+                  <span className="truncate text-xs text-slate-400">
+                    {l.siteName} · {l.totalTime}h · {l.attendance}{l.taskName?` · ${l.taskName}`:""}
+                  </span>
                 </div>
                 {expandId===l.id?<ChevronUp className="h-4 w-4 text-slate-400 flex-shrink-0"/>:<ChevronDown className="h-4 w-4 text-slate-400 flex-shrink-0"/>}
               </button>

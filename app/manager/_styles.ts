@@ -18,7 +18,7 @@ export const T = {
   tdCenter: "px-4 py-10 text-center text-sm font-semibold text-slate-300",
   empty: "px-4 py-10 text-center text-sm font-semibold text-slate-300",
 
-  badge: "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-black whitespace-nowrap",
+  badge: "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black whitespace-nowrap",
 
   summaryGrid: "grid grid-cols-4 gap-3.5 mb-5",
   summaryCard: "rounded-2xl border border-slate-100 bg-white p-4 text-center",

@@ -185,11 +185,11 @@ export default function AgencyAnnouncementsPage() {
                     selectedId === it.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"
                   }`}
                 >
-                  {it.pinned && <Pin className="h-3.5 w-3.5 shrink-0 fill-rose-500 text-rose-500" />}
+                  {it.pinned && <Pin className="h-4 w-4 shrink-0 fill-rose-500 text-rose-500" />}
                   <CatBadge it={it} />
-                  <span className="flex-1 truncate text-sm font-black text-slate-900">{it.title}</span>
-                  <span className="shrink-0 text-xs font-semibold text-slate-400">소속 전체</span>
-                  <span className="shrink-0 w-[68px] text-right text-[11px] font-semibold text-slate-300">{it.createdAt.slice(2, 10)}</span>
+                  <span className="flex-1 truncate text-[15px] font-black text-slate-900">{it.title}</span>
+                  <span className="shrink-0 text-[13px] font-semibold text-slate-500">소속 전체</span>
+                  <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{it.createdAt.slice(2, 10)}</span>
                 </button>
               ))
             )}

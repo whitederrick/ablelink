@@ -214,21 +214,17 @@ export default function ManagerDocumentsHub() {
           {pageItems.map(item => {
             return (
               <div key={item.id} className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <StatusBadge status={item.signStage} map={DOC_BADGE} />
-                      <span className="text-sm font-black text-slate-900">{item.docLabel}</span>
-                      {item.traineeName && <span className="text-sm font-semibold text-slate-500">· {item.traineeName}</span>}
-                      {item.versionNo && item.versionNo > 1 && (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-black text-amber-700">v{item.versionNo}</span>
-                      )}
-                    </div>
-                    <p className="mt-1 truncate text-xs font-semibold text-slate-500">
-                      {item.workerName} · {item.siteName} · {item.periodStart}~{item.periodEnd}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={item.signStage} map={DOC_BADGE} />
+                  <span className="shrink-0 text-[15px] font-black text-slate-900">{item.docLabel}</span>
+                  {item.traineeName && <span className="shrink-0 text-sm font-semibold text-slate-500">· {item.traineeName}</span>}
+                  {item.versionNo && item.versionNo > 1 && (
+                    <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-black text-amber-700">v{item.versionNo}</span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-400">
+                    {item.workerName} · {item.siteName} · {item.periodStart}~{item.periodEnd}
+                  </span>
+                  <div className="flex shrink-0 items-center justify-end gap-1.5">
                     <button onClick={() => openPreview(item)} className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 active:scale-95">문서 보기</button>
                     <button onClick={() => downloadPdf(item)} className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 active:scale-95">다운로드</button>
                     {item.signStage === "SUBMITTED" && (

@@ -115,7 +115,7 @@ export default function ManagerRecruitPage() {
                 <tr key={p.id} className={T.trBase}>
                   <td className={T.td}>
                     <Link href={`/manager/recruit/${p.id}`} className="font-bold text-slate-900 hover:text-sky-600">{p.title}</Link>
-                    <div className="text-xs text-slate-400">{p.companyName}{p.taskName ? ` · ${p.taskName}` : ""}</div>
+                    <span className="ml-1.5 text-xs text-slate-400">{p.companyName}{p.taskName ? ` · ${p.taskName}` : ""}</span>
                   </td>
                   <td className={T.td}>{PROF_LABEL[p.profession] ?? p.profession}</td>
                   <td className={T.td}>{p.region ?? "-"}</td>

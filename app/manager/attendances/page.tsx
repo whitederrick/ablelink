@@ -319,8 +319,8 @@ export default function AttendancesPage() {
                 <tr key={row.id} className={T.trBase}>
                   <td className={`${T.td} text-xs text-slate-500`}>{row.workDate}</td>
                   <td className={T.td}>
-                    <div className="font-black text-slate-900">{row.user?.workerName || "-"}</div>
-                    <div className="text-xs text-slate-400">{row.user?.phoneNumber}</div>
+                    <span className="font-black text-slate-900">{row.user?.workerName || "-"}</span>
+                    {row.user?.phoneNumber && <span className="ml-1.5 text-xs text-slate-400">({row.user.phoneNumber})</span>}
                   </td>
                   <td className={T.td}>{row.site?.companyName || "-"}</td>
                   <td className={`${T.td} ${row.startTime ? "font-semibold text-emerald-600" : "text-slate-300"}`}>

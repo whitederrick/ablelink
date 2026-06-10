@@ -683,18 +683,16 @@ export default function AttendanceInboxClient() {
                           active ? "border-sky-200 bg-sky-50" : "hover:bg-slate-50"
                         )}
                       >
-                        <div className="mb-0 flex items-start gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-semibold">
-                              {it.workerName} <span className="text-slate-300 font-normal">·</span>{" "}
-                              <span className="font-normal text-slate-700">{it.siteName}</span>
-                            </div>
-                            <div className="mt-0.5 text-xs text-slate-700">
-                              {fmtYmdDots(it.workDate)} · 출근 {fmtTime(it.clockInAt)} / 퇴근 {fmtTime(it.clockOutAt)}
-                            </div>
+                        <div className="mb-0 flex items-center gap-3">
+                          <div className="min-w-0 flex-1 truncate text-sm">
+                            <span className="font-semibold">{it.workerName}</span>
+                            <span className="text-slate-300"> · </span>
+                            <span className="text-slate-700">{it.siteName}</span>
+                            <span className="text-slate-300"> · </span>
+                            <span className="text-slate-500">{fmtYmdDots(it.workDate)}</span>
                           </div>
 
-                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                             {hasAny ? (
                               <>
                                 {shown.map((t) => (

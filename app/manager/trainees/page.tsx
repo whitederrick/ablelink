@@ -208,17 +208,13 @@ export default function TraineesPage() {
                 {isOpen&&(
                   <div className="border-t border-slate-100 divide-y divide-slate-50">
                     {ts.map(t=>(
-                      <div key={t.id} className="flex items-center gap-3 px-5 py-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-slate-900">{t.name}</span>
-                            <span className="text-xs text-slate-400">{t.gender==="M"?"남":"여"}</span>
-                            <StatusBadge status={t.status} map={STATUS_BADGE} />
-                          </div>
-                          <p className="text-xs text-slate-400">{t.disabilityType} · {t.severity}{t.phoneNumber?` · ${t.phoneNumber}`:""}</p>
-                        </div>
+                      <div key={t.id} className="flex items-center gap-2 px-5 py-3">
+                        <span className="font-bold text-slate-900">{t.name}</span>
+                        <span className="text-xs text-slate-400">{t.gender==="M"?"남":"여"}</span>
+                        <StatusBadge status={t.status} map={STATUS_BADGE} />
+                        <span className="truncate text-sm text-slate-500">{t.disabilityType} · {t.severity}{t.phoneNumber?` · ${t.phoneNumber}`:""}</span>
                         <button onClick={()=>openEdit(t)}
-                          className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 active:scale-95">
+                          className="ml-auto shrink-0 rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 active:scale-95">
                           <Pencil className="h-3.5 w-3.5"/>
                         </button>
                       </div>

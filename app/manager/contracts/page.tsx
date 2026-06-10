@@ -718,8 +718,8 @@ export default function AdminContractsPage() {
             : pageItems.map(c => {
               return (
                 <tr key={c.id} className={T.trBase}>
-                  <td className={T.td}><div className="font-black text-slate-900">{c.workerName}</div><div className="text-xs text-slate-400">{c.userPhone}</div></td>
-                  <td className={`${T.td} text-xs text-slate-500`}>{c.contractStart?.slice(0, 10)}<br />~ {c.contractEnd?.slice(0, 10)}</td>
+                  <td className={T.td}><span className="font-black text-slate-900">{c.workerName}</span>{c.userPhone && <span className="ml-1.5 text-xs text-slate-400">({c.userPhone})</span>}</td>
+                  <td className={`${T.td} whitespace-nowrap text-xs text-slate-500`}>{c.contractStart?.slice(0, 10)} ~ {c.contractEnd?.slice(0, 10)}</td>
                   <td className={`${T.td} text-slate-600`}>{c.workLocation || c.siteName || <span className="text-slate-300">미지정</span>}</td>
                   <td className={T.td}><StatusBadge status={c.status} map={STATUS_BADGE} /></td>
                   <td className={`${T.td} text-xs text-slate-400`}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
