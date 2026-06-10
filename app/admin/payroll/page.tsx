@@ -421,7 +421,7 @@ export default function PayrollPage() {
                           <span className={`${T.badge} ${c.workerType === "INTERNAL" ? "bg-amber-50 text-amber-600" : "bg-slate-50 text-slate-600"}`}>
                             {c.workerType === "INTERNAL" ? "내부" : "외부"}
                           </span>
-                          <span className={`${T.badge} ${c.incomeType === "EMPLOYMENT" ? "bg-purple-50 text-purple-600" : "bg-sky-50 text-sky-600"}`}>
+                          <span className={`${T.badge} ${c.incomeType === "EMPLOYMENT" ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>
                             {c.incomeType === "EMPLOYMENT" ? "근로소득" : "사업소득"}
                           </span>
                           <span className={`${T.badge} bg-slate-50 text-slate-600`}>{payTypeLabel[c.payType]}</span>
@@ -646,7 +646,7 @@ export default function PayrollPage() {
                           <div className="text-xs text-slate-400">{maskLoginId(item.loginId)}</div>
                           {bd?.payType && (
                             <div className="mt-0.5 text-[11px] text-slate-500">
-                              <span className={`mr-1 ${T.badge} ${incType === "EMPLOYMENT" ? "bg-purple-50 text-purple-600" : "bg-sky-50 text-sky-600"}`}>
+                              <span className={`mr-1 ${T.badge} ${incType === "EMPLOYMENT" ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>
                                 {incType === "EMPLOYMENT" ? "근로소득" : "사업소득"}
                               </span>
                               {payTypeLabel[bd.payType as PayType]}

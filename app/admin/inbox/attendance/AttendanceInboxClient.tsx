@@ -865,7 +865,7 @@ export default function AttendanceInboxClient() {
                         <span>출근 {fmtTime(selected.actualClockInAt)}</span>
                         <span>퇴근 {fmtTime(selected.actualClockOutAt)}</span>
                         {lateMin != null && lateMin >= 15 && (
-                          <span className="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-black text-purple-700">{lateMin}분 지각</span>
+                          <span className="rounded bg-violet-50 px-1.5 py-0.5 text-xs font-black text-violet-600">{lateMin}분 지각</span>
                         )}
                         {lateMin != null && lateMin < 15 && (
                           <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-black text-emerald-700">정시 출근</span>
