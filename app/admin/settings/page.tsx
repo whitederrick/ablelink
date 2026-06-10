@@ -11,13 +11,36 @@ const TONE_SWATCH: Record<string, string> = {
 };
 type Category = { id: string; name: string; tone: string; sortOrder: number; isActive: boolean };
 
-type TaxYear = { year: number; rowCount: number; updatedAt: string };
+type ChildCredit = { c1: number; c2: number; extraPer: number };
+type TaxYear = { year: number; rowCount: number; updatedAt: string; childCredit: ChildCredit | null };
 
 function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
   const [years, setYears] = useState<TaxYear[]>([]);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  // 자녀공제(별표2) 수동 입력 — 기본값=현행 별표2. 엑셀/붙여넣기에서 자동추출되면 그 값이 우선 저장됨.
+  const [cc, setCc] = useState({ c1: "20830", c2: "45830", extra: "33330" });
+  const [verify, setVerify] = useState<{ ok: boolean; text: string } | null>(null);
+
+  function showVerify(d: any) {
+    const s = d.summary;
+    const ccv = d.childCredit;
+    const warns: string[] = [];
+    if (!s || s.count < 100) warns.push("구간 수가 비정상적으로 적습니다");
+    if (s && !s.monotonic) warns.push("구간 순서 이상(중복/역전)");
+    if (s && s.maxDependents < 11) warns.push(`가족 열이 ${s?.maxDependents}개(보통 11)`);
+    if (!ccv) warns.push("자녀공제 미인식 → 입력값/기본값 사용");
+    const parts = [
+      `${d.year}년 등록`,
+      d.sheet ? `시트 '${d.sheet}'` : null,
+      s ? `${s.count.toLocaleString()}구간` : null,
+      s ? `급여 ${s.minPayK.toLocaleString()}~${s.maxPayK.toLocaleString()}천원` : null,
+      s ? `가족 ${s.maxDependents}열` : null,
+      ccv ? `자녀공제 ${ccv.c1.toLocaleString()}/${ccv.c2.toLocaleString()}/+${ccv.extraPer.toLocaleString()}` : "자녀공제 미인식",
+    ].filter(Boolean);
+    setVerify({ ok: warns.length === 0, text: parts.join(" · ") + (warns.length ? ` ⚠ ${warns.join(", ")}` : "") });
+  }
 
   const load = () => fetch("/api/admin/payroll/income-tax").then(r => r.json())
     .then(d => { if (d.success) setYears(d.data); }).catch(() => {});
@@ -27,11 +50,12 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
     if (!text.trim()) { onToast("간이세액표를 붙여넣어 주세요."); return; }
     setBusy(true);
     try {
+      const childCredit = { c1: Number(cc.c1), c2: Number(cc.c2), extraPer: Number(cc.extra) };
       const d = await fetch("/api/admin/payroll/income-tax", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ year: Number(year), text }),
+        body: JSON.stringify({ year: Number(year), text, childCredit }),
       }).then(r => r.json());
-      if (d.success) { onToast(`${d.year}년 간이세액표 ${d.rowCount}구간 저장`); setText(""); load(); }
+      if (d.success) { onToast(`${d.year}년 간이세액표 ${d.rowCount}구간 저장`); showVerify(d); setText(""); load(); }
       else onToast(d.message || "저장 실패");
     } finally { setBusy(false); }
   }
@@ -44,7 +68,7 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
       fd.append("year", String(year));
       fd.append("file", file);
       const d = await fetch("/api/admin/payroll/income-tax/upload", { method: "POST", body: fd }).then(r => r.json());
-      if (d.success) { onToast(`${d.year}년 간이세액표 ${d.rowCount}구간 저장(엑셀${d.sheet ? ` · '${d.sheet}' 시트` : ""})`); load(); }
+      if (d.success) { onToast(`${d.year}년 간이세액표 ${d.rowCount}구간 저장(엑셀)`); showVerify(d); load(); }
       else onToast(d.message || "업로드 실패");
     } catch { onToast("업로드 실패"); }
     finally { setBusy(false); }
@@ -63,10 +87,24 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
           {years.map(y => (
             <span key={y.year} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600">
               {y.year}년 · {y.rowCount.toLocaleString()}구간
+              {y.childCredit && <span className="text-slate-400">· 자녀공제 {y.childCredit.c1.toLocaleString()}/{y.childCredit.c2.toLocaleString()}/+{y.childCredit.extraPer.toLocaleString()}</span>}
             </span>
           ))}
         </div>
       )}
+
+      {/* 자녀공제(별표2) — 엑셀/별표2 붙여넣기 시 자동추출, 없으면 아래 값 사용 */}
+      <div className="mb-2 flex flex-wrap items-end gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
+        <span className="text-xs font-black text-slate-700">8~20세 자녀공제(별표2)</span>
+        {([["c1", "1명"], ["c2", "2명"], ["extra", "3명초과/명"]] as const).map(([k, label]) => (
+          <label key={k} className="flex items-center gap-1 text-[11px] font-bold text-slate-500">
+            {label}
+            <input type="number" value={(cc as any)[k]} onChange={e => setCc(s => ({ ...s, [k]: e.target.value }))}
+              className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold outline-none focus:border-sky-400" />
+          </label>
+        ))}
+        <span className="text-[11px] font-semibold text-slate-400">엑셀(별표2 시트)·붙여넣기에서 자동 인식되면 그 값이 우선 저장됩니다.</span>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <input type="number" value={year} onChange={e => setYear(e.target.value)} placeholder="연도"
@@ -84,6 +122,12 @@ function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
       <textarea value={text} onChange={e => setText(e.target.value)} rows={5}
         placeholder={"권장: 위 '엑셀(.xlsx) 업로드' 사용. \n또는 홈택스 표를 복사해 여기에 붙여넣기(탭/공백 구분, 빈칸 '-' 무관).\n각 행: 월급여(이상,천원) 월급여(미만,천원) 가족1명 가족2명 …"}
         className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-mono text-xs text-slate-800 outline-none focus:border-sky-400" />
+
+      {verify && (
+        <div className={`mt-2 rounded-xl px-3 py-2 text-xs font-semibold ${verify.ok ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+          {verify.ok ? "✓ 검증 통과 · " : "⚠ 확인 필요 · "}{verify.text}
+        </div>
+      )}
     </div>
   );
 }

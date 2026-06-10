@@ -34,6 +34,31 @@ function bracketFromNums(nums: number[]): TaxBracket | null {
   return { from: Math.round(nums[0] * 1000), taxes };
 }
 
+export interface TableSummary {
+  count: number;          // 구간 수
+  minPayK: number;        // 최저 월급여(천원)
+  maxPayK: number;        // 최고 시작 월급여(천원)
+  maxDependents: number;  // 가족 열 수(최대)
+  monotonic: boolean;     // from 오름차순(중복/역전 없음)
+}
+
+// 파싱된 구간표 검증 요약(운영자가 누락 없이 들어갔는지 확인용).
+export function summarizeBrackets(brackets: TaxBracket[]): TableSummary {
+  if (!brackets.length) return { count: 0, minPayK: 0, maxPayK: 0, maxDependents: 0, monotonic: true };
+  let maxDep = 0, mono = true;
+  for (let i = 0; i < brackets.length; i++) {
+    if (brackets[i].taxes.length > maxDep) maxDep = brackets[i].taxes.length;
+    if (i > 0 && brackets[i].from <= brackets[i - 1].from) mono = false;
+  }
+  return {
+    count: brackets.length,
+    minPayK: Math.round(brackets[0].from / 1000),
+    maxPayK: Math.round(brackets[brackets.length - 1].from / 1000),
+    maxDependents: maxDep,
+    monotonic: mono,
+  };
+}
+
 // 셀 행렬(엑셀 업로드 등) → 구간 목록.
 export function bracketsFromMatrix(rows: any[][]): TaxBracket[] {
   const out: TaxBracket[] = [];
@@ -106,10 +131,11 @@ export function computeBonusTax(
   opts: {
     bonus: number; monthlyPay: number; months: number; dependents: number;
     childUnder20?: number; rate?: number; ordinaryTotal?: number; alreadyWithheld?: number;
+    childCredit?: ChildCreditConfig;
   },
 ): BonusTaxResult {
   const months = Math.max(1, Math.min(12, Math.round(opts.months || 1)));
-  const taxOpts = { childUnder20: opts.childUnder20 ?? 0, rate: opts.rate ?? 100 };
+  const taxOpts = { childUnder20: opts.childUnder20 ?? 0, rate: opts.rate ?? 100, childCredit: opts.childCredit };
   const ordinaryTotal = opts.ordinaryTotal != null ? opts.ordinaryTotal : (Number(opts.monthlyPay) || 0) * months;
   const perMonth = ((Number(opts.bonus) || 0) + ordinaryTotal) / months;
   const perMonthTax = computeIncomeTax(brackets, perMonth, opts.dependents, taxOpts).tax;
@@ -123,16 +149,40 @@ export function computeBonusTax(
   };
 }
 
+// 8~20세 자녀 추가공제액(연도별 개정 — 소득세법 시행령 별표2). 운영자가 연도별로 설정.
+export interface ChildCreditConfig {
+  c1: number;       // 자녀 1명
+  c2: number;       // 자녀 2명
+  extraPer: number; // 3명↑: c2 + (n-2)*extraPer
+}
+// 현행 별표2(제189조제1항) 기준 기본값.
+export const DEFAULT_CHILD_CREDIT: ChildCreditConfig = { c1: 20830, c2: 45830, extraPer: 33330 };
+
 /**
  * 8세 이상 20세 이하 자녀 추가공제액(간이세액표 금액에서 차감).
- *  1명 12,500 / 2명 29,160 / 3명↑ 29,160 + (초과 1명당 25,000).
+ *  1명 c1 / 2명 c2 / 3명↑ c2 + (초과 1명당 extraPer). cfg 미지정 시 현행 별표2 기본값.
  */
-export function childTaxCredit(childCount: number): number {
+export function childTaxCredit(childCount: number, cfg: ChildCreditConfig = DEFAULT_CHILD_CREDIT): number {
   const n = Math.max(0, Math.floor(Number(childCount) || 0));
   if (n <= 0) return 0;
-  if (n === 1) return 12500;
-  if (n === 2) return 29160;
-  return 29160 + (n - 2) * 25000;
+  if (n === 1) return cfg.c1;
+  if (n === 2) return cfg.c2;
+  return cfg.c2 + (n - 2) * cfg.extraPer;
+}
+
+/** 별표2 텍스트(엑셀 시트/붙여넣기)에서 자녀공제액 추출. 없으면 null. */
+export function extractChildCreditFromText(text: string): ChildCreditConfig | null {
+  const t = String(text ?? "");
+  const won = (re: RegExp) => { const m = t.match(re); return m ? Number(m[1].replace(/,/g, "")) : NaN; };
+  const c1 = won(/자녀가?\s*1\s*명[^:：]*[:：]\s*([\d,]+)\s*원/);
+  const c2 = won(/자녀가?\s*2\s*명[^:：]*[:：]\s*([\d,]+)\s*원/);
+  const extraPer = won(/2\s*명\s*초과[^:：\d]*1\s*명당\s*([\d,]+)\s*원/);
+  if (!Number.isFinite(c1) && !Number.isFinite(c2)) return null;
+  return {
+    c1: Number.isFinite(c1) ? c1 : DEFAULT_CHILD_CREDIT.c1,
+    c2: Number.isFinite(c2) ? c2 : DEFAULT_CHILD_CREDIT.c2,
+    extraPer: Number.isFinite(extraPer) ? extraPer : DEFAULT_CHILD_CREDIT.extraPer,
+  };
 }
 
 export interface IncomeTaxResult {
@@ -154,10 +204,10 @@ export function computeIncomeTax(
   brackets: TaxBracket[],
   monthlyTaxablePay: number,
   dependents: number,
-  opts?: { childUnder20?: number; rate?: number },
+  opts?: { childUnder20?: number; rate?: number; childCredit?: ChildCreditConfig },
 ): IncomeTaxResult {
   const base = lookupIncomeTax(brackets, monthlyTaxablePay, dependents) ?? 0;
-  const childCredit = childTaxCredit(opts?.childUnder20 ?? 0);
+  const childCredit = childTaxCredit(opts?.childUnder20 ?? 0, opts?.childCredit);
   const afterCredit = Math.max(0, base - childCredit);
   const rate = opts?.rate === 80 || opts?.rate === 120 ? opts.rate : 100;
   const tax = Math.round((afterCredit * rate) / 100);

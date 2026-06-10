@@ -27,7 +27,8 @@ export async function GET(req: NextRequest) {
     if (!row) return NextResponse.json({ success: true, hasTable: false });
 
     const brackets: TaxBracket[] = Array.isArray(row.data) ? (row.data as any) : [];
-    const r = computeBonusTax(brackets, { bonus, monthlyPay, months, dependents, childUnder20, rate, alreadyWithheld });
+    const childCredit = (row.meta as any)?.childCredit;
+    const r = computeBonusTax(brackets, { bonus, monthlyPay, months, dependents, childUnder20, rate, alreadyWithheld, childCredit });
     return NextResponse.json({ success: true, hasTable: true, year: row.year, ...r });
   } catch (e: any) {
     if (e instanceof Response) return e;

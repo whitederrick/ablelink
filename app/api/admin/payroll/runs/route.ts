@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
       }),
     ]);
     const taxBrackets: TaxBracket[] = Array.isArray(incomeTaxRow?.data) ? (incomeTaxRow!.data as any) : [];
+    const taxChildCredit = (incomeTaxRow?.meta as any)?.childCredit;
 
     const userIds = [...new Set(assignments.map(a => a.workerId))];
     if (userIds.length === 0) {
@@ -320,7 +321,7 @@ export async function POST(req: NextRequest) {
         pushDed("bizTax", "사업소득세(3.3%)", Math.round(grossPay * BUSINESS_DEDUCTION_RATE));
       } else {
         // 근로소득: 소득세(간이세액표 → 8~20세 자녀공제 → 원천징수비율) + 주민세(소득세 10%) + 4대보험
-        const taxR = computeIncomeTax(taxBrackets, grossPay, dependents, { childUnder20, rate: withholdingRate });
+        const taxR = computeIncomeTax(taxBrackets, grossPay, dependents, { childUnder20, rate: withholdingRate, childCredit: taxChildCredit });
         pushDed("incomeTax", "소득세", taxR.tax);
         pushDed("localTax", "주민세", taxR.localTax);
         if (insuranceRates) {

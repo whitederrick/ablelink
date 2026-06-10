@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
-import { bracketsFromMatrix } from "@/lib/payroll/incomeTax";
+import { bracketsFromMatrix, extractChildCreditFromText, summarizeBrackets } from "@/lib/payroll/incomeTax";
 import ExcelJS from "exceljs";
 
 export async function POST(req: NextRequest) {
@@ -38,14 +38,17 @@ export async function POST(req: NextRequest) {
       return v;
     };
 
-    // 모든 시트(소득령 별표2 / 간이세액표 등)를 훑어 구간이 가장 많이 나오는 시트를 자동 선택.
+    // 모든 시트(소득령 별표2 / 간이세액표 등)를 훑어 구간 최다 시트=세액표, 전체 텍스트에서 자녀공제 추출.
     let brackets: ReturnType<typeof bracketsFromMatrix> = [];
     let usedSheet = "";
+    const textParts: string[] = [];
     for (const ws of wb.worksheets) {
       const rows: any[][] = [];
       ws.eachRow({ includeEmpty: false }, (row) => {
         const vals = Array.isArray(row.values) ? row.values.slice(1) : [];
-        rows.push(vals.map(cellVal));
+        const mapped = vals.map(cellVal);
+        rows.push(mapped);
+        textParts.push(mapped.map(v => (v == null ? "" : String(v))).join(" "));
       });
       const b = bracketsFromMatrix(rows);
       if (b.length > brackets.length) { brackets = b; usedSheet = ws.name; }
@@ -53,12 +56,16 @@ export async function POST(req: NextRequest) {
     if (brackets.length === 0) {
       return NextResponse.json({ success: false, message: "표 데이터를 인식하지 못했습니다. '간이세액표' 시트가 포함된 파일인지 확인하세요." }, { status: 400 });
     }
+
+    const childCredit = extractChildCreditFromText(textParts.join("\n"));
+    const meta = childCredit ? { childCredit } : undefined;
+
     await prisma.incomeTaxTable.upsert({
       where: { year },
-      create: { year, data: brackets as any, rowCount: brackets.length },
-      update: { data: brackets as any, rowCount: brackets.length },
+      create: { year, data: brackets as any, meta: meta as any, rowCount: brackets.length },
+      update: { data: brackets as any, ...(meta ? { meta: meta as any } : {}), rowCount: brackets.length },
     });
-    return NextResponse.json({ success: true, year, rowCount: brackets.length, sheet: usedSheet });
+    return NextResponse.json({ success: true, year, rowCount: brackets.length, sheet: usedSheet, childCredit: childCredit ?? null, summary: summarizeBrackets(brackets) });
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[income-tax/upload]", e);

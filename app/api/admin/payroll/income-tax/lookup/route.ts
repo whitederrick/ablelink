@@ -24,7 +24,8 @@ export async function GET(req: NextRequest) {
     if (!row) return NextResponse.json({ success: true, hasTable: false, incomeTax: null, localTax: null });
 
     const brackets: TaxBracket[] = Array.isArray(row.data) ? (row.data as any) : [];
-    const r = computeIncomeTax(brackets, pay, dependents, { childUnder20, rate });
+    const childCredit = (row.meta as any)?.childCredit;
+    const r = computeIncomeTax(brackets, pay, dependents, { childUnder20, rate, childCredit });
     return NextResponse.json({
       success: true, hasTable: true, year: row.year,
       incomeTax: r.tax, localTax: r.localTax,

@@ -1017,6 +1017,7 @@ model IncomeTaxTable {
   id        BigInt   @id @default(autoincrement())
   year      Int      @unique
   data      Json
+  meta      Json?    // 연도별 부가설정(별표2): { childCredit: { c1, c2, extraPer } }
   rowCount  Int      @default(0) @map("row_count")
   updatedAt DateTime @updatedAt @map("updated_at")
 
