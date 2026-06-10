@@ -177,7 +177,7 @@ export async function GET(request: NextRequest) {
       },
       documents,
     });
-  } catch (e: any) {
+  } catch {
     return NextResponse.json(
       { success: false, message: "서버 오류" },
       { status: 500 }

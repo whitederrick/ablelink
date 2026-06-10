@@ -6,7 +6,7 @@ import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const scope = await requireAdminSession(req);
+    await requireAdminSession(req);
 
     const { id } = await params;
     const agencyId = parseBigInt(id);

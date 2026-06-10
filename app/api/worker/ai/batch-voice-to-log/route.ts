@@ -13,7 +13,6 @@ import { logApiCall } from "@/lib/logApiCall";
 import { buildContextLines } from "@/lib/worker/aiContext";
 import { getConfigNumber } from "@/lib/systemConfig";
 
-function pad2(n: number) { return String(n).padStart(2, "0"); }
 
 function datesBetween(from: string, to: string): string[] {
   const dates: string[] = [];
@@ -264,8 +263,6 @@ ${contextBlock}
       console.error("[batch-voice-to-log] JSON 파싱 실패:", rawText.slice(0, 200));
     }
 
-    // traineeId 매핑 + fallback
-    const traineeMap = new Map(trainees.map(t => [t.name, t.id]));
     const drafts = dates.flatMap(date =>
       trainees.map(t => {
         const ai = aiDrafts.find(d => d.date === date && d.traineeName === t.name);

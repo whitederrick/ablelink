@@ -99,7 +99,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     const loginId     = String(body?.loginId ?? "").trim();
     const password    = String(body?.password ?? "");
     const displayName = body?.displayName != null ? String(body.displayName).trim() : null;
-    const phoneNumber = body?.phoneNumber != null ? String(body.phoneNumber).trim() : null;
 
     if (loginId.length < 4) {
       return NextResponse.json(

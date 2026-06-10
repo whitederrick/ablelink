@@ -88,7 +88,7 @@ export default function AdminDocumentsPage() {
     if (!selectedRunId) { setVersions([]); setLogs([]); return; }
     loadVersions(selectedRunId).catch(() => {});
     loadLogs(selectedRunId).catch(() => {});
-  }, [selectedRunId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedRunId]);
 
   async function loadRuns() {
     if (!selectedAssignId) { setRuns([]); setSelectedRunId(""); return; }

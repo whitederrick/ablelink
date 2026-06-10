@@ -23,8 +23,6 @@ const TIER_META: Record<PlanTier, { rank: number; label: string; cls: string }> 
 // 현재 플랜 → 접근 가능 등급(TRIAL은 전체 허용)
 const PLAN_RANK: Record<string, number> = { FREE: 0, TRIAL: 3, STARTER: 1, STANDARD: 2, PRO: 3 };
 
-const itemRank = (it: NavItem) => (it.plan ? TIER_META[it.plan].rank : 0);
-
 const groups: NavGroup[] = [
   {
     title: "개요",

@@ -61,7 +61,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     return NextResponse.json({ success: true });
-  } catch (e: any) {
+  } catch {
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

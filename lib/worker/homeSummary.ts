@@ -112,7 +112,6 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
   ]);
 
   // ── 알림 + 알람설정 ──
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   // 홈 알림 잔존 규칙: 미확인은 계속 노출, 확인(읽음)한 것은 5일까지만.
   const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
   const rawNotices: any[] = await (prisma as any).workerNotice.findMany({

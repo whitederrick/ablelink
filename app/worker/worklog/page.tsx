@@ -173,7 +173,7 @@ function ClockPicker({ value, onChange, onClose, label }: {
           {[
             { val: manualH, setVal: setManualH, apply: (v: string) => { const h = Math.min(23, Math.max(0, parseInt(v.replace(/\D/g, "") || "0", 10))); setHour(h); setManualH(String(h).padStart(2, "0")); }, active: mode === "hour", label: "시", onFocus: () => setMode("hour") },
             { val: manualM, setVal: setManualM, apply: (v: string) => { const m = Math.min(59, Math.max(0, parseInt(v.replace(/\D/g, "") || "0", 10))); setMinute(m); setManualM(String(m).padStart(2, "0")); }, active: mode === "minute", label: "분", onFocus: () => setMode("minute") },
-          ].reduce((acc, item, i, arr) => {
+          ].reduce((acc, item, i) => {
             acc.push(
               <div key={item.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
                 <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 600 }}>{item.label}</span>

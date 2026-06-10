@@ -26,7 +26,6 @@ interface Post {
 }
 
 export default function RecruitDetailPage() {
-  const router = useRouter();
   const params = useParams();
   const id = String(params.id);
   const [post, setPost] = useState<Post | null>(null);
@@ -71,7 +70,6 @@ export default function RecruitDetailPage() {
   if (loading) return <Shell><p className="py-16 text-center text-sm font-semibold text-slate-300">불러오는 중…</p></Shell>;
   if (!post) return <Shell><p className="py-16 text-center text-sm font-semibold text-slate-300">공고를 찾을 수 없습니다.</p></Shell>;
 
-  const applied = !!post.myApplication && post.myApplication.status !== "WITHDRAWN";
   const closed = post.status !== "OPEN";
 
   return (

@@ -11,7 +11,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const scope = await requireAdminSession(req);
+    await requireAdminSession(req);
 
     const { id } = await params;
     const adminId = parseBigInt(id);

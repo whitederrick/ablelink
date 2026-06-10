@@ -81,8 +81,6 @@ export default function AttendanceReviewPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    const [y, m] = yearMonth.split("-").map(Number);
-    const last = new Date(y, m, 0).getDate();
     Promise.all([
       fetch(`/api/worker/attendance/monthly?yearMonth=${yearMonth}`).then(r => r.json()),
       fetch(`/api/worker/attendance/edit-request`).then(r => r.json()),

@@ -125,40 +125,6 @@ function pageBottom(doc: PDFKit.PDFDocument): number {
   return doc.page.height - doc.page.margins.bottom;
 }
 
-// 헤더 반복 + 페이지 넘김을 지원하는 행 테이블
-function rowTable(
-  doc: PDFKit.PDFDocument,
-  opts: {
-    x: number; top: number; colWidths: number[];
-    header: { text: string; align?: CellOpts["align"] }[];
-    rows: { text: string; align?: CellOpts["align"] }[][];
-    headerH?: number; rowH?: number; size?: number; headerSize?: number;
-  },
-): number {
-  const { x, colWidths, header, rows, headerH = 22, rowH = 20, size = 8.5, headerSize = 8.5 } = opts;
-  let y = opts.top;
-  const drawHeader = () => {
-    let cx = x;
-    header.forEach((hc, i) => { cell(doc, cx, y, colWidths[i], headerH, hc.text, { align: hc.align ?? "center", bold: true, size: headerSize, fill: "#f0f0f0" }); cx += colWidths[i]; });
-    y += headerH;
-  };
-  drawHeader();
-  for (const row of rows) {
-    // 행 높이 동적: 가장 긴 셀 기준
-    let needed = rowH;
-    row.forEach((c, i) => {
-      doc.font("KR").fontSize(size);
-      const h = doc.heightOfString(c.text || "", { width: colWidths[i] - 4, align: c.align ?? "center" }) + 8;
-      if (h > needed) needed = h;
-    });
-    if (y + needed > pageBottom(doc)) { doc.addPage(); y = MARGIN; drawHeader(); }
-    let cx = x;
-    row.forEach((c, i) => { cell(doc, cx, y, colWidths[i], needed, c.text, { align: c.align ?? "center", size }); cx += colWidths[i]; });
-    y += needed;
-  }
-  return y;
-}
-
 // ── 출근부 주차 그리드 유틸 (원본 ATTENDANCE_SHEET 로직 이식) ──
 function normYmd(s: string | null | undefined): string {
   const t = String(s ?? "").trim().replace(/[./]/g, "-");
@@ -195,26 +161,6 @@ function countWeekdays(start: string, end: string): number | null {
   return n;
 }
 
-// "YYYY.MM.DD ~ YYYY.MM.DD" → [시작YMD, 끝YMD]
-function parseRange(text: string | undefined): [string, string] | null {
-  const parts = String(text ?? "").split("~").map((s) => normYmd(s.trim()));
-  if (parts[0] && parts[1]) return [parts[0], parts[1]];
-  if (parts[0]) return [parts[0], parts[0]];
-  return null;
-}
-// 평일(주말 제외) 목록. (공휴일은 호출측 holidays Set으로 제외 가능)
-function workingDaysList(start: string, end: string, holidays?: Set<string>): string[] {
-  const out: string[] = [];
-  if (!start || !end || start > end) return out;
-  let cur = start;
-  while (cur <= end) {
-    const [y, m, d] = cur.split("-").map(Number);
-    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-    if (dow !== 0 && dow !== 6 && !holidays?.has(cur)) out.push(cur);
-    cur = addDaysYmd(cur, 1);
-  }
-  return out;
-}
 // 훈련일지 일자 셀 표기: 2026/\n01/05
 function fmtTrainingDate(ymd: string): string {
   const [y, m, d] = ymd.split("-");

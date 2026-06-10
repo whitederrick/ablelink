@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
         createdAt:              r.createdAt.toISOString(),
       })),
     });
-  } catch (e: any) {
+  } catch {
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

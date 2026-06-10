@@ -9,7 +9,7 @@ import bcrypt from "bcryptjs";
 
 export async function GET(req: Request) {
   try {
-    const scope = await requireAdminSession(req);
+    await requireAdminSession(req);
 
     const agencies = await prisma.agency.findMany({
       include: {

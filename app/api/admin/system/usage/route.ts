@@ -6,7 +6,7 @@ import { requireAdminSession } from "@/lib/adminScope";
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireAdminSession(req);
+    await requireAdminSession(req);
 
     const { searchParams } = new URL(req.url);
     const ym = searchParams.get("yearMonth") ?? new Date().toISOString().slice(0,7);

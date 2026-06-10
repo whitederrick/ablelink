@@ -139,7 +139,7 @@ export default function BatchWorklogPage() {
   function toggleTrainee(id: string) {
     setSelectedTrainees(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   }
@@ -652,7 +652,7 @@ export default function BatchWorklogPage() {
                     onClick={() => {
                       setExpanded(prev => {
                         const next = new Set(prev);
-                        next.has(date) ? next.delete(date) : next.add(date);
+                        if (next.has(date)) next.delete(date); else next.add(date);
                         return next;
                       });
                     }}
@@ -676,7 +676,7 @@ export default function BatchWorklogPage() {
 
                   {isOpen && (
                     <div className="border-t border-slate-100 divide-y divide-slate-100">
-                      {dateDrafts.map((d, i) => {
+                      {dateDrafts.map((d) => {
                         const globalIdx = drafts.findIndex(
                           dr => dr.date === d.date && dr.traineeId === d.traineeId
                         );

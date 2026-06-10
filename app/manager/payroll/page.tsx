@@ -67,17 +67,12 @@ function defaultYM() {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 }
 const payTypeLabel: Record<PayType, string> = { MONTHLY: "월급", DAILY: "일급", HOURLY: "시급" };
-const incomeTypeLabel: Record<IncomeType, string> = { BUSINESS: "사업소득(3.3%)", EMPLOYMENT: "근로소득(4대보험)" };
 
 const RUN_STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   DRAFT:     { label: "초안", tone: "amber" },
   FINALIZED: { label: "확정", tone: "emerald" },
 };
-const DED_STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
-  ACTIVE:   { label: "활성",  tone: "emerald" },
-  INACTIVE: { label: "비활성", tone: "slate" },
-};
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 10;
 
 type Tab = "contracts" | "runs" | "deductions";
 

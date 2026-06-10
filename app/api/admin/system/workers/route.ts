@@ -11,7 +11,7 @@ const PHONE_RE = /^01[0-9]{8,9}$/;
 
 export async function GET(req: Request) {
   try {
-    const scope = await requireAdminSession(req);
+    await requireAdminSession(req);
 
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q")?.trim() ?? "";

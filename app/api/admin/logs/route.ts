@@ -16,11 +16,6 @@ export async function GET(req: NextRequest) {
     const traineeId = searchParams.get("traineeId") ?? "";
     const completed = searchParams.get("completed") ?? ""; // "true"|"false"|""
 
-    // 에이전시 스코프 — 본인 소속 직무지도원만
-    const agencyFilter = scope.agencyId
-      ? { agencyId: scope.agencyId }
-      : {};
-
     // 에이전시 내 배정 목록으로 접근 가능한 workerId 범위 결정
     const assignments = scope.agencyId
       ? await prisma.siteAssignment.findMany({

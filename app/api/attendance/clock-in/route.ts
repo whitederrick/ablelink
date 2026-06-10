@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
       basePointId: inputBasePointId,
       latitude,
       longitude,
-      accuracyM, // (옵션) 클라 제공 정확도
       isGpsModified,
       confirmOutOfRange,
     } = body;

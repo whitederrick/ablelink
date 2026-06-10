@@ -6,7 +6,7 @@ import { requireAdminSession } from "@/lib/adminScope";
 
 export async function GET(req: Request) {
   try {
-    const scope = await requireAdminSession(req);
+    await requireAdminSession(req);
 
     const agencies = await prisma.agency.findMany({
       select: {
