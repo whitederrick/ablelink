@@ -1,8 +1,8 @@
 "use client";
 
-// 문서 조회·출력 — 위저드式 폐기, 게시판(목록+우측 상세) 재설계.
+// 문서 조회 — 조회·미리보기 전용. (확정·서명·발송·다운로드·감사ZIP은 '일지 관리')
 // 상단: 기간 + 직무지도원 검색. 좌측: 직무지도원별 행 + 문서종류 뱃지(서비스단계 기준 활성).
-// 우측: 선택 문서 미리보기 + 다운로드·이메일 발송 + 감사 ZIP.
+// 우측: 선택 문서 미리보기.
 import { useEffect, useState, useMemo } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
@@ -53,11 +53,6 @@ export default function AdminDocsPage() {
   const [periodEnd,     setPeriodEnd]     = useState(def.end);
   const [query,         setQuery]         = useState("");
   const [loadingWorkers, setLoadingWorkers] = useState(false);
-  const [toEmail,       setToEmail]       = useState("");
-  const [managerEmail,  setManagerEmail]  = useState("");
-  const [sending,       setSending]       = useState(false);
-  const [sendResult,    setSendResult]    = useState<{ success: boolean; msg: string } | null>(null);
-  const [auditLoading,  setAuditLoading]  = useState(false);
 
   useEffect(() => {
     setLoadingWorkers(true);
@@ -78,7 +73,7 @@ export default function AdminDocsPage() {
       .finally(() => setLoadingWorkers(false));
   }, []);
 
-  // 직무지도원 선택 시 훈련생·담당자 이메일 로드
+  // 직무지도원 선택 시 훈련생 로드
   useEffect(() => {
     if (!selectedWorker) return;
     fetch(`/api/admin/docs/trainees?workerId=${selectedWorker}`)
@@ -88,9 +83,6 @@ export default function AdminDocsPage() {
           setWorkers(prev => prev.map(c => c.workerId === selectedWorker ? { ...c, trainees: d.trainees } : c));
         }
       });
-    fetch(`/api/admin/docs/manager-email?workerId=${selectedWorker}`)
-      .then(r => r.json())
-      .then(d => { if (d.success && d.email) { setManagerEmail(d.email); setToEmail(d.email); } });
   }, [selectedWorker]);
 
   const worker = workers.find(c => c.workerId === selectedWorker);
@@ -111,49 +103,11 @@ export default function AdminDocsPage() {
     const p = new URLSearchParams({ workerId: selectedWorker, docType, periodStart, periodEnd, ...(traineeId ? { traineeId } : {}) });
     return `/api/admin/docs/preview?${p.toString()}`;
   }
-  function handleDownload() { if (ready) window.open(previewUrl(), "_blank"); }
 
   function pickDoc(wId: string, dId: DocType) {
     setSelectedWorker(wId);
     setDocType(dId);
     setTraineeId("");
-    setSendResult(null);
-  }
-
-  async function handleSend() {
-    if (!toEmail) { alert("수신 이메일을 입력해주세요."); return; }
-    setSending(true); setSendResult(null);
-    try {
-      const res = await fetch("/api/admin/docs/generate", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workerId: selectedWorker, docType, periodStart, periodEnd, traineeId: traineeId || undefined, toEmail }),
-      });
-      const d = await res.json();
-      setSendResult({ success: d.success, msg: d.message || (d.success ? "발송 완료" : "발송 실패") });
-    } catch { setSendResult({ success: false, msg: "서버 연결 실패" }); }
-    finally { setSending(false); }
-  }
-
-  async function handleAuditDownload() {
-    if (!selectedWorker) { alert("직무지도원을 선택해주세요."); return; }
-    setAuditLoading(true);
-    try {
-      const p = new URLSearchParams({ workerId: selectedWorker, periodStart, periodEnd });
-      const res = await fetch(`/api/admin/audit-package?${p.toString()}`);
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        alert(d.message || "다운로드 실패");
-        return;
-      }
-      const blob = await res.blob();
-      const cd = res.headers.get("Content-Disposition") || "";
-      const nameMatch = cd.match(/filename\*?=(?:UTF-8'')?(.+)/i);
-      const filename  = nameMatch ? decodeURIComponent(nameMatch[1].replace(/"/g, "")) : "감사서류.zip";
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
-      URL.revokeObjectURL(url);
-    } catch { alert("서버 연결 실패"); }
-    finally { setAuditLoading(false); }
   }
 
   return (
@@ -234,83 +188,48 @@ export default function AdminDocsPage() {
           )}
         </div>
 
-        {/* 우측: 선택 문서 상세(미리보기 + 발송/다운로드 + 감사 ZIP) */}
+        {/* 우측: 선택 문서 미리보기 */}
         <div className="lg:sticky lg:top-4 h-fit space-y-3">
           {!selectedWorker || !docType ? (
             <div className={`${T.card} text-center`}>
               <p className="py-10 text-sm font-semibold text-slate-300">좌측에서 직무지도원과 문서를<br />선택하면 미리보기가 표시됩니다.</p>
             </div>
           ) : (
-            <>
-              <div className={T.card}>
-                {/* 헤더: 직무지도원·현장·문서 + 훈련생 선택(옆) + 다운로드 */}
-                <div className="mb-3 flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                      <p className="text-sm font-black text-slate-900">{worker?.workerName}{worker?.siteName && worker.siteName !== "-" ? ` · ${worker.siteName}` : ""} · {curDoc?.label}</p>
-                      {needsTrainee && (
-                        <div className="flex flex-wrap items-center gap-1.5 border-l border-slate-200 pl-3">
-                          <span className="text-[12px] font-black text-slate-500">훈련생</span>
-                          {(worker?.trainees || []).length === 0 ? (
-                            <span className="text-xs font-semibold text-slate-400">담당 훈련생 없음</span>
-                          ) : (worker?.trainees || []).map(t => (
-                            <button key={t.id} onClick={() => setTraineeId(t.id)}
-                              className={`inline-flex h-7 items-center rounded-md border px-2 text-[12px] font-bold transition ${
-                                traineeId === t.id ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                              }`}>
-                              {t.name}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-xs font-semibold text-slate-400">{periodStart} ~ {periodEnd}</p>
-                  </div>
-                  {ready && <button onClick={handleDownload} className={`${T.btnPrimary} shrink-0`}>📥 PDF 다운로드</button>}
-                </div>
-
-                {/* 미리보기 */}
-                {ready ? (
-                  <iframe src={previewUrl()} className="h-[340px] w-full rounded-xl border border-slate-200 bg-slate-100" title="문서 미리보기" />
-                ) : (
-                  <div className="flex h-[100px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50">
-                    <p className="text-sm font-semibold text-slate-400">훈련생을 선택하면 미리보기가 표시됩니다.</p>
-                  </div>
-                )}
-
-                {/* 이메일 발송 */}
-                {ready && (
-                  <div className="mt-3">
-                    <div className="flex gap-2">
-                      <input type="email" value={toEmail} onChange={e => { setToEmail(e.target.value); setSendResult(null); }}
-                        placeholder={managerEmail ? `담당자: ${managerEmail}` : "수신 이메일 주소"}
-                        className={`flex-1 ${T.input}`} />
-                      <button onClick={handleSend} disabled={sending}
-                        className="whitespace-nowrap rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white transition hover:bg-emerald-700 disabled:opacity-60">
-                        {sending ? "발송 중..." : "📧 발송"}
-                      </button>
-                    </div>
-                    {sendResult && (
-                      <p className={`mt-2 text-sm font-semibold ${sendResult.success ? "text-emerald-600" : "text-rose-600"}`}>
-                        {sendResult.success ? "✅" : "❌"} {sendResult.msg}
-                      </p>
+            <div className={T.card}>
+              {/* 헤더: 직무지도원·현장·문서 + 훈련생 선택(옆) */}
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <p className="text-sm font-black text-slate-900">{worker?.workerName}{worker?.siteName && worker.siteName !== "-" ? ` · ${worker.siteName}` : ""} · {curDoc?.label}</p>
+                    {needsTrainee && (
+                      <div className="flex flex-wrap items-center gap-1.5 border-l border-slate-200 pl-3">
+                        <span className="text-[12px] font-black text-slate-500">훈련생</span>
+                        {(worker?.trainees || []).length === 0 ? (
+                          <span className="text-xs font-semibold text-slate-400">담당 훈련생 없음</span>
+                        ) : (worker?.trainees || []).map(t => (
+                          <button key={t.id} onClick={() => setTraineeId(t.id)}
+                            className={`inline-flex h-7 items-center rounded-md border px-2 text-[12px] font-bold transition ${
+                              traineeId === t.id ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                            }`}>
+                            {t.name}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
-                )}
+                  <p className="mt-0.5 text-xs font-semibold text-slate-400">{periodStart} ~ {periodEnd}</p>
+                </div>
               </div>
 
-              {/* 감사 대응 서류 패키지 */}
-              <div className={`${T.card} border-amber-100 bg-amber-50`}>
-                <p className="mb-1 text-sm font-black text-amber-900">감사 대응 서류 패키지 (STANDARD+)</p>
-                <p className="mb-3 text-xs font-semibold text-amber-700">
-                  위 기간의 모든 문서(출근부 + 훈련생별 일지·종합평가)를 ZIP으로 일괄 다운로드합니다.
-                </p>
-                <button onClick={handleAuditDownload} disabled={auditLoading}
-                  className="w-full rounded-xl bg-amber-600 py-2.5 text-sm font-black text-white transition hover:bg-amber-700 disabled:opacity-60">
-                  {auditLoading ? "생성 중… (잠시 기다려주세요)" : "📦 전체 서류 ZIP 다운로드"}
-                </button>
-              </div>
-            </>
+              {/* 미리보기 */}
+              {ready ? (
+                <iframe src={previewUrl()} className="h-[340px] w-full rounded-xl border border-slate-200 bg-slate-100" title="문서 미리보기" />
+              ) : (
+                <div className="flex h-[100px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50">
+                  <p className="text-sm font-semibold text-slate-400">훈련생을 선택하면 미리보기가 표시됩니다.</p>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
