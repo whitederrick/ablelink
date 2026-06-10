@@ -35,6 +35,7 @@ const PROF_LABEL: Record<string, string> = {
 
 type AssignmentItem = {
   id: string; status: string; workType: string;
+  attendanceButtonExempt?: boolean;
   user: { id: string; workerName: string; phoneNumber: string | null } | null;
 };
 type WorkerOption = {
@@ -85,7 +86,9 @@ export default function AdminSiteDetailPage() {
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [assignWorkType, setAssignWorkType] = useState("FULL_DAY");
   const [assignServiceStep, setAssignServiceStep] = useState("FIELD_TRAINING");
+  const [assignExempt, setAssignExempt] = useState(false); // 출퇴근 버튼 면제(시프티 병행) — 운영자 전용
   const [assigning, setAssigning] = useState(false);
+  const [exemptSavingId, setExemptSavingId] = useState<string | null>(null);
 
   async function fetchAssignments() {
     try {
@@ -112,7 +115,7 @@ export default function AdminSiteDetailPage() {
       const res = await fetch("/api/admin/assignments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteId, workerId: selectedWorkerId, workType: assignWorkType, serviceStep: assignServiceStep }),
+        body: JSON.stringify({ siteId, workerId: selectedWorkerId, workType: assignWorkType, serviceStep: assignServiceStep, attendanceButtonExempt: assignExempt }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -122,12 +125,57 @@ export default function AdminSiteDetailPage() {
         throw new Error(msg);
       }
       setSelectedWorkerId("");
+      setAssignExempt(false);
       await fetchAssignments();
       alert("배정되었습니다.");
     } catch (e: any) {
       alert(e.message || "배정에 실패했습니다.");
     } finally {
       setAssigning(false);
+    }
+  }
+
+  // 현장(site) 단위 일괄 면제 적용/해제 — 다수 직무지도원 동시 반영
+  const [bulkExemptSaving, setBulkExemptSaving] = useState(false);
+  async function bulkExempt(exempt: boolean) {
+    const activeCnt = assignments.filter(a => a.status === "ACTIVE" || a.status === "CONFIRMED" || a.status === "ASSIGNED").length;
+    if (activeCnt === 0) return alert("이 현장에 활성 배정이 없습니다.");
+    if (!confirm(`이 현장의 활성 배정 ${activeCnt}명 전체에 출퇴근 면제를 ${exempt ? "적용" : "해제"}합니다. 계속할까요?`)) return;
+    setBulkExemptSaving(true);
+    try {
+      const res = await fetch(`/api/admin/sites/${siteId}/attendance-exempt`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exempt }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || "일괄 변경에 실패했습니다.");
+      await fetchAssignments();
+      alert(`${data.updated}명에게 면제를 ${exempt ? "적용" : "해제"}했습니다.`);
+    } catch (e: any) {
+      alert(e.message || "일괄 변경에 실패했습니다.");
+    } finally {
+      setBulkExemptSaving(false);
+    }
+  }
+
+  // 출퇴근 버튼 면제 토글(운영자 전용). PATCH는 workType이 필수라 현재 값을 함께 전송.
+  async function toggleExempt(a: AssignmentItem) {
+    const next = !a.attendanceButtonExempt;
+    setExemptSavingId(a.id);
+    try {
+      const res = await fetch(`/api/admin/assignments/${a.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workType: a.workType, attendanceButtonExempt: next }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || "변경에 실패했습니다.");
+      await fetchAssignments();
+    } catch (e: any) {
+      alert(e.message || "변경에 실패했습니다.");
+    } finally {
+      setExemptSavingId(null);
     }
   }
 
@@ -379,17 +427,50 @@ export default function AdminSiteDetailPage() {
         {assignments.length > 0 ? (
           <div className="mb-3 space-y-1.5">
             {assignments.map(a => (
-              <div key={a.id} className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
+              <div key={a.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
                 <span className="font-bold text-slate-900">{a.user?.workerName ?? "(이름없음)"}</span>
                 <span className="text-slate-400">{a.user?.phoneNumber ?? ""}</span>
+                {a.attendanceButtonExempt && (
+                  <span className="rounded-md bg-sky-100 px-1.5 py-0.5 text-[11px] font-black text-sky-700">출퇴근 면제</span>
+                )}
                 <span className={`ml-auto text-xs font-bold ${a.status === "ACTIVE" ? "text-emerald-600" : "text-slate-400"}`}>
                   {a.status} · {a.workType}
                 </span>
+                <button
+                  onClick={() => toggleExempt(a)}
+                  disabled={exemptSavingId === a.id}
+                  title="출퇴근 버튼 면제(시프티 병행) 전환 — 운영자 전용"
+                  className={`rounded-lg border px-2 py-1 text-[11px] font-black transition disabled:opacity-50 ${
+                    a.attendanceButtonExempt
+                      ? "border-sky-200 bg-white text-sky-700"
+                      : "border-slate-200 bg-white text-slate-500"
+                  }`}
+                >
+                  {exemptSavingId === a.id ? "처리중…" : a.attendanceButtonExempt ? "면제 해제" : "면제 적용"}
+                </button>
               </div>
             ))}
           </div>
         ) : (
           <p className="mb-3 text-sm font-semibold text-slate-400">아직 배정된 직무지도원이 없습니다.</p>
+        )}
+
+        {/* 현장 전체 출퇴근 면제 — 다수 직무지도원 동시 반영(운영자 편의) */}
+        {assignments.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2">
+            <span className="text-xs font-bold text-sky-800">현장 전체 출퇴근 면제</span>
+            <span className="text-[11px] font-semibold text-sky-500">활성 배정 직무지도원 전체에 일괄 적용/해제</span>
+            <div className="ml-auto flex gap-1.5">
+              <button onClick={() => bulkExempt(true)} disabled={bulkExemptSaving}
+                className="rounded-lg border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-black text-sky-700 transition disabled:opacity-50">
+                {bulkExemptSaving ? "처리중…" : "전체 면제 적용"}
+              </button>
+              <button onClick={() => bulkExempt(false)} disabled={bulkExemptSaving}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-black text-slate-500 transition disabled:opacity-50">
+                전체 해제
+              </button>
+            </div>
+          </div>
         )}
 
         {/* 신규 배정 */}
@@ -425,6 +506,15 @@ export default function AdminSiteDetailPage() {
             {assigning ? "배정 중…" : "배정"}
           </button>
         </div>
+        {/* 출퇴근 버튼 면제(시프티 병행) — 운영자만 부여 */}
+        <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <input type="checkbox" checked={assignExempt}
+            onChange={e => setAssignExempt(e.target.checked)}
+            className="h-4 w-4 accent-slate-950" />
+          <span className="text-xs font-bold text-slate-600">
+            출퇴근 버튼 면제 (시프티 병행 — 근무형태 기준 출근부 자동 생성)
+          </span>
+        </label>
         {workerOptions.length === 0 && (
           <p className="mt-2 text-xs font-semibold text-amber-500">
             배정 가능한 {item.requiredProfession ? (PROF_LABEL[item.requiredProfession] ?? "") + " 자격 " : ""}직무지도원이 없습니다.

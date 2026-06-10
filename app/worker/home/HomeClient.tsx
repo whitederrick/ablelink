@@ -49,6 +49,7 @@ interface HomeData {
   traineeCount: number;
   trainees: Trainee[];
   attendanceStatus: AttendanceStatus;
+  attendanceButtonExempt: boolean;
   attendanceId: string | null;
   workStartTime: string | null;
   workEndTime: string | null;
@@ -183,6 +184,7 @@ function normalizeHome(raw: any): HomeData {
       gender: t.gender === "M" || t.gender === "남" ? "M" : "F",
     })),
     attendanceStatus: normalizeStatus(raw),
+    attendanceButtonExempt: raw.attendanceButtonExempt ?? false,
     attendanceId: raw.attendanceId ? String(raw.attendanceId) : null,
     workStartTime: raw.startTime ?? null,
     workEndTime: raw.endTime ?? null,
@@ -312,6 +314,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
 
   useEffect(() => {
     if (!homeData) return;
+    if (homeData.attendanceButtonExempt) return; // 면제 배정: 출퇴근 버튼 미사용 → 알람 불필요
     const times = getWorkTimes(homeData.workType, homeData.customWorkStart, homeData.customWorkEnd);
     if (!times) return;
     scheduleAlarm(times.clockIn,  clockInAlert,  `출근 ${clockInAlert}분 전입니다. 출근 버튼을 눌러주세요.`,  alarmFiredRef.current);
@@ -533,6 +536,8 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
 
   const hasSite = !!homeData?.siteName;
   const traineeList = homeData?.trainees ?? [];
+  // 출퇴근 버튼 면제(운영자 부여, 시프티 병행): 버튼 대신 자동 처리 안내. 워커가 끌 수 없음.
+  const isExempt = homeData?.attendanceButtonExempt ?? false;
 
   const NAV_ITEMS = [
     { icon: Home,           label: "홈",      href: "/worker/home" },
@@ -677,8 +682,8 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
           {/* 날짜 + 상태 */}
           <div className="flex items-center justify-between pb-1">
             <span className="text-base font-bold text-slate-300">{nowDateStr()}</span>
-            <span className={`rounded-full px-3 py-1 text-xs font-black ${cfg.badge}`}>
-              {cfg.label}
+            <span className={`rounded-full px-3 py-1 text-xs font-black ${isExempt ? "bg-sky-100 text-sky-600" : cfg.badge}`}>
+              {isExempt ? "자동 기록" : cfg.label}
             </span>
           </div>
         </div>
@@ -687,7 +692,21 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
       {/* ── 컨텐츠 ── */}
       <div className="mx-auto max-w-md px-4 pb-28 pt-4 space-y-4">
 
-        {/* 출퇴근 카드 */}
+        {/* 출퇴근 카드 — 면제 배정이면 자동 처리 안내, 아니면 출퇴근 버튼 */}
+        {isExempt ? (
+          <div className="rounded-3xl border border-sky-200 bg-sky-50 p-5">
+            <div className="mb-3 flex items-center justify-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-sky-500" aria-hidden="true" />
+              <p className="text-sm font-black text-sky-900">출퇴근 자동 처리</p>
+            </div>
+            <p className="text-center text-sm font-semibold leading-6 text-sky-700">
+              이 현장은 출퇴근 버튼을 사용하지 않아요. 근무형태 기준으로 출근부가 매일 자동으로 작성됩니다.
+            </p>
+            <p className="mt-3 text-center text-xs font-semibold text-sky-500">
+              변경이 필요하면 시스템 운영자에게 문의하세요.
+            </p>
+          </div>
+        ) : (
         <div className={`rounded-3xl border p-5 ${cfg.card}`}>
           <p className="mb-4 text-center text-sm font-semibold text-slate-500">{cfg.title}</p>
 
@@ -768,6 +787,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
             </button>
           )}
         </div>
+        )}
 
         {/* ── 오늘 할 일 / 놓친 일 요약 (핵심 — 가장 위) ── */}
         {hasSite && (

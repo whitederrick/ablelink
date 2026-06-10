@@ -34,6 +34,7 @@ export interface HomeSummary {
     serviceStep: string;
     trainingType: "PRE" | "FIELD" | "ADAPTATION";
     attendanceStatus: string;
+    attendanceButtonExempt: boolean;
     attendanceId: string | null;
     startTime: string | null;
     endTime: string | null;
@@ -180,6 +181,7 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
       serviceStep: (activeAssignment as any)?.serviceStep || "FIELD_TRAINING",
       trainingType: serviceStepToTrainingType((activeAssignment as any)?.serviceStep),
       attendanceStatus: todayAttendance?.status ?? "BEFORE",
+      attendanceButtonExempt: Boolean((activeAssignment as any)?.attendanceButtonExempt),
       attendanceId: todayAttendance?.id ? todayAttendance.id.toString() : null,
       startTime: todayAttendance?.startTime ? todayAttendance.startTime.toISOString() : null,
       endTime: todayAttendance?.endTime ? todayAttendance.endTime.toISOString() : null,

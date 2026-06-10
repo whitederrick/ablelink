@@ -227,7 +227,8 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   // 적응지도면 ADAPTATION, 그 외(사전/현장훈련)는 지원고용으로 취급
   const [serviceStep, setServiceStep] = useState<ServiceStep>(initial.serviceStep === "ADAPTATION" ? "ADAPTATION" : "FIELD_TRAINING");
   const [commuteGuidanceIncluded, setCommuteGuidanceIncluded] = useState(initial.commuteGuidanceIncluded ?? true);
-  const [attendanceButtonExempt, setAttendanceButtonExempt] = useState(initial.attendanceButtonExempt ?? false);
+  // 면제는 운영자 전용 — 매니저 화면에선 읽기 전용으로 표시하고 값은 그대로 보존
+  const [attendanceButtonExempt] = useState(initial.attendanceButtonExempt ?? false);
   // 관리자가 설정한 실제 시간 (미설정 시 기본값)
   const [workStart, setWorkStart] = useState(
     initial.customWorkStart ?? WORK_TYPE_DEFAULTS[initial.workType ?? "FULL_DAY"].start
@@ -391,20 +392,25 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
           )}
         </div>
 
-        {/* 출퇴근 버튼 면제(시프티 병행) */}
+        {/* 출퇴근 버튼 면제(시프티 병행) — 운영자 전용. 매니저는 현재 상태만 확인 */}
         <div className="mb-5">
           <label className={T.label}>출퇴근 버튼 면제</label>
-          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <input type="checkbox" checked={attendanceButtonExempt}
-              onChange={e => setAttendanceButtonExempt(e.target.checked)}
-              className="h-4 w-4 accent-slate-950" />
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <span className={`inline-flex flex-shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-black ${
+              attendanceButtonExempt ? "bg-sky-100 text-sky-700" : "bg-slate-200 text-slate-500"
+            }`}>
+              {attendanceButtonExempt ? "면제 적용 중" : "미적용"}
+            </span>
             <div>
               <span className="text-sm font-black text-slate-900">출퇴근 버튼 없이 자동 작성 (시프티 병행)</span>
               <p className="mt-0.5 text-xs font-semibold text-slate-400">
-                매일 근무형태 기준으로 출근부가 자동 생성되고, 버튼을 눌러도 지각·이슈가 발생하지 않습니다.
+                {attendanceButtonExempt
+                  ? "근무형태 기준으로 출근부가 매일 자동 생성됩니다."
+                  : "직무지도원이 출퇴근 버튼으로 직접 기록합니다."}
+                {" "}변경은 시스템 운영자만 가능합니다.
               </p>
             </div>
-          </label>
+          </div>
         </div>
 
         {error && <p className="mb-3 text-sm font-semibold text-rose-600">{error}</p>}
