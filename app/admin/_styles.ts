@@ -15,7 +15,7 @@ export const T = {
   tableWrap: "rounded-2xl border border-slate-200 bg-white overflow-hidden",
   th: "border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-black uppercase tracking-wider text-slate-400 whitespace-nowrap",
   trBase: "border-b border-slate-50 last:border-b-0",
-  td: "px-4 py-3 text-[15px] font-medium text-slate-800 align-middle",
+  td: "px-4 py-2 text-[15px] font-medium text-slate-800 align-middle",
   tdCenter: "px-4 py-10 text-center text-sm font-semibold text-slate-300",
   empty: "px-4 py-10 text-center text-sm font-semibold text-slate-300",
 

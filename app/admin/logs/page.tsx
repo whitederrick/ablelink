@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Filter } from "lucide-react";
+import { Filter, X } from "lucide-react";
+import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 type AuditLog = {
   id: string; action: string; target: string|null; detail: string|null;
@@ -29,7 +30,7 @@ export default function LogsPage() {
   const [filter, setFilter] = useState("");
   const [query, setQuery]   = useState("");
   const [page, setPage]     = useState(1);
-  const [expanded, setExpanded] = useState<string|null>(null);
+  const [detail, setDetail] = useState<AuditLog|null>(null);
 
   function load(action=""){
     setLoading(true);
@@ -79,38 +80,65 @@ export default function LogsPage() {
 
       {loading?(
         <div className="flex h-40 items-center justify-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950"/></div>
-      ):filtered.length===0?(
-        <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
-          <p className="text-sm text-slate-400">{logs.length===0?"감사 로그가 없습니다.":"조건에 맞는 로그가 없습니다."}</p>
-        </div>
       ):(
-        <div className="space-y-1.5">
-          {pageItems.map(l=>(
-            <div key={l.id} className="rounded-xl border border-slate-100 bg-white">
-              <button onClick={()=>setExpanded(expanded===l.id?null:l.id)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left">
-                <span className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-black whitespace-nowrap ${ACTION_COLORS[l.action]??"bg-slate-100 text-slate-600"}`}>
-                  {l.action}
-                </span>
-                <span className="flex-1 text-[15px] font-semibold text-slate-800 truncate">
-                  {l.target??""} {l.adminLogin?`· ${l.adminLogin}`:""}
-                </span>
-                <span className="flex-shrink-0 text-[13px] text-slate-500">
-                  {new Date(l.createdAt).toLocaleString("ko-KR")}
-                </span>
-              </button>
-              {expanded===l.id&&l.detail&&(
-                <div className="border-t border-slate-100 px-4 pb-3 pt-2">
+        <div className={T.tableWrap}>
+          <table className="w-full">
+            <thead>
+              <tr>
+                <th className={T.th}>액션</th>
+                <th className={T.th}>대상</th>
+                <th className={T.th}>계정</th>
+                <th className={T.th}>일시</th>
+                <th className={T.th}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length===0?(
+                <tr><td colSpan={5} className={T.empty}>{logs.length===0?"감사 로그가 없습니다.":"조건에 맞는 로그가 없습니다."}</td></tr>
+              ):pageItems.map(l=>(
+                <tr key={l.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50`} onClick={()=>setDetail(l)}>
+                  <td className={T.td}>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-black whitespace-nowrap ${ACTION_COLORS[l.action]??"bg-slate-100 text-slate-600"}`}>{l.action}</span>
+                  </td>
+                  <td className={`${T.td} max-w-[260px] truncate`}>{l.target??<span className="text-slate-300">-</span>}</td>
+                  <td className={T.td}>{l.adminLogin??<span className="text-slate-300">-</span>}{l.adminName?<span className="text-[13px] text-slate-500"> ({l.adminName})</span>:""}</td>
+                  <td className={`${T.td} whitespace-nowrap text-[13px] text-slate-500`}>{new Date(l.createdAt).toLocaleString("ko-KR")}</td>
+                  <td className={T.td}><span className="text-[13px] font-semibold text-sky-600">상세</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+        </div>
+      )}
+
+      {/* 상세 모달 */}
+      {detail && (
+        <div className={T.modalOverlay} onClick={()=>setDetail(null)}>
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl" onClick={e=>e.stopPropagation()}>
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-black ${ACTION_COLORS[detail.action]??"bg-slate-100 text-slate-600"}`}>{detail.action}</span>
+                <p className="mt-2 text-[13px] font-semibold text-slate-400">{new Date(detail.createdAt).toLocaleString("ko-KR")}</p>
+              </div>
+              <button onClick={()=>setDetail(null)} className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"><X className="h-5 w-5"/></button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-[80px_1fr] gap-x-3 gap-y-2">
+                <span className="text-[13px] font-semibold text-slate-400">대상</span>
+                <span className="font-semibold text-slate-800">{detail.target??"-"}</span>
+                <span className="text-[13px] font-semibold text-slate-400">계정</span>
+                <span className="font-semibold text-slate-800">{detail.adminLogin??"-"}{detail.adminName?` (${detail.adminName})`:""}</span>
+                {detail.ipAddress && <><span className="text-[13px] font-semibold text-slate-400">IP</span><span className="font-semibold text-slate-800">{detail.ipAddress}</span></>}
+              </div>
+              {detail.detail && (
+                <div>
                   <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-400">상세 정보</p>
-                  <pre className="overflow-x-auto rounded-lg bg-slate-50 p-3 text-xs font-mono text-slate-700">
-                    {prettyDetail(l.detail)}
-                  </pre>
-                  {l.ipAddress&&<p className="mt-1 text-[10px] text-slate-400">IP: {l.ipAddress}</p>}
+                  <pre className="max-h-[50vh] overflow-auto rounded-lg bg-slate-50 p-3 text-xs font-mono text-slate-700">{prettyDetail(detail.detail)}</pre>
                 </div>
               )}
             </div>
-          ))}
-          <Pagination className="mt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+          </div>
         </div>
       )}
     </div>

@@ -306,7 +306,7 @@ export default function AttendancesPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="근태 현황 관리" />
+      <PageHeader title="근태 현황 관리" sub="전체 에이전시의 출퇴근 기록을 월별로 조회하고, 지도·월별 현황·교정 도구로 점검·보정합니다." />
 
       <StatCardRow
         cols={4}

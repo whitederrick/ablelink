@@ -147,7 +147,7 @@ export default function AdminProfessionsPage() {
       {/* 상세·증빙 검토 모달 */}
       {detail && (
         <div className={T.modalOverlay} onClick={() => setDetail(null)}>
-          <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white p-7 shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white p-7 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-black text-slate-900">{detail.worker.name} · {PROF_LABEL[detail.profession] ?? detail.profession}</h2>

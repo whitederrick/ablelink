@@ -74,19 +74,21 @@ export default function SettingsPage() {
           ) : configs.map(c => {
             const changed = (draft[c.key] ?? "") !== c.value;
             return (
-              <div key={c.key} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-black text-slate-900">{c.label}</p>
-                  <code className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-mono text-slate-600">{c.key}</code>
+              <div key={c.key} className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-black text-slate-900">{c.label}</p>
+                    <code className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-mono text-slate-600">{c.key}</code>
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-500">{c.description}</p>
                 </div>
-                <p className="mt-0.5 mb-2 text-xs text-slate-500">{c.description}</p>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-shrink-0 items-center gap-2">
                   <input
                     type={c.type === "number" ? "number" : "text"}
                     min={c.min} max={c.max}
                     value={draft[c.key] ?? ""}
                     onChange={e => setDraft(p => ({ ...p, [c.key]: e.target.value }))}
-                    className="w-40 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"
+                    className="w-28 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"
                   />
                   <button onClick={() => saveConfig(c.key)} disabled={!changed || savingKey === c.key}
                     className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white disabled:opacity-40">

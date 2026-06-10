@@ -16,7 +16,7 @@ const PLAN_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   STANDARD: { label: "STANDARD", tone: "violet" },
   PRO: { label: "PRO", tone: "emerald" },
 };
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 type BillingRow = {
   id: string; name: string; planType: string; isActive: boolean;

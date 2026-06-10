@@ -201,7 +201,7 @@ export default function ManagerTalentPage() {
 
       {detailFor && (
         <div className={T.modalOverlay} onClick={() => setDetailFor(null)}>
-          <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-3xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-3xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-lg font-black text-slate-900">{detailFor.name}</p>
@@ -213,11 +213,11 @@ export default function ManagerTalentPage() {
               <button onClick={() => setDetailFor(null)} className="text-2xl leading-none text-slate-300 hover:text-slate-500">×</button>
             </div>
 
-            <div className="mt-4 flex-1 space-y-5 overflow-y-auto pr-1">
+            <div className="mt-4 grid flex-1 gap-5 overflow-y-auto pr-1 sm:grid-cols-2">
               {detailLoading ? (
-                <p className={T.empty}>불러오는 중…</p>
+                <p className={`sm:col-span-2 ${T.empty}`}>불러오는 중…</p>
               ) : !detail ? (
-                <p className={T.empty}>상세 정보를 불러올 수 없습니다.</p>
+                <p className={`sm:col-span-2 ${T.empty}`}>상세 정보를 불러올 수 없습니다.</p>
               ) : (
                 <>
                   {/* 자격·직종 */}

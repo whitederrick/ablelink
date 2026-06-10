@@ -24,7 +24,7 @@ const AUDIENCE_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   MANAGERS: { label: "관리자", tone: "slate" },
   ALL: { label: "전체(긴급)", tone: "rose" },
 };
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 10;
 
 export default function AnnouncementsPage() {
   const [list, setList]       = useState<Announcement[]>([]);
@@ -211,7 +211,7 @@ export default function AnnouncementsPage() {
                 <button
                   key={a.id}
                   onClick={() => setSelectedId(a.id)}
-                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2.5 text-left transition hover:border-slate-300 ${
+                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2 text-left transition hover:border-slate-300 ${
                     selectedId === a.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"
                   }`}
                 >

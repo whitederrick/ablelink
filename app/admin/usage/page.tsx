@@ -8,7 +8,7 @@ import ListToolbar from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import { StatCardRow } from "../_components/StatCard";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 const SERVICE_LABELS: Record<string, string> = {
   GROQ_STT:    "Groq STT",

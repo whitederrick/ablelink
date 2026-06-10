@@ -28,7 +28,7 @@ const SUP_STATUS: Record<string, { label: string; tone: BadgeTone }> = {
   REPLIED: { label: "답변 완료", tone: "emerald" },
   CLOSED: { label: "종료", tone: "slate" },
 };
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 10;
 
 export default function AdminSupportPage() {
   const [tickets, setTickets]   = useState<Ticket[]>([]);
@@ -143,7 +143,7 @@ export default function AdminSupportPage() {
                 <button
                   key={t.id}
                   onClick={() => { setSelectedId(t.id); setReplyId(null); }}
-                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2.5 text-left transition hover:border-slate-300 ${
+                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2 text-left transition hover:border-slate-300 ${
                     selectedId === t.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"
                   }`}
                 >
