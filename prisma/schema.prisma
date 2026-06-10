@@ -39,6 +39,12 @@ model Worker {
   signatureUrl String? @map("signature_url") // PREMIUM에서만 사용(정책 레이어에서 강제)
   isTemporary  Boolean @default(false) @map("is_temporary")
 
+  // 급여 이체용 계좌 정보(셀프 입력 + 관리자 조회·보완, 2026-06-10). PII: signatureUrl과 동일 취급.
+  bankName        String? @map("bank_name")
+  accountNumber   String? @map("account_number")
+  accountHolder   String? @map("account_holder")
+  passbookImageUrl String? @map("passbook_image_url")
+
   // 온보딩: 이메일로 loginId 변경 시 인증 코드 보관
   pendingLoginId      String?   @map("pending_login_id")
   verifyCode          String?   @map("verify_code")
@@ -429,6 +435,9 @@ model Agency {
 
   // 사업자등록번호 or 고유번호 (10자리)
   businessNumber String? @unique @map("business_number")
+
+  // 대표자명 — 근로계약서 사업주(갑) 자동입력용 (2026-06-10)
+  representativeName String? @map("representative_name")
 
   // ✅ 구독 관리
   planType   AgencyPlanType @default(FREE) @map("plan_type")

@@ -73,7 +73,17 @@ export async function POST(req: NextRequest) {
         isActive: body.isActive !== false,
       },
     });
-    return NextResponse.json({ success: true, id: String(created.id) });
+    return NextResponse.json({
+      success: true,
+      id: String(created.id),
+      item: {
+        id: String(created.id),
+        title: created.title,
+        body: created.body,
+        sortOrder: created.sortOrder,
+        isActive: created.isActive,
+      },
+    });
   } catch (e: any) {
     if (e instanceof Response) return e;
     const msg = e?.message ?? "UNKNOWN";

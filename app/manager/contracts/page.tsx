@@ -4,12 +4,60 @@ import { useEffect, useRef, useState } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import { X } from "lucide-react";
+import { computeWorkTimes, type WorkType } from "@/lib/workSchedule";
+
+// 근무형태별 휴게시간 프리셋(근무 4h 후 30분 / 전일 점심 1h). 수동 수정 가능.
+const BREAK_PRESETS: Record<Exclude<WorkType, "CUSTOM">, { start: string; end: string }> = {
+  AM: { start: "13:00", end: "13:30" },
+  PM: { start: "17:00", end: "17:30" },
+  FULL_DAY: { start: "12:00", end: "13:00" },
+};
+const WORK_TYPE_OPTIONS: { value: WorkType; label: string }[] = [
+  { value: "AM", label: "오전 4H" },
+  { value: "PM", label: "오후 4H" },
+  { value: "FULL_DAY", label: "전일 8H" },
+  { value: "CUSTOM", label: "직접입력" },
+];
+
+// 표준 특약 라이브러리(법적 기본 세트, 참고용 — 사업장별 검토 필요).
+// "표준 특약 불러오기" 클릭 시 미등록(제목 기준) 조항만 일괄 생성.
+const STANDARD_CLAUSES: { title: string; body: string }[] = [
+  {
+    title: "연차·월차 휴가(매월 정산)",
+    body: "근로기준법에 따라 발생하는 연차·월차 유급휴가 미사용분은 매월 급여 지급 시 정산하여 지급한다.",
+  },
+  {
+    title: "연차·월차 휴가(계약 종료 시 일괄정산)",
+    body: "근로기준법에 따라 발생하는 연차·월차 유급휴가 미사용분은 계약 종료 시 일괄 정산하여 지급한다.",
+  },
+  {
+    title: "마지막 달 월차 미발생",
+    body: "계약 종료일이 속한 달의 개근에 따른 월차(연차) 휴가는 그 다음 달 근로가 예정되어 있지 아니하므로 발생·지급하지 아니한다.",
+  },
+  {
+    title: "4대보험 가입",
+    body: "근로자는 국민연금·국민건강보험·고용보험·산업재해보상보험에 가입하며, 법령에서 정한 근로자 부담분은 매월 임금에서 공제한다.",
+  },
+  {
+    title: "수습기간",
+    body: "근로 개시일부터 3개월간을 수습기간으로 하며, 수습기간 중에도 최저임금의 100분의 90 이상을 지급한다. 다만 1년 미만 계약 또는 단순노무 종사자에게는 수습기간 감액을 적용하지 아니한다.",
+  },
+  {
+    title: "비밀유지 및 개인정보 보호",
+    body: "근로자는 업무 수행 중 알게 된 훈련생의 개인정보 및 사업체의 영업·경영상 비밀을 재직 중은 물론 퇴직 후에도 외부에 누설하지 아니한다.",
+  },
+  {
+    title: "근로조건 변경 시 사전협의",
+    body: "배정 현장·근무시간 등 주요 근로조건을 변경할 필요가 있는 경우 사용자는 근로자와 사전에 협의한다.",
+  },
+];
 
 type ContractStatus = "PENDING" | "SIGNED" | "COMPLETED" | "CANCELLED";
 
 interface ContractItem {
   id: string; workerId: string; workerName: string; userPhone: string;
   contractStart: string; contractEnd: string; siteName: string | null;
+  workLocation: string | null;
   workType: string | null; status: ContractStatus; signToken: string;
   workerSignedAt: string | null; adminSignedAt: string | null; createdAt: string;
 }
@@ -121,6 +169,26 @@ function ClauseManagerModal({ onClose }: { onClose: () => void }) {
   function startEdit(c: Clause) { setEditing(c); setTitle(c.title); setBodyText(c.body); setError(""); }
   function startNew() { setEditing(null); setTitle(""); setBodyText(""); setError(""); }
 
+  // 표준 특약 라이브러리 일괄 등록(이미 같은 제목이 있으면 건너뜀)
+  const [seeding, setSeeding] = useState(false);
+  async function loadStandardClauses() {
+    const existing = new Set(clauses.map(c => c.title.trim()));
+    const missing = STANDARD_CLAUSES.filter(c => !existing.has(c.title));
+    if (missing.length === 0) { setError("표준 특약이 이미 모두 등록되어 있습니다."); return; }
+    if (!confirm(`표준 특약 ${missing.length}건을 등록합니다. 계속할까요?`)) return;
+    setSeeding(true); setError("");
+    try {
+      for (const c of missing) {
+        await fetch("/api/admin/contract-clauses", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: c.title, body: c.body }),
+        });
+      }
+      await load();
+    } catch { setError("표준 특약 등록 중 일부가 실패했습니다."); }
+    finally { setSeeding(false); }
+  }
+
   async function save() {
     if (!title.trim() || !bodyText.trim()) { setError("제목과 내용을 입력하세요."); return; }
     setSaving(true); setError("");
@@ -153,7 +221,10 @@ function ClauseManagerModal({ onClose }: { onClose: () => void }) {
             <h2 className="text-base font-black text-slate-900">특약 조항 관리</h2>
             <p className="mt-0.5 text-xs font-semibold text-slate-400">에이전시 전용 특약 조항을 등록·수정·삭제합니다. 계약서 생성 시 선택해 포함할 수 있어요.</p>
           </div>
-          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:bg-slate-50"><X className="h-4 w-4" /></button>
+          <div className="flex items-center gap-2">
+            <button onClick={loadStandardClauses} disabled={seeding} className={T.btnSecondary}>{seeding ? "등록 중..." : "표준 특약 불러오기"}</button>
+            <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:bg-slate-50"><X className="h-4 w-4" /></button>
+          </div>
         </div>
 
         <div className="grid flex-1 grid-cols-1 gap-5 overflow-hidden md:grid-cols-2">
@@ -223,10 +294,34 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
   const [contractEnd, setEnd] = useState("");
   const [workLocation, setWorkLocation] = useState("");
   const [jobDescription, setJobDescription] = useState("");
-  const [workStartTime, setWorkStartTime] = useState("09:00");
-  const [workEndTime, setWorkEndTime] = useState("18:00");
-  const [breakStartTime, setBreakStartTime] = useState("12:00");
-  const [breakEndTime, setBreakEndTime] = useState("13:00");
+  // 근무형태 + 출퇴근지도 → 소정근로/휴게 자동 셋팅(수동 수정 가능). 기본: 오전4H+출퇴근지도.
+  const [workType, setWorkType] = useState<WorkType>("AM");
+  const [commuteGuidanceIncluded, setCommute] = useState(true);
+  const [workStartTime, setWorkStartTime] = useState("08:30");
+  const [workEndTime, setWorkEndTime] = useState("14:00");
+  const [breakStartTime, setBreakStartTime] = useState("13:00");
+  const [breakEndTime, setBreakEndTime] = useState("13:30");
+
+  // 프리셋 적용: 근무형태/출퇴근지도 변경 시에만 시각을 덮어씀(사용자 수동 수정은 보존).
+  function applyPreset(wt: WorkType, commute: boolean) {
+    if (wt === "CUSTOM") return; // 직접입력은 현재 값 유지
+    const commuteEff = wt === "FULL_DAY" ? false : commute;
+    const t = computeWorkTimes(wt, commuteEff);
+    setWorkStartTime(t.start);
+    setWorkEndTime(t.end);
+    const br = BREAK_PRESETS[wt];
+    setBreakStartTime(br.start);
+    setBreakEndTime(br.end);
+  }
+  function onWorkTypeChange(wt: WorkType) {
+    setWorkType(wt);
+    if (wt === "FULL_DAY") setCommute(false); // 전일은 출퇴근지도 불가(8h 초과 금지)
+    applyPreset(wt, wt === "FULL_DAY" ? false : commuteGuidanceIncluded);
+  }
+  function onCommuteChange(checked: boolean) {
+    setCommute(checked);
+    applyPreset(workType, checked);
+  }
   const [workDaysPerWeek, setWorkDaysPerWeek] = useState("5");
   const [weeklyHoliday, setWeeklyHoliday] = useState("일");
   const [wageType, setWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("MONTHLY");
@@ -251,10 +346,42 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // 인라인 특약 생성(작성 중 새 특약을 등록·자동선택, 영구 저장). 삭제는 특약 조항 관리에서만.
+  const [showInlineClause, setShowInlineClause] = useState(false);
+  const [inlineTitle, setInlineTitle] = useState("");
+  const [inlineBody, setInlineBody] = useState("");
+  const [inlineSaving, setInlineSaving] = useState(false);
+  const [inlineErr, setInlineErr] = useState("");
+
+  async function addInlineClause() {
+    if (!inlineTitle.trim() || !inlineBody.trim()) { setInlineErr("제목과 내용을 입력하세요."); return; }
+    setInlineSaving(true); setInlineErr("");
+    try {
+      const r = await fetch("/api/admin/contract-clauses", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: inlineTitle.trim(), body: inlineBody.trim() }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.message);
+      const created: Clause | undefined = d.item;
+      if (created) {
+        setClauses(prev => [...prev, created]);
+        setSelectedClauseIds(prev => [...prev, created.id]); // 자동 선택
+      }
+      setInlineTitle(""); setInlineBody(""); setShowInlineClause(false);
+    } catch (e: any) { setInlineErr(e.message || "추가 실패"); }
+    finally { setInlineSaving(false); }
+  }
+
   // 사업주 자동채움 + 특약 목록 로드
   useEffect(() => {
     fetch("/api/admin/agency-profile").then(r => r.json()).then(d => {
-      if (d.success) { setEmployerBizName(d.data.name || ""); setEmployerPhone(d.data.phoneNumber || ""); setEmployerAddress(d.data.address || ""); }
+      if (d.success) {
+        setEmployerBizName(d.data.name || "");
+        setEmployerPhone(d.data.phoneNumber || "");
+        setEmployerAddress(d.data.address || "");
+        setEmployerRepName(d.data.representativeName || "");
+      }
     }).catch(() => {});
     fetch("/api/admin/contract-clauses").then(r => r.json()).then(d => {
       if (d.success) setClauses(d.items.filter((c: Clause) => c.isActive));
@@ -276,6 +403,9 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
           manualName: manualName.trim(), manualPhone: manualPhone.trim(),
           contractStart, contractEnd,
           workLocation: workLocation || null, jobDescription: jobDescription || null,
+          workType, commuteGuidanceIncluded,
+          customWorkStart: workType === "CUSTOM" ? workStartTime : undefined,
+          customWorkEnd: workType === "CUSTOM" ? workEndTime : undefined,
           workStartTime, workEndTime, breakStartTime, breakEndTime,
           workDaysPerWeek, weeklyHoliday,
           wageType, wageAmount: wageAmount || null,
@@ -321,8 +451,8 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
 
             {/* 1. 계약기간 */}
             <section className="grid grid-cols-2 gap-2">
-              <Field label="1. 계약 시작일 *"><input type="date" value={contractStart} onChange={e => setStart(e.target.value)} className={`w-full ${T.input}`} /></Field>
-              <Field label="계약 종료일 *"><input type="date" value={contractEnd} onChange={e => setEnd(e.target.value)} className={`w-full ${T.input}`} /></Field>
+              <Field label="1. 계약 시작일 *" hint="키패드로 직접 입력 가능 (예: 2026-06-15)"><input type="date" value={contractStart} onChange={e => setStart(e.target.value)} className={`w-full ${T.input}`} /></Field>
+              <Field label="계약 종료일 *" hint="키패드로 직접 입력 가능"><input type="date" value={contractEnd} onChange={e => setEnd(e.target.value)} className={`w-full ${T.input}`} /></Field>
             </section>
 
             {/* 2~3 */}
@@ -330,12 +460,26 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
             <Field label="3. 업무의 내용"><textarea value={jobDescription} onChange={e => setJobDescription(e.target.value)} placeholder="예: 중증장애인 직무지도 및 적응지원" rows={2} className={`w-full resize-none py-2 ${T.input} h-auto`} /></Field>
 
             {/* 4. 소정근로시간 */}
-            <section className="space-y-2">
+            <section className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/50 p-3">
               <label className={T.label}>4. 소정근로시간 / 휴게시간</label>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex items-center gap-1"><span className="text-xs text-slate-400">근로</span><input type="time" value={workStartTime} onChange={e => setWorkStartTime(e.target.value)} className={`w-full ${T.input}`} /><span className="text-xs text-slate-400">~</span><input type="time" value={workEndTime} onChange={e => setWorkEndTime(e.target.value)} className={`w-full ${T.input}`} /></div>
-                <div className="flex items-center gap-1"><span className="text-xs text-slate-400">휴게</span><input type="time" value={breakStartTime} onChange={e => setBreakStartTime(e.target.value)} className={`w-full ${T.input}`} /><span className="text-xs text-slate-400">~</span><input type="time" value={breakEndTime} onChange={e => setBreakEndTime(e.target.value)} className={`w-full ${T.input}`} /></div>
+              {/* 근무형태 라디오 */}
+              <div className="flex gap-2">
+                {WORK_TYPE_OPTIONS.map(o => (
+                  <button key={o.value} type="button" onClick={() => onWorkTypeChange(o.value)} className={`flex-1 rounded-xl border px-2 py-2 text-sm font-semibold transition ${workType === o.value ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>{o.label}</button>
+                ))}
               </div>
+              {/* 출퇴근지도 체크박스 */}
+              <label className={`flex items-center gap-2 text-sm font-semibold ${workType === "FULL_DAY" ? "text-slate-300" : "text-slate-600"}`}>
+                <input type="checkbox" checked={commuteGuidanceIncluded} disabled={workType === "FULL_DAY"} onChange={e => onCommuteChange(e.target.checked)} className="h-4 w-4 accent-slate-950 disabled:opacity-40" />
+                출퇴근지도 포함 (출근 −30분 / 퇴근 +30분 자동)
+                {workType === "FULL_DAY" && <span className="text-[11px] font-medium text-slate-400">· 전일은 불가</span>}
+              </label>
+              {/* 시각(자동 셋팅, 수동 수정 가능) */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-1"><span className="w-7 text-xs text-slate-400">근로</span><input type="time" value={workStartTime} onChange={e => setWorkStartTime(e.target.value)} className={`w-full ${T.input}`} /><span className="text-xs text-slate-400">~</span><input type="time" value={workEndTime} onChange={e => setWorkEndTime(e.target.value)} className={`w-full ${T.input}`} /></div>
+                <div className="flex items-center gap-1"><span className="w-7 text-xs text-slate-400">휴게</span><input type="time" value={breakStartTime} onChange={e => setBreakStartTime(e.target.value)} className={`w-full ${T.input}`} /><span className="text-xs text-slate-400">~</span><input type="time" value={breakEndTime} onChange={e => setBreakEndTime(e.target.value)} className={`w-full ${T.input}`} /></div>
+              </div>
+              <p className="text-[11px] font-semibold text-slate-400">근무형태·출퇴근지도 선택 시 시각이 자동 입력됩니다. 필요하면 직접 수정하세요.</p>
             </section>
 
             {/* 5. 근무일/휴일 */}
@@ -362,7 +506,7 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
                 {extraPayExists && <input value={extraPayDesc} onChange={e => setExtraPayDesc(e.target.value)} placeholder="내역 기재" className={`w-full ${T.input}`} />}
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <Field label="가산임금률(%)"><input type="number" value={overtimeRate} onChange={e => setOvertimeRate(e.target.value)} className={`w-full ${T.input}`} /></Field>
+                <Field label="가산임금률(%)" hint="5인 이상 50%(1.5배) 법정 기준. 5인 미만은 0% 가능"><input type="number" value={overtimeRate} onChange={e => setOvertimeRate(e.target.value)} className={`w-full ${T.input}`} /></Field>
                 <Field label="임금지급일"><input value={wagePayday} onChange={e => setWagePayday(e.target.value)} placeholder="매월 N일" className={`w-full ${T.input}`} /></Field>
                 <Field label="지급방법"><select value={wagePayMethod} onChange={e => setWagePayMethod(e.target.value as any)} className={`w-full ${T.input}`}><option value="ACCOUNT">계좌입금</option><option value="DIRECT">직접지급</option></select></Field>
               </div>
@@ -371,6 +515,9 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
             {/* 사업주 */}
             <section className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/50 p-3">
               <label className={T.label}>사업주(갑) — 에이전시 정보 자동 입력 (수정 가능)</label>
+              {(!employerRepName || !employerPhone || !employerAddress) && (
+                <p className="text-[11px] font-semibold text-amber-600">대표자·전화·주소가 비어 있으면 <a href="/manager/settings" target="_blank" className="underline">사업주 정보 설정</a>에서 미리 등록하면 매번 자동 입력됩니다.</p>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <input value={employerBizName} onChange={e => setEmployerBizName(e.target.value)} placeholder="사업체명" className={`w-full ${T.input}`} />
                 <input value={employerPhone} onChange={e => setEmployerPhone(e.target.value)} placeholder="전화" className={`w-full ${T.input}`} />
@@ -381,9 +528,28 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
 
             {/* 특약 조항 */}
             <section className="space-y-2">
-              <label className={T.label}>특약 조항 (선택)</label>
+              <div className="flex items-center justify-between">
+                <label className={T.label}>특약 조항 (선택)</label>
+                <button type="button" onClick={() => { setShowInlineClause(v => !v); setInlineErr(""); }} className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100">
+                  {showInlineClause ? "닫기" : "+ 새 특약 추가"}
+                </button>
+              </div>
+
+              {/* 인라인 생성: 작성 중 새 특약을 등록하면 영구 저장되고 자동 선택됩니다. 삭제는 '특약 조항 관리'에서만. */}
+              {showInlineClause && (
+                <div className="space-y-2 rounded-xl border border-sky-200 bg-sky-50/40 p-3">
+                  <input value={inlineTitle} onChange={e => setInlineTitle(e.target.value)} placeholder="조항 제목 (예: 비밀유지)" className={`w-full ${T.input}`} />
+                  <textarea value={inlineBody} onChange={e => setInlineBody(e.target.value)} placeholder="조항 내용" rows={3} className={`w-full resize-none py-2 ${T.input} h-auto`} />
+                  {inlineErr && <p className="text-xs font-semibold text-rose-600">{inlineErr}</p>}
+                  <div className="flex justify-end">
+                    <button type="button" onClick={addInlineClause} disabled={inlineSaving} className={T.btnPrimary}>{inlineSaving ? "추가 중..." : "추가하고 선택"}</button>
+                  </div>
+                  <p className="text-[11px] font-medium text-slate-400">추가한 특약은 목록에 영구 저장되어 다음 계약서에도 재사용됩니다. (삭제는 상단 &quot;특약 조항 관리&quot;)</p>
+                </div>
+              )}
+
               {clauses.length === 0 ? (
-                <p className="text-xs font-semibold text-slate-400">등록된 특약 조항이 없습니다. 상단 &quot;특약 조항 관리&quot;에서 추가하세요.</p>
+                <p className="text-xs font-semibold text-slate-400">등록된 특약 조항이 없습니다. &quot;+ 새 특약 추가&quot; 또는 상단 &quot;특약 조항 관리&quot;에서 추가하세요.</p>
               ) : clauses.map(c => (
                 <label key={c.id} className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 p-2.5 hover:bg-slate-50">
                   <input type="checkbox" checked={selectedClauseIds.includes(c.id)} onChange={() => toggleClause(c.id)} className="mt-0.5 h-4 w-4 accent-slate-950" />
@@ -509,7 +675,7 @@ export default function AdminContractsPage() {
                 <tr key={c.id} className={T.trBase}>
                   <td className={T.td}><div className="font-black text-slate-900">{c.workerName}</div><div className="text-xs text-slate-400">{c.userPhone}</div></td>
                   <td className={`${T.td} text-xs text-slate-500`}>{c.contractStart?.slice(0, 10)}<br />~ {c.contractEnd?.slice(0, 10)}</td>
-                  <td className={`${T.td} text-slate-600`}>{c.siteName || <span className="text-slate-300">미지정</span>}</td>
+                  <td className={`${T.td} text-slate-600`}>{c.workLocation || c.siteName || <span className="text-slate-300">미지정</span>}</td>
                   <td className={T.td}><span className={`${T.badge} ${st.cls}`}>{st.label}</span></td>
                   <td className={`${T.td} text-xs text-slate-400`}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>

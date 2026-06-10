@@ -431,6 +431,23 @@ function WorkerInfoModal({ worker, onClose, onSaved }: {
   const [error,       setError]       = useState("");
   const [tempPw,      setTempPw]      = useState<string | null>(null);
 
+  // 급여 계좌(셀프 입력 우선, 매니저 보완 가능) + 통장사본 조회
+  const [bankName,      setBankName]      = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountHolder, setAccountHolder] = useState("");
+  const [passbookUrl,   setPassbookUrl]   = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/admin/workers/${worker.id}`).then(r => r.json()).then(d => {
+      if (d.success) {
+        setBankName(d.data.bankName ?? "");
+        setAccountNumber(d.data.accountNumber ?? "");
+        setAccountHolder(d.data.accountHolder ?? "");
+        setPassbookUrl(d.data.passbookUrl ?? null);
+      }
+    }).catch(() => {});
+  }, [worker.id]);
+
   async function handleSave() {
     setSaving(true); setError("");
     try {
@@ -441,6 +458,7 @@ function WorkerInfoModal({ worker, onClose, onSaved }: {
           workerName:      workerName.trim() !== worker.workerName ? workerName.trim() : undefined,
           phoneNumber:   phoneNumber !== worker.phoneNumber   ? phoneNumber    : undefined,
           resetPassword: resetPw,
+          bankName, accountNumber, accountHolder,
         }),
       });
       const data = await res.json();
@@ -484,6 +502,21 @@ function WorkerInfoModal({ worker, onClose, onSaved }: {
           <label className={T.label}>전화번호</label>
           <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)}
             placeholder="010-0000-0000" type="tel" className={T.input} />
+        </div>
+
+        {/* 급여 계좌 (직무지도원 셀프 입력 우선, 매니저 보완 가능) */}
+        <div className="mb-4 rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className={`${T.label} mb-0`}>급여 계좌</label>
+            {passbookUrl
+              ? <a href={passbookUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100">통장사본 보기</a>
+              : <span className="text-[11px] font-semibold text-slate-400">통장사본 미등록</span>}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="은행명" className={T.input} />
+            <input value={accountHolder} onChange={e => setAccountHolder(e.target.value)} placeholder="예금주" className={T.input} />
+          </div>
+          <input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} placeholder="계좌번호" className={`w-full ${T.input}`} />
         </div>
 
         <div className="mb-5">

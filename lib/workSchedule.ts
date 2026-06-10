@@ -2,15 +2,17 @@
 // 근무형태별 표준 출퇴근 시각의 "단일 출처(single source of truth)".
 // 정책 변경 시 이 파일만 수정한다. (clock-in/out, 배정 수정, 출근부 인박스, 일괄생성 모두 사용)
 //
-// 규칙(2026-06-09 확정):
-//  - 오전 4시간(AM): 출퇴근지도+휴게지도 포함(기본) → 08:30~13:30 / 미포함(예외) → 09:00~13:30
-//  - 오후 4시간(PM): 포함(기본) → 12:30~17:30 / 미포함(예외) → 13:00~17:30
+// 규칙(2026-06-10 확정 — 출퇴근지도 퇴근 +30분 반영):
+//  - 오전 4시간(AM): 출퇴근지도 포함(기본) → 08:30~14:00 / 미포함(예외) → 09:00~13:30
+//  - 오후 4시간(PM): 포함(기본) → 12:30~18:00 / 미포함(예외) → 13:00~17:30
 //  - 전일 8시간(FULL_DAY): 출퇴근지도 강제 미포함(8시간 초과 금지) → 09:00~18:00
 //  - CUSTOM: 관리자가 지정한 customWorkStart~customWorkEnd (미지정 시 전일 기본)
 //
 // 4시간 근무 원칙: 근무 4h + 휴게 30분.
-//  · 미포함(예외): AM 09:00~13:30 / PM 13:00~17:30 (휴게 30분 포함, 4.5h)
-//  · 포함(기본): 출근 전 30분 출퇴근지도를 앞에 더해 AM 08:30~13:30 / PM 12:30~17:30 (5h)
+//  · 미포함(예외): AM 09:00~13:30 / PM 13:00~17:30 (근무 4h + 휴게 30분, 4.5h)
+//  · 포함(기본): 출근 전 30분 + 퇴근 후 30분 출퇴근지도를 앞뒤로 더해
+//    AM 08:30~14:00 / PM 12:30~18:00 (출근지도 0.5h + 근무 4h + 휴게 0.5h + 퇴근지도 0.5h, 5.5h).
+//    → dailyDocTimes 측정시간(훈련4h + 1.5h = 5.5h)과 일치.
 
 export const VALID_WORK_TYPES = ["AM", "PM", "FULL_DAY", "CUSTOM"] as const;
 export type WorkType = (typeof VALID_WORK_TYPES)[number];
@@ -46,11 +48,11 @@ export function computeWorkTimes(
   switch (workType) {
     case "AM":
       return commuteGuidanceIncluded
-        ? { start: "08:30", end: "13:30" }
+        ? { start: "08:30", end: "14:00" }
         : { start: "09:00", end: "13:30" };
     case "PM":
       return commuteGuidanceIncluded
-        ? { start: "12:30", end: "17:30" }
+        ? { start: "12:30", end: "18:00" }
         : { start: "13:00", end: "17:30" };
     case "FULL_DAY":
       return { start: "09:00", end: "18:00" };

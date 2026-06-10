@@ -6,12 +6,56 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { resolvePassbookUrl } from "@/lib/passbookStorage";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 
 function generateTempPassword(): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
   return Array.from({ length: 8 }, () => chars[randomInt(chars.length)]).join("");
+}
+
+// 자기 에이전시 소속 직무지도원인지 확인(스코프 가드)
+async function assertAgencyWorker(workerId: bigint, agencyId: bigint) {
+  const worker = await prisma.worker.findFirst({
+    where: { id: workerId, assignments: { some: { site: { agencyId } } } },
+    select: { id: true },
+  });
+  return !!worker;
+}
+
+// GET: 직무지도원 상세(급여 계좌 + 통장사본 signed URL 포함)
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const scope = await requireManagerSession(req);
+    const { id } = await params;
+    const workerId = BigInt(id);
+    if (!(await assertAgencyWorker(workerId, scope.agencyId))) {
+      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    }
+    const w = await prisma.worker.findUnique({
+      where: { id: workerId },
+      select: { bankName: true, accountNumber: true, accountHolder: true, passbookImageUrl: true },
+    });
+    const passbookUrl = await resolvePassbookUrl(w?.passbookImageUrl ?? null);
+    return NextResponse.json({
+      success: true,
+      data: {
+        bankName: w?.bankName ?? null,
+        accountNumber: w?.accountNumber ?? null,
+        accountHolder: w?.accountHolder ?? null,
+        hasPassbook: !!w?.passbookImageUrl,
+        passbookUrl,
+      },
+    });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    console.error("[admin workers GET]", e);
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
+  }
 }
 
 export async function PATCH(
@@ -37,11 +81,18 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { workerName, phoneNumber, resetPassword } = body;
+    const { workerName, phoneNumber, resetPassword, bankName, accountNumber, accountHolder } = body;
 
     const updates: Record<string, any> = {};
 
     if (workerName?.trim()) updates.workerName = workerName.trim();
+
+    // 급여 계좌 보완(매니저 입력) — 빈 문자열은 null
+    const bankStr = (v: any): string | null | undefined =>
+      v === undefined ? undefined : (typeof v === "string" && v.trim() ? v.trim() : null);
+    if (bankName !== undefined)      updates.bankName = bankStr(bankName);
+    if (accountNumber !== undefined) updates.accountNumber = bankStr(accountNumber);
+    if (accountHolder !== undefined) updates.accountHolder = bankStr(accountHolder);
 
     if (phoneNumber) {
       const cleaned = String(phoneNumber).replace(/-/g, "");

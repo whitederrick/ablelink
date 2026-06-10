@@ -14,11 +14,18 @@ export async function GET(req: NextRequest) {
 
   const user = await prisma.worker.findUnique({
     where:  { id: BigInt(session.workerId) },
-    select: { id: true, workerName: true, phoneNumber: true, loginId: true, isTemporary: true },
+    select: {
+      id: true, workerName: true, phoneNumber: true, loginId: true, isTemporary: true,
+      bankName: true, accountNumber: true, accountHolder: true, passbookImageUrl: true,
+    },
   });
   if (!user) return NextResponse.json({ success: false, message: "사용자를 찾을 수 없습니다." }, { status: 404 });
 
-  return NextResponse.json({ success: true, user: { ...user, id: user.id.toString() } });
+  const { passbookImageUrl, ...rest } = user;
+  return NextResponse.json({
+    success: true,
+    user: { ...rest, id: user.id.toString(), hasPassbook: !!passbookImageUrl },
+  });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -27,7 +34,7 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { workerName, phoneNumber, currentPassword, newPassword } = body;
+    const { workerName, phoneNumber, currentPassword, newPassword, bankName, accountNumber, accountHolder } = body;
 
     const user = await prisma.worker.findUnique({
       where:  { id: BigInt(session.workerId) },
@@ -64,6 +71,13 @@ export async function PATCH(req: NextRequest) {
       updates.password    = await hash(newPassword, 12);
       updates.isTemporary = false;
     }
+
+    // 급여 계좌(셀프 입력) — 빈 문자열은 null 처리
+    const bankStr = (v: any): string | null | undefined =>
+      v === undefined ? undefined : (typeof v === "string" && v.trim() ? v.trim() : null);
+    if (bankName !== undefined)      updates.bankName = bankStr(bankName);
+    if (accountNumber !== undefined) updates.accountNumber = bankStr(accountNumber);
+    if (accountHolder !== undefined) updates.accountHolder = bankStr(accountHolder);
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ success: false, message: "변경할 내용이 없습니다." }, { status: 400 });
