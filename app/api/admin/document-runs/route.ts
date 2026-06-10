@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession, type ManagerScope } from "@/lib/managerScope";
+import { requireManagerSession } from "@/lib/managerScope";
 import { Prisma, DocumentType, DocumentRunStatus } from "@prisma/client";
 
 function errToStatus(msg: string) {

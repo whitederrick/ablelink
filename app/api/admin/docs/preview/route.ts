@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { requireManagerSession } from "@/lib/managerScope";
 import { prisma } from "@/lib/prisma";
-import { renderPdfToBuffer, normalizeDocType, type DocumentType } from "@/lib/pdf";
+import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 
 const ALLOWED_IMG_HOST = (() => {

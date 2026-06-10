@@ -20,7 +20,6 @@ export default function ListToolbar({
   filters,
   selected,
   onToggleFilter,
-  multi = true,
   extra,
   extraFirst = false,
 }: {

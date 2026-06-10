@@ -8,7 +8,6 @@ import {
   CalendarDays,
   Check,
   ChevronLeft,
-  CircleDollarSign,
   ClipboardList,
   Clock,
   Download,

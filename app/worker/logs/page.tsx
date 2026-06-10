@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  BarChart2, CalendarDays, ChevronLeft, ChevronRight,
-  CircleDollarSign, ClipboardList, FileText, FileWarning, Home,
+  CalendarDays, ChevronLeft, ChevronRight,
+  ClipboardList, FileText, FileWarning, Home,
   PenLine, Trash2, X,
   Search,
 } from "lucide-react";

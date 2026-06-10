@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
-import { renderPdfToBuffer, normalizeDocType, type DocumentType } from "@/lib/pdf";
+import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { buildDocFileName, contentDisposition } from "@/lib/pdf/filename";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 
