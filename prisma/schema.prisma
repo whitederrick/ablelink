@@ -1012,6 +1012,17 @@ model InsuranceRates {
   @@map("insurance_rates")
 }
 
+// 근로소득 간이세액표(운영자가 매년 홈택스에서 받아 입력). data = [{from, taxes[]}] (taxes 인덱스0=공제대상가족1명).
+model IncomeTaxTable {
+  id        BigInt   @id @default(autoincrement())
+  year      Int      @unique
+  data      Json
+  rowCount  Int      @default(0) @map("row_count")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("income_tax_tables")
+}
+
 // 운영자가 조정하는 시스템 파라미터(하드코딩 지양). 키는 lib/systemConfig.ts CONFIG_REGISTRY에 정의.
 model SystemConfig {
   key       String   @id

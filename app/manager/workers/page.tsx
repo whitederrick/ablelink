@@ -300,12 +300,13 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
 
   return (
     <div className={T.modalOverlay}>
-      <div className={T.modalContent}>
-        <h2 className="mb-1 text-base font-black text-slate-900">배정 설정</h2>
-        <p className="mb-5 text-sm font-semibold text-slate-400">{worker.workerName} · {worker.activeAssignment?.siteName}</p>
+      <div className="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-8 shadow-2xl shadow-slate-950/20">
+        <h2 className="mb-1 text-lg font-black text-slate-900">배정 설정</h2>
+        <p className="mb-6 text-sm font-semibold text-slate-400">{worker.workerName} · {worker.activeAssignment?.siteName}</p>
 
+        <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
         {/* 서비스 단계 선택 (지원고용 ↔ 적응지도) */}
-        <div className="mb-4">
+        <div>
           <label className={T.label}>서비스 단계</label>
           <div className="grid grid-cols-2 gap-2">
             {SERVICE_STEP_OPTIONS.map(opt => (
@@ -322,7 +323,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         </div>
 
         {/* 근무형태 선택 */}
-        <div className="mb-4">
+        <div>
           <label className={T.label}>근무형태</label>
           <div className="grid grid-cols-2 gap-2">
             {(["AM", "PM", "FULL_DAY", "CUSTOM"] as WorkType[]).map(wt => (
@@ -337,7 +338,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         </div>
 
         {/* 계약(배정) 기간 — 수동 입력 */}
-        <div className="mb-4">
+        <div>
           <label className={T.label}>근로계약 기간</label>
           <div className="flex items-center gap-2">
             <input type="date" value={cStart} max={cEnd || undefined} onChange={e => setCStart(e.target.value)} className={`flex-1 ${T.input}`} />
@@ -348,7 +349,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         </div>
 
         {/* 근무 시간 — 모든 유형에서 수정 가능 */}
-        <div className="mb-4">
+        <div>
           <div className="mb-1.5 flex items-center justify-between">
             <label className={T.label} style={{ marginBottom: 0 }}>근무 시간</label>
             <span className="text-xs font-semibold text-slate-400">{totalHours()}</span>
@@ -368,7 +369,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         </div>
 
         {/* 출퇴근 지도 */}
-        <div className="mb-5">
+        <div className="sm:col-span-2">
           <label className={T.label}>출퇴근 지도 포함</label>
           {isFullDay ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-500">
@@ -393,7 +394,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         </div>
 
         {/* 출퇴근 버튼 면제(시프티 병행) — 운영자 전용. 매니저는 현재 상태만 확인 */}
-        <div className="mb-5">
+        <div className="sm:col-span-2">
           <label className={T.label}>출퇴근 버튼 면제</label>
           <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
             <span className={`inline-flex flex-shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-black ${
@@ -412,10 +413,11 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
             </div>
           </div>
         </div>
+        </div>
 
-        {error && <p className="mb-3 text-sm font-semibold text-rose-600">{error}</p>}
+        {error && <p className="mb-3 mt-5 text-sm font-semibold text-rose-600">{error}</p>}
 
-        <div className="flex justify-end gap-2">
+        <div className="mt-7 flex justify-end gap-2">
           <button onClick={onClose} className={T.btnSecondary}>취소</button>
           <button onClick={handleSave} disabled={saving} className={T.btnPrimary}>
             {saving ? "저장 중..." : "저장"}

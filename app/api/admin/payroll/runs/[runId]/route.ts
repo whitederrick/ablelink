@@ -61,7 +61,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ runI
   }
 }
 
-// PATCH: 항목 수동 수정 (grossPay, totalDeduction 재입력)
+// PATCH: 항목 수동 수정 — 그리드 라인아이템(payLines/deductLines/basicInfo) 저장 + 합계 재계산.
+//   (레거시: grossPay/totalDeduction 직접 입력도 지원, breakdown 보존)
+function s(v: any, max = 40) { return String(v ?? "").slice(0, max); }
+function num(v: any) { const n = Math.round(Number(v)); return Number.isFinite(n) ? n : 0; }
+function hrs(v: any) { const n = Number(v); return Number.isFinite(n) ? +n.toFixed(1) : 0; }
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
   try {
     const scope = await requireManagerSession(req);
@@ -75,21 +80,42 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
       return NextResponse.json({ success: false, message: "확정된 급여는 수정할 수 없습니다." }, { status: 409 });
     }
 
-    const { itemId, grossPay, totalDeduction } = await req.json();
-    const gp = Number(grossPay);
-    const td = Number(totalDeduction);
-    if (isNaN(gp) || isNaN(td)) {
-      return NextResponse.json({ success: false, message: "금액 오류" }, { status: 400 });
-    }
+    const body = await req.json();
+    const itemIdBig = BigInt(body.itemId);
 
-    // IDOR 방지: itemId가 실제 이 run 소속인지 검증
-    const itemIdBig = BigInt(itemId);
+    // IDOR 방지: itemId가 실제 이 run 소속인지 검증 + 기존 breakdown 보존
     const existingItem = await prisma.payrollItem.findUnique({
       where: { id: itemIdBig },
-      select: { runId: true },
+      select: { runId: true, breakdown: true },
     });
     if (!existingItem || existingItem.runId !== run.id) {
       return NextResponse.json({ success: false, message: "접근 불가" }, { status: 403 });
+    }
+    const prevBd = (existingItem.breakdown ?? {}) as any;
+
+    let gp: number, td: number, breakdown: any;
+
+    if (Array.isArray(body.payLines) || Array.isArray(body.deductLines)) {
+      // 그리드 편집 저장
+      const payLines = (Array.isArray(body.payLines) ? body.payLines : prevBd.payLines ?? [])
+        .map((l: any) => ({ key: s(l.key, 20), name: s(l.name), hours: hrs(l.hours), amount: num(l.amount), method: s(l.method, 120) }));
+      const deductLines = (Array.isArray(body.deductLines) ? body.deductLines : prevBd.deductLines ?? [])
+        .map((l: any) => ({ key: s(l.key, 20), name: s(l.name), amount: num(l.amount) }));
+      const basicInfo = {
+        ...(prevBd.basicInfo ?? {}),
+        ...(body.basicInfo ?? {}),
+        dependents: Math.max(1, Math.min(11, num(body.basicInfo?.dependents ?? prevBd.basicInfo?.dependents ?? 1))),
+      };
+      gp = payLines.reduce((acc: number, l: any) => acc + l.amount, 0);
+      td = deductLines.reduce((acc: number, l: any) => acc + l.amount, 0);
+      const deductionBreakdown = Object.fromEntries(deductLines.map((l: any) => [l.name, l.amount]));
+      const totalHours = +payLines.reduce((acc: number, l: any) => acc + (l.hours || 0), 0).toFixed(1);
+      breakdown = { ...prevBd, payLines, deductLines, basicInfo, deductionBreakdown, totalHours, manualEdited: true };
+    } else {
+      // 레거시: 총액 직접 수정 (breakdown 보존)
+      gp = Number(body.grossPay); td = Number(body.totalDeduction);
+      if (isNaN(gp) || isNaN(td)) return NextResponse.json({ success: false, message: "금액 오류" }, { status: 400 });
+      breakdown = { ...prevBd, manualTotalEdited: true };
     }
 
     const updated = await prisma.payrollItem.update({
@@ -98,7 +124,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
         grossPay: new Decimal(gp),
         totalDeduction: new Decimal(td),
         netPay: new Decimal(gp - td),
-        breakdown: { manual: true, grossPay: gp, totalDeduction: td },
+        breakdown,
       },
       include: { user: { select: { id: true, workerName: true, loginId: true } } },
     });

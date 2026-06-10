@@ -674,82 +674,122 @@ function rangeDot(a?: string, b?: string): string {
   return aa || bb;
 }
 
-// ── 급여명세서(임금명세서) ── 고용노동부 양식 기준
+// ── 급여명세서(임금명세서) ── 샘플 양식(기본사항|지급내역|공제내역|비고 4열 그리드)
 // payload: { agencyName, workerName, workerBirth?, yearMonth, payDate?,
-//   workedDays, workedHours, overtimeHours,
-//   payRows:[{name,amount,method?}], deductRows:[{name,amount}],
+//   job, placementType, placementDate, totalHours,
+//   payRows:[{name,hours?,amount,method?}], deductRows:[{name,amount}],
 //   grossPay, totalDeduction, netPay }
 function payslip(p: any): Promise<Buffer> {
-  const doc = newDoc(18);
-  const x = mm(18), W = doc.page.width - mm(36);
-  const won = (n: any) => `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}원`;
-
-  let y = title(doc, "임 금 명 세 서", mm(16), 19, { x, w: W, gap: mm(5) });
-
-  // ── 기본 정보 (2열) ──
-  const lc = mm(28), vc = (W - lc * 2) / 2;
-  const info: [string, string, string, string][] = [
-    ["성    명", p.workerName ?? "", "생년월일", p.workerBirth ?? ""],
-    ["귀속월", p.yearMonth ?? "", "지급일", p.payDate ?? ""],
-    ["사업체(기관)", p.agencyName ?? "", "근로일수", `${p.workedDays ?? 0} 일`],
-    ["총 근로시간", `${p.workedHours ?? 0} 시간`, "연장근로시간", `${p.overtimeHours ?? 0} 시간`],
-  ];
-  for (const [l1, v1, l2, v2] of info) {
-    cell(doc, x, y, lc, mm(8), l1, { size: 9.5, bold: true, fill: "#f4f4f4" });
-    cell(doc, x + lc, y, vc, mm(8), v1, { size: 9.5 });
-    cell(doc, x + lc + vc, y, lc, mm(8), l2, { size: 9.5, bold: true, fill: "#f4f4f4" });
-    cell(doc, x + lc * 2 + vc, y, W - lc * 2 - vc, mm(8), v2, { size: 9.5 });
-    y += mm(8);
-  }
-
-  // ── 임금 지급내역 ──
-  y += mm(4);
-  doc.font("Batang-Bold").fontSize(12).fillColor("#000").text("■ 임금 지급내역", x, y); y += mm(7);
-  const payRows: { name: string; amount: number; method?: string }[] = Array.isArray(p.payRows) ? p.payRows : [];
-  const c1 = mm(38), c3 = mm(64), c2 = W - c1 - c3;
-  cell(doc, x, y, c1, mm(8), "임금 항목", { size: 9.5, bold: true, fill: "#f0f0f0" });
-  cell(doc, x + c1, y, c2, mm(8), "지급 금액", { size: 9.5, bold: true, fill: "#f0f0f0" });
-  cell(doc, x + c1 + c2, y, c3, mm(8), "계산 방법", { size: 9.5, bold: true, fill: "#f0f0f0" });
-  y += mm(8);
-  for (const r of payRows) {
-    const h = mm(8);
-    cell(doc, x, y, c1, h, r.name, { size: 9 });
-    cell(doc, x + c1, y, c2, h, won(r.amount), { size: 9, align: "right" });
-    cell(doc, x + c1 + c2, y, c3, h, r.method ?? "", { size: 8, align: "left" });
-    y += h;
-  }
-  cell(doc, x, y, c1, mm(8), "지급액 계", { size: 9.5, bold: true, fill: "#f4f4f4" });
-  cell(doc, x + c1, y, c2, mm(8), won(p.grossPay), { size: 9.5, bold: true, align: "right" });
-  cell(doc, x + c1 + c2, y, c3, mm(8), "", { fill: "#f4f4f4" });
-  y += mm(8);
-
-  // ── 공제내역 ──
-  y += mm(4);
-  doc.font("Batang-Bold").fontSize(12).fillColor("#000").text("■ 공제내역", x, y); y += mm(7);
+  const doc = newDoc(14);
+  const x = mm(14), W = doc.page.width - mm(28);
+  const won = (n: any) => `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}`;
+  const payRows: { name: string; hours?: number; amount: number; method?: string }[] = Array.isArray(p.payRows) ? p.payRows : [];
   const deductRows: { name: string; amount: number }[] = Array.isArray(p.deductRows) ? p.deductRows : [];
-  const dc1 = W / 2;
-  cell(doc, x, y, dc1, mm(8), "공제 항목", { size: 9.5, bold: true, fill: "#f0f0f0" });
-  cell(doc, x + dc1, y, W - dc1, mm(8), "공제 금액", { size: 9.5, bold: true, fill: "#f0f0f0" });
-  y += mm(8);
-  for (const r of deductRows) {
-    cell(doc, x, y, dc1, mm(8), r.name, { size: 9 });
-    cell(doc, x + dc1, y, W - dc1, mm(8), won(r.amount), { size: 9, align: "right" });
-    y += mm(8);
+
+  // 컬럼 폭
+  const aW = W * 0.22, bW = W * 0.34, cW = W * 0.20, dW = W - aW - bW - cW;
+  const aL = aW * 0.42, aV = aW - aL;                       // 기본사항 label|value
+  const bN = bW * 0.50, bH = bW * 0.20, bA = bW - bN - bH;  // 지급내역 항목|시간|금액
+  const cN = cW * 0.55, cA = cW - cN;                       // 공제내역 항목|금액
+  const xA = x, xB = x + aW, xC = x + aW + bW, xD = x + aW + bW + cW;
+
+  // ── 제목 + 지급일 ──
+  let y = mm(12);
+  const h0 = mm(11);
+  cell(doc, x, y, aW + bW, h0, "급 여 명 세 서", { bold: true, size: 16 });
+  cell(doc, xC, y, cW, h0, "지급일", { bold: true, size: 10, fill: "#efefef" });
+  cell(doc, xD, y, dW, h0, p.payDate ?? "", { size: 10 });
+  y += h0;
+
+  // ── 헤더 밴드 ──
+  const hh = mm(7);
+  cell(doc, xA, y, aW, hh, "기본사항", { bold: true, size: 10, fill: "#e9eef5" });
+  cell(doc, xB, y, bW, hh, "지급내역", { bold: true, size: 10, fill: "#e9eef5" });
+  cell(doc, xC, y, cW, hh, "공제내역", { bold: true, size: 10, fill: "#e9eef5" });
+  cell(doc, xD, y, dW, hh, "비고", { bold: true, size: 10, fill: "#e9eef5" });
+  y += hh;
+
+  // ── 서브헤더(지급내역만 3분할) ──
+  const sh = mm(6);
+  cell(doc, xA, y, aW, sh, "", { fill: "#f6f6f6" });
+  cell(doc, xB, y, bN, sh, "임금항목", { bold: true, size: 8.5, fill: "#f6f6f6" });
+  cell(doc, xB + bN, y, bH, sh, "시간", { bold: true, size: 8.5, fill: "#f6f6f6" });
+  cell(doc, xB + bN + bH, y, bA, sh, "금액(원)", { bold: true, size: 8.5, fill: "#f6f6f6" });
+  cell(doc, xC, y, cN, sh, "항목", { bold: true, size: 8.5, fill: "#f6f6f6" });
+  cell(doc, xC + cN, y, cA, sh, "금액(원)", { bold: true, size: 8.5, fill: "#f6f6f6" });
+  cell(doc, xD, y, dW, sh, "", { fill: "#f6f6f6" });
+  y += sh;
+
+  // ── 본문(패널별 행) ──
+  const basic: [string, string][] = [
+    ["이 름", p.workerName ?? ""],
+    ["생년월일", p.workerBirth ?? ""],
+    ["업 무", p.job ?? "직무지도"],
+    ["배치형태", p.placementType ?? ""],
+    ["배치일", p.placementDate ?? ""],
+  ];
+  const rowH = mm(7.5);
+  const bodyRows = Math.max(basic.length, payRows.length, deductRows.length);
+  const bodyTop = y, bodyH = bodyRows * rowH;
+
+  for (let i = 0; i < bodyRows; i++) {
+    const ry = bodyTop + i * rowH;
+    // 기본사항
+    if (i < basic.length) {
+      cell(doc, xA, ry, aL, rowH, basic[i][0], { size: 8.5, bold: true, fill: "#f4f4f4" });
+      cell(doc, xA + aL, ry, aV, rowH, basic[i][1], { size: 9 });
+    } else {
+      cell(doc, xA, ry, aW, rowH, "");
+    }
+    // 지급내역
+    if (i < payRows.length) {
+      const r = payRows[i];
+      cell(doc, xB, ry, bN, rowH, r.name, { size: 8.5, align: "left", pad: 4 });
+      cell(doc, xB + bN, ry, bH, rowH, r.hours ? String(r.hours) : "0", { size: 8.5, align: "right" });
+      cell(doc, xB + bN + bH, ry, bA, rowH, r.amount ? won(r.amount) : "-", { size: 8.5, align: "right" });
+    } else {
+      cell(doc, xB, ry, bW, rowH, "");
+    }
+    // 공제내역
+    if (i < deductRows.length) {
+      const r = deductRows[i];
+      cell(doc, xC, ry, cN, rowH, r.name, { size: 8.5, align: "left", pad: 4 });
+      cell(doc, xC + cN, ry, cA, rowH, r.amount ? won(r.amount) : "-", { size: 8.5, align: "right" });
+    } else {
+      cell(doc, xC, ry, cW, rowH, "");
+    }
   }
-  cell(doc, x, y, dc1, mm(8), "공제액 계", { size: 9.5, bold: true, fill: "#f4f4f4" });
-  cell(doc, x + dc1, y, W - dc1, mm(8), won(p.totalDeduction), { size: 9.5, bold: true, align: "right" });
-  y += mm(8);
 
-  // ── 실지급액 ──
-  y += mm(5);
-  cell(doc, x, y, dc1, mm(11), "실 지급액", { size: 12, bold: true, fill: "#eef3fb" });
-  cell(doc, x + dc1, y, W - dc1, mm(11), won(p.netPay), { size: 13, bold: true, align: "right", fill: "#eef3fb" });
-  y += mm(11);
+  // ── 비고(본문 전체 높이 1셀) ──
+  const notes: string[] = ["[지급내역]"];
+  for (const r of payRows) if (r.method) notes.push(`○ ${r.name}: ${r.method}`);
+  notes.push("", "[공제내역]", "○ 소득세: 근로소득 간이세액표", "○ 주민세: 소득세의 10%", "○ 4대보험: 연도별 요율 적용", "", "※ 통상시급은 근로계약서에 따름");
+  doc.lineWidth(0.6).rect(xD, bodyTop, dW, bodyH).stroke("#000");
+  doc.font("KR").fontSize(7.5).fillColor("#000").text(notes.join("\n"), xD + 4, bodyTop + 4, { width: dW - 8, align: "left", lineGap: 1.5 });
 
-  // 발급 기관
+  y = bodyTop + bodyH;
+
+  // ── 합계 밴드(총시간/급여총액, 공제합계) ──
+  const th = mm(8);
+  cell(doc, xA, y, aW, th, "", { fill: "#f4f4f4" });
+  cell(doc, xB, y, bN, th, "총시간/급여총액", { bold: true, size: 8.5, fill: "#f4f4f4" });
+  cell(doc, xB + bN, y, bH, th, String(p.totalHours ?? 0), { bold: true, size: 8.5, align: "right", fill: "#f4f4f4" });
+  cell(doc, xB + bN + bH, y, bA, th, won(p.grossPay), { bold: true, size: 9, align: "right", fill: "#f4f4f4" });
+  cell(doc, xC, y, cN, th, "공제합계", { bold: true, size: 8.5, fill: "#f4f4f4" });
+  cell(doc, xC + cN, y, cA, th, won(p.totalDeduction), { bold: true, size: 9, align: "right", fill: "#f4f4f4" });
+  cell(doc, xD, y, dW, th, "", { fill: "#f4f4f4" });
+  y += th;
+
+  // ── 당월 지급액 ──
+  const nh = mm(11);
+  cell(doc, xA, y, aW + bN, nh, "당 월 지 급 액 (원)", { bold: true, size: 11, fill: "#dfe7f3" });
+  cell(doc, xB + bN, y, bH + bA + cW, nh, won(p.netPay), { bold: true, size: 13, align: "right", fill: "#dfe7f3" });
+  cell(doc, xD, y, dW, nh, "귀하의 노고에 감사드립니다.", { bold: true, size: 9 });
+  y += nh;
+
+  // ── 기관명 ──
   y += mm(8);
-  doc.font("KR").fontSize(10).fillColor("#000")
-    .text(`발급: ${p.agencyName ?? ""}`, x, y, { width: W, align: "right" });
+  doc.font("KR-Bold").fontSize(13).fillColor("#000").text(p.agencyName ?? "", x, y, { width: W, align: "center" });
 
   return toBuffer(doc);
 }

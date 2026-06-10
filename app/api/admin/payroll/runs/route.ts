@@ -9,7 +9,12 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { computeWeeklyHoliday, scheduledMinutesForWorkType } from "@/lib/payroll/weeklyHoliday";
+import { lookupIncomeTax, localIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
 import { Decimal } from "@prisma/client/runtime/library";
+
+const SERVICE_STEP_LABEL: Record<string, string> = {
+  PRE_TRAINING: "사전훈련", FIELD_TRAINING: "지원고용 현장훈련", ADAPTATION: "취업 후 적응지도",
+};
 
 const BUSINESS_DEDUCTION_RATE = 0.033; // 사업소득세 3.3%
 
@@ -74,8 +79,8 @@ export async function POST(req: NextRequest) {
     const periodStart = `${yearMonth}-01`;
     const periodEnd = `${yearMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
 
-    // 3개 쿼리 병렬 실행
-    const [insuranceRates, agencyDeductions, assignments] = await Promise.all([
+    // 4개 쿼리 병렬 실행
+    const [insuranceRates, agencyDeductions, assignments, incomeTaxRow] = await Promise.all([
       // 4대보험 요율 조회 (해당 연도 → 없으면 최근 연도)
       prisma.insuranceRates.findFirst({
         where: { year: { lte: y } },
@@ -85,7 +90,7 @@ export async function POST(req: NextRequest) {
       prisma.agencyDeduction.findMany({
         where: { agencyId, isActive: true },
       }),
-      // 이 에이전시의 해당 월 활성 배정에 속한 직무지도원 찾기
+      // 이 에이전시의 해당 월 활성 배정에 속한 직무지도원 찾기 (배치형태·배치일 포함)
       prisma.siteAssignment.findMany({
         where: {
           agencyId,
@@ -93,9 +98,15 @@ export async function POST(req: NextRequest) {
           startDate: { lte: new Date(periodEnd + "T23:59:59+09:00") },
           OR: [{ endDate: null }, { endDate: { gte: new Date(periodStart + "T00:00:00+09:00") } }],
         },
-        select: { workerId: true, siteId: true },
+        select: { workerId: true, siteId: true, serviceStep: true, startDate: true },
+      }),
+      // 근로소득 간이세액표(해당 연도 → 없으면 최근 연도)
+      prisma.incomeTaxTable.findFirst({
+        where: { year: { lte: y } },
+        orderBy: { year: "desc" },
       }),
     ]);
+    const taxBrackets: TaxBracket[] = Array.isArray(incomeTaxRow?.data) ? (incomeTaxRow!.data as any) : [];
 
     const userIds = [...new Set(assignments.map(a => a.workerId))];
     if (userIds.length === 0) {
@@ -256,27 +267,65 @@ export async function POST(req: NextRequest) {
         (breakdown as any).calcMethods = calcMethods;
       }
 
-      // 공제 계산
+      // ── 지급내역 라인아이템(샘플 양식) — 자동 산출 시드. 관리자가 그리드에서 보정·추가 ──
+      const bd = breakdown as any;
+      const owage = Number(bd.ordinaryWage ?? 0);
+      const whPay = Number(bd.weeklyHolidayPay ?? 0);
+      const whHours = owage > 0 ? +(whPay / owage).toFixed(1) : 0;
+      const basePay = Math.round(grossPay - Number(bd.overtimePay ?? 0) - whPay);
+      const payLines: { key: string; name: string; hours: number; amount: number; method?: string }[] = [];
+      if (bd.payType === "HOURLY") {
+        const rate1 = Number(contract?.baseAmount ?? bd.hourlyRate ?? 0);
+        const rate2 = contract?.hourlyRate2Plus != null ? Number(contract.hourlyRate2Plus) : Math.round(rate1 * 1.2);
+        const h2 = bd.used2PlusRate ? workedHours : 0;
+        const h1 = bd.used2PlusRate ? 0 : workedHours;
+        payLines.push({ key: "support1", name: "1인지원", hours: h1, amount: Math.round(h1 * rate1), method: rate1 ? `지원시간 × ${rate1.toLocaleString()}원` : "" });
+        payLines.push({ key: "support2", name: "2인이상지원", hours: h2, amount: Math.round(h2 * rate2), method: rate1 ? `지원시간 × ${rate1.toLocaleString()}원 × 120%` : "" });
+      } else if (contract) {
+        payLines.push({ key: "base", name: "기본급", hours: workedHours, amount: basePay, method: calcMethods["기본급"] ?? "" });
+      }
+      if (Number(bd.overtimePay ?? 0) > 0) {
+        payLines.push({ key: "overtime", name: "연장근로수당", hours: Number(bd.overtimeHours ?? 0), amount: Number(bd.overtimePay), method: calcMethods["연장근로수당"] ?? "" });
+      }
+      payLines.push({ key: "weeklyHoliday", name: "주휴수당", hours: whHours, amount: whPay, method: calcMethods["주휴수당"] ?? "" });
+      payLines.push({ key: "paidHoliday", name: "유급휴일", hours: 0, amount: 0 });
+      payLines.push({ key: "paidLeave", name: "유급연차", hours: 0, amount: 0 });
+      payLines.push({ key: "education", name: "교육수당", hours: 0, amount: 0 });
+      const totalHours = +(workedHours + whHours).toFixed(1);
+
+      // 기본사항
+      const wa = assignments.find(a => a.workerId === workerId);
+      const dependents = 1; // 공제대상가족수 기본 1(본인). 그리드에서 변경 가능.
+      const basicInfo = {
+        job: "직무지도",
+        placementType: wa?.serviceStep ? (SERVICE_STEP_LABEL[wa.serviceStep] ?? "") : "",
+        placementDate: wa?.startDate ? new Date(wa.startDate).toISOString().slice(0, 10) : "",
+        dependents,
+      };
+
+      // ── 공제 계산 ──
       let totalDeduction = 0;
       const deductionBreakdown: Record<string, number> = {};
+      const deductLines: { key: string; name: string; amount: number }[] = [];
       const incomeType = contract?.incomeType ?? "BUSINESS";
+      const pushDed = (key: string, name: string, amount: number) => {
+        deductionBreakdown[name] = amount;
+        deductLines.push({ key, name, amount });
+        totalDeduction += amount;
+      };
 
       if (incomeType === "BUSINESS") {
-        const d = Math.round(grossPay * BUSINESS_DEDUCTION_RATE);
-        deductionBreakdown["사업소득세(3.3%)"] = d;
-        totalDeduction += d;
+        pushDed("bizTax", "사업소득세(3.3%)", Math.round(grossPay * BUSINESS_DEDUCTION_RATE));
       } else {
-        // 근로소득 4대보험 (근로자 부담분)
+        // 근로소득: 소득세(간이세액표 자동조회) + 주민세(소득세 10%) + 4대보험(근로자 부담분)
+        const incomeTax = lookupIncomeTax(taxBrackets, grossPay, dependents) ?? 0;
+        pushDed("incomeTax", "소득세", incomeTax);
+        pushDed("localTax", "주민세", localIncomeTax(incomeTax));
         if (insuranceRates) {
-          const pension = Math.round(grossPay * Number(insuranceRates.nationalPension));
-          const health = Math.round(grossPay * Number(insuranceRates.healthInsurance));
-          const ltc = Math.round(grossPay * Number(insuranceRates.longTermCare));
-          const employ = Math.round(grossPay * Number(insuranceRates.employmentInsurance));
-          deductionBreakdown["국민연금"] = pension;
-          deductionBreakdown["건강보험"] = health;
-          deductionBreakdown["장기요양보험"] = ltc;
-          deductionBreakdown["고용보험"] = employ;
-          totalDeduction += pension + health + ltc + employ;
+          pushDed("pension", "국민연금", Math.round(grossPay * Number(insuranceRates.nationalPension)));
+          pushDed("health", "건강보험", Math.round(grossPay * Number(insuranceRates.healthInsurance)));
+          pushDed("ltc", "장기요양보험", Math.round(grossPay * Number(insuranceRates.longTermCare)));
+          pushDed("employment", "고용보험", Math.round(grossPay * Number(insuranceRates.employmentInsurance)));
         }
       }
 
@@ -286,8 +335,7 @@ export async function POST(req: NextRequest) {
           ded.type === "PERCENTAGE"
             ? Math.round(grossPay * Number(ded.amount))
             : Math.round(Number(ded.amount));
-        deductionBreakdown[ded.name] = amount;
-        totalDeduction += amount;
+        pushDed(`custom_${ded.id}`, ded.name, amount);
       }
 
       const netPay = grossPay - totalDeduction;
@@ -299,7 +347,7 @@ export async function POST(req: NextRequest) {
         netPay: new Decimal(netPay),
         workedDays,
         workedMinutes,
-        breakdown: { ...breakdown, incomeType, deductionBreakdown },
+        breakdown: { ...breakdown, incomeType, deductionBreakdown, payLines, deductLines, basicInfo, totalHours },
       });
     }
 

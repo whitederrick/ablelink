@@ -11,6 +11,63 @@ const TONE_SWATCH: Record<string, string> = {
 };
 type Category = { id: string; name: string; tone: string; sortOrder: number; isActive: boolean };
 
+type TaxYear = { year: number; rowCount: number; updatedAt: string };
+
+function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
+  const [years, setYears] = useState<TaxYear[]>([]);
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = () => fetch("/api/admin/payroll/income-tax").then(r => r.json())
+    .then(d => { if (d.success) setYears(d.data); }).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    if (!text.trim()) { onToast("간이세액표를 붙여넣어 주세요."); return; }
+    setBusy(true);
+    try {
+      const d = await fetch("/api/admin/payroll/income-tax", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ year: Number(year), text }),
+      }).then(r => r.json());
+      if (d.success) { onToast(`${d.year}년 간이세액표 ${d.rowCount}구간 저장`); setText(""); load(); }
+      else onToast(d.message || "저장 실패");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="mb-6 rounded-2xl border border-slate-100 bg-white p-6">
+      <h2 className="mb-1 text-base font-black text-slate-900">근로소득 간이세액표</h2>
+      <p className="mb-4 text-xs text-slate-500">
+        매년 홈택스(근로소득 간이세액표)에서 표를 받아 등록합니다. 엑셀에서 데이터 영역을 복사(탭 구분)해 아래에 붙여넣으세요.
+        에이전시 급여계산 시 소득세 자동 조회(주민세=소득세 10%)에 사용되며, 관리자가 수동 보정할 수 있습니다.
+      </p>
+
+      {years.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {years.map(y => (
+            <span key={y.year} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600">
+              {y.year}년 · {y.rowCount.toLocaleString()}구간
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input type="number" value={year} onChange={e => setYear(e.target.value)} placeholder="연도"
+          className="h-10 w-28 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-sky-400" />
+        <button onClick={save} disabled={busy} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white disabled:opacity-40">
+          {busy ? "저장 중…" : "표 등록/갱신"}
+        </button>
+      </div>
+      <textarea value={text} onChange={e => setText(e.target.value)} rows={6}
+        placeholder={"홈택스 간이세액표 붙여넣기 (탭 구분)\n예) 1,430\t1,440\t7,420\t3,000\t...\n각 행: 월급여(이상,천원) 월급여(미만,천원) 가족1명 가족2명 ..."}
+        className="mt-2 w-full rounded-xl border border-slate-200 p-3 font-mono text-xs text-slate-800 outline-none focus:border-sky-400" />
+    </div>
+  );
+}
+
 function AnnouncementCategoryManager({ onToast }: { onToast: (m: string) => void }) {
   const [cats, setCats] = useState<Category[]>([]);
   const [newName, setNewName] = useState("");
@@ -202,6 +259,9 @@ export default function SettingsPage() {
           })}
         </div>
       </div>
+
+      {/* 근로소득 간이세액표 */}
+      <IncomeTaxTableManager onToast={showToast} />
 
       {/* 공지 카테고리 관리 */}
       <AnnouncementCategoryManager onToast={showToast} />

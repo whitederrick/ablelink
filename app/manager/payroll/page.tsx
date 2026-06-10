@@ -96,8 +96,6 @@ export default function PayrollPage() {
   const [selectedRun, setSelectedRun] = useState<RunDetail | null>(null);
   const [loadingRun, setLoadingRun] = useState(false);
   const [editItem, setEditItem] = useState<RunItem | null>(null);
-  const [editGross, setEditGross] = useState("");
-  const [editDed, setEditDed] = useState("");
   const [finalizing, setFinalizing] = useState(false);
 
   async function loadContracts() {
@@ -235,20 +233,15 @@ export default function PayrollPage() {
     } finally { setLoadingRun(false); }
   }
 
-  async function handleSaveEdit() {
-    if (!editItem || !selectedRun) return;
-    const res = await fetch(`/api/admin/payroll/runs/${selectedRun.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId: editItem.id, grossPay: Number(editGross), totalDeduction: Number(editDed) }),
-    });
-    const d = await res.json();
-    if (d.success) {
-      setSelectedRun(prev => prev ? {
-        ...prev,
-        items: prev.items.map((i: RunItem) => i.id === editItem.id ? d.item : i),
-      } : null);
-      setEditItem(null);
-    } else alert(d.message);
+  function handleEditSaved(updated: RunItem) {
+    setSelectedRun(prev => prev ? {
+      ...prev,
+      items: prev.items.map((i: RunItem) => i.id === updated.id ? updated : i),
+      totalGrossPay: prev.items.reduce((s, i) => s + (i.id === updated.id ? updated.grossPay : i.grossPay), 0),
+      totalDeduction: prev.items.reduce((s, i) => s + (i.id === updated.id ? updated.totalDeduction : i.totalDeduction), 0),
+      totalNetPay: prev.items.reduce((s, i) => s + (i.id === updated.id ? updated.netPay : i.netPay), 0),
+    } : null);
+    setEditItem(null);
   }
 
   async function handleFinalize() {
@@ -677,11 +670,7 @@ export default function PayrollPage() {
                             <a className={T.btnSecondary} href={`/api/admin/payroll/items/${item.id}/payslip`}
                               target="_blank" rel="noopener noreferrer">명세서</a>
                             {selectedRun.status === "DRAFT" && (
-                              <button className={T.btnSecondary} onClick={() => {
-                                setEditItem(item);
-                                setEditGross(String(Math.round(item.grossPay)));
-                                setEditDed(String(Math.round(item.totalDeduction)));
-                              }}>수정</button>
+                              <button className={T.btnSecondary} onClick={() => setEditItem(item)}>수정</button>
                             )}
                           </div>
                         </td>
@@ -701,31 +690,179 @@ export default function PayrollPage() {
         </div>
       )}
 
-      {/* ── 항목 수정 모달 ── */}
-      {editItem && (
-        <div className={T.modalOverlay} onClick={() => setEditItem(null)}>
-          <div className={T.modalContent} onClick={e => e.stopPropagation()}>
-            <h2 className="mb-5 text-base font-black text-slate-900">{editItem.workerName} 급여 수정</h2>
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <label className={T.label}>지급액 (원)</label>
-                <input type="number" value={editGross} onChange={e => setEditGross(e.target.value)} className={`w-full ${T.input}`} />
-              </div>
-              <div className="space-y-1.5">
-                <label className={T.label}>공제액 (원)</label>
-                <input type="number" value={editDed} onChange={e => setEditDed(e.target.value)} className={`w-full ${T.input}`} />
-                <p className="text-xs font-semibold text-slate-400">
-                  실지급액: {comma(Math.max(0, Number(editGross) - Number(editDed)))}원
-                </p>
-              </div>
-            </div>
-            <div className="mt-5 flex gap-2">
-              <button className={T.btnPrimary} onClick={handleSaveEdit}>저장</button>
-              <button className={T.btnSecondary} onClick={() => setEditItem(null)}>취소</button>
+      {/* ── 급여명세 그리드 편집 ── */}
+      {editItem && selectedRun && (
+        <PayslipGridEditor
+          item={editItem}
+          runId={selectedRun.id}
+          year={Number(selectedRun.yearMonth.slice(0, 4))}
+          onClose={() => setEditItem(null)}
+          onSaved={handleEditSaved}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── 급여명세 그리드 편집기 (샘플 양식: 지급내역·공제내역 라인아이템 + 부양가족수 소득세 자동조회) ──
+type PayLine = { key: string; name: string; hours: number; amount: number; method?: string };
+type DeductLine = { key: string; name: string; amount: number };
+
+function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
+  item: RunItem; runId: string; year: number; onClose: () => void; onSaved: (i: RunItem) => void;
+}) {
+  const bd = (item.breakdown ?? {}) as any;
+  const [payLines, setPayLines] = useState<PayLine[]>(() =>
+    Array.isArray(bd.payLines) && bd.payLines.length
+      ? bd.payLines.map((l: any) => ({ key: l.key ?? "", name: l.name ?? "", hours: Number(l.hours) || 0, amount: Number(l.amount) || 0, method: l.method ?? "" }))
+      : [{ key: "base", name: "기본급", hours: 0, amount: Math.round(item.grossPay), method: "" }]);
+  const [deductLines, setDeductLines] = useState<DeductLine[]>(() =>
+    Array.isArray(bd.deductLines) && bd.deductLines.length
+      ? bd.deductLines.map((l: any) => ({ key: l.key ?? "", name: l.name ?? "", amount: Number(l.amount) || 0 }))
+      : []);
+  const [basic, setBasic] = useState(() => ({
+    job: bd.basicInfo?.job ?? "직무지도",
+    placementType: bd.basicInfo?.placementType ?? "",
+    placementDate: bd.basicInfo?.placementDate ?? "",
+    dependents: Number(bd.basicInfo?.dependents) || 1,
+  }));
+  const [saving, setSaving] = useState(false);
+  const [taxNote, setTaxNote] = useState("");
+
+  const gross = payLines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
+  const totalDed = deductLines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
+  const net = gross - totalDed;
+  const totalHours = +payLines.reduce((s, l) => s + (Number(l.hours) || 0), 0).toFixed(1);
+
+  const setPay = (i: number, f: keyof PayLine, v: any) =>
+    setPayLines(prev => prev.map((l, idx) => idx === i ? { ...l, [f]: f === "name" || f === "method" ? v : Number(v) || 0 } : l));
+  const setDed = (i: number, f: keyof DeductLine, v: any) =>
+    setDeductLines(prev => prev.map((l, idx) => idx === i ? { ...l, [f]: f === "name" ? v : Number(v) || 0 } : l));
+
+  async function refetchTax() {
+    try {
+      const res = await fetch(`/api/admin/payroll/income-tax/lookup?pay=${gross}&dependents=${basic.dependents}&year=${year}`);
+      const d = await res.json();
+      if (d.success && d.hasTable) {
+        setDeductLines(prev => {
+          let next = [...prev];
+          const setOrAdd = (key: string, name: string, amount: number) => {
+            const idx = next.findIndex(l => l.key === key);
+            if (idx >= 0) next[idx] = { ...next[idx], amount };
+            else next = [{ key, name, amount }, ...next];
+          };
+          setOrAdd("localTax", "주민세", d.localTax);
+          setOrAdd("incomeTax", "소득세", d.incomeTax);
+          return next;
+        });
+        setTaxNote(`${d.year}년 간이세액표 적용 (과세급여 ${comma(gross)}원·가족 ${basic.dependents}명): 소득세 ${comma(d.incomeTax)}원 / 주민세 ${comma(d.localTax)}원`);
+      } else {
+        setTaxNote("등록된 간이세액표가 없습니다. 운영자에게 등록을 요청하거나 소득세를 수동 입력하세요.");
+      }
+    } catch { setTaxNote("조회 실패"); }
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/payroll/runs/${runId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: item.id, payLines, deductLines, basicInfo: basic }),
+      });
+      const d = await res.json();
+      if (d.success) onSaved(d.item); else alert(d.message);
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className={T.modalOverlay} onClick={onClose}>
+      <div className="w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-8 shadow-2xl shadow-slate-950/20" onClick={e => e.stopPropagation()}>
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-lg font-black text-slate-900">{item.workerName} 급여명세 편집</h2>
+          <span className="text-sm font-semibold text-slate-400">근무 {item.workedDays}일 · {fmtMin(item.workedMinutes)}</span>
+        </div>
+
+        {/* 기본사항 */}
+        <div className="mb-5 grid grid-cols-2 gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 sm:grid-cols-4">
+          <div><label className={T.label}>업무</label>
+            <input value={basic.job} onChange={e => setBasic(b => ({ ...b, job: e.target.value }))} className={`w-full ${T.input}`} /></div>
+          <div><label className={T.label}>배치형태</label>
+            <input value={basic.placementType} onChange={e => setBasic(b => ({ ...b, placementType: e.target.value }))} className={`w-full ${T.input}`} /></div>
+          <div><label className={T.label}>배치일</label>
+            <input type="date" value={basic.placementDate} onChange={e => setBasic(b => ({ ...b, placementDate: e.target.value }))} className={`w-full ${T.input}`} /></div>
+          <div><label className={T.label}>공제대상가족수</label>
+            <div className="flex gap-1.5">
+              <input type="number" min={1} max={11} value={basic.dependents}
+                onChange={e => setBasic(b => ({ ...b, dependents: Math.max(1, Math.min(11, Number(e.target.value) || 1)) }))}
+                className={`w-full ${T.input}`} />
+              <button onClick={refetchTax} className={`${T.btnSecondary} whitespace-nowrap`} title="과세급여·가족수로 소득세 재조회">세액조회</button>
             </div>
           </div>
         </div>
-      )}
+        {taxNote && <p className="mb-4 rounded-xl bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700">{taxNote}</p>}
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          {/* 지급내역 */}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-black text-slate-900">지급내역</h3>
+              <button onClick={() => setPayLines(p => [...p, { key: `c${Date.now()}`, name: "", hours: 0, amount: 0 }])}
+                className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-50">+ 항목</button>
+            </div>
+            <div className="overflow-hidden rounded-xl border border-slate-200">
+              <div className="grid grid-cols-[1fr_64px_100px_28px] gap-1 bg-slate-50 px-2 py-1.5 text-[11px] font-black text-slate-400">
+                <span>임금항목</span><span className="text-right">시간</span><span className="text-right">금액</span><span></span>
+              </div>
+              {payLines.map((l, i) => (
+                <div key={i} className="grid grid-cols-[1fr_64px_100px_28px] items-center gap-1 border-t border-slate-50 px-2 py-1">
+                  <input value={l.name} onChange={e => setPay(i, "name", e.target.value)} className="h-8 rounded-lg border border-slate-200 px-2 text-xs font-semibold outline-none focus:border-sky-400" />
+                  <input type="number" value={l.hours || ""} onChange={e => setPay(i, "hours", e.target.value)} className="h-8 rounded-lg border border-slate-200 px-1.5 text-right text-xs outline-none focus:border-sky-400" />
+                  <input type="number" value={l.amount || ""} onChange={e => setPay(i, "amount", e.target.value)} className="h-8 rounded-lg border border-slate-200 px-1.5 text-right text-xs font-semibold outline-none focus:border-sky-400" />
+                  <button onClick={() => setPayLines(p => p.filter((_, idx) => idx !== i))} className="text-slate-300 hover:text-rose-500">✕</button>
+                </div>
+              ))}
+              <div className="grid grid-cols-[1fr_64px_100px_28px] gap-1 border-t border-slate-200 bg-slate-50 px-2 py-2 text-xs font-black">
+                <span className="text-slate-600">총시간/급여총액</span><span className="text-right text-slate-600">{totalHours}</span><span className="text-right text-sky-700">{comma(gross)}</span><span></span>
+              </div>
+            </div>
+          </div>
+
+          {/* 공제내역 */}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-black text-slate-900">공제내역</h3>
+              <button onClick={() => setDeductLines(p => [...p, { key: `c${Date.now()}`, name: "", amount: 0 }])}
+                className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-50">+ 항목</button>
+            </div>
+            <div className="overflow-hidden rounded-xl border border-slate-200">
+              <div className="grid grid-cols-[1fr_100px_28px] gap-1 bg-slate-50 px-2 py-1.5 text-[11px] font-black text-slate-400">
+                <span>공제항목</span><span className="text-right">금액</span><span></span>
+              </div>
+              {deductLines.map((l, i) => (
+                <div key={i} className="grid grid-cols-[1fr_100px_28px] items-center gap-1 border-t border-slate-50 px-2 py-1">
+                  <input value={l.name} onChange={e => setDed(i, "name", e.target.value)} className="h-8 rounded-lg border border-slate-200 px-2 text-xs font-semibold outline-none focus:border-sky-400" />
+                  <input type="number" value={l.amount || ""} onChange={e => setDed(i, "amount", e.target.value)} className="h-8 rounded-lg border border-slate-200 px-1.5 text-right text-xs font-semibold outline-none focus:border-sky-400" />
+                  <button onClick={() => setDeductLines(p => p.filter((_, idx) => idx !== i))} className="text-slate-300 hover:text-rose-500">✕</button>
+                </div>
+              ))}
+              <div className="grid grid-cols-[1fr_100px_28px] gap-1 border-t border-slate-200 bg-slate-50 px-2 py-2 text-xs font-black">
+                <span className="text-slate-600">공제합계</span><span className="text-right text-rose-600">{comma(totalDed)}</span><span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 당월지급액 */}
+        <div className="mt-5 flex items-center justify-between rounded-2xl bg-slate-950 px-5 py-4">
+          <span className="text-sm font-black text-slate-300">당월 지급액</span>
+          <span className="text-2xl font-black text-white">{comma(net)}원</span>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button className={T.btnSecondary} onClick={onClose}>취소</button>
+          <button className={T.btnPrimary} onClick={save} disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
+        </div>
+      </div>
     </div>
   );
 }
