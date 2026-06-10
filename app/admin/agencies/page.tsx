@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Building2, Users, MapPin, ChevronDown, Plus, X, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
 
 type Agency = {
   id: string; name: string; planType: string; trialEndsAt: string | null;
@@ -12,9 +15,12 @@ type Agency = {
   createdAt: string; managerCount: number; siteCount: number;
 };
 
-const PLAN_COLORS: Record<string, string> = {
-  FREE:"bg-slate-100 text-slate-600", TRIAL:"bg-amber-100 text-amber-700",
-  STARTER:"bg-sky-100 text-sky-700", STANDARD:"bg-violet-100 text-violet-700", PRO:"bg-emerald-100 text-emerald-700",
+const PLAN_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  FREE:     { label: "FREE",     tone: "slate" },
+  TRIAL:    { label: "TRIAL",    tone: "amber" },
+  STARTER:  { label: "STARTER",  tone: "sky" },
+  STANDARD: { label: "STANDARD", tone: "violet" },
+  PRO:      { label: "PRO",      tone: "emerald" },
 };
 const PLANS = ["FREE","TRIAL","STARTER","STANDARD","PRO"];
 
@@ -22,6 +28,7 @@ export default function AgenciesPage() {
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
+  const [planFilter, setPlanFilter] = useState<string[]>([]);
   const [editId, setEditId]     = useState<string|null>(null);
   const [editPlan, setEditPlan] = useState(""); const [editTrial, setEditTrial] = useState("");
   const [editMaxWorkers, setEditMaxWorkers] = useState(""); const [editMaxSites, setEditMaxSites] = useState("");
@@ -55,7 +62,14 @@ export default function AgenciesPage() {
     if(data.success){showToast("에이전시가 생성되었습니다.");setShowCreate(false);setForm({name:"",planType:"FREE",managerLoginId:"",managerPassword:"",managerDisplayName:""});load();}else showToast(data.message||"생성 실패");
   }
 
-  const filtered=agencies.filter(a=>a.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return agencies
+      .filter(a => planFilter.length === 0 || planFilter.includes(a.planType))
+      .filter(a => !q || a.name.toLowerCase().includes(q));
+  }, [agencies, search, planFilter]);
+  const togglePlan = (v: string) => setPlanFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
+  const planCnt = (p: string) => agencies.filter(a => a.planType === p).length;
 
   return (
     <div>
@@ -102,9 +116,26 @@ export default function AgenciesPage() {
         </div>
       )}
 
+      <StatCardRow
+        className="mb-5"
+        cols={4}
+        items={[
+          { label: "전체", value: agencies.length },
+          { label: "유료(STARTER+)", value: planCnt("STARTER") + planCnt("STANDARD") + planCnt("PRO"), tone: "emerald" },
+          { label: "체험(TRIAL)", value: planCnt("TRIAL"), tone: "amber" },
+          { label: "무료(FREE)", value: planCnt("FREE"), tone: "slate" },
+        ]}
+      />
+
       <div className="mb-4">
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="에이전시 이름 검색..."
-          className="w-full max-w-xs rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/>
+        <ListToolbar
+          query={search}
+          onQueryChange={setSearch}
+          placeholder="에이전시 이름 검색"
+          filters={PLANS.map(p => ({ value: p, label: p, count: planCnt(p) })) as FilterChip[]}
+          selected={planFilter}
+          onToggleFilter={togglePlan}
+        />
       </div>
 
       {loading?(
@@ -112,7 +143,7 @@ export default function AgenciesPage() {
       ):(
         <div className="space-y-2">
           {filtered.length===0?(
-            <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">에이전시가 없습니다.</p></div>
+            <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">{agencies.length===0?"에이전시가 없습니다.":"조건에 맞는 에이전시가 없습니다."}</p></div>
           ):filtered.map(a=>(
             <div key={a.id} className="rounded-2xl border border-slate-100 bg-white p-4">
               <div className="flex items-center gap-4">
@@ -122,7 +153,7 @@ export default function AgenciesPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-black text-slate-900">{a.name}</span>
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-black ${PLAN_COLORS[a.planType]??"bg-slate-100 text-slate-600"}`}>{a.planType}</span>
+                    <StatusBadge status={a.planType} map={PLAN_BADGE} />
                     {a.trialEndsAt&&<span className="text-[10px] text-slate-400">체험 ~{new Date(a.trialEndsAt).toLocaleDateString("ko-KR")}</span>}
                     {a.nextBillingAt&&<span className="text-[10px] text-emerald-600">다음결제 {new Date(a.nextBillingAt).toLocaleDateString("ko-KR")}</span>}
                   </div>

@@ -2,14 +2,18 @@
 
 // 직무지도 매칭 — 수요측(에이전시 매니저) 내 공고 목록
 import Link from "next/link";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import { StatCardRow } from "../_components/StatCard";
 
 const PROF_LABEL: Record<string, string> = {
   JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사",
 };
+const PAGE_SIZE = 20;
 
 interface Post {
   id: string; title: string; companyName: string; profession: string;
@@ -21,6 +25,9 @@ export default function ManagerRecruitPage() {
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -33,6 +40,17 @@ export default function ManagerRecruitPage() {
   }, [router]);
 
   useEffect(() => { load(); }, [load]);
+
+  const open = posts.filter(p => p.status === "OPEN").length;
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return posts
+      .filter(p => statusFilter.length === 0 || statusFilter.includes(p.status))
+      .filter(p => !q || p.title.toLowerCase().includes(q) || (p.companyName ?? "").toLowerCase().includes(q) || (p.region ?? "").toLowerCase().includes(q));
+  }, [posts, query, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [query, statusFilter]);
 
   async function toggleStatus(p: Post) {
     const next = p.status === "OPEN" ? "CLOSED" : "OPEN";
@@ -47,8 +65,32 @@ export default function ManagerRecruitPage() {
       <PageHeader
         title="직무지도 모집 공고 (Pro+)"
         sub="직무지도원을 모집할 공고를 등록하고 신청자를 관리합니다."
-        actions={<Link href="/manager/recruit/new" className={T.btnPrimary}>+ 새 공고</Link>}
+        actions={<Link href="/manager/recruit/new" className={`${T.btnPrimary} no-underline`}>+ 새 공고</Link>}
       />
+
+      <StatCardRow
+        className="mb-5"
+        cols={3}
+        items={[
+          { label: "전체 공고", value: posts.length },
+          { label: "모집중", value: open, tone: "emerald" },
+          { label: "마감", value: posts.length - open, tone: "slate" },
+        ]}
+      />
+
+      <div className="mb-4">
+        <ListToolbar
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="공고·현장·지역 검색"
+          filters={[
+            { value: "OPEN", label: "모집중", count: open },
+            { value: "CLOSED", label: "마감", count: posts.length - open },
+          ] as FilterChip[]}
+          selected={statusFilter}
+          onToggleFilter={(v)=>setStatusFilter(p=>p.includes(v)?p.filter(x=>x!==v):[...p,v])}
+        />
+      </div>
 
       <div className={T.tableWrap}>
         <table className="w-full">
@@ -66,10 +108,10 @@ export default function ManagerRecruitPage() {
           <tbody>
             {loading ? (
               <tr><td colSpan={7} className={T.empty}>불러오는 중…</td></tr>
-            ) : posts.length === 0 ? (
-              <tr><td colSpan={7} className={T.empty}>등록한 공고가 없습니다. ‘새 공고’로 등록해보세요.</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={7} className={T.empty}>{posts.length===0?"등록한 공고가 없습니다. ‘새 공고’로 등록해보세요.":"조건에 맞는 공고가 없습니다."}</td></tr>
             ) : (
-              posts.map((p) => (
+              pageItems.map((p) => (
                 <tr key={p.id} className={T.trBase}>
                   <td className={T.td}>
                     <Link href={`/manager/recruit/${p.id}`} className="font-bold text-slate-900 hover:text-sky-600">{p.title}</Link>
@@ -94,6 +136,7 @@ export default function ManagerRecruitPage() {
             )}
           </tbody>
         </table>
+        <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
       </div>
     </div>
   );

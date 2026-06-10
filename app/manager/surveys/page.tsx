@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
 import { X } from "lucide-react";
 
 type Status = "PENDING" | "RESPONDED" | "EXPIRED" | "CANCELLED";
@@ -14,12 +18,13 @@ interface SurveyItem {
 }
 interface SearchResult { id: string; workerName: string; phoneNumber: string; siteName: string | null; }
 
-const STATUS_CLS: Record<Status, { label: string; cls: string }> = {
-  PENDING:   { label: "응답 대기", cls: "bg-amber-50 text-amber-600" },
-  RESPONDED: { label: "응답 완료", cls: "bg-emerald-50 text-emerald-600" },
-  EXPIRED:   { label: "만료",      cls: "bg-slate-100 text-slate-500" },
-  CANCELLED: { label: "취소",      cls: "bg-slate-100 text-slate-500" },
+const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  PENDING:   { label: "응답 대기", tone: "amber" },
+  RESPONDED: { label: "응답 완료", tone: "emerald" },
+  EXPIRED:   { label: "만료",      tone: "slate" },
+  CANCELLED: { label: "취소",      tone: "slate" },
 };
+const PAGE_SIZE = 20;
 
 function RequestModal({ onClose, onCreated }: { onClose: () => void; onCreated: (url: string) => void }) {
   const [query, setQuery] = useState("");
@@ -108,9 +113,33 @@ export default function ManagerSurveysPage() {
   const [loading, setLoading] = useState(true);
   const [showReq, setShowReq] = useState(false);
   const [lastUrl, setLastUrl] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
 
   function load() { fetch("/api/admin/surveys").then(r => r.json()).then(d => { if (d.success) setItems(d.items); }).catch(() => {}).finally(() => setLoading(false)); }
   useEffect(() => { load(); }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return items
+      .filter(s => statusFilter.length === 0 || statusFilter.includes(s.status))
+      .filter(s => !q || s.workerName.toLowerCase().includes(q) || (s.siteName ?? "").toLowerCase().includes(q) || (s.recipientName ?? "").toLowerCase().includes(q) || s.recipientPhone.includes(q));
+  }, [items, query, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [query, statusFilter]);
+
+  const pendingCnt   = items.filter(s => s.status === "PENDING").length;
+  const respondedCnt = items.filter(s => s.status === "RESPONDED").length;
+  const closedCnt    = items.filter(s => s.status === "EXPIRED" || s.status === "CANCELLED").length;
+  const filters: FilterChip[] = [
+    { value: "PENDING", label: "응답 대기", count: pendingCnt },
+    { value: "RESPONDED", label: "응답 완료", count: respondedCnt },
+    { value: "EXPIRED", label: "만료", count: items.filter(s => s.status === "EXPIRED").length },
+    { value: "CANCELLED", label: "취소", count: items.filter(s => s.status === "CANCELLED").length },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   return (
     <div className="space-y-5">
@@ -125,19 +154,38 @@ export default function ManagerSurveysPage() {
           <button onClick={() => { navigator.clipboard.writeText(lastUrl); alert("복사되었습니다."); }} className="whitespace-nowrap rounded-xl border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">링크 복사</button>
         </div>
       )}
+
+      <StatCardRow
+        cols={4}
+        items={[
+          { label: "전체", value: items.length },
+          { label: "응답 대기", value: pendingCnt, tone: "amber" },
+          { label: "응답 완료", value: respondedCnt, tone: "emerald" },
+          { label: "만료·취소", value: closedCnt, tone: "slate" },
+        ]}
+      />
+
+      <ListToolbar
+        query={query}
+        onQueryChange={setQuery}
+        placeholder="직무지도원·사업체·담당자 검색"
+        filters={filters}
+        selected={statusFilter}
+        onToggleFilter={toggleStatus}
+      />
+
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
           <thead><tr>{["직무지도원", "사업체/담당자", "상태", "결과", "요청일"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
           <tbody>
             {loading ? <tr><td colSpan={5} className={T.tdCenter}>로딩 중...</td></tr>
-            : items.length === 0 ? <tr><td colSpan={5} className={T.tdCenter}>요청한 조사가 없습니다.</td></tr>
-            : items.map(s => {
-              const st = STATUS_CLS[s.status];
+            : filtered.length === 0 ? <tr><td colSpan={5} className={T.tdCenter}>{items.length === 0 ? "요청한 조사가 없습니다." : "조건에 맞는 조사가 없습니다."}</td></tr>
+            : pageItems.map(s => {
               return (
                 <tr key={s.id} className={T.trBase}>
                   <td className={`${T.td} font-black text-slate-900`}>{s.workerName}</td>
                   <td className={T.td}><div className="text-slate-700">{s.siteName || "-"}</div><div className="text-xs text-slate-400">{s.recipientName || ""} {s.recipientPhone}</div></td>
-                  <td className={T.td}><span className={`${T.badge} ${st.cls}`}>{st.label}</span>{s.auto && <span className="ml-1 text-[10px] text-slate-400">자동</span>}</td>
+                  <td className={T.td}><StatusBadge status={s.status} map={STATUS_BADGE} />{s.auto && <span className="ml-1 text-[10px] text-slate-400">자동</span>}</td>
                   <td className={T.td}>{s.status === "RESPONDED" ? (s.sharedWithAgency && s.overallScore != null ? <span className="font-black text-slate-800">종합 {s.overallScore}/5</span> : <span className="text-xs text-slate-400">운영자 확인</span>) : "-"}</td>
                   <td className={`${T.td} text-xs text-slate-400`}>{s.createdAt.slice(0, 10)}</td>
                 </tr>
@@ -145,6 +193,7 @@ export default function ManagerSurveysPage() {
             })}
           </tbody>
         </table>
+        <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
       </div>
       {showReq && <RequestModal onClose={() => setShowReq(false)} onCreated={(url) => { setLastUrl(url); load(); }} />}
     </div>

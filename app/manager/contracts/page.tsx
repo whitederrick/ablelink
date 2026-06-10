@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
 import { X } from "lucide-react";
 import { computeWorkTimes, type WorkType } from "@/lib/workSchedule";
 
@@ -67,12 +71,13 @@ interface SearchResult {
 }
 interface Clause { id: string; title: string; body: string; sortOrder: number; isActive: boolean; }
 
-const STATUS_CLS: Record<ContractStatus, { label: string; cls: string }> = {
-  PENDING:   { label: "서명 대기",      cls: "bg-amber-50 text-amber-600" },
-  SIGNED:    { label: "직무지도원 서명", cls: "bg-sky-50 text-sky-600" },
-  COMPLETED: { label: "계약 완료",      cls: "bg-emerald-50 text-emerald-600" },
-  CANCELLED: { label: "취소",           cls: "bg-slate-100 text-slate-500" },
+const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  PENDING:   { label: "서명 대기",      tone: "amber" },
+  SIGNED:    { label: "직무지도원 서명", tone: "sky" },
+  COMPLETED: { label: "계약 완료",      tone: "emerald" },
+  CANCELLED: { label: "취소",           tone: "slate" },
 };
+const PAGE_SIZE = 20;
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 function formatPeriod(start: string | null, end: string | null): string {
@@ -607,7 +612,7 @@ function DetailModal({ id, onClose }: { id: string; onClose: () => void }) {
                 ["소정근로", `${data.workStartTime || "-"} ~ ${data.workEndTime || "-"}`],
                 ["임금", data.wageAmount ? `${wt[data.wageType] || ""} ${Number(data.wageAmount).toLocaleString()}원` : "-"],
                 ["사업주", data.employerBizName || "-"], ["대표자", data.employerRepName || "-"],
-                ["상태", STATUS_CLS[data.status as ContractStatus]?.label || data.status],
+                ["상태", STATUS_BADGE[data.status as ContractStatus]?.label || data.status],
               ].map(([k, v]) => (
                 <div key={k as string} className="flex gap-2 border-b border-slate-50 py-1"><span className="w-20 flex-shrink-0 font-semibold text-slate-400">{k}</span><span className="font-semibold text-slate-700">{v}</span></div>
               ))}
@@ -632,6 +637,9 @@ export default function AdminContractsPage() {
   const [showClauses, setShowClauses] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [lastCreatedUrl, setLastCreatedUrl] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
   function loadContracts() {
@@ -642,6 +650,25 @@ export default function AdminContractsPage() {
   function copyLink(token: string) {
     navigator.clipboard.writeText(`${baseUrl}/contract/${token}`).then(() => alert("링크가 복사되었습니다."));
   }
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return contracts
+      .filter(c => statusFilter.length === 0 || statusFilter.includes(c.status))
+      .filter(c => !q || c.workerName.toLowerCase().includes(q) || (c.userPhone ?? "").includes(q) || (c.workLocation ?? c.siteName ?? "").toLowerCase().includes(q));
+  }, [contracts, query, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [query, statusFilter]);
+
+  const cnt = (s: string) => contracts.filter(c => c.status === s).length;
+  const filters: FilterChip[] = [
+    { value: "PENDING", label: "서명 대기", count: cnt("PENDING") },
+    { value: "SIGNED", label: "직무지도원 서명", count: cnt("SIGNED") },
+    { value: "COMPLETED", label: "계약 완료", count: cnt("COMPLETED") },
+    { value: "CANCELLED", label: "취소", count: cnt("CANCELLED") },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   return (
     <div className="space-y-5">
@@ -663,20 +690,38 @@ export default function AdminContractsPage() {
         </div>
       )}
 
+      <StatCardRow
+        cols={4}
+        items={[
+          { label: "전체", value: contracts.length },
+          { label: "서명 대기", value: cnt("PENDING"), tone: "amber" },
+          { label: "직무지도원 서명", value: cnt("SIGNED"), tone: "sky" },
+          { label: "계약 완료", value: cnt("COMPLETED"), tone: "emerald" },
+        ]}
+      />
+
+      <ListToolbar
+        query={query}
+        onQueryChange={setQuery}
+        placeholder="직무지도원·연락처·근무장소 검색"
+        filters={filters}
+        selected={statusFilter}
+        onToggleFilter={toggleStatus}
+      />
+
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
           <thead><tr>{["직무지도원", "계약 기간", "근무장소", "상태", "서명일", "관리"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
           <tbody>
             {loading ? <tr><td colSpan={6} className={T.tdCenter}>로딩 중...</td></tr>
-            : contracts.length === 0 ? <tr><td colSpan={6} className={T.tdCenter}>계약서가 없습니다.</td></tr>
-            : contracts.map(c => {
-              const st = STATUS_CLS[c.status] ?? { label: c.status, cls: "bg-slate-100 text-slate-500" };
+            : filtered.length === 0 ? <tr><td colSpan={6} className={T.tdCenter}>{contracts.length === 0 ? "계약서가 없습니다." : "조건에 맞는 계약서가 없습니다."}</td></tr>
+            : pageItems.map(c => {
               return (
                 <tr key={c.id} className={T.trBase}>
                   <td className={T.td}><div className="font-black text-slate-900">{c.workerName}</div><div className="text-xs text-slate-400">{c.userPhone}</div></td>
                   <td className={`${T.td} text-xs text-slate-500`}>{c.contractStart?.slice(0, 10)}<br />~ {c.contractEnd?.slice(0, 10)}</td>
                   <td className={`${T.td} text-slate-600`}>{c.workLocation || c.siteName || <span className="text-slate-300">미지정</span>}</td>
-                  <td className={T.td}><span className={`${T.badge} ${st.cls}`}>{st.label}</span></td>
+                  <td className={T.td}><StatusBadge status={c.status} map={STATUS_BADGE} /></td>
                   <td className={`${T.td} text-xs text-slate-400`}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>
                     <div className="flex gap-1.5">
@@ -689,6 +734,7 @@ export default function AdminContractsPage() {
             })}
           </tbody>
         </table>
+        <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
       </div>
 
       {showCreate && <CreateContractModal onClose={() => setShowCreate(false)} onCreated={(url) => { setLastCreatedUrl(url); loadContracts(); }} />}

@@ -4,6 +4,8 @@ import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import { StatCardRow } from "../_components/StatCard";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { List, Map as MapIcon, CalendarDays, Download, Wrench, Search, AlertTriangle } from "lucide-react";
 
 const AttendanceMap = dynamic(() => import("./AttendanceMap"), { ssr: false });
@@ -13,8 +15,12 @@ type CorrectionRecord = {
   workDate: string; startTime: string | null; endTime: string | null;
   status: string; isFinalClosed: boolean; isGpsModified: boolean;
 };
-const STATUS_LABELS_C: Record<string,string> = { WORKING:"출근 중", DONE:"완료", ABSENT:"결근", MODIFIED:"수정됨" };
-const STATUS_COLORS_C: Record<string,string> = { WORKING:"bg-sky-100 text-sky-700", DONE:"bg-emerald-100 text-emerald-700", ABSENT:"bg-rose-100 text-rose-700", MODIFIED:"bg-amber-100 text-amber-700" };
+const STATUS_BADGE_C: Record<string, { label: string; tone: BadgeTone }> = {
+  WORKING:  { label: "출근 중", tone: "sky" },
+  DONE:     { label: "완료",    tone: "emerald" },
+  ABSENT:   { label: "결근",    tone: "rose" },
+  MODIFIED: { label: "수정됨",  tone: "amber" },
+};
 
 function CorrectionTool() {
   const [q, setQ] = useState("");
@@ -87,7 +93,7 @@ function CorrectionTool() {
                         ? <span className="flex items-center gap-1 text-amber-600 font-semibold text-xs"><AlertTriangle className="h-3 w-3"/>미입력</span>
                         : "-")}
                     </td>
-                    <td className={T.td}><span className={`${T.badge} ${STATUS_COLORS_C[r.status]??"bg-slate-100 text-slate-600"}`}>{STATUS_LABELS_C[r.status]??r.status}</span></td>
+                    <td className={T.td}><StatusBadge status={r.status} map={STATUS_BADGE_C} /></td>
                     <td className={T.td + " text-center"}><span className={r.isFinalClosed?"text-emerald-600 font-black":"text-slate-300"}>{r.isFinalClosed?"확정":"미확정"}</span></td>
                     <td className={T.td + " text-center"}>{r.isGpsModified&&<span className={`${T.badge} bg-amber-100 text-amber-700`}>수정</span>}</td>
                   </tr>
@@ -302,19 +308,15 @@ export default function AttendancesPage() {
     <div className="space-y-5">
       <PageHeader title="근태 현황" />
 
-      <div className={T.summaryGrid}>
-        {[
-          { label: "전체 기록", value: total,     cls: "text-slate-900" },
-          { label: "출근 완료", value: clockedIn,  cls: "text-sky-600" },
-          { label: "최종 종료", value: finalized,  cls: "text-emerald-600" },
-          { label: "GPS 이탈",  value: gpsIssues,  cls: "text-orange-600" },
-        ].map((item, i) => (
-          <div key={i} className={T.summaryCard}>
-            <p className={`${T.summaryNum} ${item.cls}`}>{item.value}</p>
-            <p className={T.summaryLabel}>{item.label}</p>
-          </div>
-        ))}
-      </div>
+      <StatCardRow
+        cols={4}
+        items={[
+          { label: "전체 기록", value: total },
+          { label: "출근 완료", value: clockedIn, tone: "sky" },
+          { label: "최종 종료", value: finalized, tone: "emerald" },
+          { label: "GPS 이탈", value: gpsIssues, tone: "amber" },
+        ]}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)}

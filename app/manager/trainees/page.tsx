@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Plus, Pencil, X, ChevronDown, ChevronUp, Search } from "lucide-react";
+import { useCallback, useEffect, useState, useMemo } from "react";
+import { Plus, Pencil, X, ChevronDown, ChevronUp } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
 
 type Trainee = {
   id: string; siteId: string; siteName: string; name: string; gender: string;
@@ -12,9 +15,11 @@ type Trainee = {
 };
 type Site = { id: string; companyName: string };
 
-const STATUS_COLORS: Record<string,string> = {
-  TRAINING:"bg-sky-100 text-sky-700", EMPLOYED:"bg-emerald-100 text-emerald-700",
-  DROPOUT:"bg-rose-100 text-rose-700", GRADUATED:"bg-slate-100 text-slate-500",
+const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  TRAINING:  { label: "훈련중",   tone: "sky" },
+  EMPLOYED:  { label: "취업",     tone: "emerald" },
+  DROPOUT:   { label: "중도포기", tone: "rose" },
+  GRADUATED: { label: "수료",     tone: "slate" },
 };
 const STATUS_LABELS: Record<string,string> = { TRAINING:"훈련중", EMPLOYED:"취업", DROPOUT:"중도포기", GRADUATED:"수료" };
 
@@ -24,7 +29,8 @@ export default function TraineesPage() {
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [sites, setSites]       = useState<Site[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [search, setSearch]     = useState("");
+  const [query, setQuery]       = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [form, setForm]         = useState<typeof EMPTY & { id?: string }>(EMPTY);
   const [showForm, setShowForm] = useState(false);
@@ -73,16 +79,28 @@ export default function TraineesPage() {
     setExpanded(next);
   }
 
-  const filtered = trainees.filter(t =>
-    t.name.includes(search) || t.siteName.includes(search) || t.disabilityType.includes(search)
-  );
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return trainees
+      .filter(t => statusFilter.length === 0 || statusFilter.includes(t.status))
+      .filter(t => !q || t.name.toLowerCase().includes(q) || t.siteName.toLowerCase().includes(q) || t.disabilityType.toLowerCase().includes(q));
+  }, [trainees, query, statusFilter]);
+
+  const cnt = (s: string) => trainees.filter(t => t.status === s).length;
+  const filters: FilterChip[] = [
+    { value: "TRAINING", label: "훈련중", count: cnt("TRAINING") },
+    { value: "EMPLOYED", label: "취업", count: cnt("EMPLOYED") },
+    { value: "DROPOUT", label: "중도포기", count: cnt("DROPOUT") },
+    { value: "GRADUATED", label: "수료", count: cnt("GRADUATED") },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   // 사이트별 그룹
   const bysite: Record<string,Trainee[]> = {};
   for(const t of filtered) (bysite[t.siteId]??=[]).push(t);
 
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
         title="훈련생 관리"
         sub={`전체 ${trainees.length}명 훈련생`}
@@ -93,10 +111,24 @@ export default function TraineesPage() {
         }
       />
 
-      <div className="flex gap-2">
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="이름·현장·장애유형 검색..."
-          className={`flex-1 ${T.input}`} />
-      </div>
+      <StatCardRow
+        cols={4}
+        items={[
+          { label: "전체", value: trainees.length },
+          { label: "훈련중", value: cnt("TRAINING"), tone: "sky" },
+          { label: "취업", value: cnt("EMPLOYED"), tone: "emerald" },
+          { label: "수료·포기", value: cnt("GRADUATED") + cnt("DROPOUT"), tone: "slate" },
+        ]}
+      />
+
+      <ListToolbar
+        query={query}
+        onQueryChange={setQuery}
+        placeholder="이름·현장·장애유형 검색"
+        filters={filters}
+        selected={statusFilter}
+        onToggleFilter={toggleStatus}
+      />
 
       {/* 폼 모달 */}
       {showForm&&(
@@ -181,9 +213,7 @@ export default function TraineesPage() {
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-slate-900">{t.name}</span>
                             <span className="text-xs text-slate-400">{t.gender==="M"?"남":"여"}</span>
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${STATUS_COLORS[t.status]??"bg-slate-100 text-slate-500"}`}>
-                              {STATUS_LABELS[t.status]??t.status}
-                            </span>
+                            <StatusBadge status={t.status} map={STATUS_BADGE} />
                           </div>
                           <p className="text-xs text-slate-400">{t.disabilityType} · {t.severity}{t.phoneNumber?` · ${t.phoneNumber}`:""}</p>
                         </div>
@@ -198,7 +228,7 @@ export default function TraineesPage() {
               </div>
             );
           })}
-          {filtered.length===0&&<div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">훈련생이 없습니다.</p></div>}
+          {filtered.length===0&&<div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">{trainees.length===0?"훈련생이 없습니다.":"조건에 맞는 훈련생이 없습니다."}</p></div>}
         </div>
       )}
       {toast&&<div className="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg z-50">{toast}</div>}

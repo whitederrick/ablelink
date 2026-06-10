@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, AlertTriangle, Lock, LockOpen } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import { StatCardRow } from "../_components/StatCard";
 
 type ReviewRow = {
   workerId: string;
@@ -45,6 +47,8 @@ export default function AdminReviewPage() {
   const [sending, setSending]       = useState(false);
   const [toast, setToast]           = useState("");
   const [locking, setLocking]       = useState<string | null>(null);
+  const [query, setQuery]           = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 2500); }
 
@@ -87,11 +91,19 @@ export default function AdminReviewPage() {
       .finally(() => setLoading(false));
   }, [yearMonth]);
 
-  const fullyDone = rows.filter(r =>
+  const isAllDone = (r: ReviewRow) =>
     r.attendance.confirmed >= r.attendance.total &&
     r.logs.confirmed >= r.logs.total &&
-    (r.evaluations.total === 0 || r.evaluations.confirmed >= r.evaluations.total)
-  ).length;
+    (r.evaluations.total === 0 || r.evaluations.confirmed >= r.evaluations.total);
+  const fullyDone = rows.filter(isAllDone).length;
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows
+      .filter(r => statusFilter.length === 0 || statusFilter.includes(isAllDone(r) ? "DONE" : "PENDING"))
+      .filter(r => !q || r.workerName.toLowerCase().includes(q) || r.siteName.toLowerCase().includes(q));
+  }, [rows, query, statusFilter]);
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   async function toggleLock(r: ReviewRow) {
     setLocking(r.workerId);
@@ -142,22 +154,26 @@ export default function AdminReviewPage() {
       />
 
       {/* 요약 */}
-      {rows.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-2xl border border-slate-100 bg-white px-4 py-4 text-center">
-            <p className="text-2xl font-black text-slate-900">{rows.length}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-400">직무지도원 수</p>
-          </div>
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4 text-center">
-            <p className="text-2xl font-black text-emerald-600">{fullyDone}</p>
-            <p className="mt-1 text-xs font-semibold text-emerald-500">전체 확정 완료</p>
-          </div>
-          <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4 text-center">
-            <p className="text-2xl font-black text-amber-600">{rows.length - fullyDone}</p>
-            <p className="mt-1 text-xs font-semibold text-amber-500">미확정 있음</p>
-          </div>
-        </div>
-      )}
+      <StatCardRow
+        cols={3}
+        items={[
+          { label: "직무지도원 수", value: rows.length },
+          { label: "전체 확정 완료", value: fullyDone, tone: "emerald" },
+          { label: "미확정 있음", value: rows.length - fullyDone, tone: "amber" },
+        ]}
+      />
+
+      <ListToolbar
+        query={query}
+        onQueryChange={setQuery}
+        placeholder="직무지도원·사업체 검색"
+        filters={[
+          { value: "DONE", label: "확정 완료", count: fullyDone },
+          { value: "PENDING", label: "미확정", count: rows.length - fullyDone },
+        ] as FilterChip[]}
+        selected={statusFilter}
+        onToggleFilter={toggleStatus}
+      />
 
       {/* 테이블 */}
       <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
@@ -165,9 +181,9 @@ export default function AdminReviewPage() {
           <div className="flex h-48 items-center justify-center">
             <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
           </div>
-        ) : rows.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="flex h-48 items-center justify-center">
-            <p className="text-sm font-semibold text-slate-400">해당 기간에 데이터가 없습니다.</p>
+            <p className="text-sm font-semibold text-slate-400">{rows.length === 0 ? "해당 기간에 데이터가 없습니다." : "조건에 맞는 직무지도원이 없습니다."}</p>
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -184,11 +200,8 @@ export default function AdminReviewPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {rows.map(r => {
-                const allDone =
-                  r.attendance.confirmed >= r.attendance.total &&
-                  r.logs.confirmed >= r.logs.total &&
-                  (r.evaluations.total === 0 || r.evaluations.confirmed >= r.evaluations.total);
+              {filtered.map(r => {
+                const allDone = isAllDone(r);
                 return (
                   <tr key={r.workerId} className="hover:bg-slate-50">
                     <td className="px-4 py-3">

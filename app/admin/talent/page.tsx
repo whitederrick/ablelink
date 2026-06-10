@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 
 // 매칭은 현재 직무지도원 직종만 운영 → 직종 필터 미노출(서버도 JOB_COACH 강제).
 const PROF_LABEL: Record<string, string> = { JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사" };
@@ -78,14 +79,16 @@ export default function ManagerTalentPage() {
         sub="구직 중인 직무지도원 후보자를 찾아 제안을 보냅니다."
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-600">
-          <input type="checkbox" checked={verifiedOnly} onChange={(e) => setVerifiedOnly(e.target.checked)} /> 검증된 자격만
-        </label>
-        <div className="ml-auto flex items-center gap-2">
-          <input value={region} onChange={(e) => setRegion(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} placeholder="지역 검색" className={T.input} />
-          <button onClick={load} className={T.btnSecondary}>검색</button>
-        </div>
+      <div className="mb-4">
+        <ListToolbar
+          query={region}
+          onQueryChange={setRegion}
+          placeholder="지역 검색"
+          onSearch={load}
+          filters={[{ value: "verified", label: "검증된 자격만" }] as FilterChip[]}
+          selected={verifiedOnly ? ["verified"] : []}
+          onToggleFilter={() => setVerifiedOnly(v => !v)}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-3">

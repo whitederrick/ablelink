@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
 import { CheckCircle2, Copy, Pencil, Send } from "lucide-react";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM";
@@ -50,15 +54,16 @@ function maskLoginId(id: string) {
   return id;
 }
 
-const STATUS_CLS: Record<string, { label: string; cls: string }> = {
-  ACTIVE:   { label: "활성",    cls: "bg-emerald-50 text-emerald-600" },
-  RESIGNED: { label: "퇴사",    cls: "bg-slate-100 text-slate-500" },
-  PAUSED:   { label: "일시정지", cls: "bg-amber-50 text-amber-600" },
+const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  ACTIVE:   { label: "활성",    tone: "emerald" },
+  RESIGNED: { label: "퇴사",    tone: "slate" },
+  PAUSED:   { label: "일시정지", tone: "amber" },
 };
-const PLAN_CLS: Record<string, { label: string; cls: string }> = {
-  FREE:    { label: "무료",    cls: "bg-slate-100 text-slate-500" },
-  PREMIUM: { label: "프리미엄", cls: "bg-violet-50 text-violet-600" },
+const PLAN_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  FREE:    { label: "무료",    tone: "slate" },
+  PREMIUM: { label: "프리미엄", tone: "violet" },
 };
+const PAGE_SIZE = 20;
 const WORK_TYPE_LABELS: Record<WorkType, string> = {
   AM:       "오전 (09:00~13:00)",
   PM:       "오후 (13:00~17:00)",
@@ -554,7 +559,9 @@ function WorkerInfoModal({ worker, onClose, onSaved }: {
 export default function WorkersPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [editTarget,     setEditTarget]     = useState<{ worker: Worker; assignment: Assignment } | null>(null);
   const [infoEditTarget, setInfoEditTarget] = useState<Worker | null>(null);
@@ -595,10 +602,27 @@ export default function WorkersPage() {
     }
   }
 
-  const filtered = workers.filter(c =>
-    c.workerName.includes(search) || c.phoneNumber.includes(search) ||
-    c.activeAssignment?.siteName.includes(search) || c.loginId.includes(search)
-  );
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return workers
+      .filter(c => statusFilter.length === 0 || statusFilter.includes(c.status))
+      .filter(c => !q ||
+        c.workerName.toLowerCase().includes(q) || c.phoneNumber.includes(q) ||
+        (c.activeAssignment?.siteName ?? "").toLowerCase().includes(q) || c.loginId.toLowerCase().includes(q));
+  }, [workers, query, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [query, statusFilter]);
+
+  const activeCnt   = workers.filter(c => c.status === "ACTIVE").length;
+  const pausedCnt   = workers.filter(c => c.status === "PAUSED").length;
+  const resignedCnt = workers.filter(c => c.status === "RESIGNED").length;
+  const filters: FilterChip[] = [
+    { value: "ACTIVE", label: "활성", count: activeCnt },
+    { value: "PAUSED", label: "일시정지", count: pausedCnt },
+    { value: "RESIGNED", label: "퇴사", count: resignedCnt },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   return (
     <div className="space-y-5">
@@ -612,11 +636,24 @@ export default function WorkersPage() {
         }
       />
 
-      <div className="flex gap-2">
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="이름 / 전화번호 / 현장명 / 아이디 검색"
-          className={`flex-1 ${T.input}`} />
-      </div>
+      <StatCardRow
+        cols={4}
+        items={[
+          { label: "전체", value: workers.length },
+          { label: "활성", value: activeCnt, tone: "emerald" },
+          { label: "일시정지", value: pausedCnt, tone: "amber" },
+          { label: "퇴사", value: resignedCnt, tone: "slate" },
+        ]}
+      />
+
+      <ListToolbar
+        query={query}
+        onQueryChange={setQuery}
+        placeholder="이름 / 전화번호 / 현장명 / 아이디 검색"
+        filters={filters}
+        selected={statusFilter}
+        onToggleFilter={toggleStatus}
+      />
 
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
@@ -631,10 +668,8 @@ export default function WorkersPage() {
             {loading ? (
               <tr><td colSpan={9} className={T.tdCenter}>로딩 중...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={9} className={T.tdCenter}>직무지도원이 없습니다.</td></tr>
-            ) : filtered.map(c => {
-              const status = STATUS_CLS[c.status] || { label: c.status, cls: "bg-slate-100 text-slate-500" };
-              const plan = PLAN_CLS[c.planType] || { label: c.planType, cls: "bg-slate-100 text-slate-500" };
+              <tr><td colSpan={9} className={T.tdCenter}>{workers.length === 0 ? "직무지도원이 없습니다." : "조건에 맞는 직무지도원이 없습니다."}</td></tr>
+            ) : pageItems.map(c => {
               const assignmentId = c.activeAssignment?.assignmentId;
               const cachedAsgn = assignmentId ? assignmentMap[assignmentId] : null;
               const workTypeLabel = cachedAsgn ? WORK_TYPE_LABELS[cachedAsgn.workType] : (c.activeAssignment ? "미설정" : "-");
@@ -660,10 +695,10 @@ export default function WorkersPage() {
                   </td>
                   <td className={`${T.td} text-xs text-slate-400`}>{c.activeAssignment?.startDate?.slice(0, 10) || "-"}</td>
                   <td className={T.td}>
-                    <span className={`${T.badge} ${plan.cls}`}>{plan.label}</span>
+                    <StatusBadge status={c.planType} map={PLAN_BADGE} />
                   </td>
                   <td className={T.td}>
-                    <span className={`${T.badge} ${status.cls}`}>{status.label}</span>
+                    <StatusBadge status={c.status} map={STATUS_BADGE} />
                   </td>
                   <td className={T.td} onClick={e => e.stopPropagation()}>
                     <button
@@ -679,6 +714,7 @@ export default function WorkersPage() {
             })}
           </tbody>
         </table>
+        <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
       </div>
 
       {editTarget && (
