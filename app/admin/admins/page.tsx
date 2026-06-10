@@ -1,8 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Plus, RefreshCw, UserCheck, UserX, KeyRound, Building2 } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { Plus, UserCheck, UserX, KeyRound, Building2 } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
+import { T } from "../_styles";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
+
+const ROLE_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  ADMIN: { label: "시스템 운영자", tone: "emerald" },
+  AGENCY: { label: "에이전시 관리자", tone: "sky" },
+  GOV: { label: "기관", tone: "slate" },
+};
+const PAGE_SIZE = 20;
 
 type AdminAccount = {
   id: string;
@@ -19,16 +31,13 @@ type AdminAccount = {
 
 type Agency = { id: string; name: string; planType: string };
 
-const ROLE_COLORS: Record<string, string> = {
-  ADMIN:  "bg-emerald-100 text-emerald-700",
-  AGENCY: "bg-sky-100 text-sky-700",
-  GOV:    "bg-slate-100 text-slate-600",
-};
-
 export default function AdminsPage() {
   const [admins, setAdmins]       = useState<AdminAccount[]>([]);
   const [agencies, setAgencies]   = useState<Agency[]>([]);
   const [loading, setLoading]     = useState(true);
+  const [query, setQuery]         = useState("");
+  const [roleFilter, setRoleFilter] = useState<string[]>([]);
+  const [page, setPage]           = useState(1);
   const [toast, setToast]         = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [resetTarget, setResetTarget] = useState<AdminAccount | null>(null);
@@ -52,6 +61,16 @@ export default function AdminsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return admins
+      .filter(a => roleFilter.length === 0 || roleFilter.includes(a.role))
+      .filter(a => !q || a.loginId.toLowerCase().includes(q) || (a.displayName ?? "").toLowerCase().includes(q) || (a.agencyName ?? "").toLowerCase().includes(q));
+  }, [admins, query, roleFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [query, roleFilter]);
 
   async function createAdmin() {
     if (!form.loginId || !form.password) { showToast("아이디와 비밀번호를 입력해주세요."); return; }
@@ -107,6 +126,31 @@ export default function AdminsPage() {
           </button>
         }
       />
+
+      <StatCardRow
+        className="mb-5"
+        cols={4}
+        items={[
+          { label: "전체 계정", value: admins.length },
+          { label: "시스템 운영자", value: admins.filter(a=>a.role==="ADMIN").length, tone: "emerald" },
+          { label: "에이전시 관리자", value: admins.filter(a=>a.role==="AGENCY").length, tone: "sky" },
+          { label: "비활성", value: admins.filter(a=>!a.isActive).length, tone: "slate" },
+        ]}
+      />
+
+      <div className="mb-4">
+        <ListToolbar
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="아이디·이름·에이전시 검색"
+          filters={[
+            { value: "ADMIN", label: "운영자", count: admins.filter(a=>a.role==="ADMIN").length },
+            { value: "AGENCY", label: "관리자", count: admins.filter(a=>a.role==="AGENCY").length },
+          ] as FilterChip[]}
+          selected={roleFilter}
+          onToggleFilter={(v)=>setRoleFilter(p=>p.includes(v)?p.filter(x=>x!==v):[...p,v])}
+        />
+      </div>
 
       {/* 계정 생성 폼 */}
       {showCreate && (
@@ -202,18 +246,16 @@ export default function AdminsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {admins.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-400">계정이 없습니다.</td></tr>
-              ) : admins.map(a => (
+              {filtered.length === 0 ? (
+                <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-400">{admins.length===0?"계정이 없습니다.":"조건에 맞는 계정이 없습니다."}</td></tr>
+              ) : pageItems.map(a => (
                 <tr key={a.id} className={`hover:bg-slate-50 transition ${!a.isActive ? "opacity-50" : ""}`}>
                   <td className="px-5 py-3.5">
                     <p className="font-semibold text-slate-900">{a.loginId}</p>
                     {a.displayName && <p className="text-xs text-slate-400">{a.displayName}</p>}
                   </td>
                   <td className="px-5 py-3.5">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-black ${ROLE_COLORS[a.role] ?? "bg-slate-100 text-slate-600"}`}>
-                      {a.role}
-                    </span>
+                    <StatusBadge status={a.role} map={ROLE_BADGE} />
                   </td>
                   <td className="px-5 py-3.5">
                     {a.agencyName ? (
@@ -227,7 +269,7 @@ export default function AdminsPage() {
                     {a.lastLoginAt ? new Date(a.lastLoginAt).toLocaleDateString("ko-KR") : "없음"}
                   </td>
                   <td className="px-5 py-3.5">
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${a.isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                    <span className={`${T.badge} ${a.isActive ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
                       {a.isActive ? "활성" : "비활성"}
                     </span>
                   </td>
@@ -248,6 +290,7 @@ export default function AdminsPage() {
               ))}
             </tbody>
           </table>
+          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
         </div>
       )}
 
