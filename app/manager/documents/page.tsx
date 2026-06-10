@@ -4,6 +4,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
+
+const DOC_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  SUBMITTED: { label: "제출완료", tone: "sky" },
+  CONFIRMED: { label: "확정", tone: "violet" },
+  MANAGER_SIGNED: { label: "서명완료", tone: "emerald" },
+  CHANGES_REQUESTED: { label: "수정요청", tone: "rose" },
+};
+const DOC_PAGE_SIZE = 12;
 
 type Item = {
   id: string;
@@ -21,18 +33,13 @@ type Item = {
   updatedAt: string;
 };
 
-const STAGE: Record<string, { label: string; cls: string }> = {
-  SUBMITTED:          { label: "제출완료", cls: "bg-sky-100 text-sky-700" },
-  CONFIRMED:          { label: "확정",     cls: "bg-violet-100 text-violet-700" },
-  MANAGER_SIGNED:     { label: "서명완료", cls: "bg-emerald-100 text-emerald-700" },
-  CHANGES_REQUESTED:  { label: "수정요청", cls: "bg-rose-100 text-rose-700" },
-};
-
 export default function ManagerDocumentsHub() {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const [preview, setPreview] = useState<Item | null>(null);
@@ -55,9 +62,9 @@ export default function ManagerDocumentsHub() {
 
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(""), 3000); };
 
-  const load = useCallback((query = "") => {
+  const load = useCallback(() => {
     setLoading(true);
-    fetch(`/api/admin/document-runs/inbox${query ? `?q=${encodeURIComponent(query)}` : ""}`)
+    fetch(`/api/admin/document-runs/inbox`)
       .then(r => r.json())
       .then(d => { if (d.success) setItems(d.items); })
       .catch(() => {})
@@ -71,6 +78,25 @@ export default function ManagerDocumentsHub() {
     for (const it of items) if (c[it.signStage] != null) c[it.signStage]++;
     return c;
   }, [items]);
+
+  const filtered = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return items
+      .filter(it => statusFilter.length === 0 || statusFilter.includes(it.signStage))
+      .filter(it => !query || it.workerName.toLowerCase().includes(query) || (it.siteName ?? "").toLowerCase().includes(query) || (it.traineeName ?? "").toLowerCase().includes(query) || it.docLabel.toLowerCase().includes(query));
+  }, [items, q, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / DOC_PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * DOC_PAGE_SIZE, page * DOC_PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [q, statusFilter]);
+
+  const filters: FilterChip[] = [
+    { value: "SUBMITTED", label: "제출완료", count: summary.SUBMITTED },
+    { value: "CONFIRMED", label: "확정", count: summary.CONFIRMED },
+    { value: "MANAGER_SIGNED", label: "서명완료", count: summary.MANAGER_SIGNED },
+    { value: "CHANGES_REQUESTED", label: "수정요청", count: summary.CHANGES_REQUESTED },
+  ];
+  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   function fileNameOf(item: Item) {
     return `${item.docLabel}_${item.workerName}${item.traineeName ? `_${item.traineeName}` : ""}_${item.periodStart}_${item.periodEnd}.pdf`;
@@ -93,7 +119,7 @@ export default function ManagerDocumentsHub() {
     if (items.length === 0) { showToast("다운로드할 문서가 없습니다."); return; }
     setZipping(true);
     try {
-      const res = await fetch(`/api/admin/document-runs/zip${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+      const res = await fetch(`/api/admin/document-runs/zip`);
       if (!res.ok) { showToast("전체 다운로드 실패"); return; }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -120,7 +146,7 @@ export default function ManagerDocumentsHub() {
       if (!d.success) { showToast(d.message || "확정 실패"); return; }
       if (confirm("확정되었습니다. 지금 매니저 서명을 등록할까요?")) {
         await handleSign(item);
-      } else { showToast("확정되었습니다."); load(q); }
+      } else { showToast("확정되었습니다."); load(); }
     } finally { setBusy(null); }
   }
 
@@ -133,7 +159,7 @@ export default function ManagerDocumentsHub() {
         else showToast(d.message || "서명 실패");
         return;
       }
-      showToast("서명까지 완료되었습니다."); setPreview(null); load(q);
+      showToast("서명까지 완료되었습니다."); setPreview(null); load();
     } finally { setBusy(null); }
   }
 
@@ -144,62 +170,54 @@ export default function ManagerDocumentsHub() {
     try {
       const d = await act(item.id, "request-changes", reason);
       if (!d.success) { showToast(d.message || "요청 실패"); return; }
-      showToast("수정요청을 보냈습니다."); setPreview(null); load(q);
+      showToast("수정요청을 보냈습니다."); setPreview(null); load();
     } finally { setBusy(null); }
   }
-
-  const SUMMARY_CARDS = [
-    { key: "SUBMITTED", label: "제출완료", cls: "text-sky-600" },
-    { key: "CONFIRMED", label: "확정", cls: "text-violet-600" },
-    { key: "MANAGER_SIGNED", label: "서명완료", cls: "text-emerald-600" },
-    { key: "CHANGES_REQUESTED", label: "수정요청", cls: "text-rose-600" },
-  ];
 
   return (
     <div className="space-y-4">
       <PageHeader title="제출 문서 확인·확정 (Starter+)" sub="직무지도원이 제출한 출근부·일지를 확인하고 확정·서명합니다." />
 
-      {/* 상태 요약 */}
-      <div className="grid grid-cols-4 gap-2">
-        {SUMMARY_CARDS.map(c => (
-          <div key={c.key} className="rounded-2xl border border-slate-100 bg-white p-3 text-center">
-            <p className={`text-xl font-black leading-none ${c.cls}`}>{summary[c.key] ?? 0}</p>
-            <p className="mt-1 text-[11px] font-black text-slate-400">{c.label}</p>
-          </div>
-        ))}
-      </div>
+      <StatCardRow
+        cols={4}
+        items={[
+          { label: "제출완료", value: summary.SUBMITTED, tone: "sky" },
+          { label: "확정", value: summary.CONFIRMED, tone: "violet" },
+          { label: "서명완료", value: summary.MANAGER_SIGNED, tone: "emerald" },
+          { label: "수정요청", value: summary.CHANGES_REQUESTED, tone: "rose" },
+        ]}
+      />
 
-      <div className="flex items-center gap-2">
-        <input
-          value={q}
-          onChange={e => setQ(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") load(q); }}
-          placeholder="직무지도원명 / 현장명 검색"
-          className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400"
-        />
-        <button onClick={() => load(q)} className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white active:scale-95">검색</button>
-        <button onClick={downloadAll} disabled={zipping || items.length === 0} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 active:scale-95 disabled:opacity-50">
-          {zipping ? "압축 중…" : "전체 다운로드"}
-        </button>
-      </div>
+      <ListToolbar
+        query={q}
+        onQueryChange={setQ}
+        placeholder="직무지도원·현장·훈련생·문서명 검색"
+        filters={filters}
+        selected={statusFilter}
+        onToggleFilter={toggleStatus}
+        extra={
+          <button onClick={downloadAll} disabled={zipping || items.length === 0} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 active:scale-95 disabled:opacity-50">
+            {zipping ? "압축 중…" : "전체 다운로드"}
+          </button>
+        }
+      />
 
       {loading ? (
         <p className="py-16 text-center text-sm font-semibold text-slate-300">불러오는 중…</p>
-      ) : items.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="rounded-2xl border border-slate-100 bg-white py-16 text-center">
-          <p className="text-sm font-semibold text-slate-400">제출된 문서가 없습니다.</p>
-          <p className="mt-1 text-xs font-semibold text-slate-300">직무지도원이 앱에서 문서를 제출하면 여기에 표시됩니다.</p>
+          <p className="text-sm font-semibold text-slate-400">{items.length === 0 ? "제출된 문서가 없습니다." : "조건에 맞는 문서가 없습니다."}</p>
+          {items.length === 0 && <p className="mt-1 text-xs font-semibold text-slate-300">직무지도원이 앱에서 문서를 제출하면 여기에 표시됩니다.</p>}
         </div>
       ) : (
         <div className="space-y-2">
-          {items.map(item => {
-            const st = STAGE[item.signStage] ?? { label: item.signStage, cls: "bg-slate-100 text-slate-600" };
+          {pageItems.map(item => {
             return (
               <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className={`rounded-md px-2 py-0.5 text-[11px] font-black ${st.cls}`}>{st.label}</span>
+                      <StatusBadge status={item.signStage} map={DOC_BADGE} />
                       <span className="text-sm font-black text-slate-900">{item.docLabel}</span>
                       {item.traineeName && <span className="text-sm font-semibold text-slate-500">· {item.traineeName}</span>}
                       {item.versionNo && item.versionNo > 1 && (
@@ -227,6 +245,7 @@ export default function ManagerDocumentsHub() {
               </div>
             );
           })}
+          <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
         </div>
       )}
 
