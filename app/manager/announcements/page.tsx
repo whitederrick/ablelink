@@ -64,8 +64,8 @@ export default function AgencyAnnouncementsPage() {
   return (
     <div>
       <PageHeader
-        title="공지 게시판"
-        sub="소속 직무지도원 앱의 ‘공지사항’에 게시됩니다. (알림 도배 없이 게시판으로 열람)"
+        title="공지사항 게시판"
+        sub="소속 직무지도원 앱의 ‘공지사항’ 게시판에 게시되어, 직무지도원이 앱에서 직접 열람합니다. 개별 통지가 필요한 경우 ‘알림 발송’ 메뉴를 이용하세요."
       />
 
       <div className="grid gap-5 lg:grid-cols-[380px_1fr]">

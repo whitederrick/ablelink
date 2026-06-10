@@ -115,8 +115,8 @@ export default function ManagerSurveysPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="직무지도원 만족도 조사"
-        sub="사업체 담당자에게 직무지도원 만족도 조사를 발송합니다. 결과는 운영자가 관리하며 공유 시 점수가 표시됩니다. (PRO)"
+        title="직무지도원 만족도 조사 (Pro+)"
+        sub="사업체 담당자에게 직무지도원 만족도 조사를 발송합니다. 결과는 운영자가 관리하며 공유 시 점수가 표시됩니다."
         actions={<button onClick={() => setShowReq(true)} className={T.btnPrimary}>+ 조사 요청</button>}
       />
       {lastUrl && (

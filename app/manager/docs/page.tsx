@@ -181,7 +181,7 @@ export default function AdminDocsPage() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <PageHeader title="문서 조회·출력" sub="제출 워크플로 없이 출근부·일지를 직접 조회·출력하고 감사용 ZIP을 받습니다. (서명은 '제출 문서 확인·확정'에서)" />
+      <PageHeader title="문서 조회·출력 (Starter+)" sub="제출 워크플로 없이 출근부·일지를 직접 조회·출력하고 감사용 ZIP을 받습니다. (서명은 '제출 문서 확인·확정'에서)" />
 
       {/* 직무지도원 선택 */}
       <div className={T.card}>

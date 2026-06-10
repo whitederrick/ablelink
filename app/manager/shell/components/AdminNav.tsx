@@ -67,8 +67,8 @@ const groups: NavGroup[] = [
   {
     title: "소통",
     items: [
-      { href: "/manager/announcements", label: "공지 게시판" },
-      { href: "/manager/notices",       label: "알림 발송(전체/그룹/개별)" },
+      { href: "/manager/announcements", label: "공지사항 게시판" },
+      { href: "/manager/notices",       label: "알림 목록" },
     ],
   },
   {

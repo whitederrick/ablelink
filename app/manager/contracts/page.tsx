@@ -646,7 +646,7 @@ export default function AdminContractsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="근로계약서 관리"
+        title="근로계약서 관리 (Pro+)"
         sub="고용노동부 표준양식 기반 전자계약서 생성·발송·조회"
         actions={
           <div className="flex gap-2">

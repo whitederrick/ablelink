@@ -74,7 +74,7 @@ export default function ManagerTalentPage() {
   return (
     <div>
       <PageHeader
-        title="인재풀 검색"
+        title="인재풀 검색 (Pro+)"
         sub="구직 중인 직무지도원 후보자를 찾아 제안을 보냅니다."
       />
 

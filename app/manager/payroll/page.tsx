@@ -275,7 +275,7 @@ export default function PayrollPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="급여 관리"
+        title="급여 관리 (Pro+)"
         actions={
           <div className="flex gap-2">
             {TAB_ITEMS.map(({ key, label }) => (
