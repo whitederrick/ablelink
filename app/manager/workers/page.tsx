@@ -60,8 +60,9 @@ const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   PAUSED:   { label: "일시정지", tone: "amber" },
 };
 const PLAN_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
-  FREE:    { label: "무료",    tone: "slate" },
-  PREMIUM: { label: "프리미엄", tone: "violet" },
+  STARTER:  { label: "STARTER",  tone: "sky" },
+  STANDARD: { label: "STANDARD", tone: "violet" },
+  PRO:      { label: "PRO",      tone: "emerald" },
 };
 const PAGE_SIZE = 10;
 const WORK_TYPE_LABELS: Record<WorkType, string> = {
@@ -693,7 +694,9 @@ export default function WorkersPage() {
                   </td>
                   <td className={T.td}>{c.activeAssignment?.startDate?.slice(0, 10) || "-"}</td>
                   <td className={T.td}>
-                    <StatusBadge status={c.planType} map={PLAN_BADGE} />
+                    {c.planType && c.planType !== "FREE"
+                      ? <StatusBadge status={c.planType === "PREMIUM" ? "PRO" : c.planType} map={PLAN_BADGE} />
+                      : <span className="text-[13px] text-slate-300">무료</span>}
                   </td>
                   <td className={T.td}>
                     <StatusBadge status={c.status} map={STATUS_BADGE} />
