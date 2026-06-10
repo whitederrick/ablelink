@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
+import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { StatCardRow } from "../_components/StatCard";
 
 function maskLoginId(id: string) {
   if (!id) return "";
@@ -65,6 +69,16 @@ function defaultYM() {
 const payTypeLabel: Record<PayType, string> = { MONTHLY: "월급", DAILY: "일급", HOURLY: "시급" };
 const incomeTypeLabel: Record<IncomeType, string> = { BUSINESS: "사업소득(3.3%)", EMPLOYMENT: "근로소득(4대보험)" };
 
+const RUN_STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  DRAFT:     { label: "초안", tone: "amber" },
+  FINALIZED: { label: "확정", tone: "emerald" },
+};
+const DED_STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  ACTIVE:   { label: "활성",  tone: "emerald" },
+  INACTIVE: { label: "비활성", tone: "slate" },
+};
+const PAGE_SIZE = 12;
+
 type Tab = "contracts" | "runs" | "deductions";
 
 const initialForm = {
@@ -82,15 +96,23 @@ export default function PayrollPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
+  const [cQuery, setCQuery] = useState("");
+  const [cTypeFilter, setCTypeFilter] = useState<string[]>([]);
+  const [cPage, setCPage] = useState(1);
 
   const [deductions, setDeductions] = useState<Deduction[]>([]);
   const [loadingDed, setLoadingDed] = useState(false);
   const [showDedForm, setShowDedForm] = useState(false);
   const [dedForm, setDedForm] = useState({ name: "", type: "FIXED" as DeductionType, amount: "" });
   const [savingDed, setSavingDed] = useState(false);
+  const [dQuery, setDQuery] = useState("");
+  const [dPage, setDPage] = useState(1);
 
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
+  const [rQuery, setRQuery] = useState("");
+  const [rStatusFilter, setRStatusFilter] = useState<string[]>([]);
+  const [rPage, setRPage] = useState(1);
   const [calcYM, setCalcYM] = useState(defaultYM());
   const [calculating, setCalculating] = useState(false);
   const [selectedRun, setSelectedRun] = useState<RunDetail | null>(null);
@@ -265,6 +287,43 @@ export default function PayrollPage() {
     { key: "deductions", label: "⚙️ 공제 설정" },
   ];
 
+  // ── 계약 탭: 검색·유형필터·페이징 ──
+  const internalCnt = contracts.filter(c => c.workerType === "INTERNAL").length;
+  const externalCnt = contracts.filter(c => c.workerType === "EXTERNAL").length;
+  const contractsFiltered = useMemo(() => {
+    const q = cQuery.trim().toLowerCase();
+    return contracts
+      .filter(c => cTypeFilter.length === 0 || cTypeFilter.includes(c.workerType))
+      .filter(c => !q || c.workerName.toLowerCase().includes(q) || c.loginId.toLowerCase().includes(q));
+  }, [contracts, cQuery, cTypeFilter]);
+  const cTotalPages = Math.max(1, Math.ceil(contractsFiltered.length / PAGE_SIZE));
+  const cPageItems = contractsFiltered.slice((cPage - 1) * PAGE_SIZE, cPage * PAGE_SIZE);
+  useEffect(() => { setCPage(1); }, [cQuery, cTypeFilter]);
+  const toggleCType = (v: string) => setCTypeFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
+
+  // ── 계산 탭: 검색·상태필터·페이징 ──
+  const draftCnt = runs.filter(r => r.status === "DRAFT").length;
+  const finalizedCnt = runs.filter(r => r.status === "FINALIZED").length;
+  const runsFiltered = useMemo(() => {
+    const q = rQuery.trim().toLowerCase();
+    return runs
+      .filter(r => rStatusFilter.length === 0 || rStatusFilter.includes(r.status))
+      .filter(r => !q || r.yearMonth.toLowerCase().includes(q));
+  }, [runs, rQuery, rStatusFilter]);
+  const rTotalPages = Math.max(1, Math.ceil(runsFiltered.length / PAGE_SIZE));
+  const rPageItems = runsFiltered.slice((rPage - 1) * PAGE_SIZE, rPage * PAGE_SIZE);
+  useEffect(() => { setRPage(1); }, [rQuery, rStatusFilter]);
+  const toggleRStatus = (v: string) => setRStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
+
+  // ── 공제 탭: 검색·페이징 ──
+  const deductionsFiltered = useMemo(() => {
+    const q = dQuery.trim().toLowerCase();
+    return deductions.filter(d => !q || d.name.toLowerCase().includes(q));
+  }, [deductions, dQuery]);
+  const dTotalPages = Math.max(1, Math.ceil(deductionsFiltered.length / PAGE_SIZE));
+  const dPageItems = deductionsFiltered.slice((dPage - 1) * PAGE_SIZE, dPage * PAGE_SIZE);
+  useEffect(() => { setDPage(1); }, [dQuery]);
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -286,11 +345,31 @@ export default function PayrollPage() {
       {/* ── 계약 탭 ── */}
       {tab === "contracts" && (
         <div className="space-y-4">
-          <div className="flex justify-end">
-            <button className={T.btnPrimary} onClick={() => setShowForm(v => !v)}>
-              {showForm ? "취소" : "+ 계약 등록"}
-            </button>
-          </div>
+          <StatCardRow
+            cols={3}
+            items={[
+              { label: "전체 계약", value: contracts.length },
+              { label: "외부 직무지도원", value: externalCnt, tone: "sky" },
+              { label: "내부 직무지도원", value: internalCnt, tone: "amber" },
+            ]}
+          />
+
+          <ListToolbar
+            query={cQuery}
+            onQueryChange={setCQuery}
+            placeholder="직무지도원·아이디 검색"
+            filters={[
+              { value: "EXTERNAL", label: "외부", count: externalCnt },
+              { value: "INTERNAL", label: "내부", count: internalCnt },
+            ] as FilterChip[]}
+            selected={cTypeFilter}
+            onToggleFilter={toggleCType}
+            extra={
+              <button className={T.btnPrimary} onClick={() => setShowForm(v => !v)}>
+                {showForm ? "취소" : "+ 계약 등록"}
+              </button>
+            }
+          />
 
           {showForm && (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -392,8 +471,8 @@ export default function PayrollPage() {
 
           {loadingContracts ? (
             <p className={T.empty}>로딩 중...</p>
-          ) : contracts.length === 0 ? (
-            <div className={T.tableWrap}><p className={T.tdCenter}>등록된 급여 계약이 없습니다.</p></div>
+          ) : contractsFiltered.length === 0 ? (
+            <div className={T.tableWrap}><p className={T.tdCenter}>{contracts.length === 0 ? "등록된 급여 계약이 없습니다." : "조건에 맞는 계약이 없습니다."}</p></div>
           ) : (
             <div className={T.tableWrap}>
               <table className="w-full border-collapse">
@@ -403,7 +482,7 @@ export default function PayrollPage() {
                   ))}</tr>
                 </thead>
                 <tbody>
-                  {contracts.map(c => (
+                  {cPageItems.map(c => (
                     <tr key={c.id} className={T.trBase}>
                       <td className={T.td}>
                         <div className="font-black text-slate-900">{c.workerName}</div>
@@ -439,6 +518,7 @@ export default function PayrollPage() {
                   ))}
                 </tbody>
               </table>
+              <Pagination className="border-t border-slate-100 px-4 py-3" page={cPage} totalPages={cTotalPages} total={contractsFiltered.length} onPageChange={setCPage} />
             </div>
           )}
         </div>
@@ -453,11 +533,16 @@ export default function PayrollPage() {
             <p className="mt-1 text-xs text-slate-400">비율 공제는 소수로 저장됩니다. UI에서는 % 단위로 입력하세요 (예: 1 입력 → 1%).</p>
           </div>
 
-          <div className="flex justify-end">
-            <button className={T.btnPrimary} onClick={() => setShowDedForm(v => !v)}>
-              {showDedForm ? "취소" : "+ 공제 항목 추가"}
-            </button>
-          </div>
+          <ListToolbar
+            query={dQuery}
+            onQueryChange={setDQuery}
+            placeholder="공제 항목명 검색"
+            extra={
+              <button className={T.btnPrimary} onClick={() => setShowDedForm(v => !v)}>
+                {showDedForm ? "취소" : "+ 공제 항목 추가"}
+              </button>
+            }
+          />
 
           {showDedForm && (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -493,8 +578,8 @@ export default function PayrollPage() {
 
           {loadingDed ? (
             <p className={T.empty}>로딩 중...</p>
-          ) : deductions.length === 0 ? (
-            <div className={T.tableWrap}><p className={T.tdCenter}>등록된 공제 항목이 없습니다.</p></div>
+          ) : deductionsFiltered.length === 0 ? (
+            <div className={T.tableWrap}><p className={T.tdCenter}>{deductions.length === 0 ? "등록된 공제 항목이 없습니다." : "조건에 맞는 항목이 없습니다."}</p></div>
           ) : (
             <div className={T.tableWrap}>
               <table className="w-full border-collapse">
@@ -504,7 +589,7 @@ export default function PayrollPage() {
                   ))}</tr>
                 </thead>
                 <tbody>
-                  {deductions.map(d => (
+                  {dPageItems.map(d => (
                     <tr key={d.id} className={T.trBase}>
                       <td className={`${T.td} font-black text-slate-900`}>{d.name}</td>
                       <td className={T.td}>
@@ -528,6 +613,7 @@ export default function PayrollPage() {
                   ))}
                 </tbody>
               </table>
+              <Pagination className="border-t border-slate-100 px-4 py-3" page={dPage} totalPages={dTotalPages} total={deductionsFiltered.length} onPageChange={setDPage} />
             </div>
           )}
         </div>
@@ -549,10 +635,31 @@ export default function PayrollPage() {
             </p>
           </div>
 
+          <StatCardRow
+            cols={3}
+            items={[
+              { label: "전체 계산", value: runs.length },
+              { label: "초안", value: draftCnt, tone: "amber" },
+              { label: "확정", value: finalizedCnt, tone: "emerald" },
+            ]}
+          />
+
+          <ListToolbar
+            query={rQuery}
+            onQueryChange={setRQuery}
+            placeholder="연월 검색 (예: 2026-06)"
+            filters={[
+              { value: "DRAFT", label: "초안", count: draftCnt },
+              { value: "FINALIZED", label: "확정", count: finalizedCnt },
+            ] as FilterChip[]}
+            selected={rStatusFilter}
+            onToggleFilter={toggleRStatus}
+          />
+
           {loadingRuns ? (
             <p className={T.empty}>로딩 중...</p>
-          ) : runs.length === 0 ? (
-            <div className={T.tableWrap}><p className={T.tdCenter}>급여 계산 내역이 없습니다.</p></div>
+          ) : runsFiltered.length === 0 ? (
+            <div className={T.tableWrap}><p className={T.tdCenter}>{runs.length === 0 ? "급여 계산 내역이 없습니다." : "조건에 맞는 계산 내역이 없습니다."}</p></div>
           ) : (
             <div className={T.tableWrap}>
               <table className="w-full border-collapse">
@@ -562,14 +669,10 @@ export default function PayrollPage() {
                   ))}</tr>
                 </thead>
                 <tbody>
-                  {runs.map(r => (
+                  {rPageItems.map(r => (
                     <tr key={r.id} className={T.trBase}>
                       <td className={`${T.td} font-black text-slate-900`}>{r.yearMonth}</td>
-                      <td className={T.td}>
-                        {r.status === "FINALIZED"
-                          ? <span className={`${T.badge} bg-emerald-50 text-emerald-600`}>확정</span>
-                          : <span className={`${T.badge} bg-amber-50 text-amber-600`}>초안</span>}
-                      </td>
+                      <td className={T.td}><StatusBadge status={r.status} map={RUN_STATUS_BADGE} /></td>
                       <td className={`${T.td} text-slate-600`}>{r.itemCount}명</td>
                       <td className={`${T.td} text-xs text-slate-400`}>{r.createdAt.slice(0, 10)}</td>
                       <td className={`${T.td} text-xs text-slate-400`}>{r.finalizedAt ? r.finalizedAt.slice(0, 10) : "-"}</td>
@@ -580,6 +683,7 @@ export default function PayrollPage() {
                   ))}
                 </tbody>
               </table>
+              <Pagination className="border-t border-slate-100 px-4 py-3" page={rPage} totalPages={rTotalPages} total={runsFiltered.length} onPageChange={setRPage} />
             </div>
           )}
         </div>
@@ -604,18 +708,14 @@ export default function PayrollPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "총 지급액",   value: selectedRun.totalGrossPay,  cls: "text-sky-600" },
-              { label: "총 공제액",   value: selectedRun.totalDeduction,  cls: "text-rose-600" },
-              { label: "총 실지급액", value: selectedRun.totalNetPay,     cls: "text-emerald-600" },
-            ].map((c, i) => (
-              <div key={i} className={T.summaryCard}>
-                <p className={`text-xl font-black leading-none ${c.cls}`}>{comma(c.value)}원</p>
-                <p className={T.summaryLabel}>{c.label}</p>
-              </div>
-            ))}
-          </div>
+          <StatCardRow
+            cols={3}
+            items={[
+              { label: "총 지급액",   value: `${comma(selectedRun.totalGrossPay)}원`,  tone: "sky" },
+              { label: "총 공제액",   value: `${comma(selectedRun.totalDeduction)}원`, tone: "rose" },
+              { label: "총 실지급액", value: `${comma(selectedRun.totalNetPay)}원`,    tone: "emerald" },
+            ]}
+          />
 
           {loadingRun ? (
             <p className={T.empty}>로딩 중...</p>
