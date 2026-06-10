@@ -143,13 +143,24 @@ export default function ManagerCalendarPage() {
         </button>
       </div>
 
-      {selectedWorker && (
-        <p className="mb-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-          <b className="text-slate-900">{selectedWorker.workerName}</b>
-          {selectedWorker.siteName && selectedWorker.siteName !== "-" && <span className="text-slate-400">· {selectedWorker.siteName}</span>}
-          {isWorkingToday && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-black text-sky-700">오늘 근무중</span>}
-        </p>
-      )}
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        {selectedWorker ? (
+          <p className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+            <b className="text-slate-900">{selectedWorker.workerName}</b>
+            {selectedWorker.siteName && selectedWorker.siteName !== "-" && <span className="text-slate-400">· {selectedWorker.siteName}</span>}
+            {isWorkingToday && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-black text-sky-700">오늘 근무중</span>}
+          </p>
+        ) : <span />}
+        {/* 범례 — 달력 우상단 */}
+        <div className="flex flex-wrap items-center gap-3 text-[12px] font-semibold text-slate-500">
+          {[["bg-sky-50 border border-sky-200", "근무중"], ["bg-amber-50 border border-amber-200", "마감중"], ["bg-emerald-50 border border-emerald-200", "확정"]].map(([cls, label]) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <div className={`h-3 w-3 rounded ${cls}`} /><span>{label}</span>
+            </div>
+          ))}
+          <span className="text-slate-400">✓확정 · ⚠GPS · 오늘=테두리</span>
+        </div>
+      </div>
 
       {!selectedWorker ? (
         <div className="flex h-60 items-center justify-center rounded-2xl border border-slate-100 bg-white">
@@ -198,17 +209,6 @@ export default function ManagerCalendarPage() {
           ))}
         </div>
       )}
-
-      {/* 범례 */}
-      <div className="mt-3 flex flex-wrap gap-4 text-[13px] font-semibold text-slate-500">
-        {[["bg-sky-50 border border-sky-200", "근무중"], ["bg-amber-50 border border-amber-200", "마감중"], ["bg-emerald-50 border border-emerald-200", "확정"]].map(([cls, label]) => (
-          <div key={label} className="flex items-center gap-1.5">
-            <div className={`h-3 w-3 rounded ${cls}`} />
-            <span>{label}</span>
-          </div>
-        ))}
-        <span>✓ 확정 · ⚠ GPS 수동조정 · 오늘=테두리 강조</span>
-      </div>
     </div>
   );
 }

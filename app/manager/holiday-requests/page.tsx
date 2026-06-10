@@ -8,7 +8,7 @@ import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import { StatCardRow } from "../_components/StatCard";
 
-const HOL_PAGE_SIZE = 15;
+const HOL_PAGE_SIZE = 10;
 
 type PendingReq = {
   id: string; requestType: "DELETE" | "CHANGE_WORKDAY";

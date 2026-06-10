@@ -288,6 +288,12 @@ export default function AttendancesPage() {
                 </button>
               ))}
             </div>
+            <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2">
+              <StatusBadge status="working" map={ATT_BADGE} />
+              <StatusBadge status="done" map={ATT_BADGE} />
+              <StatusBadge status="before" map={ATT_BADGE} />
+              <StatusBadge status="gps" map={ATT_BADGE} />
+            </div>
           </>
         }
       />

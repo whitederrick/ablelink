@@ -785,50 +785,53 @@ export default function AttendanceInboxClient() {
                   </div>
                 </div>
 
-                {/* KPI */}
-                <div className="mb-4 rounded-xl bg-slate-50 p-4 border border-slate-100">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-xs text-slate-400">출근</div>
-                      <div className="font-semibold">{fmtTime(selected.clockInAt)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-slate-400">퇴근</div>
-                      <div className="font-semibold">{fmtTime(selected.clockOutAt)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-slate-400">기준거리</div>
-                      <div className="font-semibold">{selected.rangeM ?? "-"}m</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-slate-400">거리(출근)</div>
-                      <div className="font-semibold">{selected.startDistanceM ?? "-"}m</div>
+                {/* KPI + 실제 출퇴근 — 반폭 한 줄 배치 */}
+                <div className="mb-4 grid items-start gap-3 sm:grid-cols-2">
+                  {/* KPI */}
+                  <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <div className="text-xs text-slate-400">출근</div>
+                        <div className="font-semibold">{fmtTime(selected.clockInAt)}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-400">퇴근</div>
+                        <div className="font-semibold">{fmtTime(selected.clockOutAt)}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-400">기준거리</div>
+                        <div className="font-semibold">{selected.rangeM ?? "-"}m</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-400">거리(출근)</div>
+                        <div className="font-semibold">{selected.startDistanceM ?? "-"}m</div>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* 실제 출퇴근 버튼 시각 + 지각(정상 출근 확인용). 출근부는 근무형태 고정시각 사용 */}
-                {(selected.actualClockInAt || selected.actualClockOutAt) && (() => {
-                  const expMin = getExpectedStartMin(selected);
-                  const actMin = isoToLocalMin(selected.actualClockInAt);
-                  const lateMin = expMin != null && actMin != null ? actMin - expMin : null;
-                  return (
-                    <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 p-3">
-                      <div className="text-xs font-black text-sky-700">실제 출퇴근(버튼)</div>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-semibold text-slate-700">
-                        <span>출근 {fmtTime(selected.actualClockInAt)}</span>
-                        <span>퇴근 {fmtTime(selected.actualClockOutAt)}</span>
-                        {lateMin != null && lateMin >= 15 && (
-                          <span className="rounded bg-violet-50 px-1.5 py-0.5 text-xs font-black text-violet-600">{lateMin}분 지각</span>
-                        )}
-                        {lateMin != null && lateMin < 15 && (
-                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-black text-emerald-700">정시 출근</span>
-                        )}
+                  {/* 실제 출퇴근 버튼 시각 + 지각(정상 출근 확인용). 출근부는 근무형태 고정시각 사용 */}
+                  {(selected.actualClockInAt || selected.actualClockOutAt) ? (() => {
+                    const expMin = getExpectedStartMin(selected);
+                    const actMin = isoToLocalMin(selected.actualClockInAt);
+                    const lateMin = expMin != null && actMin != null ? actMin - expMin : null;
+                    return (
+                      <div className="rounded-xl border border-sky-100 bg-sky-50 p-3">
+                        <div className="text-xs font-black text-sky-700">실제 출퇴근(버튼)</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-slate-700">
+                          <span>출근 {fmtTime(selected.actualClockInAt)}</span>
+                          <span>퇴근 {fmtTime(selected.actualClockOutAt)}</span>
+                          {lateMin != null && lateMin >= 15 && (
+                            <span className="rounded bg-violet-50 px-1.5 py-0.5 text-xs font-black text-violet-600">{lateMin}분 지각</span>
+                          )}
+                          {lateMin != null && lateMin < 15 && (
+                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-black text-emerald-700">정시 출근</span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[11px] font-medium text-slate-400">출근부는 근무형태 표준시각({selected.expectedStartAt ?? "-"})으로 작성됩니다.</p>
                       </div>
-                      <p className="mt-1 text-[11px] font-medium text-slate-400">출근부는 근무형태 표준시각({selected.expectedStartAt ?? "-"})으로 작성됩니다.</p>
-                    </div>
-                  );
-                })()}
+                    );
+                  })() : null}
+                </div>
 
                 {/* Actions */}
                 <div className="mb-4 flex flex-wrap gap-2">
@@ -862,7 +865,7 @@ export default function AttendanceInboxClient() {
                 {/* Timeline */}
                 <div className="mb-4">
                   <SectionTitle title="타임 라인" note="사유 요청/사유 등록/종결 처리 흐름" />
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-2 max-h-64 space-y-2 overflow-y-auto pr-1">
                     {selected.timeline.length === 0 ? (
                       <div className="rounded-xl border p-4 text-sm text-slate-500">타임라인 항목이 없습니다.</div>
                     ) : (

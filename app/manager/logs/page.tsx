@@ -2,7 +2,7 @@
 
 // 훈련 일지 열람 — 표준 게시판: PageHeader(CSV) → StatCardRow → ListToolbar(검색 + 상태필터 + 월/직무지도원) → 목록(클릭 펼침 상세) → Pagination.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Download } from "lucide-react";
+import { Download, X } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
@@ -22,7 +22,7 @@ type Worker = { id: string; workerName: string };
 const TYPE_LABELS: Record<string,string> = { PRE:"사전훈련", FIELD:"현장훈련", ADAPTATION:"적응지도" };
 const DOW = ["일","월","화","수","목","금","토"];
 const LOG_BADGE = { confirmed: { label: "확정", tone: "emerald" as const }, pending: { label: "미확정", tone: "amber" as const } };
-const LOG_PAGE_SIZE = 12;
+const LOG_PAGE_SIZE = 10;
 
 function nowYM() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
 
@@ -30,7 +30,7 @@ export default function ManagerLogsPage() {
   const [logs, setLogs]       = useState<Log[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(false);
-  const [expandId, setExpandId] = useState<string|null>(null);
+  const [detail, setDetail] = useState<Log|null>(null);
 
   // 서버 조회조건(월·직무지도원)
   const [workerId, setWorkerId]   = useState("");
@@ -144,41 +144,69 @@ export default function ManagerLogsPage() {
       ):pageItems.length===0?(
         <p className={T.empty}>조건에 맞는 일지가 없습니다.</p>
       ):(
-        <div className="space-y-2">
+        <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
           {pageItems.map(l=>(
-            <div key={l.id} className={`rounded-2xl border bg-white ${l.isCompleted?"border-emerald-100":"border-slate-100"}`}>
-              <button onClick={()=>setExpandId(expandId===l.id?null:l.id)}
-                className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
-                <div className="flex flex-1 min-w-0 items-center gap-2 text-[15px] font-medium text-slate-800">
-                  <span className="shrink-0 font-semibold">
-                    {l.workDate} ({DOW[new Date(l.workDate+"T00:00:00").getDay()]})
-                  </span>
-                  <span className="shrink-0">{l.workerName}</span>
-                  <span className="shrink-0">→ {l.traineeName}</span>
-                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[13px] font-semibold text-slate-600">{TYPE_LABELS[l.trainingType]??l.trainingType}</span>
-                  <StatusBadge status={l.isCompleted?"confirmed":"pending"} map={LOG_BADGE} />
-                  <span className="truncate text-[13px] text-slate-500">
-                    {l.siteName} · {l.totalTime}h · {l.attendance}{l.taskName?` · ${l.taskName}`:""}
-                  </span>
-                </div>
-                {expandId===l.id?<ChevronUp className="h-4 w-4 text-slate-400 flex-shrink-0"/>:<ChevronDown className="h-4 w-4 text-slate-400 flex-shrink-0"/>}
-              </button>
-              {expandId===l.id&&(
-                <div className="border-t border-slate-100 px-4 pb-4 pt-3">
-                  {l.content?(
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{l.content}</p>
-                  ):(
-                    <p className="text-sm text-slate-400 italic">내용 없음</p>
-                  )}
-                </div>
-              )}
-            </div>
+            <button key={l.id} onClick={()=>setDetail(l)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-slate-50">
+              <span className="shrink-0 text-[15px] font-semibold text-slate-800">
+                {l.workDate.slice(5)} ({DOW[new Date(l.workDate+"T00:00:00").getDay()]})
+              </span>
+              <span className="shrink-0 text-[15px] font-medium text-slate-800">{l.workerName} → {l.traineeName}</span>
+              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[13px] font-semibold text-slate-600">{TYPE_LABELS[l.trainingType]??l.trainingType}</span>
+              <StatusBadge status={l.isCompleted?"confirmed":"pending"} map={LOG_BADGE} />
+              <span className="min-w-0 flex-1 truncate text-[13px] text-slate-500">
+                {l.siteName} · {l.totalTime}h · {l.attendance}{l.taskName?` · ${l.taskName}`:""}
+              </span>
+            </button>
           ))}
         </div>
       )}
 
       {filtered.length > 0 && (
-        <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+        <Pagination className="mt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+      )}
+
+      {/* 일지 상세 모달 */}
+      {detail && (
+        <div className={T.modalOverlay} onClick={()=>setDetail(null)}>
+          <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-3xl bg-white p-6 shadow-2xl" onClick={e=>e.stopPropagation()}>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-base font-black text-slate-900">{detail.workerName} → {detail.traineeName}</p>
+                  <StatusBadge status={detail.isCompleted?"confirmed":"pending"} map={LOG_BADGE} />
+                </div>
+                <p className="mt-0.5 text-[13px] font-semibold text-slate-400">
+                  {detail.workDate} ({DOW[new Date(detail.workDate+"T00:00:00").getDay()]}) · {TYPE_LABELS[detail.trainingType]??detail.trainingType} · {detail.siteName}
+                </p>
+              </div>
+              <button onClick={()=>setDetail(null)} className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"><X className="h-5 w-5"/></button>
+            </div>
+
+            <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                { l: "근무시간", v: `${detail.totalTime}h` },
+                { l: "출결", v: detail.attendance },
+                { l: "수행과제", v: detail.taskName || "-" },
+                { l: "수행점수", v: detail.taskScore != null ? `${detail.taskScore}점` : "-" },
+              ].map((x,i)=>(
+                <div key={i} className="rounded-xl bg-slate-50 px-3 py-2 text-center">
+                  <p className="text-[11px] font-semibold text-slate-400">{x.l}</p>
+                  <p className="mt-0.5 text-sm font-black text-slate-800">{x.v}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              <p className="mb-1 text-[11px] font-black uppercase tracking-wide text-slate-400">일지 내용</p>
+              {detail.content ? (
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{detail.content}</p>
+              ) : (
+                <p className="text-sm italic text-slate-400">내용 없음</p>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
