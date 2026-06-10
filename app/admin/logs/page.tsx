@@ -92,10 +92,10 @@ export default function LogsPage() {
                 <span className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-black whitespace-nowrap ${ACTION_COLORS[l.action]??"bg-slate-100 text-slate-600"}`}>
                   {l.action}
                 </span>
-                <span className="flex-1 text-sm font-semibold text-slate-700 truncate">
+                <span className="flex-1 text-[15px] font-semibold text-slate-800 truncate">
                   {l.target??""} {l.adminLogin?`· ${l.adminLogin}`:""}
                 </span>
-                <span className="flex-shrink-0 text-xs text-slate-400">
+                <span className="flex-shrink-0 text-[13px] text-slate-500">
                   {new Date(l.createdAt).toLocaleString("ko-KR")}
                 </span>
               </button>

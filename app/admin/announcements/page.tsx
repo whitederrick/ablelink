@@ -214,9 +214,9 @@ export default function AnnouncementsPage() {
               >
                 <span className="flex-shrink-0"><StatusBadge status={a.type} map={SYS_BADGE} /></span>
                 <span className="flex-shrink-0"><StatusBadge status={a.audience ?? "MANAGERS"} map={AUDIENCE_BADGE} /></span>
-                <span className="flex-1 text-sm font-semibold text-slate-800 truncate">{a.title}</span>
-                <span className="flex-shrink-0 text-xs text-slate-400">{(a.audience ?? "MANAGERS") === "ALL" ? `직무지도원 ${a.sentCount}명` : "관리자 전용"}</span>
-                <span className="flex-shrink-0 text-xs text-slate-400 ml-3">
+                <span className="flex-1 text-[15px] font-semibold text-slate-800 truncate">{a.title}</span>
+                <span className="flex-shrink-0 text-[13px] text-slate-500">{(a.audience ?? "MANAGERS") === "ALL" ? `직무지도원 ${a.sentCount}명` : "관리자 전용"}</span>
+                <span className="flex-shrink-0 text-[13px] text-slate-500 ml-3">
                   {new Date(a.createdAt).toLocaleString("ko-KR")}
                 </span>
               </button>

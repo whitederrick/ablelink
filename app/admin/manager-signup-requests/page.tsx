@@ -147,15 +147,15 @@ export default function ManagerSignupRequestsPage() {
                   className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-black text-sm text-slate-900">{req.agencyName}</span>
+                      <span className="text-[15px] font-semibold text-slate-800">{req.agencyName}</span>
                       <StatusBadge status={req.status} map={REQ_BADGE} />
                       {req.ntsVerified && (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-600">
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[13px] font-black text-emerald-600">
                           국세청 검증 ✓
                         </span>
                       )}
                     </div>
-                    <p className="mt-0.5 text-xs text-slate-400">
+                    <p className="mt-0.5 text-[13px] text-slate-500">
                       {req.businessNumberType === "BUSINESS" ? "사업자번호" : "고유번호"} {req.businessNumber}
                       &nbsp;·&nbsp;아이디 {req.loginId}
                       {req.displayName && ` · ${req.displayName}`}

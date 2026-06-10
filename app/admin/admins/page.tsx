@@ -250,22 +250,21 @@ export default function AdminsPage() {
                 <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-400">{admins.length===0?"계정이 없습니다.":"조건에 맞는 계정이 없습니다."}</td></tr>
               ) : pageItems.map(a => (
                 <tr key={a.id} className={`hover:bg-slate-50 transition ${!a.isActive ? "opacity-50" : ""}`}>
-                  <td className="px-5 py-3.5">
-                    <p className="font-semibold text-slate-900">{a.loginId}</p>
-                    {a.displayName && <p className="text-xs text-slate-400">{a.displayName}</p>}
+                  <td className="px-5 py-3.5 text-[15px] font-medium text-slate-800">
+                    {a.loginId}{a.displayName ? <span className="text-[13px] text-slate-500"> ({a.displayName})</span> : ""}
                   </td>
                   <td className="px-5 py-3.5">
                     <StatusBadge status={a.role} map={ROLE_BADGE} />
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5 text-[15px] font-medium text-slate-800">
                     {a.agencyName ? (
-                      <div className="flex items-center gap-1.5 text-slate-600">
-                        <Building2 className="h-3.5 w-3.5" />
-                        <span className="font-semibold">{a.agencyName}</span>
+                      <div className="flex items-center gap-1.5">
+                        <Building2 className="h-4 w-4 text-slate-400" />
+                        {a.agencyName}
                       </div>
-                    ) : <span className="text-slate-300">—</span>}
+                    ) : <span className="text-slate-400">—</span>}
                   </td>
-                  <td className="px-5 py-3.5 text-slate-400 text-xs">
+                  <td className="px-5 py-3.5 text-[15px] font-medium text-slate-800">
                     {a.lastLoginAt ? new Date(a.lastLoginAt).toLocaleDateString("ko-KR") : "없음"}
                   </td>
                   <td className="px-5 py-3.5">

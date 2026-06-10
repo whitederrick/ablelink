@@ -99,32 +99,32 @@ export default function SitesPage() {
               {filtered.length===0?(<tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">{sites.length===0?"현장이 없습니다.":"조건에 맞는 현장이 없습니다."}</td></tr>)
               :pageItems.map(s=>(
                 <tr key={s.id} onClick={()=>router.push(`/admin/sites/${s.id}`)} className="cursor-pointer hover:bg-slate-50 transition">
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800">
                     <div className="flex items-center gap-2">
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 flex-shrink-0">
                         <Building2 className="h-4 w-4 text-slate-400"/>
                       </div>
-                      <span className="font-semibold text-slate-900">{s.companyName}</span>
+                      <span className="font-semibold">{s.companyName}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     {s.requiredProfession
-                      ? <span className="rounded-md bg-sky-50 px-2 py-0.5 text-xs font-black text-sky-600">{PROF_LABEL[s.requiredProfession] ?? s.requiredProfession}</span>
-                      : <span className="text-slate-300 text-xs">-</span>}
+                      ? <span className="rounded-md bg-sky-50 px-2 py-0.5 text-[13px] font-black text-sky-600">{PROF_LABEL[s.requiredProfession] ?? s.requiredProfession}</span>
+                      : <span className="text-slate-400">-</span>}
                   </td>
-                  <td className="px-4 py-3">
-                    {s.agencyName?<span className="text-sm text-slate-700">{s.agencyName}</span>:<span className="text-slate-300 text-xs">없음</span>}
+                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800">
+                    {s.agencyName || <span className="text-slate-400">없음</span>}
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 text-slate-600"><Users className="h-3.5 w-3.5"/>{s.traineeCount}명</div>
+                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800">
+                    <div className="flex items-center gap-1"><Users className="h-4 w-4 text-slate-400"/>{s.traineeCount}명</div>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 text-slate-600">
-                      <MapPin className="h-3.5 w-3.5"/>{s.workerCount}명
-                      {s.workers.length>0&&<span className="ml-1 text-xs text-slate-400">({s.workers.map(c=>c.name).join(", ")})</span>}
+                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800">
+                    <div className="flex items-center gap-1">
+                      <MapPin className="h-4 w-4 text-slate-400"/>{s.workerCount}명
+                      {s.workers.length>0&&<span className="ml-1 text-[13px] text-slate-500">({s.workers.map(c=>c.name).join(", ")})</span>}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-400 max-w-[200px] truncate">{s.address||"-"}</td>
+                  <td className="px-4 py-3 text-[15px] font-medium text-slate-800 max-w-[200px] truncate">{s.address||"-"}</td>
                 </tr>
               ))}
             </tbody>

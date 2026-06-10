@@ -150,13 +150,13 @@ export default function AdminSupportPage() {
                 >
                   <span className="flex-shrink-0"><StatusBadge status={t.category} map={CAT_BADGE} /></span>
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-900">{t.title}</p>
+                    <p className="truncate text-[15px] font-semibold text-slate-800">{t.title}</p>
                     <p className="text-[11px] text-slate-400">
                       {t.agencyName ?? "알 수 없음"}{t.adminLogin ? ` · ${t.adminLogin}` : ""}
                     </p>
                   </div>
                   <span className="flex-shrink-0"><StatusBadge status={t.status} map={SUP_STATUS} /></span>
-                  <span className="flex-shrink-0 text-xs text-slate-400 ml-1">
+                  <span className="flex-shrink-0 text-[13px] text-slate-500 ml-1">
                     {new Date(t.createdAt).toLocaleDateString("ko-KR")}
                   </span>
                   <ChevronDown className={`h-4 w-4 flex-shrink-0 text-slate-400 transition ${isExpanded ? "rotate-180" : ""}`} />
