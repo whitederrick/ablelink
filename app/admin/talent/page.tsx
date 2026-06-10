@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
 
 // 매칭은 현재 직무지도원 직종만 운영 → 직종 필터 미노출(서버도 JOB_COACH 강제).
 const PROF_LABEL: Record<string, string> = { JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사" };
+const CARD_PAGE_SIZE = 9;
 
 type SortKey = "rating" | "experience" | "reviews" | "ageDesc" | "ageAsc";
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
@@ -62,6 +64,10 @@ export default function ManagerTalentPage() {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>("rating");
   const sorted = useMemo(() => sortCands(cands, sortBy), [cands, sortBy]);
+  const [cardPage, setCardPage] = useState(1);
+  const cardTotalPages = Math.max(1, Math.ceil(sorted.length / CARD_PAGE_SIZE));
+  const pagedCands = sorted.slice((cardPage - 1) * CARD_PAGE_SIZE, cardPage * CARD_PAGE_SIZE);
+  useEffect(() => { setCardPage(1); }, [cands, sortBy, verifiedOnly]);
   const [offerTo, setOfferTo] = useState<Cand | null>(null);
   const [detailFor, setDetailFor] = useState<Cand | null>(null);
   const [detail, setDetail] = useState<CandDetail | null>(null);
@@ -158,34 +164,32 @@ export default function ManagerTalentPage() {
         ) : cands.length === 0 ? (
           <p className={`col-span-full ${T.empty}`}>구직 중인 후보자가 없습니다.</p>
         ) : (
-          sorted.map((c) => {
-            const primary = c.professions.find((p) => p.isPrimary) ?? c.professions[0];
-            return (
-              <div key={c.id} className={`${T.card} flex flex-col`}>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[17px] font-black text-slate-900">{c.name}</p>
-                    {c.ratingCount > 0 && <span className="text-sm font-black text-amber-500">★ {c.ratingAvg.toFixed(1)} <span className="font-semibold text-slate-400">({c.ratingCount})</span></span>}
-                  </div>
-                  <p className="mt-0.5 text-sm font-semibold text-slate-400">{c.region ?? "지역 미입력"}{c.age != null ? ` · ${c.age}세` : ""}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {c.professions.map((p) => (
-                      <span key={p.profession} className={`rounded-md px-2 py-0.5 text-xs font-black ${p.verifyStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
-                        {PROF_LABEL[p.profession] ?? p.profession} {p.experienceYears}년{p.verifyStatus === "VERIFIED" ? " ✓" : ""}
-                      </span>
-                    ))}
-                  </div>
-                  {c.bio && <p className="mt-2 line-clamp-2 text-sm font-semibold text-slate-500">{c.bio}</p>}
+          pagedCands.map((c) => (
+            <div key={c.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="shrink-0 text-[16px] font-black text-slate-900">{c.name}</p>
+                  {c.professions.map((p) => (
+                    <span key={p.profession} className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-black ${p.verifyStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
+                      {PROF_LABEL[p.profession] ?? p.profession} {p.experienceYears}년{p.verifyStatus === "VERIFIED" ? " ✓" : ""}
+                    </span>
+                  ))}
+                  {c.ratingCount > 0 && <span className="ml-auto shrink-0 text-[13px] font-black text-amber-500">★ {c.ratingAvg.toFixed(1)} <span className="font-semibold text-slate-400">({c.ratingCount})</span></span>}
                 </div>
-                <div className="mt-3 flex gap-2">
-                  <button onClick={() => openDetail(c)} className={`flex-1 ${T.btnSecondary}`}>상세 보기</button>
-                  <button onClick={() => setOfferTo(c)} className={`flex-1 ${T.btnPrimary}`}>제안 보내기</button>
-                </div>
+                <p className="mt-0.5 text-[13px] font-semibold text-slate-400">{c.region ?? "지역 미입력"}{c.age != null ? ` · ${c.age}세` : ""}</p>
+                {c.bio && <p className="mt-1.5 line-clamp-2 text-[13px] font-semibold text-slate-500">{c.bio}</p>}
               </div>
-            );
-          })
+              <div className="mt-2.5 flex gap-2">
+                <button onClick={() => openDetail(c)} className="inline-flex h-8 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white text-[13px] font-bold text-slate-600 hover:bg-slate-50 active:scale-95">상세 보기</button>
+                <button onClick={() => setOfferTo(c)} className="inline-flex h-8 flex-1 items-center justify-center rounded-lg bg-slate-950 text-[13px] font-bold text-white hover:bg-slate-800 active:scale-95">제안 보내기</button>
+              </div>
+            </div>
+          ))
         )}
       </div>
+      {!loading && sorted.length > 0 && (
+        <Pagination className="mt-4" page={cardPage} totalPages={cardTotalPages} total={sorted.length} onPageChange={setCardPage} />
+      )}
 
       {offerTo && (
         <div className={T.modalOverlay} onClick={() => setOfferTo(null)}>

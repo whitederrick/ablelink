@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
 
 // 매칭은 현재 직무지도원 직종만 운영 → 직종 필터 미노출(서버도 JOB_COACH 강제).
 const PROF_LABEL: Record<string, string> = { JOB_COACH: "직무지도원", CAREGIVER: "요양보호사", ACTIVITY_ASSISTANT: "활동지원사" };
+const CARD_PAGE_SIZE = 9;
 
 type SortKey = "rating" | "experience" | "reviews" | "ageDesc" | "ageAsc";
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
@@ -22,6 +24,24 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 interface Cand {
   id: string; name: string; region: string | null; bio: string | null; ratingAvg: number; ratingCount: number; age: number | null;
   professions: { profession: string; experienceYears: number; isPrimary: boolean; verifyStatus: string }[];
+}
+
+interface CandDetail extends Cand {
+  professions: { profession: string; experienceYears: number; isPrimary: boolean; verifyStatus: string; certifiedAt: string | null }[];
+  experiences: { profession: string | null; orgName: string; title: string | null; startDate: string; endDate: string | null; description: string | null }[];
+  reviews: { rating: number; comment: string | null; createdAt: string }[];
+}
+
+function PanelPager({ page, total, size, onPage }: { page: number; total: number; size: number; onPage: (p: number) => void }) {
+  const pages = Math.ceil(total / size);
+  if (pages <= 1) return null;
+  return (
+    <div className="mt-2 flex items-center justify-end gap-2 text-xs font-semibold text-slate-500">
+      <button onClick={() => onPage(Math.max(1, page - 1))} disabled={page <= 1} className="rounded-lg border border-slate-200 px-2 py-1 disabled:opacity-40">‹</button>
+      <span>{page}/{pages}</span>
+      <button onClick={() => onPage(Math.min(pages, page + 1))} disabled={page >= pages} className="rounded-lg border border-slate-200 px-2 py-1 disabled:opacity-40">›</button>
+    </div>
+  );
 }
 
 const maxExp = (c: Cand) => c.professions.reduce((m, p) => Math.max(m, p.experienceYears), 0);
@@ -44,7 +64,17 @@ export default function ManagerTalentPage() {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>("rating");
   const sorted = useMemo(() => sortCands(cands, sortBy), [cands, sortBy]);
+  const [cardPage, setCardPage] = useState(1);
+  const cardTotalPages = Math.max(1, Math.ceil(sorted.length / CARD_PAGE_SIZE));
+  const pagedCands = sorted.slice((cardPage - 1) * CARD_PAGE_SIZE, cardPage * CARD_PAGE_SIZE);
+  useEffect(() => { setCardPage(1); }, [cands, sortBy, verifiedOnly]);
   const [offerTo, setOfferTo] = useState<Cand | null>(null);
+  const [detailFor, setDetailFor] = useState<Cand | null>(null);
+  const [detail, setDetail] = useState<CandDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [expPage, setExpPage] = useState(1);
+  const [revPage, setRevPage] = useState(1);
+  const PANEL = 5;
   const [offerMsg, setOfferMsg] = useState("");
   const [offerSite, setOfferSite] = useState("");
   const [offerSiteId, setOfferSiteId] = useState("");
@@ -78,6 +108,15 @@ export default function ManagerTalentPage() {
   }, [region, verifiedOnly, router]);
 
   useEffect(() => { load(); }, [verifiedOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function openDetail(c: Cand) {
+    setDetailFor(c); setDetail(null); setDetailLoading(true); setExpPage(1); setRevPage(1);
+    try {
+      const r = await fetch(`/api/admin/talent/${c.id}`);
+      const d = await r.json();
+      if (d.success) setDetail(d.candidate);
+    } finally { setDetailLoading(false); }
+  }
 
   async function sendOffer() {
     if (!offerTo) return;
@@ -125,29 +164,32 @@ export default function ManagerTalentPage() {
         ) : cands.length === 0 ? (
           <p className={`col-span-full ${T.empty}`}>구직 중인 후보자가 없습니다.</p>
         ) : (
-          sorted.map((c) => {
-            const primary = c.professions.find((p) => p.isPrimary) ?? c.professions[0];
-            return (
-              <div key={c.id} className={T.card}>
-                <div className="flex items-center justify-between">
-                  <p className="text-[17px] font-black text-slate-900">{c.name}</p>
-                  {c.ratingCount > 0 && <span className="text-sm font-black text-amber-500">★ {c.ratingAvg.toFixed(1)} <span className="font-semibold text-slate-400">({c.ratingCount})</span></span>}
-                </div>
-                <p className="mt-0.5 text-sm font-semibold text-slate-400">{c.region ?? "지역 미입력"}{c.age != null ? ` · ${c.age}세` : ""}</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
+          pagedCands.map((c) => (
+            <div key={c.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="shrink-0 text-[16px] font-black text-slate-900">{c.name}</p>
                   {c.professions.map((p) => (
-                    <span key={p.profession} className={`rounded-md px-2 py-0.5 text-xs font-black ${p.verifyStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
+                    <span key={p.profession} className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-black ${p.verifyStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
                       {PROF_LABEL[p.profession] ?? p.profession} {p.experienceYears}년{p.verifyStatus === "VERIFIED" ? " ✓" : ""}
                     </span>
                   ))}
+                  {c.ratingCount > 0 && <span className="ml-auto shrink-0 text-[13px] font-black text-amber-500">★ {c.ratingAvg.toFixed(1)} <span className="font-semibold text-slate-400">({c.ratingCount})</span></span>}
                 </div>
-                {c.bio && <p className="mt-2 line-clamp-2 text-sm font-semibold text-slate-500">{c.bio}</p>}
-                <button onClick={() => setOfferTo(c)} className={`mt-3 w-full ${T.btnPrimary}`}>제안 보내기</button>
+                <p className="mt-0.5 text-[13px] font-semibold text-slate-400">{c.region ?? "지역 미입력"}{c.age != null ? ` · ${c.age}세` : ""}</p>
+                {c.bio && <p className="mt-1.5 line-clamp-2 text-[13px] font-semibold text-slate-500">{c.bio}</p>}
               </div>
-            );
-          })
+              <div className="mt-2.5 flex gap-2">
+                <button onClick={() => openDetail(c)} className="inline-flex h-8 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white text-[13px] font-bold text-slate-600 hover:bg-slate-50 active:scale-95">상세 보기</button>
+                <button onClick={() => setOfferTo(c)} className="inline-flex h-8 flex-1 items-center justify-center rounded-lg bg-slate-950 text-[13px] font-bold text-white hover:bg-slate-800 active:scale-95">제안 보내기</button>
+              </div>
+            </div>
+          ))
         )}
       </div>
+      {!loading && sorted.length > 0 && (
+        <Pagination className="mt-4" page={cardPage} totalPages={cardTotalPages} total={sorted.length} onPageChange={setCardPage} />
+      )}
 
       {offerTo && (
         <div className={T.modalOverlay} onClick={() => setOfferTo(null)}>
@@ -171,6 +213,102 @@ export default function ManagerTalentPage() {
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setOfferTo(null)} className={T.btnSecondary}>취소</button>
               <button onClick={sendOffer} disabled={sending} className={T.btnPrimary}>{sending ? "전송 중…" : "제안 전송"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {detailFor && (
+        <div className={T.modalOverlay} onClick={() => setDetailFor(null)}>
+          <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-3xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-lg font-black text-slate-900">{detailFor.name}</p>
+                <p className="mt-0.5 text-sm font-semibold text-slate-400">
+                  {detailFor.region ?? "지역 미입력"}{detailFor.age != null ? ` · ${detailFor.age}세` : ""}
+                  {detailFor.ratingCount > 0 ? <span className="ml-2 font-black text-amber-500">★ {detailFor.ratingAvg.toFixed(1)} ({detailFor.ratingCount})</span> : null}
+                </p>
+              </div>
+              <button onClick={() => setDetailFor(null)} className="text-2xl leading-none text-slate-300 hover:text-slate-500">×</button>
+            </div>
+
+            <div className="mt-4 grid flex-1 gap-5 overflow-y-auto pr-1 sm:grid-cols-2">
+              {detailLoading ? (
+                <p className={`sm:col-span-2 ${T.empty}`}>불러오는 중…</p>
+              ) : !detail ? (
+                <p className={`sm:col-span-2 ${T.empty}`}>상세 정보를 불러올 수 없습니다.</p>
+              ) : (
+                <>
+                  <section>
+                    <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-400">자격·직종</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {detail.professions.map((p) => (
+                        <span key={p.profession} className={`rounded-md px-2 py-1 text-[13px] font-bold ${p.verifyStatus === "VERIFIED" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
+                          {PROF_LABEL[p.profession] ?? p.profession} · 경력 {p.experienceYears}년
+                          {p.certifiedAt ? ` · 취득 ${p.certifiedAt}` : ""}{p.verifyStatus === "VERIFIED" ? " ✓검증" : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+
+                  {detail.bio && (
+                    <section>
+                      <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-400">소개</p>
+                      <p className="whitespace-pre-wrap text-sm font-semibold text-slate-600">{detail.bio}</p>
+                    </section>
+                  )}
+
+                  <section>
+                    <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-400">경력 이력</p>
+                    {detail.experiences.length === 0 ? (
+                      <p className="text-sm font-semibold text-slate-400">등록된 경력 이력이 없습니다.</p>
+                    ) : (
+                      <>
+                      <ul className="space-y-2">
+                        {detail.experiences.slice((expPage - 1) * PANEL, expPage * PANEL).map((e, i) => (
+                          <li key={i} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-black text-slate-800">{e.orgName}{e.title ? ` · ${e.title}` : ""}</p>
+                              <p className="whitespace-nowrap text-[13px] font-semibold text-slate-400">{e.startDate} ~ {e.endDate ?? "재직중"}</p>
+                            </div>
+                            {e.profession && <p className="mt-0.5 text-[13px] font-semibold text-slate-500">{PROF_LABEL[e.profession] ?? e.profession}</p>}
+                            {e.description && <p className="mt-1 whitespace-pre-wrap text-[13px] text-slate-500">{e.description}</p>}
+                          </li>
+                        ))}
+                      </ul>
+                      <PanelPager page={expPage} total={detail.experiences.length} size={PANEL} onPage={setExpPage} />
+                      </>
+                    )}
+                  </section>
+
+                  <section>
+                    <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-400">후기 ({detail.reviews.length})</p>
+                    {detail.reviews.length === 0 ? (
+                      <p className="text-sm font-semibold text-slate-400">아직 등록된 후기가 없습니다.</p>
+                    ) : (
+                      <>
+                      <ul className="space-y-2">
+                        {detail.reviews.slice((revPage - 1) * PANEL, revPage * PANEL).map((r, i) => (
+                          <li key={i} className="rounded-xl border border-slate-100 px-3 py-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-black text-amber-500">{"★".repeat(r.rating)}<span className="text-slate-200">{"★".repeat(5 - r.rating)}</span></span>
+                              <span className="text-[13px] font-semibold text-slate-400">{r.createdAt}</span>
+                            </div>
+                            {r.comment && <p className="mt-1 text-sm text-slate-600">{r.comment}</p>}
+                          </li>
+                        ))}
+                      </ul>
+                      <PanelPager page={revPage} total={detail.reviews.length} size={PANEL} onPage={setRevPage} />
+                      </>
+                    )}
+                  </section>
+                </>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <button onClick={() => setDetailFor(null)} className={T.btnSecondary}>닫기</button>
+              <button onClick={() => { const c = detailFor; setDetailFor(null); setOfferTo(c); }} className={T.btnPrimary}>제안 보내기</button>
             </div>
           </div>
         </div>

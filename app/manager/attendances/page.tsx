@@ -10,7 +10,7 @@ import StatusBadge from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
 import { List, Map as MapIcon, CalendarDays, Download } from "lucide-react";
 
-const LIST_PAGE_SIZE = 20;
+const LIST_PAGE_SIZE = 10;
 // 근태 상태 뱃지 매핑(공통 톤)
 const ATT_BADGE = {
   done: { label: "종료", tone: "emerald" as const },

@@ -135,6 +135,7 @@ export default function TraineeReportPage() {
         ] as FilterChip[]}
         selected={statusFilter}
         onToggleFilter={toggleStatus}
+        extraFirst
         extra={
           <>
             <select value={year} onChange={e => setYear(Number(e.target.value))} className={`w-auto ${T.select}`}>

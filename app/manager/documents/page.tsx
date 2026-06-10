@@ -195,6 +195,7 @@ export default function ManagerDocumentsHub() {
         filters={filters}
         selected={statusFilter}
         onToggleFilter={toggleStatus}
+        extraFirst
         extra={
           <button onClick={downloadAll} disabled={zipping || items.length === 0} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 active:scale-95 disabled:opacity-50">
             {zipping ? "압축 중…" : "전체 다운로드"}
@@ -213,7 +214,7 @@ export default function ManagerDocumentsHub() {
         <div className="space-y-2">
           {pageItems.map(item => {
             return (
-              <div key={item.id} className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+              <div key={item.id} className="rounded-2xl border border-slate-100 bg-white px-4 py-2">
                 <div className="flex items-center gap-2 text-[15px] font-medium text-slate-800">
                   <StatusBadge status={item.signStage} map={DOC_BADGE} />
                   <span className="shrink-0 font-semibold">{item.docLabel}</span>
@@ -225,16 +226,16 @@ export default function ManagerDocumentsHub() {
                     {item.workerName} · {item.siteName} · {item.periodStart}~{item.periodEnd}
                   </span>
                   <div className="flex shrink-0 items-center justify-end gap-1.5">
-                    <button onClick={() => openPreview(item)} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 active:scale-95">문서 보기</button>
-                    <button onClick={() => downloadPdf(item)} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 active:scale-95">다운로드</button>
+                    <button onClick={() => openPreview(item)} className="inline-flex min-h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 active:scale-95">문서 보기</button>
+                    <button onClick={() => downloadPdf(item)} className="inline-flex min-h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 active:scale-95">다운로드</button>
                     {item.signStage === "SUBMITTED" && (
                       <>
-                        <button disabled={busy === item.id} onClick={() => handleConfirm(item)} className="inline-flex min-h-10 items-center rounded-xl bg-slate-950 px-3 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">확정</button>
-                        <button disabled={busy === item.id} onClick={() => handleRequestChanges(item)} className="inline-flex min-h-10 items-center rounded-xl border border-rose-200 bg-white px-3 text-[13px] font-bold text-rose-600 active:scale-95 disabled:opacity-50">수정요청</button>
+                        <button disabled={busy === item.id} onClick={() => handleConfirm(item)} className="inline-flex min-h-8 items-center rounded-lg bg-slate-950 px-3 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">확정</button>
+                        <button disabled={busy === item.id} onClick={() => handleRequestChanges(item)} className="inline-flex min-h-8 items-center rounded-lg border border-rose-200 bg-white px-3 text-[13px] font-bold text-rose-600 active:scale-95 disabled:opacity-50">수정요청</button>
                       </>
                     )}
                     {item.signStage === "CONFIRMED" && (
-                      <button disabled={busy === item.id} onClick={() => handleSign(item)} className="inline-flex min-h-10 items-center rounded-xl bg-emerald-600 px-3 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">서명</button>
+                      <button disabled={busy === item.id} onClick={() => handleSign(item)} className="inline-flex min-h-8 items-center rounded-lg bg-emerald-600 px-3 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">서명</button>
                     )}
                   </div>
                 </div>

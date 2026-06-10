@@ -77,7 +77,7 @@ const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   COMPLETED: { label: "계약 완료",      tone: "emerald" },
   CANCELLED: { label: "취소",           tone: "slate" },
 };
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 function formatPeriod(start: string | null, end: string | null): string {

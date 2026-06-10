@@ -22,6 +22,7 @@ export default function ListToolbar({
   onToggleFilter,
   multi = true,
   extra,
+  extraFirst = false,
 }: {
   query: string;
   onQueryChange: (v: string) => void;
@@ -36,42 +37,38 @@ export default function ListToolbar({
   multi?: boolean;
   /** 기간 등 화면 특수 조건 슬롯 */
   extra?: ReactNode;
+  /** true면 extra를 칩보다 앞에 렌더(예: 조회/읽음필터 뒤에 칩) */
+  extraFirst?: boolean;
 }) {
   const sel = selected ?? [];
   return (
-    <div className="space-y-2.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          value={query}
-          onChange={e => onQueryChange(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter" && onSearch) onSearch(); }}
-          placeholder={placeholder}
-          className={`min-w-[220px] flex-1 ${T.input}`}
-        />
-        {onSearch && <button onClick={onSearch} className={T.btnSecondary}>검색</button>}
-        {extra}
-      </div>
-
-      {filters && filters.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {filters.map(f => {
-            const active = sel.includes(f.value);
-            return (
-              <button
-                key={f.value}
-                onClick={() => onToggleFilter?.(f.value)}
-                className={`inline-flex min-h-10 items-center rounded-full border px-3.5 text-[13px] font-bold transition ${
-                  active
-                    ? "border-slate-950 bg-slate-950 text-white"
-                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                }`}
-              >
-                {f.label}{f.count != null ? ` ${f.count}` : ""}
-              </button>
-            );
-          })}
-        </div>
-      )}
+    <div className="flex flex-wrap items-center gap-2">
+      <input
+        value={query}
+        onChange={e => onQueryChange(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter" && onSearch) onSearch(); }}
+        placeholder={placeholder}
+        className={`min-w-[220px] flex-1 ${T.input}`}
+      />
+      {onSearch && <button onClick={onSearch} className={T.btnSecondary}>검색</button>}
+      {extraFirst && extra}
+      {filters && filters.length > 0 && filters.map(f => {
+        const active = sel.includes(f.value);
+        return (
+          <button
+            key={f.value}
+            onClick={() => onToggleFilter?.(f.value)}
+            className={`inline-flex min-h-10 items-center rounded-full border px-3.5 text-[13px] font-bold transition ${
+              active
+                ? "border-slate-950 bg-slate-950 text-white"
+                : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            {f.label}{f.count != null ? ` ${f.count}` : ""}
+          </button>
+        );
+      })}
+      {!extraFirst && extra}
     </div>
   );
 }

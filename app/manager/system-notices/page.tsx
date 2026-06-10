@@ -100,6 +100,7 @@ export default function SystemNoticesPage() {
           filters={filters}
           selected={typeFilter}
           onToggleFilter={toggleType}
+          extraFirst
           extra={
             <div className="flex gap-1">
               {([["all", "전체"], ["unread", "미확인"], ["read", "확인"]] as const).map(([v, label]) => (
@@ -116,15 +117,15 @@ export default function SystemNoticesPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         {/* 목록 — 컴팩트 단일라인 행 */}
         <div>
-          <div className="space-y-1.5">
-            {loading ? (
-              <p className={T.empty}>불러오는 중…</p>
-            ) : pageItems.length === 0 ? (
-              <p className={T.empty}>{items.length === 0 ? "등록된 공지가 없습니다." : "조건에 맞는 공지가 없습니다."}</p>
-            ) : (
-              pageItems.map(it => (
+          {loading ? (
+            <p className={T.empty}>불러오는 중…</p>
+          ) : pageItems.length === 0 ? (
+            <p className={T.empty}>{items.length === 0 ? "등록된 공지가 없습니다." : "조건에 맞는 공지가 없습니다."}</p>
+          ) : (
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              {pageItems.map(it => (
                 <button key={it.id} onClick={() => select(it)}
-                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2.5 text-left transition hover:border-slate-300 ${selectedId === it.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"}`}>
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-slate-50 ${selectedId === it.id ? "bg-slate-100" : ""}`}>
                   <StatusBadge status={it.type} map={SYS_BADGE} />
                   {it.read
                     ? <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-600">확인</span>
@@ -132,11 +133,11 @@ export default function SystemNoticesPage() {
                   <span className={`flex-1 truncate text-[15px] ${it.read ? "font-semibold text-slate-700" : "font-black text-slate-900"}`}>{it.title}</span>
                   <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{it.createdAt.slice(2, 10)}</span>
                 </button>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
           {filtered.length > 0 && (
-            <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+            <Pagination className="mt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
           )}
         </div>
 

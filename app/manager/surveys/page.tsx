@@ -24,7 +24,7 @@ const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   EXPIRED:   { label: "만료",      tone: "slate" },
   CANCELLED: { label: "취소",      tone: "slate" },
 };
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 function RequestModal({ onClose, onCreated }: { onClose: () => void; onCreated: (url: string) => void }) {
   const [query, setQuery] = useState("");

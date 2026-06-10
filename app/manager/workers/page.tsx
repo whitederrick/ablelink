@@ -63,7 +63,7 @@ const PLAN_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   FREE:    { label: "무료",    tone: "slate" },
   PREMIUM: { label: "프리미엄", tone: "violet" },
 };
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 const WORK_TYPE_LABELS: Record<WorkType, string> = {
   AM:       "오전 (09:00~13:00)",
   PM:       "오후 (13:00~17:00)",

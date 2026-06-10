@@ -297,10 +297,10 @@ export default function AdminsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="px-5 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">계정</th>
-                <th className="px-5 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">연락처</th>
-                <th className="px-5 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">마지막 로그인</th>
-                <th className="px-5 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">상태</th>
+                <th className="px-5 py-2 text-left text-xs font-black uppercase tracking-wide text-slate-500">계정</th>
+                <th className="px-5 py-2 text-left text-xs font-black uppercase tracking-wide text-slate-500">연락처</th>
+                <th className="px-5 py-2 text-left text-xs font-black uppercase tracking-wide text-slate-500">마지막 로그인</th>
+                <th className="px-5 py-2 text-left text-xs font-black uppercase tracking-wide text-slate-500">상태</th>
                 <th className="px-5 py-3 text-center text-xs font-black uppercase tracking-wide text-slate-500">작업</th>
               </tr>
             </thead>
@@ -309,26 +309,26 @@ export default function AdminsPage() {
                 <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-slate-400">{admins.length===0?"운영자가 없습니다.":"조건에 맞는 운영자가 없습니다."}</td></tr>
               ) : pageItems.map(a => (
                 <tr key={a.id} className={`hover:bg-slate-50 transition ${!a.isActive ? "opacity-50" : ""}`}>
-                  <td className="px-5 py-2.5">
+                  <td className="px-5 py-1.5">
                     <button onClick={() => openDetail(a)} className="text-[15px] font-black text-slate-900 hover:text-sky-600 hover:underline">{a.loginId}</button>
                     {a.displayName ? <span className="text-[13px] text-slate-500"> ({a.displayName})</span> : ""}
                   </td>
-                  <td className="px-5 py-2.5 text-[13px] text-slate-600">
+                  <td className="px-5 py-1.5 text-[13px] text-slate-600">
                     <div className="flex items-center gap-3">
                       {a.email && <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5 text-slate-400" />{a.email}</span>}
                       {a.phone && <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5 text-slate-400" />{a.phone}</span>}
                       {!a.email && !a.phone && <span className="text-slate-300">—</span>}
                     </div>
                   </td>
-                  <td className="px-5 py-2.5 text-[15px] font-medium text-slate-800">
+                  <td className="px-5 py-1.5 text-[15px] font-medium text-slate-800">
                     {a.lastLoginAt ? new Date(a.lastLoginAt).toLocaleDateString("ko-KR") : "없음"}
                   </td>
-                  <td className="px-5 py-2.5">
+                  <td className="px-5 py-1.5">
                     <span className={`${T.badge} ${a.isActive ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
                       {a.isActive ? "활성" : "비활성"}
                     </span>
                   </td>
-                  <td className="px-5 py-2.5">
+                  <td className="px-5 py-1.5">
                     <div className="flex items-center justify-center gap-1.5">
                       <button onClick={() => openDetail(a)} title="상세·편집"
                         className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 active:scale-95">

@@ -171,18 +171,18 @@ export default function AgencyAnnouncementsPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         {/* 목록 — 컴팩트 단일라인 행 */}
         <div>
-          <div className="space-y-1.5">
-            {loading ? (
-              <p className={T.empty}>불러오는 중…</p>
-            ) : pageItems.length === 0 ? (
-              <p className={T.empty}>{items.length === 0 ? "게시된 공지가 없습니다." : "조건에 맞는 공지가 없습니다."}</p>
-            ) : (
-              pageItems.map(it => (
+          {loading ? (
+            <p className={T.empty}>불러오는 중…</p>
+          ) : pageItems.length === 0 ? (
+            <p className={T.empty}>{items.length === 0 ? "게시된 공지가 없습니다." : "조건에 맞는 공지가 없습니다."}</p>
+          ) : (
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              {pageItems.map(it => (
                 <button
                   key={it.id}
                   onClick={() => setSelectedId(it.id)}
-                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2.5 text-left transition hover:border-slate-300 ${
-                    selectedId === it.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-slate-50 ${
+                    selectedId === it.id ? "bg-slate-100" : ""
                   }`}
                 >
                   {it.pinned && <Pin className="h-4 w-4 shrink-0 fill-rose-500 text-rose-500" />}
@@ -191,12 +191,11 @@ export default function AgencyAnnouncementsPage() {
                   <span className="shrink-0 text-[13px] font-semibold text-slate-500">소속 전체</span>
                   <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{it.createdAt.slice(2, 10)}</span>
                 </button>
-              ))
-            )}
-          </div>
-
+              ))}
+            </div>
+          )}
           {filtered.length > 0 && (
-            <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+            <Pagination className="mt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
           )}
         </div>
 

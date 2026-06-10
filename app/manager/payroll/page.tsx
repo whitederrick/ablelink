@@ -365,7 +365,7 @@ export default function PayrollPage() {
             selected={cTypeFilter}
             onToggleFilter={toggleCType}
             extra={
-              <button className={T.btnPrimary} onClick={() => setShowForm(v => !v)}>
+              <button className={`${T.btnPrimary} ml-auto`} onClick={() => setShowForm(v => !v)}>
                 {showForm ? "취소" : "+ 계약 등록"}
               </button>
             }

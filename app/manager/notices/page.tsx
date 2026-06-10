@@ -255,6 +255,7 @@ export default function NoticesPage() {
           filters={filters}
           selected={selectedTypes}
           onToggleFilter={toggleType}
+          extraFirst
           extra={
             <div className="flex gap-1">
               {([["all","전체"],["unread","미확인"],["read","확인"]] as const).map(([v, label]) => (
@@ -273,18 +274,19 @@ export default function NoticesPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         {/* 목록 — 컴팩트 단일라인 행 */}
         <div>
-          <div className="space-y-1.5">
-            {loading ? (
-              <p className={T.empty}>불러오는 중…</p>
-            ) : notices.length===0 ? (
-              <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
-                <p className="text-sm font-semibold text-slate-400">발송한 알림이 없습니다. ‘+ 알림 발송’으로 보내보세요.</p>
-              </div>
-            ) : pageItems.length===0 ? (
-              <p className={T.empty}>조건에 맞는 알림이 없습니다.</p>
-            ) : pageItems.map(n=>(
+          {loading ? (
+            <p className={T.empty}>불러오는 중…</p>
+          ) : notices.length===0 ? (
+            <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
+              <p className="text-sm font-semibold text-slate-400">발송한 알림이 없습니다. ‘+ 알림 발송’으로 보내보세요.</p>
+            </div>
+          ) : pageItems.length===0 ? (
+            <p className={T.empty}>조건에 맞는 알림이 없습니다.</p>
+          ) : (
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              {pageItems.map(n=>(
                 <button key={n.id} onClick={() => setSelectedId(n.id)}
-                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2.5 text-left transition hover:border-slate-300 ${selectedId === n.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"}`}>
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-slate-50 ${selectedId === n.id ? "bg-slate-100" : ""}`}>
                   <StatusBadge status={n.type} map={NOTICE_BADGE} />
                   {n.read
                     ? <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-600">확인</span>
@@ -293,10 +295,11 @@ export default function NoticesPage() {
                   <span className="shrink-0 max-w-[96px] truncate text-[13px] font-semibold text-slate-500">{n.workerName}</span>
                   <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{n.createdAt.slice(2, 10)}</span>
                 </button>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
           {filtered.length > 0 && (
-            <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+            <Pagination className="mt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
           )}
         </div>
 
