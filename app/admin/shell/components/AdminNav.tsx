@@ -28,6 +28,7 @@ const groups: NavGroup[] = [
       { href: "/admin/workers",     label: "직무지도원 현황 관리" },
       { href: "/admin/sites",       label: "현장(Site) 현황 관리" },
       { href: "/admin/attendances", label: "근태 현황 관리" },
+      { href: "/admin/survey-requests", label: "직무지도원 평가 요청 관리" },
       { href: "/admin/surveys",     label: "직무지도원 만족도 평가 결과" },
     ],
   },
