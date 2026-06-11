@@ -61,6 +61,12 @@ type InboxItem = {
   workerReasonText?: string | null;
   adminMemo?: string | null;
 
+  // 급여 보호 게이트
+  payrollPending?: boolean;       // 심한지각(30분+) 미컨펌 → 출근부 '보정대기'(급여 보류)
+  lateMinutes?: number | null;    // 표준 대비 실제 지각(분)
+  payrollConfirmedAt?: string | null;
+  seriousLateMin?: number;        // 심한지각 기준(분, 기본 30)
+
   updatedAt: string; // ISO
   timeline: TimelineEvent[];
 };
@@ -223,6 +229,11 @@ async function fetchInboxItems(filters: {
         workerReasonText: it.workerReasonText ?? null,
         adminMemo: it.adminMemo ?? null,
 
+        payrollPending: Boolean(it.payrollPending),
+        lateMinutes: it.lateMinutes ?? null,
+        payrollConfirmedAt: it.payrollConfirmedAt ?? null,
+        seriousLateMin: typeof it.seriousLateMin === "number" ? it.seriousLateMin : 30,
+
         updatedAt: String(it.updatedAt || new Date().toISOString()),
         timeline: Array.isArray(it.timeline) ? it.timeline : [],
       };
@@ -329,6 +340,7 @@ export default function AttendanceInboxClient() {
   const [customFrom, setCustomFrom] = useState(addDays(base, -13));
   const [customTo, setCustomTo] = useState(base);
   const [issue, setIssue] = useState<IssueFilter>("ALL");
+  const [onlyPayrollPending, setOnlyPayrollPending] = useState(false);
 
   // 기본: 처리완료는 숨김(필요 시 포함)
   const [statuses, setStatuses] = useState<InboxStatus[]>([
@@ -349,11 +361,18 @@ export default function AttendanceInboxClient() {
 
   const selected = useMemo(() => items.find((x) => x.id === selectedId) ?? null, [items, selectedId]);
 
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(items.length / pageSize)), [items.length]);
+  // 보정대기(급여 보류)만 보기 필터 — 클라이언트 측
+  const viewItems = useMemo(
+    () => (onlyPayrollPending ? items.filter((x) => x.payrollPending) : items),
+    [items, onlyPayrollPending],
+  );
+  const payrollPendingCount = useMemo(() => items.filter((x) => x.payrollPending).length, [items]);
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(viewItems.length / pageSize)), [viewItems.length]);
   const pageItems = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return items.slice(start, start + pageSize);
-  }, [items, page]);
+    return viewItems.slice(start, start + pageSize);
+  }, [viewItems, page]);
 
 
   /** load */
@@ -383,6 +402,8 @@ export default function AttendanceInboxClient() {
   useEffect(() => {
     setPage((p) => Math.min(Math.max(1, p), totalPages));
   }, [totalPages]);
+
+  useEffect(() => { setPage(1); }, [onlyPayrollPending]);
 
   /** status toggle (multi) */
   function toggleStatus(s: InboxStatus) {
@@ -618,6 +639,18 @@ export default function AttendanceInboxClient() {
               <Chip active={issue === "MISSING_CLOCK_OUT"} onClick={() => setIssue("MISSING_CLOCK_OUT")} tone="danger">
                 퇴근 기록 누락
               </Chip>
+              <button
+                type="button"
+                onClick={() => setOnlyPayrollPending((v) => !v)}
+                className={cx(
+                  "whitespace-nowrap rounded-full border px-3 py-1 text-xs font-bold transition",
+                  onlyPayrollPending
+                    ? "border-rose-600 bg-rose-600 text-white"
+                    : "border-rose-200 bg-white text-rose-600 hover:bg-rose-50",
+                )}
+              >
+                ⛔ 보정대기(급여보류){payrollPendingCount > 0 ? ` ${payrollPendingCount}` : ""}
+              </button>
             </div>
           </div>
 
@@ -659,7 +692,7 @@ export default function AttendanceInboxClient() {
             <div className="flex items-center justify-between border-b border-gray-50 px-4 py-3">
               <div className="flex items-baseline gap-2">
                 <div className="text-sm font-semibold text-slate-800">목록 조회</div>
-                <div className="text-sm ml-1 text-sky-600">{loading ? "불러오는 중…" : `(총 ${items.length}건)`}</div>
+                <div className="text-sm ml-1 text-sky-600">{loading ? "불러오는 중…" : `(총 ${viewItems.length}건)`}</div>
               </div>
               <div className="text-xs text-slate-400">정렬: 날짜 최신순</div>
             </div>
@@ -693,6 +726,11 @@ export default function AttendanceInboxClient() {
                           </div>
 
                           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                            {it.payrollPending ? (
+                              <span className="inline-flex items-center rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">
+                                보정대기
+                              </span>
+                            ) : null}
                             {hasAny ? (
                               <>
                                 {shown.map((t) => (
@@ -729,7 +767,7 @@ export default function AttendanceInboxClient() {
               </div>
 
               {/* pagination — 공용 컴포넌트 */}
-              <Pagination className="mt-3 px-1" page={page} totalPages={totalPages} total={items.length} onPageChange={setPage} />
+              <Pagination className="mt-3 px-1" page={page} totalPages={totalPages} total={viewItems.length} onPageChange={setPage} />
             </div>
           </div>
         </div>
@@ -784,6 +822,28 @@ export default function AttendanceInboxClient() {
                     </div>
                   </div>
                 </div>
+
+                {/* 급여 보호 게이트: 보정대기 안내 */}
+                {selected.payrollPending ? (
+                  <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">보정대기</span>
+                      <span className="text-sm font-bold text-rose-700">
+                        급여 산정 보류 — 심한 지각({selected.seriousLateMin ?? 30}분+{selected.lateMinutes != null ? `, 실제 ${selected.lateMinutes}분 지각` : ""})
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[13px] font-medium text-rose-700/90">
+                      이 날은 표준 출근시각을 출근부에 확정하지 않습니다(출근부에 ‘보정대기’로 표시, 급여 시간 합산 제외).
+                      직무지도원의 <b>출근부 시각 수정요청</b>을 승인하면 보정시각으로 확정되어 급여에 반영됩니다.
+                    </p>
+                    <a
+                      href="/manager/attendance-edit-requests"
+                      className="mt-3 inline-flex items-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700"
+                    >
+                      출근부 수정요청 검토하기 →
+                    </a>
+                  </div>
+                ) : null}
 
                 {/* KPI + 실제 출퇴근 — 반폭 한 줄 배치 */}
                 <div className="mb-4 grid items-start gap-3 sm:grid-cols-2">

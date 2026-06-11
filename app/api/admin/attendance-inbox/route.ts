@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { computeWorkTimes } from "@/lib/workSchedule";
 import { getConfigNumber } from "@/lib/systemConfig";
+import { isPayrollPending, lateMinutes, SERIOUS_LATE_MIN } from "@/lib/attendance/payrollGate";
 
 type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
 type InboxStatus =
@@ -136,6 +137,7 @@ export async function GET(req: Request) {
         endTime: true,
         actualStartTime: true,
         actualEndTime: true,
+        payrollConfirmedAt: true,
         rangeM: true,
         startDistanceM: true,
         endDistanceM: true,
@@ -248,6 +250,18 @@ export async function GET(req: Request) {
       if (statuses.length > 0 && !statuses.includes(inboxStatus)) continue;
       if (issue !== "ALL" && !upserted.issueTypes.includes(issue as any)) continue;
 
+      // 급여 보호 게이트: 심한지각(30분+) 미컨펌일 = 출근부 '보정대기'(급여 산정 보류)
+      const gateInput = {
+        actualStartTime: r.actualStartTime ?? null,
+        payrollConfirmedAt: r.payrollConfirmedAt ?? null,
+        workType,
+        commuteGuidanceIncluded,
+        customWorkStart,
+        customWorkEnd,
+        exempt: r.assignment?.attendanceButtonExempt ?? false,
+      };
+      const lateMin = lateMinutes(gateInput);
+
       items.push({
         id: r.id.toString(),
         workerName: r.user?.workerName ?? "-",
@@ -267,6 +281,11 @@ export async function GET(req: Request) {
         endDistanceM: r.endDistanceM ?? null,
         workerReasonText: upserted.workerReasonText ?? null,
         adminMemo: upserted.adminMemo ?? null,
+        // 급여 보호 게이트
+        lateMinutes: lateMin,
+        payrollPending: isPayrollPending(gateInput),
+        payrollConfirmedAt: r.payrollConfirmedAt ? r.payrollConfirmedAt.toISOString() : null,
+        seriousLateMin: SERIOUS_LATE_MIN,
         updatedAt: (upserted.updatedAt ?? upserted.createdAt).toISOString(),
         timeline: [],
       });
