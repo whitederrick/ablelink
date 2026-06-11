@@ -333,7 +333,7 @@ async function sendKakaoAlimtalk(params: { workerId: bigint; contractUrl: string
     phone: user.phoneNumber, name: user.workerName,
     templateCode,
     subject: "근로계약서 서명 요청",
-    message: `안녕하세요 ${user.workerName}님,\n\nAbleLink 근로계약서 서명을 요청드립니다.\n아래 링크에서 확인 후 서명해 주세요.\n\n${params.contractUrl}\n\n링크는 7일간 유효합니다.\n\n급여 이체를 위해 앱 [내 정보]에서 계좌·통장사본도 등록해 주세요.`,
+    message: `안녕하세요 ${user.workerName}님,\n\nAble-Link 근로계약서 서명을 요청드립니다.\n아래 링크에서 확인 후 서명해 주세요.\n${params.contractUrl}\n\n링크는 7일간 유효합니다.\n\n급여 이체를 위해 앱 [내 정보]에서 계좌·통장사본도 등록해 주세요.`,
     buttons: [{ name: "계약서 서명하기", linkType: "WL", linkMo: params.contractUrl, linkPc: params.contractUrl }],
   });
 }

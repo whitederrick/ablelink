@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
           phone, name: recipientName?.trim() || "담당자",
           templateCode: process.env[SURVEY_TEMPLATE]!,
           subject: "직무지도원 만족도 조사",
-          message: `안녕하세요.\n\n${worker?.workerName ?? "직무지도원"} 직무지도원에 대한 만족도 조사를 요청드립니다.\n아래 링크에서 평가해 주세요.\n\n${surveyUrl}\n\n링크는 14일간 유효합니다.`,
+          message: `${worker?.workerName ?? "직무지도원"} 직무지도원에 대한 만족도 조사를 요청드립니다.\n\n아래 링크에서 평가해 주세요.\n\n${surveyUrl}\n\n링크는 14일간 유효합니다.`,
           buttons: [{ name: "만족도 평가하기", linkType: "WL", linkMo: surveyUrl, linkPc: surveyUrl }],
         });
         sent = true;
