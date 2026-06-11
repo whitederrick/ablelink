@@ -8,7 +8,7 @@
 //
 // 등록 필요한 알림톡 템플릿 코드 (알리고 콘솔에서 등록 후 아래 변수로 설정):
 //   [사용 중 — 거래성 필수 발송]
-//   KAKAO_CONTRACT_TEMPLATE_CODE         계약서 서명 요청            (등록: UI_5996)
+//   KAKAO_CONTRACT_TEMPLATE_CODE         계약서 서명 요청            (등록: UI_6030)
 //   KAKAO_SIGNUP_TEMPLATE_CODE           신규 가입 안내(임시계정)    (등록: UI_6009)
 //   KAKAO_SURVEY_TEMPLATE_CODE           직무지도원 평가(만족도 조사) (등록: UI_6011)
 //   KAKAO_RESET_PW_TEMPLATE_CODE         비밀번호 재설정 (현재 .env 미설정 시 화면표시/SMS 폴백)

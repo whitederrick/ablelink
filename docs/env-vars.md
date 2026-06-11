@@ -81,7 +81,7 @@
 | `KAKAO_ALIMTALK_USERID` | ⚡ | 알리고 계정 ID |
 | `KAKAO_ALIMTALK_SENDER_KEY` | ⚡ | 카카오 채널 발신 프로필 키 |
 | `KAKAO_ALIMTALK_SENDER_PHONE` | ⚡ | 발신 번호 |
-| `KAKAO_CONTRACT_TEMPLATE_CODE` | ⚡ | 계약서 서명 요청 템플릿 코드 (등록: `UI_5996`) |
+| `KAKAO_CONTRACT_TEMPLATE_CODE` | ⚡ | 계약서 서명 요청 템플릿 코드 (등록: `UI_6030`) |
 | `KAKAO_SIGNUP_TEMPLATE_CODE` | ⚡ | 신규 가입 안내(임시계정) 템플릿 코드 (등록: `UI_6009`) |
 | `KAKAO_SURVEY_TEMPLATE_CODE` | ⚡ | 직무지도원 평가(만족도 조사) 템플릿 코드 (등록: `UI_6011`) — `SURVEY_AUTO_SEND=true` 시 자동발송에도 사용 |
 | `KAKAO_RESET_PW_TEMPLATE_CODE` | 🔧 | 비밀번호 재설정 템플릿 코드 (미설정 시 화면표시/SMS 폴백) |
@@ -169,7 +169,7 @@ KAKAO_ALIMTALK_API_KEY=""
 KAKAO_ALIMTALK_USERID=""
 KAKAO_ALIMTALK_SENDER_KEY=""
 KAKAO_ALIMTALK_SENDER_PHONE=""
-KAKAO_CONTRACT_TEMPLATE_CODE=""        # UI_5996 계약서 서명 요청
+KAKAO_CONTRACT_TEMPLATE_CODE=""        # UI_6030 계약서 서명 요청
 KAKAO_SIGNUP_TEMPLATE_CODE=""          # UI_6009 신규 가입 안내(임시계정)
 KAKAO_SURVEY_TEMPLATE_CODE=""          # UI_6011 직무지도원 평가
 KAKAO_RESET_PW_TEMPLATE_CODE=""        # 비밀번호 재설정 (선택)
