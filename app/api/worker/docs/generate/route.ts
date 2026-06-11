@@ -156,6 +156,7 @@ export async function POST(request: NextRequest) {
         // 급여 게이트: 심한 지각 + 미컨펌이면 출근부에 기본값 미확정 → "보정대기"
         const pending = isPayrollPending({
           actualStartTime: a.actualStartTime ?? null,
+          actualEndTime: a.actualEndTime ?? null,
           payrollConfirmedAt: a.payrollConfirmedAt ?? null,
           workType: (assignment as any).workType ?? null,
           commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? null,

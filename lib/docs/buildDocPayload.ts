@@ -176,6 +176,7 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
     const entries = attendances.map(a => {
       const pending = isPayrollPending({
         actualStartTime: a.actualStartTime ?? null,
+        actualEndTime: a.actualEndTime ?? null,
         payrollConfirmedAt: a.payrollConfirmedAt ?? null,
         workType: (assignment as any).workType ?? null,
         commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? null,

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { computeWorkTimes } from "@/lib/workSchedule";
 import { getConfigNumber } from "@/lib/systemConfig";
-import { isPayrollPending, lateMinutes, SERIOUS_LATE_MIN } from "@/lib/attendance/payrollGate";
+import { isPayrollPending, lateMinutes, earlyLeaveMinutes, SERIOUS_LATE_MIN } from "@/lib/attendance/payrollGate";
 
 type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
 type InboxStatus =
@@ -138,6 +138,7 @@ export async function GET(req: Request) {
         actualStartTime: true,
         actualEndTime: true,
         payrollConfirmedAt: true,
+        correctionRequestedAt: true,
         rangeM: true,
         startDistanceM: true,
         endDistanceM: true,
@@ -253,6 +254,7 @@ export async function GET(req: Request) {
       // 급여 보호 게이트: 심한지각(30분+) 미컨펌일 = 출근부 '보정대기'(급여 산정 보류)
       const gateInput = {
         actualStartTime: r.actualStartTime ?? null,
+        actualEndTime: r.actualEndTime ?? null,
         payrollConfirmedAt: r.payrollConfirmedAt ?? null,
         workType,
         commuteGuidanceIncluded,
@@ -261,6 +263,7 @@ export async function GET(req: Request) {
         exempt: r.assignment?.attendanceButtonExempt ?? false,
       };
       const lateMin = lateMinutes(gateInput);
+      const earlyMin = earlyLeaveMinutes(gateInput);
 
       items.push({
         id: r.id.toString(),
@@ -283,8 +286,10 @@ export async function GET(req: Request) {
         adminMemo: upserted.adminMemo ?? null,
         // 급여 보호 게이트
         lateMinutes: lateMin,
+        earlyLeaveMinutes: earlyMin,
         payrollPending: isPayrollPending(gateInput),
         payrollConfirmedAt: r.payrollConfirmedAt ? r.payrollConfirmedAt.toISOString() : null,
+        correctionRequestedAt: r.correctionRequestedAt ? r.correctionRequestedAt.toISOString() : null,
         seriousLateMin: SERIOUS_LATE_MIN,
         updatedAt: (upserted.updatedAt ?? upserted.createdAt).toISOString(),
         timeline: [],

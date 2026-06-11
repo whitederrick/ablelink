@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
           where: { workerId, workDate: { gte: periodStart, lte: periodEnd }, isFinalClosed: true, assignment: { agencyId } },
           select: {
             workDate: true, startTime: true, endTime: true,
-            actualStartTime: true, payrollConfirmedAt: true,
+            actualStartTime: true, actualEndTime: true, payrollConfirmedAt: true,
             assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true } },
             logs: { select: { extTime1on1: true, extTimeGroup: true } },
           },
@@ -176,6 +176,7 @@ export async function POST(req: NextRequest) {
       // 급여 게이트: 심한 지각 미컨펌(보정대기) 날은 급여 산정에서 제외(출근부 PDF와 동일 기준).
       const confirmedAtt = attendances.filter((a) => !isPayrollPending({
         actualStartTime: a.actualStartTime ?? null,
+        actualEndTime: a.actualEndTime ?? null,
         payrollConfirmedAt: a.payrollConfirmedAt ?? null,
         workType: a.assignment?.workType ?? null,
         commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded ?? null,

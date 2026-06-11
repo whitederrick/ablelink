@@ -62,10 +62,12 @@ type InboxItem = {
   adminMemo?: string | null;
 
   // 급여 보호 게이트
-  payrollPending?: boolean;       // 심한지각(30분+) 미컨펌 → 출근부 '보정대기'(급여 보류)
+  payrollPending?: boolean;       // 심한지각/조퇴(30분+) 미컨펌 → 출근부 '보정대기'(급여 보류)
   lateMinutes?: number | null;    // 표준 대비 실제 지각(분)
+  earlyLeaveMinutes?: number | null; // 표준 대비 실제 조퇴(분)
   payrollConfirmedAt?: string | null;
-  seriousLateMin?: number;        // 심한지각 기준(분, 기본 30)
+  correctionRequestedAt?: string | null; // 에이전시→워커 시각 보정 요청 시각
+  seriousLateMin?: number;        // 심한지각/조퇴 기준(분, 기본 30)
 
   updatedAt: string; // ISO
   timeline: TimelineEvent[];
@@ -231,7 +233,9 @@ async function fetchInboxItems(filters: {
 
         payrollPending: Boolean(it.payrollPending),
         lateMinutes: it.lateMinutes ?? null,
+        earlyLeaveMinutes: it.earlyLeaveMinutes ?? null,
         payrollConfirmedAt: it.payrollConfirmedAt ?? null,
+        correctionRequestedAt: it.correctionRequestedAt ?? null,
         seriousLateMin: typeof it.seriousLateMin === "number" ? it.seriousLateMin : 30,
 
         updatedAt: String(it.updatedAt || new Date().toISOString()),
@@ -453,6 +457,25 @@ export default function AttendanceInboxClient() {
         ok ? "종결 처리(서버 반영)" : "종결 처리(로컬 반영)"
       )
     );
+  }
+
+  const [requestingCorrection, setRequestingCorrection] = useState(false);
+  async function actionRequestCorrection() {
+    if (!selected) return;
+    setRequestingCorrection(true);
+    try {
+      const { ok, json } = await postJson<{ success: boolean; correctionRequestedAt?: string; message?: string }>(
+        `/api/admin/attendance-inbox/${selected.id}/request-correction`,
+      ).catch(() => ({ ok: false, status: 0, json: null as any }));
+      if (ok && json?.success) {
+        const at = json.correctionRequestedAt ?? new Date().toISOString();
+        updateSelected((it) => ({ ...it, correctionRequestedAt: at, updatedAt: new Date().toISOString() }));
+      } else {
+        alert(json?.message || "요청에 실패했습니다.");
+      }
+    } finally {
+      setRequestingCorrection(false);
+    }
   }
 
   async function saveAdminMemo() {
@@ -824,26 +847,47 @@ export default function AttendanceInboxClient() {
                 </div>
 
                 {/* 급여 보호 게이트: 보정대기 안내 */}
-                {selected.payrollPending ? (
+                {selected.payrollPending ? (() => {
+                  const thr = selected.seriousLateMin ?? 30;
+                  const reasons: string[] = [];
+                  if (selected.lateMinutes != null && selected.lateMinutes >= thr) reasons.push(`지각 ${selected.lateMinutes}분`);
+                  if (selected.earlyLeaveMinutes != null && selected.earlyLeaveMinutes >= thr) reasons.push(`조퇴 ${selected.earlyLeaveMinutes}분`);
+                  return (
                   <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
                     <div className="flex items-center gap-2">
                       <span className="inline-flex items-center rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">보정대기</span>
                       <span className="text-sm font-bold text-rose-700">
-                        급여 산정 보류 — 심한 지각({selected.seriousLateMin ?? 30}분+{selected.lateMinutes != null ? `, 실제 ${selected.lateMinutes}분 지각` : ""})
+                        급여 산정 보류 — 심한 지각/조퇴({thr}분+){reasons.length ? `: ${reasons.join(" · ")}` : ""}
                       </span>
                     </div>
                     <p className="mt-2 text-[13px] font-medium text-rose-700/90">
                       이 날은 표준 출근시각을 출근부에 확정하지 않습니다(출근부에 ‘보정대기’로 표시, 급여 시간 합산 제외).
                       직무지도원의 <b>출근부 시각 수정요청</b>을 승인하면 보정시각으로 확정되어 급여에 반영됩니다.
                     </p>
-                    <a
-                      href="/manager/attendance-edit-requests"
-                      className="mt-3 inline-flex items-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700"
-                    >
-                      출근부 수정요청 검토하기 →
-                    </a>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {selected.correctionRequestedAt ? (
+                        <span className="inline-flex items-center rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-bold text-rose-600">
+                          ✓ 보정요청됨 ({new Date(selected.correctionRequestedAt).toLocaleDateString()})
+                        </span>
+                      ) : (
+                        <button
+                          onClick={actionRequestCorrection}
+                          disabled={requestingCorrection}
+                          className="inline-flex items-center rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                        >
+                          {requestingCorrection ? "요청 중…" : "직무지도원에게 시각 보정 요청"}
+                        </button>
+                      )}
+                      <a
+                        href="/manager/attendance-edit-requests"
+                        className="inline-flex items-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700"
+                      >
+                        출근부 수정요청 검토하기 →
+                      </a>
+                    </div>
                   </div>
-                ) : null}
+                  );
+                })() : null}
 
                 {/* KPI + 실제 출퇴근 — 반폭 한 줄 배치 */}
                 <div className="mb-4 grid items-start gap-3 sm:grid-cols-2">

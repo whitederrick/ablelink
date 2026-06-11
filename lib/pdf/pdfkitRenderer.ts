@@ -175,7 +175,7 @@ function mdSlash(ymd: string): string {
 // 총 지도시간 셀: 3줄(시작 / ~끝 / (Xh)) — HCR돋움
 function drawTimeCell(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number, e: any) {
   doc.lineWidth(0.6).rect(x, y, w, h).stroke("#000");
-  // 급여 게이트: 심한 지각 미컨펌(보정대기)인 날은 기본 시각을 박지 않고 "보정대기"만 표시.
+  // 급여 게이트: 심한 지각/조퇴 미컨펌(보정대기)인 날은 기본 시각을 박지 않고 "보정대기"만 표시.
   if (e?.pending) {
     const lineH = 10.2;
     doc.font("KR").fontSize(8).fillColor("#b91c1c");

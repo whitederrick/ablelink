@@ -121,6 +121,7 @@ export async function GET(request: NextRequest) {
       const entries = attendances.map(a => {
         const pending = isPayrollPending({
           actualStartTime: a.actualStartTime ?? null,
+          actualEndTime: a.actualEndTime ?? null,
           payrollConfirmedAt: a.payrollConfirmedAt ?? null,
           workType: a.assignment?.workType ?? null,
           commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded ?? null,

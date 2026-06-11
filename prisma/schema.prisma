@@ -348,9 +348,12 @@ model DailyAttendance {
   endLocLat   Decimal?  @map("end_loc_lat")
   endLocLon   Decimal?  @map("end_loc_lon")
 
-  // 급여 보호 게이트: 심한 지각(실제 출근이 표준보다 30분+ 지각)인 날은 에이전시 컨펌 전까지
+  // 급여 보호 게이트: 심한 지각/조퇴(실제 출퇴근이 표준보다 30분+ 어긋남)인 날은 에이전시 컨펌 전까지
   // 출근부에 기본값을 확정하지 않는다. 보정 승인/명시적 확정 시각이 들어오면 set → 그때부터 출근부 확정.
   payrollConfirmedAt DateTime? @map("payroll_confirmed_at")
+  // 에이전시→직무지도원 '시각 보정 요청' 시각/메모. 보정대기일에 워커에게 수정요청 제출을 요청할 때 기록.
+  correctionRequestedAt   DateTime? @map("correction_requested_at")
+  correctionRequestNote   String?   @map("correction_request_note")
 
   startDistanceM Float?   @map("start_distance_m")
   endDistanceM   Float?   @map("end_distance_m")
