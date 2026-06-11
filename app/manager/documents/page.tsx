@@ -136,18 +136,18 @@ export default function ManagerDocumentsHub() {
     } catch { showToast("다운로드 실패"); }
   }
 
-  async function downloadAll() {
-    if (items.length === 0) { showToast("다운로드할 문서가 없습니다."); return; }
+  async function downloadSelected() {
+    if (selected.size === 0) { showToast("다운로드할 문서를 선택해주세요."); return; }
     setZipping(true);
     try {
-      const res = await fetch(`/api/admin/document-runs/zip`);
-      if (!res.ok) { showToast("전체 다운로드 실패"); return; }
+      const res = await fetch(`/api/admin/document-runs/zip?ids=${[...selected].join(",")}`);
+      if (!res.ok) { showToast("다운로드 실패"); return; }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `제출문서_${new Date().toISOString().slice(0, 10)}.zip`; a.click();
       URL.revokeObjectURL(url);
-    } catch { showToast("전체 다운로드 실패"); }
+    } catch { showToast("다운로드 실패"); }
     finally { setZipping(false); }
   }
 
@@ -246,8 +246,8 @@ export default function ManagerDocumentsHub() {
             <button onClick={openSend} disabled={selected.size === 0} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white active:scale-95 disabled:opacity-40">
               선택 발송{selected.size > 0 ? ` (${selected.size})` : ""}
             </button>
-            <button onClick={downloadAll} disabled={zipping || items.length === 0} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 active:scale-95 disabled:opacity-50">
-              {zipping ? "압축 중…" : "전체 다운로드"}
+            <button onClick={downloadSelected} disabled={zipping} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 active:scale-95 disabled:opacity-50">
+              {zipping ? "압축 중…" : `선택 다운로드${selected.size > 0 ? ` (${selected.size})` : ""}`}
             </button>
           </div>
         }
