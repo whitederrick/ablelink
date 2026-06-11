@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { buildDocFileName, contentDisposition } from "@/lib/pdf/filename";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
+import { isPayrollPending } from "@/lib/attendance/payrollGate";
 
 function fmtHHMM(d: Date): string {
   const kst = new Date(d.getTime() + 9*3600000);
@@ -83,11 +84,27 @@ export async function GET(request: NextRequest) {
         include:{ logs:{ select:{ time1on1:true, timeGroup:true, extTime1on1:true, extTimeGroup:true } } },
         orderBy:{ workDate:"asc" },
       });
-      const entries = attendances.map(a=>({
-        date:a.workDate, start:a.startTime?fmtHHMM(a.startTime):"", end:a.endTime?fmtHHMM(a.endTime):"",
-        hours:a.logs.reduce((s,l)=>s+Number(l.time1on1)+Number(l.extTime1on1),0),
-        multiHours:a.logs.reduce((s,l)=>s+Number(l.timeGroup)+Number(l.extTimeGroup),0),
-      }));
+      const entries = attendances.map(a=>{
+        // 급여 보호 게이트: 심한 지각/조퇴 미컨펌일은 미리보기에서도 기본 시각을 박지 않고 '보정대기'(생성 PDF와 동일).
+        const pending = isPayrollPending({
+          actualStartTime: a.actualStartTime ?? null,
+          actualEndTime: a.actualEndTime ?? null,
+          payrollConfirmedAt: a.payrollConfirmedAt ?? null,
+          workType: (assignment as any).workType ?? null,
+          commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? null,
+          customWorkStart: (assignment as any).customWorkStart ?? null,
+          customWorkEnd: (assignment as any).customWorkEnd ?? null,
+          exempt: (assignment as any).attendanceButtonExempt ?? false,
+        });
+        return {
+          date:a.workDate,
+          start: pending ? "" : (a.startTime?fmtHHMM(a.startTime):""),
+          end:   pending ? "" : (a.endTime?fmtHHMM(a.endTime):""),
+          pending,
+          hours:      pending ? 0 : a.logs.reduce((s,l)=>s+Number(l.time1on1)+Number(l.extTime1on1),0),
+          multiHours: pending ? 0 : a.logs.reduce((s,l)=>s+Number(l.timeGroup)+Number(l.extTimeGroup),0),
+        };
+      });
       const totalHours=entries.reduce((s,e)=>s+Number(e.hours),0);
       const oneToMany=entries.reduce((s,e)=>s+Number(e.multiHours),0);
       payload = {
