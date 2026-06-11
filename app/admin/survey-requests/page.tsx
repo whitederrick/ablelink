@@ -3,7 +3,7 @@
 // 운영자: 직무지도원 평가 요청 관리.
 // 계약이 종료된(또는 임박한) 직무지도원 대상자를 한 곳에서 식별하고,
 // 에이전시 매니저가 요청하지 않은 건을 운영자가 직접 평가 요청(사업체 담당자 알림톡) 발송.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
@@ -22,6 +22,13 @@ const REQ_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   CANCELLED: { label: "취소",      tone: "slate" },
 };
 const BY_LABEL: Record<string, string> = { AUTO: "자동", MANAGER: "매니저", OPERATOR: "운영자" };
+
+interface AgencyCand {
+  agencyId: string; agencyName: string; latestContractId: string;
+  siteName: string | null; contractEnd: string;
+  recipientName: string | null; recipientPhone: string | null;
+}
+interface WorkerHit { id: string; workerName: string; phoneNumber: string; agencies: AgencyCand[]; }
 
 interface Target {
   contractId: string; agencyId: string; agencyName: string;
@@ -82,6 +89,120 @@ function SendModal({ target, onClose, onSent }: { target: Target; onClose: () =>
   );
 }
 
+// 계약 무관 임의(free-form) 평가 요청 — 직무지도원 검색 → 에이전시 선택 → 연락처
+function DirectRequestModal({ onClose, onSent }: { onClose: () => void; onSent: () => void }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<WorkerHit[]>([]);
+  const [worker, setWorker] = useState<WorkerHit | null>(null);
+  const [agency, setAgency] = useState<AgencyCand | null>(null);
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientPhone, setRecipientPhone] = useState("");
+  const [siteName, setSiteName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (query.trim().length < 2 || worker) { setResults([]); return; }
+    const t = setTimeout(async () => {
+      const r = await fetch(`/api/admin/system/worker-search?q=${encodeURIComponent(query.trim())}`);
+      const d = await r.json();
+      if (d.success) setResults(d.items);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [query, worker]);
+
+  function pickAgency(a: AgencyCand) {
+    setAgency(a);
+    setSiteName(a.siteName ?? "");
+    setRecipientName(a.recipientName ?? "");
+    setRecipientPhone(a.recipientPhone ?? "");
+  }
+
+  async function submit() {
+    if (!worker) { setError("평가 대상 직무지도원을 선택하세요."); return; }
+    if (!agency) { setError("소속 에이전시를 선택하세요."); return; }
+    if (!recipientPhone.trim()) { setError("사업체 담당자 연락처를 입력하세요."); return; }
+    setSaving(true); setError("");
+    try {
+      const r = await fetch("/api/admin/system/surveys", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workerId: worker.id, agencyId: agency.agencyId, recipientName, recipientPhone, siteName }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.message);
+      alert(d.message);
+      onSent(); onClose();
+    } catch (e: any) { setError(e.message || "발송 실패"); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className={T.modalOverlay} onClick={() => !saving && onClose()}>
+      <div className={T.modalContent} onClick={e => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-black text-slate-900">평가 요청 직접 발송</h2>
+          <button onClick={() => !saving && onClose()} className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-slate-50"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="space-y-3">
+          {/* 직무지도원 검색 */}
+          <div className="space-y-1.5">
+            <label className={T.label}>평가 대상 직무지도원 *</label>
+            {worker ? (
+              <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                <span className="text-sm font-black text-emerald-700">{worker.workerName} · {worker.phoneNumber}</span>
+                <button onClick={() => { setWorker(null); setAgency(null); setQuery(""); }} className="text-xs font-semibold text-slate-500">변경</button>
+              </div>
+            ) : (
+              <>
+                <input ref={inputRef} value={query} onChange={e => setQuery(e.target.value)} placeholder="이름/전화번호 검색 (계약 이력 기준)" className={`w-full ${T.input}`} />
+                {results.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto rounded-xl border border-slate-200">
+                    {results.map(r => (
+                      <button key={r.id} onClick={() => { setWorker(r); setResults([]); if (r.agencies.length === 1) pickAgency(r.agencies[0]); }}
+                        className="flex w-full items-center justify-between border-b border-slate-50 px-3 py-2 text-left text-sm hover:bg-sky-50 last:border-b-0">
+                        <span className="font-bold text-slate-800">{r.workerName}</span>
+                        <span className="text-xs text-slate-400">{r.phoneNumber} · {r.agencies.length}개 에이전시</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* 에이전시 선택 */}
+          {worker && (
+            <div className="space-y-1.5">
+              <label className={T.label}>소속 에이전시 *</label>
+              <div className="flex flex-wrap gap-1.5">
+                {worker.agencies.map(a => (
+                  <button key={a.agencyId} onClick={() => pickAgency(a)}
+                    className={`rounded-lg border px-2.5 py-1.5 text-left text-xs font-bold transition ${
+                      agency?.agencyId === a.agencyId ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}>
+                    {a.agencyName}
+                    <span className={`ml-1 font-semibold ${agency?.agencyId === a.agencyId ? "text-slate-300" : "text-slate-400"}`}>{a.siteName || "현장미상"}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-1.5"><label className={T.label}>사업체명 (선택)</label><input value={siteName} onChange={e => setSiteName(e.target.value)} placeholder="사업체명" className={`w-full ${T.input}`} /></div>
+          <div className="space-y-1.5"><label className={T.label}>사업체 담당자명 (선택)</label><input value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="담당자명" className={`w-full ${T.input}`} /></div>
+          <div className="space-y-1.5"><label className={T.label}>사업체 담당자 연락처 * (알림톡 발송)</label><input value={recipientPhone} onChange={e => setRecipientPhone(e.target.value)} placeholder="010-1234-5678" className={`w-full ${T.input}`} /></div>
+        </div>
+        {error && <p className="mt-3 text-sm font-semibold text-rose-600">{error}</p>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={() => !saving && onClose()} disabled={saving} className={T.btnSecondary}>취소</button>
+          <button onClick={submit} disabled={saving} className={T.btnPrimary}>{saving ? "발송 중..." : "평가 요청 발송"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminSurveyRequestsPage() {
   const [items, setItems] = useState<Target[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,6 +210,7 @@ export default function AdminSurveyRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [sendTarget, setSendTarget] = useState<Target | null>(null);
+  const [showDirect, setShowDirect] = useState(false);
 
   function load() {
     setLoading(true);
@@ -123,6 +245,7 @@ export default function AdminSurveyRequestsPage() {
       <PageHeader
         title="직무지도원 평가 요청 관리"
         sub="계약이 종료된 직무지도원의 평가 요청 현황입니다. 에이전시 매니저가 요청하지 않은 건을 운영자가 직접 사업체 담당자에게 발송할 수 있습니다."
+        actions={<button onClick={() => setShowDirect(true)} className={T.btnPrimary}>+ 직접 요청</button>}
       />
 
       <StatCardRow
@@ -182,6 +305,7 @@ export default function AdminSurveyRequestsPage() {
       </div>
 
       {sendTarget && <SendModal target={sendTarget} onClose={() => setSendTarget(null)} onSent={load} />}
+      {showDirect && <DirectRequestModal onClose={() => setShowDirect(false)} onSent={load} />}
     </div>
   );
 }

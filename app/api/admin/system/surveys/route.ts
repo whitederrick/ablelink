@@ -49,40 +49,78 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: 운영자 주도 평가 요청 발송 (대상=종료 계약). 에이전시 매니저 미요청 건을 운영자가 직접 발송.
-// body: { contractId, recipientName?, recipientPhone? } — 연락처 미입력 시 현장 사업체담당자 사용.
+// POST: 운영자 주도 평가 요청 발송.
+//  - 대상 기반: { contractId, recipientName?, recipientPhone? } — 종료 계약 미요청 건.
+//  - free-form: { workerId, agencyId, recipientName?, recipientPhone?, siteName? } — 계약 무관 임의 발송.
+// 연락처 미입력 시 현장(사업체담당자) 자동 사용.
 export async function POST(req: NextRequest) {
   try {
     await requireAdminSession(req);
     const body = await req.json().catch(() => ({}));
 
-    let contractId: bigint;
-    try { contractId = BigInt(body?.contractId); } catch { return NextResponse.json({ success: false, message: "대상 계약을 선택하세요." }, { status: 400 }); }
+    // 발송 컨텍스트 해석(두 경로 공통)
+    let agencyId: bigint, workerId: bigint, workerName: string;
+    let contractId: bigint | null = null;
+    let siteName: string | null = null;
 
-    const contract = await prisma.employmentContract.findUnique({
-      where: { id: contractId },
-      select: {
-        id: true, agencyId: true, workerId: true, siteName: true, workerFilledSiteName: true,
-        user: { select: { workerName: true } },
-      },
-    });
-    if (!contract) return NextResponse.json({ success: false, message: "계약을 찾을 수 없습니다." }, { status: 404 });
+    if (body?.contractId != null && String(body.contractId) !== "") {
+      // ── 대상(계약) 기반 ──
+      let cid: bigint;
+      try { cid = BigInt(body.contractId); } catch { return NextResponse.json({ success: false, message: "대상 계약을 선택하세요." }, { status: 400 }); }
+      const contract = await prisma.employmentContract.findUnique({
+        where: { id: cid },
+        select: { id: true, agencyId: true, workerId: true, siteName: true, workerFilledSiteName: true, user: { select: { workerName: true } } },
+      });
+      if (!contract) return NextResponse.json({ success: false, message: "계약을 찾을 수 없습니다." }, { status: 404 });
 
-    // 중복 방지: 이 계약으로 진행 중(PENDING)/완료(RESPONDED)된 요청이 있으면 차단(만료·취소는 재발송 허용)
-    const dup = await prisma.satisfactionSurvey.findFirst({
-      where: { contractId: contract.id, status: { in: ["PENDING", "RESPONDED"] } },
-      select: { id: true, status: true },
-    });
-    if (dup) return NextResponse.json({ success: false, message: dup.status === "RESPONDED" ? "이미 응답이 완료된 요청입니다." : "이미 발송된 요청이 있습니다." }, { status: 409 });
+      // 중복 방지: 이 계약으로 진행중(PENDING)/완료(RESPONDED)면 차단(만료·취소는 재발송 허용)
+      const dup = await prisma.satisfactionSurvey.findFirst({
+        where: { contractId: contract.id, status: { in: ["PENDING", "RESPONDED"] } },
+        select: { status: true },
+      });
+      if (dup) return NextResponse.json({ success: false, message: dup.status === "RESPONDED" ? "이미 응답이 완료된 요청입니다." : "이미 발송된 요청이 있습니다." }, { status: 409 });
 
-    const siteName = contract.siteName || contract.workerFilledSiteName || null;
+      contractId = contract.id;
+      agencyId = contract.agencyId;
+      workerId = contract.workerId;
+      workerName = contract.user?.workerName ?? "직무지도원";
+      siteName = contract.siteName || contract.workerFilledSiteName || null;
+    } else {
+      // ── free-form(계약 무관) ──
+      let wid: bigint, aid: bigint;
+      try { wid = BigInt(body?.workerId); aid = BigInt(body?.agencyId); }
+      catch { return NextResponse.json({ success: false, message: "직무지도원과 에이전시를 선택하세요." }, { status: 400 }); }
+
+      const [worker, agency, linked] = await Promise.all([
+        prisma.worker.findUnique({ where: { id: wid }, select: { workerName: true } }),
+        prisma.agency.findUnique({ where: { id: aid }, select: { id: true } }),
+        prisma.employmentContract.findFirst({ where: { agencyId: aid, workerId: wid }, select: { id: true } }),
+      ]);
+      if (!worker) return NextResponse.json({ success: false, message: "직무지도원을 찾을 수 없습니다." }, { status: 404 });
+      if (!agency) return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
+      if (!linked) return NextResponse.json({ success: false, message: "해당 에이전시와 계약 이력이 있는 직무지도원만 요청할 수 있습니다." }, { status: 400 });
+
+      // 최근 14일 내 진행중 요청 있으면 중복 차단(오발송 방지)
+      const recent = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+      const dup = await prisma.satisfactionSurvey.findFirst({
+        where: { agencyId: aid, workerId: wid, status: "PENDING", createdAt: { gte: recent } },
+        select: { id: true },
+      });
+      if (dup) return NextResponse.json({ success: false, message: "최근 14일 내 발송된 진행 중 요청이 있습니다." }, { status: 409 });
+
+      agencyId = aid;
+      workerId = wid;
+      workerName = worker.workerName;
+      siteName = (String(body?.siteName ?? "").trim() || null);
+    }
+
+    // 사업체 담당자 연락처: body 우선, 없으면 현장(사업체담당자)
     const site = siteName
       ? await prisma.site.findFirst({
-          where: { agencyId: contract.agencyId, companyName: siteName },
+          where: { agencyId, companyName: siteName },
           select: { businessContactName: true, businessContactPhone: true },
         })
       : null;
-
     const recipientName = (String(body?.recipientName ?? "").trim() || site?.businessContactName || "").trim();
     const phone = (String(body?.recipientPhone ?? "").trim() || site?.businessContactPhone || "").trim();
     if (!/^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/.test(phone)) {
@@ -92,9 +130,7 @@ export async function POST(req: NextRequest) {
     const token = randomUUID();
     const survey = await prisma.satisfactionSurvey.create({
       data: {
-        agencyId: contract.agencyId,
-        workerId: contract.workerId,
-        contractId: contract.id,
+        agencyId, workerId, contractId,
         recipientName: recipientName || null,
         recipientPhone: phone,
         siteName,
@@ -115,7 +151,7 @@ export async function POST(req: NextRequest) {
           phone, name: recipientName || "담당자",
           templateCode: process.env[SURVEY_TEMPLATE]!,
           subject: "직무지도원 만족도 조사",
-          message: `안녕하세요.\n\n${contract.user?.workerName ?? "직무지도원"} 직무지도원에 대한 만족도 조사를 요청드립니다.\n아래 링크에서 평가해 주세요.\n\n${surveyUrl}\n\n링크는 14일간 유효합니다.`,
+          message: `안녕하세요.\n\n${workerName} 직무지도원에 대한 만족도 조사를 요청드립니다.\n아래 링크에서 평가해 주세요.\n\n${surveyUrl}\n\n링크는 14일간 유효합니다.`,
           buttons: [{ name: "만족도 평가하기", linkType: "WL", linkMo: surveyUrl, linkPc: surveyUrl }],
         });
         sent = true;

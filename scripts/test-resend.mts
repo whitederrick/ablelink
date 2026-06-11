@@ -35,7 +35,7 @@ function tinyPdf(): Promise<Buffer> {
 }
 
 async function main() {
-  const { sendSimpleEmail, sendEmailWithAttachments } = await import("../lib/email.ts");
+  const { sendSimpleEmail, sendEmailWithAttachments } = await import("../lib/email.js");
   console.log("FROM:", process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM || "(default)");
   console.log("TO  :", TO);
   console.log("KEY :", (process.env.RESEND_API_KEY || "").slice(0, 6) + "…");
