@@ -223,7 +223,7 @@ export default function AdminDocsPage() {
 
               {/* 미리보기 */}
               {ready ? (
-                <iframe src={previewUrl()} className="h-[340px] w-full rounded-xl border border-slate-200 bg-slate-100" title="문서 미리보기" />
+                <iframe src={previewUrl()} className="h-[442px] w-full rounded-xl border border-slate-200 bg-slate-100" title="문서 미리보기" />
               ) : (
                 <div className="flex h-[100px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50">
                   <p className="text-sm font-semibold text-slate-400">훈련생을 선택하면 미리보기가 표시됩니다.</p>
