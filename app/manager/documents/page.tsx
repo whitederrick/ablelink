@@ -16,6 +16,12 @@ const DOC_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   MANAGER_SIGNED: { label: "서명완료", tone: "emerald" },
   CHANGES_REQUESTED: { label: "수정요청", tone: "rose" },
 };
+// 공단 제출 상태(signStage와 독립). 일지 관리엔 미제출·재제출요구만 표시.
+const GOV_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
+  NONE: { label: "미제출", tone: "slate" },
+  RESUBMIT: { label: "재제출요구", tone: "rose" },
+  SUBMITTED: { label: "제출완료", tone: "emerald" },
+};
 const DOC_PAGE_SIZE = 12;
 
 type Item = {
@@ -27,6 +33,8 @@ type Item = {
   periodStart: string;
   periodEnd: string;
   signStage: string;
+  govStatus: string;
+  govSubmittedAt: string | null;
   currentVersionId: string | null;
   versionNo: number | null;
   versionCount: number;
@@ -85,7 +93,8 @@ export default function ManagerDocumentsHub() {
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch(`/api/admin/document-runs/inbox`)
+    // 처리 대기(미제출·재제출요구)만. 공단 제출완료분은 '공단 제출 내역' 메뉴에서 조회.
+    fetch(`/api/admin/document-runs/inbox?govStatus=NONE,RESUBMIT`)
       .then(r => r.json())
       .then(d => { if (d.success) setItems(d.items); })
       .catch(() => {})
@@ -149,6 +158,21 @@ export default function ManagerDocumentsHub() {
       URL.revokeObjectURL(url);
     } catch { showToast("다운로드 실패"); }
     finally { setZipping(false); }
+  }
+
+  // 공단 제출 상태 수동 변경(앱 외 제출 반영 등). 일지 관리에선 '제출완료로 표시'만 노출.
+  async function markGov(status: "SUBMITTED" | "RESUBMIT" | "NONE") {
+    if (selected.size === 0) { showToast("대상 문서를 선택해주세요."); return; }
+    try {
+      const res = await fetch(`/api/admin/document-runs/gov-status`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...selected], status }),
+      });
+      const d = await res.json();
+      if (!d.success) { showToast(d.message || "변경 실패"); return; }
+      showToast(d.message || "변경되었습니다.");
+      setSelected(new Set()); load();
+    } catch { showToast("변경 실패"); }
   }
 
   function openSend() {
@@ -221,7 +245,7 @@ export default function ManagerDocumentsHub() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="일지 관리" sub="직무지도원이 제출한 출근부·일지를 조회·확정·서명하고, 최종본을 다운로드하거나 이메일로 발송합니다." />
+      <PageHeader title="일지 관리" sub="처리할 문서(공단 미제출·재제출요구)를 조회·확정·서명하고, 공단에 발송합니다. 발송하면 ‘공단 제출 내역’으로 이동합니다." />
 
       <StatCardRow
         cols={4}
@@ -248,6 +272,10 @@ export default function ManagerDocumentsHub() {
             </button>
             <button onClick={downloadSelected} disabled={zipping} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 active:scale-95 disabled:opacity-50">
               {zipping ? "압축 중…" : `선택 다운로드${selected.size > 0 ? ` (${selected.size})` : ""}`}
+            </button>
+            <button onClick={() => markGov("SUBMITTED")} disabled={selected.size === 0} title="공단에 직접(앱 외) 제출한 경우 제출완료로 표시"
+              className="rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-black text-emerald-700 active:scale-95 disabled:opacity-40">
+              공단 제출완료로 표시
             </button>
           </div>
         }
@@ -280,7 +308,7 @@ export default function ManagerDocumentsHub() {
                     })}
                   />
                 </th>
-                {["상태", "문서", "직무지도원 · 현장 · 기간", "작업"].map(h => <th key={h} className={T.th}>{h}</th>)}
+                {["상태", "공단", "문서", "직무지도원 · 현장 · 기간", "작업"].map(h => <th key={h} className={T.th}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -291,6 +319,7 @@ export default function ManagerDocumentsHub() {
                       checked={selected.has(item.id)} onChange={() => toggleSel(item.id)} />
                   </td>
                   <td className={T.td}><StatusBadge status={item.signStage} map={DOC_BADGE} /></td>
+                  <td className={T.td}><StatusBadge status={item.govStatus} map={GOV_BADGE} /></td>
                   <td className={T.td}>
                     <span className="font-semibold text-slate-900">{item.docLabel}</span>
                     {item.traineeName && <span className="text-[13px] text-slate-500"> · {item.traineeName}</span>}

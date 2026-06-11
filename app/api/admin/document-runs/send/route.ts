@@ -80,10 +80,12 @@ export async function POST(req: NextRequest) {
 
     let sent = 0;
     const failures: string[] = [];
+    const sentRunIds: bigint[] = []; // 발송 성공한 문서 → 공단 제출완료 자동 기록
 
     for (const { label, runs: grpRuns } of groups.values()) {
       const usedNames = new Set<string>();
       const attachments: { filename: string; content: Buffer }[] = [];
+      const groupRunIds: bigint[] = [];
       for (const r of grpRuns) {
         if (!r.currentVersion?.sourceData) continue;
         const renderType = (PRISMA_TO_PDF_DOCTYPE[r.docType] ?? r.docType) as DocumentType;
@@ -111,6 +113,7 @@ export async function POST(req: NextRequest) {
         while (usedNames.has(name)) { name = `${safe(docLabel)}_${safe(who)}_${ps}_${pe}_${i++}.pdf`; }
         usedNames.add(name);
         attachments.push({ filename: name, content: buf });
+        groupRunIds.push(r.id);
       }
 
       if (attachments.length === 0) { failures.push(label); continue; }
@@ -125,10 +128,19 @@ export async function POST(req: NextRequest) {
       try {
         await sendEmailWithAttachments({ to, subject, body: text, attachments });
         sent++;
+        sentRunIds.push(...groupRunIds);
       } catch (e: any) {
         console.error("[document-runs/send email]", label, e);
         failures.push(label);
       }
+    }
+
+    // 발송 성공 문서 → 공단 제출완료 자동 기록(재제출요구였던 것도 다시 제출완료로)
+    if (sentRunIds.length) {
+      await prisma.documentRun.updateMany({
+        where: { id: { in: sentRunIds }, agencyId: scope.agencyId },
+        data: { govStatus: "SUBMITTED", govSubmittedAt: new Date() },
+      });
     }
 
     if (sent === 0) {

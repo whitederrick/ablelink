@@ -586,6 +586,11 @@ model DocumentRun {
   // DRAFT | WORKER_SIGNED | MANAGER_SIGNED | SUBMITTED | AGENCY_SIGNED
   signStage           String    @default("DRAFT") @map("sign_stage")
 
+  // 장애인고용공단 제출 상태(signStage와 독립). NONE(미제출) | SUBMITTED(제출완료) | RESUBMIT(재제출 요구)
+  // 발송(→공단) 성공 시 자동 SUBMITTED, 공단이 재제출 요구하면 매니저가 RESUBMIT로 수동 표시(재발송 시 다시 SUBMITTED).
+  govStatus     String    @default("NONE") @map("gov_status")
+  govSubmittedAt DateTime? @map("gov_submitted_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

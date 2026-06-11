@@ -24,18 +24,34 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") ?? "").trim();
+    // 공단 제출 상태 서버 필터(csv): NONE,RESUBMIT,SUBMITTED. 미지정 시 전체.
+    const govStatusParam = (searchParams.get("govStatus") ?? "").trim();
+    const govStatuses = govStatusParam
+      ? govStatusParam.split(",").map(s => s.trim()).filter(s => ["NONE", "SUBMITTED", "RESUBMIT"].includes(s))
+      : [];
+    // 선택적 서버 페이지네이션(제출 내역 보관함용). page 미지정 시 기존 동작(상한 take).
+    const pageParam = parseInt(searchParams.get("page") ?? "", 10);
+    const pageSizeRaw = parseInt(searchParams.get("pageSize") ?? "", 10);
+    const paginated = Number.isFinite(pageParam) && pageParam > 0;
+    const pageSize = Number.isFinite(pageSizeRaw) && pageSizeRaw > 0 ? Math.min(pageSizeRaw, 100) : 20;
+
+    const where = {
+      agencyId: scope.agencyId,
+      signStage: { not: "DRAFT" },
+      ...(govStatuses.length ? { govStatus: { in: govStatuses } } : {}),
+      ...(q ? { OR: [
+        { worker: { workerName: { contains: q } } },
+        { site: { companyName: { contains: q } } },
+      ] } : {}),
+    };
+
+    const total = paginated ? await prisma.documentRun.count({ where }) : 0;
 
     const runs = await prisma.documentRun.findMany({
-      where: {
-        agencyId: scope.agencyId,
-        signStage: { not: "DRAFT" },
-        ...(q ? { OR: [
-          { worker: { workerName: { contains: q } } },
-          { site: { companyName: { contains: q } } },
-        ] } : {}),
-      },
+      where,
       orderBy: { updatedAt: "desc" },
-      take: 300,
+      skip: paginated ? (pageParam - 1) * pageSize : undefined,
+      take: paginated ? pageSize : 300,
       select: {
         id: true,
         docType: true,
@@ -43,6 +59,8 @@ export async function GET(req: NextRequest) {
         periodStart: true,
         periodEnd: true,
         signStage: true,
+        govStatus: true,
+        govSubmittedAt: true,
         workerSignedAt: true,
         managerSignedAt: true,
         currentVersionId: true,
@@ -74,6 +92,8 @@ export async function GET(req: NextRequest) {
       periodStart: r.periodStart.toISOString().slice(0, 10),
       periodEnd: r.periodEnd.toISOString().slice(0, 10),
       signStage: r.signStage,
+      govStatus: r.govStatus,
+      govSubmittedAt: r.govSubmittedAt?.toISOString() ?? null,
       submittedAt: r.workerSignedAt?.toISOString() ?? null,
       managerSignedAt: r.managerSignedAt?.toISOString() ?? null,
       currentVersionId: r.currentVersionId?.toString() ?? null,
@@ -82,7 +102,7 @@ export async function GET(req: NextRequest) {
       updatedAt: r.updatedAt.toISOString(),
     }));
 
-    return NextResponse.json({ success: true, items });
+    return NextResponse.json({ success: true, items, ...(paginated ? { total, page: pageParam, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) } : {}) });
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[admin/document-runs/inbox]", e);

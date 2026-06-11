@@ -59,6 +59,7 @@ const groups: NavGroup[] = [
     title: "문서",
     items: [
       { href: "/manager/documents", label: "일지 관리", plan: "STARTER" }, // 워크플로 메인(조회·확정·서명·발송)
+      { href: "/manager/gov-submissions", label: "공단 제출 내역", plan: "STARTER" }, // 공단 제출완료 보관·조회
       { href: "/manager/docs",      label: "문서 조회", plan: "STARTER" },  // 매니저 직접 PDF 조회(보조)
     ],
   },
