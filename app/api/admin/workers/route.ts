@@ -111,6 +111,7 @@ export async function GET(req: NextRequest) {
               id: true,
               startDate: true,
               serviceStep: true,
+              workType: true,
               site: { select: { companyName: true } },
               agency: { select: { name: true } },
             },
@@ -138,6 +139,7 @@ export async function GET(req: NextRequest) {
           agencyName: u.assignments[0].agency?.name || "-",
           startDate: u.assignments[0].startDate.toISOString(),
           serviceStep: String(u.assignments[0].serviceStep),
+          workType: String(u.assignments[0].workType),
         } : null,
       })),
     });

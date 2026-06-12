@@ -9,6 +9,7 @@ import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
+import { workerLabel } from "../_format";
 
 const DOC_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   SUBMITTED: { label: "제출완료", tone: "sky" },
@@ -29,6 +30,7 @@ type Item = {
   docLabel: string;
   traineeName: string | null;
   workerName: string;
+  workerLoginId: string;
   siteName: string;
   periodStart: string;
   periodEnd: string;
@@ -318,7 +320,7 @@ export default function ManagerDocumentsHub() {
                     })}
                   />
                 </th>
-                {["상태", "공단", "문서", "직무지도원 · 현장 · 기간", "작업"].map(h => <th key={h} className={T.th}>{h}</th>)}
+                {["상태", "공단", "문서", "직무지도원 성명(아이디) · 현장 · 기간", "작업"].map(h => <th key={h} className={T.th}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -338,7 +340,7 @@ export default function ManagerDocumentsHub() {
                     )}
                   </td>
                   <td className={`${T.td} max-w-[260px] truncate text-[13px] text-slate-500`}>
-                    {item.workerName} · {item.siteName} · {item.periodStart}~{item.periodEnd}
+                    {workerLabel(item.workerName, item.workerLoginId)} · {item.siteName} · {item.periodStart}~{item.periodEnd}
                   </td>
                   <td className={T.td}>
                     <div className="flex items-center gap-1.5">

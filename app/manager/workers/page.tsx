@@ -8,6 +8,7 @@ import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
 import { CheckCircle2, Copy, Pencil, Send } from "lucide-react";
+import { workerLabel } from "../_format";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM";
 type ServiceStep = "PRE_TRAINING" | "FIELD_TRAINING" | "ADAPTATION";
@@ -38,20 +39,7 @@ interface Worker {
   planType: string;
   status: string;
   createdAt: string;
-  activeAssignment: { siteName: string; agencyName: string; startDate: string; assignmentId?: string } | null;
-}
-
-function maskLoginId(id: string) {
-  if (!id) return "";
-  if (id.includes("@")) {
-    const [local, domain] = id.split("@");
-    if (local.length <= 2) return id;
-    return `${local[0]}${"*".repeat(Math.min(local.length - 2, 4))}${local[local.length - 1]}@${domain}`;
-  }
-  const digits = id.replace(/\D/g, "");
-  if (digits.length >= 10)
-    return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
-  return id;
+  activeAssignment: { siteName: string; agencyName: string; startDate: string; assignmentId?: string; workType?: WorkType } | null;
 }
 
 const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
@@ -665,7 +653,7 @@ export default function WorkersPage() {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              {["이름", "전화번호", "아이디", "현장", "기관", "근무형태", "배정일", "플랜", "상태", ""].map(h => (
+              {["직무지도원 성명(아이디)", "전화번호", "현장", "기관", "근무형태", "배정일", "플랜", "상태", ""].map(h => (
                 <th key={h} className={T.th}>{h}</th>
               ))}
             </tr>
@@ -678,14 +666,16 @@ export default function WorkersPage() {
             ) : pageItems.map(c => {
               const assignmentId = c.activeAssignment?.assignmentId;
               const cachedAsgn = assignmentId ? assignmentMap[assignmentId] : null;
-              const workTypeLabel = cachedAsgn ? WORK_TYPE_LABELS[cachedAsgn.workType] : (c.activeAssignment ? "미설정" : "-");
+              // 근무형태는 목록 API(activeAssignment.workType)에서 항상 표기.
+              // 저장 후엔 캐시(cachedAsgn)가 우선 — 행 열람/취소만으로는 표기가 바뀌지 않음.
+              const wt = (cachedAsgn?.workType ?? c.activeAssignment?.workType) as WorkType | undefined;
+              const workTypeLabel = wt ? WORK_TYPE_LABELS[wt] : (c.activeAssignment ? "미설정" : "-");
               return (
                 <tr key={c.id}
                   className={`${T.trBase} ${c.activeAssignment ? "cursor-pointer hover:bg-slate-50" : ""}`}
                   onClick={() => c.activeAssignment && openEdit(c)}>
-                  <td className={T.td}>{c.workerName}</td>
+                  <td className={T.td}>{workerLabel(c.workerName, c.loginId)}</td>
                   <td className={T.td}>{c.phoneNumber}</td>
-                  <td className={T.td}>{maskLoginId(c.loginId)}</td>
                   <td className={T.td}>
                     {c.activeAssignment?.siteName
                       ? c.activeAssignment.siteName
@@ -694,7 +684,7 @@ export default function WorkersPage() {
                   <td className={T.td}>{c.activeAssignment?.agencyName || "-"}</td>
                   <td className={T.td}>
                     {c.activeAssignment
-                      ? <span className={cachedAsgn ? "text-sky-600" : "text-slate-400"}>{workTypeLabel}</span>
+                      ? <span className="text-slate-700">{workTypeLabel}</span>
                       : "-"}
                   </td>
                   <td className={T.td}>{c.activeAssignment?.startDate?.slice(0, 10) || "-"}</td>

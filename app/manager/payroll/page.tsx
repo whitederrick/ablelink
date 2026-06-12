@@ -68,6 +68,12 @@ function defaultYM() {
 }
 const payTypeLabel: Record<PayType, string> = { MONTHLY: "월급", DAILY: "일급", HOURLY: "시급" };
 
+// 시급 입력 시 자동 계산 — 공단 기준 2명 이상 동시지도 시급은 120%, 주휴수당은 시급×8시간(주40시간 기준).
+const RATE_2PLUS_MULTIPLIER = 1.2;
+const WEEKLY_HOLIDAY_HOURS = 8;
+function auto2Plus(base: number) { return base > 0 ? String(Math.round(base * RATE_2PLUS_MULTIPLIER)) : ""; }
+function autoWeeklyHoliday(base: number) { return base > 0 ? String(Math.round(base * WEEKLY_HOLIDAY_HOURS)) : ""; }
+
 const RUN_STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   DRAFT:     { label: "초안", tone: "amber" },
   FINALIZED: { label: "확정", tone: "emerald" },
@@ -419,7 +425,14 @@ export default function PayrollPage() {
                 <div className="space-y-1.5">
                   <label className={T.label}>급여 유형</label>
                   <select value={form.payType} disabled={form.workerType === "INTERNAL"}
-                    onChange={e => setForm(f => ({ ...f, payType: e.target.value as PayType }))} className={`w-full ${T.select} disabled:opacity-50`}>
+                    onChange={e => setForm(f => {
+                      const pt = e.target.value as PayType;
+                      const base = Number(f.baseAmount) || 0;
+                      const isHourly = f.workerType === "EXTERNAL" && pt === "HOURLY";
+                      return isHourly
+                        ? { ...f, payType: pt, hourlyRate2Plus: auto2Plus(base), weeklyHolidayPay: autoWeeklyHoliday(base) }
+                        : { ...f, payType: pt, hourlyRate2Plus: "" };
+                    })} className={`w-full ${T.select} disabled:opacity-50`}>
                     {form.workerType === "EXTERNAL" && <option value="HOURLY">시급</option>}
                     <option value="DAILY">일급</option>
                     {form.workerType === "EXTERNAL" && <option value="MONTHLY">월급</option>}
@@ -434,7 +447,15 @@ export default function PayrollPage() {
                 <div className="space-y-1.5">
                   <label className={T.label}>{form.payType === "HOURLY" ? "시급 (원)" : form.payType === "DAILY" ? "일급 (원)" : "월급 (원)"}</label>
                   <input type="number" value={form.baseAmount}
-                    onChange={e => setForm(f => ({ ...f, baseAmount: e.target.value }))}
+                    onChange={e => setForm(f => {
+                      const v = e.target.value;
+                      const base = Number(v) || 0;
+                      const isHourly = f.workerType === "EXTERNAL" && f.payType === "HOURLY";
+                      // 시급 입력 시 2명+ 시급(120%)·주휴수당(시급×8) 자동 채움 (수정 가능)
+                      return isHourly
+                        ? { ...f, baseAmount: v, hourlyRate2Plus: auto2Plus(base), weeklyHolidayPay: autoWeeklyHoliday(base) }
+                        : { ...f, baseAmount: v };
+                    })}
                     placeholder={form.payType === "HOURLY" ? "예: 10030 (2025 최저임금)" : form.payType === "DAILY" ? "예: 25000" : "예: 2200000"}
                     className={`w-full ${T.input}`} />
                 </div>
@@ -446,18 +467,18 @@ export default function PayrollPage() {
                       onChange={e => setForm(f => ({ ...f, hourlyRate2Plus: e.target.value }))}
                       placeholder="예: 12036 (최저임금×120%)"
                       className={`w-full ${T.input}`} />
-                    <p className="text-[11px] font-semibold text-slate-400">※ 공단 기준: 2명 이상 동시 지도 시 최저시급의 120%</p>
+                    <p className="text-[11px] font-semibold text-slate-400">※ 시급의 120% 자동 계산 (공단 기준·2명 이상 동시지도, 수정 가능)</p>
                   </div>
                 )}
 
                 {form.workerType === "EXTERNAL" && (
                   <div className="space-y-1.5">
-                    <label className={T.label}>주휴수당 (원, 선택)</label>
+                    <label className={T.label}>주휴수당 (원)</label>
                     <input type="number" value={form.weeklyHolidayPay}
                       onChange={e => setForm(f => ({ ...f, weeklyHolidayPay: e.target.value }))}
-                      placeholder="해당되는 경우만 입력"
+                      placeholder="시급 입력 시 자동 계산"
                       className={`w-full ${T.input}`} />
-                    <p className="text-[11px] font-semibold text-slate-400">※ 주 5일 근무 시 법적 주휴수당 (월 급여 계산 시 가산)</p>
+                    <p className="text-[11px] font-semibold text-slate-400">※ 시급 × 8시간 자동 계산 (주 40시간 기준, 수정 가능)</p>
                   </div>
                 )}
 
@@ -507,15 +528,17 @@ export default function PayrollPage() {
                         </div>
                       </td>
                       <td className={`${T.td}`}>
-                        <div className="font-semibold">
-                          {comma(c.baseAmount)}원{c.payType === "HOURLY" ? "/h" : c.payType === "DAILY" ? "/일" : "/월"}
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <span className="font-semibold">
+                            {comma(c.baseAmount)}원{c.payType === "HOURLY" ? "/h" : c.payType === "DAILY" ? "/일" : "/월"}
+                          </span>
+                          {c.hourlyRate2Plus != null && (
+                            <span className="text-[13px] text-slate-500">2명+ {comma(c.hourlyRate2Plus)}원/h</span>
+                          )}
+                          {c.weeklyHolidayPay != null && (
+                            <span className="text-[13px] text-slate-500">주휴 +{comma(c.weeklyHolidayPay)}원</span>
+                          )}
                         </div>
-                        {c.hourlyRate2Plus != null && (
-                          <div className="text-[13px] text-slate-500">2명+: {comma(c.hourlyRate2Plus)}원/h</div>
-                        )}
-                        {c.weeklyHolidayPay != null && (
-                          <div className="text-[13px] text-slate-500">주휴: +{comma(c.weeklyHolidayPay)}원</div>
-                        )}
                       </td>
                       <td className={`${T.td} whitespace-nowrap`}>{c.effectiveFrom} ~ {c.effectiveTo || "현재"}</td>
                       <td className={T.td}>

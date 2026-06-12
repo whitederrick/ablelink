@@ -8,6 +8,7 @@ import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
+import { workerLabel } from "../_format";
 
 const PAGE_SIZE = 20;
 
@@ -16,6 +17,7 @@ type Item = {
   docLabel: string;
   traineeName: string | null;
   workerName: string;
+  workerLoginId: string;
   siteName: string;
   periodStart: string;
   periodEnd: string;
@@ -137,7 +139,7 @@ export default function GovSubmissionsPage() {
                     checked={items.length > 0 && items.every(it => selected.has(it.id))}
                     onChange={e => setSelected(p => { const n = new Set(p); items.forEach(it => e.target.checked ? n.add(it.id) : n.delete(it.id)); return n; })} />
                 </th>
-                {["문서", "직무지도원 · 현장 · 기간", "제출일", "작업"].map(h => <th key={h} className={T.th}>{h}</th>)}
+                {["문서", "직무지도원 성명(아이디) · 현장 · 기간", "제출일", "작업"].map(h => <th key={h} className={T.th}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -152,7 +154,7 @@ export default function GovSubmissionsPage() {
                     {item.traineeName && <span className="text-[13px] text-slate-500"> · {item.traineeName}</span>}
                   </td>
                   <td className={`${T.td} max-w-[280px] truncate text-[13px] text-slate-500`}>
-                    {item.workerName} · {item.siteName} · {item.periodStart}~{item.periodEnd}
+                    {workerLabel(item.workerName, item.workerLoginId)} · {item.siteName} · {item.periodStart}~{item.periodEnd}
                   </td>
                   <td className={`${T.td} whitespace-nowrap text-[13px] text-slate-600`}>{item.govSubmittedAt ? item.govSubmittedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>

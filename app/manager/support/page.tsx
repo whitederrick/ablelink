@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Plus, X, ChevronDown, MessageCircle } from "lucide-react";
+import { Plus, X, MessageCircle } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
@@ -38,7 +38,7 @@ export default function ManagerSupportPage() {
   const [query, setQuery]     = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [page, setPage]       = useState(1);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: "", body: "", category: "GENERAL" });
   const [submitting, setSubmitting] = useState(false);
@@ -67,6 +67,7 @@ export default function ManagerSupportPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   useEffect(() => { setPage(1); }, [query, statusFilter]);
+  const selected = tickets.find(t => t.id === selectedId) ?? null;
 
   async function submit() {
     if (!form.title.trim() || !form.body.trim()) { showToast("제목과 내용을 입력해주세요."); return; }
@@ -187,64 +188,74 @@ export default function ManagerSupportPage() {
         </div>
       )}
 
-      {/* 목록 */}
-      {loading ? (
-        <div className="flex h-40 items-center justify-center">
-          <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
-          <p className="text-sm text-slate-400">{tickets.length === 0 ? "문의 내역이 없습니다." : "조건에 맞는 문의가 없습니다."}</p>
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          {pageItems.map(t => {
-            return (
-              <div key={t.id} className="rounded-2xl border border-slate-100 bg-white">
-                <button
-                  onClick={() => setExpanded(expanded === t.id ? null : t.id)}
-                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left"
-                >
+      {/* 목록(좌) — 상세(우) 마스터-디테일 */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* 목록 */}
+        <div>
+          {loading ? (
+            <p className={T.empty}>불러오는 중…</p>
+          ) : pageItems.length === 0 ? (
+            <p className={T.empty}>{tickets.length === 0 ? "문의 내역이 없습니다." : "조건에 맞는 문의가 없습니다."}</p>
+          ) : (
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              {pageItems.map(t => (
+                <button key={t.id} onClick={() => setSelectedId(t.id)}
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-slate-50 ${selectedId === t.id ? "bg-slate-100" : ""}`}>
                   <StatusBadge status={t.category} map={CAT_BADGE} />
-                  <span className="flex-1 truncate text-[15px] font-semibold text-slate-800">{t.title}</span>
                   <StatusBadge status={t.status} map={SUP_STATUS} />
-                  <span className="ml-2 flex-shrink-0 text-[13px] font-medium text-slate-500">
-                    {new Date(t.createdAt).toLocaleDateString("ko-KR")}
-                  </span>
-                  <ChevronDown className={`h-4 w-4 flex-shrink-0 text-slate-400 transition ${expanded === t.id ? "rotate-180" : ""}`} />
+                  <span className="flex-1 truncate text-[15px] font-semibold text-slate-800">{t.title}</span>
+                  <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{t.createdAt.slice(2, 10)}</span>
                 </button>
-
-                {expanded === t.id && (
-                  <div className="border-t border-slate-100 px-4 pb-4 pt-3 space-y-3">
-                    <div>
-                      <p className="mb-1 text-[11px] font-black uppercase tracking-wide text-slate-400">문의 내용</p>
-                      <p className="whitespace-pre-wrap text-sm text-slate-700">{t.body}</p>
-                    </div>
-                    {t.reply && (
-                      <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
-                        <p className="mb-1 text-[11px] font-black uppercase tracking-wide text-emerald-600">
-                          운영팀 답변 {t.repliedAt ? `· ${new Date(t.repliedAt).toLocaleDateString("ko-KR")}` : ""}
-                        </p>
-                        <p className="whitespace-pre-wrap text-sm text-slate-800">{t.reply}</p>
-                      </div>
-                    )}
-                    {t.status === "REPLIED" && (
-                      <button
-                        onClick={() => closeTicket(t.id)}
-                        disabled={closing === t.id}
-                        className={T.btnSecondary + " text-xs py-1.5"}
-                      >
-                        {closing === t.id ? "처리 중..." : "문의 종료"}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+              ))}
+            </div>
+          )}
+          {filtered.length > 0 && (
+            <Pagination className="mt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+          )}
         </div>
-      )}
+
+        {/* 상세 */}
+        <div className="lg:sticky lg:top-4 h-fit">
+          {selected ? (
+            <div className={T.card}>
+              <div className="mb-2 flex items-center gap-1.5">
+                <StatusBadge status={selected.category} map={CAT_BADGE} />
+                <StatusBadge status={selected.status} map={SUP_STATUS} />
+                <span className="ml-auto text-[11px] font-semibold text-slate-300">{new Date(selected.createdAt).toLocaleDateString("ko-KR")}</span>
+              </div>
+              <p className="text-base font-black text-slate-900">{selected.title}</p>
+
+              <div className="mt-3">
+                <p className="mb-1 text-[11px] font-black uppercase tracking-wide text-slate-400">문의 내용</p>
+                <p className="whitespace-pre-wrap text-sm font-semibold leading-relaxed text-slate-600">{selected.body}</p>
+              </div>
+
+              {selected.reply && (
+                <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                  <p className="mb-1 text-[11px] font-black uppercase tracking-wide text-emerald-600">
+                    운영팀 답변 {selected.repliedAt ? `· ${new Date(selected.repliedAt).toLocaleDateString("ko-KR")}` : ""}
+                  </p>
+                  <p className="whitespace-pre-wrap text-sm text-slate-800">{selected.reply}</p>
+                </div>
+              )}
+
+              {selected.status === "REPLIED" && (
+                <button
+                  onClick={() => closeTicket(selected.id)}
+                  disabled={closing === selected.id}
+                  className={T.btnSecondary + " mt-3 text-xs py-1.5"}
+                >
+                  {closing === selected.id ? "처리 중..." : "문의 종료"}
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className={`${T.card} text-center`}>
+              <p className="py-6 text-sm font-semibold text-slate-300">목록에서 문의를 선택하면<br />상세 내용이 표시됩니다.</p>
+            </div>
+          )}
+        </div>
+      </div>
 
       {toast && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg z-50">

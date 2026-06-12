@@ -140,28 +140,36 @@ export default function AttendanceEditRequestsPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         {/* 좌: 목록 */}
         <div>
-          <div className="space-y-1.5">
-            {loading ? (
-              <p className={T.empty}>불러오는 중…</p>
-            ) : pageItems.length === 0 ? (
-              <p className={T.empty}>{requests.length === 0 ? "접수된 요청이 없습니다." : "조건에 맞는 요청이 없습니다."}</p>
-            ) : (
-              pageItems.map(req => (
-                <button
-                  key={req.id}
-                  onClick={() => { setSelectedId(req.id); setAdminNote(""); }}
-                  className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2 text-left transition hover:border-slate-300 ${
-                    selectedId === req.id ? "border-slate-950 ring-1 ring-slate-200" : "border-slate-200"
-                  }`}
-                >
-                  <StatusBadge status={req.status} map={EDITREQ_BADGE} />
-                  <span className="shrink-0 text-[15px] font-black text-slate-900">{req.workerName}</span>
-                  <span className="flex-1 truncate text-[13px] font-semibold text-slate-500">{req.siteName} · {req.workDate.slice(5)}({dowLabel(req.workDate)})</span>
-                  <span className="shrink-0 w-[56px] text-right text-xs font-semibold text-slate-400">{req.createdAt.slice(2, 10)}</span>
-                </button>
-              ))
-            )}
-          </div>
+          {loading ? (
+            <p className={T.empty}>불러오는 중…</p>
+          ) : pageItems.length === 0 ? (
+            <p className={T.empty}>{requests.length === 0 ? "접수된 요청이 없습니다." : "조건에 맞는 요청이 없습니다."}</p>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              {/* 제목줄 */}
+              <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-slate-400">
+                <span className="w-14 shrink-0">상태</span>
+                <span className="w-16 shrink-0">직무지도원</span>
+                <span className="flex-1">현장 · 근무일</span>
+                <span className="w-[56px] shrink-0 text-right">요청일</span>
+              </div>
+              {/* 행 */}
+              <div className="divide-y divide-slate-100">
+                {pageItems.map(req => (
+                  <button
+                    key={req.id}
+                    onClick={() => { setSelectedId(req.id); setAdminNote(""); }}
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-slate-50 ${selectedId === req.id ? "bg-slate-100" : ""}`}
+                  >
+                    <span className="w-14 shrink-0"><StatusBadge status={req.status} map={EDITREQ_BADGE} /></span>
+                    <span className="w-16 shrink-0 truncate text-[15px] font-black text-slate-900">{req.workerName}</span>
+                    <span className="flex-1 truncate text-[13px] font-semibold text-slate-500">{req.siteName} · {req.workDate.slice(5)}({dowLabel(req.workDate)})</span>
+                    <span className="w-[56px] shrink-0 text-right text-xs font-semibold text-slate-400">{req.createdAt.slice(2, 10)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {filtered.length > 0 && (
             <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
           )}

@@ -27,13 +27,14 @@ export async function GET(req: NextRequest) {
       where: { agencyId: scope.agencyId },
       orderBy: { createdAt: "desc" },
       take: 100,
-      include: { worker: { select: { workerName: true } } },
+      include: { worker: { select: { workerName: true, loginId: true } } },
     });
     return NextResponse.json({
       success: true,
       items: rows.map(r => ({
         id: String(r.id),
         workerName: r.worker?.workerName ?? "",
+        workerLoginId: r.worker?.loginId ?? "",
         recipientName: r.recipientName,
         recipientPhone: r.recipientPhone,
         siteName: r.siteName,

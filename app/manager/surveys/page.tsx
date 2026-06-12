@@ -8,10 +8,11 @@ import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
 import { X } from "lucide-react";
+import { workerLabel } from "../_format";
 
 type Status = "PENDING" | "RESPONDED" | "EXPIRED" | "CANCELLED";
 interface SurveyItem {
-  id: string; workerName: string; recipientName: string | null; recipientPhone: string;
+  id: string; workerName: string; workerLoginId: string; recipientName: string | null; recipientPhone: string;
   siteName: string | null; status: Status; auto: boolean; sharedWithAgency: boolean;
   overallScore: number | null; comment: string | null;
   sentAt: string | null; respondedAt: string | null; createdAt: string;
@@ -176,15 +177,16 @@ export default function ManagerSurveysPage() {
 
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
-          <thead><tr>{["직무지도원", "사업체/담당자", "상태", "결과", "요청일"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{["직무지도원 성명(아이디)", "사업체명", "사업체 담당자", "상태", "결과", "요청일"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={5} className={T.tdCenter}>로딩 중...</td></tr>
-            : filtered.length === 0 ? <tr><td colSpan={5} className={T.tdCenter}>{items.length === 0 ? "요청한 조사가 없습니다." : "조건에 맞는 조사가 없습니다."}</td></tr>
+            {loading ? <tr><td colSpan={6} className={T.tdCenter}>로딩 중...</td></tr>
+            : filtered.length === 0 ? <tr><td colSpan={6} className={T.tdCenter}>{items.length === 0 ? "요청한 조사가 없습니다." : "조건에 맞는 조사가 없습니다."}</td></tr>
             : pageItems.map(s => {
               return (
                 <tr key={s.id} className={T.trBase}>
-                  <td className={T.td}>{s.workerName}</td>
-                  <td className={T.td}>{s.siteName || "-"}{(s.recipientName || s.recipientPhone) ? ` · ${s.recipientName || ""}${s.recipientPhone ? ` (${s.recipientPhone})` : ""}` : ""}</td>
+                  <td className={T.td}>{workerLabel(s.workerName, s.workerLoginId)}</td>
+                  <td className={T.td}>{s.siteName || "-"}</td>
+                  <td className={T.td}>{s.recipientName || "-"}{s.recipientPhone ? ` (${s.recipientPhone})` : ""}</td>
                   <td className={T.td}><StatusBadge status={s.status} map={STATUS_BADGE} />{s.auto && <span className="ml-1 text-[13px] text-slate-500">자동</span>}</td>
                   <td className={T.td}>{s.status === "RESPONDED" ? (s.sharedWithAgency && s.overallScore != null ? <span className="font-semibold text-slate-800">종합 {s.overallScore}/5</span> : <span className="text-slate-500">운영자 확인</span>) : "-"}</td>
                   <td className={T.td}>{s.createdAt.slice(0, 10)}</td>

@@ -9,7 +9,7 @@ import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
 
-const SITE_PAGE_SIZE = 10;
+const PAGE_SIZE = 10;
 
 type Trainee = {
   id: string; siteId: string; siteName: string; name: string; gender: string;
@@ -93,12 +93,8 @@ export default function TraineesPage() {
   ];
   const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
-  // 사이트별 그룹 (사이트 1행 = 사이트명+인원 + 훈련생 칩 나열)
-  const bysite: Record<string,Trainee[]> = {};
-  for(const t of filtered) (bysite[t.siteId]??=[]).push(t);
-  const siteEntries = Object.entries(bysite);
-  const siteTotalPages = Math.max(1, Math.ceil(siteEntries.length / SITE_PAGE_SIZE));
-  const pageEntries = siteEntries.slice((page - 1) * SITE_PAGE_SIZE, page * SITE_PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   useEffect(() => { setPage(1); }, [query, statusFilter]);
 
   return (
@@ -199,26 +195,33 @@ export default function TraineesPage() {
       ):filtered.length===0?(
         <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">{trainees.length===0?"훈련생이 없습니다.":"조건에 맞는 훈련생이 없습니다."}</p></div>
       ):(
-        <div className="space-y-2">
-          {pageEntries.map(([sid, ts])=>(
-            <div key={sid} className="rounded-2xl border border-slate-100 bg-white px-5 py-2">
-              {/* 현장명 (인원) + 훈련생 칩 우측 나열, 이름 클릭 → 상세 */}
-              <div className="flex flex-wrap items-center gap-2 text-[15px] font-medium text-slate-800">
-                <span className="shrink-0 font-semibold">{ts[0].siteName}</span>
-                <span className="shrink-0 text-[13px] font-semibold text-slate-500">({ts.length}명)</span>
-                <span className="mx-0.5 h-5 w-px shrink-0 bg-slate-200" />
-                {ts.map(t=>(
-                  <button key={t.id} onClick={()=>openEdit(t)}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-50 active:scale-95">
-                    {t.name}
-                    <span className="text-[12px] font-medium text-slate-400">{t.gender==="M"?"남":"여"}</span>
-                    <StatusBadge status={t.status} map={STATUS_BADGE} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-          <Pagination className="mt-2" page={page} totalPages={siteTotalPages} total={siteEntries.length} onPageChange={setPage} />
+        <div className={T.tableWrap}>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>{["이름", "현장", "성별", "생년월일", "연락처", "장애유형", "장애정도", "상태", ""].map(h => (
+                <th key={h} className={T.th}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {pageItems.map(t => (
+                <tr key={t.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50`} onClick={() => openEdit(t)}>
+                  <td className={`${T.td} font-semibold text-slate-900`}>{t.name}</td>
+                  <td className={T.td}>{t.siteName}</td>
+                  <td className={T.td}>{t.gender === "M" ? "남" : "여"}</td>
+                  <td className={T.td}>{t.birthDate || "-"}</td>
+                  <td className={T.td}>{t.phoneNumber || "-"}</td>
+                  <td className={T.td}>{t.disabilityType}</td>
+                  <td className={T.td}>{t.severity}</td>
+                  <td className={T.td}><StatusBadge status={t.status} map={STATUS_BADGE} /></td>
+                  <td className={T.td} onClick={e => e.stopPropagation()}>
+                    <button onClick={() => openEdit(t)}
+                      className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50">수정</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
         </div>
       )}
       {toast&&<div className="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg z-50">{toast}</div>}
