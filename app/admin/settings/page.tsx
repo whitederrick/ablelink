@@ -86,9 +86,10 @@ export default function SettingsPage() {
                   <input
                     type={c.type === "number" ? "number" : "text"}
                     min={c.min} max={c.max}
+                    maxLength={c.type === "string" ? 40 : undefined}
                     value={draft[c.key] ?? ""}
                     onChange={e => setDraft(p => ({ ...p, [c.key]: e.target.value }))}
-                    className="w-28 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"
+                    className={`${c.type === "number" ? "w-28" : "w-56"} rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400`}
                   />
                   <button onClick={() => saveConfig(c.key)} disabled={!changed || savingKey === c.key}
                     className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-black text-white disabled:opacity-40">

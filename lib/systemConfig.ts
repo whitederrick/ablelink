@@ -47,6 +47,31 @@ export const CONFIG_REGISTRY: ConfigSpec[] = [
     description: "실제 출근이 표준 출근시각보다 이만큼 이상 늦으면 근태 이상(지각)으로 표시.",
     type: "number", default: "15", min: 1, max: 120,
   },
+  // 직무지도원 홈 출퇴근 카드 격려 문구(상태별). 운영자가 자유 편집.
+  {
+    key: "HOME_MSG_BEFORE",
+    label: "홈 문구 — 출근 전",
+    description: "직무지도원 홈 출퇴근 카드에서 '출근 전' 상태에 표시되는 격려 문구.",
+    type: "string", default: "오늘도 좋은 하루 되세요",
+  },
+  {
+    key: "HOME_MSG_WORKING",
+    label: "홈 문구 — 근무 중",
+    description: "직무지도원 홈 출퇴근 카드에서 '근무 중' 상태에 표시되는 격려 문구.",
+    type: "string", default: "열심히 일하고 계시네요!",
+  },
+  {
+    key: "HOME_MSG_DONE",
+    label: "홈 문구 — 마감 중(퇴근 후)",
+    description: "직무지도원 홈 출퇴근 카드에서 퇴근 후 '마감 중' 상태에 표시되는 문구.",
+    type: "string", default: "수고하셨습니다",
+  },
+  {
+    key: "HOME_MSG_CLOSED",
+    label: "홈 문구 — 퇴근 완료",
+    description: "직무지도원 홈 출퇴근 카드에서 '퇴근 완료' 상태에 표시되는 문구.",
+    type: "string", default: "오늘 하루도 고생하셨습니다",
+  },
 ];
 
 const SPEC_BY_KEY = Object.fromEntries(CONFIG_REGISTRY.map(s => [s.key, s]));

@@ -6,6 +6,7 @@
 import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
 import { getWorkerPremiumStatus, getWorkerDocAccess } from "@/lib/planGuard";
+import { getConfig } from "@/lib/systemConfig";
 
 function getKstNowDate(): Date {
   const nowStr = new Date().toLocaleString("sv-SE", { timeZone: "Asia/Seoul" });
@@ -49,6 +50,8 @@ export interface HomeSummary {
   notices: { id: string; title: string; body: string; type: string; kind: string; yearMonth: string | null; link: string | null; read: boolean; createdAt: string }[];
   unreadCount: number;
   alarm: { clockInAlertMinutes: number; clockOutAlertMinutes: number };
+  // 출퇴근 카드 격려 문구(운영자 편집, SystemConfig). 상태별.
+  homeMessages: { BEFORE: string; WORKING: string; DONE: string; CLOSED: string };
   // 놓친 업무
   missing: {
     count: number;
@@ -177,6 +180,14 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     siteName: a.site?.companyName ?? "현장",
   }));
 
+  // 출퇴근 카드 격려 문구(운영자 편집 가능, 미설정 시 registry 기본값)
+  const [msgBefore, msgWorking, msgDone, msgClosed] = await Promise.all([
+    getConfig("HOME_MSG_BEFORE"),
+    getConfig("HOME_MSG_WORKING"),
+    getConfig("HOME_MSG_DONE"),
+    getConfig("HOME_MSG_CLOSED"),
+  ]);
+
   return {
     home: {
       id: site?.id ? Number(site.id) : null,
@@ -213,6 +224,7 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
       clockInAlertMinutes: setting?.clockInAlertMinutes ?? 3,
       clockOutAlertMinutes: setting?.clockOutAlertMinutes ?? 3,
     },
+    homeMessages: { BEFORE: msgBefore, WORKING: msgWorking, DONE: msgDone, CLOSED: msgClosed },
     missing: { count: missingItems.length, items: missingItems },
     today: { loggedTraineeIds, missingTraineeCount },
     missedClockOuts,
