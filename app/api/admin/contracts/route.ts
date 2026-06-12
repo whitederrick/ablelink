@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
       wageType, wageAmount, bonusExists, bonusAmount,
       extraPayExists, extraPayDesc, overtimeRate, wagePayday, wagePayMethod,
       employerBizName, employerPhone, employerAddress, employerRepName,
+      applyRepSignature,  // 대표 서명 '적용' 명시 액션(true일 때만 대표 서명 주입)
       workerAddress,
       clauseIds,  // 선택한 특약 조항 id 배열 → 스냅샷
     } = body;
@@ -272,9 +273,10 @@ export async function POST(req: NextRequest) {
         employerAddress: str(employerAddress) ?? agencyRow?.address ?? null,
         employerRepName: str(employerRepName) ?? agencyRow?.representativeName ?? null,
         workerAddress:   str(workerAddress),
-        // 사업주(갑) 서명: 에이전시에 등록된 대표자 서명을 스냅샷으로 자동 삽입(있으면).
-        adminSignatureUrl: agencyRow?.representativeSignatureUrl ?? null,
-        adminSignedAt:     agencyRow?.representativeSignatureUrl ? new Date() : null,
+        // 사업주(갑) 서명: 작성 화면에서 '대표 서명 적용'을 명시적으로 선택한 경우에만 주입.
+        //  (자동 주입 금지 — 미선택 시 대표 서명칸은 비어 발송된다.)
+        adminSignatureUrl: applyRepSignature ? (agencyRow?.representativeSignatureUrl ?? null) : null,
+        adminSignedAt:     applyRepSignature && agencyRow?.representativeSignatureUrl ? new Date() : null,
         specialClauses:  clauseSnapshot.length > 0 ? clauseSnapshot : undefined,
         signToken,
         tokenExpiresAt: expiresAt,

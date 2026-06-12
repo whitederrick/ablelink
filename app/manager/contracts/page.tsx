@@ -344,6 +344,9 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
   const [employerAddress, setEmployerAddress] = useState("");
   const [employerRepName, setEmployerRepName] = useState("");
   const [workerAddress, setWorkerAddress] = useState("");
+  // 대표 서명: 설정에 등록된 서명을 '적용' 액션으로 명시적으로 넣어야 계약서에 들어간다(자동주입 안 함).
+  const [repSignatureUrl, setRepSignatureUrl] = useState<string | null>(null);
+  const [applyRepSignature, setApplyRepSignature] = useState(false);
 
   const [clauses, setClauses] = useState<Clause[]>([]);
   const [selectedClauseIds, setSelectedClauseIds] = useState<string[]>([]);
@@ -386,6 +389,7 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
         setEmployerPhone(d.data.phoneNumber || "");
         setEmployerAddress(d.data.address || "");
         setEmployerRepName(d.data.representativeName || "");
+        setRepSignatureUrl(d.data.representativeSignatureUrl || null);
       }
     }).catch(() => {});
     fetch("/api/admin/contract-clauses").then(r => r.json()).then(d => {
@@ -418,6 +422,7 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
           extraPayExists, extraPayDesc: extraPayExists ? extraPayDesc : null,
           overtimeRate, wagePayday, wagePayMethod,
           employerBizName, employerPhone, employerAddress, employerRepName,
+          applyRepSignature: applyRepSignature && !!repSignatureUrl,
           workerAddress: workerAddress || null,
           clauseIds: selectedClauseIds,
           adminMemo: adminMemo || null,
@@ -529,6 +534,26 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
               </div>
               <input value={employerAddress} onChange={e => setEmployerAddress(e.target.value)} placeholder="주소" className={`w-full ${T.input}`} />
               <input value={employerRepName} onChange={e => setEmployerRepName(e.target.value)} placeholder="대표자명" className={`w-full ${T.input}`} />
+
+              {/* 대표 서명 적용 (명시적 액션) */}
+              <div className="mt-1 rounded-xl border border-slate-200 bg-white p-2.5">
+                {repSignatureUrl ? (
+                  <label className="flex items-center gap-2.5">
+                    <input type="checkbox" checked={applyRepSignature} onChange={e => setApplyRepSignature(e.target.checked)} className="h-4 w-4" />
+                    <span className="flex items-center gap-2 text-[13px] font-bold text-slate-700">
+                      대표 서명 적용
+                      <img src={repSignatureUrl} alt="대표 서명" className="h-7 rounded border border-slate-100 bg-slate-50 object-contain px-1" />
+                    </span>
+                  </label>
+                ) : (
+                  <p className="text-[11px] font-semibold text-amber-600">
+                    등록된 대표 서명이 없습니다. <a href="/manager/settings" target="_blank" className="underline">사업주 정보 설정</a>에서 대표 서명을 먼저 등록하세요. (미등록 시 계약서 대표 서명칸은 비어 발송됩니다)
+                  </p>
+                )}
+                {repSignatureUrl && !applyRepSignature && (
+                  <p className="mt-1 pl-6 text-[11px] font-medium text-slate-400">체크하지 않으면 대표 서명 없이 발송됩니다.</p>
+                )}
+              </div>
             </section>
 
             {/* 특약 조항 */}

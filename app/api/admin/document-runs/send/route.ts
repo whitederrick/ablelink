@@ -13,6 +13,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { injectManagerSignature } from "@/lib/docs/managerSig";
+import { missingSignatureLabels } from "@/lib/docs/requiredSignatures";
 import { sendEmailWithAttachments } from "@/lib/email";
 
 const DOC_LABEL: Record<string, string> = {
@@ -65,6 +66,29 @@ export async function POST(req: NextRequest) {
       ? await prisma.trainee.findMany({ where: { id: { in: traineeIds } }, select: { id: true, name: true } })
       : [];
     const traineeMap = new Map(trainees.map(t => [t.id.toString(), t.name]));
+
+    // ── 발송 게이트(매니저→공단): 선택 문서 중 필수 서명이 하나라도 누락이면 전체 발송 차단 + 경고 ──
+    //   직무지도원/사업체 담당자 서명은 제출 스냅샷에서, 매니저 서명은 run.managerSignatureUrl(명시 sign)로 점검.
+    const sigBlockers: string[] = [];
+    for (const r of runs) {
+      const who = r.traineeId != null ? (traineeMap.get(r.traineeId.toString()) ?? "") : (r.worker?.workerName ?? "");
+      const ps = r.periodStart.toISOString().slice(0, 10);
+      const pe = r.periodEnd.toISOString().slice(0, 10);
+      const lacks = missingSignatureLabels(r.docType, r.currentVersion?.sourceData, r.managerSignatureUrl);
+      if (lacks.length) {
+        sigBlockers.push(`· ${DOC_LABEL[r.docType] ?? r.docType}${who ? `(${who})` : ""} ${ps}~${pe} — ${lacks.join("·")} 서명 누락`);
+      }
+    }
+    if (sigBlockers.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "MISSING_SIGNATURES",
+          message: `서명이 누락된 문서가 있어 공단 발송할 수 없습니다.\n모든 서명을 등록한 뒤 다시 시도해주세요.\n\n${sigBlockers.join("\n")}`,
+        },
+        { status: 400 },
+      );
+    }
 
     // 묶음 그룹핑
     type Run = (typeof runs)[number];

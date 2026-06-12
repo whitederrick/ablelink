@@ -96,15 +96,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const [workerImg, govImg] = await Promise.all([
+    const [workerImg] = await Promise.all([
       toBase64DataUri(user?.signatureUrl),
-      toBase64DataUri(adminForSign?.signatureUrl),
     ]);
 
+    // 매니저(govAgent/agencyAgent) 서명은 프로필에서 자동 주입하지 않는다(등록된 서명만 표시).
+    //  → 매니저 서명은 일지 관리의 명시적 sign 액션을 거친 제출본에서만 들어간다.
     const sigs = {
       worker:       { name: user?.workerName || "",            imageUrl: workerImg },
-      govAgent:    { name: adminForSign?.displayName || "", imageUrl: govImg },
-      agencyAgent: { name: adminForSign?.displayName || "", imageUrl: govImg },
+      govAgent:    { name: adminForSign?.displayName || "", imageUrl: undefined as string | undefined },
+      agencyAgent: { name: adminForSign?.displayName || "", imageUrl: undefined as string | undefined },
     };
 
     const site = assignment.site;

@@ -32,6 +32,18 @@ function docActive(kind: "COMMON" | "TRAINING" | "ADAPTATION", serviceStep: stri
   return serviceStep === "ADAPTATION" ? kind === "ADAPTATION" : kind === "TRAINING";
 }
 
+// 페이지 docType id → DocumentRun.docType(enum) (공단 제출 제외 매칭용)
+const RUN_DOC_TYPE: Record<DocType, string> = {
+  "attendance-sheet":     "ATTENDANCE_SHEET",
+  "training-daily-log":   "TRAINING_DAILY_LOG",
+  "trainee-final-eval":   "TRAINEE_COMPREHENSIVE_EVAL",
+  "adaptation-daily-log": "POST_EMPLOY_ADAPT_LOG",
+  "adaptation-final-eval":"ADAPTATION_COMPREHENSIVE_EVAL",
+};
+function submittedKey(workerId: string, docType: DocType, traineeId?: string) {
+  return `${workerId}:${RUN_DOC_TYPE[docType]}:${traineeId ?? ""}`;
+}
+
 interface Worker {
   workerId: string; workerName: string; siteName: string; serviceStep: string;
   trainees: { id: string; name: string }[];
@@ -53,6 +65,8 @@ export default function AdminDocsPage() {
   const [periodEnd,     setPeriodEnd]     = useState(def.end);
   const [query,         setQuery]         = useState("");
   const [loadingWorkers, setLoadingWorkers] = useState(false);
+  // 공단 제출(SUBMITTED) 완료 → 문서 조회에서 제외할 키 집합
+  const [submittedKeys, setSubmittedKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setLoadingWorkers(true);
@@ -72,6 +86,14 @@ export default function AdminDocsPage() {
       })
       .finally(() => setLoadingWorkers(false));
   }, []);
+
+  // 기간이 바뀌면 공단 제출 완료(SUBMITTED) 키 갱신 → 해당 문서는 조회에서 제외
+  useEffect(() => {
+    fetch(`/api/admin/docs/submitted?periodStart=${periodStart}&periodEnd=${periodEnd}`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setSubmittedKeys(new Set<string>(d.keys || [])); })
+      .catch(() => {});
+  }, [periodStart, periodEnd]);
 
   // 직무지도원 선택 시 훈련생 로드
   useEffect(() => {
@@ -163,10 +185,15 @@ export default function AdminDocsPage() {
                             {DOC_DEFS.map(doc => {
                               const active = docActive(doc.kind, c.serviceStep);
                               const selected = selectedWorker === c.workerId && docType === doc.id;
+                              // 훈련생 비요구 문서(출근부)는 버튼 단계에서 제출여부 확정 가능 → 제출됐으면 비활성.
+                              const submittedHere = !doc.needsTrainee && submittedKeys.has(submittedKey(c.workerId, doc.id));
+                              const disabled = !active || submittedHere;
                               return (
-                                <button key={doc.id} disabled={!active} onClick={() => pickDoc(c.workerId, doc.id)}
+                                <button key={doc.id} disabled={disabled} onClick={() => pickDoc(c.workerId, doc.id)}
+                                  title={submittedHere ? "공단 제출 완료 — '공단 제출 내역'에서 확인" : undefined}
                                   className={`inline-flex h-7 shrink-0 items-center rounded-md border px-2 text-[12px] font-bold transition ${
                                     selected ? "border-slate-950 bg-slate-950 text-white"
+                                    : submittedHere ? "border-slate-100 bg-slate-50 text-slate-300 line-through cursor-not-allowed"
                                     : active ? "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                                     : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
                                   }`}>
@@ -222,7 +249,12 @@ export default function AdminDocsPage() {
               </div>
 
               {/* 미리보기 */}
-              {ready ? (
+              {ready && docType && submittedKeys.has(submittedKey(selectedWorker, docType, needsTrainee ? traineeId : undefined)) ? (
+                <div className="flex h-[120px] flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center">
+                  <p className="text-sm font-bold text-slate-500">이미 공단에 제출된 문서입니다.</p>
+                  <p className="text-xs font-semibold text-slate-400">제출본은 ‘공단 제출 내역’에서 확인하세요. (문서 조회에서는 제출 전 문서만 표시)</p>
+                </div>
+              ) : ready ? (
                 <iframe src={previewUrl()} className="h-[442px] w-full rounded-xl border border-slate-200 bg-slate-100" title="문서 미리보기" />
               ) : (
                 <div className="flex h-[100px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50">

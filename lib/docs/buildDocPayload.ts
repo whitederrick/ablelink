@@ -11,6 +11,8 @@ import { buildDocFileName } from "@/lib/pdf/filename";
 import { getKrHolidayDates } from "@/lib/krHolidays";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
+import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
+import { sigRequirement } from "@/lib/docs/requiredSignatures";
 
 // 빌드 중 사용자에게 보여줄 검증 오류(라우트가 적절한 status/메시지로 변환).
 export class DocPayloadError extends Error {
@@ -161,6 +163,22 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
     companyManager: { name: companyManagerSignerName,    imageUrl: companyImg },
     agencyAgent:    { name: "",                          imageUrl: undefined as string | undefined },
   };
+
+  // ── 제출 게이트(직무지도원→매니저): 필수 서명 미등록 시 제출 차단 + 경고 ──
+  //   매니저 서명은 제출 단계에선 검사하지 않음(이후 일지 관리 sign 액션에서 들어감).
+  const req = sigRequirement(PDF_TO_PRISMA_DOCTYPE[docType] ?? docType);
+  if (req.worker && !workerImg) {
+    throw new DocPayloadError(
+      "직무지도원 서명이 등록되어 있지 않습니다.\n프로필에서 서명을 먼저 등록한 뒤 제출해주세요.",
+      400, { missingSignature: "worker" },
+    );
+  }
+  if (req.companyManager && !companyImg) {
+    throw new DocPayloadError(
+      "사업체 담당자 서명이 필요합니다.\n사업체 담당자에게 서명을 받은 뒤 제출해주세요.",
+      400, { missingSignature: "companyManager" },
+    );
+  }
 
   let payload: any;
   let fileName: string;

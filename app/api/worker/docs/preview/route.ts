@@ -63,14 +63,15 @@ export async function GET(request: NextRequest) {
         orderBy: { id:"asc" },
       });
     }
-    const [workerImg, govImg] = await Promise.all([
+    const [workerImg] = await Promise.all([
       toBase64DataUri(user?.signatureUrl),
-      toBase64DataUri(adminForSign?.signatureUrl),
     ]);
+    // 매니저(govAgent/agencyAgent) 서명은 실시간 미리보기에서 자동 주입하지 않는다.
+    //  → 매니저 서명은 명시적 서명 액션을 거친 제출본 스냅샷에서만 표시된다.
     const sigs = {
       worker:       { name: user?.workerName||"",            imageUrl: workerImg },
-      govAgent:    { name: adminForSign?.displayName||"", imageUrl: govImg },
-      agencyAgent: { name: adminForSign?.displayName||"", imageUrl: govImg },
+      govAgent:    { name: adminForSign?.displayName||"", imageUrl: undefined },
+      agencyAgent: { name: adminForSign?.displayName||"", imageUrl: undefined },
     };
 
     const site = assignment.site;

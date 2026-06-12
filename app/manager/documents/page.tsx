@@ -192,7 +192,12 @@ export default function ManagerDocumentsHub() {
         body: JSON.stringify({ ids: [...selected], to, groupBy: sendGroupBy, message: sendMsg.trim() }),
       });
       const d = await res.json();
-      if (!d.success) { showToast(d.message || "발송 실패"); return; }
+      if (!d.success) {
+        // 서명 누락은 여러 줄 목록이라 토스트로는 잘림 → 전체를 alert로 안내
+        if (d.code === "MISSING_SIGNATURES") alert(d.message);
+        else showToast(d.message || "발송 실패");
+        return;
+      }
       showToast(d.message || "발송되었습니다.");
       setSendOpen(false); setSelected(new Set()); load();
     } catch { showToast("발송 실패"); }
