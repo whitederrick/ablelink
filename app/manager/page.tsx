@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Lock } from "lucide-react";
+import { RefreshCw, Lock, ChevronRight } from "lucide-react";
 import PageHeader from "./_components/PageHeader";
 import Pagination from "./_components/Pagination";
 
@@ -42,6 +42,14 @@ interface DashboardData {
 
 const LOG_CLS: Record<string, string> = {
   완료: "text-emerald-600", 임시저장: "text-amber-600", 미작성: "text-rose-600",
+};
+
+// 운영 리스크 종류 → 이동 화면(클릭 시). 섞인 리스크라 항목별로 해당 화면으로 보냄.
+const RISK_ROUTE: Record<string, string> = {
+  attendance: "/manager/inbox/attendance",
+  document:   "/manager/documents",
+  assignment: "/manager/workers",
+  site:       "/manager/sites",
 };
 
 function ActionRow({ label, count, urgent, onCountClick, showPopup, popupItems, onPopupItemClick, onPopupClose, renderPopupItem }: {
@@ -431,11 +439,16 @@ export default function AdminDashboardPage() {
               <>
                 <div>
                   {riskSlice.map((alert, i) => (
-                    <div key={i} className="flex items-center gap-2 border-b border-slate-50 py-2 last:border-b-0">
+                    <button
+                      key={i}
+                      onClick={() => router.push(RISK_ROUTE[alert.type] ?? "/manager")}
+                      className="flex w-full items-center gap-2 border-b border-slate-50 py-2 text-left transition last:border-b-0 hover:bg-slate-50"
+                    >
                       <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${alert.severity === "high" ? "bg-rose-500" : alert.severity === "medium" ? "bg-amber-500" : "bg-slate-300"}`} />
-                      <span className="text-sm font-bold text-slate-700">{alert.label}</span>
-                      <span className="truncate text-xs font-semibold text-slate-400">{alert.detail}</span>
-                    </div>
+                      <span className="flex-shrink-0 text-sm font-bold text-slate-700">{alert.label}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-400">{alert.detail}</span>
+                      <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-300" aria-hidden="true" />
+                    </button>
                   ))}
                 </div>
                 {riskPages > 1 && (
