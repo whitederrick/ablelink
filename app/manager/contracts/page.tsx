@@ -750,8 +750,8 @@ export default function AdminContractsPage() {
                   <td className={T.td}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>
                     <div className="flex gap-1.5">
-                      <button onClick={() => setDetailId(c.id)} className="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-3 text-[13px] font-bold text-slate-600 hover:bg-slate-50">상세</button>
-                      {c.status === "PENDING" && <button onClick={() => copyLink(c.signToken)} className="inline-flex min-h-10 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 text-[13px] font-bold text-sky-700 hover:bg-sky-100">링크</button>}
+                      <button onClick={() => setDetailId(c.id)} className="inline-flex h-7 items-center rounded-lg border border-slate-200 px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50">상세</button>
+                      {c.status === "PENDING" && <button onClick={() => copyLink(c.signToken)} className="inline-flex h-7 items-center rounded-lg border border-sky-200 bg-sky-50 px-2.5 text-[13px] font-bold text-sky-700 hover:bg-sky-100">링크</button>}
                     </div>
                   </td>
                 </tr>

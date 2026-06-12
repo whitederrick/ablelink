@@ -25,7 +25,7 @@ const APPROVAL_CLS: Record<string, { label: string; cls: string }> = {
 export default function AdminSitesPage() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
+  const [pageSize] = useState(10);
   // 딥링크: ?q=대상 으로 진입 시 검색 시드(대시보드 운영 리스크 항목 클릭)
   useEffect(() => {
     const sq = new URLSearchParams(window.location.search).get("q");
@@ -119,7 +119,7 @@ export default function AdminSitesPage() {
                     ) : (
                       <button
                         onClick={() => claimSite(it.id)}
-                        className="inline-flex min-h-10 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 text-[13px] font-bold text-sky-700 active:scale-95"
+                        className="inline-flex h-7 items-center rounded-lg border border-sky-200 bg-sky-50 px-2.5 text-[13px] font-bold text-sky-700 active:scale-95"
                       >
                         미지정 · 내 담당으로
                       </button>

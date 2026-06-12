@@ -709,7 +709,7 @@ export default function WorkersPage() {
                   <td className={T.td} onClick={e => e.stopPropagation()}>
                     <button
                       onClick={() => setInfoEditTarget(c)}
-                      className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-600 hover:bg-slate-50"
+                      className="inline-flex h-7 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                       수정

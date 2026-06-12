@@ -94,7 +94,7 @@ export default function TraineeReportPage() {
 
   // 목록 페이지네이션(20개씩) — 필터/조회 변경 시 1페이지로
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 10;
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
   useEffect(() => { setPage(1); }, [search, statusFilter, data]);

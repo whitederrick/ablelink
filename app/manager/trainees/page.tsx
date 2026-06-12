@@ -201,7 +201,7 @@ export default function TraineesPage() {
       ):(
         <div className="space-y-2.5">
           {pageEntries.map(([sid, ts])=>(
-            <div key={sid} className="rounded-2xl border border-slate-100 bg-white px-5 py-3.5">
+            <div key={sid} className="rounded-2xl border border-slate-100 bg-white px-5 py-2">
               {/* 현장명 (인원) + 훈련생 칩 우측 나열, 이름 클릭 → 상세 */}
               <div className="flex flex-wrap items-center gap-2 text-[15px] font-medium text-slate-800">
                 <span className="shrink-0 font-semibold">{ts[0].siteName}</span>
@@ -209,7 +209,7 @@ export default function TraineesPage() {
                 <span className="mx-0.5 h-5 w-px shrink-0 bg-slate-200" />
                 {ts.map(t=>(
                   <button key={t.id} onClick={()=>openEdit(t)}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-50 active:scale-95">
+                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-50 active:scale-95">
                     {t.name}
                     <span className="text-[12px] font-medium text-slate-400">{t.gender==="M"?"남":"여"}</span>
                     <StatusBadge status={t.status} map={STATUS_BADGE} />
