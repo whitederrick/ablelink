@@ -199,7 +199,7 @@ export default function TraineesPage() {
       ):filtered.length===0?(
         <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">{trainees.length===0?"훈련생이 없습니다.":"조건에 맞는 훈련생이 없습니다."}</p></div>
       ):(
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           {pageEntries.map(([sid, ts])=>(
             <div key={sid} className="rounded-2xl border border-slate-100 bg-white px-5 py-2">
               {/* 현장명 (인원) + 훈련생 칩 우측 나열, 이름 클릭 → 상세 */}
