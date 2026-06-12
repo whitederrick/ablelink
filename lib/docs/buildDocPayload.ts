@@ -192,7 +192,9 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
     });
 
     const entries = attendances.map(a => {
-      const pending = isPayrollPending({
+      // 퇴근 미실행(퇴근 버튼 미실행·미확정)인 날은 시각 미확정 → 출근부에 '보정대기'로 표기.
+      const missedClockOut = !a.endTime && !((assignment as any).attendanceButtonExempt ?? false);
+      const pending = missedClockOut || isPayrollPending({
         actualStartTime: a.actualStartTime ?? null,
         actualEndTime: a.actualEndTime ?? null,
         payrollConfirmedAt: a.payrollConfirmedAt ?? null,

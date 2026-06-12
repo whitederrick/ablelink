@@ -9,6 +9,8 @@ import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { sendEmailWithPdf } from "@/lib/email";
+import { sigRequirement } from "@/lib/docs/requiredSignatures";
+import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 
 function fmtHHMM(d: Date) {
   const kst = new Date(d.getTime() + 9 * 3600000);
@@ -198,6 +200,21 @@ export async function POST(request: NextRequest) {
 
     let emailSent = false;
     if (toEmail) {
+      // 발송 게이트: 매니저(관리자) 서명은 위에서 강제, 추가로 직무지도원/사업체 서명 누락 시 발송 차단.
+      const reqS = sigRequirement(PDF_TO_PRISMA_DOCTYPE[docType] ?? docType);
+      const lacks: string[] = [];
+      if (reqS.worker && !sigs.worker?.imageUrl) lacks.push("직무지도원");
+      if (reqS.companyManager && !(payload?.signatures?.companyManager?.imageUrl)) lacks.push("사업체 담당자");
+      if (lacks.length) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "MISSING_SIGNATURES",
+            message: `서명이 누락되어 발송할 수 없습니다: ${lacks.join("·")} 서명 미등록.\n해당 문서는 매니저 '일지 관리'에서 서명을 갖춰 발송해주세요.`,
+          },
+          { status: 400 },
+        );
+      }
       await sendEmailWithPdf({
         from: process.env.EMAIL_FROM || "AbleLink <noreply@able-link.co.kr>",
         to: toEmail,

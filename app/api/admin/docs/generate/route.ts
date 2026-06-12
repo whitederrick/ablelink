@@ -10,6 +10,8 @@ import { renderPdfToBuffer } from "@/lib/pdf";
 import { sendEmailWithPdf } from "@/lib/email";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
+import { sigRequirement } from "@/lib/docs/requiredSignatures";
+import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 
 function fmtHHMM(d: Date) {
   const kst = new Date(d.getTime() + 9*3600000);
@@ -123,7 +125,9 @@ export async function POST(request: NextRequest) {
         orderBy: { workDate:"asc" },
       });
       const entries = attendances.map(a => {
-        const pending = isPayrollPending({
+        // 퇴근 미실행(퇴근 버튼 미실행·미확정)인 날은 시각 미확정 → 출근부에 '보정대기'로 표기.
+        const missedClockOut = !a.endTime && !(a.assignment?.attendanceButtonExempt ?? false);
+        const pending = missedClockOut || isPayrollPending({
           actualStartTime: a.actualStartTime ?? null,
           actualEndTime: a.actualEndTime ?? null,
           payrollConfirmedAt: a.payrollConfirmedAt ?? null,
@@ -234,6 +238,21 @@ export async function POST(request: NextRequest) {
 
     let emailSent = false;
     if (toEmail) {
+      // 발송 게이트: 필수 서명(직무지도원/사업체) 누락 시 발송 차단(공단 발송 보호).
+      const reqS = sigRequirement(PDF_TO_PRISMA_DOCTYPE[docType] ?? docType);
+      const lacks: string[] = [];
+      if (reqS.worker && !sigs.worker?.imageUrl) lacks.push("직무지도원");
+      if (reqS.companyManager && !(payload?.signatures?.companyManager?.imageUrl)) lacks.push("사업체 담당자");
+      if (lacks.length) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "MISSING_SIGNATURES",
+            message: `서명이 누락되어 발송할 수 없습니다: ${lacks.join("·")} 서명 미등록.\n해당 문서는 매니저 '일지 관리'에서 서명을 갖춰 발송해주세요.`,
+          },
+          { status: 400 },
+        );
+      }
       await sendEmailWithPdf({
         from: process.env.EMAIL_FROM || "AbleLink <noreply@able-link.co.kr>",
         to: toEmail,

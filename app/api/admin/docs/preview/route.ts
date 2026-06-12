@@ -109,8 +109,9 @@ export async function GET(request: NextRequest) {
         orderBy:{ workDate:"asc" },
       });
       const entries = attendances.map(a=>{
-        // 급여 보호 게이트: 심한 지각/조퇴 미컨펌일은 미리보기에서도 기본 시각을 박지 않고 '보정대기'(생성 PDF와 동일).
-        const pending = isPayrollPending({
+        // 급여 보호 게이트: 심한 지각/조퇴 미컨펌일 + 퇴근 미실행(시각 미확정)일은 '보정대기'로 표기.
+        const missedClockOut = !a.endTime && !((assignment as any).attendanceButtonExempt ?? false);
+        const pending = missedClockOut || isPayrollPending({
           actualStartTime: a.actualStartTime ?? null,
           actualEndTime: a.actualEndTime ?? null,
           payrollConfirmedAt: a.payrollConfirmedAt ?? null,
