@@ -342,11 +342,6 @@ export default function AttendanceInboxClient() {
 
   /** filters */
   const [q, setQ] = useState("");
-  // 딥링크: ?q=대상 으로 진입 시 검색 시드(대시보드 운영 리스크 항목 클릭)
-  useEffect(() => {
-    const sq = new URLSearchParams(window.location.search).get("q");
-    if (sq) setQ(sq);
-  }, []);
   const [period, setPeriod] = useState<PeriodPreset>("LAST_14");
   const [customFrom, setCustomFrom] = useState(addDays(base, -13));
   const [customTo, setCustomTo] = useState(base);
@@ -370,6 +365,16 @@ export default function AttendanceInboxClient() {
   const pageSize = 10;
   const [page, setPage] = useState(1);
 
+  // 딥링크(대시보드 운영 리스크 → ?q=대상&focus=id): 검색 시드 + 기간 확장(LAST_30) + 포커스 대상 기억
+  const [focusId, setFocusId] = useState<string | null>(null);
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const sq = sp.get("q");
+    const sf = sp.get("focus");
+    if (sq) { setQ(sq); setPeriod("LAST_30"); }  // 과거 건도 보이도록 기간 확장
+    if (sf) setFocusId(sf);
+  }, []);
+
   const selected = useMemo(() => items.find((x) => x.id === selectedId) ?? null, [items, selectedId]);
 
   // 보정대기(급여 보류)만 보기 필터 — 클라이언트 측
@@ -384,6 +389,20 @@ export default function AttendanceInboxClient() {
     const start = (page - 1) * pageSize;
     return viewItems.slice(start, start + pageSize);
   }, [viewItems, page]);
+
+  // 딥링크 포커스: 대상이 로드되면 해당 페이지로 이동 + 선택 + 스크롤(1회)
+  useEffect(() => {
+    if (!focusId) return;
+    const idx = viewItems.findIndex((x) => x.id === focusId);
+    if (idx < 0) return; // 아직 로드 전이거나 현재 필터 범위 밖
+    setPage(Math.floor(idx / pageSize) + 1);
+    setSelectedId(focusId);
+    const fid = focusId;
+    setFocusId(null);
+    setTimeout(() => {
+      document.querySelector(`[data-item-id="${fid}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+  }, [focusId, viewItems]);
 
 
   /** load */
@@ -763,10 +782,11 @@ export default function AttendanceInboxClient() {
                       <button
                         key={it.id}
                         type="button"
+                        data-item-id={it.id}
                         onClick={() => setSelectedId(it.id)}
                         className={cx(
                           "w-full rounded-lg border border-slate-100 px-4 py-3 text-left transition",
-                          active ? "border-sky-200 bg-sky-50" : "hover:bg-slate-50"
+                          active ? "border-sky-300 bg-sky-50 ring-2 ring-sky-200" : "hover:bg-slate-50"
                         )}
                       >
                         <div className="mb-0 flex items-center gap-3">

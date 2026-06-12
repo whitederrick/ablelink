@@ -29,7 +29,7 @@ interface DashboardData {
     endDate: string | null; serviceStep: string; daysLeft: number | null;
   }>;
   riskAlerts: Array<{
-    type: string; label: string; target: string; detail: string;
+    type: string; id?: string; label: string; target: string; detail: string;
     severity: "high" | "medium" | "low";
   }>;
   todayList: Array<{
@@ -441,7 +441,14 @@ export default function AdminDashboardPage() {
                   {riskSlice.map((alert, i) => (
                     <button
                       key={i}
-                      onClick={() => router.push(`${RISK_ROUTE[alert.type] ?? "/manager"}${alert.target ? `?q=${encodeURIComponent(alert.target)}` : ""}`)}
+                      onClick={() => {
+                        const base = RISK_ROUTE[alert.type] ?? "/manager";
+                        const params = new URLSearchParams();
+                        if (alert.target) params.set("q", alert.target);
+                        if (alert.id) params.set("focus", alert.id);
+                        const qs = params.toString();
+                        router.push(qs ? `${base}?${qs}` : base);
+                      }}
                       className="flex w-full items-center gap-2 border-b border-slate-50 py-2 text-left transition last:border-b-0 hover:bg-slate-50"
                     >
                       <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${alert.severity === "high" ? "bg-rose-500" : alert.severity === "medium" ? "bg-amber-500" : "bg-slate-300"}`} />

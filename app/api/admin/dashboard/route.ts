@@ -110,14 +110,14 @@ export async function GET(req: Request) {
 
     // ── 6. 운영 리스크 알림 ───────────────────────────────────────
     const riskAlerts: Array<{
-      type: string; label: string; target: string; detail: string; severity: "high" | "medium" | "low";
+      type: string; id?: string; label: string; target: string; detail: string; severity: "high" | "medium" | "low";
     }> = [];
 
     for (const issue of derivedIssues.slice(0, 15)) {
       const daysAgo = Math.floor((now.getTime() - new Date(`${issue.workDate}T00:00:00Z`).getTime()) / 86400000);
       if (daysAgo >= 3) {
         riskAlerts.push({
-          type: "attendance", label: "[근태]",
+          type: "attendance", id: String(issue.id), label: "[근태]",
           target: issue.workerName,
           detail: `${daysAgo}일 경과 미확인 근태 — 『${issue.siteName}』`,
           severity: daysAgo >= 7 ? "high" : "medium",
@@ -127,7 +127,7 @@ export async function GET(req: Request) {
 
     for (const r of docRunsOpen.filter(r => r.signStage === "SUBMITTED").slice(0, 8)) {
       riskAlerts.push({
-        type: "document", label: "[문서]",
+        type: "document", id: String(r.id), label: "[문서]",
         target: r.worker?.workerName || "-",
         detail: `${docTypeLabel(r.docType)} 확정 대기 — 『${r.site?.companyName || ""}』`,
         severity: "medium",
@@ -139,7 +139,7 @@ export async function GET(req: Request) {
         ? Math.ceil((a.endDate.getTime() - today.getTime()) / 86400000)
         : 0;
       riskAlerts.push({
-        type: "assignment", label: "[배정]",
+        type: "assignment", id: String(a.id), label: "[배정]",
         target: a.user?.workerName || "-",
         detail: `배정 종료 D-${daysLeft} — 『${a.site?.companyName || ""}』`,
         severity: daysLeft <= 3 ? "high" : "medium",
@@ -148,7 +148,7 @@ export async function GET(req: Request) {
 
     for (const s of unassignedSites.slice(0, 3)) {
       riskAlerts.push({
-        type: "site", label: "[미배정]",
+        type: "site", id: String(s.id), label: "[미배정]",
         target: s.companyName,
         detail: "활성 직무지도원 배정 없음",
         severity: "low",
