@@ -6,6 +6,7 @@ import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
+import Pagination from "../_components/Pagination";
 
 const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   TRAINING:  { label: "훈련중",   tone: "sky" },
@@ -91,6 +92,13 @@ export default function TraineeReportPage() {
   }, [data, search, statusFilter]);
   const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
+  // 목록 페이지네이션(20개씩) — 필터/조회 변경 시 1페이지로
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
+  useEffect(() => { setPage(1); }, [search, statusFilter, data]);
+
   const avgLogRate = filtered.length > 0
     ? Math.round(filtered.reduce((s, r) => s + r.logRate, 0) / filtered.length)
     : 0;
@@ -174,7 +182,7 @@ export default function TraineeReportPage() {
                 <tr><td colSpan={9} className={T.tdCenter}>조회 중...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className={T.tdCenter}>{data.length === 0 ? "데이터가 없습니다." : "조건에 맞는 훈련생이 없습니다."}</td></tr>
-              ) : filtered.map(row => (
+              ) : pageItems.map(row => (
                 <tr key={row.traineeId} className={T.trBase}>
                   <td className={T.td}>
                     <span className="text-[15px] font-black text-slate-900">{row.traineeName}</span>
@@ -216,6 +224,9 @@ export default function TraineeReportPage() {
               ))}
             </tbody>
           </table>
+          {filtered.length > 0 && (
+            <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+          )}
         </div>
       )}
     </div>
