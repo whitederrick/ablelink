@@ -25,6 +25,9 @@ import {
 } from "lucide-react";
 import type { WorkerPayload } from "../_lib/session";
 import type { HomeSummary } from "@/lib/worker/homeSummary";
+import { LATE_CLOCK_OUT_REASONS } from "@/lib/attendance/lateClockOut";
+
+type MissedClockOut = { attendanceId: string; workDate: string; siteName: string };
 
 // ─── 타입 ───────────────────────────────────────────────
 type AttendanceStatus = "BEFORE" | "WORKING" | "DONE" | "CLOSED";
@@ -277,6 +280,11 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
   const [todayMissing,   setTodayMissing]   = useState(initialData?.today.missingTraineeCount ?? 0);
   // 오늘 일지 쓰기 — 훈련생 선택 시트
   const [showLogPicker,  setShowLogPicker]  = useState(false);
+  // 퇴근 미실행(보정대기) — 늦은 퇴근 처리
+  const [missedClockOuts, setMissedClockOuts] = useState<MissedClockOut[]>(initialData?.missedClockOuts ?? []);
+  const [missedTarget,    setMissedTarget]    = useState<MissedClockOut | null>(null);
+  const [missedReason,    setMissedReason]    = useState<string>("");
+  const [missedReasonText, setMissedReasonText] = useState<string>("");
 
   // 단일 통합 조회 (출퇴근/일지 액션 후 재검증). 첫 로드는 서버 프리페치(initialData)로 처리.
   const refresh = useCallback(async () => {
@@ -294,6 +302,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
       setClockOutAlert(d.alarm.clockOutAlertMinutes);
       setMissingCount(d.missing.count);
       setTodayMissing(d.today.missingTraineeCount);
+      setMissedClockOuts(d.missedClockOuts ?? []);
     } catch (e: any) {
       showToast(e.message || "데이터를 불러올 수 없습니다.", "error");
     } finally {
@@ -484,6 +493,35 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
       },
       onDismiss: () => setDialog(null),
     });
+  }
+
+  // 퇴근 미실행 → 사유와 함께 늦은 퇴근 처리
+  function openMissedModal(m: MissedClockOut) {
+    setMissedTarget(m);
+    setMissedReason("");
+    setMissedReasonText("");
+  }
+  async function submitLateClockOut() {
+    if (!missedTarget) return;
+    if (!missedReason) { showToast("사유를 선택해주세요.", "error"); return; }
+    if (missedReason === "OTHER" && !missedReasonText.trim()) { showToast("기타 사유를 입력해주세요.", "error"); return; }
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/worker/attendance/${missedTarget.attendanceId}/late-clockout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reasonCode: missedReason, reasonText: missedReasonText.trim() }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || "처리에 실패했습니다.");
+      setMissedTarget(null);
+      showToast("퇴근 처리되었습니다.", "success");
+      await refresh();
+    } catch (e: any) {
+      showToast(e.message || "처리 중 오류가 발생했습니다.", "error");
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function handleLogout() {
@@ -789,6 +827,37 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
         </div>
         )}
 
+        {/* ── 퇴근 미실행(보정대기) 알림 — 사유와 함께 늦은 퇴근 처리 ── */}
+        {missedClockOuts.length > 0 && (
+          <div className="rounded-3xl border border-amber-300 bg-amber-50 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <FileWarning className="h-5 w-5 text-amber-600" />
+              <p className="text-sm font-black text-amber-900">퇴근 미실행 {missedClockOuts.length}건</p>
+            </div>
+            <p className="mb-3 text-xs font-semibold leading-5 text-amber-700">
+              퇴근 버튼을 누르지 않은 날이 있어요. 사유와 함께 퇴근을 처리해 주세요.
+              <br />처리 전까지 출근부에 퇴근 시각이 비어 있습니다.
+            </p>
+            <div className="flex flex-col gap-2">
+              {missedClockOuts.map(m => (
+                <button
+                  key={m.attendanceId}
+                  onClick={() => openMissedModal(m)}
+                  className="flex items-center justify-between rounded-2xl border border-amber-200 bg-white px-4 py-3 text-left transition active:scale-[0.98]"
+                >
+                  <span>
+                    <span className="block text-sm font-black text-slate-900">{m.workDate}</span>
+                    <span className="block text-xs font-semibold text-slate-500">{m.siteName}</span>
+                  </span>
+                  <span className="flex items-center gap-1 text-sm font-black text-amber-700">
+                    퇴근 처리 <ChevronRight className="h-4 w-4" />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── 오늘 할 일 / 놓친 일 요약 (핵심 — 가장 위) ── */}
         {hasSite && (
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -1047,6 +1116,60 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
       )}
 
       {/* ── 다이얼로그 ── */}
+      {/* ── 퇴근 미실행: 사유 선택 + 늦은 퇴근 처리 모달 ── */}
+      {missedTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 sm:items-center">
+          <div className="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl">
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-base font-black text-slate-900">퇴근 처리</p>
+              <button onClick={() => setMissedTarget(null)} className="rounded-full p-1 text-slate-400">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-4 text-sm font-semibold text-slate-500">
+              {missedTarget.workDate} · {missedTarget.siteName}
+              <br />
+              <span className="text-xs text-slate-400">퇴근 시각은 근무형태 표준시각으로 출근부에 기록됩니다.</span>
+            </p>
+
+            <p className="mb-2 text-sm font-black text-slate-800">늦은 퇴근 사유</p>
+            <div className="mb-3 flex flex-col gap-2">
+              {LATE_CLOCK_OUT_REASONS.map(r => (
+                <button
+                  key={r.code}
+                  onClick={() => setMissedReason(r.code)}
+                  className={`min-h-12 rounded-2xl border px-4 text-left text-sm font-bold transition active:scale-[0.98] ${
+                    missedReason === r.code
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-200 bg-white text-slate-700"
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+
+            {missedReason === "OTHER" && (
+              <textarea
+                value={missedReasonText}
+                onChange={e => setMissedReasonText(e.target.value)}
+                placeholder="기타 사유를 입력해주세요."
+                rows={2}
+                className="mb-3 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-slate-900"
+              />
+            )}
+
+            <button
+              onClick={submitLateClockOut}
+              disabled={actionLoading || !missedReason}
+              className="w-full min-h-14 rounded-2xl bg-slate-950 text-base font-black text-white transition active:scale-[0.97] disabled:opacity-50"
+            >
+              {actionLoading ? "처리 중..." : "퇴근 처리하기"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {dialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-5">
           <div className="w-full max-w-xs rounded-3xl bg-white p-6 shadow-2xl">

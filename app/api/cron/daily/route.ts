@@ -27,30 +27,59 @@ export async function GET(req: NextRequest) {
   const yesterday = kstDateStr(-1);
 
   let autoConfirmed  = 0;
+  let missedFlagged  = 0;
   let tokensCleared  = 0;
   let expiryNotified = 0;
   let exemptCreated  = 0;
   let surveysSent    = 0;
   const errors: string[] = [];
 
-  // ── 1. 전일 미확정 출근 자동 확정 ──────────────────────────────
+  // ── 1. 전일 미확정 출근 처리 ───────────────────────────────────
+  // - status=DONE(퇴근은 눌렀으나 미확정): 기존대로 자동 확정(endTime 이미 표준시각으로 채워짐)
+  // - status=WORKING(퇴근 미실행): 18:00 자동 채움 금지. endTime은 비워 '보정대기'로 두고,
+  //   '퇴근 미실행'으로 플래그(clockOutMissedAt) + 직무지도원에 앱 내 알림.
+  //   → 직무지도원이 사유와 함께 늦게 퇴근 처리하거나, 매니저가 표준시각으로 확정해야 채워진다.
   try {
     const stale = await prisma.dailyAttendance.findMany({
       where: { workDate: yesterday, startTime: { not: null }, isFinalClosed: false },
-      select: { id: true, endTime: true },
+      select: {
+        id: true, status: true, workerId: true, clockOutMissedAt: true,
+        site: { select: { companyName: true } },
+        assignment: { select: { agencyId: true } },
+      },
     });
-    const autoEndTime = new Date(`${yesterday}T18:00:00+09:00`);
     for (const att of stale) {
-      await prisma.dailyAttendance.update({
-        where: { id: att.id },
-        data: {
-          endTime:       att.endTime ?? autoEndTime,
-          isFinalClosed: true,
-          finalizedAt:   now,
-          status:        "DONE",
-        },
-      });
-      autoConfirmed++;
+      if (att.status === "WORKING") {
+        // 퇴근 미실행 → 보정대기로 두고 1회만 플래그/알림
+        if (att.clockOutMissedAt) continue;
+        await prisma.dailyAttendance.update({
+          where: { id: att.id },
+          data: { clockOutMissedAt: now },
+        });
+        const noticeAgencyId = att.assignment?.agencyId;
+        if (noticeAgencyId) {
+          try {
+            await prisma.workerNotice.create({
+              data: {
+                workerId: att.workerId,
+                agencyId: noticeAgencyId,
+                title: "퇴근 미실행 안내",
+                body: `${yesterday} '${att.site?.companyName ?? "현장"}' 퇴근이 등록되지 않았습니다.\n앱에서 사유와 함께 퇴근을 처리해 주세요. (처리 전까지 출근부에 퇴근 시각이 비어 있습니다)`,
+                type: "WARN",
+                link: "/worker/home",
+              },
+            });
+          } catch (e: any) { errors.push(`미실행알림[${att.id}]: ${e.message}`); }
+        }
+        missedFlagged++;
+      } else {
+        // status=DONE: endTime 있음 → 자동 확정
+        await prisma.dailyAttendance.update({
+          where: { id: att.id },
+          data: { isFinalClosed: true, finalizedAt: now, status: "DONE" },
+        });
+        autoConfirmed++;
+      }
     }
   } catch (e: any) { errors.push(`자동확정: ${e.message}`); }
 
@@ -204,11 +233,11 @@ export async function GET(req: NextRequest) {
     }
   } catch (e: any) { errors.push(`만족도자동: ${e.message}`); }
 
-  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent}`, errors);
+  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 퇴근미실행:${missedFlagged} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent}`, errors);
 
   return NextResponse.json({
     success: true, yesterday,
-    autoConfirmed, tokensCleared, expiryNotified, exemptCreated, surveysSent,
+    autoConfirmed, missedFlagged, tokensCleared, expiryNotified, exemptCreated, surveysSent,
     errors,
   });
 }

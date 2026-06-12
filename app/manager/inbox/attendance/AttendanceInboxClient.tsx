@@ -68,6 +68,7 @@ type InboxItem = {
   payrollConfirmedAt?: string | null;
   correctionRequestedAt?: string | null; // 에이전시→워커 시각 보정 요청 시각
   seriousLateMin?: number;        // 심한지각/조퇴 기준(분, 기본 30)
+  missedClockOut?: boolean;       // 퇴근 미실행(과거 WORKING·미확정) → 매니저 표준시각 확정 가능
 
   updatedAt: string; // ISO
   timeline: TimelineEvent[];
@@ -237,6 +238,7 @@ async function fetchInboxItems(filters: {
         payrollConfirmedAt: it.payrollConfirmedAt ?? null,
         correctionRequestedAt: it.correctionRequestedAt ?? null,
         seriousLateMin: typeof it.seriousLateMin === "number" ? it.seriousLateMin : 30,
+        missedClockOut: Boolean(it.missedClockOut),
 
         updatedAt: String(it.updatedAt || new Date().toISOString()),
         timeline: Array.isArray(it.timeline) ? it.timeline : [],
@@ -475,6 +477,29 @@ export default function AttendanceInboxClient() {
       }
     } finally {
       setRequestingCorrection(false);
+    }
+  }
+
+  const [confirmingMissed, setConfirmingMissed] = useState(false);
+  async function actionConfirmMissedClockOut() {
+    if (!selected) return;
+    if (!confirm(`${selected.workDate} 퇴근 미실행 건을 표준 퇴근시각으로 확정할까요?\n확정 후에는 수정이 불가합니다.`)) return;
+    setConfirmingMissed(true);
+    try {
+      const { ok, json } = await postJson<{ success: boolean; message?: string }>(
+        `/api/admin/attendance-inbox/${selected.id}/confirm-missed-clockout`,
+      ).catch(() => ({ ok: false, status: 0, json: null as any }));
+      if (ok && json?.success) {
+        updateSelected((it) => pushTimeline(
+          { ...it, missedClockOut: false, status: "ADMIN_RESOLVED", updatedAt: new Date().toISOString() },
+          "퇴근 미실행 표준시각 확정",
+          "매니저 확정(표준 퇴근시각)",
+        ));
+      } else {
+        alert(json?.message || "확정에 실패했습니다.");
+      }
+    } finally {
+      setConfirmingMissed(false);
     }
   }
 
@@ -888,6 +913,29 @@ export default function AttendanceInboxClient() {
                   </div>
                   );
                 })() : null}
+
+                {/* 퇴근 미실행: 매니저 표준시각 확정 폴백 */}
+                {selected.missedClockOut ? (
+                  <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-white">퇴근 미실행</span>
+                      <span className="text-sm font-bold text-amber-800">직무지도원이 퇴근 버튼을 누르지 않은 날입니다.</span>
+                    </div>
+                    <p className="mt-2 text-[13px] font-medium text-amber-800/90">
+                      출근부에 퇴근 시각이 비어 있습니다(급여 산정 제외). 직무지도원이 앱에서 사유와 함께 퇴근을 처리하도록 안내해 주세요.
+                      끝내 처리되지 않으면 아래에서 <b>표준 퇴근시각</b>으로 확정할 수 있습니다(매니저 책임 확정).
+                    </p>
+                    <div className="mt-3">
+                      <button
+                        onClick={actionConfirmMissedClockOut}
+                        disabled={confirmingMissed}
+                        className="inline-flex items-center rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700 disabled:opacity-60"
+                      >
+                        {confirmingMissed ? "확정 중…" : "표준 퇴근시각으로 확정"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 {/* KPI + 실제 출퇴근 — 반폭 한 줄 배치 */}
                 <div className="mb-4 grid items-start gap-3 sm:grid-cols-2">

@@ -48,16 +48,9 @@ export async function GET(
     const AUTO_FINALIZE_MINUTES = Number(process.env.AUTO_FINALIZE_MINUTES ?? 60); // 기본 60분 후 자동 확정
     const kstNow = getKstNowDate();
 
-    // 이전 날짜의 미종료 WORKING 기록 자동 처리 (출근 후 앱 종료 케이스)
-    const staleWorking = await prisma.dailyAttendance.findFirst({
-      where: { workerId, status: 'WORKING', workDate: { lt: today } },
-    });
-    if (staleWorking) {
-      await prisma.dailyAttendance.update({
-        where: { id: staleWorking.id },
-        data: { status: 'DONE', isFinalClosed: true, finalizedAt: kstNow },
-      });
-    }
+    // 과거 날짜의 미퇴근(status=WORKING) 기록은 '퇴근 미실행(보정대기)'로 그대로 둔다.
+    // (예전엔 endTime 없이 DONE+확정했으나 급여 게이트 원칙과 어긋나 제거. 직무지도원의 늦은 퇴근
+    //  처리 또는 매니저 표준시각 확정 전까지 미확정 유지. 노출은 home-summary의 missedClockOuts.)
 
     const pendingFinalize = await prisma.dailyAttendance.findFirst({
       where: {
@@ -74,18 +67,21 @@ export async function GET(
     if (pendingFinalize) {
       const byDateChange = pendingFinalize.workDate !== today;
 
-      // endTime이 "마지막 퇴근 업데이트 시간" 역할을 하므로 이를 기준으로 경과시간 판단
-      const end = pendingFinalize.endTime;
+      // ✅ 경과시간은 "실제 퇴근 버튼 누른 시각(actualEndTime)" 기준으로 판단.
+      //    endTime은 근무형태별 표준 종료시각으로 고정 저장되므로 타임아웃 기준이 될 수 없음.
+      //    (레거시 기록 호환: actualEndTime 없으면 endTime 폴백)
+      const pressedEnd = pendingFinalize.actualEndTime ?? pendingFinalize.endTime;
       const byTimeout =
-        !!end &&
-        (new Date().getTime() - new Date(end).getTime() >= AUTO_FINALIZE_MINUTES * 60 * 1000);
+        !!pressedEnd &&
+        (new Date().getTime() - new Date(pressedEnd).getTime() >= AUTO_FINALIZE_MINUTES * 60 * 1000);
 
       if (byDateChange || byTimeout) {
         await prisma.dailyAttendance.update({
           where: { id: pendingFinalize.id },
           data: {
             isFinalClosed: true,
-            finalizedAt: end ?? kstNow,
+            // 마감 시각(finalizedAt)은 표준 종료시각(endTime) 기준 유지
+            finalizedAt: pendingFinalize.endTime ?? kstNow,
           },
         });
       }

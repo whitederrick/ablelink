@@ -24,6 +24,7 @@ const AttendanceMap = dynamic(() => import("./AttendanceMap"), { ssr: false });
 type AttendanceItem = {
   id: string; workDate: string;
   startTime: string | null; endTime: string | null;
+  actualStartTime: string | null; actualEndTime: string | null;
   isFinalClosed: boolean; isGpsModified: boolean;
   status: string;
   startLocLat: string | null; startLocLon: string | null;
@@ -330,9 +331,19 @@ export default function AttendancesPage() {
                   <td className={T.td}>{row.site?.companyName || "-"}</td>
                   <td className={`${T.td} ${row.startTime ? "font-semibold text-emerald-600" : ""}`}>
                     {formatTime(row.startTime)}
+                    {row.actualStartTime && (
+                      <span className="mt-0.5 block text-[11px] font-medium text-slate-400">
+                        실제 {formatTime(row.actualStartTime)}
+                      </span>
+                    )}
                   </td>
                   <td className={T.td}>
                     {formatTime(row.endTime)}
+                    {row.actualEndTime && (
+                      <span className="mt-0.5 block text-[11px] font-medium text-slate-400">
+                        실제 {formatTime(row.actualEndTime)}
+                      </span>
+                    )}
                   </td>
                   <td className={T.td}>
                     <StatusBadge status={row.isFinalClosed ? "done" : row.startTime ? "working" : "before"} map={ATT_BADGE} />

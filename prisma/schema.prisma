@@ -355,6 +355,15 @@ model DailyAttendance {
   correctionRequestedAt   DateTime? @map("correction_requested_at")
   correctionRequestNote   String?   @map("correction_request_note")
 
+  // 퇴근 미실행 처리: 출근은 했으나 퇴근 버튼을 안 누른 채 날이 바뀐 기록.
+  // - clockOutMissedAt: cron이 '퇴근 미실행'으로 플래그한 시각(목록 식별·알림용). endTime은 비워둠(보정대기).
+  // - lateClockOutAt: 직무지도원이 늦게 퇴근을 처리(사유 입력)한 시각.
+  // - lateClockOutReasonCode/Reason: 늦은 퇴근 사유(사전 선택 코드 + 기타 자유입력).
+  clockOutMissedAt      DateTime? @map("clock_out_missed_at")
+  lateClockOutAt        DateTime? @map("late_clock_out_at")
+  lateClockOutReasonCode String?  @map("late_clock_out_reason_code")
+  lateClockOutReason    String?   @map("late_clock_out_reason")
+
   startDistanceM Float?   @map("start_distance_m")
   endDistanceM   Float?   @map("end_distance_m")
   withinRange    Boolean? @map("within_range")

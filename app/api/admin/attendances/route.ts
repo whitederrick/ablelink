@@ -58,10 +58,13 @@ function toItem(r: any) {
     workDate: r.workDate,
 
     startTime: asIso(r.startTime),
+    // 실제 출/퇴근 버튼 누른 시각(등록시각). startTime/endTime은 출근부용 표준 고정시각.
+    actualStartTime: asIso(r.actualStartTime),
     startLocLat: r.startLocLat != null ? String(r.startLocLat) : null,
     startLocLon: r.startLocLon != null ? String(r.startLocLon) : null,
 
     endTime: asIso(r.endTime),
+    actualEndTime: asIso(r.actualEndTime),
     endLocLat: r.endLocLat != null ? String(r.endLocLat) : null,
     endLocLon: r.endLocLon != null ? String(r.endLocLon) : null,
 
@@ -185,9 +188,11 @@ export async function GET(req: NextRequest) {
 
           workDate: true,
           startTime: true,
+          actualStartTime: true,
           startLocLat: true,
           startLocLon: true,
           endTime: true,
+          actualEndTime: true,
           endLocLat: true,
           endLocLon: true,
 

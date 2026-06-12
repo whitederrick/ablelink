@@ -56,22 +56,19 @@ export interface HomeSummary {
   };
   // 오늘 일지 상태
   today: { loggedTraineeIds: string[]; missingTraineeCount: number };
+  // 퇴근 미실행(과거 출근만 하고 퇴근 안 누른 보정대기 건) — 사유와 함께 늦은 퇴근 처리 필요
+  missedClockOuts: { attendanceId: string; workDate: string; siteName: string }[];
 }
 
 export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
   const today = getKstDateString();
   const kstNow = getKstNowDate();
 
-  // ── 자동 최종 마감 (구 /api/home/[workerId] 로직 이식) ──
-  const staleWorking = await prisma.dailyAttendance.findFirst({
-    where: { workerId, status: "WORKING", workDate: { lt: today } },
-  });
-  if (staleWorking) {
-    await prisma.dailyAttendance.update({
-      where: { id: staleWorking.id },
-      data: { status: "DONE", isFinalClosed: true, finalizedAt: kstNow },
-    });
-  }
+  // ── 자동 최종 마감 ──
+  // 과거 날짜의 미퇴근(status=WORKING) 기록은 '퇴근 미실행(보정대기)'로 그대로 둔다.
+  // (예전엔 여기서 endTime 없이 DONE+확정했으나, 그러면 출근부 퇴근시각이 비거나 잘못 박혀
+  //  급여 게이트 원칙과 어긋남. 이제는 직무지도원이 사유와 함께 늦게 퇴근 처리하거나
+  //  매니저가 표준시각으로 확정할 때까지 미확정으로 유지한다. 아래 missedClockOuts로 노출.)
   const AUTO_FINALIZE_MINUTES = Number(process.env.AUTO_FINALIZE_MINUTES ?? 60);
   const pendingFinalize = await prisma.dailyAttendance.findFirst({
     where: { workerId, status: "DONE", isFinalClosed: false },
@@ -79,12 +76,16 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
   });
   if (pendingFinalize) {
     const byDateChange = pendingFinalize.workDate !== today;
-    const end = pendingFinalize.endTime;
-    const byTimeout = !!end && (Date.now() - new Date(end).getTime() >= AUTO_FINALIZE_MINUTES * 60 * 1000);
+    // ✅ 자동 마감 경과시간은 "실제 퇴근 버튼 누른 시각(actualEndTime)" 기준.
+    //    endTime은 근무형태별 표준 종료시각으로 고정 저장되므로 타임아웃 기준이 될 수 없음.
+    //    (레거시 기록 호환: actualEndTime 없으면 endTime 폴백)
+    const pressedEnd = pendingFinalize.actualEndTime ?? pendingFinalize.endTime;
+    const byTimeout = !!pressedEnd && (Date.now() - new Date(pressedEnd).getTime() >= AUTO_FINALIZE_MINUTES * 60 * 1000);
     if (byDateChange || byTimeout) {
       await prisma.dailyAttendance.update({
         where: { id: pendingFinalize.id },
-        data: { isFinalClosed: true, finalizedAt: end ?? kstNow },
+        // 마감 시각(finalizedAt)은 FINALIZE 액션과 동일하게 표준 종료시각(endTime) 기준 유지
+        data: { isFinalClosed: true, finalizedAt: pendingFinalize.endTime ?? kstNow },
       });
     }
   }
@@ -163,6 +164,19 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
   }
   const missingTraineeCount = trainees.filter(t => !loggedTraineeIds.includes(t.id.toString())).length;
 
+  // ── 퇴근 미실행 (과거 날짜 + 아직 WORKING = 퇴근 안 누름) ──
+  const missedRows = await prisma.dailyAttendance.findMany({
+    where: { workerId, status: "WORKING", workDate: { lt: today }, isFinalClosed: false },
+    include: { site: { select: { companyName: true } } },
+    orderBy: { workDate: "desc" },
+    take: 30,
+  });
+  const missedClockOuts = missedRows.map(a => ({
+    attendanceId: a.id.toString(),
+    workDate: a.workDate,
+    siteName: a.site?.companyName ?? "현장",
+  }));
+
   return {
     home: {
       id: site?.id ? Number(site.id) : null,
@@ -201,5 +215,6 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     },
     missing: { count: missingItems.length, items: missingItems },
     today: { loggedTraineeIds, missingTraineeCount },
+    missedClockOuts,
   };
 }

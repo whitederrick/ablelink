@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { computeWorkTimes } from "@/lib/workSchedule";
+import { getKstDateString } from "@/lib/time";
 import { getConfigNumber } from "@/lib/systemConfig";
 import { isPayrollPending, lateMinutes, earlyLeaveMinutes, SERIOUS_LATE_MIN } from "@/lib/attendance/payrollGate";
 
@@ -94,6 +95,7 @@ export async function GET(req: Request) {
   try {
     const scope = await requireManagerSession(req);
     const lateThresholdMin = await getConfigNumber("LATE_THRESHOLD_MIN");
+    const today = getKstDateString();
 
     // 소속 기관만 조회
     const agencyId = scope.agencyId;
@@ -133,6 +135,8 @@ export async function GET(req: Request) {
       select: {
         id: true,
         workDate: true,
+        status: true,
+        isFinalClosed: true,
         startTime: true,
         endTime: true,
         actualStartTime: true,
@@ -290,6 +294,9 @@ export async function GET(req: Request) {
         payrollPending: isPayrollPending(gateInput),
         payrollConfirmedAt: r.payrollConfirmedAt ? r.payrollConfirmedAt.toISOString() : null,
         correctionRequestedAt: r.correctionRequestedAt ? r.correctionRequestedAt.toISOString() : null,
+        // 퇴근 미실행(보정대기): 과거 날짜 + 아직 WORKING(퇴근 안 누름) + 미확정.
+        // 직무지도원이 끝내 처리 안 하면 매니저가 표준시각으로 확정 가능.
+        missedClockOut: r.status === "WORKING" && r.workDate < today && !r.isFinalClosed,
         seriousLateMin: SERIOUS_LATE_MIN,
         updatedAt: (upserted.updatedAt ?? upserted.createdAt).toISOString(),
         timeline: [],
