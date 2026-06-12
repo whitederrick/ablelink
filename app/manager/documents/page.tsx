@@ -47,6 +47,11 @@ export default function ManagerDocumentsHub() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  // 딥링크: ?q=대상 으로 진입 시 검색 시드(대시보드 운영 리스크 항목 클릭)
+  useEffect(() => {
+    const sq = new URLSearchParams(window.location.search).get("q");
+    if (sq) setQ(sq);
+  }, []);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);

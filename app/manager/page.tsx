@@ -441,7 +441,7 @@ export default function AdminDashboardPage() {
                   {riskSlice.map((alert, i) => (
                     <button
                       key={i}
-                      onClick={() => router.push(RISK_ROUTE[alert.type] ?? "/manager")}
+                      onClick={() => router.push(`${RISK_ROUTE[alert.type] ?? "/manager"}${alert.target ? `?q=${encodeURIComponent(alert.target)}` : ""}`)}
                       className="flex w-full items-center gap-2 border-b border-slate-50 py-2 text-left transition last:border-b-0 hover:bg-slate-50"
                     >
                       <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${alert.severity === "high" ? "bg-rose-500" : alert.severity === "medium" ? "bg-amber-500" : "bg-slate-300"}`} />

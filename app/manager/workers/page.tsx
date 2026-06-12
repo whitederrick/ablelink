@@ -564,6 +564,11 @@ export default function WorkersPage() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  // 딥링크: ?q=대상 으로 진입 시 검색 시드(대시보드 운영 리스크 항목 클릭)
+  useEffect(() => {
+    const sq = new URLSearchParams(window.location.search).get("q");
+    if (sq) setQuery(sq);
+  }, []);
   const [editTarget,     setEditTarget]     = useState<{ worker: Worker; assignment: Assignment } | null>(null);
   const [infoEditTarget, setInfoEditTarget] = useState<Worker | null>(null);
   const [showInvite,     setShowInvite]     = useState(false);
