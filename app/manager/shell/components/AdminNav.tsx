@@ -27,7 +27,7 @@ const groups: NavGroup[] = [
   {
     title: "개요",
     items: [
-      { href: "/manager", label: "대시보드" },
+      { href: "/manager", label: "통합 운영 대시보드" },
       { href: "/manager/reports", label: "훈련생 진척도 리포트", plan: "STANDARD" }, // 모니터링/분석 성격 — 개요 밑으로
     ],
   },

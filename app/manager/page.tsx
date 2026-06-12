@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Lock } from "lucide-react";
 import PageHeader from "./_components/PageHeader";
+import Pagination from "./_components/Pagination";
 
 interface DashboardData {
   today: string;
@@ -138,6 +139,10 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [popup, setPopup] = useState<null | "attendance_gps" | "attendance_time" | "doc_pending" | "doc_overdue" | "assign_ending" | "unassigned_site">(null);
+  // 하단 3개 목록 페이지네이션(5개씩)
+  const [riskPage, setRiskPage]     = useState(1);
+  const [todayPage, setTodayPage]   = useState(1);
+  const [noticePage, setNoticePage] = useState(1);
   const [pendingEditReqs, setPendingEditReqs] = useState(0);
   const [announcements, setAnnouncements] = useState<{ id: string; title: string; body: string; type: string; createdAt: string; read?: boolean }[]>([]);
   // 훈련생 진척도 요약(기존 리포트 API 재사용, 클라 집계). 플랜 잠금 시 reportLocked.
@@ -220,11 +225,22 @@ export default function AdminDashboardPage() {
 
   const reportMonth = d?.today ? Number(d.today.slice(5, 7)) : new Date().getMonth() + 1;
 
+  // 하단 3개 목록 페이지네이션(5개씩)
+  const PAGE = 5;
+  const todayAll  = d?.todayList ?? [];
+  const riskAll   = d?.riskAlerts ?? [];
+  const todayPages  = Math.max(1, Math.ceil(todayAll.length / PAGE));
+  const riskPages   = Math.max(1, Math.ceil(riskAll.length / PAGE));
+  const noticePages = Math.max(1, Math.ceil(announcements.length / PAGE));
+  const todaySlice  = todayAll.slice((todayPage - 1) * PAGE, todayPage * PAGE);
+  const riskSlice   = riskAll.slice((riskPage - 1) * PAGE, riskPage * PAGE);
+  const noticeSlice = announcements.slice((noticePage - 1) * PAGE, noticePage * PAGE);
+
   return (
     <div className="max-w-[1200px] space-y-4">
       {/* 헤더 */}
       <PageHeader
-        title="업무 현황 요약"
+        title="통합 운영 대시보드"
         sub={todayFmt}
         actions={
           <button
@@ -370,23 +386,8 @@ export default function AdminDashboardPage() {
           </Section>
       </div>
 
-      {/* 2행: 운영 리스크 · 오늘 출근 현황 · 공지사항 가로 3열 */}
+      {/* 2행: 오늘 출근 현황 · 운영 리스크 · 공지사항 가로 3열 (출근↔리스크 위치 교체) */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-
-          {/* 운영 리스크 — 단순 목록 */}
-          <Section title="운영 리스크 알림" count={d?.riskAlerts.length}>
-            {!d?.riskAlerts.length ? <EmptyRow text="리스크 알림 없음" /> : (
-              <div>
-                {d.riskAlerts.slice(0, 5).map((alert, i) => (
-                  <div key={i} className="flex items-center gap-2 border-b border-slate-50 py-2 last:border-b-0">
-                    <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${alert.severity === "high" ? "bg-rose-500" : alert.severity === "medium" ? "bg-amber-500" : "bg-slate-300"}`} />
-                    <span className="text-sm font-bold text-slate-700">{alert.label}</span>
-                    <span className="truncate text-xs font-semibold text-slate-400">{alert.detail}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Section>
 
           {/* 오늘 출근 현황 */}
           <Section
@@ -394,23 +395,48 @@ export default function AdminDashboardPage() {
             sub={`근무 ${s?.todayWorking ?? 0}명 / 종료 ${s?.todayDone ?? 0}명`}
             onMore={() => router.push("/manager/attendances")}
           >
-            {!d?.todayList.length ? <EmptyRow text="오늘 출근 기록 없음" /> : (
-              <div>
-                {d.todayList.slice(0, 5).map(row => (
-                  <div key={row.id} className="flex items-center justify-between border-b border-slate-50 py-2 last:border-b-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-black text-slate-900">{row.workerName}</span>
-                      {row.hasIssue && (
-                        <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-black text-rose-600">이슈</span>
-                      )}
+            {todayAll.length === 0 ? <EmptyRow text="오늘 출근 기록 없음" /> : (
+              <>
+                <div>
+                  {todaySlice.map(row => (
+                    <div key={row.id} className="flex items-center justify-between border-b border-slate-50 py-2 last:border-b-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-black text-slate-900">{row.workerName}</span>
+                        {row.hasIssue && (
+                          <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-black text-rose-600">이슈</span>
+                        )}
+                      </div>
+                      <span className="text-xs font-semibold text-slate-400">{row.clockIn || "-"} ~ {row.clockOut || "-"}</span>
+                      <span className={`text-xs font-black ${LOG_CLS[row.logStatus] || "text-slate-400"}`}>
+                        {row.logStatus}
+                      </span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-400">{row.clockIn || "-"} ~ {row.clockOut || "-"}</span>
-                    <span className={`text-xs font-black ${LOG_CLS[row.logStatus] || "text-slate-400"}`}>
-                      {row.logStatus}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                {todayPages > 1 && (
+                  <Pagination className="mt-3" page={todayPage} totalPages={todayPages} total={todayAll.length} onPageChange={setTodayPage} />
+                )}
+              </>
+            )}
+          </Section>
+
+          {/* 운영 리스크 — 단순 목록 */}
+          <Section title="운영 리스크 알림" count={riskAll.length}>
+            {riskAll.length === 0 ? <EmptyRow text="리스크 알림 없음" /> : (
+              <>
+                <div>
+                  {riskSlice.map((alert, i) => (
+                    <div key={i} className="flex items-center gap-2 border-b border-slate-50 py-2 last:border-b-0">
+                      <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${alert.severity === "high" ? "bg-rose-500" : alert.severity === "medium" ? "bg-amber-500" : "bg-slate-300"}`} />
+                      <span className="text-sm font-bold text-slate-700">{alert.label}</span>
+                      <span className="truncate text-xs font-semibold text-slate-400">{alert.detail}</span>
+                    </div>
+                  ))}
+                </div>
+                {riskPages > 1 && (
+                  <Pagination className="mt-3" page={riskPage} totalPages={riskPages} total={riskAll.length} onPageChange={setRiskPage} />
+                )}
+              </>
             )}
           </Section>
 
@@ -423,21 +449,26 @@ export default function AdminDashboardPage() {
             {announcements.length === 0 ? (
               <EmptyRow text="등록된 공지가 없습니다" />
             ) : (
-              announcements.slice(0, 5).map(a => (
-                <button key={a.id} onClick={() => router.push("/manager/system-notices")}
-                  className="block w-full border-b border-slate-50 py-2 text-left last:border-b-0 transition hover:bg-slate-50">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className={`truncate text-sm ${a.read === false ? "font-black text-slate-900" : "font-semibold text-slate-700"}`}>
-                      <span className={`mr-1 ${a.type === "URGENT" ? "text-rose-600" : a.type === "MAINTENANCE" ? "text-amber-600" : "text-sky-600"}`}>
-                        [{a.type === "URGENT" ? "긴급" : a.type === "MAINTENANCE" ? "점검" : "공지"}]
-                      </span>
-                      {a.title}
-                      {a.read === false && <span className="ml-1.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-black text-rose-600">미확인</span>}
-                    </p>
-                    <span className="flex-shrink-0 text-[10px] font-semibold text-slate-300">{a.createdAt.slice(0, 10)}</span>
-                  </div>
-                </button>
-              ))
+              <>
+                {noticeSlice.map(a => (
+                  <button key={a.id} onClick={() => router.push("/manager/system-notices")}
+                    className="block w-full border-b border-slate-50 py-2 text-left last:border-b-0 transition hover:bg-slate-50">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`truncate text-sm ${a.read === false ? "font-black text-slate-900" : "font-semibold text-slate-700"}`}>
+                        <span className={`mr-1 ${a.type === "URGENT" ? "text-rose-600" : a.type === "MAINTENANCE" ? "text-amber-600" : "text-sky-600"}`}>
+                          [{a.type === "URGENT" ? "긴급" : a.type === "MAINTENANCE" ? "점검" : "공지"}]
+                        </span>
+                        {a.title}
+                        {a.read === false && <span className="ml-1.5 rounded-full bg-rose-500 px-1.5 py-0.5 text-[9px] font-black text-white">미확인</span>}
+                      </p>
+                      <span className="flex-shrink-0 text-[10px] font-semibold text-slate-300">{a.createdAt.slice(0, 10)}</span>
+                    </div>
+                  </button>
+                ))}
+                {noticePages > 1 && (
+                  <Pagination className="mt-3" page={noticePage} totalPages={noticePages} total={announcements.length} onPageChange={setNoticePage} />
+                )}
+              </>
             )}
           </Section>
       </div>
