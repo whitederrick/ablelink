@@ -119,7 +119,7 @@ export default function SubscriptionPage() {
         ) : !agency ? (
           <p className={T.empty}>에이전시 정보를 찾을 수 없습니다.</p>
         ) : (
-          <div className="max-w-6xl space-y-5">
+          <div className="space-y-5">
             {/* 현재 상태 */}
             <div className={T.card}>
               <div className="flex flex-wrap items-center gap-3">

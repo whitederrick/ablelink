@@ -73,6 +73,7 @@ const RUN_STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   FINALIZED: { label: "확정", tone: "emerald" },
 };
 const PAGE_SIZE = 10;
+const DETAIL_PAGE_SIZE = 10;
 
 type Tab = "contracts" | "runs" | "deductions";
 
@@ -112,8 +113,11 @@ export default function PayrollPage() {
   const [calculating, setCalculating] = useState(false);
   const [selectedRun, setSelectedRun] = useState<RunDetail | null>(null);
   const [loadingRun, setLoadingRun] = useState(false);
+  const [detailPage, setDetailPage] = useState(1);
   const [editItem, setEditItem] = useState<RunItem | null>(null);
   const [finalizing, setFinalizing] = useState(false);
+  const [toast, setToast] = useState("");
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 4000); };
 
   async function loadContracts() {
     setLoadingContracts(true);
@@ -153,6 +157,8 @@ export default function PayrollPage() {
     else if (tab === "runs") loadRuns();
     else loadDeductions();
   }, [tab]);
+
+  useEffect(() => { setDetailPage(1); }, [selectedRun?.id]);
 
   async function handleSaveContract() {
     if (!form.workerId || !form.baseAmount || !form.effectiveFrom) {
@@ -236,7 +242,11 @@ export default function PayrollPage() {
         body: JSON.stringify({ yearMonth: calcYM }),
       });
       const d = await res.json();
-      if (d.success) { loadRuns(); alert(`${d.itemCount}명 계산 완료`); }
+      if (d.success) {
+        showToast(`✅ ${calcYM} 급여 계산 완료 — ${d.itemCount}명. 아래에 계산 결과(급여명세)를 열었습니다.`);
+        loadRuns();
+        if (d.id) loadRunDetail(d.id);   // 계산 직후 결과 상세(급여명세)로 바로 이동
+      }
       else alert(d.message);
     } finally { setCalculating(false); }
   }
@@ -360,16 +370,18 @@ export default function PayrollPage() {
             selected={cTypeFilter}
             onToggleFilter={toggleCType}
             extra={
-              <button className={`${T.btnPrimary} ml-auto`} onClick={() => setShowForm(v => !v)}>
-                {showForm ? "취소" : "+ 계약 등록"}
-              </button>
+              !showForm ? (
+                <button className={`${T.btnPrimary} ml-auto`} onClick={() => setShowForm(true)}>
+                  + 계약 등록
+                </button>
+              ) : null
             }
           />
 
           {showForm && (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
               <p className="mb-4 text-sm font-black text-slate-900">급여 계약 등록</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-1.5">
                   <label className={T.label}>직무지도원</label>
                   <select value={form.workerId} onChange={e => setForm(f => ({ ...f, workerId: e.target.value }))} className={`w-full ${T.select}`}>
@@ -416,6 +428,9 @@ export default function PayrollPage() {
                     <p className="text-[11px] font-semibold text-slate-400">※ 내부 직무지도원은 일급만 적용</p>
                   )}
                 </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <div className="space-y-1.5">
                   <label className={T.label}>{form.payType === "HOURLY" ? "시급 (원)" : form.payType === "DAILY" ? "일급 (원)" : "월급 (원)"}</label>
                   <input type="number" value={form.baseAmount}
@@ -614,19 +629,7 @@ export default function PayrollPage() {
       {/* ── 급여 계산 탭 - 목록 ── */}
       {tab === "runs" && !selectedRun && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="space-y-1.5">
-              <label className={T.label}>계산 월</label>
-              <input type="month" value={calcYM} onChange={e => setCalcYM(e.target.value)} className={`w-auto ${T.input}`} />
-            </div>
-            <button className={T.btnPrimary} onClick={handleCalculate} disabled={calculating}>
-              {calculating ? "계산 중..." : "⚡ 급여 계산"}
-            </button>
-            <p className="self-center text-xs font-semibold text-slate-400">
-              출퇴근 기록·급여 계약·공제 설정을 기반으로 자동 계산합니다.
-            </p>
-          </div>
-
+          {/* 대시보드 카운트 — 맨 위(다른 화면과 동일) */}
           <StatCardRow
             cols={3}
             items={[
@@ -636,17 +639,30 @@ export default function PayrollPage() {
             ]}
           />
 
-          <ListToolbar
-            query={rQuery}
-            onQueryChange={setRQuery}
-            placeholder="연월 검색 (예: 2026-06)"
-            filters={[
-              { value: "DRAFT", label: "초안", count: draftCnt },
-              { value: "FINALIZED", label: "확정", count: finalizedCnt },
-            ] as FilterChip[]}
-            selected={rStatusFilter}
-            onToggleFilter={toggleRStatus}
-          />
+          {/* 계산 월(좌) + 조회 툴바(우) 한 줄 */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label className="whitespace-nowrap text-sm font-semibold text-slate-600">계산 월</label>
+              <input type="month" value={calcYM} onChange={e => setCalcYM(e.target.value)} className={`w-auto ${T.input}`} />
+              <button className={T.btnPrimary} onClick={handleCalculate} disabled={calculating}>
+                {calculating ? "계산 중..." : "⚡ 급여 계산 실행"}
+              </button>
+            </div>
+            <div className="min-w-[260px] flex-1">
+              <ListToolbar
+                query={rQuery}
+                onQueryChange={setRQuery}
+                placeholder="연월 검색 (예: 2026-06)"
+                filters={[
+                  { value: "DRAFT", label: "초안", count: draftCnt },
+                  { value: "FINALIZED", label: "확정", count: finalizedCnt },
+                ] as FilterChip[]}
+                selected={rStatusFilter}
+                onToggleFilter={toggleRStatus}
+              />
+            </div>
+          </div>
+          <p className="text-xs font-semibold text-slate-400">출퇴근 기록·급여 계약·공제 설정을 기반으로 자동 계산합니다.</p>
 
           {loadingRuns ? (
             <p className={T.empty}>로딩 중...</p>
@@ -669,7 +685,7 @@ export default function PayrollPage() {
                       <td className={T.td}>{r.createdAt.slice(0, 10)}</td>
                       <td className={T.td}>{r.finalizedAt ? r.finalizedAt.slice(0, 10) : "-"}</td>
                       <td className={T.td}>
-                        <button className={T.btnSecondary} onClick={() => loadRunDetail(r.id)}>상세 보기</button>
+                        <button onClick={() => loadRunDetail(r.id)} className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50">상세 보기</button>
                       </td>
                     </tr>
                   ))}
@@ -720,14 +736,19 @@ export default function PayrollPage() {
                   ))}</tr>
                 </thead>
                 <tbody>
-                  {selectedRun.items.map(item => {
+                  {selectedRun.items.slice((detailPage - 1) * DETAIL_PAGE_SIZE, detailPage * DETAIL_PAGE_SIZE).map(item => {
                     const bd = item.breakdown as any;
                     const incType: IncomeType = bd?.incomeType ?? "BUSINESS";
                     const dedBreakdown: Record<string, number> = bd?.deductionBreakdown ?? {};
                     return (
                       <tr key={item.id} className={T.trBase}>
                         <td className={T.td}>
-                          <div className="font-semibold">{item.workerName} <span className="text-[13px] font-normal text-slate-500">({maskLoginId(item.loginId)})</span></div>
+                          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                            <span className="font-semibold">{item.workerName} <span className="text-[13px] font-normal text-slate-500">({maskLoginId(item.loginId)})</span></span>
+                            {bd?.note && (
+                              <span className="text-[11px] font-semibold text-amber-600">⚠ {bd.note}</span>
+                            )}
+                          </div>
                           {bd?.payType && (
                             <div className="mt-0.5 text-[13px] text-slate-500">
                               <span className={`mr-1 ${T.badge} ${incType === "EMPLOYMENT" ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>
@@ -740,28 +761,29 @@ export default function PayrollPage() {
                               {bd.weeklyHolidayPay && ` +주휴${comma(bd.weeklyHolidayPay)}원`}
                             </div>
                           )}
-                          {bd?.note && (
-                            <div className="mt-0.5 text-[11px] font-semibold text-amber-600">⚠ {bd.note}</div>
-                          )}
                         </td>
                         <td className={`${T.td} text-center text-slate-600`}>{item.workedDays}일</td>
                         <td className={`${T.td} text-center text-slate-600`}>{fmtMin(item.workedMinutes)}</td>
                         <td className={`${T.td} text-right font-black text-sky-600`}>{comma(item.grossPay)}원</td>
                         <td className={`${T.td} text-right`}>
-                          <div className="text-rose-600 font-semibold">-{comma(item.totalDeduction)}원</div>
-                          <div className="text-[10px] text-slate-400 space-y-0.5">
-                            {Object.entries(dedBreakdown).map(([k, v]) => (
-                              <div key={k}>{k}: {comma(v)}원</div>
-                            ))}
+                          <div className="flex flex-wrap items-baseline justify-end gap-x-1.5">
+                            <span className="text-rose-600 font-semibold">-{comma(item.totalDeduction)}원</span>
+                            {Object.keys(dedBreakdown).length > 0 && (
+                              <span className="text-[10px] text-slate-400">
+                                ({Object.entries(dedBreakdown).map(([k, v]) => `${k} ${comma(v)}원`).join(" · ")})
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className={`${T.td} text-right font-black text-emerald-600`}>{comma(item.netPay)}원</td>
                         <td className={T.td}>
                           <div className="flex items-center justify-end gap-1.5">
-                            <a className={T.btnSecondary} href={`/api/admin/payroll/items/${item.id}/payslip`}
+                            <a className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50"
+                              href={`/api/admin/payroll/items/${item.id}/payslip`}
                               target="_blank" rel="noopener noreferrer">명세서</a>
                             {selectedRun.status === "DRAFT" && (
-                              <button className={T.btnSecondary} onClick={() => setEditItem(item)}>수정</button>
+                              <button className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50"
+                                onClick={() => setEditItem(item)}>수정</button>
                             )}
                           </div>
                         </td>
@@ -770,6 +792,9 @@ export default function PayrollPage() {
                   })}
                 </tbody>
               </table>
+              <Pagination className="border-t border-slate-100 px-4 py-3" page={detailPage}
+                totalPages={Math.max(1, Math.ceil(selectedRun.items.length / DETAIL_PAGE_SIZE))}
+                total={selectedRun.items.length} onPageChange={setDetailPage} />
             </div>
           )}
 
@@ -790,6 +815,12 @@ export default function PayrollPage() {
           onClose={() => setEditItem(null)}
           onSaved={handleEditSaved}
         />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-8 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg">
+          {toast}
+        </div>
       )}
     </div>
   );

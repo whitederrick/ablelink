@@ -118,7 +118,7 @@ export default function ManagerSupportPage() {
         sub="데이터 수정 요청, 결제 문의 등을 Ablelink 운영팀에 보냅니다"
         actions={
           <button onClick={() => setShowForm(true)} className={T.btnPrimary + " flex items-center gap-2"}>
-            <Plus className="h-4 w-4" />문의 작성
+            <Plus className="h-4 w-4" />문의 등록
           </button>
         }
       />
@@ -145,14 +145,14 @@ export default function ManagerSupportPage() {
         />
       </div>
 
-      {/* 문의 작성 모달 */}
+      {/* 문의 등록 모달 */}
       {showForm && (
         <div className={T.modalOverlay}>
           <div className={T.modalContent}>
             <div className="mb-5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <MessageCircle className="h-5 w-5 text-slate-700" />
-                <p className="text-base font-black text-slate-900">문의 작성</p>
+                <p className="text-base font-black text-slate-900">문의 등록</p>
               </div>
               <button onClick={() => setShowForm(false)}><X className="h-5 w-5 text-slate-400" /></button>
             </div>
@@ -197,13 +197,13 @@ export default function ManagerSupportPage() {
           <p className="text-sm text-slate-400">{tickets.length === 0 ? "문의 내역이 없습니다." : "조건에 맞는 문의가 없습니다."}</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {pageItems.map(t => {
             return (
               <div key={t.id} className="rounded-2xl border border-slate-100 bg-white">
                 <button
                   onClick={() => setExpanded(expanded === t.id ? null : t.id)}
-                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left"
                 >
                   <StatusBadge status={t.category} map={CAT_BADGE} />
                   <span className="flex-1 truncate text-[15px] font-semibold text-slate-800">{t.title}</span>

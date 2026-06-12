@@ -172,79 +172,72 @@ export async function GET(req: Request) {
       },
     });
 
-    const items: any[] = [];
+    // ── 성능: 행별 순차 DB 조회/쓰기(N+1) 제거 ──
+    //  1) 면제 제외 + 이슈 있는 행만 후보 수집(행별 컨텍스트 1회 계산)
+    //  2) 기존 이슈 일괄 findMany(1쿼리)  3) 신규만 create / 변경된 OPEN만 update(불필요 쓰기 스킵)
+    const issueSelect = { dailyAttendanceId: true, status: true, issueTypes: true, workerReasonText: true, adminMemo: true, updatedAt: true, createdAt: true } as const;
 
+    type Cand = {
+      r: (typeof rows)[number]; derived: IssueType[];
+      workType: string | null; commuteGuidanceIncluded: boolean;
+      customWorkStart: string | null; customWorkEnd: string | null; expectedStartAt: string | null;
+    };
+    const candidates: Cand[] = [];
     for (const r of rows) {
-      // 출퇴근 버튼 면제 배정 → 실제 버튼시각 무시(지각·범위 등 근태 이슈 미발생)
       if (r.assignment?.attendanceButtonExempt) continue;
       const workType = r.assignment?.workType ?? null;
       const commuteGuidanceIncluded = r.assignment?.commuteGuidanceIncluded ?? true;
       const customWorkStart = r.assignment?.customWorkStart ?? null;
       const customWorkEnd = r.assignment?.customWorkEnd ?? null;
-      const expectedStartAt = getExpectedStartHHMM({
-        workType,
-        commuteGuidanceIncluded,
-        customWorkStart,
-        customWorkEnd,
-      });
-
       const derived = deriveIssueTypes({
-        startTime: r.startTime,
-        endTime: r.endTime,
-        actualStartTime: r.actualStartTime ?? null,
-        startDistanceM: r.startDistanceM ?? null,
-        rangeM: r.rangeM ?? null,
-        workType,
-        commuteGuidanceIncluded,
-        customWorkStart,
-        customWorkEnd,
+        startTime: r.startTime, endTime: r.endTime, actualStartTime: r.actualStartTime ?? null,
+        startDistanceM: r.startDistanceM ?? null, rangeM: r.rangeM ?? null,
+        workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd,
       }, lateThresholdMin);
-
       if (derived.length === 0) continue;
+      const expectedStartAt = getExpectedStartHHMM({ workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd });
+      candidates.push({ r, derived, workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd, expectedStartAt });
+    }
 
-      // 기존 이슈 조회 → 없으면 생성 (upsert race condition 방지)
-      let existing = await prisma.attendanceIssue.findUnique({
-        where: { dailyAttendanceId: r.id },
-        select: { status: true, issueTypes: true, workerReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
-      });
+    // 2) 기존 이슈 일괄 조회
+    const existingRows = candidates.length
+      ? await prisma.attendanceIssue.findMany({ where: { dailyAttendanceId: { in: candidates.map(c => c.r.id) } }, select: issueSelect })
+      : [];
+    const issueMap = new Map<string, any>(existingRows.map(e => [e.dailyAttendanceId.toString(), e]));
 
-      if (!existing) {
+    // 3) 신규 생성 / 변경된 OPEN 갱신만(병렬). 동일 issueTypes면 쓰기 스킵 → 반복 로딩 빨라짐.
+    const sameTypes = (a: any[], b: any[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
+    await Promise.all(candidates.map(async (c) => {
+      const key = c.r.id.toString();
+      const ex = issueMap.get(key);
+      if (!ex) {
         try {
-          existing = await prisma.attendanceIssue.create({
+          const created = await prisma.attendanceIssue.create({
             data: {
-              dailyAttendanceId: r.id,
-              issueTypes: derived as any,
-              events: {
-                create: [{
-                  type: "ISSUE_CREATED",
-                  actorRole: "MANAGER",
-                  actorManagerId: scope.managerId,
-                  message: `이슈 등록: ${derived.join(", ")}`,
-                }],
-              },
+              dailyAttendanceId: c.r.id, issueTypes: c.derived as any,
+              events: { create: [{ type: "ISSUE_CREATED", actorRole: "MANAGER", actorManagerId: scope.managerId, message: `이슈 등록: ${c.derived.join(", ")}` }] },
             },
-            select: { status: true, issueTypes: true, workerReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
+            select: issueSelect,
           });
+          issueMap.set(key, created);
         } catch (e: any) {
-          // 동시 요청으로 이미 생성된 경우 재조회
           if (e?.code === "P2002") {
-            existing = await prisma.attendanceIssue.findUnique({
-              where: { dailyAttendanceId: r.id },
-              select: { status: true, issueTypes: true, workerReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
-            });
-          } else {
-            throw e;
-          }
+            const re = await prisma.attendanceIssue.findUnique({ where: { dailyAttendanceId: c.r.id }, select: issueSelect });
+            if (re) issueMap.set(key, re);
+          } else throw e;
         }
-      } else if (existing.status === "OPEN") {
-        existing = await prisma.attendanceIssue.update({
-          where: { dailyAttendanceId: r.id },
-          data: { issueTypes: derived as any },
-          select: { status: true, issueTypes: true, workerReasonText: true, adminMemo: true, updatedAt: true, createdAt: true },
-        });
+      } else if (ex.status === "OPEN" && !sameTypes(ex.issueTypes as any[], c.derived)) {
+        const upd = await prisma.attendanceIssue.update({ where: { dailyAttendanceId: c.r.id }, data: { issueTypes: c.derived as any }, select: issueSelect });
+        issueMap.set(key, upd);
       }
+    }));
 
-      const upserted = existing;
+    // 4) 필터 + 게이트 + items 구성
+    const items: any[] = [];
+    for (const c of candidates) {
+      const r = c.r;
+      const { workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd, expectedStartAt } = c;
+      const upserted = issueMap.get(r.id.toString());
       if (!upserted) continue;
 
       const inboxStatus = mapIssueStatusToInboxStatus({

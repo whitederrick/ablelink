@@ -342,16 +342,16 @@ export default function ManagerDocumentsHub() {
                   </td>
                   <td className={T.td}>
                     <div className="flex items-center gap-1.5">
-                      <button onClick={() => openPreview(item)} className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-700 active:scale-95">문서 보기</button>
-                      <button onClick={() => downloadPdf(item)} className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-700 active:scale-95">다운로드</button>
+                      <button onClick={() => openPreview(item)} className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-700 active:scale-95">문서 보기</button>
+                      <button onClick={() => downloadPdf(item)} className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-700 active:scale-95">다운로드</button>
                       {item.signStage === "SUBMITTED" && (
                         <>
-                          <button disabled={busy === item.id} onClick={() => handleConfirm(item)} className="inline-flex h-8 items-center rounded-lg bg-slate-950 px-2.5 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">확정</button>
-                          <button disabled={busy === item.id} onClick={() => handleRequestChanges(item)} className="inline-flex h-8 items-center rounded-lg border border-rose-200 bg-white px-2.5 text-[13px] font-bold text-rose-600 active:scale-95 disabled:opacity-50">수정요청</button>
+                          <button disabled={busy === item.id} onClick={() => handleConfirm(item)} className="inline-flex h-7 items-center rounded-lg bg-slate-950 px-2.5 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">확정</button>
+                          <button disabled={busy === item.id} onClick={() => handleRequestChanges(item)} className="inline-flex h-7 items-center rounded-lg border border-rose-200 bg-white px-2.5 text-[13px] font-bold text-rose-600 active:scale-95 disabled:opacity-50">수정요청</button>
                         </>
                       )}
                       {item.signStage === "CONFIRMED" && (
-                        <button disabled={busy === item.id} onClick={() => handleSign(item)} className="inline-flex h-8 items-center rounded-lg bg-emerald-600 px-2.5 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">서명</button>
+                        <button disabled={busy === item.id} onClick={() => handleSign(item)} className="inline-flex h-7 items-center rounded-lg bg-emerald-600 px-2.5 text-[13px] font-bold text-white active:scale-95 disabled:opacity-50">서명</button>
                       )}
                     </div>
                   </td>

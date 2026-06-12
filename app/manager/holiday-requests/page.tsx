@@ -229,7 +229,7 @@ export default function HolidayRequestsPage() {
                       <button
                         onClick={() => setWorkday(row, true)}
                         disabled={savingWorkday === row.id}
-                        className={`min-h-9 px-3 text-[13px] font-bold transition disabled:opacity-50 ${
+                        className={`h-7 px-3 text-[13px] font-bold transition disabled:opacity-50 ${
                           row.countAsWorkday ? "bg-emerald-500 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
                         }`}
                       >
@@ -238,7 +238,7 @@ export default function HolidayRequestsPage() {
                       <button
                         onClick={() => setWorkday(row, false)}
                         disabled={savingWorkday === row.id}
-                        className={`min-h-9 border-l border-slate-200 px-3 text-[13px] font-bold transition disabled:opacity-50 ${
+                        className={`h-7 border-l border-slate-200 px-3 text-[13px] font-bold transition disabled:opacity-50 ${
                           !row.countAsWorkday ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
                         }`}
                       >

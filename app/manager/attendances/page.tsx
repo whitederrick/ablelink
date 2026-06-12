@@ -329,20 +329,24 @@ export default function AttendancesPage() {
                     {row.user?.workerName || "-"}{row.user?.phoneNumber ? ` (${row.user.phoneNumber})` : ""}
                   </td>
                   <td className={T.td}>{row.site?.companyName || "-"}</td>
-                  <td className={`${T.td} ${row.startTime ? "font-semibold text-emerald-600" : ""}`}>
-                    {formatTime(row.startTime)}
-                    {row.actualStartTime && (
-                      <span className="mt-0.5 block text-[11px] font-medium text-slate-400">
-                        실제 {formatTime(row.actualStartTime)}
+                  <td className={T.td}>
+                    {row.actualStartTime ? (
+                      <span className="flex items-baseline gap-1.5">
+                        <span className="font-bold text-emerald-600">{formatTime(row.actualStartTime)}</span>
+                        {row.startTime && <span className="text-[11px] font-medium text-slate-400">기본 {formatTime(row.startTime)}</span>}
                       </span>
+                    ) : (
+                      <span className="font-semibold text-slate-500">{formatTime(row.startTime)}</span>
                     )}
                   </td>
                   <td className={T.td}>
-                    {formatTime(row.endTime)}
-                    {row.actualEndTime && (
-                      <span className="mt-0.5 block text-[11px] font-medium text-slate-400">
-                        실제 {formatTime(row.actualEndTime)}
+                    {row.actualEndTime ? (
+                      <span className="flex items-baseline gap-1.5">
+                        <span className="font-bold text-slate-900">{formatTime(row.actualEndTime)}</span>
+                        {row.endTime && <span className="text-[11px] font-medium text-slate-400">기본 {formatTime(row.endTime)}</span>}
                       </span>
+                    ) : (
+                      <span className="font-semibold text-slate-500">{formatTime(row.endTime)}</span>
                     )}
                   </td>
                   <td className={T.td}>

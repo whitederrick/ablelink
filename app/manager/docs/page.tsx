@@ -155,7 +155,7 @@ export default function AdminDocsPage() {
         />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-[5fr_7fr]">
         {/* 좌측: 게시판(제목줄 + 직무지도원 행 + 문서 버튼 한 줄) */}
         <div>
           {loadingWorkers ? (
@@ -181,7 +181,7 @@ export default function AdminDocsPage() {
                         <td className="px-2.5 py-1.5 align-middle whitespace-nowrap text-[14px] font-bold text-slate-800">{c.workerName}</td>
                         <td className="px-2.5 py-1.5 align-middle whitespace-nowrap text-[13px] text-slate-500">{c.siteName}</td>
                         <td className="px-2.5 py-1.5 align-middle">
-                          <div className="flex flex-nowrap items-center gap-1">
+                          <div className="flex flex-nowrap items-center gap-2">
                             {DOC_DEFS.map(doc => {
                               const active = docActive(doc.kind, c.serviceStep);
                               const selected = selectedWorker === c.workerId && docType === doc.id;
@@ -226,11 +226,11 @@ export default function AdminDocsPage() {
               {/* 헤더: 직무지도원·현장·문서 + 훈련생 선택(옆) */}
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
                     <p className="text-sm font-black text-slate-900">{worker?.workerName}{worker?.siteName && worker.siteName !== "-" ? ` · ${worker.siteName}` : ""} · {curDoc?.label}</p>
                     {needsTrainee && (
-                      <div className="flex flex-wrap items-center gap-1.5 border-l border-slate-200 pl-3">
-                        <span className="text-[12px] font-black text-slate-500">훈련생</span>
+                      <div className="flex flex-wrap items-center gap-1.5 border-l border-slate-200 pl-5">
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[13px] font-black text-slate-700">훈련생</span>
                         {(worker?.trainees || []).length === 0 ? (
                           <span className="text-xs font-semibold text-slate-400">담당 훈련생 없음</span>
                         ) : (worker?.trainees || []).map(t => (
@@ -255,7 +255,7 @@ export default function AdminDocsPage() {
                   <p className="text-xs font-semibold text-slate-400">제출본은 ‘공단 제출 내역’에서 확인하세요. (문서 조회에서는 제출 전 문서만 표시)</p>
                 </div>
               ) : ready ? (
-                <iframe src={previewUrl()} className="h-[442px] w-full rounded-xl border border-slate-200 bg-slate-100" title="문서 미리보기" />
+                <iframe src={previewUrl()} className="h-[530px] w-full rounded-xl border border-slate-200 bg-slate-100" title="문서 미리보기" />
               ) : (
                 <div className="flex h-[100px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50">
                   <p className="text-sm font-semibold text-slate-400">훈련생을 선택하면 미리보기가 표시됩니다.</p>

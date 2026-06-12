@@ -67,7 +67,10 @@ export default function ManagerRecruitNewPage() {
         sub="직무지도원이 검색·신청할 모집 공고를 등록합니다."
       />
 
-      <div className="max-w-2xl space-y-5">
+      <div className="max-w-5xl">
+        <div className="grid items-start gap-5 lg:grid-cols-2">
+          {/* 좌측: 기본 정보 + 위치 */}
+          <div className="space-y-5">
         <div className={T.card}>
           <p className="mb-4 text-sm font-black text-slate-900">기본 정보</p>
           <div className="space-y-3">
@@ -118,7 +121,10 @@ export default function ManagerRecruitNewPage() {
           )}
           <input value={form.detailAddress} onChange={(e) => set("detailAddress", e.target.value)} className={`mt-2 w-full ${T.input}`} placeholder="상세주소 (선택)" />
         </div>
+          </div>{/* 좌측 컬럼 끝 */}
 
+          {/* 우측: 근무 조건 */}
+          <div className="space-y-5">
         <div className={T.card}>
           <p className="mb-4 text-sm font-black text-slate-900">근무 조건</p>
           <div className="mb-3 grid grid-cols-2 gap-3">
@@ -140,8 +146,10 @@ export default function ManagerRecruitNewPage() {
             <div><label className={T.label}>담당자 연락처</label><input value={form.contactPhone} onChange={(e) => set("contactPhone", e.target.value)} className={`w-full ${T.input}`} /></div>
           </div>
         </div>
+          </div>{/* 우측 컬럼 끝 */}
+        </div>{/* 2단 그리드 끝 */}
 
-        <div className="flex justify-end gap-2">
+        <div className="mt-5 flex justify-end gap-2">
           <button onClick={() => router.push("/manager/recruit")} className={T.btnSecondary}>취소</button>
           <button onClick={submit} disabled={saving} className={T.btnPrimary}>{saving ? "등록 중…" : "공고 등록"}</button>
         </div>

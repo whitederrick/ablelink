@@ -246,7 +246,7 @@ export default function AdminDashboardPage() {
   const noticeSlice = announcements.slice((noticePage - 1) * PAGE, noticePage * PAGE);
 
   return (
-    <div className="max-w-[1200px] space-y-4">
+    <div className="space-y-4">
       {/* 헤더 */}
       <PageHeader
         title="통합 운영 대시보드"

@@ -299,7 +299,10 @@ function Chip({
       className={[
         "whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold transition",
         active
-          ? "border-sky-500 bg-sky-500 text-white"
+          // 이슈 필터(tone=danger)는 보정대기(급여보류)와 동일한 로즈, 그 외(기간·처리상태)는 검정으로 통일
+          ? tone === "danger"
+            ? "border-rose-400 bg-rose-400 text-white"
+            : "border-slate-950 bg-slate-950 text-white"
           : tone === "danger"
           ? "border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
           : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
@@ -692,41 +695,41 @@ export default function AttendanceInboxClient() {
             </div>
           </div>
 
-          {/* 이슈 필터 (단일) */}
+          {/* 보정대기 건 확인(별도) + 이슈 필터(단일) — 보정대기는 단일선택과 별개로 좌측 분리 */}
           <div className="col-span-12 lg:col-span-6">
-            <label className="mb-1 block text-sm font-semibold text-slate-700">이슈 필터(단일 선택)</label>
-            <div className="flex flex-wrap gap-2">
-              <Chip active={issue === "ALL"} onClick={() => setIssue("ALL")}>
-                전체
-              </Chip>
-              <Chip active={issue === "OUT_OF_RANGE"} onClick={() => setIssue("OUT_OF_RANGE")} tone="danger">
-                기준 범위 이탈
-              </Chip>
-              <Chip active={issue === "TIME_ANOMALY"} onClick={() => setIssue("TIME_ANOMALY")} tone="danger">
-                출퇴근 시간 이상
-              </Chip>
-              <Chip active={issue === "MISSING_CLOCK_IN"} onClick={() => setIssue("MISSING_CLOCK_IN")} tone="danger">
-                출근 기록 누락
-              </Chip>
-              <Chip active={issue === "MISSING_CLOCK_OUT"} onClick={() => setIssue("MISSING_CLOCK_OUT")} tone="danger">
-                퇴근 기록 누락
-              </Chip>
-              <button
-                type="button"
-                onClick={() => setOnlyPayrollPending((v) => !v)}
-                className={cx(
-                  "whitespace-nowrap rounded-full border px-3 py-1 text-xs font-bold transition",
-                  onlyPayrollPending
-                    ? "border-rose-600 bg-rose-600 text-white"
-                    : "border-rose-200 bg-white text-rose-600 hover:bg-rose-50",
-                )}
-              >
-                ⛔ 보정대기(급여보류){payrollPendingCount > 0 ? ` ${payrollPendingCount}` : ""}
-              </button>
+            <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
+              {/* 보정대기 건 확인 — 큰 이슈 사항, 단일선택 이슈 필터와 독립 */}
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">보정대기 건 확인</label>
+                <button
+                  type="button"
+                  onClick={() => setOnlyPayrollPending((v) => !v)}
+                  className={cx(
+                    "whitespace-nowrap rounded-full border px-3 py-1 text-xs font-bold transition",
+                    onlyPayrollPending
+                      ? "border-rose-600 bg-rose-600 text-white"
+                      : "border-rose-200 bg-white text-rose-600 hover:bg-rose-50",
+                  )}
+                >
+                  ⛔ 보정대기(급여보류){payrollPendingCount > 0 ? ` ${payrollPendingCount}` : ""}
+                </button>
+              </div>
+
+              {/* 이슈 필터(단일 선택) */}
+              <div className="min-w-0 flex-1">
+                <label className="mb-1 block text-sm font-semibold text-slate-700">이슈 필터(단일 선택)</label>
+                <div className="flex flex-wrap gap-2">
+                  <Chip active={issue === "ALL"} onClick={() => setIssue("ALL")}>전체</Chip>
+                  <Chip active={issue === "OUT_OF_RANGE"} onClick={() => setIssue("OUT_OF_RANGE")}>기준 범위 이탈</Chip>
+                  <Chip active={issue === "TIME_ANOMALY"} onClick={() => setIssue("TIME_ANOMALY")}>출퇴근 시간 이상</Chip>
+                  <Chip active={issue === "MISSING_CLOCK_IN"} onClick={() => setIssue("MISSING_CLOCK_IN")}>출근 기록 누락</Chip>
+                  <Chip active={issue === "MISSING_CLOCK_OUT"} onClick={() => setIssue("MISSING_CLOCK_OUT")}>퇴근 기록 누락</Chip>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* 처리 상태 (복수) */}
+          {/* 처리 상태 (복수) — 이슈 필터 우측, 기간 조회와 좌측 정렬(6/6) */}
           <div className="col-span-12 lg:col-span-6">
             <label className="mb-1 block text-sm font-semibold text-slate-700">처리 상태(복수 선택)</label>
             <div className="flex flex-wrap gap-2">
@@ -770,7 +773,7 @@ export default function AttendanceInboxClient() {
             </div>
 
             <div className="p-2">
-              <div className="space-y-1 p-2">
+              <div className="space-y-[3px] p-2">
                 {pageItems.length === 0 ? (
                   <div className="rounded-xl border p-6 text-sm text-slate-500">조건에 해당하는 항목이 없습니다.</div>
                 ) : (
@@ -785,7 +788,7 @@ export default function AttendanceInboxClient() {
                         data-item-id={it.id}
                         onClick={() => setSelectedId(it.id)}
                         className={cx(
-                          "w-full rounded-lg border border-slate-100 px-4 py-2 text-left transition",
+                          "w-full rounded-lg border border-slate-100 px-4 py-[5px] text-left transition",
                           active ? "border-sky-300 bg-sky-50 ring-2 ring-sky-200" : "hover:bg-slate-50"
                         )}
                       >
@@ -847,7 +850,7 @@ export default function AttendanceInboxClient() {
 
         {/* Right detail */}
         <div className="col-span-12 lg:col-span-6 xl:col-span-6">
-          <div className="h-full rounded-xl border border-slate-100 bg-white p-5">
+          <div className="flex h-full flex-col rounded-xl border border-slate-100 bg-white p-5">
             {!selected ? (
               <div className="rounded-xl border p-6 text-sm text-slate-500">좌측 목록에서 항목을 선택하세요.</div>
             ) : (
@@ -862,10 +865,22 @@ export default function AttendanceInboxClient() {
 
                   <div className="mt-3 flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="truncate text-lg font-semibold">
-                        {selected.workerName}{" "}
-                        <span className="text-slate-300 font-normal">·</span>{" "}
-                        <span className="font-normal text-slate-700">{selected.siteName}</span>
+                      {/* 직무지도원·현장명 + 상태 뱃지(옆으로 이동) */}
+                      <div className="flex items-center gap-2">
+                        <div className="min-w-0 truncate text-lg font-semibold">
+                          {selected.workerName}{" "}
+                          <span className="text-slate-300 font-normal">·</span>{" "}
+                          <span className="font-normal text-slate-700">{selected.siteName}</span>
+                        </div>
+                        <span className={[
+                          "shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] font-bold text-white",
+                          selected.status === "ADMIN_RESOLVED" ? "bg-emerald-600"
+                            : selected.status === "WORKER_REPLIED" ? "bg-sky-600"
+                            : selected.status === "WORKER_REASON_MISSING" ? "bg-rose-600"
+                            : "bg-slate-600",
+                        ].join(" ")}>
+                          {STATUS_LABEL[selected.status]}
+                        </span>
                       </div>
                       <div className="mt-1 text-sm text-slate-700">{fmtYmdDots(selected.workDate)}</div>
 
@@ -882,16 +897,16 @@ export default function AttendanceInboxClient() {
                       </div>
                     </div>
 
+                    {/* 뱃지 자리 → 사유 등록 요청 버튼 */}
                     <div className="shrink-0">
-                      <div className={[
-                        "whitespace-nowrap rounded-xl px-4 py-1.5 text-xs font-semibold text-white",
-                        selected.status === "ADMIN_RESOLVED" ? "bg-emerald-600"
-                          : selected.status === "WORKER_REPLIED" ? "bg-sky-600"
-                          : selected.status === "WORKER_REASON_MISSING" ? "bg-rose-600"
-                          : "bg-slate-600",
-                      ].join(" ")}>
-                        {STATUS_LABEL[selected.status]}
-                      </div>
+                      {actions?.showRequestReason && (
+                        <button
+                          onClick={actionRequestReason}
+                          className="whitespace-nowrap rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                        >
+                          사유 등록 요청
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -903,37 +918,40 @@ export default function AttendanceInboxClient() {
                   if (selected.lateMinutes != null && selected.lateMinutes >= thr) reasons.push(`지각 ${selected.lateMinutes}분`);
                   if (selected.earlyLeaveMinutes != null && selected.earlyLeaveMinutes >= thr) reasons.push(`조퇴 ${selected.earlyLeaveMinutes}분`);
                   return (
-                  <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
+                  <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       <span className="inline-flex items-center rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">보정대기</span>
                       <span className="text-sm font-bold text-rose-700">
                         급여 산정 보류 — 심한 지각/조퇴({thr}분+){reasons.length ? `: ${reasons.join(" · ")}` : ""}
                       </span>
                     </div>
-                    <p className="mt-2 text-[13px] font-medium text-rose-700/90">
-                      이 날은 표준 출근시각을 출근부에 확정하지 않습니다(출근부에 ‘보정대기’로 표시, 급여 시간 합산 제외).
-                      직무지도원의 <b>출근부 시각 수정요청</b>을 승인하면 보정시각으로 확정되어 급여에 반영됩니다.
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {selected.correctionRequestedAt ? (
-                        <span className="inline-flex items-center rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-bold text-rose-600">
-                          ✓ 보정요청됨 ({new Date(selected.correctionRequestedAt).toLocaleDateString()})
-                        </span>
-                      ) : (
-                        <button
-                          onClick={actionRequestCorrection}
-                          disabled={requestingCorrection}
-                          className="inline-flex items-center rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                    <div className="mt-2 flex items-baseline justify-between gap-4">
+                      <p className="text-[13px] font-medium text-rose-700/90">
+                        해당 일은 출퇴근 시간이 출근부에 등록되지 않습니다.(급여 시간 합산 제외로 해당일 급여 미지급)
+                        <br />
+                        직무지도원의 수정요청을 승인하면, 보정시각으로 확정됩니다.(해당일 급여에 반영)
+                      </p>
+                      <div className="flex shrink-0 flex-col items-stretch gap-1.5">
+                        {selected.correctionRequestedAt ? (
+                          <span className="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-lg border border-rose-200 bg-white px-3 text-[13px] font-bold text-rose-600">
+                            ✓ 보정요청됨 ({new Date(selected.correctionRequestedAt).toLocaleDateString()})
+                          </span>
+                        ) : (
+                          <button
+                            onClick={actionRequestCorrection}
+                            disabled={requestingCorrection}
+                            className="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-lg border border-rose-300 bg-white px-3 text-[13px] font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                          >
+                            {requestingCorrection ? "요청 중…" : "직무지도원에게 시각 보정 요청"}
+                          </button>
+                        )}
+                        <a
+                          href="/manager/attendance-edit-requests"
+                          className="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-lg bg-rose-600 px-3 text-[13px] font-bold text-white hover:bg-rose-700"
                         >
-                          {requestingCorrection ? "요청 중…" : "직무지도원에게 시각 보정 요청"}
-                        </button>
-                      )}
-                      <a
-                        href="/manager/attendance-edit-requests"
-                        className="inline-flex items-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700"
-                      >
-                        출근부 수정요청 검토하기 →
-                      </a>
+                          출근부 수정요청 검토하기 →
+                        </a>
+                      </div>
                     </div>
                   </div>
                   );
@@ -962,11 +980,11 @@ export default function AttendanceInboxClient() {
                   </div>
                 ) : null}
 
-                {/* KPI + 실제 출퇴근 — 반폭 한 줄 배치 */}
-                <div className="mb-4 grid items-start gap-3 sm:grid-cols-2">
+                {/* KPI(좁게) + 실제 출퇴근 결과(넓게) — 높이 동일(stretch) */}
+                <div className="mb-3 grid gap-3 sm:grid-cols-[2fr_3fr]">
                   {/* KPI */}
                   <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
-                    <div className="grid grid-cols-4 gap-2 text-sm">
+                    <div className="grid grid-cols-4 gap-1 text-sm">
                       <div>
                         <div className="text-xs text-slate-400">출근</div>
                         <div className="font-semibold">{fmtTime(selected.clockInAt)}</div>
@@ -993,56 +1011,48 @@ export default function AttendanceInboxClient() {
                     const lateMin = expMin != null && actMin != null ? actMin - expMin : null;
                     return (
                       <div className="rounded-xl border border-sky-100 bg-sky-50 p-3">
-                        <div className="text-xs font-black text-sky-700">실제 출퇴근(버튼)</div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-slate-700">
-                          <span>출근 {fmtTime(selected.actualClockInAt)}</span>
-                          <span>퇴근 {fmtTime(selected.actualClockOutAt)}</span>
-                          {lateMin != null && lateMin >= 15 && (
-                            <span className="rounded bg-violet-50 px-1.5 py-0.5 text-xs font-black text-violet-600">{lateMin}분 지각</span>
-                          )}
-                          {lateMin != null && lateMin < 15 && (
-                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-black text-emerald-700">정시 출근</span>
-                          )}
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <div className="text-xs font-black text-sky-700">실제 출퇴근 시간 등록 결과</div>
+                          <span className="text-[11px] font-medium text-slate-400">출근부는 근무형태 표준시각으로 작성됩니다</span>
                         </div>
-                        <p className="mt-1 text-[11px] font-medium text-slate-400">출근부는 근무형태 표준시각({selected.expectedStartAt ?? "-"})으로 작성됩니다.</p>
+                        {lateMin != null && (
+                          <div className="mt-1.5">
+                            {lateMin >= 15 ? (
+                              <span className="rounded bg-violet-50 px-1.5 py-0.5 text-xs font-black text-violet-600">{lateMin}분 지각</span>
+                            ) : (
+                              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-black text-emerald-700">정시 출근</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })() : null}
                 </div>
 
-                {/* Actions */}
-                <div className="mb-4 flex flex-wrap gap-2">
-                  {actions?.showRequestReason ? (
+                {/* Actions (사유 등록 요청은 상단 헤더로 이동) — 없을 땐 렌더 안 함(빈 여백 제거) */}
+                {actions?.showSupplementAndResolve && (
+                  <div className="mb-3 flex flex-wrap gap-2">
                     <button
-                      onClick={actionRequestReason}
+                      onClick={actionRequestSupplement}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      보완 요청
+                    </button>
+                    <button
+                      onClick={actionResolve}
                       className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
                     >
-                      사유 등록 요청
+                      처리 완료
                     </button>
-                  ) : null}
+                  </div>
+                )}
 
-                  {actions?.showSupplementAndResolve ? (
-                    <>
-                      <button
-                        onClick={actionRequestSupplement}
-                        className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        보완 요청
-                      </button>
-                      <button
-                        onClick={actionResolve}
-                        className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-                      >
-                        처리 완료
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-
-                {/* Timeline */}
-                <div className="mb-4">
+                {/* 타임라인 + 운영 메모 — 좌우 절반씩 한 줄 */}
+                <div className="grid min-h-0 flex-1 gap-4 sm:grid-cols-2">
+                {/* Timeline — 항목이 많으면 이 영역만 스크롤 */}
+                <div className="flex min-h-0 flex-col">
                   <SectionTitle title="타임 라인" note="사유 요청/사유 등록/종결 처리 흐름" />
-                  <div className="mt-2 max-h-64 space-y-2 overflow-y-auto pr-1">
+                  <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                     {selected.timeline.length === 0 ? (
                       <div className="rounded-xl border p-4 text-sm text-slate-500">타임라인 항목이 없습니다.</div>
                     ) : (
@@ -1060,7 +1070,7 @@ export default function AttendanceInboxClient() {
                 </div>
 
                 {/* Memo */}
-                <div>
+                <div className="flex min-h-0 flex-col">
                   <SectionTitle title="운영 메모" note="운영 관점에서 확인 사항/조치 내역을 기록합니다." />
                   <div className="mt-2 flex items-start gap-2">
                     <textarea
@@ -1080,6 +1090,7 @@ export default function AttendanceInboxClient() {
                     </button>
                   </div>
                   <div className="mt-1 text-xs text-slate-400">마지막 갱신: {new Date(selected.updatedAt).toLocaleString()}</div>
+                </div>
                 </div>
               </>
             )}
