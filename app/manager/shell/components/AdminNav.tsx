@@ -36,8 +36,8 @@ const groups: NavGroup[] = [
     items: [
       { href: "/manager/sites",     label: "현장(Site) 관리" },
       { href: "/manager/workers",   label: "직무지도원 관리" },
-      { href: "/manager/trainees",  label: "훈련생 현황" },
-      { href: "/manager/contracts", label: "근로계약서", plan: "PRO" },
+      { href: "/manager/trainees",  label: "훈련생 현황 관리" },
+      { href: "/manager/contracts", label: "근로계약서 관리", plan: "PRO" },
       { href: "/manager/surveys",   label: "직무지도원 만족도 평가", plan: "PRO" },
     ],
   },
@@ -47,7 +47,7 @@ const groups: NavGroup[] = [
       { href: "/manager/attendances",              label: "근태 현황" },
       { href: "/manager/calendar",                 label: "근태 캘린더" },
       { href: "/manager/inbox/attendance",         label: "근태 이슈 확인" },
-      { href: "/manager/attendance-edit-requests", label: "출근부 수정 요청" },
+      { href: "/manager/attendance-edit-requests", label: "출근부 수정 요청 관리" },
       { href: "/manager/holiday-requests",         label: "커스텀 휴무일 관리" },
       { href: "/manager/logs",                     label: "훈련 일지 열람" },
     ],
@@ -59,7 +59,7 @@ const groups: NavGroup[] = [
     title: "문서",
     items: [
       { href: "/manager/documents", label: "일지 관리", plan: "STARTER" }, // 워크플로 메인(조회·확정·서명·발송)
-      { href: "/manager/gov-submissions", label: "공단 제출 내역", plan: "STARTER" }, // 공단 제출완료 보관·조회
+      { href: "/manager/gov-submissions", label: "공단 제출 내역 관리", plan: "STARTER" }, // 공단 제출완료 보관·조회
       { href: "/manager/docs",      label: "문서 조회", plan: "STARTER" },  // 매니저 직접 PDF 조회(보조)
     ],
   },
@@ -74,7 +74,7 @@ const groups: NavGroup[] = [
   {
     title: "직무지도 매칭",
     items: [
-      { href: "/manager/recruit", label: "직무지도 공고",  plan: "PRO" },
+      { href: "/manager/recruit", label: "직무지도 모집 공고",  plan: "PRO" },
       { href: "/manager/talent",  label: "인재풀 검색",    plan: "PRO" },
     ],
   },
@@ -88,7 +88,7 @@ const groups: NavGroup[] = [
     title: "구독/지원",
     items: [
       { href: "/manager/settings",     label: "사업주 정보 관리" },
-      { href: "/manager/signature",    label: "관리자 서명" },
+      { href: "/manager/signature",    label: "관리자 서명 관리" },
       { href: "/manager/subscription", label: "구독 관리" },
       { href: "/manager/support",      label: "운영자 문의" },
     ],

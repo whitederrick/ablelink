@@ -104,7 +104,7 @@ export default function TraineesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="훈련생 관리"
+        title="훈련생 현황 관리"
         sub={`전체 ${trainees.length}명 훈련생`}
         actions={
           <button onClick={openCreate} className={`${T.btnPrimary} flex items-center gap-1.5`}>

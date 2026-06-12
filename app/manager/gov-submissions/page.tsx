@@ -99,7 +99,7 @@ export default function GovSubmissionsPage() {
 
   return (
     <div>
-      <PageHeader title="공단 제출 내역" sub="장애인고용공단에 제출 완료된 문서입니다. 공단이 재제출을 요구하면 ‘재제출 요구로 표시’로 일지 관리에 되돌릴 수 있습니다." />
+      <PageHeader title="공단 제출 내역 관리" sub="장애인고용공단에 제출 완료된 문서입니다. 공단이 재제출을 요구하면 ‘재제출 요구로 표시’로 일지 관리에 되돌릴 수 있습니다." />
 
       <div className="mb-4">
         <ListToolbar
