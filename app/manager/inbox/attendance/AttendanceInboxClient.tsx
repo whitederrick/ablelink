@@ -760,7 +760,7 @@ export default function AttendanceInboxClient() {
       <div className="grid grid-cols-12 gap-4">
         {/* Left list */}
         <div className="col-span-12 lg:col-span-6 xl:col-span-6">
-          <div className="rounded-xl border border-slate-100 bg-white">
+          <div className="h-full rounded-xl border border-slate-100 bg-white">
             <div className="flex items-center justify-between border-b border-gray-50 px-4 py-3">
               <div className="flex items-baseline gap-2">
                 <div className="text-sm font-semibold text-slate-800">목록 조회</div>
@@ -785,7 +785,7 @@ export default function AttendanceInboxClient() {
                         data-item-id={it.id}
                         onClick={() => setSelectedId(it.id)}
                         className={cx(
-                          "w-full rounded-lg border border-slate-100 px-4 py-3 text-left transition",
+                          "w-full rounded-lg border border-slate-100 px-4 py-2 text-left transition",
                           active ? "border-sky-300 bg-sky-50 ring-2 ring-sky-200" : "hover:bg-slate-50"
                         )}
                       >
@@ -847,7 +847,7 @@ export default function AttendanceInboxClient() {
 
         {/* Right detail */}
         <div className="col-span-12 lg:col-span-6 xl:col-span-6">
-          <div className="rounded-xl border border-slate-100 bg-white p-5">
+          <div className="h-full rounded-xl border border-slate-100 bg-white p-5">
             {!selected ? (
               <div className="rounded-xl border p-6 text-sm text-slate-500">좌측 목록에서 항목을 선택하세요.</div>
             ) : (
@@ -966,7 +966,7 @@ export default function AttendanceInboxClient() {
                 <div className="mb-4 grid items-start gap-3 sm:grid-cols-2">
                   {/* KPI */}
                   <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
-                    <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="grid grid-cols-4 gap-2 text-sm">
                       <div>
                         <div className="text-xs text-slate-400">출근</div>
                         <div className="font-semibold">{fmtTime(selected.clockInAt)}</div>
