@@ -102,19 +102,20 @@ function ActionRow({ label, count, urgent, onCountClick, showPopup, popupItems, 
   );
 }
 
-function Section({ title, sub, count, onMore, children }: {
-  title: string; sub?: string; count?: number;
+function Section({ title, sub, titleRight, count, onMore, children }: {
+  title: string; sub?: string; titleRight?: React.ReactNode; count?: number;
   onMore?: () => void; children: React.ReactNode;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="mb-3 flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h2 className="text-sm font-black text-slate-900">{title}</h2>
             {count !== undefined && count > 0 && (
               <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-black text-white">{count}</span>
             )}
+            {titleRight}
           </div>
           {sub && <p className="mt-0.5 text-[11px] font-semibold text-slate-400">{sub}</p>}
         </div>
@@ -392,7 +393,11 @@ export default function AdminDashboardPage() {
           {/* 오늘 출근 현황 */}
           <Section
             title="오늘 출근 현황"
-            sub={`근무 ${s?.todayWorking ?? 0}명 / 종료 ${s?.todayDone ?? 0}명`}
+            titleRight={
+              <span className="text-[11px] font-semibold text-slate-400">
+                근무 {s?.todayWorking ?? 0}명 / 종료 {s?.todayDone ?? 0}명
+              </span>
+            }
             onMore={() => router.push("/manager/attendances")}
           >
             {todayAll.length === 0 ? <EmptyRow text="오늘 출근 기록 없음" /> : (
