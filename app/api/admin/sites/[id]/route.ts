@@ -193,6 +193,11 @@ export async function PATCH(
       data.allowanceRange = allowanceRange;
     }
 
+    // 활성/비활성 전환(재활성화 포함)
+    if (body.isActive !== undefined) {
+      data.isActive = body.isActive === true || body.isActive === "true";
+    }
+
     // ✅ 담당 관리자(Manager 로그인) 지정/이관/해제
     //    null/빈값 = 미지정(공용)으로 해제, 값 있으면 같은 에이전시 관리자로 지정/이관
     if (body.ownerManagerId !== undefined) {
@@ -269,7 +274,8 @@ export async function DELETE(
 
     if (session.kind === "manager") assertAgencyAccess(session.agencyId, existing.agencyId);
 
-    await prisma.site.delete({ where: { id: siteId } });
+    // 하드 삭제 대신 비활성화(소프트 삭제) — 배정·문서 등 연관 데이터가 있어도 안전.
+    await prisma.site.update({ where: { id: siteId }, data: { isActive: false } });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     if (e instanceof Response) return e;

@@ -155,7 +155,7 @@ export default function ManagerLogsPage() {
               {pageItems.map(l => (
                 <tr key={l.id} onClick={() => setDetail(l)} className={`${T.trBase} cursor-pointer hover:bg-slate-50`}>
                   <td className={`${T.td} whitespace-nowrap`}>{l.workDate.slice(5)} ({DOW[new Date(l.workDate + "T00:00:00").getDay()]})</td>
-                  <td className={`${T.td} font-semibold text-slate-900`}><div className="max-w-[130px] truncate">{l.workerName}</div></td>
+                  <td className={`${T.td} font-semibold text-slate-900 whitespace-nowrap`}>{l.workerName}</td>
                   <td className={T.td}><div className="max-w-[120px] truncate">{l.traineeName}</div></td>
                   <td className={T.td}><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[13px] font-semibold text-slate-600">{TYPE_LABELS[l.trainingType] ?? l.trainingType}</span></td>
                   <td className={T.td}><StatusBadge status={l.isCompleted ? "confirmed" : "pending"} map={LOG_BADGE} /></td>

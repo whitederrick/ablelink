@@ -515,7 +515,7 @@ export default function PayrollPage() {
                 <tbody>
                   {cPageItems.map(c => (
                     <tr key={c.id} className={T.trBase}>
-                      <td className={T.td}><div className="max-w-[180px] truncate">{c.workerName} <span className="text-[13px] text-slate-500">({maskLoginId(c.loginId)})</span></div></td>
+                      <td className={`${T.td} whitespace-nowrap`}>{c.workerName} <span className="text-[13px] text-slate-500">({maskLoginId(c.loginId)})</span></td>
                       <td className={T.td}>
                         <div className="flex flex-wrap gap-1">
                           <span className={`${T.badge} ${c.workerType === "INTERNAL" ? "bg-amber-50 text-amber-600" : "bg-slate-50 text-slate-600"}`}>

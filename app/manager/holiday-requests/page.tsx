@@ -221,7 +221,7 @@ export default function HolidayRequestsPage() {
               {pageItems.map(row => (
                 <tr key={row.id} className={T.trBase}>
                   <td className={T.td + " tabular-nums"}>{row.date}</td>
-                  <td className={T.td}><div className="max-w-[130px] truncate">{row.workerName}</div></td>
+                  <td className={`${T.td} whitespace-nowrap`}>{row.workerName}</td>
                   <td className={T.td}><div className="max-w-[150px] truncate">{row.siteName}</div></td>
                   <td className={T.td}><div className="max-w-[180px] truncate">{row.reason ?? "-"}</div></td>
                   <td className={T.td}>

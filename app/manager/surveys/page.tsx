@@ -184,7 +184,7 @@ export default function ManagerSurveysPage() {
             : pageItems.map(s => {
               return (
                 <tr key={s.id} className={T.trBase}>
-                  <td className={T.td}><div className="max-w-[160px] truncate">{workerLabel(s.workerName, s.workerLoginId)}</div></td>
+                  <td className={`${T.td} whitespace-nowrap`}>{workerLabel(s.workerName, s.workerLoginId)}</td>
                   <td className={T.td}><div className="max-w-[150px] truncate">{s.siteName || "-"}</div></td>
                   <td className={T.td}><div className="max-w-[110px] truncate">{s.recipientName || "-"}</div></td>
                   <td className={T.td}>{s.recipientPhone || "-"}</td>

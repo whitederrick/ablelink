@@ -18,11 +18,17 @@ type AddrItem = { addressName: string; x: string; y: string };
 const RANGE_PRESETS = [50, 100, 150, 200, 300, 500];
 
 export default function SiteDetailModal({ siteId, onClose, onSaved }: {
-  siteId: string; onClose: () => void; onSaved: () => void;
+  siteId?: string | null; onClose: () => void; onSaved: () => void;
 }) {
-  const [loading, setLoading] = useState(true);
+  const isCreate = !siteId;
+  const [loading, setLoading] = useState(!isCreate);
   const [saving, setSaving] = useState(false);
   const [item, setItem] = useState<SiteDetail | null>(null);
+
+  // 신규 등록 시 운영자(ADMIN)는 기관 선택 필요 (매니저는 본인 기관 자동)
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [agencies, setAgencies] = useState<{ id: string; name: string }[]>([]);
+  const [agencyId, setAgencyId] = useState("");
 
   const [companyName, setCompanyName] = useState("");
   const [address, setAddress] = useState("");
@@ -50,7 +56,27 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
       .catch(() => {});
   }, []);
 
+  // 신규 등록: 세션 확인 → 운영자면 기관 목록 로드
   useEffect(() => {
+    if (!isCreate) return;
+    (async () => {
+      try {
+        const me = await fetch("/api/manager/auth/me", { cache: "no-store" }).then(r => r.json()).catch(() => null);
+        const admin = me?.success === true && me?.session?.role === "ADMIN";
+        setIsAdmin(admin);
+        if (admin) {
+          const d = await fetch("/api/admin/sites/options", { cache: "no-store" }).then(r => r.json()).catch(() => null);
+          const a = (d?.options?.agencies || []) as { id: string; name: string }[];
+          setAgencies(a);
+          if (a.length > 0) setAgencyId(String(a[0].id));
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCreate]);
+
+  useEffect(() => {
+    if (!siteId) { setLoading(false); return; }  // 신규 등록 모드는 조회 생략
     let alive = true;
     (async () => {
       setLoading(true);
@@ -104,30 +130,33 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
 
   async function onSave() {
     if (!companyName.trim()) return alert("현장(사업체)명을 입력하세요.");
-    if (!address.trim()) return alert("주소를 입력하세요.");
-    if (!gpsLat.trim() || !gpsLon.trim()) return alert("주소 검색·지도로 위치를 지정하세요.");
+    if (!address.trim() || !gpsLat.trim() || !gpsLon.trim()) return alert("주소 검색·지도로 위치를 지정하세요.");
     if (!businessContactName.trim()) return alert("사업체 담당자 성명을 입력하세요.");
     if (!businessContactPhone.trim()) return alert("사업체 담당자 연락처를 입력하세요.");
     if (isNaN(allowanceRange) || allowanceRange < 50 || allowanceRange > 1000) return alert("GPS 허용 범위는 50~1000m 사이로 설정하세요.");
+    if (isCreate && isAdmin && !agencyId) return alert("기관을 선택하세요.");
     setSaving(true);
     try {
-      const res = await fetch(`/api/admin/sites/${siteId}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyName: companyName.trim(), address: address.trim(),
-          detailAddress: detailAddress.trim() || null,
-          gpsLat: Number(gpsLat), gpsLon: Number(gpsLon), allowanceRange,
-          businessContactName: businessContactName.trim(),
-          businessContactPhone: businessContactPhone.trim(),
-          businessContactEmail: businessContactEmail.trim() || null,
-          ownerManagerId: ownerManagerId || null,
-        }),
+      const payload: any = {
+        companyName: companyName.trim(), address: address.trim(),
+        detailAddress: detailAddress.trim() || null,
+        gpsLat: Number(gpsLat), gpsLon: Number(gpsLon), allowanceRange,
+        businessContactName: businessContactName.trim(),
+        businessContactPhone: businessContactPhone.trim(),
+        businessContactEmail: businessContactEmail.trim() || null,
+        ownerManagerId: ownerManagerId || "",
+      };
+      if (isCreate && isAdmin) payload.agencyId = agencyId;
+      const res = await fetch(isCreate ? "/api/admin/sites" : `/api/admin/sites/${siteId}`, {
+        method: isCreate ? "POST" : "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
-      alert("저장되었습니다.");
+      alert(isCreate ? "등록되었습니다." : "저장되었습니다.");
       onSaved();
-    } catch (e: any) { alert(e.message || "저장에 실패했습니다."); }
+    } catch (e: any) { alert(e.message || (isCreate ? "등록에 실패했습니다." : "저장에 실패했습니다.")); }
     finally { setSaving(false); }
   }
 
@@ -142,6 +171,19 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
     } catch { alert("처리에 실패했습니다."); }
   }
 
+  async function onReactivate() {
+    try {
+      const res = await fetch(`/api/admin/sites/${siteId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: true }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      alert("활성화되었습니다.");
+      onSaved();
+    } catch { alert("처리에 실패했습니다."); }
+  }
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={onClose}>
@@ -149,20 +191,28 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
           {/* 헤더 */}
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-black text-slate-900">직무지도 현장(사업체) 상세</h2>
+              <h2 className="text-lg font-black text-slate-900">{isCreate ? "직무지도 현장(사업체) 신규 등록" : "직무지도 현장(사업체) 상세"}</h2>
               {item && (
                 <p className="mt-0.5 text-[13px] font-semibold text-slate-400">
-                  ID {item.id} · 기관 {item.agencyName} · <span className={item.isActive ? "font-bold text-emerald-600" : "font-bold text-rose-600"}>{item.isActive ? "활성" : "비활성"}</span>
+                  ID {item.id} · 기관 {item.agencyName} · <span className={`${T.badge} ${item.isActive ? "bg-sky-50 text-sky-600" : "bg-rose-50 text-rose-600"}`}>{item.isActive ? "활성" : "비활성"}</span>
                 </p>
               )}
             </div>
             <button onClick={onClose} className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"><X className="h-5 w-5" /></button>
           </div>
 
-          {loading || !item ? (
+          {!isCreate && (loading || !item) ? (
             <div className="flex h-60 items-center justify-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" /></div>
           ) : (
             <>
+              {isCreate && isAdmin && (
+                <div className={`${T.card} mb-4`}>
+                  <label className={T.label}>기관 *</label>
+                  <select value={agencyId} onChange={e => setAgencyId(e.target.value)} className={`w-full ${T.select}`}>
+                    {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="grid gap-4 lg:grid-cols-2">
                 {/* 기본 정보 */}
                 <div className={T.card}>
@@ -202,13 +252,16 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                       <div className="flex items-center gap-2">
                         <input value={gpsLat} readOnly className={`w-0 min-w-0 flex-1 ${T.input} bg-slate-50`} placeholder="위도" />
                         <input value={gpsLon} readOnly className={`w-0 min-w-0 flex-1 ${T.input} bg-slate-50`} placeholder="경도" />
-                        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
-                          <span className="text-slate-400">기준점</span>
-                          <span className={item.basePointConfirmed ? "font-bold text-emerald-600" : "font-bold text-amber-600"}>{item.basePointConfirmed ? "확정" : "미확정"}</span>
-                        </span>
+                        {item && (
+                          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
+                            <span className="text-slate-400">기준점</span>
+                            <span className={item.basePointConfirmed ? "font-bold text-emerald-600" : "font-bold text-amber-600"}>{item.basePointConfirmed ? "확정" : "미확정"}</span>
+                          </span>
+                        )}
                       </div>
                       <button onClick={() => { if (gpsLat && gpsLon) setMapPick({ lat: Number(gpsLat), lon: Number(gpsLon), address }); }}
                         className="mt-2 text-xs font-bold text-sky-600 hover:underline">지도에서 위치 다시 보기 · 조정</button>
+                      <p className="mt-1 text-[11px] font-semibold text-rose-600">기준점의 최종 확정은 직무지도원이 해당 현장에서 실제 위치로 검증할 때 진행됩니다.</p>
                     </div>
                   </div>
                 </div>
@@ -226,10 +279,10 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                   </div>
 
                   <div className={T.card}>
-                    <h3 className="mb-1 text-sm font-black text-slate-900">업무 이관 담당자</h3>
-                    <p className="mb-3 text-xs font-semibold text-slate-400">이 현장 업무를 맡는(이관받는) 우리 쪽 담당자. 기본값은 미지정(공용)입니다.</p>
+                    <h3 className="mb-1 text-sm font-black text-slate-900">위탁기관 담당자 지정</h3>
+                    <p className="mb-3 text-xs font-semibold text-slate-400">해당 직무지도 현장(사업체)를 담당하는 담당자를 지정합니다. 담당자 미지정인 경우 담당자 지정이 필요합니다.</p>
                     <select value={ownerManagerId} onChange={e => setOwnerManagerId(e.target.value)} className={`w-full ${T.select}`}>
-                      <option value="">미지정 (공용)</option>
+                      <option value="">담당자 미지정(지정 필요)</option>
                       {ownerManagers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
                   </div>
@@ -256,10 +309,14 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
 
               {/* 액션 */}
               <div className="mt-5 flex items-center gap-2">
-                <button onClick={onDelete} className={T.btnDanger}>해당 직무지도 현장(사업체) 비활성화</button>
+                {!isCreate && item && (item.isActive ? (
+                  <button onClick={onDelete} className={T.btnDanger}>해당 직무지도 현장(사업체) 비활성화</button>
+                ) : (
+                  <button onClick={onReactivate} className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-black text-sky-600 transition active:scale-95">해당 직무지도 현장(사업체) 활성화</button>
+                ))}
                 <div className="ml-auto flex gap-2">
                   <button onClick={onClose} className={T.btnSecondary}>닫기</button>
-                  <button onClick={onSave} disabled={saving} className={T.btnPrimary}>{saving ? "저장 중..." : "변경사항 저장"}</button>
+                  <button onClick={onSave} disabled={saving} className={T.btnPrimary}>{saving ? (isCreate ? "등록 중..." : "저장 중...") : (isCreate ? "등록" : "변경사항 저장")}</button>
                 </div>
               </div>
             </>

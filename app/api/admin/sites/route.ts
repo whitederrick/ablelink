@@ -67,9 +67,12 @@ export async function GET(req: NextRequest) {
     const page = parseIntSafe(searchParams.get("page"), 1);
     const pageSize = Math.min(parseIntSafe(searchParams.get("pageSize"), 20), 100);
 
+    // isActive: 미지정→활성만(기존 동작 유지), "all"→전체, "true/false"→해당 상태만
     const isActiveParam = searchParams.get("isActive");
-    const isActive =
-      isActiveParam == null ? true : isActiveParam === "true" || isActiveParam === "1";
+    const isActive: boolean | undefined =
+      isActiveParam === "all" ? undefined
+      : isActiveParam == null ? true
+      : isActiveParam === "true" || isActiveParam === "1";
 
     // manager: 본인 agency 강제 / admin(운영자): ?agencyId 선택(없으면 전체)
     let agencyId: bigint | undefined;
@@ -184,6 +187,12 @@ export async function POST(req: NextRequest) {
     const lonStr = String(gpsLonRaw ?? "").trim();
     if (!latStr || !lonStr) throw new Error("VALIDATION:gpsLatLon");
 
+    // GPS 허용 범위(선택) — 미지정 시 스키마 기본값
+    const allowanceRange = body.allowanceRange == null ? undefined : Number(body.allowanceRange);
+    if (allowanceRange !== undefined && (isNaN(allowanceRange) || allowanceRange < 50 || allowanceRange > 1000)) {
+      throw new Error("VALIDATION:allowanceRange (50~1000m)");
+    }
+
     // manager: 본인 agency / admin(운영자): body.agencyId 지정 필수
     const agencyId = resolveScopeAgencyId(session, body.agencyId);
 
@@ -196,11 +205,16 @@ export async function POST(req: NextRequest) {
       }, { status: 403 });
     }
 
-    // ✅ 담당 관리자(Manager 로그인): 생성한 관리자가 자동 담당. 운영자(admin)는 body.ownerManagerId 선택(없으면 미지정).
+    // ✅ 위탁기관 담당자 지정.
+    //  - body.ownerManagerId 미전송(undefined): 매니저는 생성자 본인(기존 동작), 운영자는 미지정.
+    //  - 빈 문자열: 명시적 미지정.
+    //  - 값 있음: 같은 에이전시 관리자로 지정.
     let ownerManagerId: bigint | null = null;
-    if (session.kind === "manager") {
-      ownerManagerId = session.managerId;
-    } else if (body.ownerManagerId != null && String(body.ownerManagerId).trim() !== "") {
+    if (body.ownerManagerId === undefined) {
+      ownerManagerId = session.kind === "manager" ? session.managerId : null;
+    } else if (String(body.ownerManagerId).trim() === "") {
+      ownerManagerId = null;
+    } else {
       const oid = parseBigInt(body.ownerManagerId);
       if (!oid) throw new Error("VALIDATION:ownerManagerId");
       const m = await prisma.manager.findUnique({ where: { id: oid }, select: { agencyId: true } });
@@ -221,6 +235,7 @@ export async function POST(req: NextRequest) {
         businessContactPhone,
         businessContactEmail,
         requiredProfession,
+        ...(allowanceRange !== undefined ? { allowanceRange } : {}),
       },
       select: {
         id: true,

@@ -744,7 +744,7 @@ export default function AdminContractsPage() {
             : pageItems.map(c => {
               return (
                 <tr key={c.id} className={T.trBase}>
-                  <td className={T.td}><div className="max-w-[160px] truncate">{workerLabel(c.workerName, c.loginId)}</div></td>
+                  <td className={`${T.td} whitespace-nowrap`}>{workerLabel(c.workerName, c.loginId)}</td>
                   <td className={T.td}>{c.userPhone || "-"}</td>
                   <td className={`${T.td} whitespace-nowrap`}>{c.contractStart?.slice(0, 10)} ~ {c.contractEnd?.slice(0, 10)}</td>
                   <td className={T.td}><div className="max-w-[200px] truncate">{c.workLocation || c.siteName || <span className="text-slate-400">미지정</span>}</div></td>

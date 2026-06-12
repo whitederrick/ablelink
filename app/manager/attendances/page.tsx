@@ -326,7 +326,7 @@ export default function AttendancesPage() {
               {pageItems.map(row => (
                 <tr key={row.id} className={T.trBase}>
                   <td className={T.td}>{row.workDate}</td>
-                  <td className={T.td}><div className="max-w-[160px] truncate">{row.user ? workerLabel(row.user.workerName, row.user.loginId) : "-"}</div></td>
+                  <td className={`${T.td} whitespace-nowrap`}>{row.user ? workerLabel(row.user.workerName, row.user.loginId) : "-"}</td>
                   <td className={T.td}>{row.user?.phoneNumber || "-"}</td>
                   <td className={T.td}><div className="max-w-[150px] truncate">{row.site?.companyName || "-"}</div></td>
                   <td className={T.td}>

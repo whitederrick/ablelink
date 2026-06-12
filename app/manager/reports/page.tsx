@@ -195,7 +195,7 @@ export default function TraineeReportPage() {
                     <StatusBadge status={row.status} map={STATUS_BADGE} />
                   </td>
                   <td className={`${T.td} text-[15px] font-semibold text-slate-800`}><div className="max-w-[150px] truncate">{row.siteName}</div></td>
-                  <td className={`${T.td} text-[15px] font-semibold text-slate-800`}><div className="max-w-[130px] truncate">{row.workerName}</div></td>
+                  <td className={`${T.td} text-[15px] font-semibold text-slate-800 whitespace-nowrap`}>{row.workerName}</td>
                   <td className={`${T.td} font-black`}>
                     {row.totalWorkDays}일
                   </td>

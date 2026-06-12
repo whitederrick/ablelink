@@ -153,7 +153,7 @@ export default function GovSubmissionsPage() {
                     <span className="font-semibold text-slate-900">{item.docLabel}</span>
                     {item.traineeName && <span className="text-[13px] text-slate-500"> · {item.traineeName}</span>}
                   </td>
-                  <td className={T.td}><div className="max-w-[160px] truncate">{workerLabel(item.workerName, item.workerLoginId)}</div></td>
+                  <td className={`${T.td} whitespace-nowrap`}>{workerLabel(item.workerName, item.workerLoginId)}</td>
                   <td className={T.td}><div className="max-w-[150px] truncate">{item.siteName}</div></td>
                   <td className={`${T.td} whitespace-nowrap text-[13px] text-slate-500`}>{item.periodStart}~{item.periodEnd}</td>
                   <td className={`${T.td} whitespace-nowrap text-[13px] text-slate-600`}>{item.govSubmittedAt ? item.govSubmittedAt.slice(0, 10) : "-"}</td>

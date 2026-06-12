@@ -158,7 +158,7 @@ export default function AttendanceEditRequestsPage() {
                       onClick={() => { setSelectedId(req.id); setAdminNote(""); }}
                       className={`${T.trBase} cursor-pointer hover:bg-slate-50 ${selectedId === req.id ? "bg-slate-100" : ""}`}>
                       <td className={T.td}><StatusBadge status={req.status} map={EDITREQ_BADGE} /></td>
-                      <td className={`${T.td} font-semibold text-slate-900`}><div className="max-w-[90px] truncate">{req.workerName}</div></td>
+                      <td className={`${T.td} font-semibold text-slate-900 whitespace-nowrap`}>{req.workerName}</td>
                       <td className={`${T.td} max-w-[120px]`}><div className="truncate">{req.siteName}</div></td>
                       <td className={`${T.td} whitespace-nowrap`}>{req.workDate.slice(5)}({dowLabel(req.workDate)})</td>
                       <td className={`${T.td} whitespace-nowrap`}>{req.createdAt.slice(2, 10)}</td>

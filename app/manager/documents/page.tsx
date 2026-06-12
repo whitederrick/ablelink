@@ -328,7 +328,7 @@ export default function ManagerDocumentsHub() {
                       <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[12px] font-black text-amber-700">v{item.versionNo}</span>
                     )}
                   </td>
-                  <td className={T.td}><div className="max-w-[160px] truncate">{workerLabel(item.workerName, item.workerLoginId)}</div></td>
+                  <td className={`${T.td} whitespace-nowrap`}>{workerLabel(item.workerName, item.workerLoginId)}</td>
                   <td className={T.td}><div className="max-w-[150px] truncate">{item.siteName}</div></td>
                   <td className={`${T.td} whitespace-nowrap text-[13px] text-slate-500`}>{item.periodStart}~{item.periodEnd}</td>
                   <td className={T.td}>

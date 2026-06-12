@@ -147,7 +147,7 @@ export default function AddressMapPicker({
             onClick={() => onConfirm(pos.lat, pos.lon, addr)}
             className="min-h-11 flex-1 rounded-xl bg-slate-950 text-sm font-black text-white transition active:scale-[0.97] disabled:opacity-50"
           >
-            이 위치로 확정
+            이 위치로 지정
           </button>
         </div>
       </div>

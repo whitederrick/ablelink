@@ -674,7 +674,7 @@ export default function WorkersPage() {
                 <tr key={c.id}
                   className={`${T.trBase} ${c.activeAssignment ? "cursor-pointer hover:bg-slate-50" : ""}`}
                   onClick={() => c.activeAssignment && openEdit(c)}>
-                  <td className={T.td}><div className="max-w-[160px] truncate"><span className="font-semibold text-sky-600">{workerLabel(c.workerName, c.loginId)}</span></div></td>
+                  <td className={`${T.td} whitespace-nowrap`}><span className="font-semibold text-sky-600">{workerLabel(c.workerName, c.loginId)}</span></td>
                   <td className={T.td}>{c.phoneNumber}</td>
                   <td className={T.td}>
                     <div className="max-w-[150px] truncate">
@@ -701,7 +701,7 @@ export default function WorkersPage() {
                   <td className={T.td} onClick={e => e.stopPropagation()}>
                     <button
                       onClick={() => setInfoEditTarget(c)}
-                      className="inline-flex h-7 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50"
+                      className="inline-flex h-7 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 transition hover:border-slate-800 hover:bg-slate-800 hover:text-white"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                       수정
