@@ -216,10 +216,10 @@ export async function POST(request: NextRequest) {
         );
       }
       await sendEmailWithPdf({
-        from: process.env.EMAIL_FROM || "AbleLink <noreply@able-link.co.kr>",
+        from: process.env.EMAIL_FROM || "Able-Link <noreply@able-link.co.kr>",
         to: toEmail,
-        subject: `[AbleLink] ${DOC_LABELS[docType] || docType} - ${site.companyName} (${start} ~ ${end}) [서명완료]`,
-        body: `안녕하세요.\n\n${site.companyName} 직무지도 ${DOC_LABELS[docType] || docType}를 첨부합니다.\n\n■ 직무지도원: ${user?.workerName || ""}\n■ 기간: ${start} ~ ${end}\n■ 서명: ${admin.displayName || "에이전시 담당자"}\n\n감사합니다.\nAbleLink`,
+        subject: `[Able-Link] ${DOC_LABELS[docType] || docType} - ${site.companyName} (${start} ~ ${end}) [서명완료]`,
+        body: `안녕하세요.\n\n${site.companyName} 직무지도 ${DOC_LABELS[docType] || docType}를 첨부합니다.\n\n■ 직무지도원: ${user?.workerName || ""}\n■ 기간: ${start} ~ ${end}\n■ 서명: ${admin.displayName || "에이전시 담당자"}\n\n감사합니다.\nAble-Link`,
         pdfBuffer,
         fileName,
       });

@@ -87,7 +87,7 @@ export default function AdminTopbar({
       {/* 좌측: 소속 기관명 */}
       <div className="flex min-w-0 items-center gap-2">
         <span className="truncate text-sm font-black text-slate-900">
-          {session?.agencyName || "AbleLink"}
+          {session?.agencyName || "Able-Link"}
         </span>
         <span className="flex-shrink-0 rounded-full border border-slate-100 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-400">
           관리자

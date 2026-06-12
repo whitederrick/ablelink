@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
     await sendSms({
       phone,
-      message: `[AbleLink] 인증번호: ${code}\n5분 이내에 입력해주세요.`,
+      message: `[Able-Link] 인증번호: ${code}\n5분 이내에 입력해주세요.`,
     });
 
     return NextResponse.json({ success: true });

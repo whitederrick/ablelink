@@ -53,9 +53,9 @@ export default function WorkerLoginPage() {
         <div className="pt-8 text-center">
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-950 shadow-lg shadow-slate-950/20">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icons/icon-512.png" alt="AbleLink" className="h-10 w-10 rounded-2xl" />
+            <img src="/icons/icon-512.png" alt="Able-Link" className="h-10 w-10 rounded-2xl" />
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-950">AbleLink</h1>
+          <h1 className="text-2xl font-black tracking-tight text-slate-950">Able-Link</h1>
           <p className="mt-1 text-sm font-semibold text-slate-500">장애인 직무지도 지원 서비스</p>
         </div>
 

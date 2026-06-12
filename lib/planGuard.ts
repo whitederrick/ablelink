@@ -165,7 +165,7 @@ export async function checkPlanAccess(
   }
 
   // (2.5) 셀프등록(무소속 운영) 워커 — 기본 문서·서명(PDF·전자서명·사업체담당자 사인)은 무료 허용.
-  //       에이전시 계약 기반 게이트는 "에이전시가 실제로 AbleLink를 운영(Manager 계정 보유)"할 때만 적용.
+  //       에이전시 계약 기반 게이트는 "에이전시가 실제로 Able-Link를 운영(Manager 계정 보유)"할 때만 적용.
   if (SELF_DOC_FEATURES.has(feature) && (await isSelfManagedWorker(workerId))) {
     return { allowed: true, reason: "SELF_MANAGED" };
   }

@@ -43,7 +43,7 @@
 | `AWS_SES_ACCESS_KEY` | ✅ | IAM Access Key ID |
 | `AWS_SES_SECRET_KEY` | ✅ | IAM Secret Access Key |
 | `AWS_REGION` | 🔧 | onboarding 라우트용 리전 (fallback) | `ap-northeast-2` |
-| `EMAIL_FROM` | 🔧 | 이메일 발신자 표시명 | `AbleLink <noreply@able-link.co.kr>` |
+| `EMAIL_FROM` | 🔧 | 이메일 발신자 표시명 | `Able-Link <noreply@able-link.co.kr>` |
 | `SES_FROM_EMAIL` | 🔧 | 발신 이메일 주소 | `noreply@able-link.co.kr` |
 
 > **주의**: AWS SES 샌드박스 해제 전까지는 등록된 이메일로만 발송 가능
@@ -152,7 +152,7 @@ AWS_SES_REGION="ap-northeast-2"
 AWS_SES_ACCESS_KEY=""
 AWS_SES_SECRET_KEY=""
 AWS_REGION="ap-northeast-2"
-EMAIL_FROM="AbleLink <noreply@able-link.co.kr>"
+EMAIL_FROM="Able-Link <noreply@able-link.co.kr>"
 SES_FROM_EMAIL="noreply@able-link.co.kr"
 
 # AI

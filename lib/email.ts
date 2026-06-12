@@ -3,7 +3,7 @@
 //
 // 필요 환경변수:
 //   RESEND_API_KEY    — Resend 대시보드에서 발급 (필수)
-//   RESEND_FROM_EMAIL — 기본 발신자, 예: "AbleLink <noreply@able-link.co.kr>"
+//   RESEND_FROM_EMAIL — 기본 발신자, 예: "Able-Link <noreply@able-link.co.kr>"
 //                       (Resend에서 도메인 인증 완료 후 사용 가능)
 import { Resend } from "resend";
 
@@ -23,7 +23,7 @@ const DEFAULT_FROM =
   process.env.RESEND_FROM_EMAIL ||
   process.env.EMAIL_FROM ||
   process.env.SES_FROM_EMAIL ||
-  "AbleLink <noreply@able-link.co.kr>";
+  "Able-Link <noreply@able-link.co.kr>";
 
 export async function sendEmailWithPdf(opts: {
   from: string;

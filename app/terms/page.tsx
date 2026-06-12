@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "서비스 이용약관 — AbleLink" };
+export const metadata: Metadata = { title: "서비스 이용약관 — Able-Link" };
 
 export default function TermsPage() {
   return (
@@ -13,13 +13,13 @@ export default function TermsPage() {
 
           <section>
             <h2 className="mb-3 text-base font-black text-slate-900">제1조 (목적)</h2>
-            <p>이 약관은 플라포레스트(이하 "회사")가 운영하는 AbleLink 서비스(이하 "서비스")의 이용 조건 및 절차, 회사와 이용자 간의 권리, 의무 및 책임 사항을 규정함을 목적으로 합니다.</p>
+            <p>이 약관은 플라포레스트(이하 "회사")가 운영하는 Able-Link 서비스(이하 "서비스")의 이용 조건 및 절차, 회사와 이용자 간의 권리, 의무 및 책임 사항을 규정함을 목적으로 합니다.</p>
           </section>
 
           <section>
             <h2 className="mb-3 text-base font-black text-slate-900">제2조 (용어의 정의)</h2>
             <ul className="list-disc space-y-1.5 pl-5">
-              <li>"서비스"란 회사가 제공하는 장애인 직무지도원 업무관리 플랫폼 AbleLink를 의미합니다.</li>
+              <li>"서비스"란 회사가 제공하는 장애인 직무지도원 업무관리 플랫폼 Able-Link를 의미합니다.</li>
               <li>"직무지도원"이란 장애인 직무지도 서비스를 제공하는 자로 서비스에 가입한 개인 이용자를 말합니다.</li>
               <li>"에이전시"란 직무지도원을 고용·위탁하여 장애인 고용 지원 서비스를 운영하는 기관을 말합니다.</li>
               <li>"계정"이란 이용자가 서비스에 접근하기 위해 설정한 아이디(전화번호 또는 이메일)와 비밀번호의 조합을 말합니다.</li>
@@ -108,7 +108,7 @@ export default function TermsPage() {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <p className="text-xs font-semibold text-slate-500">
-              사업자명: 플라포레스트 | 서비스명: AbleLink<br />
+              사업자명: 플라포레스트 | 서비스명: Able-Link<br />
               문의: able-link.co.kr | 시행일: 2026년 1월 1일
             </p>
           </div>

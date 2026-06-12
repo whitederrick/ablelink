@@ -48,7 +48,7 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <PageHeader title="시스템 대시보드" sub="AbleLink 전체 운영 현황 · 카드를 누르면 해당 화면으로 이동합니다" />
+      <PageHeader title="시스템 대시보드" sub="Able-Link 전체 운영 현황 · 카드를 누르면 해당 화면으로 이동합니다" />
 
       {loading ? (
         <div className="flex h-40 items-center justify-center">

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { ArrowRight, Building2, CreditCard, FileText, MapPin, Sparkles, Users } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "AbleLink — 장애인 직무지도원 관리 서비스",
+  title: "Able-Link — 장애인 직무지도원 관리 서비스",
   description: "직무지도원과 에이전시를 위한 스마트 업무 관리 플랫폼",
 };
 
@@ -24,11 +24,11 @@ export default function LandingPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/icons/icon-512.png"
-              alt="AbleLink"
+              alt="Able-Link"
               className="h-12 w-12 rounded-2xl shadow-lg shadow-slate-950/10"
             />
             <div>
-              <h1 className="text-3xl font-black tracking-tight text-slate-950">AbleLink</h1>
+              <h1 className="text-3xl font-black tracking-tight text-slate-950">Able-Link</h1>
               <p className="text-xs font-semibold text-slate-400">장애인 직무지도원 관리 서비스</p>
             </div>
           </div>
@@ -81,7 +81,7 @@ export default function LandingPage() {
         </div>
 
         <p className="pb-2 text-center text-xs font-semibold text-slate-400">
-          © 2026 AbleLink · Provided by Platforest
+          © 2026 Able-Link · Provided by Platforest
         </p>
       </section>
     </main>

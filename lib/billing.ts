@@ -9,9 +9,9 @@ export const PLAN_PRICES: Record<string, number> = {
 };
 
 export const PLAN_NAMES: Record<string, string> = {
-  STARTER: "AbleLink 스타터",
-  STANDARD: "AbleLink 스탠다드",
-  PRO: "AbleLink 프로",
+  STARTER: "Able-Link 스타터",
+  STANDARD: "Able-Link 스탠다드",
+  PRO: "Able-Link 프로",
 };
 
 export type BillingCycle = "MONTHLY" | "ANNUAL";

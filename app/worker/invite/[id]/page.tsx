@@ -119,7 +119,7 @@ export default function InvitePage() {
             <KeyRound className="h-6 w-6 text-sky-400" />
           </div>
           <p className="mb-1 text-xs font-semibold text-slate-400">초대장</p>
-          <h1 className="text-xl font-black text-white">AbleLink 가입</h1>
+          <h1 className="text-xl font-black text-white">Able-Link 가입</h1>
           {invite && (
             <div className="mt-3 rounded-xl bg-white/10 px-4 py-3">
               <p className="flex items-center justify-center gap-1.5 text-sm font-black text-white">

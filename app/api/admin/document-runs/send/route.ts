@@ -142,13 +142,13 @@ export async function POST(req: NextRequest) {
 
       if (attachments.length === 0) { failures.push(label); continue; }
 
-      const subject = `[AbleLink] ${agencyName} 제출문서 — ${label} (${attachments.length}건)`;
+      const subject = `[Able-Link] ${agencyName} 제출문서 — ${label} (${attachments.length}건)`;
       const text =
         (message ? `${message}\n\n` : "") +
         `■ 위탁기관: ${agencyName}\n` +
         `■ 묶음: ${label}\n` +
         `■ 첨부 문서: ${attachments.length}건\n\n` +
-        `AbleLink에서 발송된 메일입니다.`;
+        `Able-Link에서 발송된 메일입니다.`;
       try {
         await sendEmailWithAttachments({ to, subject, body: text, attachments });
         sent++;

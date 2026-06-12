@@ -67,9 +67,9 @@ export default function PWAInstallPrompt() {
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icons/icon-192.png" alt="AbleLink" style={{ width: 44, height: 44, borderRadius: 10 }} />
+        <img src="/icons/icon-192.png" alt="Able-Link" style={{ width: 44, height: 44, borderRadius: 10 }} />
         <div>
-          <p style={{ color: "#fff", fontSize: 14, fontWeight: 700, margin: 0 }}>AbleLink 앱 설치</p>
+          <p style={{ color: "#fff", fontSize: 14, fontWeight: 700, margin: 0 }}>Able-Link 앱 설치</p>
           <p style={{ color: "#9ca3af", fontSize: 12, margin: "2px 0 0" }}>홈 화면에서 바로 실행</p>
         </div>
       </div>

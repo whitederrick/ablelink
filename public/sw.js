@@ -1,4 +1,4 @@
-// public/sw.js — AbleLink Service Worker (출퇴근 알람용)
+// public/sw.js — Able-Link Service Worker (출퇴근 알람용)
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
 
@@ -6,7 +6,7 @@ self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
 self.addEventListener("message", e => {
   if (e.data?.type !== "SHOW_ALARM") return;
   e.waitUntil(
-    self.registration.showNotification("AbleLink 알람", {
+    self.registration.showNotification("Able-Link 알람", {
       body: e.data.body || "",
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
@@ -22,7 +22,7 @@ self.addEventListener("push", e => {
   if (!e.data) return;
   const { title, body, icon, badge, data } = e.data.json();
   e.waitUntil(
-    self.registration.showNotification(title || "AbleLink", {
+    self.registration.showNotification(title || "Able-Link", {
       body: body || "",
       icon: icon || "/icons/icon-192.png",
       badge: badge || "/icons/icon-192.png",

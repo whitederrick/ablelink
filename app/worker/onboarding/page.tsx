@@ -131,7 +131,7 @@ export default function OnboardingPage() {
             <KeyRound className="h-6 w-6 text-sky-400" aria-hidden="true" />
           </div>
           <p className="mb-1 text-xs font-semibold text-slate-400">환영합니다, {workerName}님</p>
-          <h1 className="text-xl font-black text-white">AbleLink 초기 설정</h1>
+          <h1 className="text-xl font-black text-white">Able-Link 초기 설정</h1>
           <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-400">
             아이디와 비밀번호를 설정하면 서비스를 이용하실 수 있습니다.
           </p>

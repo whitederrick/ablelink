@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "개인정보처리방침 — AbleLink" };
+export const metadata: Metadata = { title: "개인정보처리방침 — Able-Link" };
 
 export default function PrivacyPage() {
   return (
@@ -13,7 +13,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="mb-3 text-base font-black text-slate-900">제1조 (개인정보의 처리 목적)</h2>
-            <p>플라포레스트(이하 "회사")는 AbleLink 서비스 제공을 위해 다음 목적으로 개인정보를 처리합니다.</p>
+            <p>플라포레스트(이하 "회사")는 Able-Link 서비스 제공을 위해 다음 목적으로 개인정보를 처리합니다.</p>
             <ul className="mt-2 list-disc space-y-1.5 pl-5">
               <li>회원 가입 및 본인 확인</li>
               <li>GPS 기반 출퇴근 기록 및 근태 관리</li>
@@ -119,7 +119,7 @@ export default function PrivacyPage() {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <p className="text-xs font-semibold text-slate-500">
-              사업자명: 플라포레스트 | 서비스명: AbleLink<br />
+              사업자명: 플라포레스트 | 서비스명: Able-Link<br />
               문의: able-link.co.kr | 시행일: 2026년 1월 1일
             </p>
           </div>

@@ -4,7 +4,7 @@ import Link from "next/link";
 export default function SignupClosedPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-slate-50 px-6 text-center">
-      <span className="text-[22px] font-black tracking-tight text-slate-900">AbleLink</span>
+      <span className="text-[22px] font-black tracking-tight text-slate-900">Able-Link</span>
       <div className="space-y-2">
         <h1 className="text-lg font-black text-slate-900">에이전시 가입은 운영팀을 통해 진행됩니다</h1>
         <p className="text-sm font-semibold leading-relaxed text-slate-500">

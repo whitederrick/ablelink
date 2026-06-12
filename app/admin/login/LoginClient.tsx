@@ -46,7 +46,7 @@ export default function LoginClient() {
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-500 shadow-lg shadow-emerald-500/30">
             <Settings className="h-8 w-8 text-white" aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white">AbleLink</h1>
+          <h1 className="text-2xl font-black tracking-tight text-white">Able-Link</h1>
           <p className="mt-1 text-sm font-semibold text-slate-400">시스템 운영자 로그인</p>
         </div>
 

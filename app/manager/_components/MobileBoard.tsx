@@ -192,7 +192,7 @@ export default function MobileBoard({
         <div className="flex items-center justify-between">
           <div className="min-w-0">
             <p className="truncate text-[15px] font-black text-slate-900">
-              {session?.agencyName || "AbleLink"}
+              {session?.agencyName || "Able-Link"}
             </p>
             <p className="text-[11px] font-semibold text-slate-400">
               {todayFmt}{session?.loginId ? ` · ${session.loginId}` : ""}

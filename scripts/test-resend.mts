@@ -27,7 +27,7 @@ function tinyPdf(): Promise<Buffer> {
     doc.on("error", reject);
     doc.registerFont("KR", FONT_PATH);
     doc.font("KR");
-    doc.fontSize(20).text("AbleLink Resend 발송 테스트", { align: "center" });
+    doc.fontSize(20).text("Able-Link Resend 발송 테스트", { align: "center" });
     doc.moveDown().fontSize(12).text(`발송 시각: ${new Date().toISOString()}`);
     doc.text("이 PDF가 보이면 첨부 발송 경로가 정상입니다.");
     doc.end();
@@ -43,7 +43,7 @@ async function main() {
   // ① 단순 텍스트 메일
   await sendSimpleEmail({
     to: TO,
-    subject: "[AbleLink] Resend 발송 테스트 ① 단순 메일",
+    subject: "[Able-Link] Resend 발송 테스트 ① 단순 메일",
     text: "Resend 단순 텍스트 발송 테스트입니다. 이 메일이 도착하면 발신 도메인 인증이 정상입니다.",
   });
   console.log("✓ ① 단순 메일 발송 완료");
@@ -52,7 +52,7 @@ async function main() {
   const pdf = await tinyPdf();
   await sendEmailWithAttachments({
     to: TO,
-    subject: "[AbleLink] Resend 발송 테스트 ② PDF 첨부",
+    subject: "[Able-Link] Resend 발송 테스트 ② PDF 첨부",
     body: "PDF 첨부 발송 테스트입니다. 첨부된 PDF를 확인해주세요.",
     attachments: [{ filename: "ablelink-test.pdf", content: pdf }],
   });

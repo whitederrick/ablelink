@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     try {
       await sendSms({
         phone: phoneNumber,
-        message: `[AbleLink] ${invite.agency.name}에서 직무지도원 초대장이 도착했습니다.\n인증번호: ${code}\n가입 링크: ${inviteUrl}\n(24시간 유효)`,
+        message: `[Able-Link] ${invite.agency.name}에서 직무지도원 초대장이 도착했습니다.\n인증번호: ${code}\n가입 링크: ${inviteUrl}\n(24시간 유효)`,
       });
     } catch (smsErr) {
       console.warn("[invite] SMS 발송 실패:", smsErr);

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────
-# AbleLink API 테스트 스크립트 v6
+# Able-Link API 테스트 스크립트 v6
 # (v6: 섹션 24 — 업로드 입력 검증 + OTP/초대/가입 무차별 대입 방어 검증 추가)
 # 실행: bash docs/run-tests.sh
 # 사전 조건: npx tsx prisma/seed.ts 실행 후 npm run dev 실행
@@ -56,7 +56,7 @@ extract() { echo "$1" | grep -o "\"$2\":\"[^\"]*\"" | head -1 | cut -d'"' -f4; }
 extract_num() { echo "$1" | grep -o "\"$2\":[0-9]*" | head -1 | cut -d':' -f2; }
 
 # ── 서버 확인 ──────────────────────────────────────────────────
-echo -e "${BOLD}AbleLink API 테스트 v5${NC}"
+echo -e "${BOLD}Able-Link API 테스트 v5${NC}"
 echo "서버 확인 중..."
 if ! curl -s -o /dev/null -w "%{http_code}" "$BASE/worker/login" | grep -q "200"; then
   echo -e "${RED}서버 미실행. npm run dev 를 먼저 실행하세요.${NC}"; exit 1

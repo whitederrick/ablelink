@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   try {
     await sendSimpleEmail({
       to:      email,
-      subject: "[AbleLink] 이메일 인증 코드",
+      subject: "[Able-Link] 이메일 인증 코드",
       text:    `안녕하세요, ${session.workerName}님.\n\n이메일 아이디 변경을 위한 인증 코드입니다.\n\n인증 코드: ${code}\n\n이 코드는 10분간 유효합니다.\n본인이 요청하지 않으셨다면 무시해주세요.`,
     });
   } catch (e) {

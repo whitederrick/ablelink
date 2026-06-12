@@ -4,7 +4,7 @@ export default function NotFound() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center bg-slate-50 px-5 text-center">
       <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-slate-950 shadow-lg shadow-slate-950/20">
-        <img src="/icons/icon-512.png" alt="AbleLink" className="h-12 w-12 rounded-2xl" />
+        <img src="/icons/icon-512.png" alt="Able-Link" className="h-12 w-12 rounded-2xl" />
       </div>
       <p className="text-6xl font-black text-slate-200">404</p>
       <p className="mt-3 text-xl font-black text-slate-900">페이지를 찾을 수 없습니다</p>

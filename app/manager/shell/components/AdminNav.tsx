@@ -121,7 +121,7 @@ export default function AdminNav() {
   return (
     <aside className="flex w-[220px] flex-shrink-0 flex-col overflow-y-auto bg-slate-950 px-3 pb-8 pt-7">
       <Link href="/manager" className="mb-6 block px-3 no-underline">
-        <span className="text-[22px] font-black tracking-tight text-white">AbleLink</span>
+        <span className="text-[22px] font-black tracking-tight text-white">Able-Link</span>
         <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
           Agency Manager
         </p>

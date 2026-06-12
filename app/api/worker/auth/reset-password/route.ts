@@ -75,8 +75,8 @@ export async function POST(req: NextRequest) {
       try {
         await sendSimpleEmail({
           to: raw,
-          subject: "[AbleLink] 임시 비밀번호 안내",
-          text: `안녕하세요, ${user.workerName || ""}님.\n\n임시 비밀번호: ${tempPw}\n\n로그인 후 반드시 비밀번호를 변경해주세요.\n\n- AbleLink 팀`,
+          subject: "[Able-Link] 임시 비밀번호 안내",
+          text: `안녕하세요, ${user.workerName || ""}님.\n\n임시 비밀번호: ${tempPw}\n\n로그인 후 반드시 비밀번호를 변경해주세요.\n\n- Able-Link 팀`,
         });
       } catch (e: any) {
         console.error("[reset-password] 이메일 발송 실패:", e?.message);
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
         phone: user.phoneNumber,
         name: user.workerName || "",
         templateCode: process.env[RESET_PW_TEMPLATE]!,
-        subject: "AbleLink 임시 비밀번호 안내",
+        subject: "Able-Link 임시 비밀번호 안내",
         message: `안녕하세요 ${user.workerName || ""}님,\n\n요청하신 임시 비밀번호를 안내드립니다.\n\n임시 비밀번호: ${tempPw}\n\n로그인 후 반드시 비밀번호를 변경해주세요.\n\n${appUrl}/worker/login`,
         buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
       });

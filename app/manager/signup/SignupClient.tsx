@@ -127,7 +127,7 @@ export default function SignupClient() {
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-950 shadow-lg shadow-slate-950/20">
             <Building2 className="h-8 w-8 text-sky-400" />
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-950">AbleLink</h1>
+          <h1 className="text-2xl font-black tracking-tight text-slate-950">Able-Link</h1>
           <p className="mt-1 text-sm font-semibold text-slate-500">에이전시 관리자 가입 신청</p>
         </div>
 

@@ -5,7 +5,7 @@ import OldBrowserNotice from "./_components/OldBrowserNotice";
 import { Analytics } from "@vercel/analytics/react";
 
 export const metadata: Metadata = {
-  title: "AbleLink",
+  title: "Able-Link",
   description: "장애인 직무지도원 관리 서비스",
 };
 

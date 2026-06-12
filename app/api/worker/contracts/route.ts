@@ -202,7 +202,7 @@ async function sendSignedNotificationNew(workerId: bigint, phone: string, name: 
 
   await sendAlimtalk({
     phone, name, templateCode,
-    subject: "AbleLink 가입 안내",
+    subject: "Able-Link 가입 안내",
     message: `안녕하세요 ${name}님,\n\n근로계약서 서명이 완료되었습니다.\nAble-Link 서비스를 이용하시려면 아래 정보로 로그인해 주세요.\n\n아이디: ${loginId} (전화번호)\n임시 비밀번호: ${tempPassword}\n\n첫 로그인 후 비밀번호를 변경해 주세요. (아이디는 전화번호이며, 원하면 이메일로 변경할 수 있습니다.)`,
     buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
   });

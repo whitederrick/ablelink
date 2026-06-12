@@ -3,13 +3,13 @@ import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import SessionRefresh from "./_components/SessionRefresh";
 
 export const metadata: Metadata = {
-  title: "AbleLink - 직무지도원",
+  title: "Able-Link - 직무지도원",
   description: "장애인 직무지도 지원 서비스",
   manifest: "/worker-manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "AbleLink",
+    title: "Able-Link",
     startupImage: "/icons/icon-512.png",
   },
   icons: {

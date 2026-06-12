@@ -71,8 +71,8 @@ export async function POST(req: NextRequest) {
 
       await sendSimpleEmail({
         to: email,
-        subject: "[AbleLink] 이메일 인증 코드",
-        text: `AbleLink 이메일 인증 코드: ${code}\n\n이 코드는 10분간 유효합니다.`,
+        subject: "[Able-Link] 이메일 인증 코드",
+        text: `Able-Link 이메일 인증 코드: ${code}\n\n이 코드는 10분간 유효합니다.`,
       });
 
       return NextResponse.json({ success: true, message: "인증 코드가 발송되었습니다." });

@@ -7,7 +7,7 @@ import Link from "next/link";
 export default function WorkerSiteRegisterClosedPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-slate-50 px-6 text-center">
-      <img src="/icons/icon-512.png" alt="AbleLink" className="h-12 w-12 rounded-2xl" />
+      <img src="/icons/icon-512.png" alt="Able-Link" className="h-12 w-12 rounded-2xl" />
       <div className="space-y-2">
         <h1 className="text-lg font-black text-slate-900">현장 직접 등록은 운영되지 않습니다</h1>
         <p className="text-sm font-semibold leading-relaxed text-slate-500">
