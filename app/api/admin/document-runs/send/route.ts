@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
     if (sentRunIds.length) {
       await prisma.documentRun.updateMany({
         where: { id: { in: sentRunIds }, agencyId: scope.agencyId },
-        data: { govStatus: "SUBMITTED", govSubmittedAt: new Date() },
+        data: { govStatus: "SUBMITTED", govSubmittedAt: new Date(), govSubmitCount: { increment: 1 } },
       });
     }
 

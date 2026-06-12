@@ -134,7 +134,7 @@ export default function AdminSiteNewPage() {
   return (
     <div className="max-w-2xl space-y-5">
       <PageHeader
-        title="현장(Site) 신규 등록"
+        title="직무지도 현장(사업체) 신규 등록"
         actions={<Link href="/manager/sites" className={T.btnSecondary}>← 목록으로</Link>}
       />
 
@@ -158,12 +158,12 @@ export default function AdminSiteNewPage() {
           <p className="mb-4 text-sm font-black text-slate-900">기본 정보</p>
           <div className="space-y-3">
             <div>
-              <label className={T.label}>사업체명 *</label>
+              <label className={T.label}>현장(사업체) *</label>
               <input
                 value={form.companyName}
                 onChange={(e) => setForm((p) => ({ ...p, companyName: e.target.value }))}
                 className={`w-full ${T.input}`}
-                placeholder="사업체명"
+                placeholder="현장(사업체)명"
               />
             </div>
 

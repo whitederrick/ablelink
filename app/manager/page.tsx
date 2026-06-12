@@ -190,7 +190,7 @@ export default function AdminDashboardPage() {
         const rows: any[] = json.data ?? [];
         const total = rows.length;
         const training = rows.filter(r => r.status === "TRAINING").length;
-        const avgLogRate = total > 0 ? Math.round(rows.reduce((s, r) => s + r.logRate, 0) / total) : 0;
+        const avgLogRate = total > 0 ? Math.round(rows.reduce((s, r) => s + r.logRate, 0) / total * 10) / 10 : 0;
         const scored = rows.filter(r => r.avgScore !== null);
         const avgScore = scored.length > 0
           ? Math.round(scored.reduce((s, r) => s + r.avgScore, 0) / scored.length * 10) / 10
@@ -498,40 +498,46 @@ export default function AdminDashboardPage() {
           </Section>
       </div>
 
-      {/* 하단: 훈련생 진척도 리포트 요약 — 모니터링 성격. 더 보기 → /manager/reports */}
-      <Section
-        title="훈련생 진척도 리포트"
-        sub={`${reportMonth}월 기준 요약`}
-        onMore={reportLocked ? undefined : () => router.push("/manager/reports")}
-      >
-        {reportLocked ? (
-          <div className="flex items-center gap-2 py-3 text-sm font-semibold text-slate-400">
-            <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-            STANDARD 플랜 이상에서 훈련생 진척도를 확인할 수 있습니다.
+      {/* 하단: 훈련생 진척도 리포트 — 2/3 폭. 제목/카드/더보기 위쪽 정렬, 카드가 가운데 남은 폭을 채움. 우측 1/3은 비움 */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="shrink-0">
+              <h2 className="text-sm font-black text-slate-900">훈련생 진척도 리포트</h2>
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">{reportMonth}월 기준 요약</p>
+            </div>
+
+            {!reportLocked && report && (
+              <div className="grid flex-1 grid-cols-4 gap-2.5">
+                {[
+                  { label: "전체 훈련생", value: report.total, unit: "명", cls: "text-slate-900" },
+                  { label: "훈련 중", value: report.training, unit: "명", cls: "text-sky-600" },
+                  { label: "평균 일지 작성률", value: report.avgLogRate.toFixed(1), unit: "%", cls: report.avgLogRate >= 80 ? "text-emerald-600" : report.avgLogRate >= 60 ? "text-amber-500" : "text-rose-500" },
+                  { label: "평균 수행 점수", value: report.avgScore != null ? report.avgScore.toFixed(1) : "-", unit: "/5.0", cls: report.avgScore === null ? "text-slate-300" : report.avgScore >= 4 ? "text-emerald-600" : report.avgScore >= 3 ? "text-sky-600" : "text-amber-500" },
+                ].map((c, i) => (
+                  <div key={i} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-center">
+                    <p className="mb-1 text-[11px] font-semibold leading-tight text-slate-500">{c.label}</p>
+                    <p className={`text-2xl font-black leading-none ${c.cls}`}>{c.value}<span className="ml-0.5 text-xs font-semibold text-slate-400">{c.unit}</span></p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!reportLocked && (
+              <button onClick={() => router.push("/manager/reports")} className="shrink-0 text-xs font-black text-sky-600 transition hover:text-sky-700">더 보기 +</button>
+            )}
           </div>
-        ) : !report ? (
-          <EmptyRow text="불러오는 중..." />
-        ) : (
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-2 px-1 py-1">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-lg font-black leading-none text-slate-900">{report.total}<span className="ml-0.5 text-[11px] font-semibold text-slate-400">명</span></span>
-              <span className="text-[11px] font-semibold text-slate-500">전체 훈련생</span>
+
+          {reportLocked ? (
+            <div className="mt-1 flex items-center gap-2 py-3 text-sm font-semibold text-slate-400">
+              <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+              STANDARD 플랜 이상에서 훈련생 진척도를 확인할 수 있습니다.
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-lg font-black leading-none text-sky-600">{report.training}<span className="ml-0.5 text-[11px] font-semibold text-slate-400">명</span></span>
-              <span className="text-[11px] font-semibold text-slate-500">훈련 중</span>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className={`text-lg font-black leading-none ${report.avgLogRate >= 80 ? "text-emerald-600" : report.avgLogRate >= 60 ? "text-amber-500" : "text-rose-500"}`}>{report.avgLogRate}<span className="ml-0.5 text-[11px] font-semibold text-slate-400">%</span></span>
-              <span className="text-[11px] font-semibold text-slate-500">평균 일지 작성률</span>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className={`text-lg font-black leading-none ${report.avgScore === null ? "text-slate-300" : report.avgScore >= 4 ? "text-emerald-600" : report.avgScore >= 3 ? "text-sky-600" : "text-amber-500"}`}>{report.avgScore ?? "-"}<span className="ml-0.5 text-[11px] font-semibold text-slate-400">/5</span></span>
-              <span className="text-[11px] font-semibold text-slate-500">평균 수행 점수</span>
-            </div>
-          </div>
-        )}
-      </Section>
+          ) : !report ? (
+            <EmptyRow text="불러오는 중..." />
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

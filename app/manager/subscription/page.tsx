@@ -137,7 +137,7 @@ export default function SubscriptionPage() {
                   <div className="font-semibold text-slate-700">{agency.currentWorkers}명{agency.maxWorkers > 0 ? ` / ${agency.maxWorkers}명` : " (무제한)"}</div>
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-slate-400">현장(Site)</div>
+                  <div className="text-xs font-semibold text-slate-400">현장(사업체)</div>
                   <div className="font-semibold text-slate-700">{agency.currentSites}개{agency.maxSites > 0 ? ` / ${agency.maxSites}개` : " (무제한)"}</div>
                 </div>
                 {agency.trialEndsAt && (

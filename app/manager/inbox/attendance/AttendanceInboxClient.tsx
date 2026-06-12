@@ -772,6 +772,13 @@ export default function AttendanceInboxClient() {
               <div className="text-xs text-slate-400">정렬: 날짜 최신순</div>
             </div>
 
+            {/* 제목줄 — 행 구성 안내 */}
+            <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50 px-6 py-2 text-[11px] font-black text-slate-500">
+              <div className="min-w-0 flex-1">직무지도원 성명 · 현장(사업체) · 근무일</div>
+              <div className="shrink-0">이슈 / 보정</div>
+              <div className="shrink-0">처리 상태</div>
+            </div>
+
             <div className="p-2">
               <div className="space-y-[3px] p-2">
                 {pageItems.length === 0 ? (

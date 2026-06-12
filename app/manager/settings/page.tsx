@@ -46,8 +46,6 @@ export default function AgencySettingsPage() {
 
   // 스마트폰(대표자) 서명 — QR / SMS
   const [phoneSign, setPhoneSign] = useState<{ url: string; qr: string } | null>(null);
-  const [repPhone, setRepPhone] = useState("");
-  const [smsSending, setSmsSending] = useState(false);
   const [smsNote, setSmsNote] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -152,15 +150,14 @@ export default function AgencySettingsPage() {
     if (d.success) { setSigUrl(null); setMsg({ ok: true, text: "삭제되었습니다." }); }
   }
 
-  // 대표자 서명 토큰 발급 → (옵션) 휴대폰 SMS 발송 → QR 표시 + 완료 폴링
-  async function startPhoneSign(opts?: { phone?: string }) {
+  // 대표자 서명 토큰 발급 → QR 표시 + 완료 폴링 (스마트폰으로 직접 서명)
+  async function startPhoneSign() {
     setSmsNote("");
-    if (opts?.phone) setSmsSending(true);
     try {
       const d = await fetch("/api/admin/agency-profile/sign-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(opts?.phone ? { phone: opts.phone } : {}),
+        body: JSON.stringify({}),
       }).then(r => r.json());
       if (!d.success) { setSmsNote(d.message || "발급 실패"); return; }
 
@@ -168,7 +165,6 @@ export default function AgencySettingsPage() {
       const qr = await QRCode.toDataURL(d.url, { width: 260, margin: 1 });
       const baseline = sigUrl;
       setPhoneSign({ url: d.url, qr });
-      if (opts?.phone) setSmsNote(d.sent ? "대표자 휴대폰으로 서명 링크를 전송했습니다." : "문자 발송 환경 미설정 — QR로 진행해주세요.");
 
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = setInterval(async () => {
@@ -184,8 +180,6 @@ export default function AgencySettingsPage() {
       }, 3000);
     } catch {
       setSmsNote("오류가 발생했습니다.");
-    } finally {
-      setSmsSending(false);
     }
   }
 
@@ -328,31 +322,9 @@ export default function AgencySettingsPage() {
                 <button onClick={() => startPhoneSign()} className={T.btnSecondary}>📱 스마트폰으로 서명</button>
                 <button onClick={() => setSigMode("view")} className={T.btnSecondary}>취소</button>
               </div>
-              <p className="mt-2 text-xs font-semibold text-slate-400">대표자가 직접 PC에서 그리기 어려우면 "스마트폰으로 서명"으로 QR·문자 링크를 통해 폰에서 입력하세요.</p>
+              <p className="mt-2 text-xs font-semibold text-slate-400">대표자가 직접 PC에서 그리기 어려우면 "스마트폰으로 서명"으로 QR을 스캔해 폰에서 입력하세요.</p>
             </>
           )}
-
-          {/* 대표자 휴대폰으로 서명 요청 (SMS) */}
-          <div className="mt-4 border-t border-slate-100 pt-4">
-            <label className={T.label}>대표자 휴대폰으로 서명 요청 (문자)</label>
-            <div className="flex gap-2">
-              <input
-                value={repPhone}
-                onChange={e => setRepPhone(e.target.value)}
-                placeholder="대표자 휴대폰번호 (예: 010-1234-5678)"
-                type="tel"
-                className={`flex-1 ${T.input}`}
-              />
-              <button
-                onClick={() => startPhoneSign({ phone: repPhone })}
-                disabled={smsSending || !repPhone.replace(/-/g, "").match(/^01[0-9]{8,9}$/)}
-                className={T.btnSecondary}
-              >
-                {smsSending ? "전송 중..." : "서명 링크 전송"}
-              </button>
-            </div>
-            <p className="mt-1 text-[11px] font-semibold text-slate-400">대표자가 현장에 없을 때, 휴대폰으로 서명 링크를 보내 직접 서명받을 수 있습니다.</p>
-          </div>
         </div>
       </div>
 

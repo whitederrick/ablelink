@@ -599,6 +599,8 @@ model DocumentRun {
   // 발송(→공단) 성공 시 자동 SUBMITTED, 공단이 재제출 요구하면 매니저가 RESUBMIT로 수동 표시(재발송 시 다시 SUBMITTED).
   govStatus     String    @default("NONE") @map("gov_status")
   govSubmittedAt DateTime? @map("gov_submitted_at")
+  // 공단 발송 누적 횟수. 1회=공단 제출 완료, 2회 이상=공단 수정 제출 완료(재발송·n차).
+  govSubmitCount Int       @default(0) @map("gov_submit_count")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

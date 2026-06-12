@@ -141,7 +141,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
             </div>
 
             <div className="mb-6">
-              <label className={T.label}>배정 현장 (선택)</label>
+              <label className={T.label}>배정 현장(사업체) (선택)</label>
               <select value={siteId} onChange={e => setSiteId(e.target.value)} className={`w-full ${T.select}`}>
                 <option value="">현장 미지정</option>
                 {sites.map(s => <option key={s.id} value={s.id}>{s.companyName}</option>)}
@@ -622,7 +622,7 @@ export default function WorkersPage() {
     <div className="space-y-5">
       <PageHeader
         title="직무지도원 관리"
-        sub={`총 ${total}명 · 행 클릭 시 근무형태 설정`}
+        sub="직무지도원 계정과 현장(사업체) 배정 현황을 관리합니다. 목록에서 직무지도원을 선택하면 근무형태와 배정 정보를 설정할 수 있습니다."
         actions={
           <button onClick={() => setShowInvite(true)} className={`${T.btnPrimary} flex items-center gap-1.5`}>
             <Send className="h-3.5 w-3.5" />초대 발송
@@ -643,7 +643,7 @@ export default function WorkersPage() {
       <ListToolbar
         query={query}
         onQueryChange={setQuery}
-        placeholder="이름 / 전화번호 / 현장명 / 아이디 검색"
+        placeholder="이름 / 전화번호 / 현장(사업체) / 아이디 검색"
         filters={filters}
         selected={statusFilter}
         onToggleFilter={toggleStatus}
@@ -653,7 +653,7 @@ export default function WorkersPage() {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              {["직무지도원 성명(아이디)", "전화번호", "현장", "기관", "근무형태", "배정일", "플랜", "상태", ""].map(h => (
+              {["직무지도원 성명(아이디)", "전화번호", "현장(사업체)", "기관", "근무형태", "배정일", "플랜", "상태", "작업"].map(h => (
                 <th key={h} className={T.th}>{h}</th>
               ))}
             </tr>
@@ -674,14 +674,16 @@ export default function WorkersPage() {
                 <tr key={c.id}
                   className={`${T.trBase} ${c.activeAssignment ? "cursor-pointer hover:bg-slate-50" : ""}`}
                   onClick={() => c.activeAssignment && openEdit(c)}>
-                  <td className={T.td}>{workerLabel(c.workerName, c.loginId)}</td>
+                  <td className={T.td}><div className="max-w-[160px] truncate"><span className="font-semibold text-sky-600">{workerLabel(c.workerName, c.loginId)}</span></div></td>
                   <td className={T.td}>{c.phoneNumber}</td>
                   <td className={T.td}>
-                    {c.activeAssignment?.siteName
-                      ? c.activeAssignment.siteName
-                      : <span className="text-slate-400">미배정</span>}
+                    <div className="max-w-[150px] truncate">
+                      {c.activeAssignment?.siteName
+                        ? c.activeAssignment.siteName
+                        : <span className="text-slate-400">미배정</span>}
+                    </div>
                   </td>
-                  <td className={T.td}>{c.activeAssignment?.agencyName || "-"}</td>
+                  <td className={T.td}><div className="max-w-[120px] truncate">{c.activeAssignment?.agencyName || "-"}</div></td>
                   <td className={T.td}>
                     {c.activeAssignment
                       ? <span className="text-slate-700">{workTypeLabel}</span>

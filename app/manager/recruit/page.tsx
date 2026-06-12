@@ -114,11 +114,13 @@ export default function ManagerRecruitPage() {
               pageItems.map((p) => (
                 <tr key={p.id} className={T.trBase}>
                   <td className={T.td}>
-                    <Link href={`/manager/recruit/${p.id}`} className="font-bold text-slate-900 hover:text-sky-600">{p.title}</Link>
-                    <span className="ml-1.5 text-xs text-slate-400">{p.companyName}{p.taskName ? ` · ${p.taskName}` : ""}</span>
+                    <div className="max-w-[300px] truncate">
+                      <Link href={`/manager/recruit/${p.id}`} className="font-bold text-slate-900 hover:text-sky-600">{p.title}</Link>
+                      <span className="ml-1.5 text-xs text-slate-400">{p.companyName}{p.taskName ? ` · ${p.taskName}` : ""}</span>
+                    </div>
                   </td>
                   <td className={T.td}>{PROF_LABEL[p.profession] ?? p.profession}</td>
-                  <td className={T.td}>{p.region ?? "-"}</td>
+                  <td className={T.td}><div className="max-w-[140px] truncate">{p.region ?? "-"}</div></td>
                   <td className={T.td}>{p.headcount}명</td>
                   <td className={T.td}>
                     <Link href={`/manager/recruit/${p.id}`} className="font-black text-sky-600 hover:underline">{p.applicationCount ?? 0}건</Link>

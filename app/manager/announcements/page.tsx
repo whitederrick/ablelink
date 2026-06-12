@@ -4,7 +4,7 @@
 // 카테고리는 시스템 운영자가 전역 관리(app/admin/settings) → 매니저는 작성 시 선택만.
 // 표준 게시판: PageHeader(+등록) → StatCardRow → ListToolbar(검색·카테고리 멀티필터) → 목록+우측 상세 → Pagination.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pin, Trash2, Plus, Pencil } from "lucide-react";
+import { Pin, Trash2, Pencil } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
@@ -141,8 +141,8 @@ export default function AgencyAnnouncementsPage() {
         title="에이전시 공지사항"
         sub="소속 직무지도원 앱의 ‘공지사항’에 게시됩니다. 개별 통지가 필요하면 ‘알림 발송’ 메뉴를 이용하세요."
         actions={
-          <button onClick={openCreate} className={`inline-flex items-center gap-1.5 ${T.btnPrimary}`}>
-            <Plus className="h-4 w-4" /> 공지 등록
+          <button onClick={openCreate} className={T.btnPrimary}>
+            + 공지 등록
           </button>
         }
       />
@@ -176,26 +176,32 @@ export default function AgencyAnnouncementsPage() {
           ) : pageItems.length === 0 ? (
             <p className={T.empty}>{items.length === 0 ? "게시된 공지가 없습니다." : "조건에 맞는 공지가 없습니다."}</p>
           ) : (
-            <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              {pageItems.map(it => (
-                <button
-                  key={it.id}
-                  onClick={() => setSelectedId(it.id)}
-                  className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-slate-50 ${
-                    selectedId === it.id ? "bg-slate-100" : ""
-                  }`}
-                >
-                  {it.pinned && <Pin className="h-4 w-4 shrink-0 fill-rose-500 text-rose-500" />}
-                  <CatBadge it={it} />
-                  <span className="flex-1 truncate text-[15px] font-black text-slate-900">{it.title}</span>
-                  <span className="shrink-0 text-[13px] font-semibold text-slate-500">소속 전체</span>
-                  <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{it.createdAt.slice(2, 10)}</span>
-                </button>
-              ))}
+            <div className={T.tableWrap}>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>{["분류", "제목", "대상", "게시일"].map(h => (
+                    <th key={h} className={T.th}>{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody>
+                  {pageItems.map(it => (
+                    <tr key={it.id} onClick={() => setSelectedId(it.id)}
+                      className={`${T.trBase} cursor-pointer hover:bg-slate-50 ${selectedId === it.id ? "bg-slate-100" : ""}`}>
+                      <td className={T.td}><CatBadge it={it} /></td>
+                      <td className={`${T.td} max-w-[240px]`}>
+                        <div className="flex items-center gap-1.5">
+                          {it.pinned && <Pin className="h-4 w-4 shrink-0 fill-rose-500 text-rose-500" />}
+                          <span className="truncate font-black text-slate-900">{it.title}</span>
+                        </div>
+                      </td>
+                      <td className={T.td}>소속 전체</td>
+                      <td className={`${T.td} whitespace-nowrap`}>{it.createdAt.slice(2, 10)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
             </div>
-          )}
-          {filtered.length > 0 && (
-            <Pagination className="mt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
           )}
         </div>
 

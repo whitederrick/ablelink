@@ -508,14 +508,14 @@ export default function PayrollPage() {
             <div className={T.tableWrap}>
               <table className="w-full border-collapse">
                 <thead>
-                  <tr>{["직무지도원", "소득/급여유형", "금액", "적용 기간", ""].map(h => (
+                  <tr>{["직무지도원 성명(아이디)", "소득/급여유형", "금액", "적용 기간", ""].map(h => (
                     <th key={h} className={T.th}>{h}</th>
                   ))}</tr>
                 </thead>
                 <tbody>
                   {cPageItems.map(c => (
                     <tr key={c.id} className={T.trBase}>
-                      <td className={T.td}>{c.workerName} <span className="text-[13px] text-slate-500">({maskLoginId(c.loginId)})</span></td>
+                      <td className={T.td}><div className="max-w-[180px] truncate">{c.workerName} <span className="text-[13px] text-slate-500">({maskLoginId(c.loginId)})</span></div></td>
                       <td className={T.td}>
                         <div className="flex flex-wrap gap-1">
                           <span className={`${T.badge} ${c.workerType === "INTERNAL" ? "bg-amber-50 text-amber-600" : "bg-slate-50 text-slate-600"}`}>
@@ -754,7 +754,7 @@ export default function PayrollPage() {
             <div className={T.tableWrap}>
               <table className="w-full border-collapse">
                 <thead>
-                  <tr>{["직무지도원", "근무일수", "근무시간", "지급액", "공제액", "실지급액", ""].map(h => (
+                  <tr>{["직무지도원 성명(아이디)", "근무일수", "근무시간", "지급액", "공제액", "실지급액", ""].map(h => (
                     <th key={h} className={T.th}>{h}</th>
                   ))}</tr>
                 </thead>

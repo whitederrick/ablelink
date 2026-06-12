@@ -122,22 +122,31 @@ export default function SystemNoticesPage() {
           ) : pageItems.length === 0 ? (
             <p className={T.empty}>{items.length === 0 ? "등록된 공지가 없습니다." : "조건에 맞는 공지가 없습니다."}</p>
           ) : (
-            <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              {pageItems.map(it => (
-                <button key={it.id} onClick={() => select(it)}
-                  className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-slate-50 ${selectedId === it.id ? "bg-slate-100" : ""}`}>
-                  <StatusBadge status={it.type} map={SYS_BADGE} />
-                  {it.read
-                    ? <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-600">확인</span>
-                    : <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-black text-rose-600">미확인</span>}
-                  <span className={`flex-1 truncate text-[15px] ${it.read ? "font-semibold text-slate-700" : "font-black text-slate-900"}`}>{it.title}</span>
-                  <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{it.createdAt.slice(2, 10)}</span>
-                </button>
-              ))}
+            <div className={T.tableWrap}>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>{["유형", "확인", "제목", "게시일"].map(h => (
+                    <th key={h} className={T.th}>{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody>
+                  {pageItems.map(it => (
+                    <tr key={it.id} onClick={() => select(it)}
+                      className={`${T.trBase} cursor-pointer hover:bg-slate-50 ${selectedId === it.id ? "bg-slate-100" : ""}`}>
+                      <td className={T.td}><StatusBadge status={it.type} map={SYS_BADGE} /></td>
+                      <td className={T.td}>
+                        {it.read
+                          ? <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-[13px] font-black text-emerald-600">확인</span>
+                          : <span className="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-[13px] font-black text-rose-600">미확인</span>}
+                      </td>
+                      <td className={`${T.td} max-w-[260px]`}><div className={`truncate ${it.read ? "" : "font-black text-slate-900"}`}>{it.title}</div></td>
+                      <td className={`${T.td} whitespace-nowrap`}>{it.createdAt.slice(2, 10)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
             </div>
-          )}
-          {filtered.length > 0 && (
-            <Pagination className="mt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
           )}
         </div>
 

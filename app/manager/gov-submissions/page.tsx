@@ -139,7 +139,7 @@ export default function GovSubmissionsPage() {
                     checked={items.length > 0 && items.every(it => selected.has(it.id))}
                     onChange={e => setSelected(p => { const n = new Set(p); items.forEach(it => e.target.checked ? n.add(it.id) : n.delete(it.id)); return n; })} />
                 </th>
-                {["문서", "직무지도원 성명(아이디) · 현장 · 기간", "제출일", "작업"].map(h => <th key={h} className={T.th}>{h}</th>)}
+                {["문서명", "직무지도원 성명(아이디)", "현장(사업체)", "근무 기간", "문서 제출일", "작업"].map(h => <th key={h} className={T.th}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -153,9 +153,9 @@ export default function GovSubmissionsPage() {
                     <span className="font-semibold text-slate-900">{item.docLabel}</span>
                     {item.traineeName && <span className="text-[13px] text-slate-500"> · {item.traineeName}</span>}
                   </td>
-                  <td className={`${T.td} max-w-[280px] truncate text-[13px] text-slate-500`}>
-                    {workerLabel(item.workerName, item.workerLoginId)} · {item.siteName} · {item.periodStart}~{item.periodEnd}
-                  </td>
+                  <td className={T.td}><div className="max-w-[160px] truncate">{workerLabel(item.workerName, item.workerLoginId)}</div></td>
+                  <td className={T.td}><div className="max-w-[150px] truncate">{item.siteName}</div></td>
+                  <td className={`${T.td} whitespace-nowrap text-[13px] text-slate-500`}>{item.periodStart}~{item.periodEnd}</td>
                   <td className={`${T.td} whitespace-nowrap text-[13px] text-slate-600`}>{item.govSubmittedAt ? item.govSubmittedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>
                     <button onClick={() => downloadPdf(item)} className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-700 active:scale-95">다운로드</button>

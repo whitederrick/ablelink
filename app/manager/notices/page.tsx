@@ -283,23 +283,32 @@ export default function NoticesPage() {
           ) : pageItems.length===0 ? (
             <p className={T.empty}>조건에 맞는 알림이 없습니다.</p>
           ) : (
-            <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              {pageItems.map(n=>(
-                <button key={n.id} onClick={() => setSelectedId(n.id)}
-                  className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-slate-50 ${selectedId === n.id ? "bg-slate-100" : ""}`}>
-                  <StatusBadge status={n.type} map={NOTICE_BADGE} />
-                  {n.read
-                    ? <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-600">확인</span>
-                    : <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-black text-rose-600">미확인</span>}
-                  <span className={`flex-1 truncate text-[15px] ${n.read ? "font-semibold text-slate-700" : "font-black text-slate-900"}`}>{n.title}</span>
-                  <span className="shrink-0 max-w-[96px] truncate text-[13px] font-semibold text-slate-500">{n.workerName}</span>
-                  <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{n.createdAt.slice(2, 10)}</span>
-                </button>
-              ))}
+            <div className={T.tableWrap}>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>{["유형", "확인", "제목", "수신자", "게시일"].map(h => (
+                    <th key={h} className={T.th}>{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody>
+                  {pageItems.map(n=>(
+                    <tr key={n.id} onClick={() => setSelectedId(n.id)}
+                      className={`${T.trBase} cursor-pointer hover:bg-slate-50 ${selectedId === n.id ? "bg-slate-100" : ""}`}>
+                      <td className={T.td}><StatusBadge status={n.type} map={NOTICE_BADGE} /></td>
+                      <td className={T.td}>
+                        {n.read
+                          ? <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-[13px] font-black text-emerald-600">확인</span>
+                          : <span className="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-[13px] font-black text-rose-600">미확인</span>}
+                      </td>
+                      <td className={`${T.td} max-w-[220px]`}><div className={`truncate ${n.read ? "" : "font-black text-slate-900"}`}>{n.title}</div></td>
+                      <td className={`${T.td} max-w-[110px]`}><div className="truncate">{n.workerName}</div></td>
+                      <td className={`${T.td} whitespace-nowrap`}>{n.createdAt.slice(2, 10)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
             </div>
-          )}
-          {filtered.length > 0 && (
-            <Pagination className="mt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
           )}
         </div>
 

@@ -118,7 +118,7 @@ export default function ManagerLogsPage() {
         <ListToolbar
           query={query}
           onQueryChange={v => { setQuery(v); setPage(1); }}
-          placeholder="훈련생·작성자·내용 검색"
+          placeholder="훈련생·직무지도원·내용 검색"
           filters={filters}
           selected={selectedStatus}
           onToggleFilter={toggleStatus}
@@ -148,17 +148,21 @@ export default function ManagerLogsPage() {
           <table className="w-full">
             <thead>
               <tr>
-                {["날짜", "작성자 → 훈련생", "유형", "상태", "현장 · 시간 · 출결 · 과제", ""].map(h => <th key={h} className={T.th}>{h}</th>)}
+                {["날짜", "직무지도원 성명", "훈련생", "유형", "상태", "현장(사업체)", "훈련시간", "출결 여부", "수행 과제", ""].map(h => <th key={h} className={T.th}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
               {pageItems.map(l => (
                 <tr key={l.id} onClick={() => setDetail(l)} className={`${T.trBase} cursor-pointer hover:bg-slate-50`}>
                   <td className={`${T.td} whitespace-nowrap`}>{l.workDate.slice(5)} ({DOW[new Date(l.workDate + "T00:00:00").getDay()]})</td>
-                  <td className={T.td}>{l.workerName} <span className="text-slate-400">→</span> {l.traineeName}</td>
+                  <td className={`${T.td} font-semibold text-slate-900`}><div className="max-w-[130px] truncate">{l.workerName}</div></td>
+                  <td className={T.td}><div className="max-w-[120px] truncate">{l.traineeName}</div></td>
                   <td className={T.td}><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[13px] font-semibold text-slate-600">{TYPE_LABELS[l.trainingType] ?? l.trainingType}</span></td>
                   <td className={T.td}><StatusBadge status={l.isCompleted ? "confirmed" : "pending"} map={LOG_BADGE} /></td>
-                  <td className={`${T.td} max-w-[280px] truncate text-[13px] text-slate-500`}>{l.siteName} · {l.totalTime}h · {l.attendance}{l.taskName ? ` · ${l.taskName}` : ""}</td>
+                  <td className={T.td}><div className="max-w-[150px] truncate">{l.siteName}</div></td>
+                  <td className={`${T.td} whitespace-nowrap`}>{l.totalTime}h</td>
+                  <td className={T.td}>{l.attendance}</td>
+                  <td className={`${T.td} text-[13px] text-slate-500`}><div className="max-w-[160px] truncate">{l.taskName || "-"}</div></td>
                   <td className={T.td}><span className="text-[13px] font-semibold text-sky-600">상세</span></td>
                 </tr>
               ))}

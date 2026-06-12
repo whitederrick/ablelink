@@ -170,7 +170,7 @@ export default function ManagerSiteDetailPage() {
   return (
     <div className="max-w-2xl space-y-5">
       <PageHeader
-        title="현장(Site) 상세"
+        title="직무지도 현장(사업체) 상세"
         sub={
           <>
             ID: {item.id} · 기관: {item.agencyName} ·{" "}
@@ -191,7 +191,7 @@ export default function ManagerSiteDetailPage() {
       <div className={T.card}>
         <h2 className="mb-4 text-sm font-black text-slate-900">기본 정보</h2>
         <div className="space-y-3">
-          <Field label="사업체명 *" value={companyName} onChange={setCompanyName} />
+          <Field label="현장(사업체) *" value={companyName} onChange={setCompanyName} />
           <Field label="주소 *" value={address} onChange={setAddress} />
           <Field label="상세주소" value={detailAddress} onChange={setDetailAddress} />
           <div className="grid grid-cols-2 gap-3">

@@ -4,6 +4,7 @@ import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import Pagination from "../_components/Pagination";
 import ListToolbar from "../_components/ListToolbar";
+import SiteDetailModal from "./SiteDetailModal";
 import { useEffect, useMemo, useState } from "react";
 
 type SiteItem = {
@@ -15,7 +16,7 @@ type SiteItem = {
 };
 
 const APPROVAL_CLS: Record<string, { label: string; cls: string }> = {
-  ORIGINAL_SET:         { label: "미확정",   cls: "bg-slate-100 text-slate-500" },
+  ORIGINAL_SET:         { label: "미확정",   cls: "bg-rose-50 text-rose-600" },
   WORKER_PROPOSED:       { label: "제안됨",   cls: "bg-amber-50 text-amber-600" },
   APPROVED:             { label: "승인",     cls: "bg-emerald-50 text-emerald-600" },
   REJECTED:             { label: "반려",     cls: "bg-rose-50 text-rose-600" },
@@ -34,6 +35,7 @@ export default function AdminSitesPage() {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<SiteItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
 
   async function fetchList(targetPage: number) {
@@ -75,60 +77,61 @@ export default function AdminSitesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="현장(Site) 관리"
-        sub="사업체(현장) 등록·검색 및 기준점·담당자 관리"
+        title="직무지도 현장(사업체) 관리"
+        sub="직무지도원이 근무하는 현장(사업체)을 등록하고 검색합니다. 출근 기준점(GPS)과 현장의 사업체 담당자 정보도 여기서 관리합니다."
         actions={
-          <Link href="/manager/sites/new" className={T.btnPrimary}>신규 등록</Link>
+          <Link href="/manager/sites/new" className={T.btnPrimary}>+ 신규 등록</Link>
         }
       />
 
       <ListToolbar query={q} onQueryChange={setQ} onSearch={onSearch}
-        placeholder="사업체명/주소/담당자명/메일/전화/기관 검색" />
+        placeholder="현장(사업체)/주소/담당자명/메일/전화/기관 검색" />
 
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
           <thead>
-            <tr>{["ID", "사업체명", "주소", "사업체 담당자", "담당 관리자", "기관", "GPS 범위", "기준점", "상태"].map(h => (
+            <tr>{["ID", "현장(사업체)", "주소", "사업체 담당자 성명", "사업체 담당자 연락처", "업무 이관 담당자", "기관명", "GPS 범위", "기준점", "상태"].map(h => (
               <th key={h} className={T.th}>{h}</th>
             ))}</tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} className={T.tdCenter}>로딩 중...</td></tr>
+              <tr><td colSpan={10} className={T.tdCenter}>로딩 중...</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={9} className={T.tdCenter}>데이터가 없습니다.</td></tr>
+              <tr><td colSpan={10} className={T.tdCenter}>데이터가 없습니다.</td></tr>
             ) : items.map(it => {
               const approval = APPROVAL_CLS[it.basePointApprovalStatus] || APPROVAL_CLS.ORIGINAL_SET;
               return (
-                <tr key={it.id} className={T.trBase}>
+                <tr key={it.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50`} onClick={() => setDetailId(it.id)}>
                   <td className={T.td}>{it.id}</td>
                   <td className={T.td}>
-                    <Link href={`/manager/sites/${it.id}`} className="font-semibold text-sky-600 hover:underline">
-                      {it.companyName}
-                    </Link>
+                    <div className="max-w-[150px] truncate">
+                      <span className="font-semibold text-sky-600 hover:underline">{it.companyName}</span>
+                    </div>
                   </td>
                   <td className={T.td}>
-                    {it.address}{it.detailAddress ? ` ${it.detailAddress}` : ""}
+                    <div className="max-w-[240px] truncate" title={`${it.address}${it.detailAddress ? ` ${it.detailAddress}` : ""}`}>
+                      {it.address}{it.detailAddress ? ` ${it.detailAddress}` : ""}
+                    </div>
                   </td>
-                  <td className={T.td}>
-                    {it.businessContactName || "-"}{it.businessContactPhone ? ` (${it.businessContactPhone})` : ""}
-                  </td>
-                  <td className={T.td}>
+                  <td className={T.td}><div className="max-w-[110px] truncate">{it.businessContactName || "-"}</div></td>
+                  <td className={T.td}><div className="max-w-[120px] truncate">{it.businessContactPhone || "-"}</div></td>
+                  <td className={T.td} onClick={e => e.stopPropagation()}>
                     {it.ownerManagerName ? (
-                      it.ownerManagerName
+                      <div className="max-w-[130px] truncate">{it.ownerManagerName}</div>
                     ) : (
                       <button
                         onClick={() => claimSite(it.id)}
-                        className="inline-flex h-7 items-center rounded-lg border border-sky-200 bg-sky-50 px-2.5 text-[13px] font-bold text-sky-700 active:scale-95"
+                        className="inline-flex h-7 items-center whitespace-nowrap rounded-lg border border-sky-200 bg-sky-50 px-2.5 text-[13px] font-bold text-sky-700 active:scale-95"
                       >
                         미지정 · 내 담당으로
                       </button>
                     )}
                   </td>
-                  <td className={T.td}>{it.agencyName || "-"}</td>
+                  <td className={T.td}><div className="max-w-[130px] truncate">{it.agencyName || "-"}</div></td>
                   <td className={T.td}>{it.allowanceRange ?? 100}m</td>
                   <td className={T.td}>
-                    <span className={it.basePointConfirmed ? "font-semibold text-emerald-600" : "text-slate-500"}>
+                    <span className={`text-[13px] ${it.basePointConfirmed ? "font-semibold text-emerald-600" : "text-slate-500"}`}>
                       {it.basePointConfirmed ? "확정" : "미확정"}
                     </span>
                   </td>
@@ -143,6 +146,14 @@ export default function AdminSitesPage() {
       </div>
 
       <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
+
+      {detailId && (
+        <SiteDetailModal
+          siteId={detailId}
+          onClose={() => setDetailId(null)}
+          onSaved={() => { setDetailId(null); fetchList(page); }}
+        />
+      )}
     </div>
   );
 }

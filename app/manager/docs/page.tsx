@@ -166,7 +166,7 @@ export default function AdminDocsPage() {
             <div className={T.tableWrap}>
               <table className="w-full">
                 <thead>
-                  <tr>{["구분", "직무지도원", "현장", "문서"].map(h => (
+                  <tr>{["구분", "직무지도원 성명", "현장(사업체)", "문서"].map(h => (
                     <th key={h} className="border-b border-slate-100 bg-slate-50 px-2.5 py-2 text-left text-[13px] font-black text-slate-500 whitespace-nowrap">{h}</th>
                   ))}</tr>
                 </thead>
@@ -178,8 +178,8 @@ export default function AdminDocsPage() {
                         <td className="px-2.5 py-1.5 align-middle whitespace-nowrap">
                           <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[12px] font-black ${isAdapt ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>{isAdapt ? "적응지도" : "지원훈련"}</span>
                         </td>
-                        <td className="px-2.5 py-1.5 align-middle whitespace-nowrap text-[14px] font-bold text-slate-800">{c.workerName}</td>
-                        <td className="px-2.5 py-1.5 align-middle whitespace-nowrap text-[13px] text-slate-500">{c.siteName}</td>
+                        <td className="px-2.5 py-1.5 align-middle text-[14px] font-bold text-slate-800"><div className="max-w-[120px] truncate">{c.workerName}</div></td>
+                        <td className="px-2.5 py-1.5 align-middle text-[13px] text-slate-500"><div className="max-w-[140px] truncate">{c.siteName}</div></td>
                         <td className="px-2.5 py-1.5 align-middle">
                           <div className="flex flex-nowrap items-center gap-2">
                             {DOC_DEFS.map(doc => {

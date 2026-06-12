@@ -27,7 +27,7 @@ function ScoreBar({ value, max = 5 }: { value: number | null; max?: number }) {
       <div className="h-2 w-20 flex-shrink-0 overflow-hidden rounded-full bg-slate-100">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs font-black text-slate-700">{value}</span>
+      <span className="text-xs font-black text-slate-700">{value.toFixed(1)}</span>
     </div>
   );
 }
@@ -42,7 +42,7 @@ function RateBar({ value }: { value: number }) {
       <div className="h-2 w-20 flex-shrink-0 overflow-hidden rounded-full bg-slate-100">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${value}%` }} />
       </div>
-      <span className="text-xs font-black text-slate-700">{value}%</span>
+      <span className="text-xs font-black text-slate-700">{value.toFixed(1)}%</span>
     </div>
   );
 }
@@ -100,7 +100,7 @@ export default function TraineeReportPage() {
   useEffect(() => { setPage(1); }, [search, statusFilter, data]);
 
   const avgLogRate = filtered.length > 0
-    ? Math.round(filtered.reduce((s, r) => s + r.logRate, 0) / filtered.length)
+    ? Math.round(filtered.reduce((s, r) => s + r.logRate, 0) / filtered.length * 10) / 10
     : 0;
   const avgScore = (() => {
     const scored = filtered.filter(r => r.avgScore !== null);
@@ -125,8 +125,8 @@ export default function TraineeReportPage() {
         items={[
           { label: "전체 훈련생", value: filtered.length },
           { label: "훈련 중", value: trainingCount, tone: "sky" },
-          { label: "평균 일지 작성률", value: `${avgLogRate}%`, tone: avgLogRate >= 80 ? "emerald" : avgLogRate >= 60 ? "amber" : "rose" },
-          { label: "평균 수행 점수 (/5)", value: avgScore ?? "-", tone: avgScore === null ? "slate" : avgScore >= 4 ? "emerald" : avgScore >= 3 ? "sky" : "amber" },
+          { label: "평균 일지 작성률", value: `${avgLogRate.toFixed(1)}%`, tone: avgLogRate >= 80 ? "emerald" : avgLogRate >= 60 ? "amber" : "rose" },
+          { label: "평균 수행 점수 (/5.0)", value: avgScore != null ? avgScore.toFixed(1) : "-", tone: avgScore === null ? "slate" : avgScore >= 4 ? "emerald" : avgScore >= 3 ? "sky" : "amber" },
         ]}
       />
 
@@ -172,34 +172,34 @@ export default function TraineeReportPage() {
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                {["훈련생", "장애유형", "상태", "사업장 / 직무지도원", "출근일", "일지작성", "작성률", "수행점수 (평균)", "종합평가"].map(h => (
+                {["훈련생(성별)", "장애유형", "상태", "현장(사업체)", "직무지도원 성명", "출근일", "일지작성", "작성률", "수행점수 (평균)", "종합평가"].map(h => (
                   <th key={h} className={T.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className={T.tdCenter}>조회 중...</td></tr>
+                <tr><td colSpan={10} className={T.tdCenter}>조회 중...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className={T.tdCenter}>{data.length === 0 ? "데이터가 없습니다." : "조건에 맞는 훈련생이 없습니다."}</td></tr>
+                <tr><td colSpan={10} className={T.tdCenter}>{data.length === 0 ? "데이터가 없습니다." : "조건에 맞는 훈련생이 없습니다."}</td></tr>
               ) : pageItems.map(row => (
                 <tr key={row.traineeId} className={T.trBase}>
                   <td className={T.td}>
-                    <span className="text-[15px] font-black text-slate-900">{row.traineeName}</span>
-                    <span className="ml-1.5 text-sm font-semibold text-slate-400">({row.gender === "M" ? "남" : "여"})</span>
+                    <div className="flex max-w-[140px] items-baseline">
+                      <span className="truncate text-[15px] font-black text-slate-900">{row.traineeName}</span>
+                      <span className="ml-1.5 shrink-0 text-sm font-semibold text-slate-400">({row.gender === "M" ? "남" : "여"})</span>
+                    </div>
                   </td>
-                  <td className={`${T.td} text-sm font-semibold text-slate-600`}>{row.disabilityType}</td>
+                  <td className={`${T.td} text-sm font-semibold text-slate-600`}><div className="max-w-[110px] truncate">{row.disabilityType}</div></td>
                   <td className={T.td}>
                     <StatusBadge status={row.status} map={STATUS_BADGE} />
                   </td>
-                  <td className={T.td}>
-                    <span className="text-[15px] font-semibold text-slate-800">{row.siteName}</span>
-                    <span className="ml-1.5 text-sm font-semibold text-slate-400">· {row.workerName}</span>
-                  </td>
-                  <td className={`${T.td} text-center font-black`}>
+                  <td className={`${T.td} text-[15px] font-semibold text-slate-800`}><div className="max-w-[150px] truncate">{row.siteName}</div></td>
+                  <td className={`${T.td} text-[15px] font-semibold text-slate-800`}><div className="max-w-[130px] truncate">{row.workerName}</div></td>
+                  <td className={`${T.td} font-black`}>
                     {row.totalWorkDays}일
                   </td>
-                  <td className={`${T.td} text-center font-black`}>
+                  <td className={`${T.td} font-black`}>
                     {row.daysWithLog}일
                   </td>
                   <td className={T.td}>
@@ -217,7 +217,7 @@ export default function TraineeReportPage() {
                         </p>
                       </div>
                     ) : (
-                      <span className="text-xs font-semibold text-slate-300">미작성</span>
+                      <span className="text-sm font-bold text-rose-500">미작성</span>
                     )}
                   </td>
                 </tr>

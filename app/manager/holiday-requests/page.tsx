@@ -212,7 +212,7 @@ export default function HolidayRequestsPage() {
           <table className="w-full">
             <thead>
               <tr>
-                {["날짜", "직무지도원", "현장", "사유", "근무인정", "요청 상태", ""].map(h => (
+                {["날짜", "직무지도원 성명", "현장(사업체)", "사유", "근무인정", "요청 상태", ""].map(h => (
                   <th key={h} className={T.th}>{h}</th>
                 ))}
               </tr>
@@ -221,9 +221,9 @@ export default function HolidayRequestsPage() {
               {pageItems.map(row => (
                 <tr key={row.id} className={T.trBase}>
                   <td className={T.td + " tabular-nums"}>{row.date}</td>
-                  <td className={T.td}>{row.workerName}</td>
-                  <td className={T.td}>{row.siteName}</td>
-                  <td className={T.td + " max-w-[160px] truncate"}>{row.reason ?? "-"}</td>
+                  <td className={T.td}><div className="max-w-[130px] truncate">{row.workerName}</div></td>
+                  <td className={T.td}><div className="max-w-[150px] truncate">{row.siteName}</div></td>
+                  <td className={T.td}><div className="max-w-[180px] truncate">{row.reason ?? "-"}</div></td>
                   <td className={T.td}>
                     <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
                       <button

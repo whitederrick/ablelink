@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Plus, X, MessageCircle } from "lucide-react";
+import { X, MessageCircle } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
@@ -118,8 +118,8 @@ export default function ManagerSupportPage() {
         title="운영자 문의"
         sub="데이터 수정 요청, 결제 문의 등을 Ablelink 운영팀에 보냅니다"
         actions={
-          <button onClick={() => setShowForm(true)} className={T.btnPrimary + " flex items-center gap-2"}>
-            <Plus className="h-4 w-4" />문의 등록
+          <button onClick={() => setShowForm(true)} className={T.btnPrimary}>
+            + 문의 등록
           </button>
         }
       />
@@ -197,20 +197,27 @@ export default function ManagerSupportPage() {
           ) : pageItems.length === 0 ? (
             <p className={T.empty}>{tickets.length === 0 ? "문의 내역이 없습니다." : "조건에 맞는 문의가 없습니다."}</p>
           ) : (
-            <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              {pageItems.map(t => (
-                <button key={t.id} onClick={() => setSelectedId(t.id)}
-                  className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-slate-50 ${selectedId === t.id ? "bg-slate-100" : ""}`}>
-                  <StatusBadge status={t.category} map={CAT_BADGE} />
-                  <StatusBadge status={t.status} map={SUP_STATUS} />
-                  <span className="flex-1 truncate text-[15px] font-semibold text-slate-800">{t.title}</span>
-                  <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{t.createdAt.slice(2, 10)}</span>
-                </button>
-              ))}
+            <div className={T.tableWrap}>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>{["유형", "상태", "제목", "등록일"].map(h => (
+                    <th key={h} className={T.th}>{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody>
+                  {pageItems.map(t => (
+                    <tr key={t.id} onClick={() => setSelectedId(t.id)}
+                      className={`${T.trBase} cursor-pointer hover:bg-slate-50 ${selectedId === t.id ? "bg-slate-100" : ""}`}>
+                      <td className={T.td}><StatusBadge status={t.category} map={CAT_BADGE} /></td>
+                      <td className={T.td}><StatusBadge status={t.status} map={SUP_STATUS} /></td>
+                      <td className={`${T.td} max-w-[240px]`}><div className="truncate font-semibold text-slate-800">{t.title}</div></td>
+                      <td className={`${T.td} whitespace-nowrap`}>{t.createdAt.slice(2, 10)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
             </div>
-          )}
-          {filtered.length > 0 && (
-            <Pagination className="mt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
           )}
         </div>
 

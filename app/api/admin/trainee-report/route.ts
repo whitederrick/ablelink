@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
           siteName:     asgn.site.companyName,
           totalWorkDays,
           daysWithLog,
-          logRate:      totalWorkDays > 0 ? Math.round(daysWithLog / totalWorkDays * 100) : 0,
+          logRate:      totalWorkDays > 0 ? Math.round(daysWithLog / totalWorkDays * 1000) / 10 : 0,
           avgScore,
           evalType:     latestEval?.evalType ?? null,
           evalPeriod:   latestEval ? `${latestEval.periodStart} ~ ${latestEval.periodEnd}` : null,

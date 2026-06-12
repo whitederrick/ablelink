@@ -10,19 +10,8 @@ import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
 import { workerLabel } from "../_format";
+import { docSubmitStatus, DOC_SUBMIT_BADGE } from "../_docStatus";
 
-const DOC_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
-  SUBMITTED: { label: "제출완료", tone: "sky" },
-  CONFIRMED: { label: "확정", tone: "violet" },
-  MANAGER_SIGNED: { label: "서명완료", tone: "emerald" },
-  CHANGES_REQUESTED: { label: "수정요청", tone: "rose" },
-};
-// 공단 제출 상태(signStage와 독립). 일지 관리엔 미제출·재제출요구만 표시.
-const GOV_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
-  NONE: { label: "미제출", tone: "slate" },
-  RESUBMIT: { label: "재제출요구", tone: "rose" },
-  SUBMITTED: { label: "제출완료", tone: "emerald" },
-};
 const DOC_PAGE_SIZE = 12;
 
 type Item = {
@@ -37,6 +26,7 @@ type Item = {
   signStage: string;
   govStatus: string;
   govSubmittedAt: string | null;
+  govSubmitCount: number;
   currentVersionId: string | null;
   versionNo: number | null;
   versionCount: number;
@@ -320,7 +310,7 @@ export default function ManagerDocumentsHub() {
                     })}
                   />
                 </th>
-                {["상태", "공단", "문서", "직무지도원 성명(아이디) · 현장 · 기간", "작업"].map(h => <th key={h} className={T.th}>{h}</th>)}
+                {["일지 제출 상태", "문서명", "직무지도원 성명(아이디)", "현장(사업체)", "근무 기간", "작업"].map(h => <th key={h} className={T.th}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -330,8 +320,7 @@ export default function ManagerDocumentsHub() {
                     <input type="checkbox" className="h-4 w-4 cursor-pointer accent-slate-900" aria-label="선택"
                       checked={selected.has(item.id)} onChange={() => toggleSel(item.id)} />
                   </td>
-                  <td className={T.td}><StatusBadge status={item.signStage} map={DOC_BADGE} /></td>
-                  <td className={T.td}><StatusBadge status={item.govStatus} map={GOV_BADGE} /></td>
+                  <td className={T.td}><StatusBadge status={docSubmitStatus(item)} map={DOC_SUBMIT_BADGE} /></td>
                   <td className={T.td}>
                     <span className="font-semibold text-slate-900">{item.docLabel}</span>
                     {item.traineeName && <span className="text-[13px] text-slate-500"> · {item.traineeName}</span>}
@@ -339,9 +328,9 @@ export default function ManagerDocumentsHub() {
                       <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[12px] font-black text-amber-700">v{item.versionNo}</span>
                     )}
                   </td>
-                  <td className={`${T.td} max-w-[260px] truncate text-[13px] text-slate-500`}>
-                    {workerLabel(item.workerName, item.workerLoginId)} · {item.siteName} · {item.periodStart}~{item.periodEnd}
-                  </td>
+                  <td className={T.td}><div className="max-w-[160px] truncate">{workerLabel(item.workerName, item.workerLoginId)}</div></td>
+                  <td className={T.td}><div className="max-w-[150px] truncate">{item.siteName}</div></td>
+                  <td className={`${T.td} whitespace-nowrap text-[13px] text-slate-500`}>{item.periodStart}~{item.periodEnd}</td>
                   <td className={T.td}>
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => openPreview(item)} className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-700 active:scale-95">문서 보기</button>

@@ -33,8 +33,8 @@ export async function PATCH(req: NextRequest) {
       where: { id: { in: ids }, agencyId: scope.agencyId, signStage: { not: "DRAFT" } },
       data: {
         govStatus: status,
-        // 제출완료로 표시할 때 제출시각 기록(이미 있으면 갱신). 그 외 상태는 기존 시각 유지.
-        ...(status === "SUBMITTED" ? { govSubmittedAt: new Date() } : {}),
+        // 제출완료로 표시할 때 제출시각 기록 + 발송 횟수 증가(앱 외 수동 제출도 n차로 누적).
+        ...(status === "SUBMITTED" ? { govSubmittedAt: new Date(), govSubmitCount: { increment: 1 } } : {}),
       },
     });
 

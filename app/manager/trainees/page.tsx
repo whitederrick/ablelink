@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo } from "react";
-import { Plus, X } from "lucide-react";
+import { X, Pencil } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
@@ -101,10 +101,10 @@ export default function TraineesPage() {
     <div className="space-y-5">
       <PageHeader
         title="훈련생 현황 관리"
-        sub={`전체 ${trainees.length}명 훈련생`}
+        sub="현장(사업체)에서 직무지도를 받는 훈련생의 명단과 훈련 진행 상태를 등록하고 관리합니다."
         actions={
-          <button onClick={openCreate} className={`${T.btnPrimary} flex items-center gap-1.5`}>
-            <Plus className="h-4 w-4"/>훈련생 등록
+          <button onClick={openCreate} className={T.btnPrimary}>
+            + 훈련생 등록
           </button>
         }
       />
@@ -122,7 +122,7 @@ export default function TraineesPage() {
       <ListToolbar
         query={query}
         onQueryChange={setQuery}
-        placeholder="이름·현장·장애유형 검색"
+        placeholder="이름·현장(사업체)·장애유형 검색"
         filters={filters}
         selected={statusFilter}
         onToggleFilter={toggleStatus}
@@ -138,7 +138,7 @@ export default function TraineesPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
-                <label className="mb-1 block text-xs font-semibold text-slate-600">현장 *</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">현장(사업체) *</label>
                 <select value={form.siteId} onChange={e=>setForm(f=>({...f,siteId:e.target.value}))}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400">
                   <option value="">현장 선택</option>
@@ -198,24 +198,27 @@ export default function TraineesPage() {
         <div className={T.tableWrap}>
           <table className="w-full border-collapse">
             <thead>
-              <tr>{["이름", "현장", "성별", "생년월일", "연락처", "장애유형", "장애정도", "상태", ""].map(h => (
+              <tr>{["이름", "현장(사업체)", "성별", "생년월일", "연락처", "장애유형", "장애정도", "상태", "작업"].map(h => (
                 <th key={h} className={T.th}>{h}</th>
               ))}</tr>
             </thead>
             <tbody>
               {pageItems.map(t => (
                 <tr key={t.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50`} onClick={() => openEdit(t)}>
-                  <td className={`${T.td} font-semibold text-slate-900`}>{t.name}</td>
-                  <td className={T.td}>{t.siteName}</td>
+                  <td className={`${T.td} font-semibold text-slate-900`}><div className="max-w-[120px] truncate">{t.name}</div></td>
+                  <td className={T.td}><div className="max-w-[150px] truncate">{t.siteName}</div></td>
                   <td className={T.td}>{t.gender === "M" ? "남" : "여"}</td>
                   <td className={T.td}>{t.birthDate || "-"}</td>
                   <td className={T.td}>{t.phoneNumber || "-"}</td>
-                  <td className={T.td}>{t.disabilityType}</td>
+                  <td className={T.td}><div className="max-w-[120px] truncate">{t.disabilityType}</div></td>
                   <td className={T.td}>{t.severity}</td>
                   <td className={T.td}><StatusBadge status={t.status} map={STATUS_BADGE} /></td>
                   <td className={T.td} onClick={e => e.stopPropagation()}>
                     <button onClick={() => openEdit(t)}
-                      className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50">수정</button>
+                      className="inline-flex h-7 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50">
+                      <Pencil className="h-3.5 w-3.5" />
+                      수정
+                    </button>
                   </td>
                 </tr>
               ))}

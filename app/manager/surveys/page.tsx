@@ -95,7 +95,7 @@ function RequestModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
               </>
             )}
           </div>
-          <div className="space-y-1.5"><label className={T.label}>사업체명 (선택)</label><input value={siteName} onChange={e => setSiteName(e.target.value)} placeholder="사업체명" className={`w-full ${T.input}`} /></div>
+          <div className="space-y-1.5"><label className={T.label}>현장(사업체) (선택)</label><input value={siteName} onChange={e => setSiteName(e.target.value)} placeholder="현장(사업체)명" className={`w-full ${T.input}`} /></div>
           <div className="space-y-1.5"><label className={T.label}>사업체 담당자명 (선택)</label><input value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="담당자명" className={`w-full ${T.input}`} /></div>
           <div className="space-y-1.5"><label className={T.label}>사업체 담당자 연락처 * (알림톡 발송)</label><input value={recipientPhone} onChange={e => setRecipientPhone(e.target.value)} placeholder="010-1234-5678" className={`w-full ${T.input}`} /></div>
         </div>
@@ -169,7 +169,7 @@ export default function ManagerSurveysPage() {
       <ListToolbar
         query={query}
         onQueryChange={setQuery}
-        placeholder="직무지도원·사업체·담당자 검색"
+        placeholder="직무지도원·현장(사업체)·담당자 검색"
         filters={filters}
         selected={statusFilter}
         onToggleFilter={toggleStatus}
@@ -177,16 +177,17 @@ export default function ManagerSurveysPage() {
 
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
-          <thead><tr>{["직무지도원 성명(아이디)", "사업체명", "사업체 담당자", "상태", "결과", "요청일"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{["직무지도원 성명(아이디)", "현장(사업체)", "사업체 담당자 성명", "사업체 담당자 연락처", "상태", "결과", "요청일"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={6} className={T.tdCenter}>로딩 중...</td></tr>
-            : filtered.length === 0 ? <tr><td colSpan={6} className={T.tdCenter}>{items.length === 0 ? "요청한 조사가 없습니다." : "조건에 맞는 조사가 없습니다."}</td></tr>
+            {loading ? <tr><td colSpan={7} className={T.tdCenter}>로딩 중...</td></tr>
+            : filtered.length === 0 ? <tr><td colSpan={7} className={T.tdCenter}>{items.length === 0 ? "요청한 조사가 없습니다." : "조건에 맞는 조사가 없습니다."}</td></tr>
             : pageItems.map(s => {
               return (
                 <tr key={s.id} className={T.trBase}>
-                  <td className={T.td}>{workerLabel(s.workerName, s.workerLoginId)}</td>
-                  <td className={T.td}>{s.siteName || "-"}</td>
-                  <td className={T.td}>{s.recipientName || "-"}{s.recipientPhone ? ` (${s.recipientPhone})` : ""}</td>
+                  <td className={T.td}><div className="max-w-[160px] truncate">{workerLabel(s.workerName, s.workerLoginId)}</div></td>
+                  <td className={T.td}><div className="max-w-[150px] truncate">{s.siteName || "-"}</div></td>
+                  <td className={T.td}><div className="max-w-[110px] truncate">{s.recipientName || "-"}</div></td>
+                  <td className={T.td}>{s.recipientPhone || "-"}</td>
                   <td className={T.td}><StatusBadge status={s.status} map={STATUS_BADGE} />{s.auto && <span className="ml-1 text-[13px] text-slate-500">자동</span>}</td>
                   <td className={T.td}>{s.status === "RESPONDED" ? (s.sharedWithAgency && s.overallScore != null ? <span className="font-semibold text-slate-800">종합 {s.overallScore}/5</span> : <span className="text-slate-500">운영자 확인</span>) : "-"}</td>
                   <td className={T.td}>{s.createdAt.slice(0, 10)}</td>

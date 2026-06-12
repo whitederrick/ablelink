@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       take: 50,
       include: {
-        user: { select: { workerName: true, phoneNumber: true } },
+        user: { select: { workerName: true, loginId: true, phoneNumber: true } },
       },
     });
 
@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
         id: String(r.id),
         workerId: String(r.workerId),
         workerName: r.user.workerName,
+        loginId: r.user.loginId,
         userPhone: r.user.phoneNumber,
         contractStart: r.contractStart.toISOString(),
         contractEnd: r.contractEnd.toISOString(),

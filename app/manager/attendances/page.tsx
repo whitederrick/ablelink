@@ -9,6 +9,7 @@ import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import StatusBadge from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
 import { List, Map as MapIcon, CalendarDays, Download } from "lucide-react";
+import { workerLabel } from "../_format";
 
 const LIST_PAGE_SIZE = 10;
 // 근태 상태 뱃지 매핑(공통 톤)
@@ -32,7 +33,7 @@ type AttendanceItem = {
   startDistanceM: number | null; endDistanceM: number | null;
   withinRange: boolean | null; rangeM: number | null;
   site: { companyName: string } | null;
-  user: { workerName: string; phoneNumber: string } | null;
+  user: { workerName: string; loginId: string; phoneNumber: string } | null;
 };
 
 type ViewMode = "list" | "map" | "monthly";
@@ -114,8 +115,8 @@ function MonthlyView({ items, yearMonth }: { items: AttendanceItem[]; yearMonth:
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 min-w-[100px] border border-slate-200 bg-slate-50 px-3 py-2 text-left font-black text-slate-700">직무지도원</th>
-              <th className="sticky left-[100px] z-10 min-w-[80px] border border-slate-200 bg-slate-50 px-2 py-2 text-center font-black text-slate-700">현장</th>
+              <th className="sticky left-0 z-10 min-w-[100px] border border-slate-200 bg-slate-50 px-3 py-2 text-left font-black text-slate-700">직무지도원 성명</th>
+              <th className="sticky left-[100px] z-10 min-w-[80px] border border-slate-200 bg-slate-50 px-2 py-2 text-center font-black text-slate-700">현장(사업체)</th>
               {dayNums.map(d => {
                 const weekday = new Date(y, m - 1, d).getDay();
                 return (
@@ -316,7 +317,7 @@ export default function AttendancesPage() {
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                {["날짜", "직무지도원", "현장", "출근", "퇴근", "상태", "GPS", "출근 거리"].map(h => (
+                {["날짜", "직무지도원 성명(아이디)", "전화번호", "현장(사업체)", "출근", "퇴근", "상태", "GPS", "출근 거리"].map(h => (
                   <th key={h} className={T.th}>{h}</th>
                 ))}
               </tr>
@@ -325,10 +326,9 @@ export default function AttendancesPage() {
               {pageItems.map(row => (
                 <tr key={row.id} className={T.trBase}>
                   <td className={T.td}>{row.workDate}</td>
-                  <td className={T.td}>
-                    {row.user?.workerName || "-"}{row.user?.phoneNumber ? ` (${row.user.phoneNumber})` : ""}
-                  </td>
-                  <td className={T.td}>{row.site?.companyName || "-"}</td>
+                  <td className={T.td}><div className="max-w-[160px] truncate">{row.user ? workerLabel(row.user.workerName, row.user.loginId) : "-"}</div></td>
+                  <td className={T.td}>{row.user?.phoneNumber || "-"}</td>
+                  <td className={T.td}><div className="max-w-[150px] truncate">{row.site?.companyName || "-"}</div></td>
                   <td className={T.td}>
                     {row.actualStartTime ? (
                       <span className="flex items-baseline gap-1.5">

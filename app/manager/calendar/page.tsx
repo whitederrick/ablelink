@@ -105,7 +105,7 @@ export default function ManagerCalendarPage() {
 
   return (
     <div>
-      <PageHeader title="근태 캘린더" sub="현장·직무지도원을 선택해 월간 출근 현황을 확인합니다." />
+      <PageHeader title="근태 캘린더" sub="현장(사업체)·직무지도원을 선택해 월간 출근 현황을 확인합니다." />
 
       <StatCardRow
         className="mb-5"

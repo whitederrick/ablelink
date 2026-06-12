@@ -9,6 +9,7 @@ import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
 import { X } from "lucide-react";
 import { computeWorkTimes, type WorkType } from "@/lib/workSchedule";
+import { workerLabel } from "../_format";
 
 // 근무형태별 휴게시간 프리셋(근무 4h 후 30분 / 전일 점심 1h). 수동 수정 가능.
 const BREAK_PRESETS: Record<Exclude<WorkType, "CUSTOM">, { start: string; end: string }> = {
@@ -59,7 +60,7 @@ const STANDARD_CLAUSES: { title: string; body: string }[] = [
 type ContractStatus = "PENDING" | "SIGNED" | "COMPLETED" | "CANCELLED";
 
 interface ContractItem {
-  id: string; workerId: string; workerName: string; userPhone: string;
+  id: string; workerId: string; workerName: string; loginId: string; userPhone: string;
   contractStart: string; contractEnd: string; siteName: string | null;
   workLocation: string | null;
   workType: string | null; status: ContractStatus; signToken: string;
@@ -128,14 +129,14 @@ function WorkerSearchPopup({ onSelect, onClose }: { onSelect: (r: SearchResult) 
           {!searching && results.length > 0 && (
             <div className={T.tableWrap}>
               <table className="w-full border-collapse">
-                <thead><tr>{["이름", "전화번호", "이메일", "최근 사업체", "근무 기간"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{["이름", "전화번호", "이메일", "최근 현장(사업체)", "근무 기간"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
                 <tbody>
                   {results.map(r => (
                     <tr key={r.id} onClick={() => { onSelect(r); onClose(); }} className={`${T.trBase} cursor-pointer hover:bg-sky-50`}>
-                      <td className={`${T.td} font-black text-slate-900`}>{r.workerName}</td>
+                      <td className={`${T.td} font-black text-slate-900`}><div className="max-w-[100px] truncate">{r.workerName}</div></td>
                       <td className={`${T.td} text-slate-600`}>{r.phoneNumber}</td>
-                      <td className={`${T.td} text-xs text-slate-400`}>{r.email || "-"}</td>
-                      <td className={`${T.td} text-slate-600`}>{r.siteName || <span className="text-slate-300">미지정</span>}</td>
+                      <td className={`${T.td} text-xs text-slate-400`}><div className="max-w-[140px] truncate">{r.email || "-"}</div></td>
+                      <td className={`${T.td} text-slate-600`}><div className="max-w-[120px] truncate">{r.siteName || <span className="text-slate-300">미지정</span>}</div></td>
                       <td className={`${T.td} whitespace-nowrap text-xs text-slate-400`}>{formatPeriod(r.contractStart, r.contractEnd)}</td>
                     </tr>
                   ))}
@@ -699,7 +700,7 @@ export default function AdminContractsPage() {
     <div className="space-y-5">
       <PageHeader
         title="근로계약서 관리 (Pro+)"
-        sub="고용노동부 표준양식 기반 전자계약서 생성·발송·조회"
+        sub="고용노동부 표준양식으로 직무지도원의 전자 근로계약서를 작성하고, 직무지도원에게 발송하거나 작성된 계약서를 조회합니다."
         actions={
           <div className="flex gap-2">
             <button onClick={() => setShowClauses(true)} className={T.btnSecondary}>특약 조항 관리</button>
@@ -736,16 +737,17 @@ export default function AdminContractsPage() {
 
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
-          <thead><tr>{["직무지도원", "계약 기간", "근무장소", "상태", "서명일", "관리"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{["직무지도원 성명(아이디)", "전화번호", "계약 기간", "근무장소", "상태", "서명일", "관리"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={6} className={T.tdCenter}>로딩 중...</td></tr>
-            : filtered.length === 0 ? <tr><td colSpan={6} className={T.tdCenter}>{contracts.length === 0 ? "계약서가 없습니다." : "조건에 맞는 계약서가 없습니다."}</td></tr>
+            {loading ? <tr><td colSpan={7} className={T.tdCenter}>로딩 중...</td></tr>
+            : filtered.length === 0 ? <tr><td colSpan={7} className={T.tdCenter}>{contracts.length === 0 ? "계약서가 없습니다." : "조건에 맞는 계약서가 없습니다."}</td></tr>
             : pageItems.map(c => {
               return (
                 <tr key={c.id} className={T.trBase}>
-                  <td className={T.td}>{c.workerName}{c.userPhone ? ` (${c.userPhone})` : ""}</td>
+                  <td className={T.td}><div className="max-w-[160px] truncate">{workerLabel(c.workerName, c.loginId)}</div></td>
+                  <td className={T.td}>{c.userPhone || "-"}</td>
                   <td className={`${T.td} whitespace-nowrap`}>{c.contractStart?.slice(0, 10)} ~ {c.contractEnd?.slice(0, 10)}</td>
-                  <td className={T.td}>{c.workLocation || c.siteName || <span className="text-slate-400">미지정</span>}</td>
+                  <td className={T.td}><div className="max-w-[200px] truncate">{c.workLocation || c.siteName || <span className="text-slate-400">미지정</span>}</div></td>
                   <td className={T.td}><StatusBadge status={c.status} map={STATUS_BADGE} /></td>
                   <td className={T.td}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>

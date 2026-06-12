@@ -202,7 +202,7 @@ export default function ManagerTalentPage() {
                 <option key={s.id} value={s.id}>{s.companyName}{s.agencyName ? ` (${s.agencyName})` : ""}</option>
               ))}
             </select>
-            <input value={offerSite} onChange={(e) => setOfferSite(e.target.value)} placeholder="제안 현장/사업체명 (선택, 텍스트)" className={`mt-2 w-full ${T.input}`} />
+            <input value={offerSite} onChange={(e) => setOfferSite(e.target.value)} placeholder="제안 현장(사업체) (선택, 텍스트)" className={`mt-2 w-full ${T.input}`} />
             <label className="mt-3 block text-xs font-bold text-slate-500">직무지도 기간 * — 일정 겹침 판정 기준</label>
             <div className="mt-1 flex items-center gap-2">
               <input type="date" value={offerStart} onChange={(e) => setOfferStart(e.target.value)} className={`w-full ${T.input}`} />
