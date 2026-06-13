@@ -8,6 +8,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { getWorkerPremiumStatus, getWorkerDocAccess } from "@/lib/planGuard";
 import { getKstDateString } from "@/lib/time";
+import { effectiveTrainingType } from "@/lib/serviceStep";
 
 export async function GET(request: NextRequest) {
   try {
@@ -98,10 +99,8 @@ export async function GET(request: NextRequest) {
         fieldTrainingStart: assignment.startDate?.toISOString() ?? null,
         fieldTrainingEnd: assignment.endDate?.toISOString() ?? null,
         attendanceId: todayAttendance?.id?.toString() ?? null,
-        // 훈련 단계
-        trainingType: (assignment as any)?.serviceStep === "PRE_TRAINING"
-          ? "PRE" : (assignment as any)?.serviceStep === "ADAPTATION"
-          ? "ADAPTATION" : "FIELD",
+        // 훈련 단계(오늘 기준 — 전환일 지나면 적응지도)
+        trainingType: effectiveTrainingType((assignment as any)?.serviceStep, (assignment as any)?.adaptationStartDate, todayStr),
       },
     }, {
       // 브라우저가 과거(전환 전) 값을 캐시로 먼저 반환해 화면이 잠깐 옛 단계로 보이는 것 방지

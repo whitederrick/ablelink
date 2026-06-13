@@ -7,13 +7,15 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
+import { effectiveTrainingType } from "@/lib/serviceStep";
 
 export async function GET(req: NextRequest) {
   const session = await getWorkerSessionFromReq(req);
   if (!session) return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
 
   const workerId = BigInt(session.workerId);
-  const today = new Date(`${getKstDateString()}T00:00:00.000Z`);
+  const todayStr = getKstDateString();
+  const today = new Date(`${todayStr}T00:00:00.000Z`);
 
   // 단일 쿼리: 활성 배정 + 현장명 + 사업체담당자 + 훈련생
   const assignment = await prisma.siteAssignment.findFirst({
@@ -25,6 +27,7 @@ export async function GET(req: NextRequest) {
     },
     select: {
       serviceStep: true,
+      adaptationStartDate: true,
       site: {
         select: {
           companyName: true,
@@ -39,10 +42,8 @@ export async function GET(req: NextRequest) {
   const noStore = { headers: { "Cache-Control": "no-store" } };
   if (!assignment?.site) return NextResponse.json({ success: true, data: null }, noStore);
 
-  const trainingType =
-    assignment.serviceStep === "PRE_TRAINING" ? "PRE"
-    : assignment.serviceStep === "ADAPTATION" ? "ADAPTATION"
-    : "FIELD";
+  // 오늘 기준 단계(전환일 지나면 적응지도)
+  const trainingType = effectiveTrainingType(assignment.serviceStep, (assignment as any).adaptationStartDate, todayStr);
 
   return NextResponse.json({
     success: true,

@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import { effectiveTrainingType } from "@/lib/serviceStep";
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
           },
         },
         assignment: {
-          select: { serviceStep: true },
+          select: { serviceStep: true, adaptationStartDate: true },
         },
       },
       orderBy: { workDate: "desc" },
@@ -43,10 +44,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       attendances: attendances.map(a => {
-        const step = (a.assignment as any)?.serviceStep;
-        const trainingType =
-          step === "PRE_TRAINING" ? "PRE" :
-          step === "ADAPTATION"   ? "ADAPTATION" : "FIELD";
+        // 해당 출근일 기준 단계(전환일 반영)
+        const trainingType = effectiveTrainingType((a.assignment as any)?.serviceStep, (a.assignment as any)?.adaptationStartDate, a.workDate);
         return {
           attendanceId:  a.id.toString(),
           workDate:      a.workDate,

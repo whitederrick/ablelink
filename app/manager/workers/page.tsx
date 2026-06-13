@@ -7,7 +7,7 @@ import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
-import { CheckCircle2, Copy, Pencil, Send } from "lucide-react";
+import { CheckCircle2, Copy, Send, X } from "lucide-react";
 import { workerLabel } from "../_format";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM";
@@ -15,8 +15,10 @@ type ServiceStep = "PRE_TRAINING" | "FIELD_TRAINING" | "ADAPTATION";
 
 interface Assignment {
   id: string;
+  siteId: string;
   workType: WorkType;
   serviceStep: ServiceStep;
+  adaptationStartDate: string | null; // 지원고용 훈련 → 적응지도 전환일(있으면 복합 2단계)
   commuteGuidanceIncluded: boolean;
   attendanceButtonExempt?: boolean;
   customWorkStart: string | null;
@@ -27,7 +29,7 @@ interface Assignment {
 
 // 서비스 단계(지원고용/적응지도) — 문서 세트와 일지 종류를 결정. 현장은 지원고용→적응지도로 전환될 수 있음.
 const SERVICE_STEP_OPTIONS: { value: ServiceStep; label: string; desc: string }[] = [
-  { value: "FIELD_TRAINING", label: "지원고용 현장훈련", desc: "훈련일지·훈련생 종합평가" },
+  { value: "FIELD_TRAINING", label: "지원고용 훈련", desc: "훈련일지·훈련생 종합평가" },
   { value: "ADAPTATION",     label: "취업 후 적응지도", desc: "적응지도 일지·종합평가" },
 ];
 
@@ -39,7 +41,7 @@ interface Worker {
   planType: string;
   status: string;
   createdAt: string;
-  activeAssignment: { siteName: string; agencyName: string; startDate: string; assignmentId?: string; workType?: WorkType } | null;
+  activeAssignment: { siteName: string; agencyName: string; startDate: string; assignmentId?: string; workType?: WorkType; serviceStep?: ServiceStep; adaptationStartDate?: string | null } | null;
 }
 
 const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
@@ -218,8 +220,12 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   onClose: () => void; onSaved: (updated: Assignment) => void;
 }) {
   const [workType, setWorkType] = useState<WorkType>(initial.workType ?? "FULL_DAY");
-  // 적응지도면 ADAPTATION, 그 외(사전/현장훈련)는 지원고용으로 취급
-  const [serviceStep, setServiceStep] = useState<ServiceStep>(initial.serviceStep === "ADAPTATION" ? "ADAPTATION" : "FIELD_TRAINING");
+  // 현장 구분(복수 선택): 지원고용 훈련 / 적응지도. 둘 다면 전환일 기준 1배정을 단계 분할.
+  // 초기값: 전환일 있으면 둘 다, 없으면 serviceStep 단건.
+  const initDual = !!initial.adaptationStartDate;
+  const [wantField, setWantField] = useState(initDual || initial.serviceStep !== "ADAPTATION");
+  const [wantAdapt, setWantAdapt] = useState(initDual || initial.serviceStep === "ADAPTATION");
+  const [splitDate, setSplitDate] = useState(initial.adaptationStartDate ? initial.adaptationStartDate.slice(0, 10) : "");
   const [commuteGuidanceIncluded, setCommuteGuidanceIncluded] = useState(initial.commuteGuidanceIncluded ?? true);
   // 면제는 운영자 전용 — 매니저 화면에선 읽기 전용으로 표시하고 값은 그대로 보존
   const [attendanceButtonExempt] = useState(initial.attendanceButtonExempt ?? false);
@@ -259,6 +265,17 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   }
 
   async function handleSave() {
+    if (!wantField && !wantAdapt) { setError("현장 구분을 1개 이상 선택하세요."); return; }
+    const dual = wantField && wantAdapt;
+    if (dual) {
+      if (!splitDate) { setError("적응지도 전환일을 입력하세요."); return; }
+      if (cStart && splitDate <= cStart) { setError("전환일은 계약 시작일 이후여야 합니다."); return; }
+      if (cEnd && splitDate > cEnd) { setError("전환일은 계약 종료일 이내여야 합니다."); return; }
+    }
+    // 둘 다 → FIELD_TRAINING + 전환일(이후 적응지도) / 단건 → 해당 구분, 전환일 없음
+    const newServiceStep: ServiceStep = (wantAdapt && !wantField) ? "ADAPTATION" : "FIELD_TRAINING";
+    const newAdaptationStart = dual ? splitDate : null;
+
     setSaving(true); setError("");
     try {
       const res = await fetch(`/api/admin/assignments/${assignmentId}`, {
@@ -266,7 +283,8 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workType,
-          serviceStep,
+          serviceStep: newServiceStep,
+          adaptationStartDate: newAdaptationStart, // null이면 단건으로 초기화
           commuteGuidanceIncluded: isFullDay ? false : commuteGuidanceIncluded,
           attendanceButtonExempt,
           customWorkStart: workStart,
@@ -278,7 +296,8 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
       onSaved({
-        ...initial, workType, serviceStep,
+        ...initial, workType, serviceStep: newServiceStep,
+        adaptationStartDate: newAdaptationStart ? new Date(newAdaptationStart).toISOString() : null,
         commuteGuidanceIncluded: isFullDay ? false : commuteGuidanceIncluded,
         attendanceButtonExempt,
         customWorkStart: workStart,
@@ -293,27 +312,45 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   }
 
   return (
-    <div className={T.modalOverlay}>
-      <div className="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-8 shadow-2xl shadow-slate-950/20">
-        <h2 className="mb-1 text-lg font-black text-slate-900">배정 설정</h2>
-        <p className="mb-6 text-sm font-semibold text-slate-400">{worker.workerName} · {worker.activeAssignment?.siteName}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={onClose}>
+      <div className="w-full max-w-[62rem] max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-black text-slate-900">배정 설정</h2>
+            <p className="mt-0.5 text-[13px] font-semibold text-slate-400">{worker.workerName} · {worker.activeAssignment?.siteName}</p>
+          </div>
+          <button onClick={onClose} className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"><X className="h-5 w-5" /></button>
+        </div>
 
         <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
-        {/* 서비스 단계 선택 (지원고용 ↔ 적응지도) */}
+        {/* 현장 구분(복수 선택) — 지원고용 훈련 / 적응지도. 둘 다면 전환일로 단계 분할 */}
         <div>
-          <label className={T.label}>서비스 단계</label>
+          <label className={T.label}>현장 구분 <span className="font-semibold text-slate-400">(복수 선택 가능)</span></label>
           <div className="grid grid-cols-2 gap-2">
-            {SERVICE_STEP_OPTIONS.map(opt => (
-              <button key={opt.value} type="button" onClick={() => setServiceStep(opt.value)}
-                className={`rounded-xl border px-3 py-2.5 text-left transition active:scale-95 ${
-                  serviceStep === opt.value ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                }`}>
-                <span className={`block text-sm ${serviceStep === opt.value ? "font-black" : "font-semibold"}`}>{opt.label}</span>
-                <span className={`block text-xs ${serviceStep === opt.value ? "text-slate-300" : "text-slate-400"}`}>{opt.desc}</span>
-              </button>
-            ))}
+            {SERVICE_STEP_OPTIONS.map(opt => {
+              const on = opt.value === "ADAPTATION" ? wantAdapt : wantField;
+              const toggle = () => opt.value === "ADAPTATION" ? setWantAdapt(v => !v) : setWantField(v => !v);
+              return (
+                <button key={opt.value} type="button" onClick={toggle}
+                  className={`rounded-xl border px-3 py-2.5 text-left transition active:scale-95 ${
+                    on ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}>
+                  <span className={`block text-sm ${on ? "font-black" : "font-semibold"}`}>{opt.label}</span>
+                  <span className={`block text-xs ${on ? "text-slate-300" : "text-slate-400"}`}>{opt.desc}</span>
+                </button>
+              );
+            })}
           </div>
-          <p className="mt-1.5 text-xs font-semibold text-slate-400">현장이 취업 후 적응지도로 전환되면 여기서 변경하세요. 과거 일지는 그대로 보존됩니다.</p>
+          {wantField && wantAdapt ? (
+            <div className="mt-2">
+              <label className="mb-1 block text-xs font-black text-slate-700">적응지도 전환일 (이 날부터 적응지도)</label>
+              <input type="date" value={splitDate} min={cStart || undefined} max={cEnd || undefined}
+                onChange={e => setSplitDate(e.target.value)} className={`w-full ${T.input}`} />
+              <p className="mt-1 text-xs font-semibold text-slate-400">전체 계약기간 중 전환일 전날까지 지원고용 훈련, 전환일부터 적응지도로 구분됩니다.</p>
+            </div>
+          ) : (
+            <p className="mt-1.5 text-xs font-semibold text-slate-400">둘 다 선택하면 한 계약 기간을 전환일 기준으로 지원고용 훈련 → 적응지도로 나눕니다. 과거 일지는 그대로 보존됩니다.</p>
+          )}
         </div>
 
         {/* 근무형태 선택 */}
@@ -422,129 +459,6 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   );
 }
 
-// ── 직무지도원 정보 수정 모달 ─────────────────────────────
-function WorkerInfoModal({ worker, onClose, onSaved }: {
-  worker: Worker; onClose: () => void; onSaved: (updated: Partial<Worker>) => void;
-}) {
-  const [workerName,    setUserName]    = useState(worker.workerName);
-  const [phoneNumber, setPhoneNumber] = useState(worker.phoneNumber);
-  const [resetPw,     setResetPw]     = useState(false);
-  const [saving,      setSaving]      = useState(false);
-  const [error,       setError]       = useState("");
-  const [tempPw,      setTempPw]      = useState<string | null>(null);
-
-  // 급여 계좌(셀프 입력 우선, 매니저 보완 가능) + 통장사본 조회
-  const [bankName,      setBankName]      = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [accountHolder, setAccountHolder] = useState("");
-  const [passbookUrl,   setPassbookUrl]   = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch(`/api/admin/workers/${worker.id}`).then(r => r.json()).then(d => {
-      if (d.success) {
-        setBankName(d.data.bankName ?? "");
-        setAccountNumber(d.data.accountNumber ?? "");
-        setAccountHolder(d.data.accountHolder ?? "");
-        setPassbookUrl(d.data.passbookUrl ?? null);
-      }
-    }).catch(() => {});
-  }, [worker.id]);
-
-  async function handleSave() {
-    setSaving(true); setError("");
-    try {
-      const res = await fetch(`/api/admin/workers/${worker.id}`, {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          workerName:      workerName.trim() !== worker.workerName ? workerName.trim() : undefined,
-          phoneNumber:   phoneNumber !== worker.phoneNumber   ? phoneNumber    : undefined,
-          resetPassword: resetPw,
-          bankName, accountNumber, accountHolder,
-        }),
-      });
-      const data = await res.json();
-      if (!data.success) { setError(data.message); return; }
-      if (data.tempPassword) { setTempPw(data.tempPassword); return; }
-      onSaved({ workerName: workerName.trim(), phoneNumber });
-      onClose();
-    } catch { setError("저장에 실패했습니다."); }
-    finally   { setSaving(false); }
-  }
-
-  if (tempPw) {
-    return (
-      <div className={T.modalOverlay}>
-        <div className={T.modalContent}>
-          <h2 className="mb-3 text-base font-black text-slate-900">임시 비밀번호 발급 완료</h2>
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <p className="text-xs font-semibold text-amber-600 mb-1">{worker.workerName}님의 임시 비밀번호</p>
-            <p className="text-2xl font-black tracking-widest text-amber-900">{tempPw}</p>
-          </div>
-          <p className="mb-4 text-xs font-semibold text-slate-500">직무지도원에게 임시 비밀번호를 안내해주세요. 로그인 후 변경 요청됩니다.</p>
-          <button onClick={() => { onSaved({ workerName: workerName.trim(), phoneNumber }); onClose(); }}
-            className={T.btnPrimary}>확인</button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={T.modalOverlay}>
-      <div className={T.modalContent}>
-        <h2 className="mb-1 text-base font-black text-slate-900">직무지도원 정보 수정</h2>
-        <p className="mb-5 text-sm font-semibold text-slate-400">{worker.workerName}</p>
-
-        <div className="mb-4">
-          <label className={T.label}>이름</label>
-          <input value={workerName} onChange={e => setUserName(e.target.value)} className={T.input} />
-        </div>
-
-        <div className="mb-4">
-          <label className={T.label}>전화번호</label>
-          <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)}
-            placeholder="010-0000-0000" type="tel" className={T.input} />
-        </div>
-
-        {/* 급여 계좌 (직무지도원 셀프 입력 우선, 매니저 보완 가능) */}
-        <div className="mb-4 rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <label className={`${T.label} mb-0`}>급여 계좌</label>
-            {passbookUrl
-              ? <a href={passbookUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100">통장사본 보기</a>
-              : <span className="text-[11px] font-semibold text-slate-400">통장사본 미등록</span>}
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="은행명" className={T.input} />
-            <input value={accountHolder} onChange={e => setAccountHolder(e.target.value)} placeholder="예금주" className={T.input} />
-          </div>
-          <input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} placeholder="계좌번호" className={`w-full ${T.input}`} />
-        </div>
-
-        <div className="mb-5">
-          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <input type="checkbox" checked={resetPw} onChange={e => setResetPw(e.target.checked)}
-              className="h-4 w-4 accent-slate-950" />
-            <div>
-              <span className="text-sm font-black text-slate-900">임시 비밀번호 발급</span>
-              <p className="mt-0.5 text-xs font-semibold text-slate-400">새 임시 비밀번호를 생성하여 화면에 표시합니다.</p>
-            </div>
-          </label>
-        </div>
-
-        {error && <p className="mb-3 text-sm font-semibold text-rose-600">{error}</p>}
-
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className={T.btnSecondary}>취소</button>
-          <button onClick={handleSave} disabled={saving} className={T.btnPrimary}>
-            {saving ? "저장 중..." : "저장"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function WorkersPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
@@ -558,7 +472,6 @@ export default function WorkersPage() {
     if (sq) setQuery(sq);
   }, []);
   const [editTarget,     setEditTarget]     = useState<{ worker: Worker; assignment: Assignment } | null>(null);
-  const [infoEditTarget, setInfoEditTarget] = useState<Worker | null>(null);
   const [showInvite,     setShowInvite]     = useState(false);
   const [assignmentMap, setAssignmentMap] = useState<Record<string, Assignment>>({});
 
@@ -580,8 +493,10 @@ export default function WorkersPage() {
         if (data.success && data.items?.length > 0) {
           const item = data.items.find((i: any) => i.id === assignmentId) ?? data.items[0];
           const asgn: Assignment = {
-            id: item.id, workType: (item.workType as WorkType) ?? "FULL_DAY",
+            id: item.id, siteId: String(item.siteId ?? item.site?.id ?? ""),
+            workType: (item.workType as WorkType) ?? "FULL_DAY",
             serviceStep: (item.serviceStep as ServiceStep) ?? "FIELD_TRAINING",
+            adaptationStartDate: item.adaptationStartDate ?? null,
             commuteGuidanceIncluded: item.commuteGuidanceIncluded ?? true,
             attendanceButtonExempt: item.attendanceButtonExempt ?? false,
             customWorkStart: item.customWorkStart ?? null, customWorkEnd: item.customWorkEnd ?? null,
@@ -621,8 +536,8 @@ export default function WorkersPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="직무지도원 관리"
-        sub="직무지도원 계정과 현장(사업체) 배정 현황을 관리합니다. 목록에서 직무지도원을 선택하면 근무형태와 배정 정보를 설정할 수 있습니다."
+        title="직무지도원 배정 관리"
+        sub="직무지도원과 현장(사업체)의 배정 현황을 관리합니다. 목록에서 직무지도원을 선택하면 근무형태·서비스 단계·근로계약 기간 등 배정 정보를 설정할 수 있습니다. 직무지도원 정보·급여계좌 수정은 [직무지도원 관리]에서 합니다."
         actions={
           <button onClick={() => setShowInvite(true)} className={`${T.btnPrimary} flex items-center gap-1.5`}>
             <Send className="h-3.5 w-3.5" />초대 발송
@@ -653,7 +568,7 @@ export default function WorkersPage() {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              {["직무지도원 성명(아이디)", "전화번호", "현장(사업체)", "기관", "근무형태", "배정일", "플랜", "상태", "작업"].map(h => (
+              {["직무지도원 성명(아이디)", "전화번호", "현장(사업체)", "현장 구분", "기관", "근무형태", "배정일", "플랜", "상태"].map(h => (
                 <th key={h} className={T.th}>{h}</th>
               ))}
             </tr>
@@ -670,6 +585,9 @@ export default function WorkersPage() {
               // 저장 후엔 캐시(cachedAsgn)가 우선 — 행 열람/취소만으로는 표기가 바뀌지 않음.
               const wt = (cachedAsgn?.workType ?? c.activeAssignment?.workType) as WorkType | undefined;
               const workTypeLabel = wt ? WORK_TYPE_LABELS[wt] : (c.activeAssignment ? "미설정" : "-");
+              // 현장 구분: 전환일 있으면 복합(2단계), 없으면 단건
+              const adaptStart = cachedAsgn?.adaptationStartDate ?? c.activeAssignment?.adaptationStartDate ?? null;
+              const step = (cachedAsgn?.serviceStep ?? c.activeAssignment?.serviceStep) as ServiceStep | undefined;
               return (
                 <tr key={c.id}
                   className={`${T.trBase} ${c.activeAssignment ? "cursor-pointer hover:bg-slate-50" : ""}`}
@@ -682,6 +600,12 @@ export default function WorkersPage() {
                         ? c.activeAssignment.siteName
                         : <span className="text-slate-400">미배정</span>}
                     </div>
+                  </td>
+                  <td className={T.td}>
+                    {!c.activeAssignment ? "-"
+                      : adaptStart
+                        ? <span className={`${T.badge} bg-violet-50 text-violet-600`}>복합 2단계</span>
+                        : <span className="text-slate-700">{step === "ADAPTATION" ? "적응지도" : "지원고용 훈련"}</span>}
                   </td>
                   <td className={T.td}><div className="max-w-[120px] truncate">{c.activeAssignment?.agencyName || "-"}</div></td>
                   <td className={T.td}>
@@ -698,15 +622,6 @@ export default function WorkersPage() {
                   <td className={T.td}>
                     <StatusBadge status={c.status} map={STATUS_BADGE} />
                   </td>
-                  <td className={T.td} onClick={e => e.stopPropagation()}>
-                    <button
-                      onClick={() => setInfoEditTarget(c)}
-                      className="inline-flex h-7 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 transition hover:border-slate-800 hover:bg-slate-800 hover:text-white"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      수정
-                    </button>
-                  </td>
                 </tr>
               );
             })}
@@ -722,19 +637,6 @@ export default function WorkersPage() {
           initial={editTarget.assignment}
           onClose={() => setEditTarget(null)}
           onSaved={updated => setAssignmentMap(prev => ({ ...prev, [updated.id]: updated }))}
-        />
-      )}
-
-      {infoEditTarget && (
-        <WorkerInfoModal
-          worker={infoEditTarget}
-          onClose={() => setInfoEditTarget(null)}
-          onSaved={updated => {
-            setWorkers(prev => prev.map(c =>
-              c.id === infoEditTarget.id ? { ...c, ...updated } : c
-            ));
-            setInfoEditTarget(null);
-          }}
         />
       )}
 

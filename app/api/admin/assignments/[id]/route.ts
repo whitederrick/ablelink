@@ -60,6 +60,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
       updateData.serviceStep = step;
     }
+    // 적응지도 전환일(선택) — 빈값/없음이면 null(단건), 날짜면 분할 배정
+    if (body.adaptationStartDate !== undefined) {
+      updateData.adaptationStartDate = body.adaptationStartDate ? new Date(body.adaptationStartDate) : null;
+    }
 
     const updated = await prisma.siteAssignment.update({
       where: { id: assignmentId },

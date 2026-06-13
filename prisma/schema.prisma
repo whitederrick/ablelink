@@ -238,6 +238,10 @@ model SiteAssignment {
   stepStart DateTime? @map("step_start")
   stepEnd   DateTime? @map("step_end")
 
+  // 단일 배정 내 지원고용 훈련 → 적응지도 '전환일'(적응지도 시작일). null이면 단건(serviceStep 그대로).
+  // 설정 시: 전체 계약기간 중 [시작~전환 전날]=지원고용 훈련, [전환일~종료]=적응지도. (2026-06-14)
+  adaptationStartDate DateTime? @map("adaptation_start_date")
+
   // 근무형태: "AM"(09-12) | "PM"(13-17) | "FULL_DAY"(09-18) | "CUSTOM"
   workType                String? @map("work_type")
   // 출퇴근 지도(30분 출근+30분 퇴근) 포함 여부 — AM/PM 기본 true, FULL_DAY 강제 false

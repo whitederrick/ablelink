@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { effectiveServiceStep, serviceStepToTrainingType } from "@/lib/serviceStep";
 
 // ✅ KST 기준 "현재 시각" Date 생성 (서버 TZ와 무관하게 안전하게)
 function getKstNowDate() {
@@ -169,12 +170,8 @@ export async function GET(
           gender: t.gender,
           status: t.status,
         })),
-        serviceStep: (activeAssignment as any)?.serviceStep || "FIELD_TRAINING",
-        trainingType: (activeAssignment as any)?.serviceStep === "PRE_TRAINING"
-          ? "PRE"
-          : (activeAssignment as any)?.serviceStep === "ADAPTATION"
-          ? "ADAPTATION"
-          : "FIELD",
+        serviceStep: effectiveServiceStep((activeAssignment as any)?.serviceStep, (activeAssignment as any)?.adaptationStartDate, today),
+        trainingType: serviceStepToTrainingType(effectiveServiceStep((activeAssignment as any)?.serviceStep, (activeAssignment as any)?.adaptationStartDate, today)),
         attendanceStatus: attendanceStatus,
         attendanceId: todayAttendance?.id ? todayAttendance.id.toString() : null,
         startTime: todayAttendance?.startTime ?? null,

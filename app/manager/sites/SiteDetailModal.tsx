@@ -282,7 +282,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                     <h3 className="mb-1 text-sm font-black text-slate-900">위탁기관 담당자 지정</h3>
                     <p className="mb-3 text-xs font-semibold text-slate-400">해당 직무지도 현장(사업체)를 담당하는 담당자를 지정합니다. 담당자 미지정인 경우 담당자 지정이 필요합니다.</p>
                     <select value={ownerManagerId} onChange={e => setOwnerManagerId(e.target.value)} className={`w-full ${T.select}`}>
-                      <option value="">담당자 미지정(지정 필요)</option>
+                      <option value="">담당자 지정 필요</option>
                       {ownerManagers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
                   </div>

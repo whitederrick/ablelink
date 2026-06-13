@@ -7,14 +7,11 @@ import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
 import { getWorkerPremiumStatus, getWorkerDocAccess } from "@/lib/planGuard";
 import { getConfig } from "@/lib/systemConfig";
+import { effectiveServiceStep, serviceStepToTrainingType, effectiveTrainingType } from "@/lib/serviceStep";
 
 function getKstNowDate(): Date {
   const nowStr = new Date().toLocaleString("sv-SE", { timeZone: "Asia/Seoul" });
   return new Date(nowStr.replace(" ", "T"));
-}
-
-function serviceStepToTrainingType(step: string | null | undefined): "PRE" | "FIELD" | "ADAPTATION" {
-  return step === "PRE_TRAINING" ? "PRE" : step === "ADAPTATION" ? "ADAPTATION" : "FIELD";
 }
 
 export interface HomeSummary {
@@ -143,7 +140,7 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     where: { workerId, workDate: { gte: from }, logs: { none: { writerId: workerId } } },
     include: {
       site: { select: { companyName: true, trainees: { where: { status: "TRAINING" }, select: { id: true, name: true, gender: true } } } },
-      assignment: { select: { serviceStep: true } },
+      assignment: { select: { serviceStep: true, adaptationStartDate: true } },
     },
     orderBy: { workDate: "desc" },
     take: 30,
@@ -152,7 +149,8 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     attendanceId: a.id.toString(),
     workDate: a.workDate,
     siteName: a.site.companyName,
-    trainingType: serviceStepToTrainingType((a.assignment as any)?.serviceStep),
+    // 해당 출근일 기준으로 훈련/적응지도 판정(전환일 반영)
+    trainingType: effectiveTrainingType((a.assignment as any)?.serviceStep, (a.assignment as any)?.adaptationStartDate, a.workDate),
     trainees: a.site.trainees.map(t => ({ id: t.id.toString(), name: t.name, gender: t.gender })),
   }));
 
@@ -202,8 +200,9 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
       customWorkStart: (activeAssignment as any)?.customWorkStart ?? null,
       customWorkEnd: (activeAssignment as any)?.customWorkEnd ?? null,
       trainees: trainees.map((t: any) => ({ id: t.id.toString(), name: t.name, gender: t.gender, status: t.status })),
-      serviceStep: (activeAssignment as any)?.serviceStep || "FIELD_TRAINING",
-      trainingType: serviceStepToTrainingType((activeAssignment as any)?.serviceStep),
+      // 오늘 기준 실효 단계(전환일 지나면 적응지도)
+      serviceStep: effectiveServiceStep((activeAssignment as any)?.serviceStep, (activeAssignment as any)?.adaptationStartDate, today),
+      trainingType: serviceStepToTrainingType(effectiveServiceStep((activeAssignment as any)?.serviceStep, (activeAssignment as any)?.adaptationStartDate, today)),
       attendanceStatus: todayAttendance?.status ?? "BEFORE",
       attendanceButtonExempt: Boolean((activeAssignment as any)?.attendanceButtonExempt),
       attendanceId: todayAttendance?.id ? todayAttendance.id.toString() : null,

@@ -7,6 +7,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { getKrHolidays } from "@/lib/krHolidays";
+import { effectiveTrainingType } from "@/lib/serviceStep";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
@@ -187,8 +188,8 @@ export async function GET(request: NextRequest) {
         siteName:        assignment?.site?.companyName ?? null,
         assignmentStart: assignment?.startDate?.toISOString().slice(0, 10) ?? null,
         assignmentEnd:   assignment?.endDate?.toISOString().slice(0, 10)   ?? null,
-        trainingType: assignment?.serviceStep === "PRE_TRAINING" ? "PRE"
-          : assignment?.serviceStep === "ADAPTATION" ? "ADAPTATION" : "FIELD",
+        // 조회 월 말일 기준 단계(전환일 반영). 일별 일지 종류는 작성 시점 API에서 해당일 기준으로 판정.
+        trainingType: effectiveTrainingType(assignment?.serviceStep, (assignment as any)?.adaptationStartDate, endDate),
         days: dayMap,
         holidays: allHolidays,
         customHolidays,

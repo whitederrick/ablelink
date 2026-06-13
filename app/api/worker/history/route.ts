@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import { effectiveServiceStep } from "@/lib/serviceStep";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
       },
       include: {
         site: { select: { companyName: true } },
-        assignment: { select: { serviceStep: true, agencyId: true } },
+        assignment: { select: { serviceStep: true, adaptationStartDate: true, agencyId: true } },
         logs: { select: { isCompleted: true, totalRecognizedTime: true } },
         attendanceIssue: { select: { status: true, issueTypes: true } },
       },
@@ -52,7 +53,8 @@ export async function GET(req: NextRequest) {
         id: a.id.toString(),
         workDate: a.workDate,
         siteName: a.site?.companyName ?? "-",
-        serviceStep: a.assignment?.serviceStep ?? null,
+        // 해당 근무일 기준 실효 단계(전환일 반영)
+        serviceStep: a.assignment ? effectiveServiceStep(a.assignment.serviceStep, (a.assignment as any).adaptationStartDate, a.workDate) : null,
         startTime: a.startTime ? a.startTime.toISOString() : null,
         endTime: a.endTime ? a.endTime.toISOString() : null,
         // 실제 출퇴근 버튼 시각(정상 출근 확인용). 출근부는 위 고정시각 사용.

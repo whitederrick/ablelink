@@ -36,6 +36,7 @@ function toItem(r: any) {
     assignedByManagerId: r.assignedByManagerId != null ? String(r.assignedByManagerId) : null,
     workType: r.workType ?? "FULL_DAY",
     serviceStep: r.serviceStep ?? "FIELD_TRAINING",
+    adaptationStartDate: r.adaptationStartDate?.toISOString?.() ?? r.adaptationStartDate ?? null,
     commuteGuidanceIncluded: r.commuteGuidanceIncluded ?? true,
     attendanceButtonExempt: r.attendanceButtonExempt ?? false,
     customWorkStart: r.customWorkStart ?? null,
@@ -110,6 +111,7 @@ export async function GET(req: NextRequest) {
         },
         workType: true,
         serviceStep: true,
+        adaptationStartDate: true,
         commuteGuidanceIncluded: true,
         attendanceButtonExempt: true,
         customWorkStart: true,
@@ -185,6 +187,9 @@ export async function POST(req: NextRequest) {
     const rawStep = body.serviceStep != null ? String(body.serviceStep).trim() : null;
     const serviceStep = validSteps.includes(rawStep ?? "") ? (rawStep as any) : "FIELD_TRAINING";
 
+    // 지원고용 훈련 → 적응지도 전환일(선택). serviceStep=FIELD_TRAINING + 전환일 설정 시 단계 분할.
+    const adaptationStartDate = body.adaptationStartDate ? new Date(body.adaptationStartDate) : null;
+
     // manager 로그인 계정(Manager.id) 기록. admin(운영자) 직접 배정은 null.
     const assignedByManagerId = session.kind === "manager" ? session.managerId : null;
 
@@ -197,6 +202,7 @@ export async function POST(req: NextRequest) {
         // 급여 정산·대시보드·구독 인원(ACTIVE만 집계)에서 누락되던 문제 방지)
         status: "ACTIVE",
         serviceStep,
+        adaptationStartDate,
         isMainWorker,
         assignedAt: new Date(),
         startDate: body.startDate ? new Date(body.startDate) : new Date(),

@@ -120,7 +120,7 @@ export default function AdminSitesPage() {
                     {it.ownerManagerName ? (
                       <div className="max-w-[130px] truncate">{it.ownerManagerName}</div>
                     ) : (
-                      <span className="whitespace-nowrap font-semibold text-rose-600">담당자 미지정(지정 필요)</span>
+                      <span className="whitespace-nowrap font-semibold text-rose-600">담당자 지정 필요</span>
                     )}
                   </td>
                   <td className={T.td}><div className="max-w-[130px] truncate">{it.agencyName || "-"}</div></td>
