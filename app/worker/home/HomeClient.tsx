@@ -53,6 +53,7 @@ interface HomeData {
   trainees: Trainee[];
   attendanceStatus: AttendanceStatus;
   attendanceButtonExempt: boolean;
+  pipelineGate: "AWAITING_CONTRACT" | "NOT_CONNECTED" | "LOCATION_NOT_CONFIRMED" | null;
   attendanceId: string | null;
   workStartTime: string | null;
   workEndTime: string | null;
@@ -188,6 +189,7 @@ function normalizeHome(raw: any): HomeData {
     })),
     attendanceStatus: normalizeStatus(raw),
     attendanceButtonExempt: raw.attendanceButtonExempt ?? false,
+    pipelineGate: raw.pipelineGate ?? null,
     attendanceId: raw.attendanceId ? String(raw.attendanceId) : null,
     workStartTime: raw.startTime ?? null,
     workEndTime: raw.endTime ?? null,
@@ -798,6 +800,28 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
 
       {/* ── 컨텐츠 ── */}
       <div className="mx-auto max-w-md px-4 pb-28 pt-4 space-y-4">
+
+        {/* 파이프라인 게이트 안내(출근 전 필요한 단계 사전 안내) */}
+        {homeData?.pipelineGate && (
+          <div className={`rounded-2xl border p-4 ${
+            homeData.pipelineGate === "AWAITING_CONTRACT" ? "border-amber-200 bg-amber-50"
+            : homeData.pipelineGate === "NOT_CONNECTED" ? "border-sky-200 bg-sky-50"
+            : "border-orange-200 bg-orange-50"
+          }`}>
+            {homeData.pipelineGate === "AWAITING_CONTRACT" && (
+              <p className="text-sm font-bold leading-6 text-amber-800">근로계약서 작성 대기 중이에요.<br />담당자가 계약서를 보내면 다음 단계로 진행됩니다.</p>
+            )}
+            {homeData.pipelineGate === "NOT_CONNECTED" && (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-bold leading-6 text-sky-800">새 현장 배정 연결이 필요해요.<br />받은 인증코드를 입력해주세요.</p>
+                <button onClick={() => router.push("/worker/connect")} className="shrink-0 rounded-xl bg-sky-600 px-3.5 py-2.5 text-sm font-black text-white">배정 연결</button>
+              </div>
+            )}
+            {homeData.pipelineGate === "LOCATION_NOT_CONFIRMED" && (
+              <p className="text-sm font-bold leading-6 text-orange-800">출근하려면 현장에서 최초 위치 확정이 필요해요.<br />현장에 도착해 <b>출근하기</b>를 누르면 위치 확정 후 출근됩니다.</p>
+            )}
+          </div>
+        )}
 
         {/* 출퇴근 카드 — 면제 배정이면 자동 처리 안내, 아니면 출퇴근 버튼 */}
         {isExempt ? (

@@ -24,6 +24,7 @@ export interface HomeSummary {
     gpsLat: number | null;
     gpsLon: number | null;
     allowanceRange: number;
+    pipelineGate: "AWAITING_CONTRACT" | "NOT_CONNECTED" | "LOCATION_NOT_CONFIRMED" | null;
     workType: string;
     commuteGuidanceIncluded: boolean;
     customWorkStart: string | null;
@@ -195,6 +196,13 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
       gpsLat: site?.gpsLat ? Number(site.gpsLat) : null,
       gpsLon: site?.gpsLon ? Number(site.gpsLon) : null,
       allowanceRange: site?.allowanceRange ?? 100,
+      // 파이프라인 게이트(assignment-pipeline-design.md): 출근 전 필요한 단계를 홈에서 사전 안내
+      pipelineGate: !activeAssignment ? null
+        : (activeAssignment as any).status === "ASSIGNED" ? "AWAITING_CONTRACT"
+        : !(activeAssignment as any).connectedAt ? "NOT_CONNECTED"
+        // 출퇴근 버튼 미적용(자동 기록) 배정은 GPS 출근이 없어 기준점 확정이 의미 없음 → 위치 게이트 제외
+        : (!(activeAssignment as any).attendanceButtonExempt && !(activeAssignment as any).baseConfirmedAt) ? "LOCATION_NOT_CONFIRMED"
+        : null,
       workType: activeAssignment?.workType || "FULL_DAY",
       commuteGuidanceIncluded: (activeAssignment as any)?.commuteGuidanceIncluded ?? true,
       customWorkStart: (activeAssignment as any)?.customWorkStart ?? null,

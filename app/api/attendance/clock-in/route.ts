@@ -132,7 +132,8 @@ export async function POST(request: NextRequest) {
 
     // 🔑 위치확정 게이트(assignment-pipeline-design.md §8): 최초 현장 방문 위치확정 전에는 출근 불가.
     //    기준점이 미확정이면 거리·반경·범위밖 사유·GPS보정 검증이 전부 허수가 되므로 강제한다.
-    if (!assignment.baseConfirmedAt) {
+    //    단, 출퇴근 버튼 미적용(자동 기록) 배정은 GPS 출근이 없어 기준점 확정이 무의미 → 제외.
+    if (!assignment.attendanceButtonExempt && !assignment.baseConfirmedAt) {
       return NextResponse.json(
         { success: false, message: "LOCATION_NOT_CONFIRMED", assignmentId: String(assignment.id), siteId: String(assignment.siteId) },
         { status: 409 }

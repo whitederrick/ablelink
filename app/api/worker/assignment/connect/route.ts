@@ -44,13 +44,13 @@ export async function POST(req: NextRequest) {
     // 배정이 본인 것인지 확인 후 연결 처리
     const assignment = await prisma.siteAssignment.findFirst({
       where: { id: invite.assignmentId, workerId },
-      select: { id: true, connectedAt: true, site: { select: { companyName: true } } },
+      select: { id: true, connectedAt: true, attendanceButtonExempt: true, site: { select: { companyName: true } } },
     });
     if (!assignment) {
       return NextResponse.json({ success: false, message: "연결할 배정을 찾을 수 없습니다." }, { status: 404 });
     }
 
-    await prisma.$transaction([
+    const ops: any[] = [
       prisma.siteAssignment.updateMany({
         where: { id: assignment.id, connectedAt: null },
         data: { connectedAt: new Date() },
@@ -59,7 +59,15 @@ export async function POST(req: NextRequest) {
         where: { id: invite.id },
         data: { usedAt: new Date(), usedByWorkerId: workerId },
       }),
-    ]);
+    ];
+    // 출퇴근 버튼 미적용(자동 기록) 배정은 위치확정 단계가 없으므로 연결 시 바로 ACTIVE로 전이.
+    if (assignment.attendanceButtonExempt) {
+      ops.push(prisma.siteAssignment.updateMany({
+        where: { id: assignment.id, status: "CONFIRMED" },
+        data: { status: "ACTIVE" },
+      }));
+    }
+    await prisma.$transaction(ops);
 
     return NextResponse.json({
       success: true,

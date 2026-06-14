@@ -183,10 +183,18 @@ export async function POST(req: NextRequest) {
       // 신규 가입자: 임시 비밀번호 발급 → 알림톡(자격증명 전달). 로그인=연결이므로 배정 connectedAt 기록.
       await sendSignedNotificationNew(contract.workerId, user.phoneNumber, user.workerName);
       if (contract.assignmentId) {
+        const asg = await prisma.siteAssignment.findUnique({ where: { id: contract.assignmentId }, select: { attendanceButtonExempt: true } });
         await prisma.siteAssignment.updateMany({
           where: { id: contract.assignmentId, connectedAt: null },
           data: { connectedAt: new Date() },
         });
+        // 면제(자동 기록) 배정은 위치확정 단계가 없으므로 연결 시 바로 ACTIVE
+        if (asg?.attendanceButtonExempt) {
+          await prisma.siteAssignment.updateMany({
+            where: { id: contract.assignmentId, status: "CONFIRMED" },
+            data: { status: "ACTIVE" },
+          });
+        }
       }
     } else if (contract.assignmentId && contract.agencyId) {
       // 기존 회원 + 연결 배정: 인증코드 발송 → 앱에서 코드 입력으로 배정 연결(connectedAt).
