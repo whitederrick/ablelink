@@ -666,17 +666,19 @@ export default function WorkersPage() {
                   onClick={() => c.activeAssignment && openEdit(c)}>
                   <td className={`${T.td} whitespace-nowrap`}><span className="font-semibold text-sky-600">{workerLabel(c.workerName, c.loginId)}</span></td>
                   <td className={T.td}>{c.phoneNumber}</td>
-                  <td className={T.td}>
-                    <div className="max-w-[150px] truncate">
-                      {c.activeAssignment?.siteName
-                        ? c.activeAssignment.siteName
-                        : <span className="text-slate-400">미배정</span>}
-                    </div>
-                    {c.activeAssignment?.assignStatus && ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus] && (
-                      <span className={`${T.badge} mt-1 inline-block ${ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus].cls}`}>
-                        {ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus].label}
+                  <td className={`${T.td} whitespace-nowrap`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className="max-w-[120px] truncate">
+                        {c.activeAssignment?.siteName
+                          ? c.activeAssignment.siteName
+                          : <span className="text-slate-400">미배정</span>}
                       </span>
-                    )}
+                      {c.activeAssignment?.assignStatus && ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus] && (
+                        <span className={`${T.badge} shrink-0 ${ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus].cls}`}>
+                          {ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus].label}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className={T.td}>
                     {!c.activeAssignment ? "-"
