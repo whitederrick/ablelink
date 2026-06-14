@@ -156,15 +156,21 @@ baseConfirmedAt DateTime? @map("base_confirmed_at")  // 최초 현장 위치확�
 
 ---
 
-## ⛔ 배포 게이트 (deploy 전 필수)
+## 배포 게이트 (deploy 전 점검)
 
-1. **매니저 → ASSIGNED 워커 계약서 작성/발송 UI** (가장 중요): 플립으로 신규 배정은 `ASSIGNED`로 시작한다.
-   `ASSIGNED→CONFIRMED`는 **계약 서명(assignmentId 연결)** 으로만 일어나므로, 매니저가 특정 배정에 대해
-   계약서를 생성(assignmentId 전달)·발송하는 UI가 없으면 신규 워커가 ASSIGNED에서 막힌다.
-   현재 `contracts` POST는 assignmentId를 받지만, 매니저 계약 작성 화면이 이를 전달하지 않음.
-   → 이 UI(또는 초대 3갈래 UI) 완성 전 **배포 금지**.
-2. 알림톡 `KAKAO_ASSIGN_CONNECT_TEMPLATE_CODE` 등록(미등록 시 앱 내 알림으로 코드 전달되어 동작은 함).
-3. 배포 시 마이그레이션 3건 적용 필요: 20260615100000 / 110000 / 120000 (로컬·운영 DB 적용 완료 상태).
+1. **[해결] 매니저 → ASSIGNED 워커 계약서 작성/발송 UI**: 배정 설정 상세 모달 푸터 **"계약서 작성·발송"**
+   → `/manager/contracts?assignmentId=&workerId=`로 진입, 배정 정보 프리필 + `assignmentId` 연결되어
+   계약 생성. 서명 시 write-back으로 `ASSIGNED→CONFIRMED`. (결정#2 배정+계약 합치기)
+   → 이로써 신규 워커가 ASSIGNED에서 막히지 않고 파이프라인을 끝까지 탈 수 있음. **배포 차단 해소.**
+2. 알림톡 `KAKAO_ASSIGN_CONNECT_TEMPLATE_CODE` 등록(외부, `docs/alimtalk-assign-connect-template.md`).
+   미등록 시 앱 내 알림으로 코드 전달되는 폴백 동작 → **비차단**.
+3. 배포 시 마이그레이션 3건 적용: 20260615100000 / 110000 / 120000 (로컬·운영 DB 적용 완료).
+
+### 남은 enhancement (배포 비차단, 내일 검토)
+- **초대 멀티/지정 UI**(결정#1: 마켓플레이스는 이번 제외, 직접 초대만): 현재 단건 초대는 동작(ASSIGNED 수렴).
+  멀티(다수 후보)·지정 초대 UI는 후속.
+- 모집→지원→선정 마켓플레이스 오픈(차후 product 결정).
+- (선택) 워커 홈 프로액티브 배너(연결/위치 필요 사전 표시).
 
 ---
 

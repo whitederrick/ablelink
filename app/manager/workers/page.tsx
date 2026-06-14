@@ -478,11 +478,24 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
 
         {error && <p className="mb-3 mt-5 text-sm font-semibold text-rose-600">{error}</p>}
 
-        <div className="mt-7 flex justify-end gap-2">
-          <button onClick={onClose} className={T.btnSecondary}>취소</button>
-          <button onClick={handleSave} disabled={saving} className={T.btnPrimary}>
-            {saving ? "저장 중..." : "저장"}
+        <div className="mt-7 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => { window.location.href = `/manager/contracts?assignmentId=${assignmentId}&workerId=${worker.id}`; }}
+            className={`rounded-xl border px-3.5 py-2.5 text-sm font-bold transition ${
+              initial.hasContract
+                ? "border-slate-200 text-slate-600 hover:bg-slate-50"
+                : "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100"
+            }`}
+          >
+            {initial.hasContract ? "계약서 재작성·발송" : "계약서 작성·발송"}
           </button>
+          <div className="flex gap-2">
+            <button onClick={onClose} className={T.btnSecondary}>취소</button>
+            <button onClick={handleSave} disabled={saving} className={T.btnPrimary}>
+              {saving ? "저장 중..." : "저장"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

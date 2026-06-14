@@ -290,23 +290,36 @@ function Field({ label, children, hint }: { label: string; children: React.React
   );
 }
 
-function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCreated: (url: string) => void; }) {
-  const [selectedUserId, setSelectedUserId] = useState("");
-  const [manualName, setManualName] = useState("");
-  const [manualPhone, setManualPhone] = useState("");
+type ContractPrefill = {
+  assignmentId?: string; workerId?: string; workerName?: string; phone?: string;
+  siteName?: string; contractStart?: string; contractEnd?: string;
+  workType?: WorkType; commuteGuidanceIncluded?: boolean;
+  customWorkStart?: string | null; customWorkEnd?: string | null;
+};
+
+function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => void; onCreated: (url: string) => void; prefill?: ContractPrefill; }) {
+  // 배정에서 진입 시(prefill) 근무형태 기준으로 소정근로/휴게 초기값 산정
+  const initWt = (prefill?.workType as WorkType) ?? "AM";
+  const initCommute = initWt === "FULL_DAY" ? false : (prefill?.commuteGuidanceIncluded ?? true);
+  const initTimes = computeWorkTimes(initWt, initCommute, prefill?.customWorkStart, prefill?.customWorkEnd);
+  const initBreak = initWt === "CUSTOM" ? { start: "13:00", end: "13:30" } : BREAK_PRESETS[initWt];
+
+  const [selectedUserId, setSelectedUserId] = useState(prefill?.workerId ?? "");
+  const [manualName, setManualName] = useState(prefill?.workerName ?? "");
+  const [manualPhone, setManualPhone] = useState(prefill?.phone ?? "");
   const [showSearch, setShowSearch] = useState(false);
 
-  const [contractStart, setStart] = useState("");
-  const [contractEnd, setEnd] = useState("");
-  const [workLocation, setWorkLocation] = useState("");
+  const [contractStart, setStart] = useState(prefill?.contractStart ?? "");
+  const [contractEnd, setEnd] = useState(prefill?.contractEnd ?? "");
+  const [workLocation, setWorkLocation] = useState(prefill?.siteName ?? "");
   const [jobDescription, setJobDescription] = useState("");
   // 근무형태 + 출퇴근지도 → 소정근로/휴게 자동 셋팅(수동 수정 가능). 기본: 오전4H+출퇴근지도.
-  const [workType, setWorkType] = useState<WorkType>("AM");
-  const [commuteGuidanceIncluded, setCommute] = useState(true);
-  const [workStartTime, setWorkStartTime] = useState("08:30");
-  const [workEndTime, setWorkEndTime] = useState("14:00");
-  const [breakStartTime, setBreakStartTime] = useState("13:00");
-  const [breakEndTime, setBreakEndTime] = useState("13:30");
+  const [workType, setWorkType] = useState<WorkType>(initWt);
+  const [commuteGuidanceIncluded, setCommute] = useState(initCommute);
+  const [workStartTime, setWorkStartTime] = useState(initTimes.start);
+  const [workEndTime, setWorkEndTime] = useState(initTimes.end);
+  const [breakStartTime, setBreakStartTime] = useState(initBreak.start);
+  const [breakEndTime, setBreakEndTime] = useState(initBreak.end);
 
   // 프리셋 적용: 근무형태/출퇴근지도 변경 시에만 시각을 덮어씀(사용자 수동 수정은 보존).
   function applyPreset(wt: WorkType, commute: boolean) {
@@ -410,6 +423,7 @@ function CreateContractModal({ onClose, onCreated }: { onClose: () => void; onCr
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workerId: selectedUserId || undefined,
+          assignmentId: prefill?.assignmentId || undefined, // 배정 진입 시 계약↔배정 연결(서명 시 write-back)
           manualName: manualName.trim(), manualPhone: manualPhone.trim(),
           contractStart, contractEnd,
           workLocation: workLocation || null, jobDescription: jobDescription || null,
@@ -668,10 +682,43 @@ export default function AdminContractsPage() {
   const [page, setPage] = useState(1);
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
+  const [prefill, setPrefill] = useState<ContractPrefill | undefined>(undefined);
+
   function loadContracts() {
     fetch("/api/admin/contracts").then(r => r.json()).then(c => { if (c.success) setContracts(c.items); }).catch(() => {}).finally(() => setLoading(false));
   }
   useEffect(() => { loadContracts(); }, []);
+
+  // 배정에서 진입(?assignmentId=&workerId=): 배정 정보로 프리필 + 계약서 생성 모달 자동 오픈
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const aid = sp.get("assignmentId");
+    const wid = sp.get("workerId");
+    if (!aid || !wid) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/assignments?workerId=${wid}`);
+        const data = await res.json();
+        if (!data.success) return;
+        const item = (data.items ?? []).find((i: any) => String(i.id) === String(aid));
+        if (!item) return;
+        setPrefill({
+          assignmentId: String(item.id),
+          workerId: String(item.user?.id ?? wid),
+          workerName: item.user?.workerName ?? "",
+          phone: item.user?.phoneNumber ?? "",
+          siteName: item.site?.companyName ?? "",
+          contractStart: item.startDate ? String(item.startDate).slice(0, 10) : "",
+          contractEnd: item.endDate ? String(item.endDate).slice(0, 10) : "",
+          workType: (item.workType as WorkType) ?? undefined,
+          commuteGuidanceIncluded: item.commuteGuidanceIncluded,
+          customWorkStart: item.customWorkStart ?? null,
+          customWorkEnd: item.customWorkEnd ?? null,
+        });
+        setShowCreate(true);
+      } catch {}
+    })();
+  }, []);
 
   function copyLink(token: string) {
     navigator.clipboard.writeText(`${baseUrl}/contract/${token}`).then(() => alert("링크가 복사되었습니다."));
@@ -764,7 +811,7 @@ export default function AdminContractsPage() {
         <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
       </div>
 
-      {showCreate && <CreateContractModal onClose={() => setShowCreate(false)} onCreated={(url) => { setLastCreatedUrl(url); loadContracts(); }} />}
+      {showCreate && <CreateContractModal prefill={prefill} onClose={() => { setShowCreate(false); setPrefill(undefined); }} onCreated={(url) => { setLastCreatedUrl(url); loadContracts(); }} />}
       {showClauses && <ClauseManagerModal onClose={() => setShowClauses(false)} />}
       {detailId && <DetailModal id={detailId} onClose={() => setDetailId(null)} />}
     </div>
