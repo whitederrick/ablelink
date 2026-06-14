@@ -156,13 +156,46 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // 서명 완료 후 알림 (실패해도 서명 결과에 영향 없음)
+  // ── 계약 ↔ 배정 write-back (assignment-pipeline-design.md §6) ──
+  // 연결된 배정이 있으면 계약 근무정보를 배정으로 반영하고 ASSIGNED→CONFIRMED(연결 대기)로 전이.
+  // ACTIVE 배정은 강등하지 않도록 status 가드.
+  if (contract.assignmentId) {
+    const isFullDay = contract.workType === "FULL_DAY";
+    const isCustom  = contract.workType === "CUSTOM";
+    await prisma.siteAssignment.updateMany({
+      where: { id: contract.assignmentId, status: { in: ["ASSIGNED", "CONFIRMED"] } },
+      data: {
+        workType: contract.workType ?? undefined,
+        commuteGuidanceIncluded: isFullDay ? false : contract.commuteGuidanceIncluded,
+        customWorkStart: isCustom ? contract.customWorkStart : null,
+        customWorkEnd:   isCustom ? contract.customWorkEnd   : null,
+        startDate: contract.contractStart,
+        endDate:   contract.contractEnd,
+        status:    "CONFIRMED",
+        confirmedAt: new Date(),
+      },
+    });
+  }
+
+  // 서명 완료 후 연결(assignment-pipeline-design.md §7) — 신규/기존 분기. 실패해도 서명엔 영향 없음.
   try {
     if (user?.isTemporary) {
-      // 신규 가입자: 임시 비밀번호 발급 → 알림톡(필수, 미로그인 상태 자격증명 전달)
+      // 신규 가입자: 임시 비밀번호 발급 → 알림톡(자격증명 전달). 로그인=연결이므로 배정 connectedAt 기록.
       await sendSignedNotificationNew(contract.workerId, user.phoneNumber, user.workerName);
+      if (contract.assignmentId) {
+        await prisma.siteAssignment.updateMany({
+          where: { id: contract.assignmentId, connectedAt: null },
+          data: { connectedAt: new Date() },
+        });
+      }
+    } else if (contract.assignmentId && contract.agencyId) {
+      // 기존 회원 + 연결 배정: 인증코드 발송 → 앱에서 코드 입력으로 배정 연결(connectedAt).
+      await sendConnectCodeExisting(
+        contract.workerId, contract.assignmentId, contract.agencyId,
+        contract.createdByManagerId, user?.phoneNumber ?? "", user?.workerName ?? "직무지도원",
+      );
     } else if (contract.agencyId) {
-      // 기존 회원: 서명 완료 안내 → 앱 내 알림(무료, 비용 절감)
+      // 연결 배정 없는 기존 회원(단순 재계약 등): 서명 완료 안내(앱 내 알림).
       await prisma.workerNotice.create({
         data: {
           workerId: contract.workerId,
@@ -174,7 +207,7 @@ export async function POST(req: NextRequest) {
       });
     }
   } catch (e) {
-    console.error("[contracts sign] 서명 완료 알림 처리 실패:", e);
+    console.error("[contracts sign] 서명 완료 연결 처리 실패:", e);
   }
 
   return NextResponse.json({ success: true, message: "서명이 완료되었습니다." });
@@ -206,5 +239,53 @@ async function sendSignedNotificationNew(workerId: bigint, phone: string, name: 
     message: `안녕하세요 ${name}님,\n\n근로계약서 서명이 완료되었습니다.\nAble-Link 서비스를 이용하시려면 아래 정보로 로그인해 주세요.\n\n아이디: ${loginId} (전화번호)\n임시 비밀번호: ${tempPassword}\n\n첫 로그인 후 비밀번호를 변경해 주세요. (아이디는 전화번호이며, 원하면 이메일로 변경할 수 있습니다.)`,
     buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
   });
+}
+
+// ─── 기존 직무지도원 배정 연결 인증코드 발송(assignment-pipeline-design.md §7) ──────────
+// 이미 가입된 유저는 임시비번 대신 인증코드를 받아 앱에서 입력 → 배정 연결(connectedAt).
+async function sendConnectCodeExisting(
+  workerId: bigint, assignmentId: bigint, agencyId: bigint,
+  createdByManagerId: bigint | null, phone: string, name: string,
+) {
+  const code = String(randomInt(100000, 1000000)); // 6자리
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7일
+
+  // 연결 토큰은 매니저 소속 필요 — 부재 시(운영자 발행 등) 같은 에이전시 매니저로 폴백
+  let managerId = createdByManagerId;
+  if (managerId == null) {
+    const m = await prisma.manager.findFirst({ where: { agencyId }, select: { id: true } });
+    managerId = m?.id ?? null;
+  }
+  if (managerId == null) {
+    await prisma.workerNotice.create({
+      data: { workerId, agencyId, title: "새 배정 연결", body: "근로계약이 완료되었습니다. 담당자에게 연결 인증코드를 요청해 주세요.", type: "INFO" },
+    });
+    return;
+  }
+
+  await prisma.workerInvite.create({
+    data: {
+      agencyId, assignmentId, existingWorkerId: workerId,
+      purpose: "CONNECT_EXISTING",
+      phoneNumber: phone, workerName: name, code, expiresAt,
+      createdByManagerId: managerId,
+    },
+  });
+
+  const templateCode = process.env.KAKAO_ASSIGN_CONNECT_TEMPLATE_CODE;
+  const appUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";
+  if (templateCode && phone) {
+    await sendAlimtalk({
+      phone, name, templateCode,
+      subject: "Able-Link 배정 연결 인증코드",
+      message: `안녕하세요 ${name}님,\n\n근로계약이 완료되어 새 현장 배정 연결이 필요합니다.\n앱에서 아래 인증코드를 입력해 주세요.\n\n인증코드: ${code}\n(유효기간 7일)`,
+      buttons: [{ name: "배정 연결하기", linkType: "WL", linkMo: `${appUrl}/worker/connect`, linkPc: `${appUrl}/worker/connect` }],
+    });
+  } else {
+    // 템플릿 미등록 폴백: 앱 내 알림으로 코드 전달(무료)
+    await prisma.workerNotice.create({
+      data: { workerId, agencyId, title: "새 배정 연결 인증코드", body: `새 현장 배정 연결 인증코드: ${code} (앱 > 배정 연결에서 입력, 유효 7일)`, type: "INFO" },
+    });
+  }
 }
 

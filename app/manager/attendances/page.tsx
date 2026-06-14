@@ -333,7 +333,7 @@ export default function AttendancesPage() {
                     {row.actualStartTime ? (
                       <span className="flex items-baseline gap-1.5">
                         <span className="font-bold text-emerald-600">{formatTime(row.actualStartTime)}</span>
-                        {row.startTime && <span className="text-[11px] font-medium text-slate-400">기본 {formatTime(row.startTime)}</span>}
+                        {row.startTime && <span className="text-[11px] font-medium text-slate-400">출근부 입력 {formatTime(row.startTime)}</span>}
                       </span>
                     ) : (
                       <span className="font-semibold text-slate-500">{formatTime(row.startTime)}</span>
@@ -343,7 +343,7 @@ export default function AttendancesPage() {
                     {row.actualEndTime ? (
                       <span className="flex items-baseline gap-1.5">
                         <span className="font-bold text-slate-900">{formatTime(row.actualEndTime)}</span>
-                        {row.endTime && <span className="text-[11px] font-medium text-slate-400">기본 {formatTime(row.endTime)}</span>}
+                        {row.endTime && <span className="text-[11px] font-medium text-slate-400">출근부 입력 {formatTime(row.endTime)}</span>}
                       </span>
                     ) : (
                       <span className="font-semibold text-slate-500">{formatTime(row.endTime)}</span>

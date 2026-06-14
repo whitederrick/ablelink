@@ -27,6 +27,19 @@ function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) 
   return R * c;
 }
 
+// 위치확정 게이트(assignment-pipeline-design.md §8): 해당 배정의 baseConfirmedAt을 기록하고
+// 연결 완료(CONFIRMED) 상태면 정상 근무(ACTIVE)로 전이한다. 출근부 개방 = ACTIVE + baseConfirmedAt.
+async function confirmAssignmentLocation(assignmentId: bigint, now: Date) {
+  await prisma.siteAssignment.updateMany({
+    where: { id: assignmentId, baseConfirmedAt: null },
+    data: { baseConfirmedAt: now },
+  });
+  await prisma.siteAssignment.updateMany({
+    where: { id: assignmentId, status: "CONFIRMED" },
+    data: { status: "ACTIVE" },
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getWorkerSessionFromReq(request);
@@ -182,6 +195,9 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // 🔑 위치확정 게이트: 이 직무지도원의 배정 위치확정 처리(출근부 개방) + CONFIRMED→ACTIVE
+      await confirmAssignmentLocation(assignment.id, now);
+
       return NextResponse.json({
         success: true,
         status: "APPROVED",
@@ -189,6 +205,20 @@ export async function POST(request: NextRequest) {
         distanceM: distRounded,
         allowanceM,
         message: "허용범위 이내(<= 허용거리)로 판단되어 보정 좌표가 즉시 반영(확정)되었습니다.",
+      });
+    }
+
+    // ✅ 이미 확정된 현장 + 허용범위 이내: 좌표는 그대로(잠금) 두되, 이 직무지도원의
+    //    최초 방문 '위치 확인'으로 처리하여 출근부를 개방한다(신규 배정 워커의 게이트 통과).
+    if (distM <= allowanceM && site.basePointConfirmed) {
+      await confirmAssignmentLocation(assignment.id, now);
+      return NextResponse.json({
+        success: true,
+        status: "CONFIRMED_LOCATION",
+        applied: false,
+        distanceM: distRounded,
+        allowanceM,
+        message: "현장 위치가 확인되어 출근부 작성이 가능해졌습니다.",
       });
     }
 

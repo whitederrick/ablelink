@@ -258,6 +258,12 @@ model SiteAssignment {
   droppedAt   DateTime? @map("dropped_at")
   endedAt     DateTime? @map("ended_at")
 
+  // 파이프라인 게이트 (assignment-pipeline-design.md)
+  // connectedAt: 워커가 임시비번 로그인 / 인증코드 입력으로 배정을 본인 계정에 연결한 시각
+  connectedAt     DateTime? @map("connected_at")
+  // baseConfirmedAt: 최초 현장 위치확정(SiteBasePoint WORKER_FINAL) 시각 — 출근부 개방 게이트
+  baseConfirmedAt DateTime? @map("base_confirmed_at")
+
   assignedByManagerId BigInt?  @map("assigned_by_manager_id")
   assignedByManager   Manager? @relation(fields: [assignedByManagerId], references: [id])
   statusReason        String?  @map("status_reason")
@@ -1608,6 +1614,10 @@ model WorkerInvite {
   expiresAt          DateTime  @map("expires_at")
   usedAt             DateTime? @map("used_at")
   usedByWorkerId       BigInt?   @map("used_by_worker_id")
+  // 배정 연결(Phase 3): 기존 유저 연결용 토큰
+  existingWorkerId   BigInt?   @map("existing_worker_id") // 기존 유저 연결(계정 미생성)
+  assignmentId       BigInt?   @map("assignment_id")      // 연결 대상 배정
+  purpose            String    @default("NEW_ACCOUNT") @map("purpose") // NEW_ACCOUNT | CONNECT_EXISTING
   createdByManagerId BigInt    @map("created_by_manager_id")
   createdAt          DateTime  @default(now()) @map("created_at")
 

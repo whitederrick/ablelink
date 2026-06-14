@@ -109,6 +109,7 @@ export async function GET(req: NextRequest) {
             take: 1,
             select: {
               id: true,
+              status: true,
               startDate: true,
               serviceStep: true,
               adaptationStartDate: true,
@@ -136,6 +137,7 @@ export async function GET(req: NextRequest) {
         createdAt: u.createdAt.toISOString(),
         activeAssignment: u.assignments[0] ? {
           assignmentId: String(u.assignments[0].id),
+          assignStatus: String(u.assignments[0].status),
           siteName: u.assignments[0].site?.companyName || "-",
           agencyName: u.assignments[0].agency?.name || "-",
           startDate: u.assignments[0].startDate.toISOString(),

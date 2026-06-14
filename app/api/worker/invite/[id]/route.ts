@@ -117,7 +117,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             siteId:    invite.siteId,
             agencyId:  invite.agencyId,
             startDate: now,
-            status:    "ACTIVE",
+            // 파이프라인: 초대 수락=ASSIGNED(계약 대기). 계약 서명→CONFIRMED, 연결+위치확정→ACTIVE.
+            status:    "ASSIGNED",
           },
         });
       }

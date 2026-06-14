@@ -82,7 +82,8 @@ export async function PATCH(req: NextRequest) {
             siteId: assignSiteId,
             workerId,
             agencyId: assignAgencyId,
-            status: "ACTIVE",
+            // 파이프라인: 제안 수락=ASSIGNED(계약 대기). 계약 서명→CONFIRMED, 연결+위치확정→ACTIVE.
+            status: "ASSIGNED",
             isMainWorker: true,
             assignedAt: new Date(),
             // 제안에 명시된 직무지도 기간을 배정 기간으로 승계(없으면 오늘 시작)

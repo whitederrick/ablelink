@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
 
     const {
       workerId,       // 검색 팝업에서 선택한 기존 유저 ID (선택)
+      assignmentId,   // 연결할 배정(SiteAssignment) ID (선택) — 계약완료 시 근무정보 write-back 대상
       manualName,   // 수동 입력: 이름
       manualPhone,  // 수동 입력: 전화번호
       contractStart, contractEnd,
@@ -191,6 +192,20 @@ export async function POST(req: NextRequest) {
     // ─── agencyId 결정 ──────────────────────────────────────────
     const agencyId: bigint = scope.agencyId;
 
+    // ─── 연결 배정 검증 (선택) ──────────────────────────────────
+    // assignmentId가 오면 해당 배정이 같은 에이전시·직무지도원 소속인지 확인 후 계약에 연결.
+    // 계약 완료(서명) 시 이 배정으로 근무정보 write-back + 상태 전이가 일어난다.
+    let assignmentIdBig: bigint | null = null;
+    if (assignmentId !== undefined && assignmentId !== null && assignmentId !== "") {
+      try { assignmentIdBig = BigInt(assignmentId); }
+      catch { throw new Error("VALIDATION:잘못된 assignmentId입니다."); }
+      const asgn = await prisma.siteAssignment.findFirst({
+        where: { id: assignmentIdBig, workerId: userIdBig, agencyId },
+        select: { id: true },
+      });
+      if (!asgn) throw new Error("VALIDATION:연결할 배정을 찾을 수 없습니다. (직무지도원/기관 불일치)");
+    }
+
     // ─── 구독 플랜 + 한도 체크 ──────────────────────────────────
     const planCheck = await checkAgencyPlanAccess(agencyId, "CONTRACT_ONLINE");
     if (!planCheck.allowed) {
@@ -242,6 +257,7 @@ export async function POST(req: NextRequest) {
       data: {
         agencyId,
         workerId: userIdBig,
+        assignmentId: assignmentIdBig,
         contractStart: startDate,
         contractEnd: endDate,
         siteName: siteName || null,

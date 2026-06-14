@@ -9,6 +9,7 @@ import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
 import { CheckCircle2, Copy, Send, X } from "lucide-react";
 import { workerLabel } from "../_format";
+import { computeWorkTimes } from "@/lib/workSchedule";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM";
 type ServiceStep = "PRE_TRAINING" | "FIELD_TRAINING" | "ADAPTATION";
@@ -25,12 +26,13 @@ interface Assignment {
   customWorkEnd: string | null;
   startDate: string | null;
   endDate: string | null;
+  hasContract?: boolean; // 연결/서명완료 계약서 존재 — 계약파생 필드 변경 경고 게이트
 }
 
 // 서비스 단계(지원고용/적응지도) — 문서 세트와 일지 종류를 결정. 현장은 지원고용→적응지도로 전환될 수 있음.
 const SERVICE_STEP_OPTIONS: { value: ServiceStep; label: string; desc: string }[] = [
-  { value: "FIELD_TRAINING", label: "지원고용 훈련", desc: "훈련일지·훈련생 종합평가" },
-  { value: "ADAPTATION",     label: "취업 후 적응지도", desc: "적응지도 일지·종합평가" },
+  { value: "FIELD_TRAINING", label: "지원고용 훈련", desc: "(훈련일지/훈련생 종합평가 작성)" },
+  { value: "ADAPTATION",     label: "취업 후 적응지도", desc: "(적응지도 일지/종합평가 작성)" },
 ];
 
 interface Worker {
@@ -41,7 +43,7 @@ interface Worker {
   planType: string;
   status: string;
   createdAt: string;
-  activeAssignment: { siteName: string; agencyName: string; startDate: string; assignmentId?: string; workType?: WorkType; serviceStep?: ServiceStep; adaptationStartDate?: string | null } | null;
+  activeAssignment: { siteName: string; agencyName: string; startDate: string; assignmentId?: string; assignStatus?: string; workType?: WorkType; serviceStep?: ServiceStep; adaptationStartDate?: string | null } | null;
 }
 
 const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
@@ -54,11 +56,25 @@ const PLAN_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   STANDARD: { label: "STANDARD", tone: "violet" },
   PRO:      { label: "PRO",      tone: "emerald" },
 };
+// 배정 파이프라인 상태(assignment-pipeline-design.md): 선정→계약→연결→위치확정→근무
+const ASSIGN_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
+  ASSIGNED:  { label: "계약 대기",      cls: "bg-amber-50 text-amber-600" },
+  CONFIRMED: { label: "연결·위치 대기", cls: "bg-sky-50 text-sky-600" },
+  ACTIVE:    { label: "근무중",         cls: "bg-emerald-50 text-emerald-600" },
+};
 const PAGE_SIZE = 10;
 const WORK_TYPE_LABELS: Record<WorkType, string> = {
   AM:       "오전 (09:00~13:00)",
   PM:       "오후 (13:00~17:00)",
   FULL_DAY: "전일 (09:00~18:00)",
+  CUSTOM:   "직접 입력",
+};
+
+// 근무형태 버튼용 짧은 라벨(한 줄 배치)
+const WORK_TYPE_SHORT: Record<WorkType, string> = {
+  AM:       "오전 4시간",
+  PM:       "오후 4시간",
+  FULL_DAY: "전일 8시간",
   CUSTOM:   "직접 입력",
 };
 
@@ -244,28 +260,30 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
 
   const isFullDay = workType === "FULL_DAY";
 
+  // 계약서 파생 필드(근무형태·근로계약 기간·출퇴근 지도 포함 여부) 강제 변경 시 1회 경고.
+  // 이 값들은 근로계약서 내용에서 자동 셋팅되므로, 변경하면 신규 계약서 작성이 필요함을 알린다.
+  // 계약파생 필드별로 1회씩 경고(근무형태·근로계약 기간·출퇴근 지도 — 각각 동일하게).
+  const [warnedFields, setWarnedFields] = useState<Set<string>>(new Set());
+  function warnContractChange(field: "workType" | "period" | "commute") {
+    // 연결된 계약서가 있을 때만 경고(신규 배정 최초 설정 시엔 경고 불필요)
+    if (!initial.hasContract || warnedFields.has(field)) return;
+    alert("해당 내용 변경 시 근로계약서 내용이 변경되어 신규 근로계약서 작성이 필요합니다.");
+    setWarnedFields(prev => new Set(prev).add(field));
+  }
+
   // 근무형태 변경 시 기본 시간으로 초기화 (이미 커스텀 값이 있으면 유지)
   function changeWorkType(wt: WorkType) {
+    if (wt !== workType) warnContractChange("workType");
     setWorkType(wt);
     const def = WORK_TYPE_DEFAULTS[wt];
     setWorkStart(def.start);
     setWorkEnd(def.end);
   }
 
-  // 총 시간 계산 (표시용)
-  function totalHours() {
-    const [sh, sm] = workStart.split(":").map(Number);
-    const [eh, em] = workEnd.split(":").map(Number);
-    const total = (eh * 60 + em) - (sh * 60 + sm);
-    if (total <= 0) return "0H";
-    const guidance = isFullDay ? total - 60 : total;  // 전일: 점심 1H 공제
-    return isFullDay
-      ? `총 ${(total / 60).toFixed(1)}H (점심 1H 공제 → 인정 ${(guidance / 60).toFixed(1)}H)`
-      : `${(total / 60).toFixed(1)}H`;
-  }
-
   async function handleSave() {
     if (!wantField && !wantAdapt) { setError("현장 구분을 1개 이상 선택하세요."); return; }
+    if (!cStart || !cEnd) { setError("근로계약 시작일과 종료일을 모두 입력하세요."); return; }
+    if (cEnd < cStart) { setError("종료일은 시작일 이후여야 합니다."); return; }
     const dual = wantField && wantAdapt;
     if (dual) {
       if (!splitDate) { setError("적응지도 전환일을 입력하세요."); return; }
@@ -311,135 +329,147 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
     } finally { setSaving(false); }
   }
 
+  // 출근부에 자동 기록되는 실제 근무 시각(출퇴근 지도·휴게 포함) — workSchedule SSOT 기준
+  const effCommute = isFullDay ? false : commuteGuidanceIncluded;
+  const actual = computeWorkTimes(workType, effCommute, workStart, workEnd);
+  // 실제 근무 시간 창의 길이 표기 (전일은 점심 1H 공제 안내)
+  function actualLabel() {
+    const [sh, sm] = actual.start.split(":").map(Number);
+    const [eh, em] = actual.end.split(":").map(Number);
+    const min = (eh * 60 + em) - (sh * 60 + sm);
+    if (min <= 0) return "0H";
+    return isFullDay
+      ? `총 ${(min / 60).toFixed(1)}H · 점심 1H 공제(인정 ${((min - 60) / 60).toFixed(1)}H)`
+      : `총 ${(min / 60).toFixed(1)}H`;
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={onClose}>
       <div className="w-full max-w-[62rem] max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-black text-slate-900">배정 설정</h2>
+            <h2 className="text-lg font-black text-slate-900">배정 설정 상세</h2>
             <p className="mt-0.5 text-[13px] font-semibold text-slate-400">{worker.workerName} · {worker.activeAssignment?.siteName}</p>
           </div>
           <button onClick={onClose} className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"><X className="h-5 w-5" /></button>
         </div>
 
-        <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
+        <div className="space-y-5">
         {/* 현장 구분(복수 선택) — 지원고용 훈련 / 적응지도. 둘 다면 전환일로 단계 분할 */}
         <div>
-          <label className={T.label}>현장 구분 <span className="font-semibold text-slate-400">(복수 선택 가능)</span></label>
-          <div className="grid grid-cols-2 gap-2">
-            {SERVICE_STEP_OPTIONS.map(opt => {
-              const on = opt.value === "ADAPTATION" ? wantAdapt : wantField;
-              const toggle = () => opt.value === "ADAPTATION" ? setWantAdapt(v => !v) : setWantField(v => !v);
-              return (
-                <button key={opt.value} type="button" onClick={toggle}
-                  className={`rounded-xl border px-3 py-2.5 text-left transition active:scale-95 ${
-                    on ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}>
-                  <span className={`block text-sm ${on ? "font-black" : "font-semibold"}`}>{opt.label}</span>
-                  <span className={`block text-xs ${on ? "text-slate-300" : "text-slate-400"}`}>{opt.desc}</span>
-                </button>
-              );
-            })}
-          </div>
-          {wantField && wantAdapt ? (
-            <div className="mt-2">
-              <label className="mb-1 block text-xs font-black text-slate-700">적응지도 전환일 (이 날부터 적응지도)</label>
-              <input type="date" value={splitDate} min={cStart || undefined} max={cEnd || undefined}
-                onChange={e => setSplitDate(e.target.value)} className={`w-full ${T.input}`} />
-              <p className="mt-1 text-xs font-semibold text-slate-400">전체 계약기간 중 전환일 전날까지 지원고용 훈련, 전환일부터 적응지도로 구분됩니다.</p>
+          {/* 둘 다 선택 시 좌(현장 구분+버튼)/우(전환일+입력) 2열, 타이틀 상단 정렬 */}
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <label className={T.label}>현장 구분 <span className="font-semibold text-slate-400">(복수 선택 가능)</span></label>
+              <div className="flex items-stretch gap-2">
+                {SERVICE_STEP_OPTIONS.map(opt => {
+                  const on = opt.value === "ADAPTATION" ? wantAdapt : wantField;
+                  const toggle = () => opt.value === "ADAPTATION" ? setWantAdapt(v => !v) : setWantField(v => !v);
+                  return (
+                    <button key={opt.value} type="button" onClick={toggle}
+                      className={`flex min-w-0 flex-1 items-baseline gap-1.5 rounded-xl border px-3 py-2.5 text-left transition active:scale-95 ${
+                        on ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}>
+                      <span className={`whitespace-nowrap text-sm ${on ? "font-black" : "font-semibold"}`}>{opt.label}</span>
+                      <span className={`truncate text-xs ${on ? "text-slate-300" : "text-slate-400"}`}>{opt.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          ) : (
-            <p className="mt-1.5 text-xs font-semibold text-slate-400">둘 다 선택하면 한 계약 기간을 전환일 기준으로 지원고용 훈련 → 적응지도로 나눕니다. 과거 일지는 그대로 보존됩니다.</p>
-          )}
+            {wantField && wantAdapt && (
+              <div className="shrink-0">
+                <label className={T.label}>전환일</label>
+                <input type="date" value={splitDate} min={cStart || undefined} max={cEnd || undefined}
+                  onChange={e => setSplitDate(e.target.value)} className={`w-40 ${T.input}`} />
+              </div>
+            )}
+          </div>
+          <p className="mt-1.5 text-xs font-semibold text-slate-400">현장을 모두 선택할 경우, 설정한 날짜를 기준으로 취업 후 적응지도로 전환되며 기존 작성 일지는 보존됩니다.</p>
         </div>
 
-        {/* 근무형태 선택 */}
+        {/* 계약(배정) 기간 — 수동 입력. 직무지도원 계약은 반드시 종료일 존재 */}
+        <div>
+          <label className={T.label}>근로계약 기간</label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input type="date" value={cStart} max={cEnd || undefined} onChange={e => { warnContractChange("period"); setCStart(e.target.value); }} className={`w-40 ${T.input}`} />
+            <span className="font-semibold text-slate-400">~</span>
+            <input type="date" value={cEnd} min={cStart || undefined} onChange={e => { warnContractChange("period"); setCEnd(e.target.value); }} className={`w-40 ${T.input}`} />
+            <span className="ml-1 text-xs font-semibold text-slate-400">해당 근로계약 기간은 근로계약서 기반으로 자동 입력됩니다.</span>
+          </div>
+        </div>
+
+        {/* 근무형태 — 한 줄 배치(작게). CUSTOM만 직접 시간 입력 */}
         <div>
           <label className={T.label}>근무형태</label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {(["AM", "PM", "FULL_DAY", "CUSTOM"] as WorkType[]).map(wt => (
               <button key={wt} type="button" onClick={() => changeWorkType(wt)}
                 className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition active:scale-95 ${
                   workType === wt ? "border-slate-950 bg-slate-950 font-black text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                 }`}>
-                {WORK_TYPE_LABELS[wt]}
+                {WORK_TYPE_SHORT[wt]}
               </button>
             ))}
           </div>
-        </div>
-
-        {/* 계약(배정) 기간 — 수동 입력 */}
-        <div>
-          <label className={T.label}>근로계약 기간</label>
-          <div className="flex items-center gap-2">
-            <input type="date" value={cStart} max={cEnd || undefined} onChange={e => setCStart(e.target.value)} className={`flex-1 ${T.input}`} />
-            <span className="font-semibold text-slate-400">~</span>
-            <input type="date" value={cEnd} min={cStart || undefined} onChange={e => setCEnd(e.target.value)} className={`flex-1 ${T.input}`} />
-          </div>
-          <p className="mt-1.5 text-xs font-semibold text-slate-400">종료일을 비우면 무기한. 이 기간이 유료기능 접근 판정의 계약기간이 됩니다.</p>
-        </div>
-
-        {/* 근무 시간 — 모든 유형에서 수정 가능 */}
-        <div>
-          <div className="mb-1.5 flex items-center justify-between">
-            <label className={T.label} style={{ marginBottom: 0 }}>근무 시간</label>
-            <span className="text-xs font-semibold text-slate-400">{totalHours()}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <input type="time" value={workStart} onChange={e => setWorkStart(e.target.value)}
-              className={`flex-1 ${T.input}`} />
-            <span className="text-slate-400 font-semibold">~</span>
-            <input type="time" value={workEnd} onChange={e => setWorkEnd(e.target.value)}
-              className={`flex-1 ${T.input}`} />
-          </div>
-          {isFullDay && (
-            <p className="mt-1.5 text-xs font-semibold text-slate-400">
-              전일 근무: 점심시간 1시간이 자동 공제되어 공단 인정시간에서 제외됩니다.
-            </p>
+          {workType === "CUSTOM" && (
+            <div className="mt-2 flex items-center justify-end gap-2">
+              <input type="time" value={workStart} onChange={e => setWorkStart(e.target.value)} className={`w-32 ${T.input}`} />
+              <span className="text-slate-400 font-semibold">~</span>
+              <input type="time" value={workEnd} onChange={e => setWorkEnd(e.target.value)} className={`w-32 ${T.input}`} />
+            </div>
           )}
         </div>
 
-        {/* 출퇴근 지도 */}
-        <div className="sm:col-span-2">
-          <label className={T.label}>출퇴근 지도 포함</label>
+        {/* 출퇴근 지도 포함 여부 + 휴게시간 안내(옆) */}
+        <div>
+          <label className={T.label}>출퇴근 지도 포함 여부</label>
           {isFullDay ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-500">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-sm font-semibold text-slate-500">
               전일 근무는 출퇴근 지도를 포함할 수 없습니다.
             </div>
           ) : (
-            <>
-              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <input type="checkbox" checked={commuteGuidanceIncluded}
-                  onChange={e => setCommuteGuidanceIncluded(e.target.checked)}
-                  className="h-4 w-4 accent-slate-950" />
-                <div>
-                  <span className="text-sm font-black text-slate-900">출퇴근 지도 포함 (+60분)</span>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-400">출근 30분 + 퇴근 30분</p>
-                </div>
+                  onChange={e => { warnContractChange("commute"); setCommuteGuidanceIncluded(e.target.checked); }}
+                  className="h-4 w-4 flex-shrink-0 accent-slate-950" />
+                <span className="text-sm font-black text-slate-900">출퇴근 지도 포함 (+60분) <span className="font-semibold text-slate-400">출근 30분 + 퇴근 30분</span></span>
               </label>
-              <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50 p-2.5 text-xs font-semibold text-sky-700">
-                휴게시간 지도(30분)는 항상 포함됩니다.
-              </div>
-            </>
+              <p className="flex items-center text-xs font-bold text-rose-600">
+                ※ 휴게시간 지도(30분)는 4시간 근무 시 무조건 포함됩니다.
+              </p>
+            </div>
           )}
         </div>
 
-        {/* 출퇴근 버튼 면제(시프티 병행) — 운영자 전용. 매니저는 현재 상태만 확인 */}
-        <div className="sm:col-span-2">
-          <label className={T.label}>출퇴근 버튼 면제</label>
-          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        {/* 실제 근무 시간(자동) + 출근부 자동작성 안내(옆) */}
+        <div>
+          <label className={T.label}>실제 근무 시간 <span className="font-semibold text-slate-400">(출퇴근 지도 및 휴게시간 포함)</span></label>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex w-fit items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-black text-slate-900">
+              {actual.start} ~ {actual.end}
+              <span className="ml-2 text-xs font-semibold text-slate-400">{actualLabel()}</span>
+            </div>
+            <span className="text-xs font-bold text-rose-600">※ 출근부에는 해당 시간으로 자동 작성됩니다.</span>
+          </div>
+        </div>
+
+        {/* 출퇴근 버튼 미적용 여부(시프티 병행) — 운영자 전용. 매니저는 현재 상태만 확인 */}
+        <div>
+          <label className={T.label}>출퇴근 버튼 미적용 여부</label>
+          <div className={`flex items-center gap-3 rounded-xl border p-3 ${
+            attendanceButtonExempt ? "border-rose-200 bg-rose-50" : "border-sky-200 bg-sky-50"
+          }`}>
             <span className={`inline-flex flex-shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-black ${
-              attendanceButtonExempt ? "bg-sky-100 text-sky-700" : "bg-slate-200 text-slate-500"
+              attendanceButtonExempt ? "bg-rose-100 text-rose-700" : "bg-sky-100 text-sky-700"
             }`}>
-              {attendanceButtonExempt ? "면제 적용 중" : "미적용"}
+              {attendanceButtonExempt ? "미적용 중" : "적용 중"}
             </span>
             <div>
-              <span className="text-sm font-black text-slate-900">출퇴근 버튼 없이 자동 작성 (시프티 병행)</span>
+              <span className="text-sm font-black text-slate-900">출퇴근 버튼 없이 자동 출근부 작성</span>
               <p className="mt-0.5 text-xs font-semibold text-slate-400">
-                {attendanceButtonExempt
-                  ? "근무형태 기준으로 출근부가 매일 자동 생성됩니다."
-                  : "직무지도원이 출퇴근 버튼으로 직접 기록합니다."}
-                {" "}변경은 시스템 운영자만 가능합니다.
+                직무지도원이 출퇴근 버튼으로 직접 출퇴근 시간을 기록합니다. 해당 적용 여부 변경은 시스템 운영자만 가능합니다.
               </p>
             </div>
           </div>
@@ -501,6 +531,7 @@ export default function WorkersPage() {
             attendanceButtonExempt: item.attendanceButtonExempt ?? false,
             customWorkStart: item.customWorkStart ?? null, customWorkEnd: item.customWorkEnd ?? null,
             startDate: item.startDate ?? null, endDate: item.endDate ?? null,
+            hasContract: item.hasContract ?? false,
           };
           setAssignmentMap(prev => ({ ...prev, [assignmentId]: asgn }));
           setEditTarget({ worker, assignment: asgn });
@@ -537,7 +568,7 @@ export default function WorkersPage() {
     <div className="space-y-5">
       <PageHeader
         title="직무지도원 배정 관리"
-        sub="직무지도원과 현장(사업체)의 배정 현황을 관리합니다. 목록에서 직무지도원을 선택하면 근무형태·서비스 단계·근로계약 기간 등 배정 정보를 설정할 수 있습니다. 직무지도원 정보·급여계좌 수정은 [직무지도원 관리]에서 합니다."
+        sub="직무지도원과 현장(사업체)의 배정 현황을 관리합니다. 목록에서 직무지도원을 선택하면 근무형태·서비스 단계·근로계약 기간 등 배정 정보를 설정할 수 있습니다."
         actions={
           <button onClick={() => setShowInvite(true)} className={`${T.btnPrimary} flex items-center gap-1.5`}>
             <Send className="h-3.5 w-3.5" />초대 발송
@@ -600,6 +631,11 @@ export default function WorkersPage() {
                         ? c.activeAssignment.siteName
                         : <span className="text-slate-400">미배정</span>}
                     </div>
+                    {c.activeAssignment?.assignStatus && ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus] && (
+                      <span className={`${T.badge} mt-1 inline-block ${ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus].cls}`}>
+                        {ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus].label}
+                      </span>
+                    )}
                   </td>
                   <td className={T.td}>
                     {!c.activeAssignment ? "-"

@@ -119,7 +119,27 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, items: rows.map(toItem) });
+    // 계약서 연결 여부: assignmentId로 직접 연결됐거나(우선), 없으면 해당 직무지도원의
+    // 서명완료(SIGNED/COMPLETED) 계약서 존재로 판정 → 모달에서 계약파생 필드 변경 경고 게이트.
+    const asgnIds = rows.map(r => r.id);
+    const workerIds = Array.from(new Set(rows.map(r => r.workerId)));
+    const contracts = asgnIds.length
+      ? await prisma.employmentContract.findMany({
+          where: {
+            status: { in: ["SIGNED", "COMPLETED"] },
+            OR: [{ assignmentId: { in: asgnIds } }, { workerId: { in: workerIds } }],
+          },
+          select: { assignmentId: true, workerId: true },
+        })
+      : [];
+    const contractAsgnIds = new Set(contracts.filter(c => c.assignmentId != null).map(c => String(c.assignmentId)));
+    const contractWorkerIds = new Set(contracts.map(c => String(c.workerId)));
+    const items = rows.map(r => ({
+      ...toItem(r),
+      hasContract: contractAsgnIds.has(String(r.id)) || contractWorkerIds.has(String(r.workerId)),
+    }));
+
+    return NextResponse.json({ success: true, items });
   } catch (e: any) {
     if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
@@ -198,9 +218,9 @@ export async function POST(req: NextRequest) {
         siteId,
         workerId,
         agencyId: effectiveAgencyId, // 에이전시 스코프 쿼리(급여·CSV·근태inbox·휴무)에서 누락 방지
-        // 초대·셀프등록 경로와 동일하게 ACTIVE로 생성 (ASSIGNED→ACTIVE 승격 경로가 없어
-        // 급여 정산·대시보드·구독 인원(ACTIVE만 집계)에서 누락되던 문제 방지)
-        status: "ACTIVE",
+        // 파이프라인(assignment-pipeline-design.md): 선정=ASSIGNED(계약 대기). 계약 서명→CONFIRMED,
+        // 연결+위치확정→ACTIVE. 과금/급여(ACTIVE만)는 정상근무 시점부터 집계된다.
+        status: "ASSIGNED",
         serviceStep,
         adaptationStartDate,
         isMainWorker,

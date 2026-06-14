@@ -121,6 +121,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
     }
 
+    // 🔑 연결 게이트(assignment-pipeline-design.md §7): 기존 유저는 인증코드로 배정을 연결해야 출근 가능.
+    //    (신규 유저는 임시비번 발급 시 connectedAt 자동 기록, 기존 운영 ACTIVE는 백필로 grandfather)
+    if (!assignment.connectedAt) {
+      return NextResponse.json(
+        { success: false, message: "ASSIGNMENT_NOT_CONNECTED", assignmentId: String(assignment.id) },
+        { status: 409 }
+      );
+    }
+
+    // 🔑 위치확정 게이트(assignment-pipeline-design.md §8): 최초 현장 방문 위치확정 전에는 출근 불가.
+    //    기준점이 미확정이면 거리·반경·범위밖 사유·GPS보정 검증이 전부 허수가 되므로 강제한다.
+    if (!assignment.baseConfirmedAt) {
+      return NextResponse.json(
+        { success: false, message: "LOCATION_NOT_CONFIRMED", assignmentId: String(assignment.id), siteId: String(assignment.siteId) },
+        { status: 409 }
+      );
+    }
+
     const site = assignment.site;
 
     // [STEP 3] 기준점(BasePoint) 결정

@@ -357,6 +357,33 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
   const showToast = (msg: string, type: "success" | "error" | "info" = "info") =>
     setToast({ msg, type });
 
+  // 최초 현장 방문 위치확정: 현재 좌표를 기준점으로 propose. 허용범위 이내면 확정(APPROVED/CONFIRMED_LOCATION).
+  async function confirmLocation(
+    siteId: string | undefined,
+    lat: number,
+    lon: number,
+    accuracyM?: number,
+  ): Promise<boolean> {
+    if (!siteId) { showToast("현장 정보를 찾을 수 없습니다.", "error"); return false; }
+    try {
+      const res = await fetch("/api/site/basepoint/propose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, proposedLat: lat, proposedLon: lon, accuracyM }),
+      });
+      const data = await res.json();
+      if (data.success && (data.status === "APPROVED" || data.status === "CONFIRMED_LOCATION")) {
+        showToast("현장 위치가 확정되었습니다.", "success");
+        return true;
+      }
+      showToast(data.message || "현장에서 위치 확정에 실패했습니다. 현장 안에서 다시 시도해주세요.", "error");
+      return false;
+    } catch {
+      showToast("위치 확정 중 오류가 발생했습니다.", "error");
+      return false;
+    }
+  }
+
   async function doAttendance(
     endpoint: string,
     extraPayload: Record<string, any> = {},
@@ -429,6 +456,42 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
                 setDialog(null);
                 setActionLoading(true);
                 const ok = await doAttendance(endpoint, { ...extraPayload, confirmOutOfRange: true }, true);
+                setActionLoading(false);
+                resolve(ok);
+              },
+              onCancel: () => { setDialog(null); resolve(false); },
+            });
+          });
+        }
+        // 🔑 연결 게이트: 기존 유저는 배정 연결 인증코드 입력 전 출근 불가(서버 ASSIGNMENT_NOT_CONNECTED).
+        if (res.status === 409 && data.message === "ASSIGNMENT_NOT_CONNECTED") {
+          return new Promise<boolean>(resolve => {
+            setDialog({
+              title: "배정 연결 필요",
+              msg: "이 현장 배정을 먼저 연결해야 출근할 수 있어요.\n담당자가 보낸 인증코드를 입력해주세요.",
+              confirmLabel: "배정 연결하기",
+              cancelLabel: "닫기",
+              onConfirm: () => { setDialog(null); router.push("/worker/connect"); resolve(false); },
+              onCancel: () => { setDialog(null); resolve(false); },
+            });
+          });
+        }
+
+        // 🔑 위치확정 게이트: 최초 현장 방문 위치확정 전에는 출근 불가(서버 LOCATION_NOT_CONFIRMED).
+        //    현재 위치를 현장 기준점으로 확정한 뒤 출근을 재시도하도록 안내한다.
+        if (res.status === 409 && data.message === "LOCATION_NOT_CONFIRMED") {
+          const siteId = data.siteId as string | undefined;
+          return new Promise(resolve => {
+            setDialog({
+              title: "현장 위치 확정",
+              msg: "이 현장은 최초 방문 시 위치 확정이 필요합니다.\n현재 위치를 현장 기준점으로 확정하고 출근할까요?\n(현장 안에서 진행해주세요.)",
+              confirmLabel: "위치 확정하고 출근",
+              cancelLabel: "취소",
+              onConfirm: async () => {
+                setDialog(null);
+                setActionLoading(true);
+                const confirmed = await confirmLocation(siteId, latitude, longitude, coords.accuracy);
+                const ok = confirmed ? await doAttendance(endpoint, extraPayload, confirmOutOfRange) : false;
                 setActionLoading(false);
                 resolve(ok);
               },

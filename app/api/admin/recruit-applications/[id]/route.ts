@@ -102,13 +102,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       });
       if (dup) return;
 
-      // ③ SiteAssignment 생성 (초대·셀프등록과 동일하게 ACTIVE로 — 급여·근태·구독 인원 집계 누락 방지)
+      // ③ SiteAssignment 생성 — 파이프라인: 선정=ASSIGNED(계약 대기). 계약 서명→CONFIRMED, 연결+위치확정→ACTIVE.
       await tx.siteAssignment.create({
         data: {
           siteId,
           workerId: app.workerId,
           agencyId: app.post.agencyId,
-          status: "ACTIVE",
+          status: "ASSIGNED",
           isMainWorker: true,
           assignedAt: new Date(),
           startDate: new Date(),
