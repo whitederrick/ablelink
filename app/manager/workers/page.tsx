@@ -86,19 +86,21 @@ const WORK_TYPE_DEFAULTS: Record<WorkType, { start: string; end: string }> = {
   CUSTOM:   { start: "09:00", end: "18:00" },
 };
 
-// ── 초대 링크 발송 모달 ───────────────────────────────────
+// ── 초대 링크 발송 모달 (멀티/지정) ───────────────────────────────────
 interface Site { id: string; companyName: string; }
-interface InviteResult { inviteUrl: string; code: string; phoneNumber: string; expiresAt: string; }
+type Recipient = { phone: string; name: string };
+type SentResult = { phone: string; name: string; ok: boolean; code?: string; inviteUrl?: string; error?: string };
+
+const isValidPhone = (p: string) => /^01[0-9]{8,9}$/.test(p.replace(/-/g, "").trim());
 
 function InviteModal({ onClose }: { onClose: () => void }) {
-  const [phone,      setPhone]      = useState("");
-  const [workerName, setWorkerName] = useState("");
-  const [siteId,     setSiteId]     = useState("");
-  const [sites,      setSites]      = useState<Site[]>([]);
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState("");
-  const [result,     setResult]     = useState<InviteResult | null>(null);
-  const [copied,     setCopied]     = useState(false);
+  const [siteId,  setSiteId]  = useState("");
+  const [sites,   setSites]   = useState<Site[]>([]);
+  const [rows,    setRows]    = useState<Recipient[]>([{ phone: "", name: "" }]);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+  const [results, setResults] = useState<SentResult[] | null>(null);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/sites?pageSize=100")
@@ -107,58 +109,61 @@ function InviteModal({ onClose }: { onClose: () => void }) {
       .catch(() => {});
   }, []);
 
+  function updateRow(i: number, patch: Partial<Recipient>) {
+    setRows(rs => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+    setError("");
+  }
+  function addRow() { setRows(rs => [...rs, { phone: "", name: "" }]); }
+  function removeRow(i: number) { setRows(rs => (rs.length === 1 ? rs : rs.filter((_, idx) => idx !== i))); }
+
+  const validRows = rows.filter(r => isValidPhone(r.phone));
+
   async function handleSend() {
+    // 중복 번호 가드
+    const nums = validRows.map(r => r.phone.replace(/-/g, "").trim());
+    if (new Set(nums).size !== nums.length) { setError("중복된 전화번호가 있습니다."); return; }
+    if (validRows.length === 0) { setError("유효한 휴대전화번호를 1개 이상 입력하세요."); return; }
     setError(""); setLoading(true);
-    try {
-      const res = await fetch("/api/admin/workers/invite", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phoneNumber: phone.replace(/-/g, "").trim(),
-          workerName: workerName.trim() || undefined,
-          siteId: siteId || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!data.success) { setError(data.message); return; }
-      setResult(data.invite);
-    } catch { setError("서버와 연결할 수 없습니다."); }
-    finally { setLoading(false); }
+    const out: SentResult[] = [];
+    for (const r of validRows) {
+      try {
+        const res = await fetch("/api/admin/workers/invite", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phoneNumber: r.phone.replace(/-/g, "").trim(),
+            workerName: r.name.trim() || undefined,
+            siteId: siteId || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) out.push({ phone: r.phone, name: r.name, ok: true, code: data.invite.code, inviteUrl: data.invite.inviteUrl });
+        else out.push({ phone: r.phone, name: r.name, ok: false, error: data.message });
+      } catch {
+        out.push({ phone: r.phone, name: r.name, ok: false, error: "서버와 연결할 수 없습니다." });
+      }
+    }
+    setResults(out);
+    setLoading(false);
   }
 
-  async function handleCopy(text: string) {
+  async function handleCopy(text: string, idx: number) {
     await navigator.clipboard.writeText(text).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(null), 2000);
   }
+
+  const okCount = results?.filter(r => r.ok).length ?? 0;
+  const failCount = results ? results.length - okCount : 0;
 
   return (
     <div className={T.modalOverlay}>
-      <div className={T.modalContent}>
-        {!result ? (
+      <div className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white p-6 shadow-2xl">
+        {!results ? (
           <>
-            <h2 className="mb-1 text-base font-black text-slate-900">직무지도원 초대</h2>
-            <p className="mb-5 text-sm font-semibold text-slate-400">전화번호로 초대 링크와 인증번호를 문자 발송합니다.</p>
+            <h2 className="mb-1 text-base font-black text-slate-900">직무지도원 초대 (멀티·지정)</h2>
+            <p className="mb-4 text-sm font-semibold text-slate-400">후보 1명(지정) 또는 여러 명(멀티)에게 같은 현장으로 초대 링크·인증번호를 발송합니다.</p>
 
             <div className="mb-4">
-              <label className={T.label}>휴대전화번호 <span className="text-rose-500">*</span></label>
-              <input
-                type="tel" placeholder="01012345678"
-                value={phone} onChange={e => { setPhone(e.target.value); setError(""); }}
-                className={`w-full ${T.input}`}
-              />
-            </div>
-
-            <div className="mb-4">
-              <label className={T.label}>이름 (선택)</label>
-              <input
-                type="text" placeholder="홍길동"
-                value={workerName} onChange={e => setWorkerName(e.target.value)}
-                className={`w-full ${T.input}`}
-              />
-              <p className="mt-1 text-xs font-semibold text-slate-400">입력 시 가입 화면에 이름이 미리 채워집니다.</p>
-            </div>
-
-            <div className="mb-6">
               <label className={T.label}>배정 현장(사업체) (선택)</label>
               <select value={siteId} onChange={e => setSiteId(e.target.value)} className={`w-full ${T.select}`}>
                 <option value="">현장 미지정</option>
@@ -166,62 +171,85 @@ function InviteModal({ onClose }: { onClose: () => void }) {
               </select>
             </div>
 
+            <label className={T.label}>후보 <span className="font-semibold text-slate-400">(전화번호 필수 · 이름 선택)</span></label>
+            <div className="-mr-1 max-h-[38vh] space-y-2 overflow-y-auto pr-1">
+              {rows.map((r, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="w-5 flex-shrink-0 text-center text-xs font-black text-slate-400">{i + 1}</span>
+                  <input type="tel" placeholder="01012345678" value={r.phone}
+                    onChange={e => updateRow(i, { phone: e.target.value })}
+                    className={`flex-1 ${T.input} ${r.phone && !isValidPhone(r.phone) ? "border-rose-300" : ""}`} />
+                  <input type="text" placeholder="이름(선택)" value={r.name}
+                    onChange={e => updateRow(i, { name: e.target.value })}
+                    className={`w-28 ${T.input}`} />
+                  <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1}
+                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:bg-slate-50 disabled:opacity-30">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={addRow} className="mt-2 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-bold text-slate-500 transition hover:bg-slate-50">
+              + 후보 추가
+            </button>
+
             {error && (
-              <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">{error}</div>
+              <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">{error}</div>
             )}
 
-            <div className="flex justify-end gap-2">
+            <div className="mt-5 flex justify-end gap-2">
               <button onClick={onClose} className={T.btnSecondary}>취소</button>
-              <button
-                onClick={handleSend}
-                disabled={loading || !phone.replace(/-/g, "").match(/^01[0-9]{8,9}$/)}
-                className={`${T.btnPrimary} flex items-center gap-1.5`}
-              >
+              <button onClick={handleSend} disabled={loading || validRows.length === 0}
+                className={`${T.btnPrimary} flex items-center gap-1.5`}>
                 <Send className="h-3.5 w-3.5" />
-                {loading ? "발송 중..." : "초대 발송"}
+                {loading ? "발송 중..." : `${validRows.length}명 초대 발송`}
               </button>
             </div>
           </>
         ) : (
           <>
-            <div className="mb-5 flex items-center gap-3">
+            <div className="mb-4 flex items-center gap-3">
               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
               </div>
               <div>
                 <p className="font-black text-slate-900">초대 발송 완료</p>
-                <p className="text-xs font-semibold text-slate-400">{result.phoneNumber.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3")} · 24시간 유효</p>
+                <p className="text-xs font-semibold text-slate-400">성공 {okCount}명{failCount > 0 ? ` · 실패 ${failCount}명` : ""}</p>
               </div>
             </div>
 
-            <div className="mb-3 space-y-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="mb-1 text-xs font-black text-slate-500">인증번호</p>
-                <p className="text-2xl font-black tracking-[8px] text-slate-900">{result.code}</p>
-                <p className="mt-1 text-xs font-semibold text-slate-400">직무지도원에게 구두 또는 문자로 전달해주세요.</p>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="mb-1 text-xs font-black text-slate-500">초대 링크</p>
-                <p className="mb-2 break-all text-xs font-semibold text-sky-600">{result.inviteUrl}</p>
-                <button
-                  onClick={() => handleCopy(result.inviteUrl)}
-                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 transition hover:bg-slate-50"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  {copied ? "복사됨!" : "링크 복사"}
-                </button>
-              </div>
+            <div className="-mr-1 max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+              {results.map((r, i) => (
+                <div key={i} className={`rounded-xl border p-3 ${r.ok ? "border-slate-200 bg-slate-50" : "border-rose-200 bg-rose-50"}`}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-black text-slate-900">
+                      {r.name?.trim() || "이름 미입력"} <span className="font-semibold text-slate-400">{r.phone.replace(/-/g, "").replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3")}</span>
+                    </p>
+                    {!r.ok && <span className="text-xs font-bold text-rose-600">실패</span>}
+                  </div>
+                  {r.ok ? (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="rounded-lg bg-white px-2 py-1 text-base font-black tracking-[4px] text-slate-900">{r.code}</span>
+                      <button onClick={() => r.inviteUrl && handleCopy(r.inviteUrl, i)}
+                        className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-700 transition hover:bg-slate-100">
+                        <Copy className="h-3.5 w-3.5" />{copiedIdx === i ? "복사됨!" : "링크 복사"}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-xs font-semibold text-rose-600">{r.error}</p>
+                  )}
+                </div>
+              ))}
             </div>
 
-            <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+            <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-3">
               <p className="text-xs font-semibold text-amber-700">
-                SMS 환경변수(KAKAO_ALIMTALK_*)가 설정된 경우 자동 문자 발송됩니다.
-                미설정 시 위 링크와 인증번호를 직접 전달해주세요.
+                SMS 환경변수(KAKAO_ALIMTALK_*) 설정 시 자동 문자 발송됩니다. 미설정 시 위 링크·인증번호를 직접 전달해주세요.
+                수락한 후보는 <b>계약 대기(ASSIGNED)</b>로 들어오며, 목록에서 계약서를 작성·발송하세요.
               </p>
             </div>
 
-            <div className="mt-5 flex justify-end">
+            <div className="mt-4 flex justify-end">
               <button onClick={onClose} className={T.btnPrimary}>확인</button>
             </div>
           </>
