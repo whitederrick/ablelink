@@ -22,6 +22,12 @@ function loadFont(file: string): Buffer {
 
 type Sig = { name?: string; imageUrl?: string };
 
+// PNG 헤더(IHDR)에서 이미지 픽셀 크기 읽기. (직인=정사각 판별용. PNG 아니면 null)
+function pngSize(buf: Buffer): { w: number; h: number } | null {
+  if (buf.length < 24 || buf.toString("ascii", 12, 16) !== "IHDR") return null;
+  return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+}
+
 function newDoc(marginMm?: number): PDFKit.PDFDocument {
   const m = marginMm != null ? mm(marginMm) : MARGIN;
   const doc = new PDFDocument({ size: "A4", margins: { top: m, bottom: m, left: m, right: m } });
@@ -862,13 +868,22 @@ function employmentContract(p: any): Promise<Buffer> {
       const nameW = doc.widthOfString(labelTxt);
       const sx = startX + nameW + mm(7);
       doc.font("KR").fontSize(10.5).fillColor("#000").text(tail, sx, y);
-      // 서명 이미지: "(서명)" 텍스트 중앙에 겹쳐 그림
+      // 서명/직인 이미지: "(서명)" 텍스트 중앙에 겹쳐 그림
       if (sign.imageUrl && sign.imageUrl.startsWith("data:image")) {
         try {
           const img = Buffer.from(sign.imageUrl.split(",")[1], "base64");
           const tailW = doc.widthOfString(tail);
-          const imgW = mm(32.3), imgH = mm(13.3);
-          doc.image(img, sx + tailW / 2 - imgW / 2, y - mm(4.5), { fit: [imgW, imgH], align: "center", valign: "center" });
+          const cx = sx + tailW / 2;
+          // 직인은 정사각(정규화 400×400 PNG)으로 저장됨 → 정사각이면 직인으로 보고 실제 도장 크기(큰 정사각)로 그림.
+          const meta = pngSize(img);
+          const isStamp = !!meta && Math.abs(meta.w / meta.h - 1) < 0.12;
+          if (isStamp) {
+            const s = mm(20); // 직인 실제 크기(정사각)
+            doc.image(img, cx - s / 2, y - mm(8), { fit: [s, s], align: "center", valign: "center" });
+          } else {
+            const imgW = mm(32.3), imgH = mm(13.3);
+            doc.image(img, cx - imgW / 2, y - mm(4.5), { fit: [imgW, imgH], align: "center", valign: "center" });
+          }
         } catch { /* 무시 */ }
       }
     }

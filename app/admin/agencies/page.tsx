@@ -64,7 +64,7 @@ export default function AgenciesPage() {
     setProcessing(true);
     const res=await fetch("/api/admin/system/agencies",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});
     const data=await res.json(); setProcessing(false);
-    if(data.success){showToast("에이전시가 생성되었습니다.");setShowCreate(false);setForm({name:"",planType:"FREE",managerLoginId:"",managerPassword:"",managerDisplayName:""});load();}else showToast(data.message||"생성 실패");
+    if(data.success){showToast("위탁기관가 생성되었습니다.");setShowCreate(false);setForm({name:"",planType:"FREE",managerLoginId:"",managerPassword:"",managerDisplayName:""});load();}else showToast(data.message||"생성 실패");
   }
 
   const filtered = useMemo(() => {
@@ -82,25 +82,25 @@ export default function AgenciesPage() {
   return (
     <div>
       <PageHeader
-        title="에이전시 관리"
-        sub="에이전시를 등록하고 상세 정보 및 구독 플랜을 관리합니다."
+        title="위탁기관 관리"
+        sub="위탁기관를 등록하고 상세 정보 및 구독 플랜을 관리합니다."
         actions={
           <button onClick={()=>setShowCreate(true)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white active:scale-95">
-            <Plus className="h-4 w-4" />에이전시 등록
+            <Plus className="h-4 w-4" />위탁기관 등록
           </button>
         }
       />
 
-      {/* 에이전시 생성 모달 */}
+      {/* 위탁기관 생성 모달 */}
       {showCreate&&(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-5">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-base font-black text-slate-900">에이전시 등록</p>
+              <p className="text-base font-black text-slate-900">위탁기관 등록</p>
               <button onClick={()=>setShowCreate(false)}><X className="h-5 w-5 text-slate-400"/></button>
             </div>
             <div className="space-y-3">
-              <div><label className="mb-1 block text-xs font-semibold text-slate-600">에이전시 이름 *</label>
+              <div><label className="mb-1 block text-xs font-semibold text-slate-600">위탁기관 이름 *</label>
                 <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="기관명" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400"/></div>
               <div><label className="mb-1 block text-xs font-semibold text-slate-600">초기 플랜</label>
                 <select value={form.planType} onChange={e=>setForm(f=>({...f,planType:e.target.value}))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400">
@@ -118,7 +118,7 @@ export default function AgenciesPage() {
             </div>
             <div className="mt-4 flex gap-2">
               <button onClick={()=>setShowCreate(false)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 active:scale-95">취소</button>
-              <button onClick={createAgency} disabled={processing} className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">{processing?"등록 중...":"에이전시 등록"}</button>
+              <button onClick={createAgency} disabled={processing} className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">{processing?"등록 중...":"위탁기관 등록"}</button>
             </div>
           </div>
         </div>
@@ -139,7 +139,7 @@ export default function AgenciesPage() {
         <ListToolbar
           query={search}
           onQueryChange={setSearch}
-          placeholder="에이전시 이름 검색"
+          placeholder="위탁기관 이름 검색"
           filters={PLANS.map(p => ({ value: p, label: p, count: planCnt(p) })) as FilterChip[]}
           selected={planFilter}
           onToggleFilter={togglePlan}
@@ -151,7 +151,7 @@ export default function AgenciesPage() {
       ):(
         <div className="space-y-2">
           {filtered.length===0?(
-            <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">{agencies.length===0?"에이전시가 없습니다.":"조건에 맞는 에이전시가 없습니다."}</p></div>
+            <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">{agencies.length===0?"위탁기관가 없습니다.":"조건에 맞는 위탁기관가 없습니다."}</p></div>
           ):pageItems.map(a=>(
             <div key={a.id} className="rounded-xl border border-slate-200 bg-white">
               <div className="flex items-center gap-2.5 px-3.5 py-2.5">
@@ -199,7 +199,7 @@ export default function AgenciesPage() {
         </div>
       )}
 
-      {/* 에이전시 상세 모달 */}
+      {/* 위탁기관 상세 모달 */}
       {detailId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-5" onClick={() => setDetailId(null)}>
           <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>

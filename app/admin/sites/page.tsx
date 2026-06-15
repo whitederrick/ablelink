@@ -55,7 +55,7 @@ export default function SitesPage() {
     <div>
       <PageHeader
         title="현장(Site) 현황 관리"
-        sub="전체 에이전시의 현장을 조회하고 상세 정보를 관리합니다."
+        sub="전체 위탁기관의 현장을 조회하고 상세 정보를 관리합니다."
         actions={
           <Link href="/admin/sites/new" className={`${T.btnPrimary} no-underline`}>+ 현장(Site) 등록</Link>
         }
@@ -66,7 +66,7 @@ export default function SitesPage() {
         cols={3}
         items={[
           { label: "전체 현장", value: sites.length },
-          { label: "에이전시 연결", value: linked, tone: "emerald" },
+          { label: "위탁기관 연결", value: linked, tone: "emerald" },
           { label: "미연결", value: sites.length - linked, tone: "slate" },
         ]}
       />
@@ -75,7 +75,7 @@ export default function SitesPage() {
         <ListToolbar
           query={q}
           onQueryChange={setQ}
-          placeholder="현장명·주소·에이전시 검색"
+          placeholder="현장명·주소·위탁기관 검색"
           filters={[
             { value: "linked", label: "연결", count: linked },
             { value: "unlinked", label: "미연결", count: sites.length - linked },
@@ -91,7 +91,7 @@ export default function SitesPage() {
         <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-slate-100 bg-slate-50">
-              {["현장명","직종","에이전시","훈련생","직무지도원","주소"].map(h=>(
+              {["현장명","직종","위탁기관","훈련생","직무지도원","주소"].map(h=>(
                 <th key={h} className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">{h}</th>
               ))}
             </tr></thead>

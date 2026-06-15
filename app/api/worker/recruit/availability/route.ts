@@ -1,5 +1,5 @@
 // app/api/worker/recruit/availability/route.ts
-// 후보자(워커) 구직중 공개 여부 (에이전시 컨택 허용)
+// 후보자(워커) 구직중 공개 여부 (위탁기관 컨택 허용)
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";

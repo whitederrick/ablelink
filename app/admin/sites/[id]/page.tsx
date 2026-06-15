@@ -327,7 +327,7 @@ export default function AdminSiteDetailPage() {
         <h2 className="mb-1 text-sm font-black text-slate-900">📍 GPS 출퇴근 허용 범위</h2>
         <p className="mb-4 text-sm font-semibold leading-relaxed text-slate-400">
           직무지도원이 현장 반경 내에서 출퇴근 처리할 수 있는 허용 거리입니다.<br />
-          범위를 벗어나면 에이전시 승인이 필요합니다.
+          범위를 벗어나면 위탁기관 승인이 필요합니다.
         </p>
 
         {/* 프리셋 옵션 */}
@@ -393,10 +393,10 @@ export default function AdminSiteDetailPage() {
         </div>
       </div>
 
-      {/* 담당 관리자(에이전시 측 관리자) — 지정/이관 */}
+      {/* 담당 관리자(위탁기관 측 관리자) — 지정/이관 */}
       <div className={T.card}>
         <h2 className="mb-1 text-sm font-black text-slate-900">담당 관리자</h2>
-        <p className="mb-3 text-xs font-semibold text-slate-400">이 현장을 맡는 에이전시 관리자. ‘미지정(공용)’으로 두거나 다른 관리자에게 이관할 수 있습니다.</p>
+        <p className="mb-3 text-xs font-semibold text-slate-400">이 현장을 맡는 위탁기관 관리자. ‘미지정(공용)’으로 두거나 다른 관리자에게 이관할 수 있습니다.</p>
         <select
           value={ownerManagerId}
           onChange={(e) => setOwnerManagerId(e.target.value)}

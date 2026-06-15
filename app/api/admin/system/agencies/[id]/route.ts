@@ -1,4 +1,4 @@
-// 시스템 운영자 전용: 에이전시 플랜 변경 / 정보 수정
+// 시스템 운영자 전용: 위탁기관 플랜 변경 / 정보 수정
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -20,7 +20,7 @@ export async function PATCH(
     const { planType, trialEndsAt, maxWorkers, maxSites, billingCycle, customAmount, billingNote } = body;
 
     const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
-    if (!agency) return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
+    if (!agency) return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
 
     const validPlans = ["FREE", "TRIAL", "STARTER", "STANDARD", "PRO"];
     if (planType && !validPlans.includes(planType)) {
@@ -55,7 +55,7 @@ export async function PATCH(
       detail: { before: { planType: agency.planType }, after: updateData },
     });
 
-    return NextResponse.json({ success: true, message: "에이전시 정보가 업데이트되었습니다." });
+    return NextResponse.json({ success: true, message: "위탁기관 정보가 업데이트되었습니다." });
   } catch (e: any) {
     if (e instanceof Response) return e;
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });

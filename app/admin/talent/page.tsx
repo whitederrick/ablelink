@@ -1,6 +1,6 @@
 "use client";
 
-// 에이전시 — 구직중 후보자 풀 검색 + 제안(컨택) 보내기 (방향 B)
+// 위탁기관 — 구직중 후보자 풀 검색 + 제안(컨택) 보내기 (방향 B)
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "../_styles";

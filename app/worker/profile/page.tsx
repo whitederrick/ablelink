@@ -454,7 +454,7 @@ export default function WorkerProfilePage() {
                   <p className="text-sm font-black text-rose-800">정말 탈퇴하시겠습니까?</p>
                   <p className="mt-1 text-xs font-semibold leading-relaxed text-rose-600">
                     탈퇴 시 이름·전화번호·서명 등 개인정보가 즉시 삭제됩니다.<br />
-                    출퇴근·업무일지 기록은 소속 에이전시 운영 기록으로 보존됩니다.
+                    출퇴근·업무일지 기록은 소속 위탁기관 운영 기록으로 보존됩니다.
                   </p>
                 </div>
               </div>

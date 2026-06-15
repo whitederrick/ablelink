@@ -63,7 +63,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const agencyId = rec.assignment?.agencyId;
   if (agencyId) {
     const planCheck = await checkAgencyPlanAccess(agencyId, "SITE_MANAGER_SIGN");
-    // 셀프등록(무소속 운영) 에이전시는 기본 문서·서명 무료 허용
+    // 셀프등록(무소속 운영) 위탁기관는 기본 문서·서명 무료 허용
     if (!planCheck.allowed && !(await isSelfManagedAgency(agencyId))) {
       return NextResponse.json({ success: false, message: "사업체 담당자 서명 기능은 STANDARD 플랜 이상에서 사용 가능합니다." }, { status: 403 });
     }

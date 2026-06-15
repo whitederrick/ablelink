@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    // 소속 에이전시 스코프 강제
+    // 소속 위탁기관 스코프 강제
     where.agencyId = scope.agencyId;
 
     const [total, rows] = await Promise.all([
@@ -207,7 +207,7 @@ export async function POST(req: NextRequest) {
     });
     if (!assignment) throw new Error("NOT_FOUND");
 
-    // 소속 에이전시 스코프 강제
+    // 소속 위탁기관 스코프 강제
     if (assignment.site.agencyId == null || assignment.site.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
 
     const created = await prisma.documentRun.create({

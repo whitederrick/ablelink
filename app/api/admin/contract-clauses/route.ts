@@ -1,5 +1,5 @@
 // app/api/admin/contract-clauses/route.ts
-// 에이전시별 근로계약서 특약 조항 마스터 — 목록/생성
+// 위탁기관별 근로계약서 특약 조항 마스터 — 목록/생성
 
 export const runtime = "nodejs";
 
@@ -16,7 +16,7 @@ function errToStatus(msg: string) {
   return 500;
 }
 
-// GET: 에이전시 특약 조항 목록(활성/비활성 모두)
+// GET: 위탁기관 특약 조항 목록(활성/비활성 모두)
 export async function GET(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);

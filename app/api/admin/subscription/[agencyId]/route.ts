@@ -1,5 +1,5 @@
 // app/api/admin/subscription/[agencyId]/route.ts
-// 에이전시 플랜 변경 API
+// 위탁기관 플랜 변경 API
 
 export const runtime = "nodejs";
 

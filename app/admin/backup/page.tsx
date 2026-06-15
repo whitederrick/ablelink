@@ -1,7 +1,7 @@
 "use client";
 
 // 시스템 운영자 전체 데이터 백업 — 보관 1년 경과분 안전망.
-// 고객 화면 export는 1년 제한이지만, 운영자 백업은 전 기간·전 에이전시(제한 없음).
+// 고객 화면 export는 1년 제한이지만, 운영자 백업은 전 기간·전 위탁기관(제한 없음).
 
 import { useState } from "react";
 import { Download, FileSpreadsheet, Database } from "lucide-react";
@@ -35,7 +35,7 @@ export default function AdminBackupPage() {
     <div>
       <PageHeader
         title="데이터 백업"
-        sub="전 에이전시의 출근부·일지를 전 기간(보관 제한 없음)으로 내려받습니다."
+        sub="전 위탁기관의 출근부·일지를 전 기간(보관 제한 없음)으로 내려받습니다."
       />
 
       <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -46,8 +46,8 @@ export default function AdminBackupPage() {
       </div>
 
       <div className="grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
-        <BackupCard title="근태(출근부) 전체" desc="전 에이전시 DailyAttendance" type="attendance" busy={busy} onDownload={download} />
-        <BackupCard title="일지 전체" desc="전 에이전시 TraineeLog" type="logs" busy={busy} onDownload={download} />
+        <BackupCard title="근태(출근부) 전체" desc="전 위탁기관 DailyAttendance" type="attendance" busy={busy} onDownload={download} />
+        <BackupCard title="일지 전체" desc="전 위탁기관 TraineeLog" type="logs" busy={busy} onDownload={download} />
       </div>
 
       {msg && <p className="mt-4 text-sm font-semibold text-rose-600">{msg}</p>}

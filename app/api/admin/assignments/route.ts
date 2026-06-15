@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
     });
     if (!site) throw new Error("NOT_FOUND");
     if (!site.isActive) throw new Error("VALIDATION:siteInactive");
-    if (site.agencyId == null) throw new Error("FORBIDDEN"); // 배정은 에이전시 귀속 사이트만(급여·구독 집계)
+    if (site.agencyId == null) throw new Error("FORBIDDEN"); // 배정은 위탁기관 귀속 사이트만(급여·구독 집계)
     if (session.kind === "manager" && site.agencyId !== session.agencyId) throw new Error("FORBIDDEN");
     const effectiveAgencyId = site.agencyId;
 
@@ -182,12 +182,12 @@ export async function POST(req: NextRequest) {
     if (!user) throw new Error("NOT_FOUND");
     if (String(user.status) !== "ACTIVE") throw new Error("VALIDATION:userInactive");
 
-    // 동일 site/user에 “활성 배정”이 이미 있으면 중복 방지(정책)
+    // 동일 site/user에 진행 중 배정(요청·수락·계약대기·근무)이 이미 있으면 중복 방지(정책)
     const dup = await prisma.siteAssignment.findFirst({
-      where: { siteId, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      where: { siteId, workerId, status: { in: ["REQUESTED", "ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] } },
       select: { id: true },
     });
-    if (dup) throw new Error("VALIDATION:alreadyAssigned");
+    if (dup) return NextResponse.json({ success: false, message: "이미 해당 현장에 배정(또는 요청)된 직무지도원입니다." }, { status: 409 });
 
     const isMainWorker = body.isMainWorker === false ? false : true;
     const memo = body.memo != null ? String(body.memo).trim() : null;
@@ -213,48 +213,104 @@ export async function POST(req: NextRequest) {
     // manager 로그인 계정(Manager.id) 기록. admin(운영자) 직접 배정은 null.
     const assignedByManagerId = session.kind === "manager" ? session.managerId : null;
 
-    const created = await prisma.siteAssignment.create({
-      data: {
-        siteId,
-        workerId,
-        agencyId: effectiveAgencyId, // 에이전시 스코프 쿼리(급여·CSV·근태inbox·휴무)에서 누락 방지
-        // 파이프라인(assignment-pipeline-design.md): 선정=ASSIGNED(계약 대기). 계약 서명→CONFIRMED,
-        // 연결+위치확정→ACTIVE. 과금/급여(ACTIVE만)는 정상근무 시점부터 집계된다.
-        status: "ASSIGNED",
-        serviceStep,
-        adaptationStartDate,
-        isMainWorker,
-        assignedAt: new Date(),
-        startDate: body.startDate ? new Date(body.startDate) : new Date(),
-        endDate: body.endDate ? new Date(body.endDate) : null,
-        assignedByManagerId,
-        statusReason: memo,
-        workType,
-        commuteGuidanceIncluded,
-        attendanceButtonExempt,
-        customWorkStart,
-        customWorkEnd,
-      },
-      select: {
-        id: true,
-        workerId: true,
-        siteId: true,
-        status: true,
-        startDate: true,
-        endDate: true,
-        assignedAt: true,
-        confirmedAt: true,
-        rejectedAt: true,
-        droppedAt: true,
-        endedAt: true,
-        statusReason: true,
-        assignedByManagerId: true,
-        site: { select: { id: true, companyName: true, address: true, agencyId: true } },
-        user: {
-          select: { id: true, workerName: true, loginId: true, phoneNumber: true, role: true, status: true },
-        },
-      },
+    // 배정 요청 모드: mode === "request" → 즉시 ASSIGNED가 아니라 REQUESTED(요청 중) 생성.
+    // 요청 근무형태(복수)·회신 기한을 저장하고, 후보 수락 시 workType이 확정된다.
+    const isRequest = body.mode === "request";
+    let requestedWorkTypesCsv: string | null = null;
+    let replyDeadline: Date | null = null;
+    if (isRequest) {
+      const wts: string[] = Array.isArray(body.requestedWorkTypes)
+        ? body.requestedWorkTypes.map((w: any) => String(w).trim()).filter((w: string) => validWorkTypes.includes(w))
+        : [];
+      if (wts.length === 0) throw new Error("VALIDATION:requestedWorkTypes");
+      requestedWorkTypesCsv = Array.from(new Set(wts)).join(",");
+      if (!body.replyDeadline) throw new Error("VALIDATION:replyDeadline");
+      const d = new Date(body.replyDeadline);
+      if (isNaN(d.getTime())) throw new Error("VALIDATION:replyDeadline");
+      replyDeadline = d;
+    }
+
+    // 닫힌 기록 처리: 워커가 거절(REJECTED)한 건은 다시 요청 불가. 탈락/기한초과(DROPPED/EXPIRED)는 행을 재사용(중복 방지).
+    let reuseId: bigint | null = null;
+    const closed = await prisma.siteAssignment.findFirst({
+      where: { siteId, workerId, status: { in: ["REJECTED", "DROPPED", "EXPIRED"] } },
+      orderBy: { id: "desc" },
+      select: { id: true, status: true },
     });
+    if (closed?.status === "REJECTED") {
+      return NextResponse.json({ success: false, message: "직무지도원이 거절한 요청입니다. 다시 요청할 수 없습니다." }, { status: 409 });
+    }
+    if (closed) reuseId = closed.id;
+
+    // 파이프라인(assignment-pipeline-design.md): 요청=REQUESTED(회신 대기) → 후보 수락 → 선정 ASSIGNED(계약 대기)
+    // → 계약 서명 CONFIRMED → 연결+위치확정 ACTIVE. 과금/급여(ACTIVE만)는 정상근무 시점부터 집계된다.
+    const dataObj: any = {
+      siteId,
+      workerId,
+      agencyId: effectiveAgencyId, // 위탁기관 스코프 쿼리(급여·CSV·근태inbox·휴무)에서 누락 방지
+      status: isRequest ? "REQUESTED" : "ASSIGNED",
+      requestedWorkTypes: requestedWorkTypesCsv,
+      replyDeadline,
+      serviceStep,
+      adaptationStartDate,
+      isMainWorker,
+      assignedAt: new Date(),
+      startDate: body.startDate ? new Date(body.startDate) : new Date(),
+      endDate: body.endDate ? new Date(body.endDate) : null,
+      assignedByManagerId,
+      statusReason: memo,
+      // 요청 단계에선 근무형태 미확정(후보 수락 시 선택값으로 세팅)
+      workType: isRequest ? null : workType,
+      commuteGuidanceIncluded,
+      attendanceButtonExempt,
+      customWorkStart,
+      customWorkEnd,
+      rejectedAt: null, droppedAt: null, // 재사용 시 닫힘 흔적 초기화(신규 생성엔 무해)
+    };
+    const selectObj = {
+      id: true,
+      workerId: true,
+      siteId: true,
+      status: true,
+      startDate: true,
+      endDate: true,
+      assignedAt: true,
+      confirmedAt: true,
+      rejectedAt: true,
+      droppedAt: true,
+      endedAt: true,
+      statusReason: true,
+      assignedByManagerId: true,
+      site: { select: { id: true, companyName: true, address: true, agencyId: true } },
+      user: { select: { id: true, workerName: true, loginId: true, phoneNumber: true, role: true, status: true } },
+    } as const;
+    const created = reuseId
+      ? await prisma.siteAssignment.update({ where: { id: reuseId }, data: dataObj, select: selectObj })
+      : await prisma.siteAssignment.create({ data: dataObj, select: selectObj });
+
+    // 배정 요청은 워커에게 앱 내 알림(무료) — 홈에서 수락/거절.
+    if (isRequest) {
+      const wtLabel: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "전일", CUSTOM: "직접" };
+      const wtText = (requestedWorkTypesCsv ?? "").split(",").filter(Boolean).map(w => wtLabel[w] ?? w).join("·");
+      try {
+        await prisma.workerNotice.create({
+          data: {
+            workerId,
+            agencyId: effectiveAgencyId,
+            title: "[배정] 새 배정 요청이 도착했습니다",
+            body:
+              `${created.site?.companyName ?? "현장"}에서 배정 요청이 도착했습니다.` +
+              (wtText ? `\n요청 근무형태: ${wtText}` : "") +
+              (replyDeadline ? `\n회신 기한: ${replyDeadline.toISOString().slice(0, 10)} (이후 자동 탈락)` : "") +
+              `\n\n홈에서 희망 근무형태를 선택해 수락하거나 거절해주세요.`,
+            type: "INFO",
+            link: "/worker/home",
+          },
+        });
+      } catch (notifyErr) {
+        console.warn("[assignments] 배정 요청 알림 생성 실패:", notifyErr);
+      }
+    }
 
     return NextResponse.json({ success: true, item: toItem(created) });
   } catch (e: any) {

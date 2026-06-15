@@ -1,6 +1,6 @@
 // app/api/admin/system/worker-search/route.ts
-// 운영자(시스템): 전체 직무지도원 검색(계약 이력 기준, 에이전시 스코프 없음).
-// free-form 평가 요청용 — 각 직무지도원의 에이전시 후보(소속 계약별)와 사업체 담당자 연락처 prefill 포함.
+// 운영자(시스템): 전체 직무지도원 검색(계약 이력 기준, 위탁기관 스코프 없음).
+// free-form 평가 요청용 — 각 직무지도원의 위탁기관 후보(소속 계약별)와 사업체 담당자 연락처 prefill 포함.
 
 export const runtime = "nodejs";
 
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     const siteMap = new Map(sites.map(s => [`${s.agencyId}|${s.companyName}`, s]));
 
     const items = workers.map(w => {
-      // 에이전시별 최신 계약 1건씩 → 에이전시 후보
+      // 위탁기관별 최신 계약 1건씩 → 위탁기관 후보
       const byAgency = new Map<string, (typeof w.employmentContracts)[number]>();
       for (const c of w.employmentContracts) {
         const key = String(c.agencyId);

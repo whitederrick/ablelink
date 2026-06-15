@@ -32,7 +32,7 @@ export async function PATCH(
     if (!record)
       return NextResponse.json({ success: false, message: "기록을 찾을 수 없습니다." }, { status: 404 });
 
-    // 에이전시 스코프 검증
+    // 위탁기관 스코프 검증
     if (!record.assignment?.agencyId || record.assignment.agencyId.toString() !== agencyId.toString())
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
 

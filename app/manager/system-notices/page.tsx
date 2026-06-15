@@ -1,7 +1,7 @@
 "use client";
 
 // 시스템 공지사항 — 운영자가 발송한 시스템 공지를 매니저가 열람(목록→상세→확인/미확인).
-// (매니저가 직무지도원에게 보내는 공지는 '에이전시 공지사항' 별개)
+// (매니저가 직무지도원에게 보내는 공지는 '위탁기관 공지사항' 별개)
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";

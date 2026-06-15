@@ -1,5 +1,5 @@
 // lib/planGuard.ts
-// 에이전시 구독 플랜 체크 유틸리티
+// 위탁기관 구독 플랜 체크 유틸리티
 
 import { prisma } from "./prisma";
 import { getConfigNumber } from "./systemConfig";
@@ -65,7 +65,7 @@ export interface PlanCheckResult {
   message?: string;
 }
 
-// 셀프등록(에이전시 미소속 운영) 워커에게도 무료로 허용하는 "기본 문서·서명" 기능.
+// 셀프등록(위탁기관 미소속 운영) 워커에게도 무료로 허용하는 "기본 문서·서명" 기능.
 // AI 음성·온라인계약·급여 등은 제외 → 유료 유지.
 const SELF_DOC_FEATURES = new Set<PremiumFeature>([
   "PDF_GENERATE",
@@ -76,7 +76,7 @@ const SELF_DOC_FEATURES = new Set<PremiumFeature>([
 /**
  * 셀프등록(무소속 운영) 워커 여부.
  * 셀프 현장등록은 사업체 담당자(Site.businessContact*)만 채우고 Manager(로그인 계정)는 만들지 않는다.
- * → 활성 배정의 에이전시에 Manager 로그인 계정이 0개면 "직접 운영" 컨텍스트로 간주.
+ * → 활성 배정의 위탁기관에 Manager 로그인 계정이 0개면 "직접 운영" 컨텍스트로 간주.
  */
 export async function isSelfManagedWorker(workerId: bigint): Promise<boolean> {
   const assignment = await prisma.siteAssignment.findFirst({
@@ -88,7 +88,7 @@ export async function isSelfManagedWorker(workerId: bigint): Promise<boolean> {
   return isSelfManagedAgency(assignment.agencyId);
 }
 
-/** Manager(로그인 계정)가 0개인 에이전시 = 셀프등록/무소속 운영 컨텍스트. */
+/** Manager(로그인 계정)가 0개인 위탁기관 = 셀프등록/무소속 운영 컨텍스트. */
 export async function isSelfManagedAgency(agencyId: bigint): Promise<boolean> {
   const managerCount = await prisma.manager.count({ where: { agencyId } });
   return managerCount === 0;
@@ -118,11 +118,11 @@ function planAllows(plan: string, feature: PremiumFeature): boolean {
 //
 // 접근 권한은 두 갈래로 결정된다:
 //  (1) 시스템 운영자가 직무지도원 개인에게 직접 부여(worker.planType = PREMIUM)
-//      → 에이전시와 무관하게 전체 유료기능 허용 (초기 직무지도원 테스트/특례용)
-//  (2) 에이전시 구독을 근로계약/배정 기반으로 소비
-//      → 서명된 EmploymentContract의 계약기간(계약종료 +3일 유예) 내이면 그 에이전시 플랜으로 판단.
+//      → 위탁기관와 무관하게 전체 유료기능 허용 (초기 직무지도원 테스트/특례용)
+//  (2) 위탁기관 구독을 근로계약/배정 기반으로 소비
+//      → 서명된 EmploymentContract의 계약기간(계약종료 +3일 유예) 내이면 그 위탁기관 플랜으로 판단.
 //      → 전자계약서가 없으면(전자계약서는 PRO 전용) 활성 SiteAssignment의 배정기간을 계약기간으로 보고
-//        그 에이전시 플랜으로 판단. (2026-06-06 접근모델 재설계)
+//        그 위탁기관 플랜으로 판단. (2026-06-06 접근모델 재설계)
 //  기본 기능(출퇴근·수동일지 등)은 checkPlanAccess를 거치지 않으므로 항상 사용 가능.
 
 const CONTRACT_GRACE_MS = 3 * 24 * 60 * 60 * 1000; // 계약 종료 후 3일 유예 (잔여 일지 제출 등)
@@ -141,13 +141,13 @@ export async function checkPlanAccess(
     return { allowed: true, planType: "PREMIUM" }; // 전체 허용(운영자 특례)
   }
   if (grant === "STARTER" || grant === "STANDARD" || grant === "PRO") {
-    // 운영자가 개인에게 부여한 등급으로 판정. 그 등급으로 부족한 기능은 아래 에이전시 기반으로 폴백.
+    // 운영자가 개인에게 부여한 등급으로 판정. 그 등급으로 부족한 기능은 아래 위탁기관 기반으로 폴백.
     if (planAllows(grant, feature)) {
       return { allowed: true, planType: grant };
     }
   }
 
-  // (2) 근로계약 기반 에이전시 구독 (계약기간 + 3일 유예 내)
+  // (2) 근로계약 기반 위탁기관 구독 (계약기간 + 3일 유예 내)
   const now = new Date();
   const contract = await prisma.employmentContract.findFirst({
     where: {
@@ -165,14 +165,14 @@ export async function checkPlanAccess(
   }
 
   // (2.5) 셀프등록(무소속 운영) 워커 — 기본 문서·서명(PDF·전자서명·사업체담당자 사인)은 무료 허용.
-  //       에이전시 계약 기반 게이트는 "에이전시가 실제로 Able-Link를 운영(Manager 계정 보유)"할 때만 적용.
+  //       위탁기관 계약 기반 게이트는 "위탁기관가 실제로 Able-Link를 운영(Manager 계정 보유)"할 때만 적용.
   if (SELF_DOC_FEATURES.has(feature) && (await isSelfManagedWorker(workerId))) {
     return { allowed: true, reason: "SELF_MANAGED" };
   }
 
   // (2b) 활성 배정 기반 engagement — 전자 근로계약서(PRO 전용)가 없어도 배정 기간을
-  //      계약 기간으로 보고 해당 에이전시 구독 플랜으로 판정한다. (배정 startDate~endDate, 종료 +3일 유예)
-  //      전자계약서가 PRO 전용이 되면서, STARTER/STANDARD 에이전시도 워커가 기능을 쓸 수 있게 하는 연결고리.
+  //      계약 기간으로 보고 해당 위탁기관 구독 플랜으로 판정한다. (배정 startDate~endDate, 종료 +3일 유예)
+  //      전자계약서가 PRO 전용이 되면서, STARTER/STANDARD 위탁기관도 워커가 기능을 쓸 수 있게 하는 연결고리.
   const engagement = await prisma.siteAssignment.findFirst({
     where: {
       workerId,
@@ -219,7 +219,7 @@ export async function checkPlanAccess(
   return {
     allowed: false,
     reason: "NO_AGENCY",
-    message: "아직 연결된 에이전시 근로계약이 없어요. 출퇴근·일지 등 기본 기능은 그대로 사용할 수 있어요.",
+    message: "아직 연결된 위탁기관 근로계약이 없어요. 출퇴근·일지 등 기본 기능은 그대로 사용할 수 있어요.",
   };
 }
 
@@ -254,7 +254,7 @@ export async function checkAgencyPlanAccess(
 ): Promise<PlanCheckResult> {
   const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
   if (!agency) {
-    return { allowed: false, reason: "NO_AGENCY", message: "에이전시를 찾을 수 없습니다." };
+    return { allowed: false, reason: "NO_AGENCY", message: "위탁기관를 찾을 수 없습니다." };
   }
   return _checkAgency(agency, feature);
 }
@@ -341,7 +341,7 @@ export async function checkQuota(
 
 // ─── 플랜별 기본 한도 (DB 초기값 세팅용) ─────────────────────────
 
-// 정책(2026-06-05): 유료 플랜은 인원/사업장 한도 없음 — 성장 벽 제거(에이전시 확보 우선).
+// 정책(2026-06-05): 유료 플랜은 인원/사업장 한도 없음 — 성장 벽 제거(위탁기관 확보 우선).
 // FREE만 온램프 한도 유지. 향후 스케일 과금은 캡이 아니라 AI 사용량 미터링/시트 애드온으로.
 export const PLAN_LIMITS: Record<string, { maxWorkers: number; maxSites: number }> = {
   FREE:     { maxWorkers: 3, maxSites: 2 },

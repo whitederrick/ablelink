@@ -1,6 +1,6 @@
 // app/api/admin/site-owners/route.ts
-// 현장 '담당 관리자' 지정/이관 드롭다운용 — 에이전시의 Manager(로그인) 계정 목록
-// GET → { managers: [{ id, name }] }  (manager: 본인 에이전시 / admin: ?agencyId)
+// 현장 '담당 관리자' 지정/이관 드롭다운용 — 위탁기관의 Manager(로그인) 계정 목록
+// GET → { managers: [{ id, name }] }  (manager: 본인 위탁기관 / admin: ?agencyId)
 
 export const runtime = "nodejs";
 

@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
     const agencyId: bigint = scope.agencyId;
 
     // ─── 연결 배정 검증 (선택) ──────────────────────────────────
-    // assignmentId가 오면 해당 배정이 같은 에이전시·직무지도원 소속인지 확인 후 계약에 연결.
+    // assignmentId가 오면 해당 배정이 같은 위탁기관·직무지도원 소속인지 확인 후 계약에 연결.
     // 계약 완료(서명) 시 이 배정으로 근무정보 write-back + 상태 전이가 일어난다.
     let assignmentIdBig: bigint | null = null;
     if (assignmentId !== undefined && assignmentId !== null && assignmentId !== "") {
@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
       }, { status: 403 });
     }
 
-    // ─── 사업주(갑) 정보: 미입력 시 에이전시 정보로 자동 채움(스냅샷 보존) ──
+    // ─── 사업주(갑) 정보: 미입력 시 위탁기관 정보로 자동 채움(스냅샷 보존) ──
     const agencyRow = await prisma.agency.findUnique({
       where: { id: agencyId },
       select: { name: true, phoneNumber: true, address: true, representativeName: true, representativeSignatureUrl: true },

@@ -89,8 +89,8 @@ export default function AnnouncementsPage() {
     setSending(false);
     if (data.success) {
       showToast(data.audience === "ALL"
-        ? `전체 발송 완료 — 직무지도원 ${data.sentCount}명 + 전체 에이전시 관리자에게 전달됐습니다.`
-        : `발송 완료 — 에이전시 관리자에게 전달됐습니다.`);
+        ? `전체 발송 완료 — 직무지도원 ${data.sentCount}명 + 전체 위탁기관 관리자에게 전달됐습니다.`
+        : `발송 완료 — 위탁기관 관리자에게 전달됐습니다.`);
       setShowForm(false);
       setForm({ title: "", body: "", type: "INFO", audience: "MANAGERS" });
       load();
@@ -103,7 +103,7 @@ export default function AnnouncementsPage() {
     <div>
       <PageHeader
         title="시스템 공지"
-        sub="시스템 공지를 발송합니다. 평상시에는 에이전시 관리자에게, 긴급 시(점검·중단)에는 전체 사용자에게 전달됩니다."
+        sub="시스템 공지를 발송합니다. 평상시에는 위탁기관 관리자에게, 긴급 시(점검·중단)에는 전체 사용자에게 전달됩니다."
         actions={
           <>
             <button onClick={load} className={T.btnSecondary + " flex items-center gap-1.5"}>
@@ -152,17 +152,17 @@ export default function AnnouncementsPage() {
               <div>
                 <label className={T.label}>발송 대상</label>
                 <select value={form.audience} onChange={e => setForm(f => ({ ...f, audience: e.target.value }))} className={T.select + " w-full"}>
-                  <option value="MANAGERS">에이전시 관리자 (일반 공지·기본)</option>
+                  <option value="MANAGERS">위탁기관 관리자 (일반 공지·기본)</option>
                   <option value="ALL">전체 — 관리자 + 모든 직무지도원 (긴급·시스템 점검)</option>
                 </select>
                 {form.audience === "ALL" ? (
                   <p className="mt-1 rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] font-bold text-rose-600">
                     ⚠️ 긴급 전체 공지 — 시스템 점검·서비스 중단 등 모든 사용자에게 즉시 알려야 할 때만 사용하세요.
-                    전체 에이전시 관리자 + <strong>모든 직무지도원 앱 알림함</strong>까지 전송됩니다.
+                    전체 위탁기관 관리자 + <strong>모든 직무지도원 앱 알림함</strong>까지 전송됩니다.
                   </p>
                 ) : (
                   <p className="mt-1 text-[11px] font-semibold text-slate-400">
-                    각 에이전시 관리자만 ‘시스템 공지사항’에서 확인합니다. 직무지도원에게는 전달되지 않습니다.
+                    각 위탁기관 관리자만 ‘시스템 공지사항’에서 확인합니다. 직무지도원에게는 전달되지 않습니다.
                   </p>
                 )}
               </div>
@@ -241,7 +241,7 @@ export default function AnnouncementsPage() {
               <p className="text-base font-black text-slate-900">{selected.title}</p>
               <p className="mt-2 whitespace-pre-line text-sm font-semibold leading-relaxed text-slate-600">{selected.body}</p>
               <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 text-xs text-slate-400">
-                <span>{(selected.audience ?? "MANAGERS") === "ALL" ? `직무지도원 ${selected.sentCount}명 + 전체 관리자 전송` : "에이전시 관리자 전용"}</span>
+                <span>{(selected.audience ?? "MANAGERS") === "ALL" ? `직무지도원 ${selected.sentCount}명 + 전체 관리자 전송` : "위탁기관 관리자 전용"}</span>
                 {selected.adminLogin && <span>발송자: {selected.adminLogin}</span>}
               </div>
             </div>

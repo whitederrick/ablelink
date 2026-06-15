@@ -10,7 +10,7 @@ import { PLAN_LIMITS } from "@/lib/planGuard";
 
 export async function POST(request: NextRequest) {
   try {
-    // 구독 해지는 본인 에이전시 매니저만. (이전: 워커 세션 + 스코프 미검증 → 임의 에이전시 해지 가능 버그)
+    // 구독 해지는 본인 위탁기관 매니저만. (이전: 워커 세션 + 스코프 미검증 → 임의 위탁기관 해지 가능 버그)
     const scope = await requireManagerSession(request);
 
     const free = PLAN_LIMITS.FREE;

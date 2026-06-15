@@ -1,5 +1,5 @@
 // app/api/admin/recruit-posts/route.ts
-// 직무지도 매칭 마켓플레이스 — 수요측(에이전시 매니저/시스템 운영자=공단·플랫폼) 공고 등록·목록
+// 직무지도 매칭 마켓플레이스 — 수요측(위탁기관 매니저/시스템 운영자=공단·플랫폼) 공고 등록·목록
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -35,7 +35,7 @@ function serialize(p: any) {
   };
 }
 
-// 목록 — manager: 본인/소속 공고 / admin: 전체 공고(운영자가 모든 에이전시 공고 관리)
+// 목록 — manager: 본인/소속 공고 / admin: 전체 공고(운영자가 모든 위탁기관 공고 관리)
 export async function GET(req: NextRequest) {
   try {
     const session = await requireAdminOrManagerSession(req);
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await requireAdminOrManagerSession(req);
 
-    // 매칭 공고 등록은 STARTER+ 구독 기능. 에이전시(매니저)만 게이트, 운영자(공단/플랫폼)는 예외.
+    // 매칭 공고 등록은 STARTER+ 구독 기능. 위탁기관(매니저)만 게이트, 운영자(공단/플랫폼)는 예외.
     if (session.kind === "manager") {
       const access = await checkAgencyPlanAccess(session.agencyId, "RECRUIT_POST");
       if (!access.allowed) {

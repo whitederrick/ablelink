@@ -2,7 +2,7 @@
 
 // 운영자: 직무지도원 평가 요청 관리.
 // 계약이 종료된(또는 임박한) 직무지도원 대상자를 한 곳에서 식별하고,
-// 에이전시 매니저가 요청하지 않은 건을 운영자가 직접 평가 요청(사업체 담당자 알림톡) 발송.
+// 위탁기관 매니저가 요청하지 않은 건을 운영자가 직접 평가 요청(사업체 담당자 알림톡) 발송.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
@@ -89,7 +89,7 @@ function SendModal({ target, onClose, onSent }: { target: Target; onClose: () =>
   );
 }
 
-// 계약 무관 임의(free-form) 평가 요청 — 직무지도원 검색 → 에이전시 선택 → 연락처
+// 계약 무관 임의(free-form) 평가 요청 — 직무지도원 검색 → 위탁기관 선택 → 연락처
 function DirectRequestModal({ onClose, onSent }: { onClose: () => void; onSent: () => void }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<WorkerHit[]>([]);
@@ -121,7 +121,7 @@ function DirectRequestModal({ onClose, onSent }: { onClose: () => void; onSent: 
 
   async function submit() {
     if (!worker) { setError("평가 대상 직무지도원을 선택하세요."); return; }
-    if (!agency) { setError("소속 에이전시를 선택하세요."); return; }
+    if (!agency) { setError("소속 위탁기관를 선택하세요."); return; }
     if (!recipientPhone.trim()) { setError("사업체 담당자 연락처를 입력하세요."); return; }
     setSaving(true); setError("");
     try {
@@ -162,7 +162,7 @@ function DirectRequestModal({ onClose, onSent }: { onClose: () => void; onSent: 
                       <button key={r.id} onClick={() => { setWorker(r); setResults([]); if (r.agencies.length === 1) pickAgency(r.agencies[0]); }}
                         className="flex w-full items-center justify-between border-b border-slate-50 px-3 py-2 text-left text-sm hover:bg-sky-50 last:border-b-0">
                         <span className="font-bold text-slate-800">{r.workerName}</span>
-                        <span className="text-xs text-slate-400">{r.phoneNumber} · {r.agencies.length}개 에이전시</span>
+                        <span className="text-xs text-slate-400">{r.phoneNumber} · {r.agencies.length}개 위탁기관</span>
                       </button>
                     ))}
                   </div>
@@ -171,10 +171,10 @@ function DirectRequestModal({ onClose, onSent }: { onClose: () => void; onSent: 
             )}
           </div>
 
-          {/* 에이전시 선택 */}
+          {/* 위탁기관 선택 */}
           {worker && (
             <div className="space-y-1.5">
-              <label className={T.label}>소속 에이전시 *</label>
+              <label className={T.label}>소속 위탁기관 *</label>
               <div className="flex flex-wrap gap-1.5">
                 {worker.agencies.map(a => (
                   <button key={a.agencyId} onClick={() => pickAgency(a)}
@@ -244,7 +244,7 @@ export default function AdminSurveyRequestsPage() {
     <div className="space-y-5">
       <PageHeader
         title="직무지도원 평가 요청 관리"
-        sub="계약이 종료된 직무지도원의 평가 요청 현황입니다. 에이전시 매니저가 요청하지 않은 건을 운영자가 직접 사업체 담당자에게 발송할 수 있습니다."
+        sub="계약이 종료된 직무지도원의 평가 요청 현황입니다. 위탁기관 매니저가 요청하지 않은 건을 운영자가 직접 사업체 담당자에게 발송할 수 있습니다."
         actions={<button onClick={() => setShowDirect(true)} className={T.btnPrimary}>+ 직접 요청</button>}
       />
 
@@ -260,7 +260,7 @@ export default function AdminSurveyRequestsPage() {
       <ListToolbar
         query={query}
         onQueryChange={setQuery}
-        placeholder="에이전시·직무지도원·사업체 검색"
+        placeholder="위탁기관·직무지도원·사업체 검색"
         filters={filters}
         selected={statusFilter}
         onToggleFilter={toggleStatus}
@@ -268,7 +268,7 @@ export default function AdminSurveyRequestsPage() {
 
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
-          <thead><tr>{["에이전시", "직무지도원", "사업체/담당자", "계약종료", "요청상태", "발송"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{["위탁기관", "직무지도원", "사업체/담당자", "계약종료", "요청상태", "발송"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
           <tbody>
             {loading ? <tr><td colSpan={6} className={T.tdCenter}>로딩 중...</td></tr>
             : filtered.length === 0 ? <tr><td colSpan={6} className={T.tdCenter}>{items.length === 0 ? "평가 요청 대상자가 없습니다." : "조건에 맞는 대상자가 없습니다."}</td></tr>

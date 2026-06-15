@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 자기 에이전시만 구독 변경 가능
+    // 자기 위탁기관만 구독 변경 가능
     if (scope.agencyId !== BigInt(agencyId)) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
@@ -43,13 +43,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 운영자 딜(주기·협상가) 반영을 위해 에이전시 조회
+    // 운영자 딜(주기·협상가) 반영을 위해 위탁기관 조회
     const agencyRow = await prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
       select: { planType: true, billingCycle: true, customAmount: true },
     });
     if (!agencyRow) {
-      return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
+      return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
     }
     // 청구 금액·주기 = 운영자 협상가 우선, 없으면 표준 월정액. (선택한 planType 기준으로 표준가 산출)
     const { amount, cycle } = effectiveBilling({ planType, billingCycle: agencyRow.billingCycle, customAmount: agencyRow.customAmount });

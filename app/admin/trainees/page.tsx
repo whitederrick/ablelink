@@ -77,7 +77,7 @@ export default function TraineesPage() {
     <div className="space-y-5">
       <PageHeader
         title="훈련생 현황"
-        sub="전체 훈련생 현황을 조회합니다. (등록·수정은 한국장애인고용공단에서 관리하며, 에이전시는 조회만 가능합니다.)"
+        sub="전체 훈련생 현황을 조회합니다. (등록·수정은 한국장애인고용공단에서 관리하며, 위탁기관는 조회만 가능합니다.)"
       />
 
       <StatCardRow

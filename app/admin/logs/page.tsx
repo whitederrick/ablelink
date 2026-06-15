@@ -68,7 +68,7 @@ export default function LogsPage() {
               <select value={filter} onChange={e=>{setFilter(e.target.value);load(e.target.value);}}
                 className="h-10 rounded-xl border border-slate-200 bg-white pl-9 pr-4 text-sm font-semibold text-slate-700 outline-none focus:border-sky-400">
                 <option value="">전체 액션</option>
-                <option value="AGENCY">에이전시 관련</option>
+                <option value="AGENCY">위탁기관 관련</option>
                 <option value="WORKER">직무지도원 관련</option>
                 <option value="ATTENDANCE">출근 기록 수정</option>
                 <option value="ADMIN">계정 관련</option>

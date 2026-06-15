@@ -1,6 +1,6 @@
 "use client";
 
-// 에이전시 구독 — 매니저가 본인 에이전시 플랜을 조회하고 결제(Toss)로 구독/변경/해지.
+// 위탁기관 구독 — 매니저가 본인 위탁기관 플랜을 조회하고 결제(Toss)로 구독/변경/해지.
 // (이전 /worker/subscribe 결제 플로우를 매니저 콘솔로 이전)
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -77,7 +77,7 @@ export default function SubscriptionPage() {
 
   async function subscribe(planId: string) {
     if (!tossLoaded) { alert("결제 모듈을 불러오는 중입니다. 잠시 후 다시 시도해주세요."); return; }
-    if (!agency) { alert("에이전시 정보를 찾을 수 없습니다."); return; }
+    if (!agency) { alert("위탁기관 정보를 찾을 수 없습니다."); return; }
     setBusy(true);
     try {
       const clientKey = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || "";
@@ -111,13 +111,13 @@ export default function SubscriptionPage() {
       <div>
         <PageHeader
           title="구독 관리"
-          sub="에이전시 구독 플랜을 확인하고 변경합니다. 결제는 토스페이먼츠로 안전하게 처리됩니다."
+          sub="위탁기관 구독 플랜을 확인하고 변경합니다. 결제는 토스페이먼츠로 안전하게 처리됩니다."
         />
 
         {loading ? (
           <p className={T.empty}>불러오는 중…</p>
         ) : !agency ? (
-          <p className={T.empty}>에이전시 정보를 찾을 수 없습니다.</p>
+          <p className={T.empty}>위탁기관 정보를 찾을 수 없습니다.</p>
         ) : (
           <div className="space-y-5">
             {/* 현재 상태 */}

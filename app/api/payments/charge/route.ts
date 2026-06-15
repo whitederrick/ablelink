@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  // 결제일이 도래했거나(오늘) 일시 오류로 밀린(연체) 에이전시 조회 — 유예 재시도 포함
+  // 결제일이 도래했거나(오늘) 일시 오류로 밀린(연체) 위탁기관 조회 — 유예 재시도 포함
   const agencies = await prisma.agency.findMany({
     where: {
       planType: { in: ["STARTER", "STANDARD", "PRO"] },

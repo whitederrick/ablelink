@@ -1,4 +1,4 @@
-// 시스템 운영자: 전체 에이전시 결제/구독 현황
+// 시스템 운영자: 전체 위탁기관 결제/구독 현황
 export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";

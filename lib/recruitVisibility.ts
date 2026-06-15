@@ -2,12 +2,12 @@
 // 마켓플레이스 공급측(워커) 공고 노출 게이트 — 관계기반 + 운영자 전체공개.
 // 정책(2026-06-02 확정):
 //  - 운영자(admin/공단·플랫폼) 공고(createdByAdminId != null)는 전체 직무지도원에게 노출.
-//  - 에이전시 공고(agencyId != null)는 "그 에이전시로 1회 이상 배정 이력이 있는" 직무지도원에게만 노출.
+//  - 위탁기관 공고(agencyId != null)는 "그 위탁기관로 1회 이상 배정 이력이 있는" 직무지도원에게만 노출.
 
 import "server-only";
 import { prisma } from "@/lib/prisma";
 
-// worker가 배정 이력이 있는 에이전시 ID 집합(중복 제거)
+// worker가 배정 이력이 있는 위탁기관 ID 집합(중복 제거)
 export async function getWorkerAgencyIds(workerId: bigint): Promise<bigint[]> {
   const rows = await prisma.siteAssignment.findMany({
     where: { workerId, agencyId: { not: null } },

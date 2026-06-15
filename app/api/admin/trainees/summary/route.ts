@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     const scope = await requireManagerSession(request);
 
-    // 활성 배정된 Site별 훈련생 현황 (AGENCY 관리자는 자기 에이전시만)
+    // 활성 배정된 Site별 훈련생 현황 (AGENCY 관리자는 자기 위탁기관만)
     const assignments = await prisma.siteAssignment.findMany({
       where: { status: "ACTIVE", ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
       include: {

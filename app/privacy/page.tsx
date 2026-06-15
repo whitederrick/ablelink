@@ -32,7 +32,7 @@ export default function PrivacyPage() {
                 <p>성명, 휴대전화번호, 이메일 주소, 비밀번호(암호화), GPS 위치정보(근무 중 출퇴근 시), 서비스 이용 기록</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="mb-2 font-black text-slate-900">에이전시 관리자 (필수)</p>
+                <p className="mb-2 font-black text-slate-900">위탁기관 관리자 (필수)</p>
                 <p>성명, 이메일 주소, 비밀번호(암호화), 소속 기관명</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -57,7 +57,7 @@ export default function PrivacyPage() {
             <ul className="mt-2 list-disc space-y-1.5 pl-5">
               <li>이용자가 사전에 동의한 경우</li>
               <li>법령에 의해 요구되는 경우</li>
-              <li>에이전시가 소속 직무지도원의 근태·문서 정보를 조회하는 경우 (서비스의 본질적 기능)</li>
+              <li>위탁기관가 소속 직무지도원의 근태·문서 정보를 조회하는 경우 (서비스의 본질적 기능)</li>
             </ul>
           </section>
 

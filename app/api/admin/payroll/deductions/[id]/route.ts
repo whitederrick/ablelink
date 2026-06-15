@@ -1,5 +1,5 @@
 // app/api/admin/payroll/deductions/[id]/route.ts
-// 에이전시 공제 항목 수정/삭제
+// 위탁기관 공제 항목 수정/삭제
 
 export const runtime = "nodejs";
 
@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const scope = await requireManagerSession(req);
     const agencyId = scope.agencyId;
     if (!agencyId) {
-      return NextResponse.json({ success: false, message: "에이전시 정보 없음" }, { status: 403 });
+      return NextResponse.json({ success: false, message: "위탁기관 정보 없음" }, { status: 403 });
     }
 
     const { id: idStr } = await params;
@@ -51,7 +51,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const scope = await requireManagerSession(req);
     const agencyId = scope.agencyId;
     if (!agencyId) {
-      return NextResponse.json({ success: false, message: "에이전시 정보 없음" }, { status: 403 });
+      return NextResponse.json({ success: false, message: "위탁기관 정보 없음" }, { status: 403 });
     }
 
     const { id: idStr } = await params;

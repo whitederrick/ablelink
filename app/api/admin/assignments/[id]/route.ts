@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ success: false, message: "직접입력 근무시간은 HH:MM 형식으로 입력해주세요." }, { status: 400 });
     }
 
-    // 자기 에이전시 배정만 수정 가능
+    // 자기 위탁기관 배정만 수정 가능
     const agencyId = scope.agencyId;
     const existing = await prisma.siteAssignment.findUnique({
       where: { id: assignmentId },

@@ -1,5 +1,5 @@
 // app/api/admin/talent/route.ts
-// 에이전시/공단 — 구직중(openToOffers) 후보자 풀 검색 (방향 B)
+// 위탁기관/공단 — 구직중(openToOffers) 후보자 풀 검색 (방향 B)
 // 개인정보 보호: 검색 결과엔 연락처 비노출 (제안→수락 시 별도 연락)
 export const runtime = "nodejs";
 
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   try {
     const session = await requireAdminOrManagerSession(req);
 
-    // 인재풀 검색·역제안은 PRO 전용. 에이전시(매니저)만 게이트, 운영자는 예외.
+    // 인재풀 검색·역제안은 PRO 전용. 위탁기관(매니저)만 게이트, 운영자는 예외.
     if (session.kind === "manager") {
       const access = await checkAgencyPlanAccess(session.agencyId, "TALENT_SOURCING");
       if (!access.allowed) {

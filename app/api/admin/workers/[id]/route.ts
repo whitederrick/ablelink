@@ -15,7 +15,7 @@ function generateTempPassword(): string {
   return Array.from({ length: 8 }, () => chars[randomInt(chars.length)]).join("");
 }
 
-// 자기 에이전시 소속 직무지도원인지 확인(스코프 가드)
+// 자기 위탁기관 소속 직무지도원인지 확인(스코프 가드)
 async function assertAgencyWorker(workerId: bigint, agencyId: bigint) {
   const worker = await prisma.worker.findFirst({
     where: { id: workerId, assignments: { some: { site: { agencyId } } } },
@@ -68,7 +68,7 @@ export async function PATCH(
     const { id } = await params;
     const workerId = BigInt(id);
 
-    // 자기 에이전시 소속 직무지도원만 수정 가능
+    // 자기 위탁기관 소속 직무지도원만 수정 가능
     const worker = await prisma.worker.findFirst({
       where: {
         id: workerId,

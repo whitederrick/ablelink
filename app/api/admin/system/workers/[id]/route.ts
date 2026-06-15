@@ -43,7 +43,7 @@ export async function PATCH(
       return NextResponse.json({ success: true, message: `상태가 ${status}로 변경되었습니다.` });
     }
 
-    // 운영자 개인 구독 부여/회수 (에이전시 계약과 무관한 직접 권한 — 초기 영업·특례용)
+    // 운영자 개인 구독 부여/회수 (위탁기관 계약과 무관한 직접 권한 — 초기 영업·특례용)
     // 등급 단위 개통(2026-06-06): FREE/STARTER/STANDARD/PRO/PREMIUM 중 선택.
     if (action === "set-plan") {
       const plan = String(body.planType ?? "");

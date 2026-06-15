@@ -19,7 +19,7 @@ function errToStatus(msg: string) {
   return 500;
 }
 
-// GET: 에이전시 만족도 조사 목록 (결과 점수는 운영자 전용 → 매니저에겐 상태만)
+// GET: 위탁기관 만족도 조사 목록 (결과 점수는 운영자 전용 → 매니저에겐 상태만)
 export async function GET(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
@@ -79,12 +79,12 @@ export async function POST(req: NextRequest) {
     let widBig: bigint;
     try { widBig = BigInt(workerId); } catch { throw new Error("VALIDATION:잘못된 직무지도원 ID"); }
 
-    // 본인 에이전시와 계약 이력이 있는 직무지도원만 조사 요청 가능
+    // 본인 위탁기관와 계약 이력이 있는 직무지도원만 조사 요청 가능
     const linked = await prisma.employmentContract.findFirst({
       where: { agencyId: scope.agencyId, workerId: widBig },
       select: { id: true },
     });
-    if (!linked) throw new Error("VALIDATION:본인 에이전시와 계약 이력이 있는 직무지도원만 요청할 수 있습니다.");
+    if (!linked) throw new Error("VALIDATION:본인 위탁기관와 계약 이력이 있는 직무지도원만 요청할 수 있습니다.");
 
     const worker = await prisma.worker.findUnique({ where: { id: widBig }, select: { workerName: true } });
 

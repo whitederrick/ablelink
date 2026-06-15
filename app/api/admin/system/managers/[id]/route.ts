@@ -1,5 +1,5 @@
 // app/api/admin/system/managers/[id]/route.ts
-// 시스템 운영자 전용: 에이전시 관리자(Manager 로그인) 활성/비활성 토글
+// 시스템 운영자 전용: 위탁기관 관리자(Manager 로그인) 활성/비활성 토글
 // PATCH { isActive: boolean }
 
 export const runtime = "nodejs";

@@ -1,5 +1,5 @@
 // app/api/admin/attendances/route.ts
-// 관리자(에이전시) - 직무지도원별 출퇴근(근태) 현황 조회 API
+// 관리자(위탁기관) - 직무지도원별 출퇴근(근태) 현황 조회 API
 //
 // GET /api/admin/attendances?workerId=1&from=2026-01-01&to=2026-01-31&page=1&pageSize=50
 // GET /api/admin/attendances?yearMonth=2026-01&workerId=1

@@ -99,6 +99,7 @@ interface Candidate {
   periodStart: string | null; periodEnd: string | null;
   // 이력 기반 추천(현장 선택 시 계산)
   experienceCount?: number; sameSite?: boolean; sameBizType?: boolean;
+  expired?: boolean; // 이 현장 기한 초과 후보(재요청 대상) — 좌측 목록에 합류
 }
 type Recipient =
   | { kind: "worker"; workerId: string; name: string; phone: string;
@@ -136,9 +137,11 @@ function InviteModal({ onClose, initialSiteId, initialWorkTypes, initialDeadline
   // 부분 확정 후 진입(현장 프리셀렉트): 현장·요청 근무형태는 확정 단계에서 정해졌으므로 잠금
   const lockSite = !!initialSiteId;
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
-  // 이 현장에서 담당자가 탈락(DROPPED)·기한초과(EXPIRED)시킨 이전 후보 — 되살리기 대상
+  // 이 현장에서 담당자가 '제외(DROPPED)'한 이전 후보 — 복원(상태 변경) 대상
   const [revivable, setRevivable] = useState<{ assignmentId: string; workerName: string; loginId: string; phone: string; status: string }[]>([]);
-  const [revivedIds, setRevivedIds] = useState<Set<string>>(new Set()); // 되살린(수락 복원) 후보 — 목록엔 남기되 '복원됨'으로 표시
+  const [revivedIds, setRevivedIds] = useState<Set<string>>(new Set()); // 복원(수락)한 후보 — 목록엔 남기되 '복원됨'으로 표시
+  // 이 현장 기한 초과(EXPIRED) 후보 — 좌측 후보 목록에 합류시켜 재요청(요청 시 기존 행 재사용)
+  const [expiredExtra, setExpiredExtra] = useState<Candidate[]>([]);
 
   useEffect(() => {
     fetch("/api/admin/sites?pageSize=100")
@@ -161,15 +164,22 @@ function InviteModal({ onClose, initialSiteId, initialWorkTypes, initialDeadline
 
   // 이 현장의 이전 후보(탈락/기한초과) 조회 — 부분 재요청 시 우측에서 되살리기
   useEffect(() => {
-    if (!siteId) { setRevivable([]); return; }
+    if (!siteId) { setRevivable([]); setExpiredExtra([]); return; }
     fetch("/api/admin/assignment-requests", { cache: "no-store" })
       .then(r => r.json())
       .then(d => {
-        if (!d.success) { setRevivable([]); return; }
+        if (!d.success) { setRevivable([]); setExpiredExtra([]); return; }
         const g = (d.groups ?? []).find((x: any) => String(x.siteId) === String(siteId));
-        setRevivable((g?.candidates ?? []).filter((c: any) => c.status === "DROPPED" || c.status === "EXPIRED"));
+        const cands: any[] = g?.candidates ?? [];
+        // 제외(DROPPED) → 복원 대상(우측). 기한 초과(EXPIRED) → 좌측 후보 목록 합류(재요청).
+        setRevivable(cands.filter(c => c.status === "DROPPED"));
+        setExpiredExtra(cands.filter(c => c.status === "EXPIRED").map(c => ({
+          id: String(c.workerId), name: c.workerName, phone: c.phone,
+          engaged: false, currentStatus: "EXPIRED", currentSiteName: null,
+          periodStart: null, periodEnd: null, experienceCount: 0, sameSite: false, sameBizType: false, expired: true,
+        })));
       })
-      .catch(() => setRevivable([]));
+      .catch(() => { setRevivable([]); setExpiredExtra([]); });
   }, [siteId]);
 
   // 정원(근무형태별 합) 대비 배정수로 충원 여부 판정. 정원 미설정(0)이면 배정 0=충원필요.
@@ -190,13 +200,16 @@ function InviteModal({ onClose, initialSiteId, initialWorkTypes, initialDeadline
 
   const filteredCandidates = useMemo(() => {
     const q = candSearch.trim();
-    return candidates.filter(c => {
+    // 기한 초과 재요청 후보를 앞에 합류 + id 중복 제거
+    const seen = new Set<string>();
+    const pool = [...expiredExtra, ...candidates].filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; });
+    return pool.filter(c => {
       if (selectedWorkerIds.has(c.id)) return false; // 이미 선택됨
       if (onlyUnassigned && c.engaged) return false; // 미배정만 필터
       if (!q) return true;
       return c.name.includes(q) || c.phone.replace(/-/g, "").includes(q.replace(/-/g, ""));
     });
-  }, [candidates, candSearch, recipients, onlyUnassigned]);
+  }, [candidates, expiredExtra, candSearch, recipients, onlyUnassigned]);
 
   function addWorker(c: Candidate) {
     setError("");
@@ -425,9 +438,11 @@ function InviteModal({ onClose, initialSiteId, initialWorkTypes, initialDeadline
                           <div className="min-w-0">
                             <p className="flex flex-wrap items-center gap-1.5 text-sm font-black text-slate-900">
                               <span className="truncate">{c.name}</span>
-                              {c.engaged
-                                ? <span className={`${T.badge} shrink-0 bg-emerald-50 text-emerald-600`}>근무중</span>
-                                : <span className={`${T.badge} shrink-0 bg-slate-100 text-slate-500`}>미배정</span>}
+                              {c.expired
+                                ? <span className={`${T.badge} shrink-0 bg-amber-50 text-amber-600`}>기한 초과 · 재요청</span>
+                                : c.engaged
+                                  ? <span className={`${T.badge} shrink-0 bg-emerald-50 text-emerald-600`}>근무중</span>
+                                  : <span className={`${T.badge} shrink-0 bg-slate-100 text-slate-500`}>미배정</span>}
                               {c.sameSite
                                 ? <span className={`${T.badge} shrink-0 bg-sky-50 text-sky-600`}>이 현장 경험</span>
                                 : c.sameBizType
@@ -468,7 +483,7 @@ function InviteModal({ onClose, initialSiteId, initialWorkTypes, initialDeadline
                 <div>
                   {revivable.length > 0 && (
                     <div className="mb-4">
-                      <label className={T.label}>이전 후보 <span className="font-semibold text-slate-400">(탈락·기한초과 · 상태 변경 가능)</span></label>
+                      <label className={T.label}>제외된 후보 <span className="font-semibold text-slate-400">(복원 가능)</span></label>
                       <p className="mb-1.5 text-xs font-semibold text-slate-400">상태 변경을 선택하면 해당 후보자가 기존에 배정 요청을 <span className="font-bold text-emerald-600">수락한 상태로 복원</span>됩니다. 추가 후보자를 선택하려면 좌측에서 검색하여 추가하시면 됩니다.</p>
                       <div className="max-h-[20vh] space-y-1.5 overflow-y-auto rounded-xl border border-amber-100 bg-amber-50/40 p-2">
                         {revivable.map(c => {
@@ -480,7 +495,7 @@ function InviteModal({ onClose, initialSiteId, initialWorkTypes, initialDeadline
                                 <span className="truncate">{c.workerName} <span className="font-semibold text-slate-400">({c.loginId})</span></span>
                                 {revived
                                   ? <span className={`${T.badge} shrink-0 bg-emerald-50 text-emerald-600`}>복원됨 · 수락</span>
-                                  : <span className={`${T.badge} shrink-0 bg-slate-100 text-slate-500`}>{c.status === "DROPPED" ? "탈락" : "기한 초과"}</span>}
+                                  : <span className={`${T.badge} shrink-0 bg-slate-100 text-slate-500`}>제외</span>}
                               </p>
                               <p className="mt-0.5 truncate text-xs font-semibold text-slate-400">{fmtPhone(c.phone)}{revived ? " · 이미 수락한 상태로 확정 대기" : ""}</p>
                             </div>

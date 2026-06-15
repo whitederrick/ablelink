@@ -1,5 +1,5 @@
 // app/api/admin/subscription/route.ts
-// 에이전시 구독 현황 조회
+// 위탁기관 구독 현황 조회
 
 export const runtime = "nodejs";
 

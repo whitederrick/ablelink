@@ -17,14 +17,18 @@ const WT_LABEL: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY:
 const fmtDate = (iso: string | null) => (iso ? iso.slice(5, 10).replace("-", ".") : "");
 const fmtPhone = (p: string) => p.replace(/-/g, "").replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3");
 
-// 요청 상태 = 직무지도원 회신 결과
+// 요청 상태 = 직무지도원 회신 결과(후보 응답 축). 4종만 존재.
+// DROPPED는 '제외'(담당자가 수락 후보를 선정에서 뺀 상태)로, 요청 상태로는 '요청 수락'으로 표기한다.
 const STATE: Record<string, { label: string; cls: string }> = {
   REQUESTED: { label: "회신 대기", cls: "bg-sky-50 text-sky-600" },
-  ACCEPTED:  { label: "수락",      cls: "bg-emerald-50 text-emerald-600" },
+  ACCEPTED:  { label: "요청 수락", cls: "bg-emerald-50 text-emerald-600" },
   REJECTED:  { label: "요청 거절", cls: "bg-rose-50 text-rose-600" },
   EXPIRED:   { label: "기한 초과", cls: "bg-slate-100 text-slate-400" },
-  DROPPED:   { label: "탈락",      cls: "bg-slate-100 text-slate-500" },
 };
+// 요청 상태 표시용: 제외(DROPPED)는 '요청 수락'으로 보여준다.
+const reqStatusOf = (s: string) => (s === "DROPPED" ? "ACCEPTED" : s);
+// 선정/제외 토글 대상 = 수락(ACCEPTED) 또는 제외(DROPPED)
+const isSelectable = (s: string) => s === "ACCEPTED" || s === "DROPPED";
 
 type Candidate = {
   assignmentId: string; workerId: string; workerName: string; loginId: string; phone: string; status: string;
@@ -34,7 +38,8 @@ type Group = { siteId: string; siteName: string; siteAddress: string; capacity: 
 
 // 근무 형태 표기(오전 / 오후 / 전일 / 오전·오후)
 function workTypeText(c: Candidate): string {
-  const list = c.status === "ACCEPTED" && c.chosenWorkType ? [c.chosenWorkType] : c.requestedWorkTypes;
+  // 수락·제외(수락했던 후보)는 선택한 근무형태, 그 외는 요청한 근무형태 목록
+  const list = isSelectable(c.status) && c.chosenWorkType ? [c.chosenWorkType] : c.requestedWorkTypes;
   return list.map(w => WT_LABEL[w] ?? w).join("/") || "-";
 }
 
@@ -70,9 +75,8 @@ export default function AssignmentSelectionPage() {
 
   const dl = (c: Candidate) => (c.replyDeadline ? new Date(c.replyDeadline).getTime() : Infinity);
   const acceptedOf = (g: Group) => g.candidates.filter(c => c.status === "ACCEPTED");
-  // 선정 인원 수: 담당자가 손댄 현장은 선택 집합 크기, 아직 안 본 현장은 기본값(수락 후보 수).
-  // (우측 상세 진입 시 초기화하는 기본 선정과 동일하게 맞춰, 클릭 전에도 충족 여부가 바르게 보이도록.)
-  const pickedCount = (g: Group) => selected[g.siteId]?.size ?? acceptedOf(g).length;
+  // 수락한 전체(이후 제외된 사람 포함). 수락 인원 수 = 요청을 수락한 전체.
+  const acceptedAllOf = (g: Group) => g.candidates.filter(c => isSelectable(c.status));
 
   const processed = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -138,7 +142,7 @@ export default function AssignmentSelectionPage() {
     const isPartial = ids.length < g.capacity;
     const msg = isPartial
       ? `${g.siteName}에 ${ids.length}명만 부분 확정할까요? (모집 ${g.capacity}명 중 ${ids.length}명)\n확정 후 남은 ${g.capacity - ids.length}자리를 채우는 추가 배정 요청 화면으로 이동합니다.`
-      : `${g.siteName}에 ${ids.length}명을 최종 확정할까요?\n확정된 직무지도원은 배정 관리(계약 대기)로 넘어가며, 나머지 후보는 탈락 처리됩니다.`;
+      : `${g.siteName}에 ${ids.length}명을 최종 확정할까요?\n확정된 직무지도원은 배정 관리(계약 대기)로 넘어가며, 선정하지 않은 수락 후보는 '제외' 처리됩니다(부분 재요청 시 복원 가능).`;
     if (!window.confirm(msg)) return;
     setBusy(true);
     try {
@@ -177,7 +181,7 @@ export default function AssignmentSelectionPage() {
       />
       {error && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">{error}</div>}
 
-      <div className="grid gap-5 lg:grid-cols-[9fr_11fr]">
+      <div className="grid gap-5 lg:grid-cols-[11fr_9fr]">
         {/* ── 좌: 현장 목록 ── */}
         <div>
           <div className="mb-3 space-y-2">
@@ -205,25 +209,36 @@ export default function AssignmentSelectionPage() {
             <p className={T.empty}>{groups.length === 0 ? "확정할 배정 요청이 없습니다." : "조건에 맞는 현장이 없습니다."}</p>
           ) : (
             <div className={T.tableWrap}>
-              <table className="w-full">
+              <table className="w-full table-fixed">
+                <colgroup>
+                  <col style={{ width: "230px" }} />
+                  <col />
+                  <col style={{ width: "120px" }} />
+                  <col style={{ width: "92px" }} />
+                  <col style={{ width: "104px" }} />
+                </colgroup>
                 <thead>
-                  <tr>{["현장(사업체)", "주소", "선정/모집", "충족 여부", "회신 기한"].map(h => <th key={h} className={TH}>{h}</th>)}</tr>
+                  <tr>{["현장(사업체)", "주소", "요청/수락/모집", "충족 여부", "회신 기한"].map(h => <th key={h} className={TH}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {pageGroups.map(g => {
-                    const selN = pickedCount(g);
+                    const reqN = g.candidates.length;          // 요청 = 요청 보낸 전체
+                    const accN = acceptedAllOf(g).length;      // 수락 = 요청 수락한 전체(제외 포함)
                     const nearest = Math.min(...g.candidates.map(dl));
                     const active = g.siteId === selectedSiteId;
-                    const full = g.capacity > 0 && selN === g.capacity;
+                    const full = g.capacity > 0 && accN === g.capacity;
+                    const over = g.capacity > 0 && accN > g.capacity; // 수락 > 모집(초과)
                     return (
                       <tr key={g.siteId} onClick={() => setSelectedSiteId(g.siteId)} className={`${T.trBase} cursor-pointer ${active ? "bg-sky-50" : "hover:bg-slate-50"}`}>
-                        <td className={`${CELL} font-bold text-sky-600`}><div className="max-w-[140px] truncate" title={g.siteName}>{g.siteName}</div></td>
-                        <td className={`${CELL} text-[13px] font-bold text-slate-900`}><div className="max-w-[260px] truncate" title={g.siteAddress}>{g.siteAddress || "-"}</div></td>
-                        <td className={`${CELL} whitespace-nowrap font-bold text-slate-900`}>{selN}/{g.capacity || 0}</td>
+                        <td className={`${CELL} font-bold text-sky-600`}><div className="truncate" title={g.siteName}>{g.siteName}</div></td>
+                        <td className={`${CELL} text-[13px] font-bold text-slate-900`}><div className="truncate" title={g.siteAddress}>{g.siteAddress || "-"}</div></td>
+                        <td className={`${CELL} whitespace-nowrap font-bold text-slate-900`}>{reqN} / {accN} / {g.capacity || 0}</td>
                         <td className={CELL}>
-                          {full
-                            ? <span className={`${T.badge} bg-emerald-50 text-emerald-600`}>충족</span>
-                            : <span className={`${T.badge} bg-rose-50 text-rose-600`}>미충족</span>}
+                          {over
+                            ? <span className={`${T.badge} bg-amber-50 text-amber-600`}>초과</span>
+                            : full
+                              ? <span className={`${T.badge} bg-emerald-50 text-emerald-600`}>충족</span>
+                              : <span className={`${T.badge} bg-rose-50 text-rose-600`}>미충족</span>}
                         </td>
                         <td className={`${CELL} whitespace-nowrap text-[13px] font-bold text-slate-900`}>{Number.isFinite(nearest) ? `~${fmtDate(new Date(nearest).toISOString())}` : "-"}</td>
                       </tr>
@@ -242,8 +257,9 @@ export default function AssignmentSelectionPage() {
             <div className="flex h-[420px] items-center justify-center text-sm font-semibold text-slate-300">왼쪽에서 현장을 선택하세요.</div>
           ) : (() => {
             const selN = selected[sel.siteId]?.size ?? 0;
-            const waitingCount = sel.candidates.filter(c => c.status === "REQUESTED").length;
-            const over = sel.capacity > 0 && selN > sel.capacity;
+            const waitingCount = sel.candidates.filter(c => c.status === "REQUESTED").length; // 회신 대기(확정 게이트용)
+            const reqTotal = sel.candidates.length;                       // 요청 = 요청 보낸 전체
+            const acceptedTotal = sel.candidates.filter(c => isSelectable(c.status)).length; // 수락 = 요청 수락한 전체(제외 포함)
             // 회신 대기자가 있으면 모집 다 차야(==) 확정. 대기 0(전원 응답·기한초과)이면 부분 확정 허용(1~모집).
             const canFinalize = sel.capacity > 0 && selN >= 1 && selN <= sel.capacity && (waitingCount > 0 ? selN === sel.capacity : true);
             const partial = canFinalize && selN < sel.capacity;
@@ -256,8 +272,9 @@ export default function AssignmentSelectionPage() {
                 <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
                   <div className="min-w-0">
                     <p className="truncate text-lg font-black text-slate-900" title={sel.siteName}>{sel.siteName}</p>
-                    <p className={`mt-1 text-[15px] font-black ${over ? "text-rose-600" : "text-slate-600"}`}>
-                      선정 인원 수: {selN} / 모집 인원 수: {sel.capacity} (오전 {sel.capAm ?? 0}명, 오후 {sel.capPm ?? 0}명, 전일 {sel.capFull ?? 0}명){over ? " · 초과!" : ""}
+                    <p className="mt-1 text-[15px] font-black text-slate-600">
+                      요청 인원 수: {reqTotal} / 수락 인원 수: {acceptedTotal} / 모집 인원 수: {sel.capacity}
+                      <span className="ml-1 font-semibold text-slate-400">(오전 {sel.capAm ?? 0} · 오후 {sel.capPm ?? 0} · 전일 {sel.capFull ?? 0})</span>
                     </p>
                   </div>
                   <button type="button" disabled={!canFinalize || busy} onClick={() => finalize(sel)}
@@ -281,22 +298,25 @@ export default function AssignmentSelectionPage() {
                       </thead>
                       <tbody>
                         {rows.map(c => {
-                          const st = STATE[c.status] ?? { label: c.status, cls: "bg-slate-100 text-slate-500" };
+                          const st = STATE[reqStatusOf(c.status)] ?? { label: c.status, cls: "bg-slate-100 text-slate-500" };
+                          const selectable = isSelectable(c.status);
                           const isPicked = selected[sel.siteId]?.has(c.assignmentId) ?? false;
                           return (
-                            <tr key={c.assignmentId} className={`${T.trBase} ${c.status === "ACCEPTED" && isPicked ? "bg-sky-50" : ""}`}>
+                            <tr key={c.assignmentId} className={`${T.trBase} ${selectable && isPicked ? "bg-sky-50" : ""}`}>
                               <td className={`${CELL} font-bold text-sky-600`}><div className="truncate" title={workerLabel(c.workerName, c.loginId)}>{workerLabel(c.workerName, c.loginId)}</div></td>
                               <td className={`${CELL} whitespace-nowrap text-[13px] font-bold text-slate-900`}>{fmtPhone(c.phone)}</td>
                               <td className={CELL}><span className={`${T.badge} ${st.cls}`}>{st.label}</span></td>
                               <td className={`${CELL} whitespace-nowrap font-bold text-slate-900`}>{workTypeText(c)}</td>
                               <td className={CELL}>
-                                {c.status === "ACCEPTED" ? (
+                                {selectable ? (
                                   <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
                                     <button type="button" disabled={busy} onClick={() => setPick(sel.siteId, c.assignmentId, true)}
                                       className={`px-3 py-1.5 text-[13px] font-black transition ${isPicked ? "bg-emerald-600 text-white" : "bg-white text-slate-500 hover:bg-emerald-50 hover:text-emerald-600"}`}>선정</button>
                                     <button type="button" disabled={busy} onClick={() => setPick(sel.siteId, c.assignmentId, false)}
                                       className={`border-l border-slate-200 px-3 py-1.5 text-[13px] font-black transition ${!isPicked ? "bg-rose-600 text-white" : "bg-white text-slate-500 hover:bg-rose-50 hover:text-rose-600"}`}>제외</button>
                                   </div>
+                                ) : c.status === "EXPIRED" ? (
+                                  <span className="text-[13px] font-bold text-slate-400">선정 불가</span>
                                 ) : (
                                   <span className="text-[13px] text-slate-300">-</span>
                                 )}

@@ -1,4 +1,4 @@
-// 시스템 운영자: 에이전시 상세 조회
+// 시스템 운영자: 위탁기관 상세 조회
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -12,9 +12,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const agencyId = parseBigInt(id);
     if (!agencyId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
 
-    // 에이전시 존재 확인 후 병렬 조회
+    // 위탁기관 존재 확인 후 병렬 조회
     const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
-    if (!agency) return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
+    if (!agency) return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
 
     const [managers, sites, workers, logCount, attCount, apiUsage] = await Promise.all([
       prisma.manager.findMany({ where: { agencyId }, select: { id: true, loginId: true, displayName: true, isActive: true, lastLoginAt: true } }),

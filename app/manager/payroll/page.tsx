@@ -558,8 +558,8 @@ export default function PayrollPage() {
       {tab === "deductions" && (
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
-            <p className="mb-1 font-black text-slate-900">에이전시 공제 항목</p>
-            <p>기본 공제(사업소득세 3.3% 또는 4대보험)에 추가로 에이전시별 특이한 공제가 있는 경우 등록합니다.</p>
+            <p className="mb-1 font-black text-slate-900">위탁기관 공제 항목</p>
+            <p>기본 공제(사업소득세 3.3% 또는 4대보험)에 추가로 위탁기관별 특이한 공제가 있는 경우 등록합니다.</p>
             <p className="mt-1 text-xs text-slate-400">비율 공제는 소수로 저장됩니다. UI에서는 % 단위로 입력하세요 (예: 1 입력 → 1%).</p>
           </div>
 

@@ -1,7 +1,7 @@
 // app/api/admin/system/survey-targets/route.ts
 // 운영자(시스템): 직무지도원 평가 요청 '대상자' 현황.
 // 계약이 종료된(또는 임박한) 직무지도원 × 평가요청 발송 여부를 한 곳에서 식별.
-// 에이전시 매니저가 요청하지 않은 건을 운영자가 직접 확인·발송하기 위한 목록.
+// 위탁기관 매니저가 요청하지 않은 건을 운영자가 직접 확인·발송하기 위한 목록.
 
 export const runtime = "nodejs";
 
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
       const siteName = c.siteName || c.workerFilledSiteName || null;
       const site = siteName ? siteMap.get(`${c.agencyId}|${siteName}`) : undefined;
 
-      // 매칭: ① contractId 일치 우선 ② 없으면 같은 에이전시·직무지도원 + 계약종료 이후 생성된 최신 요청
+      // 매칭: ① contractId 일치 우선 ② 없으면 같은 위탁기관·직무지도원 + 계약종료 이후 생성된 최신 요청
       let matched = surveys.find(s => s.contractId === c.id);
       if (!matched) {
         const buffer = new Date(c.contractEnd.getTime() - 24 * 60 * 60 * 1000);

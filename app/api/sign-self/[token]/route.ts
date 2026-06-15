@@ -47,7 +47,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // (계약서 PDF 렌더러가 data:image 만 임베드하므로 스토리지 URL이 아닌 data URI로 보관)
     if (payload.scope === "agency-rep") {
       if (!payload.agencyId) {
-        return NextResponse.json({ success: false, message: "대상 에이전시 정보가 없습니다." }, { status: 400 });
+        return NextResponse.json({ success: false, message: "대상 위탁기관 정보가 없습니다." }, { status: 400 });
       }
       const buf = Buffer.from(await imageBlob!.arrayBuffer());
       const dataUrl = `data:${imgCheck.mime};base64,${buf.toString("base64")}`;

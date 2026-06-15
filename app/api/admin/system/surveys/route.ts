@@ -1,5 +1,5 @@
 // app/api/admin/system/surveys/route.ts
-// 운영자(시스템): 모든 만족도 조사 결과 조회 + 에이전시 전달 토글
+// 운영자(시스템): 모든 만족도 조사 결과 조회 + 위탁기관 전달 토글
 
 export const runtime = "nodejs";
 
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       // ── free-form(계약 무관) ──
       let wid: bigint, aid: bigint;
       try { wid = BigInt(body?.workerId); aid = BigInt(body?.agencyId); }
-      catch { return NextResponse.json({ success: false, message: "직무지도원과 에이전시를 선택하세요." }, { status: 400 }); }
+      catch { return NextResponse.json({ success: false, message: "직무지도원과 위탁기관를 선택하세요." }, { status: 400 }); }
 
       const [worker, agency, linked] = await Promise.all([
         prisma.worker.findUnique({ where: { id: wid }, select: { workerName: true } }),
@@ -97,8 +97,8 @@ export async function POST(req: NextRequest) {
         prisma.employmentContract.findFirst({ where: { agencyId: aid, workerId: wid }, select: { id: true } }),
       ]);
       if (!worker) return NextResponse.json({ success: false, message: "직무지도원을 찾을 수 없습니다." }, { status: 404 });
-      if (!agency) return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
-      if (!linked) return NextResponse.json({ success: false, message: "해당 에이전시와 계약 이력이 있는 직무지도원만 요청할 수 있습니다." }, { status: 400 });
+      if (!agency) return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
+      if (!linked) return NextResponse.json({ success: false, message: "해당 위탁기관와 계약 이력이 있는 직무지도원만 요청할 수 있습니다." }, { status: 400 });
 
       // 최근 14일 내 진행중 요청 있으면 중복 차단(오발송 방지)
       const recent = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH: 결과를 에이전시에 전달(공유) 토글
+// PATCH: 결과를 위탁기관에 전달(공유) 토글
 export async function PATCH(req: NextRequest) {
   try {
     await requireAdminSession(req);

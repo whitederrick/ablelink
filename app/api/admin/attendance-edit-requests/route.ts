@@ -1,4 +1,4 @@
-// 에이전시 관리자: 출근부 수정 요청 목록 조회
+// 위탁기관 관리자: 출근부 수정 요청 목록 조회
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -11,7 +11,7 @@ export async function GET(req: Request) {
 
     const where: any = {};
 
-    // 소속 에이전시의 배정된 직무지도원만
+    // 소속 위탁기관의 배정된 직무지도원만
     where.attendance = {
       assignment: { agencyId: scope.agencyId },
     };

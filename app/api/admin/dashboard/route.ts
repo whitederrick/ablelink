@@ -1,5 +1,5 @@
 // app/api/admin/dashboard/route.ts
-// 관리자 대시보드 — 에이전시 관점 통합 현황 API
+// 관리자 대시보드 — 위탁기관 관점 통합 현황 API
 
 export const runtime = "nodejs";
 

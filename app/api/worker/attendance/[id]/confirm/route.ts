@@ -31,7 +31,7 @@ export async function PATCH(
     if (record.workerId.toString() !== session.workerId)
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     if (record.isManagerFinalClosed)
-      return NextResponse.json({ success: false, message: "에이전시 관리자가 최종 확정한 기록입니다. 수정이 불가합니다." }, { status: 409 });
+      return NextResponse.json({ success: false, message: "위탁기관 관리자가 최종 확정한 기록입니다. 수정이 불가합니다." }, { status: 409 });
     if (record.isFinalClosed)
       return NextResponse.json({ success: false, message: "이미 확정된 기록입니다." }, { status: 409 });
 

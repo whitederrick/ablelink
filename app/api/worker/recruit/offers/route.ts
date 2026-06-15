@@ -57,7 +57,7 @@ export async function PATCH(req: NextRequest) {
     if (offer.status !== "PENDING") return NextResponse.json({ success: false, message: "이미 처리된 제안입니다." }, { status: 409 });
 
     // 수락 + 제안에 현장이 연결돼 있으면 → 해당 현장으로 자동 배정(방향 B). 좌표/agencyId는 site에서.
-    // 가드(비활성 인력·구독 한도·중복)는 미충족 시 배정만 건너뛰고 수락 자체는 진행(에이전시가 수동 처리).
+    // 가드(비활성 인력·구독 한도·중복)는 미충족 시 배정만 건너뛰고 수락 자체는 진행(위탁기관가 수동 처리).
     let autoAssigned = false;
     let assignSiteId: bigint | null = null;
     let assignAgencyId: bigint | null = null;
@@ -99,7 +99,7 @@ export async function PATCH(req: NextRequest) {
       }
     });
 
-    // 수락 결과 알림(WorkerNotice.agencyId 필수 → 에이전시 연계일 때만, 무료 채널)
+    // 수락 결과 알림(WorkerNotice.agencyId 필수 → 위탁기관 연계일 때만, 무료 채널)
     const noticeAgencyId = assignAgencyId ?? offer.agencyId;
     if (action === "accept" && noticeAgencyId) {
       try {

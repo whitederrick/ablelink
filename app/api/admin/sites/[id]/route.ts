@@ -44,6 +44,9 @@ function toRow(r: any) {
     requiredProfession: r.requiredProfession ?? null,
 
     allowanceRange: r.allowanceRange ?? 100,
+    amCapacity: r.amCapacity ?? 0,
+    pmCapacity: r.pmCapacity ?? 0,
+    fullDayCapacity: r.fullDayCapacity ?? 0,
 
     basePointConfirmed: r.basePointConfirmed,
     basePointAuthority: r.basePointAuthority,
@@ -80,6 +83,9 @@ export async function GET(
         detailAddress: true,
         gpsLat: true,
         allowanceRange: true,
+        amCapacity: true,
+        pmCapacity: true,
+        fullDayCapacity: true,
         gpsLon: true,
         agencyId: true,
         ownerManagerId: true,
@@ -145,6 +151,10 @@ export async function PATCH(
     const gpsLon = body.gpsLon == null ? undefined : String(body.gpsLon).trim();
     const allowanceRange =
       body.allowanceRange == null ? undefined : Number(body.allowanceRange);
+    const parseCap = (v: any) => (v == null ? undefined : Math.max(0, Math.min(99, Math.floor(Number(v)) || 0)));
+    const amCapacity = parseCap(body.amCapacity);
+    const pmCapacity = parseCap(body.pmCapacity);
+    const fullDayCapacity = parseCap(body.fullDayCapacity);
     const businessContactName =
       body.businessContactName == null ? undefined : String(body.businessContactName).trim();
     const businessContactPhone =
@@ -193,13 +203,17 @@ export async function PATCH(
       data.allowanceRange = allowanceRange;
     }
 
+    if (amCapacity !== undefined) data.amCapacity = amCapacity;
+    if (pmCapacity !== undefined) data.pmCapacity = pmCapacity;
+    if (fullDayCapacity !== undefined) data.fullDayCapacity = fullDayCapacity;
+
     // 활성/비활성 전환(재활성화 포함)
     if (body.isActive !== undefined) {
       data.isActive = body.isActive === true || body.isActive === "true";
     }
 
     // ✅ 담당 관리자(Manager 로그인) 지정/이관/해제
-    //    null/빈값 = 미지정(공용)으로 해제, 값 있으면 같은 에이전시 관리자로 지정/이관
+    //    null/빈값 = 미지정(공용)으로 해제, 값 있으면 같은 위탁기관 관리자로 지정/이관
     if (body.ownerManagerId !== undefined) {
       const raw = body.ownerManagerId;
       if (raw === null || String(raw).trim() === "") {
@@ -227,6 +241,10 @@ export async function PATCH(
         detailAddress: true,
         gpsLat: true,
         gpsLon: true,
+        allowanceRange: true,
+        amCapacity: true,
+        pmCapacity: true,
+        fullDayCapacity: true,
         agencyId: true,
         ownerManagerId: true,
         businessContactName: true,

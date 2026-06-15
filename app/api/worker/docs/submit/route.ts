@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
       } catch (e) { console.error("[submit version prune]", e); }
     }
 
-    // 알림 대상: 담당 매니저(있으면) → 없으면 소속 에이전시 매니저 전체.
+    // 알림 대상: 담당 매니저(있으면) → 없으면 소속 위탁기관 매니저 전체.
     let targetManagerIds: bigint[] = [];
     if (ownerManagerId) {
       targetManagerIds = [ownerManagerId];

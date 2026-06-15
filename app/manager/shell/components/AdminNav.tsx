@@ -34,12 +34,13 @@ const groups: NavGroup[] = [
   {
     title: "현장/인원",
     items: [
-      { href: "/manager/sites",     label: "현장(사업체) 관리" },
-      { href: "/manager/workers",   label: "직무지도원 배정 관리" },
-      { href: "/manager/worker-accounts", label: "직무지도원 관리" },
-      { href: "/manager/trainees",  label: "훈련생 현황 관리" },
-      { href: "/manager/contracts", label: "근로계약서 관리", plan: "PRO" },
-      { href: "/manager/surveys",   label: "직무지도원 만족도 평가", plan: "PRO" },
+      { href: "/manager/sites",            label: "현장(사업체) 관리" },
+      { href: "/manager/worker-accounts",  label: "직무지도원 관리" },
+      { href: "/manager/workers",          label: "직무지도원 배정 관리" },
+      { href: "/manager/assignment-selection", label: "직무지도원 배정 확정" },
+      { href: "/manager/contracts",        label: "근로계약서 관리", plan: "PRO" },
+      { href: "/manager/trainees",         label: "훈련생 현황 관리" },
+      { href: "/manager/surveys",          label: "직무지도원 만족도 평가", plan: "PRO" },
     ],
   },
   {
@@ -68,7 +69,7 @@ const groups: NavGroup[] = [
     title: "소통",
     items: [
       { href: "/manager/system-notices", label: "시스템 공지사항" },
-      { href: "/manager/announcements",   label: "에이전시 공지사항" },
+      { href: "/manager/announcements",   label: "위탁기관 공지사항" },
       { href: "/manager/notices",         label: "알림 목록" },
     ],
   },

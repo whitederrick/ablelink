@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const periodStart = `${year}-${pad2(month)}-01`;
     const periodEnd   = `${year}-${pad2(month)}-31`;
 
-    // 에이전시 소속 활성 배정 전체
+    // 위탁기관 소속 활성 배정 전체
     const assignments = await prisma.siteAssignment.findMany({
       where: { agencyId, status: "ACTIVE" },
       include: {

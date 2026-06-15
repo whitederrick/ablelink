@@ -1,6 +1,6 @@
 // app/api/admin/system/backup/route.ts
 // 시스템 운영자 전용: 전체 데이터 백업(보관 1년 경과분 안전망).
-// 고객 화면 export는 보관 1년 제한이지만, 운영자 백업은 전 기간·전 에이전시(제한 없음).
+// 고객 화면 export는 보관 1년 제한이지만, 운영자 백업은 전 기간·전 위탁기관(제한 없음).
 // GET /api/admin/system/backup?type=attendance|logs&format=xlsx|csv
 
 export const runtime = "nodejs";
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
           site: { select: { companyName: true, agency: { select: { name: true } } } },
         },
       });
-      header = ["에이전시", "날짜", "직무지도원", "연락처", "현장", "출근", "퇴근", "상태", "GPS", "출근거리(m)"];
+      header = ["위탁기관", "날짜", "직무지도원", "연락처", "현장", "출근", "퇴근", "상태", "GPS", "출근거리(m)"];
       rows = recs.map(r => [
         r.site?.agency?.name ?? "",
         r.workDate,
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
           tasks: { select: { taskName: true, performanceScore: true } },
         },
       });
-      header = ["에이전시", "날짜", "직무지도원", "훈련생", "훈련유형", "1:1시간", "그룹시간", "내용", "평가", "작업내용"];
+      header = ["위탁기관", "날짜", "직무지도원", "훈련생", "훈련유형", "1:1시간", "그룹시간", "내용", "평가", "작업내용"];
       rows = recs.map(r => [
         r.attendance.site?.agency?.name ?? "",
         r.attendance.workDate,

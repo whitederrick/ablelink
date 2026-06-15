@@ -1,6 +1,6 @@
 "use client";
 
-// 에이전시 공지 게시판 — 매니저가 작성/수정/고정/삭제. 소속 직무지도원이 앱 '공지사항'에서 열람.
+// 위탁기관 공지 게시판 — 매니저가 작성/수정/고정/삭제. 소속 직무지도원이 앱 '공지사항'에서 열람.
 // 카테고리는 시스템 운영자가 전역 관리(app/admin/settings) → 매니저는 작성 시 선택만.
 // 표준 게시판: PageHeader(+등록) → StatCardRow → ListToolbar(검색·카테고리 멀티필터) → 목록+우측 상세 → Pagination.
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -138,7 +138,7 @@ export default function AgencyAnnouncementsPage() {
   return (
     <div>
       <PageHeader
-        title="에이전시 공지사항"
+        title="위탁기관 공지사항"
         sub="소속 직무지도원 앱의 ‘공지사항’에 게시됩니다. 개별 통지가 필요하면 ‘알림 발송’ 메뉴를 이용하세요."
         actions={
           <button onClick={openCreate} className={T.btnPrimary}>

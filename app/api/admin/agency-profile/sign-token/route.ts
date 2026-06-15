@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       select: { name: true, representativeName: true },
     });
     if (!agency) {
-      return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
+      return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
     }
 
     const token = await createSelfSignToken({

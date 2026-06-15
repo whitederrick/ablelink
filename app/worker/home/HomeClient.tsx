@@ -19,12 +19,16 @@ import {
   Megaphone,
   PenLine,
   Search,
+  Send,
   Sparkles,
   User,
   X,
 } from "lucide-react";
 import type { WorkerPayload } from "../_lib/session";
 import type { HomeSummary } from "@/lib/worker/homeSummary";
+
+// 배정 요청 근무형태 라벨
+const REQ_WT_LABEL: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "전일", CUSTOM: "직접" };
 import { LATE_CLOCK_OUT_REASONS } from "@/lib/attendance/lateClockOut";
 
 type MissedClockOut = { attendanceId: string; workDate: string; siteName: string };
@@ -285,6 +289,8 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
   // 오늘 일지 쓰기 — 훈련생 선택 시트
   const [showLogPicker,  setShowLogPicker]  = useState(false);
   // 퇴근 미실행(보정대기) — 늦은 퇴근 처리
+  const [pendingRequests, setPendingRequests] = useState<HomeSummary["pendingRequests"]>(initialData?.pendingRequests ?? []);
+  const [reqWtChoice, setReqWtChoice] = useState<Record<string, string>>({});
   const [missedClockOuts, setMissedClockOuts] = useState<MissedClockOut[]>(initialData?.missedClockOuts ?? []);
   const [missedTarget,    setMissedTarget]    = useState<MissedClockOut | null>(null);
   const [missedReason,    setMissedReason]    = useState<string>("");
@@ -307,6 +313,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
       setMissingCount(d.missing.count);
       setTodayMissing(d.today.missingTraineeCount);
       setMissedClockOuts(d.missedClockOuts ?? []);
+      setPendingRequests(d.pendingRequests ?? []);
       if (d.homeMessages) setHomeMessages(d.homeMessages);
     } catch (e: any) {
       showToast(e.message || "데이터를 불러올 수 없습니다.", "error");
@@ -319,6 +326,27 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
   useEffect(() => {
     if (!initialData) refresh();
   }, [initialData, refresh]);
+
+  // 배정 요청 회신: 수락(희망 근무형태) / 거절
+  async function respondRequest(assignmentId: string, action: "accept" | "decline", workType?: string) {
+    if (action === "accept" && !workType) { showToast("희망 근무형태를 선택해주세요.", "error"); return; }
+    setActionLoading(true);
+    try {
+      const res = await fetch("/api/worker/assignment/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignmentId, action, workType }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      showToast(data.message || "처리되었습니다.", "success");
+      await refresh();
+    } catch (e: any) {
+      showToast(e.message || "처리에 실패했습니다.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   async function markAllRead() {
     await fetch("/api/worker/notices/read", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
@@ -823,6 +851,45 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
           </div>
         )}
 
+        {/* ── 배정 요청(수락/거절) ── */}
+        {pendingRequests.length > 0 && (
+          <div className="space-y-3">
+            {pendingRequests.map(req => {
+              const choice = reqWtChoice[req.assignmentId];
+              return (
+                <div key={req.assignmentId} className="rounded-3xl border border-blue-200 bg-blue-50 p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Send className="h-5 w-5 text-blue-600" />
+                    <p className="text-sm font-black text-blue-900">새 배정 요청</p>
+                  </div>
+                  <p className="text-base font-black text-slate-900">{req.siteName}</p>
+                  {req.agencyName && <p className="text-xs font-semibold text-slate-500">{req.agencyName}</p>}
+                  {req.replyDeadline && (
+                    <p className="mt-1 text-xs font-black text-rose-600">회신 기한 {req.replyDeadline.slice(0, 10)} · 이후 자동 탈락</p>
+                  )}
+                  <p className="mb-1.5 mt-3 text-xs font-black text-slate-700">희망 근무형태 선택</p>
+                  <div className="flex gap-2">
+                    {req.requestedWorkTypes.map(wt => (
+                      <button key={wt} type="button" onClick={() => setReqWtChoice(s => ({ ...s, [req.assignmentId]: wt }))}
+                        className={`flex-1 rounded-xl border py-2.5 text-sm font-bold transition active:scale-95 ${
+                          choice === wt ? "border-blue-600 bg-blue-600 text-white" : "border-blue-200 bg-white text-slate-700"
+                        }`}>
+                        {REQ_WT_LABEL[wt] ?? wt}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button onClick={() => respondRequest(req.assignmentId, "decline")} disabled={actionLoading}
+                      className="flex-1 rounded-xl border border-slate-300 bg-white py-3 text-sm font-black text-slate-600 transition active:scale-[0.98] disabled:opacity-60">거절</button>
+                    <button onClick={() => respondRequest(req.assignmentId, "accept", choice)} disabled={actionLoading || !choice}
+                      className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-black text-white transition active:scale-[0.98] disabled:opacity-50">수락</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* 출퇴근 카드 — 면제 배정이면 자동 처리 안내, 아니면 출퇴근 버튼 */}
         {isExempt ? (
           <div className="rounded-3xl border border-sky-200 bg-sky-50 p-5">
@@ -1079,7 +1146,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
             </div>
             <p className="mb-1 text-sm font-semibold text-slate-500">배정된 현장이 없습니다.</p>
             <p className="mb-5 px-6 text-xs font-semibold leading-relaxed text-slate-400">
-              소속 에이전시 또는 시스템 운영자가 현장을 배정하면 시작할 수 있어요.
+              소속 위탁기관 또는 시스템 운영자가 현장을 배정하면 시작할 수 있어요.
             </p>
             <button
               onClick={() => router.push("/recruit")}

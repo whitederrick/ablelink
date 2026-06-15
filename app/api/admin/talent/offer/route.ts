@@ -1,5 +1,5 @@
 // app/api/admin/talent/offer/route.ts
-// 에이전시/공단 — 후보자에게 제안(컨택) 보내기
+// 위탁기관/공단 — 후보자에게 제안(컨택) 보내기
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await requireAdminOrManagerSession(req);
 
-    // 인재풀 역제안은 PRO 전용. 에이전시(매니저)만 게이트, 운영자는 예외.
+    // 인재풀 역제안은 PRO 전용. 위탁기관(매니저)만 게이트, 운영자는 예외.
     if (session.kind === "manager") {
       const access = await checkAgencyPlanAccess(session.agencyId, "TALENT_SOURCING");
       if (!access.allowed) {
@@ -58,9 +58,9 @@ export async function POST(req: NextRequest) {
       if (!sid) return NextResponse.json({ success: false, message: "잘못된 현장 ID" }, { status: 400 });
       const site = await prisma.site.findUnique({ where: { id: sid }, select: { id: true, isActive: true, agencyId: true } });
       if (!site || !site.isActive) return NextResponse.json({ success: false, message: "연결할 현장을 찾을 수 없습니다." }, { status: 404 });
-      if (site.agencyId == null) return NextResponse.json({ success: false, message: "에이전시 귀속 현장만 연결할 수 있습니다." }, { status: 400 });
+      if (site.agencyId == null) return NextResponse.json({ success: false, message: "위탁기관 귀속 현장만 연결할 수 있습니다." }, { status: 400 });
       if (session.kind === "manager" && site.agencyId !== session.agencyId)
-        return NextResponse.json({ success: false, message: "본인 에이전시의 현장만 연결할 수 있습니다." }, { status: 403 });
+        return NextResponse.json({ success: false, message: "본인 위탁기관의 현장만 연결할 수 있습니다." }, { status: 403 });
       siteId = site.id;
     }
 
@@ -80,11 +80,11 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 후보자 알림 (WorkerNotice.agencyId 필수 → 에이전시 제안일 때만)
+    // 후보자 알림 (WorkerNotice.agencyId 필수 → 위탁기관 제안일 때만)
     if (agencyId) {
       try {
         await prisma.workerNotice.create({
-          data: { workerId, agencyId, title: "[직무지도 매칭] 에이전시에서 제안이 도착했습니다", body: b.message?.trim() ? String(b.message).slice(0, 200) : "제안 내용을 확인해주세요.", type: "INFO" },
+          data: { workerId, agencyId, title: "[직무지도 매칭] 위탁기관에서 제안이 도착했습니다", body: b.message?.trim() ? String(b.message).slice(0, 200) : "제안 내용을 확인해주세요.", type: "INFO" },
         });
       } catch { /* 비치명적 */ }
     }

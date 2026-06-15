@@ -137,7 +137,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // action === "approve"
     const result = await prisma.$transaction(async (tx) => {
       // 1. Agency 생성
-      // 이미 같은 이름의 에이전시가 있을 수 있으므로 확인
+      // 이미 같은 이름의 위탁기관가 있을 수 있으므로 확인
       let agency = await tx.agency.findUnique({
         where: { name: existing.agencyName },
         select: { id: true },

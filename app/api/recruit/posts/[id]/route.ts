@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
     if (!p) return NextResponse.json({ success: false, message: "공고를 찾을 수 없습니다." }, { status: 404 });
 
-    // 노출 게이트: 운영자 공고 OR 배정 이력 에이전시 공고만 조회 허용(미노출은 404로 은닉)
+    // 노출 게이트: 운영자 공고 OR 배정 이력 위탁기관 공고만 조회 허용(미노출은 404로 은닉)
     const agencyIds = await getWorkerAgencyIds(workerId);
     if (!isPostVisibleToWorker({ createdByAdminId: p.createdByAdminId, agencyId: p.agencyId }, agencyIds)) {
       return NextResponse.json({ success: false, message: "공고를 찾을 수 없습니다." }, { status: 404 });

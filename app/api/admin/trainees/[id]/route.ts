@@ -1,4 +1,4 @@
-// 에이전시 관리자: 훈련생 수정 / 상태 변경
+// 위탁기관 관리자: 훈련생 수정 / 상태 변경
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";

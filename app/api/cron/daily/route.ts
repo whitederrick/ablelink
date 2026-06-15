@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
               workerId: contract.workerId,
               agencyId: contract.agencyId,
               title: `근로계약 만료 D-${offsetDays} 안내`,
-              body: `사업장: ${siteName}\n계약 종료일: ${contractEndStr}\n재계약이 필요하면 담당 에이전시로 연락해 주세요.`,
+              body: `사업장: ${siteName}\n계약 종료일: ${contractEndStr}\n재계약이 필요하면 담당 위탁기관로 연락해 주세요.`,
               type: "WARN",
             },
           });

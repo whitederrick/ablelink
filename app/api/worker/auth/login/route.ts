@@ -58,13 +58,16 @@ export async function POST(request: Request) {
 
     if (user.status !== "ACTIVE") {
       return NextResponse.json(
-        { success: false, message: "비활성화된 계정입니다. 담당 에이전시에 문의하세요." },
+        { success: false, message: "비활성화된 계정입니다. 담당 위탁기관에 문의하세요." },
         { status: 403 }
       );
     }
 
     // 로그인 성공 → rate limit 초기화
     await resetRateLimit(rateLimitKey);
+
+    // 활동(휴면) 상태 판정용 마지막 로그인 시각 갱신
+    await prisma.worker.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
 
     // 활성 배정 조회
     const today = new Date();

@@ -15,15 +15,15 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    title: "에이전시 운영 관리",
+    title: "위탁기관 운영 관리",
     items: [
-      { href: "/admin/agencies",                 label: "에이전시 관리" },
-      { href: "/admin/manager-signup-requests",  label: "에이전시 관리자 관리" },
+      { href: "/admin/agencies",                 label: "위탁기관 관리" },
+      { href: "/admin/manager-signup-requests",  label: "위탁기관 관리자 관리" },
       { href: "/admin/admins",                   label: "시스템 운영자 관리" },
     ],
   },
   {
-    title: "에이전시 데이터 관리",
+    title: "위탁기관 데이터 관리",
     items: [
       { href: "/admin/workers",     label: "직무지도원 현황 관리" },
       { href: "/admin/sites",       label: "현장(Site) 현황 관리" },
@@ -75,7 +75,7 @@ export default function AdminNav() {
     return pathname === href || pathname.startsWith(href + "/");
   };
 
-  // 아코디언: 한 번에 한 카테고리만 펼침(나머지 자동 접힘) → 세로 스크롤 최소화. (에이전시 매니저와 동일)
+  // 아코디언: 한 번에 한 카테고리만 펼침(나머지 자동 접힘) → 세로 스크롤 최소화. (위탁기관 매니저와 동일)
   const activeGroupTitle = groups.find(g => g.items.some(it => isActive(it.href)))?.title ?? groups[0].title;
   const [openGroup, setOpenGroup] = useState<string | null>(activeGroupTitle);
   useEffect(() => { setOpenGroup(activeGroupTitle); }, [activeGroupTitle]);

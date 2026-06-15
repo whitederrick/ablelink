@@ -1,5 +1,5 @@
 // lib/managerSession.ts
-// 에이전시 관리자(Manager) 전용 JWT 세션
+// 위탁기관 관리자(Manager) 전용 JWT 세션
 
 import { SignJWT, jwtVerify } from "jose";
 

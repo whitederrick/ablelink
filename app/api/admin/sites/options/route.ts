@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   try {
     const session = await requireAdminOrManagerSession(req);
 
-    // manager: 본인 agency만 / admin(운영자): 전체 에이전시
+    // manager: 본인 agency만 / admin(운영자): 전체 위탁기관
     const agencyWhere = session.kind === "manager" ? { id: session.agencyId } : {};
 
     const agencies = await prisma.agency.findMany({

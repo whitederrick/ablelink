@@ -106,7 +106,7 @@ export default function InviteClient({ code }: { code: string }) {
             <Building2 className="h-8 w-8 text-sky-400" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-slate-950">Able-Link</h1>
-          <p className="mt-1 text-sm font-semibold text-slate-500">에이전시 관리자 초대 가입</p>
+          <p className="mt-1 text-sm font-semibold text-slate-500">위탁기관 관리자 초대 가입</p>
         </div>
 
         <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">

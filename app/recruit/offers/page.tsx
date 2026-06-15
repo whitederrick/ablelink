@@ -69,7 +69,7 @@ export default function OffersPage() {
         <div className="mx-4 mt-4 flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-4">
           <div>
             <p className="text-sm font-black text-slate-900">구직 중 (제안 받기)</p>
-            <p className="text-xs font-semibold text-slate-400">켜면 에이전시가 내 프로필을 보고 제안할 수 있어요.</p>
+            <p className="text-xs font-semibold text-slate-400">켜면 위탁기관가 내 프로필을 보고 제안할 수 있어요.</p>
           </div>
           <button onClick={toggle} className={`relative h-7 w-12 flex-shrink-0 rounded-full transition ${open ? "bg-sky-500" : "bg-slate-200"}`}>
             <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${open ? "left-[22px]" : "left-0.5"}`} />

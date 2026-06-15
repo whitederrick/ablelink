@@ -1,4 +1,4 @@
-// 에이전시 관리자 전용 로그인 (Manager 테이블 — managers)
+// 위탁기관 관리자 전용 로그인 (Manager 테이블 — managers)
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";

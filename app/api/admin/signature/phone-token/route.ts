@@ -1,5 +1,5 @@
 // app/api/admin/signature/phone-token/route.ts
-// 매니저(에이전시 관리자)가 PC에서 발급 → 스마트폰에서 본인 서명을 입력하기 위한 일회용 토큰.
+// 매니저(위탁기관 관리자)가 PC에서 발급 → 스마트폰에서 본인 서명을 입력하기 위한 일회용 토큰.
 export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";

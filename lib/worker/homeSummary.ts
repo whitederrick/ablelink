@@ -59,6 +59,8 @@ export interface HomeSummary {
   today: { loggedTraineeIds: string[]; missingTraineeCount: number };
   // 퇴근 미실행(과거 출근만 하고 퇴근 안 누른 보정대기 건) — 사유와 함께 늦은 퇴근 처리 필요
   missedClockOuts: { attendanceId: string; workDate: string; siteName: string }[];
+  // 배정 요청(REQUESTED) — 매니저가 보낸 요청, 워커가 수락(희망 근무형태 선택)/거절
+  pendingRequests: { assignmentId: string; siteName: string; agencyName: string; requestedWorkTypes: string[]; replyDeadline: string | null }[];
 }
 
 export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
@@ -179,6 +181,20 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     siteName: a.site?.companyName ?? "현장",
   }));
 
+  // ── 배정 요청(REQUESTED) — 기한 미초과만 노출 ──
+  const requestRows = await prisma.siteAssignment.findMany({
+    where: { workerId, status: "REQUESTED", OR: [{ replyDeadline: null }, { replyDeadline: { gte: new Date() } }] },
+    include: { site: { select: { companyName: true } }, agency: { select: { name: true } } },
+    orderBy: { id: "desc" },
+  });
+  const pendingRequests = requestRows.map(a => ({
+    assignmentId: a.id.toString(),
+    siteName: a.site?.companyName ?? "현장",
+    agencyName: a.agency?.name ?? "",
+    requestedWorkTypes: (a.requestedWorkTypes ?? "").split(",").filter(Boolean),
+    replyDeadline: a.replyDeadline ? a.replyDeadline.toISOString() : null,
+  }));
+
   // 출퇴근 카드 격려 문구(운영자 편집 가능, 미설정 시 registry 기본값)
   const [msgBefore, msgWorking, msgDone, msgClosed] = await Promise.all([
     getConfig("HOME_MSG_BEFORE"),
@@ -235,5 +251,6 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     missing: { count: missingItems.length, items: missingItems },
     today: { loggedTraineeIds, missingTraineeCount },
     missedClockOuts,
+    pendingRequests,
   };
 }

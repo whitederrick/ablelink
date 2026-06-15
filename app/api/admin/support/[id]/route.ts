@@ -1,5 +1,5 @@
 // 지원 요청 상세 조회 + 회신
-// GET   — ADMIN / MANAGER(본인 에이전시만)
+// GET   — ADMIN / MANAGER(본인 위탁기관만)
 // PATCH — ADMIN: reply | MANAGER: close(본인 티켓)
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";

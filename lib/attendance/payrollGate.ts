@@ -1,6 +1,6 @@
 // lib/attendance/payrollGate.ts
 // 급여 보호 게이트: "심한 지각(실제 출근이 표준보다 30분+ 늦음) 또는 심한 조퇴(실제 퇴근이
-// 표준보다 30분+ 이름)인 날은 에이전시 컨펌 전까지 출근부에 기본 표준시각을 확정하지 않는다."
+// 표준보다 30분+ 이름)인 날은 위탁기관 컨펌 전까지 출근부에 기본 표준시각을 확정하지 않는다."
 // 출근부 = 급여 산정 근거이므로 오확정(과지급) 방지.
 //
 // 판정은 실제 버튼시각(actualStartTime/actualEndTime) 기준. 실제 시각이 없으면(과거 기록·기간
@@ -63,7 +63,7 @@ export function earlyLeaveMinutes(a: PayrollGateInput): number | null {
 
 /**
  * 이 날의 출근부 시각이 "보정 대기(미확정)"인가?
- *  - 심한 지각(>=30분) 또는 심한 조퇴(>=30분) 이고, 아직 에이전시 컨펌(payrollConfirmedAt) 전이면 true.
+ *  - 심한 지각(>=30분) 또는 심한 조퇴(>=30분) 이고, 아직 위탁기관 컨펌(payrollConfirmedAt) 전이면 true.
  *  - 보정 대기인 날은 출근부 PDF에 기본값을 박지 않고 "보정대기"로 표시한다.
  */
 export function isPayrollPending(a: PayrollGateInput): boolean {

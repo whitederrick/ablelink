@@ -1,5 +1,5 @@
 // app/api/admin/attendance-inbox/[id]/request-correction/route.ts
-// 에이전시→직무지도원 '시각 보정 요청'. 급여 보호 게이트 보정대기일(심한 지각/조퇴 미컨펌)에 대해
+// 위탁기관→직무지도원 '시각 보정 요청'. 급여 보호 게이트 보정대기일(심한 지각/조퇴 미컨펌)에 대해
 // 직무지도원에게 출근부 시각 수정요청 제출을 요청한다. 워커 알림(앱 내 무료) + 추적 컬럼 기록.
 // 실제 보정시각 확정(payrollConfirmedAt)은 기존 출근부 수정요청 승인(admin/attendance-edit-requests)에서 일어남.
 

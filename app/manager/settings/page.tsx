@@ -1,6 +1,6 @@
 "use client";
 
-// 매니저 — 사업주(에이전시) 정보 관리. 근로계약서 생성 시 사업주(갑) 정보·서명으로 자동 입력된다.
+// 매니저 — 사업주(위탁기관) 정보 관리. 근로계약서 생성 시 사업주(갑) 정보·서명으로 자동 입력된다.
 import { useEffect, useRef, useState } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
@@ -39,10 +39,12 @@ export default function AgencySettingsPage() {
 
   // 대표자 서명
   const [sigUrl, setSigUrl] = useState<string | null>(null);
-  const [sigMode, setSigMode] = useState<"view" | "draw">("view");
+  const [sigMode, setSigMode] = useState<"view" | "draw" | "stamp">("view");
   const [sigEmpty, setSigEmpty] = useState(true);
   const [sigSaving, setSigSaving] = useState(false);
   const padRef = useRef<SignaturePadHandle>(null);
+  // 직인(도장) 이미지 — 업로드 시 흰 배경을 투명 처리한 미리보기(dataURL)
+  const [stampPreview, setStampPreview] = useState<string | null>(null);
 
   // 스마트폰(대표자) 서명 — QR / SMS
   const [phoneSign, setPhoneSign] = useState<{ url: string; qr: string } | null>(null);
@@ -148,6 +150,71 @@ export default function AgencySettingsPage() {
     });
     const d = await r.json();
     if (d.success) { setSigUrl(null); setMsg({ ok: true, text: "삭제되었습니다." }); }
+  }
+
+  // 직인 이미지 선택 → 흰 배경 자동 투명 처리 → 미리보기 생성
+  function handleStampFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // 같은 파일 재선택 허용
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setMsg({ ok: false, text: "이미지 파일을 선택해주세요." }); return; }
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { setMsg({ ok: false, text: "이미지 처리에 실패했습니다." }); return; }
+      ctx.drawImage(img, 0, 0);
+      const W = canvas.width, H = canvas.height;
+      const imgData = ctx.getImageData(0, 0, W, H);
+      const px = imgData.data;
+      // 1) 흰색(밝은) 배경 → 투명. 도장 인주(빨강/검정)는 유지. + 불투명 영역 경계 계산(여백 트림)
+      let minX = W, minY = H, maxX = -1, maxY = -1;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * 4;
+          if (px[i] > 230 && px[i + 1] > 230 && px[i + 2] > 230) { px[i + 3] = 0; continue; }
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+      if (maxX < 0) { setMsg({ ok: false, text: "직인 형태를 인식하지 못했습니다. 배경이 흰색인 이미지를 사용해주세요." }); return; }
+      // 2) 트림한 직인을 고정 정사각 캔버스에 중앙 배치(계약서에서 모든 직인이 동일 크기로 렌더되도록 정규화)
+      const SIZE = 400;
+      const sw = maxX - minX + 1, sh = maxY - minY + 1;
+      const out = document.createElement("canvas");
+      out.width = SIZE; out.height = SIZE;
+      const octx = out.getContext("2d");
+      if (!octx) { setMsg({ ok: false, text: "이미지 처리에 실패했습니다." }); return; }
+      const scale = (SIZE * 0.92) / Math.max(sw, sh); // 약간의 여백을 두고 꽉 차게
+      const dw = sw * scale, dh = sh * scale;
+      octx.drawImage(canvas, minX, minY, sw, sh, (SIZE - dw) / 2, (SIZE - dh) / 2, dw, dh);
+      setStampPreview(out.toDataURL("image/png"));
+    };
+    img.onerror = () => setMsg({ ok: false, text: "이미지를 불러올 수 없습니다." });
+    img.src = URL.createObjectURL(file);
+  }
+
+  // 직인 저장 — 대표자 서명과 동일하게 representativeSignatureUrl에 저장(계약서 서명란 자동 삽입)
+  async function saveStamp() {
+    if (!stampPreview) { setMsg({ ok: false, text: "직인 이미지를 선택해주세요." }); return; }
+    setSigSaving(true); setMsg(null);
+    try {
+      const r = await fetch("/api/admin/agency-profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ representativeSignatureUrl: stampPreview }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.message);
+      setSigUrl(stampPreview); setStampPreview(null); setSigMode("view");
+      setMsg({ ok: true, text: "직인이 저장되었습니다." });
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message || "직인 저장에 실패했습니다." });
+    } finally {
+      setSigSaving(false);
+    }
   }
 
   // 대표자 서명 토큰 발급 → QR 표시 + 완료 폴링 (스마트폰으로 직접 서명)
@@ -282,20 +349,21 @@ export default function AgencySettingsPage() {
           </div>
         </div>
 
-        {/* 대표자 서명 */}
+        {/* 대표자 서명 / 직인 */}
         <div className={T.card}>
-          <p className="mb-1 text-sm font-black text-slate-900">대표자 서명</p>
-          <p className="mb-3 text-xs font-semibold text-slate-400">등록한 서명은 근로계약서 사업주(갑) <strong>대표자</strong> 서명란에 자동 삽입됩니다.</p>
+          <p className="mb-1 text-sm font-black text-slate-900">대표자 서명 / 직인</p>
+          <p className="mb-3 text-xs font-semibold text-slate-400">등록한 <strong>대표자 서명</strong> 또는 <strong>직인</strong>이 근로계약서 사업주(갑) 서명란에 자동 삽입됩니다. 둘 중 하나를 선택해 등록하세요.</p>
 
           {sigMode === "view" ? (
             sigUrl ? (
               <>
                 <div className="flex min-h-[120px] items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={sigUrl} alt="대표자 서명" className="max-h-[100px] max-w-full object-contain" />
+                  <img src={sigUrl} alt="대표자 서명 또는 직인" className="max-h-[100px] max-w-full object-contain" />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button onClick={() => { setSigMode("draw"); setSigEmpty(true); }} className={T.btnPrimary}>다시 등록</button>
+                  <button onClick={() => { setSigMode("draw"); setSigEmpty(true); }} className={T.btnPrimary}>✍️ 서명 등록</button>
+                  <button onClick={() => { setStampPreview(null); setSigMode("stamp"); }} className={T.btnPrimary}>🟥 직인 등록</button>
                   <button onClick={() => startPhoneSign()} className={T.btnSecondary}>📱 스마트폰으로 서명</button>
                   <button onClick={deleteSignature} className={T.btnDanger}>삭제</button>
                 </div>
@@ -303,13 +371,33 @@ export default function AgencySettingsPage() {
             ) : (
               <div className="py-8 text-center">
                 <p className="mb-1 text-3xl">✍️</p>
-                <p className="mb-5 text-sm font-semibold text-slate-400">등록된 대표자 서명이 없습니다.</p>
+                <p className="mb-5 text-sm font-semibold text-slate-400">등록된 대표자 서명 / 직인이 없습니다.</p>
                 <div className="flex flex-wrap justify-center gap-2">
-                  <button onClick={() => { setSigMode("draw"); setSigEmpty(true); }} className={T.btnPrimary}>서명 등록하기</button>
+                  <button onClick={() => { setSigMode("draw"); setSigEmpty(true); }} className={T.btnPrimary}>✍️ 서명 등록하기</button>
+                  <button onClick={() => { setStampPreview(null); setSigMode("stamp"); }} className={T.btnPrimary}>🟥 직인 등록하기</button>
                   <button onClick={() => startPhoneSign()} className={T.btnSecondary}>📱 스마트폰으로 서명</button>
                 </div>
               </div>
             )
+          ) : sigMode === "stamp" ? (
+            <>
+              <label className={`${T.btnSecondary} mb-3 inline-flex cursor-pointer`}>
+                직인 이미지 선택
+                <input type="file" accept="image/*" className="hidden" onChange={handleStampFile} />
+              </label>
+              {stampPreview && (
+                <div className="mb-3 flex min-h-[120px] max-w-[460px] items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 p-5"
+                  style={{ backgroundImage: "linear-gradient(45deg,#eef2f6 25%,transparent 25%,transparent 75%,#eef2f6 75%),linear-gradient(45deg,#eef2f6 25%,transparent 25%,transparent 75%,#eef2f6 75%)", backgroundSize: "16px 16px", backgroundPosition: "0 0,8px 8px" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={stampPreview} alt="직인 미리보기" className="max-h-[120px] max-w-full object-contain" />
+                </div>
+              )}
+              <p className="mb-3 text-xs font-semibold text-slate-400">도장(직인) 이미지를 올리면 <strong>흰색 배경이 자동으로 투명 처리</strong>되어 저장됩니다.</p>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={saveStamp} disabled={sigSaving || !stampPreview} className={T.btnPrimary}>{sigSaving ? "저장 중..." : "직인 저장"}</button>
+                <button onClick={() => { setStampPreview(null); setSigMode("view"); }} className={T.btnSecondary}>취소</button>
+              </div>
+            </>
           ) : (
             <>
               <div className="relative mb-3 max-w-[460px] overflow-hidden rounded-xl border-2 border-slate-950 bg-white">

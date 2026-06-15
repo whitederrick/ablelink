@@ -258,7 +258,7 @@ async function sendConnectCodeExisting(
   const code = String(randomInt(100000, 1000000)); // 6자리
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7일
 
-  // 연결 토큰은 매니저 소속 필요 — 부재 시(운영자 발행 등) 같은 에이전시 매니저로 폴백
+  // 연결 토큰은 매니저 소속 필요 — 부재 시(운영자 발행 등) 같은 위탁기관 매니저로 폴백
   let managerId = createdByManagerId;
   if (managerId == null) {
     const m = await prisma.manager.findFirst({ where: { agencyId }, select: { id: true } });

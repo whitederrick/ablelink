@@ -1,5 +1,5 @@
 // app/api/admin/system/agencies/[id]/manager-invite/route.ts
-// 시스템 운영자 전용: 에이전시 관리자 초대 코드 발급
+// 시스템 운영자 전용: 위탁기관 관리자 초대 코드 발급
 
 export const runtime = "nodejs";
 
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { id } = await params;
     const agencyId = parseBigInt(id);
     if (!agencyId) {
-      return NextResponse.json({ success: false, message: "잘못된 에이전시 ID입니다." }, { status: 400 });
+      return NextResponse.json({ success: false, message: "잘못된 위탁기관 ID입니다." }, { status: 400 });
     }
 
     const agency = await prisma.agency.findUnique({
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     });
 
     if (!agency) {
-      return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
+      return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
     }
 
     const body = await req.json().catch(() => ({}));

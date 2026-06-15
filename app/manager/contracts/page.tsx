@@ -225,7 +225,7 @@ function ClauseManagerModal({ onClose }: { onClose: () => void }) {
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h2 className="text-base font-black text-slate-900">특약 조항 관리</h2>
-            <p className="mt-0.5 text-xs font-semibold text-slate-400">에이전시 전용 특약 조항을 등록·수정·삭제합니다. 계약서 생성 시 선택해 포함할 수 있어요.</p>
+            <p className="mt-0.5 text-xs font-semibold text-slate-400">위탁기관 전용 특약 조항을 등록·수정·삭제합니다. 계약서 생성 시 선택해 포함할 수 있어요.</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={loadStandardClauses} disabled={seeding} className={T.btnSecondary}>{seeding ? "등록 중..." : "표준 특약 불러오기"}</button>
@@ -539,7 +539,7 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
 
             {/* 사업주 */}
             <section className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/50 p-3">
-              <label className={T.label}>사업주(갑) — 에이전시 정보 자동 입력 (수정 가능)</label>
+              <label className={T.label}>사업주(갑) — 위탁기관 정보 자동 입력 (수정 가능)</label>
               {(!employerRepName || !employerPhone || !employerAddress) && (
                 <p className="text-[11px] font-semibold text-amber-600">대표자·전화·주소가 비어 있으면 <a href="/manager/settings" target="_blank" className="underline">사업주 정보 설정</a>에서 미리 등록하면 매번 자동 입력됩니다.</p>
               )}

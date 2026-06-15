@@ -1,6 +1,6 @@
 "use client";
 
-// 에이전시 상세 본문 — 목록의 모달 팝업과 /admin/agencies/[id] 페이지가 공유.
+// 위탁기관 상세 본문 — 목록의 모달 팝업과 /admin/agencies/[id] 페이지가 공유.
 // onClose 제공 시 모달 모드(닫기 버튼), 미제공 시 페이지 모드(router.back).
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -163,7 +163,7 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
 
   if (error || !agency) return (
     <div className="flex h-60 flex-col items-center justify-center gap-3">
-      <p className="text-sm text-slate-500">{error || "에이전시를 찾을 수 없습니다."}</p>
+      <p className="text-sm text-slate-500">{error || "위탁기관를 찾을 수 없습니다."}</p>
       <button onClick={() => onClose ? onClose() : router.back()} className={T.btnSecondary}>← 뒤로</button>
     </div>
   );
@@ -173,7 +173,7 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
       {/* 헤더 */}
       <div>
         <button onClick={() => onClose ? onClose() : router.back()} className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
-          <ArrowLeft className="h-4 w-4" />{onClose ? "닫기" : "에이전시 목록"}
+          <ArrowLeft className="h-4 w-4" />{onClose ? "닫기" : "위탁기관 목록"}
         </button>
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">

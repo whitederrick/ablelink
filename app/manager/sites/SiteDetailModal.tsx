@@ -9,6 +9,7 @@ import AddressMapPicker from "@/components/AddressMapPicker";
 type SiteDetail = {
   id: string; companyName: string; address: string; detailAddress: string | null;
   gpsLat: string; gpsLon: string; allowanceRange: number; agencyName: string;
+  amCapacity?: number; pmCapacity?: number; fullDayCapacity?: number;
   businessContactName: string | null; businessContactPhone: string | null; businessContactEmail: string | null;
   ownerManagerId: string | null; ownerManagerName: string | null;
   basePointConfirmed: boolean; basePointApprovalStatus: string; isActive: boolean;
@@ -16,6 +17,9 @@ type SiteDetail = {
 type AddrItem = { addressName: string; x: string; y: string };
 
 const RANGE_PRESETS = [50, 100, 150, 200, 300, 500];
+
+// 이 모달 전용 카드 — 전역 T.card(p-5)보다 상하 여백을 줄임(px-5 py-4). 카드 간 간격은 별도로 넓힘.
+const CARD = "rounded-2xl border border-slate-200 bg-white px-5 py-4";
 
 export default function SiteDetailModal({ siteId, onClose, onSaved }: {
   siteId?: string | null; onClose: () => void; onSaved: () => void;
@@ -36,6 +40,9 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
   const [gpsLat, setGpsLat] = useState("");
   const [gpsLon, setGpsLon] = useState("");
   const [allowanceRange, setAllowanceRange] = useState(100);
+  const [amCapacity, setAmCapacity] = useState(0);
+  const [pmCapacity, setPmCapacity] = useState(0);
+  const [fullDayCapacity, setFullDayCapacity] = useState(0);
 
   const [businessContactName, setBusinessContactName] = useState("");
   const [businessContactPhone, setBusinessContactPhone] = useState("");
@@ -94,6 +101,9 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
         setGpsLat(String(it.gpsLat ?? ""));
         setGpsLon(String(it.gpsLon ?? ""));
         setAllowanceRange(it.allowanceRange ?? 100);
+        setAmCapacity(it.amCapacity ?? 0);
+        setPmCapacity(it.pmCapacity ?? 0);
+        setFullDayCapacity(it.fullDayCapacity ?? 0);
         setBusinessContactName(it.businessContactName || "");
         setBusinessContactPhone(it.businessContactPhone || "");
         setBusinessContactEmail(it.businessContactEmail || "");
@@ -141,6 +151,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
         companyName: companyName.trim(), address: address.trim(),
         detailAddress: detailAddress.trim() || null,
         gpsLat: Number(gpsLat), gpsLon: Number(gpsLon), allowanceRange,
+        amCapacity, pmCapacity, fullDayCapacity,
         businessContactName: businessContactName.trim(),
         businessContactPhone: businessContactPhone.trim(),
         businessContactEmail: businessContactEmail.trim() || null,
@@ -206,16 +217,16 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
           ) : (
             <>
               {isCreate && isAdmin && (
-                <div className={`${T.card} mb-4`}>
+                <div className={`${CARD} mb-5`}>
                   <label className={T.label}>기관 *</label>
                   <select value={agencyId} onChange={e => setAgencyId(e.target.value)} className={`w-full ${T.select}`}>
                     {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 </div>
               )}
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid gap-5 lg:grid-cols-2">
                 {/* 기본 정보 */}
-                <div className={T.card}>
+                <div className={CARD}>
                   <h3 className="mb-3 text-sm font-black text-slate-900">기본 정보</h3>
                   <div className="space-y-3">
                     <div>
@@ -267,8 +278,8 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                 </div>
 
                 {/* 사업체 담당자 + 업무 이관 담당자 */}
-                <div className="space-y-4">
-                  <div className={T.card}>
+                <div className="space-y-5">
+                  <div className={CARD}>
                     <h3 className="mb-1 text-sm font-black text-slate-900">사업체 담당자</h3>
                     <p className="mb-3 text-xs font-semibold text-slate-400">현장 측 담당자. 출근부 ‘사업체담당자’ 서명 요청에 자동 채워집니다.</p>
                     <div className="space-y-3">
@@ -278,7 +289,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                     </div>
                   </div>
 
-                  <div className={T.card}>
+                  <div className={CARD}>
                     <h3 className="mb-1 text-sm font-black text-slate-900">위탁기관 담당자 지정</h3>
                     <p className="mb-3 text-xs font-semibold text-slate-400">해당 직무지도 현장(사업체)를 담당하는 담당자를 지정합니다. 담당자 미지정인 경우 담당자 지정이 필요합니다.</p>
                     <select value={ownerManagerId} onChange={e => setOwnerManagerId(e.target.value)} className={`w-full ${T.select}`}>
@@ -290,9 +301,9 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
               </div>
 
               {/* GPS 출퇴근 허용 범위 */}
-              <div className={`${T.card} mt-4`}>
+              <div className={`${CARD} mt-5`}>
                 <h3 className="mb-1 text-sm font-black text-slate-900">📍 GPS 출퇴근 허용 범위</h3>
-                <p className="mb-3 text-xs font-semibold text-slate-400">직무지도원이 현장 반경 내에서만 출퇴근 처리할 수 있습니다. 범위를 벗어나면 에이전시 승인이 필요합니다.</p>
+                <p className="mb-3 text-xs font-semibold text-slate-400">직무지도원이 현장 반경 내에서만 출퇴근 처리할 수 있습니다. 범위를 벗어나면 위탁기관 승인이 필요합니다.</p>
                 <div className="flex flex-wrap items-center gap-2">
                   {RANGE_PRESETS.map(v => (
                     <button key={v} type="button" onClick={() => setAllowanceRange(v)}
@@ -304,6 +315,24 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                     <span className="text-sm font-semibold text-slate-500">m</span>
                   </div>
                   <span className="ml-auto text-sm font-bold text-slate-600">현재 설정 범위 : <span className="text-base font-black text-sky-600">반경 {allowanceRange}m</span></span>
+                </div>
+              </div>
+
+              {/* 근무형태별 필요 직무지도원 정원 */}
+              <div className={`${CARD} mt-5`}>
+                <h3 className="mb-1 text-sm font-black text-slate-900">👥 필요 직무지도원 정원</h3>
+                <p className="mb-3 text-xs font-semibold text-slate-400">근무형태별로 이 현장에 필요한 직무지도원 수입니다. 배정 요청 화면의 충원 현황·필터에 사용됩니다. (0 = 해당 형태 불필요)</p>
+                <div className="flex flex-wrap items-center gap-4">
+                  {([["오전", amCapacity, setAmCapacity], ["오후", pmCapacity, setPmCapacity], ["전일", fullDayCapacity, setFullDayCapacity]] as const).map(([label, val, setter]) => (
+                    <div key={label} className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-600">{label}</span>
+                      <input type="number" min={0} max={99} value={val}
+                        onChange={e => setter(Math.max(0, Math.min(99, Math.floor(Number(e.target.value)) || 0)))}
+                        className={`w-20 text-center ${T.input}`} />
+                      <span className="text-sm font-semibold text-slate-500">명</span>
+                    </div>
+                  ))}
+                  <span className="ml-auto text-sm font-bold text-slate-600">총 정원 : <span className="text-base font-black text-sky-600">{amCapacity + pmCapacity + fullDayCapacity}명</span></span>
                 </div>
               </div>
 

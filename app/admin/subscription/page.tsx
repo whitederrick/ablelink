@@ -52,7 +52,7 @@ export default function SubscriptionPage() {
 
       <div className={T.summaryGrid}>
         {[
-          { label: "전체 에이전시", value: agencies.length, cls: "text-slate-900" },
+          { label: "전체 위탁기관", value: agencies.length, cls: "text-slate-900" },
           { label: "무료",          value: freeCount,        cls: "text-slate-400" },
           { label: "체험중",        value: trialCount,       cls: "text-amber-600" },
           { label: "유료 구독",     value: paidCount,        cls: "text-emerald-600" },
@@ -67,7 +67,7 @@ export default function SubscriptionPage() {
       {loading ? (
         <p className={T.empty}>로딩 중...</p>
       ) : agencies.length === 0 ? (
-        <p className={T.empty}>등록된 에이전시가 없습니다.</p>
+        <p className={T.empty}>등록된 위탁기관가 없습니다.</p>
       ) : (
         <div className="space-y-3">
           {agencies.map(a => {

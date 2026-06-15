@@ -1,5 +1,5 @@
 // app/api/admin/worker-accounts/route.ts
-// 직무지도원 관리(인적 관리) 목록 — 본 에이전시와 현재/과거 계약(배정) 이력이 있는 직무지도원.
+// 직무지도원 관리(인적 관리) 목록 — 본 위탁기관와 현재/과거 계약(배정) 이력이 있는 직무지도원.
 // 배정 관리(/api/admin/workers)와 달리 '활성 배정'으로 한정하지 않고 과거 이력자까지 포함한다.
 export const runtime = "nodejs";
 
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(parseIntSafe(searchParams.get("pageSize"), 10), 100);
     const engagement = (searchParams.get("engagement") || "all").trim(); // all | active | ended
 
-    // 본 에이전시 현장에 배정 이력이 있는 직무지도원(현재/과거 무관)
+    // 본 위탁기관 현장에 배정 이력이 있는 직무지도원(현재/과거 무관)
     const baseAssign: Prisma.SiteAssignmentWhereInput = { site: { agencyId } };
     let assignmentsFilter: Prisma.WorkerWhereInput["assignments"];
     if (engagement === "active") {
@@ -74,13 +74,18 @@ export async function GET(req: NextRequest) {
           phoneNumber: true,
           status: true,
           createdAt: true,
+          lastLoginAt: true,
           bankName: true,
           accountNumber: true,
-          // 진행 중 판정용 — 본 에이전시 배정의 상태만
+          // 진행 중 판정용 — 본 위탁기관 배정의 상태만
           assignments: { where: baseAssign, select: { status: true } },
         },
       }),
     ]);
+
+    // 활동(휴면) 판정: 진행 중 배정·계약 보유 OR 최근 3개월 내 로그인 = 활성, 아니면 휴면(자동, 로그인 시 자동 활성)
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
     return NextResponse.json({
       success: true,
@@ -89,6 +94,7 @@ export async function GET(req: NextRequest) {
       total,
       items: rows.map((w) => {
         const hasActive = w.assignments.some((a) => ACTIVE_ASSIGN.includes(a.status));
+        const recentLogin = !!w.lastLoginAt && w.lastLoginAt >= threeMonthsAgo;
         return {
           id: String(w.id),
           loginId: w.loginId,
@@ -96,8 +102,10 @@ export async function GET(req: NextRequest) {
           phoneNumber: w.phoneNumber,
           status: String(w.status),
           createdAt: w.createdAt.toISOString(),
+          lastLoginAt: w.lastLoginAt ? w.lastLoginAt.toISOString() : null,
           hasBankAccount: !!(w.bankName && w.accountNumber),
           engagement: hasActive ? "ACTIVE" : "ENDED", // 진행 중 | 종료
+          activity: hasActive || recentLogin ? "ACTIVE" : "DORMANT", // 활성 | 휴면(자동)
         };
       }),
     });

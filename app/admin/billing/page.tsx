@@ -69,13 +69,13 @@ export default function BillingPage() {
 
   return (
     <div>
-      <PageHeader title="결제·구독 현황" sub="전체 에이전시의 구독 플랜과 결제·연체 상태를 확인합니다." />
+      <PageHeader title="결제·구독 현황" sub="전체 위탁기관의 구독 플랜과 결제·연체 상태를 확인합니다." />
 
       <StatCardRow
         className="mb-5"
         cols={4}
         items={[
-          { label: "전체 에이전시", value: rows.length },
+          { label: "전체 위탁기관", value: rows.length },
           { label: "유료 구독", value: paid.length, tone: "emerald" },
           { label: "체험 중", value: trial.length, tone: "amber" },
           { label: "결제 연체", value: overdue.length, tone: "rose" },
@@ -86,7 +86,7 @@ export default function BillingPage() {
         <ListToolbar
           query={q}
           onQueryChange={setQ}
-          placeholder="에이전시명 검색"
+          placeholder="위탁기관명 검색"
           filters={[
             { value: "paid", label: "유료", count: paid.length },
             { value: "trial", label: "체험", count: trial.length },
@@ -107,7 +107,7 @@ export default function BillingPage() {
           <table className="w-full">
             <thead>
               <tr>
-                {["에이전시","플랜","구독 시작","다음 결제","체험 종료","빌링키","관리자","현장","상태"].map(h => (
+                {["위탁기관","플랜","구독 시작","다음 결제","체험 종료","빌링키","관리자","현장","상태"].map(h => (
                   <th key={h} className={T.th}>{h}</th>
                 ))}
               </tr>

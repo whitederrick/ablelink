@@ -102,7 +102,7 @@ export default function ManagerSignupRequestsPage() {
 
   return (
     <div>
-      <PageHeader title="에이전시 관리자 관리" sub="에이전시 관리자의 가입 신청을 검토하고 승인 또는 반려합니다." />
+      <PageHeader title="위탁기관 관리자 관리" sub="위탁기관 관리자의 가입 신청을 검토하고 승인 또는 반려합니다." />
 
       <StatCardRow
         className="mb-5"
@@ -276,7 +276,7 @@ export default function ManagerSignupRequestsPage() {
                     {req.status === "APPROVED" && req.agencyId && (
                       <a href={`/admin/agencies/${req.agencyId}`}
                         className="inline-flex items-center gap-1.5 text-sm font-semibold text-sky-600 hover:underline">
-                        에이전시 상세 보기 <ExternalLink className="h-3.5 w-3.5" />
+                        위탁기관 상세 보기 <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     )}
                   </div>

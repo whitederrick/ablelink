@@ -193,7 +193,7 @@ export default function AdminDocsPage() {
           )}
 
           <div className="mt-3 border-t border-slate-100 pt-3">
-            <p className="mb-2 text-xs font-black text-slate-500">에이전시 담당자 서명 후 발송</p>
+            <p className="mb-2 text-xs font-black text-slate-500">위탁기관 담당자 서명 후 발송</p>
             <button onClick={handleSign} disabled={signing}
               className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-indigo-700 disabled:opacity-60">
               {signing ? "서명 생성 중..." : "✍️ 내 서명 넣어 발송 (서명완료 PDF)"}

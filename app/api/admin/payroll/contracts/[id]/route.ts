@@ -12,7 +12,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const scope = await requireManagerSession(req);
     const agencyId = scope.agencyId;
     if (!agencyId) {
-      return NextResponse.json({ success: false, message: "에이전시 정보 없음" }, { status: 403 });
+      return NextResponse.json({ success: false, message: "위탁기관 정보 없음" }, { status: 403 });
     }
 
     const { id: idStr } = await params;

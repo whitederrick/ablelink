@@ -82,7 +82,7 @@ function CorrectionTool() {
           <p className="text-xs font-semibold text-slate-400">{rows.length}건 검색됨</p>
           <div className={T.tableWrap}>
             <table className="w-full">
-              <thead><tr>{["날짜","직무지도원","현장","에이전시","출근","퇴근","상태","확정","GPS"].map(h=><th key={h} className={T.th}>{h}</th>)}</tr></thead>
+              <thead><tr>{["날짜","직무지도원","현장","위탁기관","출근","퇴근","상태","확정","GPS"].map(h=><th key={h} className={T.th}>{h}</th>)}</tr></thead>
               <tbody>
                 {rows.map(r => (
                   <tr key={r.id} className={T.trBase}>
@@ -311,7 +311,7 @@ export default function AttendancesPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="근태 현황 관리" sub="전체 에이전시의 출퇴근 기록을 월별로 조회하고, 지도·월별 현황·교정 도구로 점검·보정합니다." />
+      <PageHeader title="근태 현황 관리" sub="전체 위탁기관의 출퇴근 기록을 월별로 조회하고, 지도·월별 현황·교정 도구로 점검·보정합니다." />
 
       <StatCardRow
         cols={4}

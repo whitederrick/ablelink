@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     const scope = await requireManagerSession(req);
     const agencyId = scope.agencyId;
     if (!agencyId) {
-      return NextResponse.json({ success: false, message: "에이전시 정보 없음" }, { status: 403 });
+      return NextResponse.json({ success: false, message: "위탁기관 정보 없음" }, { status: 403 });
     }
 
     const planCheck = await checkAgencyPlanAccess(agencyId, "PAYROLL");
@@ -86,11 +86,11 @@ export async function POST(req: NextRequest) {
         where: { year: { lte: y } },
         orderBy: { year: "desc" },
       }),
-      // 에이전시 공제 항목
+      // 위탁기관 공제 항목
       prisma.agencyDeduction.findMany({
         where: { agencyId, isActive: true },
       }),
-      // 이 에이전시의 해당 월 활성 배정에 속한 직무지도원 찾기 (배치형태·배치일 포함)
+      // 이 위탁기관의 해당 월 활성 배정에 속한 직무지도원 찾기 (배치형태·배치일 포함)
       prisma.siteAssignment.findMany({
         where: {
           agencyId,
@@ -333,7 +333,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 에이전시 커스텀 공제
+      // 위탁기관 커스텀 공제
       for (const ded of agencyDeductions) {
         const amount =
           ded.type === "PERCENTAGE"

@@ -48,6 +48,10 @@ function toRow(r: any) {
 
     requiredProfession: r.requiredProfession ?? null,
 
+    amCapacity: r.amCapacity ?? 0,
+    pmCapacity: r.pmCapacity ?? 0,
+    fullDayCapacity: r.fullDayCapacity ?? 0,
+
     basePointConfirmed: r.basePointConfirmed,
     basePointAuthority: r.basePointAuthority,
     basePointApprovalStatus: r.basePointApprovalStatus,
@@ -132,6 +136,10 @@ export async function GET(req: NextRequest) {
           agency: { select: { id: true, name: true } },
           ownerManager: { select: { id: true, displayName: true, loginId: true } },
 
+          amCapacity: true,
+          pmCapacity: true,
+          fullDayCapacity: true,
+
           basePointConfirmed: true,
           basePointAuthority: true,
           basePointApprovalStatus: true,
@@ -143,12 +151,23 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
+    // 각 현장의 현재 배정 중(ASSIGNED/CONFIRMED/ACTIVE) 인원 수 — 배정 요청 화면의 [미배정/배정중] 필터용
+    const siteIds = rows.map((r) => r.id);
+    const grouped = siteIds.length
+      ? await prisma.siteAssignment.groupBy({
+          by: ["siteId"],
+          where: { siteId: { in: siteIds }, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+          _count: { _all: true },
+        })
+      : [];
+    const countMap = new Map(grouped.map((g) => [String(g.siteId), g._count._all]));
+
     return NextResponse.json({
       success: true,
       page,
       pageSize,
       total,
-      items: rows.map(toRow),
+      items: rows.map((r) => ({ ...toRow(r), assignedCount: countMap.get(String(r.id)) ?? 0 })),
     });
   } catch (e: any) {
     if (e instanceof Response) return e;
@@ -172,6 +191,12 @@ export async function POST(req: NextRequest) {
 
     // 직종(카테고리) — 선택
     const requiredProfession = PROFESSIONS.includes(body.requiredProfession) ? body.requiredProfession : null;
+
+    // 근무형태별 필요 정원(0~99)
+    const parseCap = (v: any) => Math.max(0, Math.min(99, Math.floor(Number(v)) || 0));
+    const amCapacity = parseCap(body.amCapacity);
+    const pmCapacity = parseCap(body.pmCapacity);
+    const fullDayCapacity = parseCap(body.fullDayCapacity);
 
     // ✅ 사업체 담당자(현장 연락 담당자) — 이름·연락처 필수, 이메일 선택
     const businessContactName = String(body.businessContactName ?? "").trim();
@@ -208,7 +233,7 @@ export async function POST(req: NextRequest) {
     // ✅ 위탁기관 담당자 지정.
     //  - body.ownerManagerId 미전송(undefined): 매니저는 생성자 본인(기존 동작), 운영자는 미지정.
     //  - 빈 문자열: 명시적 미지정.
-    //  - 값 있음: 같은 에이전시 관리자로 지정.
+    //  - 값 있음: 같은 위탁기관 관리자로 지정.
     let ownerManagerId: bigint | null = null;
     if (body.ownerManagerId === undefined) {
       ownerManagerId = session.kind === "manager" ? session.managerId : null;
@@ -235,6 +260,9 @@ export async function POST(req: NextRequest) {
         businessContactPhone,
         businessContactEmail,
         requiredProfession,
+        amCapacity,
+        pmCapacity,
+        fullDayCapacity,
         ...(allowanceRange !== undefined ? { allowanceRange } : {}),
       },
       select: {

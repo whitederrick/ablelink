@@ -1,5 +1,5 @@
 // app/api/admin/talent/[id]/route.ts
-// 에이전시/공단 — 후보자 상세(경력 이력·후기 포함). 방향 B 인재풀 상세 조회.
+// 위탁기관/공단 — 후보자 상세(경력 이력·후기 포함). 방향 B 인재풀 상세 조회.
 // 개인정보 보호: 연락처/전체 주소 비노출(제안 수락 전). 후기는 평가 주체 익명화.
 export const runtime = "nodejs";
 
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           endDate: e.endDate ? e.endDate.toISOString().slice(0, 10) : null,
           description: e.description ?? null,
         })),
-        // 후기: 평가 주체(에이전시/관리자) 익명화 — 평점·코멘트·작성월만
+        // 후기: 평가 주체(위탁기관/관리자) 익명화 — 평점·코멘트·작성월만
         reviews: worker.reviews.map((r) => ({
           rating: r.rating, comment: r.comment ?? null,
           createdAt: r.createdAt.toISOString().slice(0, 7),

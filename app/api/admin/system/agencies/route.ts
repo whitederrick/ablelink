@@ -1,4 +1,4 @@
-// 시스템 운영자 전용: 에이전시 목록 조회 + 신규 생성
+// 시스템 운영자 전용: 위탁기관 목록 조회 + 신규 생성
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -47,13 +47,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, planType, managerLoginId, managerPassword, managerDisplayName } = body;
 
-    if (!name?.trim()) return NextResponse.json({ success: false, message: "에이전시 이름은 필수입니다." }, { status: 400 });
+    if (!name?.trim()) return NextResponse.json({ success: false, message: "위탁기관 이름은 필수입니다." }, { status: 400 });
     if (!managerLoginId?.trim() || !managerPassword) {
       return NextResponse.json({ success: false, message: "최초 관리자 계정 정보가 필요합니다." }, { status: 400 });
     }
 
     const exists = await prisma.agency.findUnique({ where: { name: name.trim() } });
-    if (exists) return NextResponse.json({ success: false, message: "이미 존재하는 에이전시 이름입니다." }, { status: 409 });
+    if (exists) return NextResponse.json({ success: false, message: "이미 존재하는 위탁기관 이름입니다." }, { status: 409 });
 
     // Manager 테이블에서 중복 확인
     const loginExists = await prisma.manager.findUnique({ where: { loginId: managerLoginId.trim() } });

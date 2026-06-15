@@ -1,5 +1,5 @@
 // 커스텀 휴무일 관리
-// GET   — AGENCY: 자기 에이전시 직무지도원들의 휴무일 목록 + 기존 요청 현황
+// GET   — AGENCY: 자기 위탁기관 직무지도원들의 휴무일 목록 + 기존 요청 현황
 // POST  — AGENCY: 삭제 요청 생성(직무지도원 수락 필요)
 // PATCH — AGENCY: 근무 인정(countAsWorkday) 최종 결정 — 관리자 권한으로 즉시 반영(급여 반영)
 export const runtime = "nodejs";
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const dateFrom = `${y}-${pad}-01`;
     const dateTo   = `${y}-${pad}-31`;
 
-    // 에이전시 소속 활성 배정의 휴무일
+    // 위탁기관 소속 활성 배정의 휴무일
     const holidays = await prisma.siteHoliday.findMany({
       where: {
         date: { gte: dateFrom, lte: dateTo },
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     if (requestType === "CHANGE_WORKDAY" && proposedCountAsWorkday === undefined)
       return NextResponse.json({ success: false, message: "변경할 근무인정 값이 필요합니다." }, { status: 400 });
 
-    // 해당 휴무일이 자기 에이전시 소속인지 확인
+    // 해당 휴무일이 자기 위탁기관 소속인지 확인
     const holiday = await prisma.siteHoliday.findUnique({
       where: { id: BigInt(holidayId) },
       include: { assignment: { select: { agencyId: true } } },
@@ -152,7 +152,7 @@ export async function PATCH(req: NextRequest) {
     if (!holidayId || typeof countAsWorkday !== "boolean")
       return NextResponse.json({ success: false, message: "holidayId와 countAsWorkday(boolean)가 필요합니다." }, { status: 400 });
 
-    // 자기 에이전시 소속 휴무일인지 확인
+    // 자기 위탁기관 소속 휴무일인지 확인
     const holiday = await prisma.siteHoliday.findUnique({
       where: { id: BigInt(holidayId) },
       include: { assignment: { select: { agencyId: true, workerId: true } } },

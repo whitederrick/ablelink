@@ -1,6 +1,6 @@
 "use client";
 
-// 직무지도 매칭 — 수요측 공고 등록 (에이전시 매니저)
+// 직무지도 매칭 — 수요측 공고 등록 (위탁기관 매니저)
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "../../_styles";

@@ -143,7 +143,7 @@ export default function InvitePage() {
                 <p className="mt-1 text-base font-black text-slate-900">{invite.phoneNumber.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3")}</p>
               </div>
               <p className="text-sm font-semibold text-slate-500">
-                에이전시에서 전달받은 <strong className="font-black text-slate-800">6자리 인증번호</strong>를 입력해주세요.
+                위탁기관에서 전달받은 <strong className="font-black text-slate-800">6자리 인증번호</strong>를 입력해주세요.
               </p>
               <input
                 type="text" inputMode="numeric" maxLength={6}

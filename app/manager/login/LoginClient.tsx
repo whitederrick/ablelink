@@ -43,7 +43,7 @@ export default function LoginClient() {
             <Building2 className="h-8 w-8 text-sky-400" aria-hidden="true" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-slate-950">Able-Link</h1>
-          <p className="mt-1 text-sm font-semibold text-slate-500">에이전시 관리자 로그인</p>
+          <p className="mt-1 text-sm font-semibold text-slate-500">위탁기관 관리자 로그인</p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">

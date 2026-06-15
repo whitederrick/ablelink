@@ -96,7 +96,7 @@ export default function RecruitSignupPage() {
         <div className="space-y-3 px-4 pt-3">
           <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-xs font-semibold leading-relaxed text-sky-700">
             <ShieldCheck className="mb-1 h-4 w-4" />
-            직무지도원 자격을 등록하고 직무지도 공고에 지원하거나, 에이전시의 제안을 받을 수 있어요. 자격은 운영자 검증 후 활성화됩니다.
+            직무지도원 자격을 등록하고 직무지도 공고에 지원하거나, 위탁기관의 제안을 받을 수 있어요. 자격은 운영자 검증 후 활성화됩니다.
           </div>
 
           {/* 1. 휴대폰 인증 */}

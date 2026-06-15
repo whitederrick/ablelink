@@ -38,8 +38,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     // 수락 시 → 운영 Site 생성/연계 + SiteAssignment 자동 생성(활성 worker 편입).
-    // 단, "에이전시 공고 + 좌표 보유"일 때만. 운영자(공단/플랫폼) 공고는 agencyId가 없어
-    // 자동배정 대상이 아니고(운영 에이전시 부재), ACCEPTED 표시 + 알림만 한다.
+    // 단, "위탁기관 공고 + 좌표 보유"일 때만. 운영자(공단/플랫폼) 공고는 agencyId가 없어
+    // 자동배정 대상이 아니고(운영 위탁기관 부재), ACCEPTED 표시 + 알림만 한다.
     let autoAssigned = false;
     const canAutoAssign =
       action === "accept" && app.post.agencyId != null && app.post.lat != null && app.post.lon != null;
@@ -121,7 +121,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       autoAssigned = true;
     });
 
-    // 직무지도원에게 알림(매칭 결과) — WorkerNotice.agencyId 필수라 에이전시 공고일 때만
+    // 직무지도원에게 알림(매칭 결과) — WorkerNotice.agencyId 필수라 위탁기관 공고일 때만
     if (app.post.agencyId) {
       try {
         await prisma.workerNotice.create({

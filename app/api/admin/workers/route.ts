@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
 
       // assignment 기간 필터(선택)
       const assignmentWhere: Prisma.SiteAssignmentWhereInput = {
+        // 배정 관리 목록 = 확정 이후(계약 대기→연결·위치→근무중). 요청/수락 단계는 '배정 확정' 화면 소관.
         status: { in: [AssignStatus.ASSIGNED, AssignStatus.CONFIRMED, AssignStatus.ACTIVE] },
       };
 
@@ -88,10 +89,15 @@ export async function GET(req: NextRequest) {
       where.assignments = { some: assignmentWhere };
     }
 
-    const [total, rows] = await Promise.all([
-      prisma.worker.count({ where }),
+    // 워커 상태 필터(활성/일시정지/퇴사). 상태별 카운트는 필터와 무관하게 전체 표시.
+    const VALID_W_STATUS = ["ACTIVE", "PAUSED", "RESIGNED"];
+    const statuses = (searchParams.get("status") || "").split(",").map(s => s.trim()).filter(s => VALID_W_STATUS.includes(s));
+    const listWhere: Prisma.WorkerWhereInput = statuses.length ? { ...where, status: { in: statuses as any } } : where;
+
+    const [total, rows, statusGroups, pendingRequestCount] = await Promise.all([
+      prisma.worker.count({ where: listWhere }),
       prisma.worker.findMany({
-        where,
+        where: listWhere,
         orderBy: { id: "desc" },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -114,19 +120,29 @@ export async function GET(req: NextRequest) {
               serviceStep: true,
               adaptationStartDate: true,
               workType: true,
+              requestedWorkTypes: true,
+              replyDeadline: true,
               site: { select: { companyName: true } },
               agency: { select: { name: true } },
             },
           },
         },
       }),
+      prisma.worker.groupBy({ by: ["status"], where, _count: { _all: true } }),
+      // 미처리 배정 요청(회신 대기/수락) 수 — '배정 요청 관리' 버튼 배지(전체 기준 정확값)
+      prisma.siteAssignment.count({ where: { agencyId: scope.agencyId, status: { in: [AssignStatus.REQUESTED, AssignStatus.ACCEPTED] } } }),
     ]);
+
+    const counts: Record<string, number> = { ACTIVE: 0, PAUSED: 0, RESIGNED: 0 };
+    for (const g of statusGroups) counts[String(g.status)] = g._count._all;
 
     return NextResponse.json({
       success: true,
       page,
       pageSize,
       total,
+      counts,
+      pendingRequestCount,
       data: rows.map((u) => ({
         id: String(u.id),
         loginId: u.loginId,
@@ -143,7 +159,9 @@ export async function GET(req: NextRequest) {
           startDate: u.assignments[0].startDate.toISOString(),
           serviceStep: String(u.assignments[0].serviceStep),
           adaptationStartDate: u.assignments[0].adaptationStartDate?.toISOString() ?? null,
-          workType: String(u.assignments[0].workType),
+          workType: u.assignments[0].workType ? String(u.assignments[0].workType) : null,
+          requestedWorkTypes: u.assignments[0].requestedWorkTypes ?? null,
+          replyDeadline: u.assignments[0].replyDeadline?.toISOString() ?? null,
         } : null,
       })),
     });

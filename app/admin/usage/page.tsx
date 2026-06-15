@@ -80,7 +80,7 @@ export default function UsagePage() {
     <div>
       <PageHeader
         title="AI 사용량"
-        sub="월별·에이전시별 AI API 호출량을 확인합니다."
+        sub="월별·위탁기관별 AI API 호출량을 확인합니다."
         actions={
           <div className="flex items-center gap-2">
             <button onClick={() => setYm(prevMonth(ym))} className={T.btnSecondary + " px-2.5"}><ChevronLeft className="h-4 w-4" /></button>
@@ -101,7 +101,7 @@ export default function UsagePage() {
       />
 
       <div className="mb-4">
-        <ListToolbar query={q} onQueryChange={setQ} placeholder="에이전시명 검색" />
+        <ListToolbar query={q} onQueryChange={setQ} placeholder="위탁기관명 검색" />
       </div>
 
       {loading ? (
@@ -117,7 +117,7 @@ export default function UsagePage() {
           <table className="w-full">
             <thead>
               <tr>
-                <th className={T.th}>에이전시</th>
+                <th className={T.th}>위탁기관</th>
                 {Object.entries(SERVICE_LABELS).map(([key, label]) => (
                   <th key={key} className={T.th.replace("text-left", "text-right")}>{label}</th>
                 ))}

@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
       kind = "NOTICE_INDIVIDUAL";
       const requested = (Array.isArray(userIds) ? userIds : [])
         .map((id: unknown) => parseBigInt(id)).filter((id): id is bigint => id !== null);
-      // ✅ 크로스테넌트 방지: 요청된 워커 중 "내 에이전시 소속"만 대상으로.
+      // ✅ 크로스테넌트 방지: 요청된 워커 중 "내 위탁기관 소속"만 대상으로.
       if (requested.length > 0) {
         const valid = await prisma.siteAssignment.findMany({
           where: { agencyId, workerId: { in: requested }, status: { in: [...activeStatuses] } },

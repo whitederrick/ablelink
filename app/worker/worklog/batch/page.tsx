@@ -347,7 +347,7 @@ export default function BatchWorklogPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
         <p className="text-lg font-black text-slate-900">스탠다드(STANDARD) 플랜 이상에서만 사용 가능합니다.</p>
-        <p className="text-sm text-slate-500">에이전시 담당자에게 구독 업그레이드를 요청해주세요.</p>
+        <p className="text-sm text-slate-500">위탁기관 담당자에게 구독 업그레이드를 요청해주세요.</p>
         <button onClick={() => router.back()} className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white">
           돌아가기
         </button>

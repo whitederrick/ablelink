@@ -383,7 +383,7 @@ export default function AttendanceReviewPage() {
         <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
           <p className="text-xs font-semibold leading-relaxed text-slate-500">
             · 출근·퇴근 시간 수정이 필요하면 &apos;수정 요청&apos; 버튼을 눌러주세요.<br />
-            · 수정 요청은 에이전시 관리자 승인 후 반영됩니다.<br />
+            · 수정 요청은 위탁기관 관리자 승인 후 반영됩니다.<br />
             · GPS 자동 입력 기록도 수정 요청을 통해서만 변경 가능합니다.
           </p>
         </div>

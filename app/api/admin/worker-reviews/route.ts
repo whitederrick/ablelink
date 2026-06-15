@@ -1,5 +1,5 @@
 // app/api/admin/worker-reviews/route.ts
-// 에이전시/공단 — 매칭된 인력(직무지도원 등) 평점·후기. 매칭(수락된 신청/제안) 이력이 있어야 평가 가능.
+// 위탁기관/공단 — 매칭된 인력(직무지도원 등) 평점·후기. 매칭(수락된 신청/제안) 이력이 있어야 평가 가능.
 // 평가 주체별 1건(upsert) + Worker.ratingAvg/ratingCount 집계 갱신.
 export const runtime = "nodejs";
 

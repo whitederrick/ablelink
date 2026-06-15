@@ -1,4 +1,4 @@
-// 에이전시 관리자: 출근부 수정 요청 승인/반려
+// 위탁기관 관리자: 출근부 수정 요청 승인/반려
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -34,7 +34,7 @@ export async function PATCH(
       return NextResponse.json({ success: false, message: "이미 처리된 요청입니다." }, { status: 409 });
     }
 
-    // 소속 에이전시 소속인지 확인
+    // 소속 위탁기관 소속인지 확인
     const siteAgencyId = request.attendance.site?.agencyId;
     if (!siteAgencyId || siteAgencyId !== scope.agencyId) {
       return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
@@ -51,7 +51,7 @@ export async function PATCH(
 
       // 2. 출근 기록에 제안된 시간 적용
       //    ⚠️ KST 벽시계 → UTC instant 보정(kstWallTimeToInstant). 다른 곳과 동일 출처를 써야 9시간 어긋남 방지.
-      //    승인 = 에이전시 컨펌 → payrollConfirmedAt 설정 → 출근부 급여 게이트 통과(보정대기 해제).
+      //    승인 = 위탁기관 컨펌 → payrollConfirmedAt 설정 → 출근부 급여 게이트 통과(보정대기 해제).
       const updateData: any = { payrollConfirmedAt: now };
       if (request.proposedStart) {
         updateData.startTime = kstWallTimeToInstant(request.attendance.workDate, request.proposedStart);

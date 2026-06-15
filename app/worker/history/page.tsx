@@ -124,7 +124,7 @@ export default function HistoryPage() {
         <div className="mx-auto max-w-md space-y-4 p-4">
           <div className="rounded-2xl border border-slate-100 bg-white p-4">
             {[
-              { label: "소속 에이전시", value: selectedPay.agencyName },
+              { label: "소속 위탁기관", value: selectedPay.agencyName },
               { label: "지급 기간",    value: selectedPay.yearMonth },
               { label: "확정일",      value: selectedPay.finalizedAt ? new Date(selectedPay.finalizedAt).toLocaleDateString("ko-KR") : "-" },
             ].map(({ label, value }) => (
@@ -327,7 +327,7 @@ export default function HistoryPage() {
           ) : payItems.length === 0 ? (
             <div className="rounded-3xl border border-slate-100 bg-white py-12 text-center">
               <p className="text-sm font-semibold text-slate-400">확정된 급여명세가 없습니다.</p>
-              <p className="mt-1 text-xs font-semibold text-slate-300">에이전시에서 급여를 확정하면 여기서 확인할 수 있어요.</p>
+              <p className="mt-1 text-xs font-semibold text-slate-300">위탁기관에서 급여를 확정하면 여기서 확인할 수 있어요.</p>
             </div>
           ) : (
             <div className="space-y-2.5">

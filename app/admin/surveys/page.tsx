@@ -67,7 +67,7 @@ export default function AdminSurveysPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="직무지도원 만족도 평가 결과" sub="모든 에이전시의 직무지도원 만족도 평가 결과를 조회하고, 에이전시에 전달할 수 있습니다." />
+      <PageHeader title="직무지도원 만족도 평가 결과" sub="모든 위탁기관의 직무지도원 만족도 평가 결과를 조회하고, 위탁기관에 전달할 수 있습니다." />
 
       <StatCardRow
         cols={3}
@@ -81,7 +81,7 @@ export default function AdminSurveysPage() {
       <ListToolbar
         query={query}
         onQueryChange={setQuery}
-        placeholder="에이전시·직무지도원·사업체 검색"
+        placeholder="위탁기관·직무지도원·사업체 검색"
         filters={filters}
         selected={statusFilter}
         onToggleFilter={toggleStatus}
@@ -89,7 +89,7 @@ export default function AdminSurveysPage() {
 
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
-          <thead><tr>{["에이전시", "직무지도원", "사업체/담당자", "상태", "종합", "전달", "응답일"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{["위탁기관", "직무지도원", "사업체/담당자", "상태", "종합", "전달", "응답일"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
           <tbody>
             {loading ? <tr><td colSpan={7} className={T.tdCenter}>로딩 중...</td></tr>
             : filtered.length === 0 ? <tr><td colSpan={7} className={T.tdCenter}>{items.length === 0 ? "조사 결과가 없습니다." : "조건에 맞는 결과가 없습니다."}</td></tr>

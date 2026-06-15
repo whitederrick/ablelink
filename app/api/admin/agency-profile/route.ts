@@ -1,5 +1,5 @@
 // app/api/admin/agency-profile/route.ts
-// 매니저 소속 에이전시 기본 정보 (계약서 사업주 자동채움 등). GET 조회 + PATCH 편집(매니저 셀프).
+// 매니저 소속 위탁기관 기본 정보 (계약서 사업주 자동채움 등). GET 조회 + PATCH 편집(매니저 셀프).
 
 export const runtime = "nodejs";
 
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
       where: { id: scope.agencyId },
       select: { name: true, phoneNumber: true, address: true, businessNumber: true, representativeName: true, representativeSignatureUrl: true, govContactEmail: true, govContactName: true },
     });
-    if (!a) return NextResponse.json({ success: false, message: "에이전시를 찾을 수 없습니다." }, { status: 404 });
+    if (!a) return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
     return NextResponse.json({
       success: true,
       data: {

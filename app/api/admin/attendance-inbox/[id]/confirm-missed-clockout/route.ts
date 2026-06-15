@@ -1,5 +1,5 @@
 // app/api/admin/attendance-inbox/[id]/confirm-missed-clockout/route.ts
-// 에이전시 매니저: '퇴근 미실행'(직무지도원이 끝내 늦은 퇴근을 처리하지 않은 보정대기 건)을
+// 위탁기관 매니저: '퇴근 미실행'(직무지도원이 끝내 늦은 퇴근을 처리하지 않은 보정대기 건)을
 // 표준 퇴근시각으로 확정하는 폴백. 매니저 책임 확정이므로 isManagerFinalClosed로 잠근다.
 
 export const runtime = "nodejs";
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           workerId: att.workerId,
           agencyId: scope.agencyId,
           title: "퇴근 미실행 확정 안내",
-          body: `${att.workDate} 퇴근 미실행 건이 에이전시 관리자에 의해 표준 퇴근시각으로 확정되었습니다.`,
+          body: `${att.workDate} 퇴근 미실행 건이 위탁기관 관리자에 의해 표준 퇴근시각으로 확정되었습니다.`,
           type: "INFO",
         },
       });

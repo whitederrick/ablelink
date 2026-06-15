@@ -4,7 +4,7 @@ import { ArrowRight, Building2, CreditCard, FileText, MapPin, Sparkles, Users } 
 
 export const metadata: Metadata = {
   title: "Able-Link — 장애인 직무지도원 관리 서비스",
-  description: "직무지도원과 에이전시를 위한 스마트 업무 관리 플랫폼",
+  description: "직무지도원과 위탁기관를 위한 스마트 업무 관리 플랫폼",
 };
 
 const FEATURES = [
@@ -33,7 +33,7 @@ export default function LandingPage() {
             </div>
           </div>
           <p className="text-base font-semibold leading-7 text-slate-500">
-            직무지도원과 에이전시를 위한<br />스마트 업무 관리 플랫폼입니다.
+            직무지도원과 위탁기관를 위한<br />스마트 업무 관리 플랫폼입니다.
           </p>
         </div>
 
@@ -60,7 +60,7 @@ export default function LandingPage() {
             <span className="flex items-center gap-3">
               <Building2 className="h-5 w-5 text-sky-500" aria-hidden="true" />
               <span>
-                <span className="block text-sm font-black">에이전시 관리자</span>
+                <span className="block text-sm font-black">위탁기관 관리자</span>
                 <span className="block text-xs font-semibold text-slate-400">운영·통계·문서 관리</span>
               </span>
             </span>

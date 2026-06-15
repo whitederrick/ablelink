@@ -240,7 +240,7 @@ export default function AdminSiteNewPage() {
 
         <div className={T.card}>
           <p className="mb-1 text-sm font-black text-slate-900">GPS 출퇴근 허용 범위 *</p>
-          <p className="mb-3 text-xs font-semibold text-slate-400">범위를 벗어나면 에이전시 승인이 필요합니다.</p>
+          <p className="mb-3 text-xs font-semibold text-slate-400">범위를 벗어나면 위탁기관 승인이 필요합니다.</p>
           <div className="flex flex-wrap gap-2 mb-3">
             {[50, 100, 150, 200, 300, 500].map(v => (
               <button

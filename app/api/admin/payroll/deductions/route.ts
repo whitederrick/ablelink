@@ -1,5 +1,5 @@
 // app/api/admin/payroll/deductions/route.ts
-// 에이전시 커스텀 공제 항목 CRUD
+// 위탁기관 커스텀 공제 항목 CRUD
 
 export const runtime = "nodejs";
 
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const scope = await requireManagerSession(req);
     const agencyId = scope.agencyId;
     if (!agencyId) {
-      return NextResponse.json({ success: false, message: "에이전시 정보 없음" }, { status: 403 });
+      return NextResponse.json({ success: false, message: "위탁기관 정보 없음" }, { status: 403 });
     }
 
     const deductions = await prisma.agencyDeduction.findMany({
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     const scope = await requireManagerSession(req);
     const agencyId = scope.agencyId;
     if (!agencyId) {
-      return NextResponse.json({ success: false, message: "에이전시 정보 없음" }, { status: 403 });
+      return NextResponse.json({ success: false, message: "위탁기관 정보 없음" }, { status: 403 });
     }
 
     const body = await req.json();

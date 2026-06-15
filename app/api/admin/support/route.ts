@@ -1,5 +1,5 @@
 // 지원 요청 채널
-// GET  — ADMIN: 전체 목록 | MANAGER: 자기 에이전시 목록
+// GET  — ADMIN: 전체 목록 | MANAGER: 자기 위탁기관 목록
 // POST — MANAGER 전용: 티켓 생성
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 
     const where: any = {};
     if (status && ["OPEN","REPLIED","CLOSED"].includes(status)) where.status = status;
-    // MANAGER는 자기 에이전시 티켓만, ADMIN은 전체
+    // MANAGER는 자기 위탁기관 티켓만, ADMIN은 전체
     if (session.kind === "manager") where.agencyId = session.agencyId;
 
     const tickets = await prisma.supportTicket.findMany({

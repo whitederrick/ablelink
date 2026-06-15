@@ -1,5 +1,5 @@
 // app/api/admin/payroll/items/[itemId]/payslip/route.ts
-// GET: 급여명세서 PDF 발급(운영자/매니저). 소속 에이전시 항목만.
+// GET: 급여명세서 PDF 발급(운영자/매니저). 소속 위탁기관 항목만.
 
 export const runtime = "nodejs";
 

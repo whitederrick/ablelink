@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 에이전시 관리자 서명은 관리자가 명시적으로 서명 후 첨부 — 여기서는 자동 삽입 안 함
+    // 위탁기관 관리자 서명은 관리자가 명시적으로 서명 후 첨부 — 여기서는 자동 삽입 안 함
     const [workerImg, companyImg] = await Promise.all([
       toBase64DataUri(user?.signatureUrl),
       toBase64DataUri(companyManagerSignatureUrl),

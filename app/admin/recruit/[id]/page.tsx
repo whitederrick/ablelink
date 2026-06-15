@@ -1,6 +1,6 @@
 "use client";
 
-// 직무지도 매칭 — 공고 신청자 목록 + 수락/반려 (에이전시 매니저)
+// 직무지도 매칭 — 공고 신청자 목록 + 수락/반려 (위탁기관 매니저)
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { T } from "../../_styles";

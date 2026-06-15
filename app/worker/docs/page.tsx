@@ -189,7 +189,7 @@ function DocsContent() {
     }
   }
 
-  // 에이전시에 최종 제출(인앱) — 선택 문서를 기간 묶음으로 제출. 기존 이메일 발송과 별개.
+  // 위탁기관에 최종 제출(인앱) — 선택 문서를 기간 묶음으로 제출. 기존 이메일 발송과 별개.
   async function submitDocs() {
     const checkedDocs = ALL_DOC_TYPES.filter(d => activeDocIds.includes(d.id) && docStates[d.id].checked);
     if (checkedDocs.length === 0) { alert("제출할 문서를 선택해주세요."); return; }
@@ -205,7 +205,7 @@ function DocsContent() {
         ? docStates[d.id].traineeIds.map(tid => ({ docType: d.id, traineeId: tid }))
         : [{ docType: d.id, traineeId: undefined as string | undefined }]
     );
-    if (!confirm(`선택한 문서 ${documents.length}건을 에이전시에 최종 제출할까요?\n제출하면 담당 매니저가 확인·서명합니다. (수정 후 다시 제출하면 새 버전으로 관리됩니다)`)) return;
+    if (!confirm(`선택한 문서 ${documents.length}건을 위탁기관에 최종 제출할까요?\n제출하면 담당 매니저가 확인·서명합니다. (수정 후 다시 제출하면 새 버전으로 관리됩니다)`)) return;
     setSubmitLoading(true);
     try {
       const res = await fetch("/api/worker/docs/submit", {
@@ -214,7 +214,7 @@ function DocsContent() {
         body: JSON.stringify({ periodStart, periodEnd, documents, companyManagerSignToken: signToken || undefined }),
       });
       const data = await res.json();
-      if (data.success) alert(`${data.submitted}건을 에이전시에 제출했습니다. 담당 매니저에게 알림이 전송되었습니다.`);
+      if (data.success) alert(`${data.submitted}건을 위탁기관에 제출했습니다. 담당 매니저에게 알림이 전송되었습니다.`);
       else alert(data.message || "제출에 실패했습니다.");
     } catch {
       alert("서버와 연결할 수 없습니다.");
@@ -525,7 +525,7 @@ function DocsContent() {
               {submitLoading ? (
                 <><Clock className="h-5 w-5 animate-spin" aria-hidden="true" /> 제출 중...</>
               ) : (
-                <><Check className="h-5 w-5" aria-hidden="true" /> 에이전시에 최종 제출 ({checkedCount}개)</>
+                <><Check className="h-5 w-5" aria-hidden="true" /> 위탁기관에 최종 제출 ({checkedCount}개)</>
               )}
             </button>
             <p className="mx-4 mt-1.5 text-center text-[11px] font-semibold text-slate-400">
@@ -537,7 +537,7 @@ function DocsContent() {
         {/* 안내 */}
         <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4 text-center">
           <p className="text-xs font-semibold leading-relaxed text-slate-400">
-'에이전시에 최종 제출'을 누르면 담당 매니저 앱으로 전달됩니다.<br />
+'위탁기관에 최종 제출'을 누르면 담당 매니저 앱으로 전달됩니다.<br />
             직무지도원 서명은 등록된 서명이 자동 삽입됩니다.
           </p>
         </div>

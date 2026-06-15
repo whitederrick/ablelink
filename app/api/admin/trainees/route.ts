@@ -1,4 +1,4 @@
-// 에이전시 관리자: 훈련생 목록 조회 + 신규 등록
+// 위탁기관 관리자: 훈련생 목록 조회 + 신규 등록
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";

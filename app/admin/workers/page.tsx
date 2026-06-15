@@ -145,7 +145,7 @@ export default function WorkersPage() {
         <ListToolbar
           query={q}
           onQueryChange={setQ}
-          placeholder="이름·전화번호·아이디·에이전시 검색"
+          placeholder="이름·전화번호·아이디·위탁기관 검색"
           filters={[
             { value: "ACTIVE", label: "활성", count: workers.filter(w=>w.status==="ACTIVE").length },
             { value: "PAUSED", label: "일시정지", count: workers.filter(w=>w.status==="PAUSED").length },
@@ -194,7 +194,7 @@ export default function WorkersPage() {
             ):actionType==="plan"?(
               <>
                 <p className="mb-2 text-xs font-semibold leading-relaxed text-slate-400">
-                  에이전시 계약과 무관하게 개인에게 직접 부여하는 등급입니다(초기 영업·특례용). FREE=회수.
+                  위탁기관 계약과 무관하게 개인에게 직접 부여하는 등급입니다(초기 영업·특례용). FREE=회수.
                 </p>
                 <select value={newPlan} onChange={e=>setNewPlan(e.target.value)}
                   className="mb-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none">
@@ -273,7 +273,7 @@ export default function WorkersPage() {
         <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-slate-100 bg-slate-50">
-              {["이름/아이디","연락처","소속 에이전시","현장","상태","작업"].map(h=>(
+              {["이름/아이디","연락처","소속 위탁기관","현장","상태","작업"].map(h=>(
                 <th key={h} className="px-4 py-1.5 text-left text-xs font-black uppercase tracking-wide text-slate-500">{h}</th>
               ))}
             </tr></thead>

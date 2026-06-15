@@ -1,4 +1,4 @@
-// 에이전시 관리자: 직무지도원 일지 내용 열람
+// 위탁기관 관리자: 직무지도원 일지 내용 열람
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const traineeId = searchParams.get("traineeId") ?? "";
     const completed = searchParams.get("completed") ?? ""; // "true"|"false"|""
 
-    // 에이전시 내 배정 목록으로 접근 가능한 workerId 범위 결정
+    // 위탁기관 내 배정 목록으로 접근 가능한 workerId 범위 결정
     const assignments = scope.agencyId
       ? await prisma.siteAssignment.findMany({
           where: { agencyId: scope.agencyId, status: { in: ["ACTIVE","ASSIGNED","CONFIRMED"] } },

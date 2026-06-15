@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, message: "수정 요청이 제출되었습니다. 에이전시 관리자 승인 후 반영됩니다." });
+    return NextResponse.json({ success: true, message: "수정 요청이 제출되었습니다. 위탁기관 관리자 승인 후 반영됩니다." });
   } catch (e: any) {
     console.error("[worker/attendance/edit-request POST]", e);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });

@@ -215,7 +215,7 @@ export default function ManagerSiteDetailPage() {
         <h2 className="mb-1 text-sm font-black text-slate-900">📍 GPS 출퇴근 허용 범위</h2>
         <p className="mb-4 text-sm font-semibold leading-relaxed text-slate-400">
           직무지도원이 현장 반경 내에서 출퇴근 처리할 수 있는 허용 거리입니다.<br />
-          범위를 벗어나면 에이전시 승인이 필요합니다.
+          범위를 벗어나면 위탁기관 승인이 필요합니다.
         </p>
 
         {/* 프리셋 옵션 */}

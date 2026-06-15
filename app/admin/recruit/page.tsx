@@ -1,6 +1,6 @@
 "use client";
 
-// 직무지도 매칭 — 수요측(에이전시 매니저) 내 공고 목록
+// 직무지도 매칭 — 수요측(위탁기관 매니저) 내 공고 목록
 import Link from "next/link";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -82,7 +82,7 @@ export default function ManagerRecruitPage() {
         <ListToolbar
           query={query}
           onQueryChange={setQuery}
-          placeholder="공고·현장·에이전시·지역 검색"
+          placeholder="공고·현장·위탁기관·지역 검색"
           filters={[
             { value: "OPEN", label: "모집중", count: open },
             { value: "CLOSED", label: "마감", count: posts.length - open },
@@ -97,7 +97,7 @@ export default function ManagerRecruitPage() {
           <thead>
             <tr>
               <th className={T.th}>공고</th>
-              <th className={T.th}>출처(에이전시)</th>
+              <th className={T.th}>출처(위탁기관)</th>
               <th className={T.th}>직종</th>
               <th className={T.th}>지역</th>
               <th className={T.th}>모집</th>

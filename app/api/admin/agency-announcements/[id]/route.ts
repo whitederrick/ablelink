@@ -1,4 +1,4 @@
-// 에이전시 공지 게시판 — 항목 삭제/고정 토글 (본인 에이전시만).
+// 위탁기관 공지 게시판 — 항목 삭제/고정 토글 (본인 위탁기관만).
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";

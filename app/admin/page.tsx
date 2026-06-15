@@ -15,7 +15,7 @@ interface SystemStats {
 
 // 통계 카드 → 해당 목록 화면으로 이동
 const STAT_CARDS = [
-  { key: "agencyCount",          icon: Building2,  label: "에이전시",   href: "/admin/agencies", color: "text-violet-600 bg-violet-50" },
+  { key: "agencyCount",          icon: Building2,  label: "위탁기관",   href: "/admin/agencies", color: "text-violet-600 bg-violet-50" },
   { key: "workerCount",          icon: Users,      label: "직무지도원", href: "/admin/workers",  color: "text-sky-600 bg-sky-50" },
   { key: "siteCount",            icon: MapPin,     label: "현장(Site)", href: "/admin/sites",    color: "text-emerald-600 bg-emerald-50" },
   { key: "traineeCount",         icon: Users,      label: "훈련생",     href: "/admin/sites",    color: "text-amber-600 bg-amber-50" },
@@ -24,13 +24,13 @@ const STAT_CARDS = [
 
 // 주요 메뉴 바로가기
 const QUICK_LINKS = [
-  { href: "/admin/agencies",                label: "에이전시 관리",      desc: "에이전시 생성·플랜·한도",        icon: Building2 },
-  { href: "/admin/manager-signup-requests", label: "에이전시 관리자 관리", desc: "가입 신청 검토·승인",            icon: UserPlus },
+  { href: "/admin/agencies",                label: "위탁기관 관리",      desc: "위탁기관 생성·플랜·한도",        icon: Building2 },
+  { href: "/admin/manager-signup-requests", label: "위탁기관 관리자 관리", desc: "가입 신청 검토·승인",            icon: UserPlus },
   { href: "/admin/admins",                  label: "시스템 운영자 관리",  desc: "운영자·관리자 계정",             icon: UserCog },
   { href: "/admin/talent",                  label: "인재풀 관리",        desc: "구직 직무지도원·공고·자격검증",   icon: Sparkles },
   { href: "/admin/billing",                 label: "구독/사용량 현황",    desc: "결제·구독·AI 사용량",            icon: CreditCard },
   { href: "/admin/announcements",           label: "시스템 공지",        desc: "관리자·전체 사용자 공지 발송",    icon: Bell },
-  { href: "/admin/attendances",             label: "근태 현황·교정",     desc: "전체 에이전시 근태 조회·교정",    icon: ClipboardCheck },
+  { href: "/admin/attendances",             label: "근태 현황·교정",     desc: "전체 위탁기관 근태 조회·교정",    icon: ClipboardCheck },
   { href: "/admin/settings",                label: "시스템 설정",        desc: "운영 설정값·간이세액표·카테고리",  icon: Settings },
 ];
 

@@ -27,14 +27,14 @@ export async function POST(req: NextRequest) {
     const userBigId = parseBigInt(workerId);
     if (!userBigId) return NextResponse.json({ success: false, message: "잘못된 userId입니다." }, { status: 400 });
 
-    // 해당 직무지도원이 자기 에이전시 소속인지 확인
-    // assignmentId로 스코프를 제한해 다중배정 시 타 에이전시 레코드 침범 방지
+    // 해당 직무지도원이 자기 위탁기관 소속인지 확인
+    // assignmentId로 스코프를 제한해 다중배정 시 타 위탁기관 레코드 침범 방지
     const assignments = await prisma.siteAssignment.findMany({
       where: { workerId: userBigId, agencyId, status: { in: ["ACTIVE","ASSIGNED","CONFIRMED"] } },
       select: { id: true },
     });
     if (assignments.length === 0)
-      return NextResponse.json({ success: false, message: "해당 직무지도원은 이 에이전시 소속이 아닙니다." }, { status: 403 });
+      return NextResponse.json({ success: false, message: "해당 직무지도원은 이 위탁기관 소속이 아닙니다." }, { status: 403 });
 
     const assignmentIds = assignments.map(a => a.id);
     const { dateFrom, dateTo } = dateRange(yearMonth);
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
         workerId:   userBigId,
         agencyId,
         title:    `[최종 확정] ${yearMonth} 출근기록이 잠겼습니다`,
-        body:     `에이전시 관리자가 ${yearMonth} 출근기록을 최종 확정했습니다. 더 이상 수정이 불가합니다.`,
+        body:     `위탁기관 관리자가 ${yearMonth} 출근기록을 최종 확정했습니다. 더 이상 수정이 불가합니다.`,
         type:     "INFO",
       },
     });
@@ -88,7 +88,7 @@ export async function DELETE(req: NextRequest) {
       select: { id: true },
     });
     if (assignments.length === 0)
-      return NextResponse.json({ success: false, message: "해당 직무지도원은 이 에이전시 소속이 아닙니다." }, { status: 403 });
+      return NextResponse.json({ success: false, message: "해당 직무지도원은 이 위탁기관 소속이 아닙니다." }, { status: 403 });
 
     const assignmentIds = assignments.map(a => a.id);
     const { dateFrom, dateTo } = dateRange(yearMonth);

@@ -81,7 +81,7 @@ export default function LoginClient() {
         </form>
 
         <p className="mt-6 text-center text-xs text-slate-600">
-          에이전시 관리자는{" "}
+          위탁기관 관리자는{" "}
           <a href="/manager/login" className="text-slate-400 underline">여기서 로그인</a>
         </p>
       </div>

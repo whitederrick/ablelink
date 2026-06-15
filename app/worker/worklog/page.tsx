@@ -609,7 +609,7 @@ function WorklogForm() {
                   <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
                   <div>
                     <p className="text-xs font-black text-amber-800">{dayName}요일 (주말)에 일지를 작성합니다</p>
-                    <p className="text-[11px] font-semibold text-amber-700">주말 일지는 에이전시 관리자에게 통보됩니다. 작성 사유를 기재해주세요.</p>
+                    <p className="text-[11px] font-semibold text-amber-700">주말 일지는 위탁기관 관리자에게 통보됩니다. 작성 사유를 기재해주세요.</p>
                     <input
                       type="text"
                       value={weekendReason}

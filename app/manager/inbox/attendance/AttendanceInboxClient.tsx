@@ -66,7 +66,7 @@ type InboxItem = {
   lateMinutes?: number | null;    // 표준 대비 실제 지각(분)
   earlyLeaveMinutes?: number | null; // 표준 대비 실제 조퇴(분)
   payrollConfirmedAt?: string | null;
-  correctionRequestedAt?: string | null; // 에이전시→워커 시각 보정 요청 시각
+  correctionRequestedAt?: string | null; // 위탁기관→워커 시각 보정 요청 시각
   seriousLateMin?: number;        // 심한지각/조퇴 기준(분, 기본 30)
   missedClockOut?: boolean;       // 퇴근 미실행(과거 WORKING·미확정) → 매니저 표준시각 확정 가능
 

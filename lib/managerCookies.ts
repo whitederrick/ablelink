@@ -1,5 +1,5 @@
 // lib/managerCookies.ts
-// 에이전시 관리자 세션 쿠키 관리
+// 위탁기관 관리자 세션 쿠키 관리
 
 import "server-only";
 import { NextResponse } from "next/server";

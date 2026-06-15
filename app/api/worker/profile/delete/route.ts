@@ -1,6 +1,6 @@
 // DELETE /api/worker/profile/delete — 회원 탈퇴
 // 비밀번호 확인 후 PII 익명화 + 세션 쿠키 삭제
-// (출퇴근·일지 기록은 에이전시 운영 기록이므로 보존, 개인정보만 제거)
+// (출퇴근·일지 기록은 위탁기관 운영 기록이므로 보존, 개인정보만 제거)
 
 export const runtime = "nodejs";
 
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     const anonymousId = `deleted_${user.id}_${Date.now()}`;
 
-    // PII 익명화 (출퇴근·일지 기록은 에이전시 운영 기록으로 보존)
+    // PII 익명화 (출퇴근·일지 기록은 위탁기관 운영 기록으로 보존)
     await prisma.worker.update({
       where: { id: user.id },
       data: {

@@ -1,4 +1,4 @@
-// AI 사용량 통계 (월별·에이전시별)
+// AI 사용량 통계 (월별·위탁기관별)
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       _count: { id: true },
     });
 
-    // 에이전시 이름 조회
+    // 위탁기관 이름 조회
     const agencyIds = [...new Set(byAgency.map(r => r.agencyId).filter(Boolean))] as bigint[];
     const agencies  = await prisma.agency.findMany({
       where: { id: { in: agencyIds } },
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       return acc;
     }, {} as Record<string, number>);
 
-    // 에이전시별 집계
+    // 위탁기관별 집계
     const perAgency = byAgency.reduce((acc, r) => {
       const key = r.agencyId?.toString() ?? "unknown";
       if (!acc[key]) acc[key] = { name: agencyMap.get(key) ?? "알 수 없음", calls: {} };

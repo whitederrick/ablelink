@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const q = (searchParams.get("q") || "").trim();
     const region = (searchParams.get("region") || "").trim();
 
-    // 노출 게이트: 운영자 공고(전체공개) OR 배정 이력 에이전시 공고
+    // 노출 게이트: 운영자 공고(전체공개) OR 배정 이력 위탁기관 공고
     const agencyIds = await getWorkerAgencyIds(workerId);
     const visibilityOr = recruitVisibilityOr(agencyIds);
 

@@ -1,5 +1,5 @@
 // app/api/admin/recruit-posts/[id]/route.ts
-// 공고 수정(마감 등)·삭제 — 본인(에이전시/운영자) 소유만
+// 공고 수정(마감 등)·삭제 — 본인(위탁기관/운영자) 소유만
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";

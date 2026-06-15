@@ -92,7 +92,7 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<{ day: number; data: DayData } | null>(null);
 
-  // 에이전시 변경 요청
+  // 위탁기관 변경 요청
   const [pendingReqs, setPendingReqs] = useState<HolidayReqItem[]>([]);
   const [respondingId, setRespondingId] = useState<string | null>(null);
 
@@ -294,11 +294,11 @@ export default function CalendarPage() {
           </button>
         </div>
 
-        {/* 에이전시 휴무일 변경 요청 배너 */}
+        {/* 위탁기관 휴무일 변경 요청 배너 */}
         {pendingReqs.length > 0 && (
           <div className="mx-4 mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <p className="mb-2 text-sm font-black text-amber-800">
-              에이전시 변경 요청 {pendingReqs.length}건 — 확인이 필요합니다
+              위탁기관 변경 요청 {pendingReqs.length}건 — 확인이 필요합니다
             </p>
             <div className="space-y-2">
               {pendingReqs.map(req => (

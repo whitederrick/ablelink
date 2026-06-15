@@ -42,10 +42,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "제목과 내용은 필수입니다." }, { status: 400 });
 
     const noticeType = ["INFO","MAINTENANCE","URGENT"].includes(type) ? type : "INFO";
-    // 대상: MANAGERS=에이전시 관리자만(기본, 직무지도원 미발송) | ALL=관리자+전체 직무지도원
+    // 대상: MANAGERS=위탁기관 관리자만(기본, 직무지도원 미발송) | ALL=관리자+전체 직무지도원
     const toAll = audience === "ALL";
 
-    // 전체 발송일 때만 활성 에이전시 직무지도원에게 WorkerNotice 생성(중복 제거)
+    // 전체 발송일 때만 활성 위탁기관 직무지도원에게 WorkerNotice 생성(중복 제거)
     let targets: { workerId: bigint; agencyId: bigint }[] = [];
     if (toAll) {
       const grouped = await prisma.siteAssignment.groupBy({
