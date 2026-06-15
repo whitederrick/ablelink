@@ -11,7 +11,7 @@ import { AssignStatus } from "@prisma/client";
 
 const ACTIVE_ASSIGN: AssignStatus[] = [AssignStatus.ACTIVE, AssignStatus.ASSIGNED, AssignStatus.CONFIRMED];
 
-// 자기 에이전시 소속(배정 이력) 직무지도원인지 확인
+// 자기 위탁기관 소속(배정 이력) 직무지도원인지 확인
 async function assertAgencyWorker(workerId: bigint, agencyId: bigint) {
   const worker = await prisma.worker.findFirst({
     where: { id: workerId, assignments: { some: { site: { agencyId } } } },
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!w) return NextResponse.json({ success: false, message: "직무지도원을 찾을 수 없습니다." }, { status: 404 });
     const passbookUrl = await resolvePassbookUrl(w.passbookImageUrl ?? null);
 
-    // 계약(배정) 이력 — 본 에이전시 현장만, 최신순
+    // 계약(배정) 이력 — 본 위탁기관 현장만, 최신순
     const assignments = await prisma.siteAssignment.findMany({
       where: { workerId, site: { agencyId } },
       orderBy: { startDate: "desc" },
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       orderBy: { createdAt: "desc" },
       select: {
         id: true, siteName: true, status: true, overallScore: true, comment: true,
-        sharedWithAgency: true, respondedAt: true, createdAt: true,
+        scores: true, sharedWithAgency: true, respondedAt: true, createdAt: true,
       },
     });
 
@@ -97,6 +97,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           sharedWithAgency: s.sharedWithAgency,
           overallScore: s.sharedWithAgency ? s.overallScore : null,
           comment: s.sharedWithAgency ? s.comment : null,
+          scores: s.sharedWithAgency ? (s.scores ?? null) : null,
         })),
       },
     });

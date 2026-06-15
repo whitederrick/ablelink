@@ -21,6 +21,7 @@ type AssignmentRow = {
 type SurveyRow = {
   id: string; siteName: string | null; status: string; respondedAt: string | null;
   createdAt: string; sharedWithAgency: boolean; overallScore: number | null; comment: string | null;
+  scores: Record<string, number> | null;
 };
 type Detail = { account: Account; assignments: AssignmentRow[]; surveys: SurveyRow[] };
 
@@ -41,10 +42,96 @@ const SURVEY_STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   EXPIRED:   { label: "만료",      cls: "bg-slate-100 text-slate-500" },
   CANCELLED: { label: "취소",      cls: "bg-slate-100 text-slate-500" },
 };
+// 만족도 세부 평가 항목(각 1~5)
+const SCORE_LABEL: Record<string, string> = {
+  professionalism: "전문성", diligence: "성실성", communication: "소통", support: "지원",
+};
 
 function fmtDate(iso: string) { return iso.slice(0, 10); }
 function fmtPeriod(start: string, end: string | null) {
   return `${fmtDate(start)} ~ ${end ? fmtDate(end) : "무기한"}`;
+}
+
+const PAGE_SIZE = 3; // 과거 계약 이력·평가 결과 한 화면 노출 개수
+
+// 모달 내 경량 페이저 — 페이지가 2개 이상일 때만 표시.
+function Pager({ page, pageCount, onChange }: { page: number; pageCount: number; onChange: (p: number) => void }) {
+  if (pageCount <= 1) return null;
+  return (
+    <div className="flex items-center justify-center gap-2 pt-2">
+      <button onClick={() => onChange(page - 1)} disabled={page === 0}
+        className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40">이전</button>
+      <span className="text-xs font-semibold text-slate-400">{page + 1} / {pageCount}</span>
+      <button onClick={() => onChange(page + 1)} disabled={page >= pageCount - 1}
+        className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40">다음</button>
+    </div>
+  );
+}
+
+// 만족도 평가 상세 — 목록 항목 클릭 시 뜨는 서브 모달(상위 모달 위에 표시).
+function SurveyDetailModal({ survey, onClose }: { survey: SurveyRow; onClose: () => void }) {
+  const st = SURVEY_STATUS_LABEL[survey.status] ?? { label: survey.status, cls: "bg-slate-100 text-slate-500" };
+  const scoreEntries = survey.scores
+    ? Object.entries(survey.scores).filter(([k]) => SCORE_LABEL[k])
+    : [];
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4"
+      onClick={e => { e.stopPropagation(); onClose(); }}>
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-black text-slate-900">만족도 평가 상세</h3>
+            <p className="mt-0.5 text-[13px] font-semibold text-slate-400">
+              {survey.siteName || "현장 미지정"}
+              {survey.respondedAt ? ` · 응답 ${fmtDate(survey.respondedAt)}` : ""}
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="space-y-4">
+          {/* 종합 점수·상태 */}
+          <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+            <span className="text-sm font-semibold text-slate-500">종합 만족도</span>
+            <div className="flex items-center gap-2">
+              {survey.overallScore != null
+                ? <span className="text-lg font-black text-amber-500">★ {survey.overallScore.toFixed(1)}</span>
+                : <span className="text-sm font-semibold text-slate-400">미전달</span>}
+              <span className={`${T.badge} ${st.cls}`}>{st.label}</span>
+            </div>
+          </div>
+
+          {/* 세부 항목 점수 */}
+          {scoreEntries.length > 0 && (
+            <div className="space-y-1.5">
+              {scoreEntries.map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
+                  <span className="text-sm font-semibold text-slate-600">{SCORE_LABEL[k]}</span>
+                  <span className="text-sm font-black text-amber-500">★ {Number(v).toFixed(1)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 코멘트 */}
+          <div>
+            <p className="mb-1 text-xs font-black text-slate-700">코멘트</p>
+            {survey.comment
+              ? <p className="whitespace-pre-line rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-600">{survey.comment}</p>
+              : <p className="text-sm font-semibold text-slate-300">작성된 코멘트가 없습니다.</p>}
+          </div>
+
+          {survey.status === "RESPONDED" && survey.overallScore == null && (
+            <p className="text-xs font-semibold text-slate-400">운영자 전달 후 점수·코멘트가 표시됩니다.</p>
+          )}
+        </div>
+
+        <div className="mt-5 flex justify-end">
+          <button onClick={onClose} className={T.btnSecondary}>닫기</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }: {
@@ -62,6 +149,11 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
   const [accountHolder, setAccountHolder] = useState("");
   const [resetPw, setResetPw] = useState(false);
   const [tempPw, setTempPw] = useState<string | null>(null);
+
+  // 과거 계약 이력·평가 결과 페이지(0-base)
+  const [pastPage, setPastPage] = useState(0);
+  const [surveyPage, setSurveyPage] = useState(0);
+  const [surveyDetail, setSurveyDetail] = useState<SurveyRow | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -116,6 +208,12 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
   const acc = detail?.account;
   const current = detail?.assignments.filter(a => a.active) ?? [];
   const past = detail?.assignments.filter(a => !a.active) ?? [];
+  const surveys = detail?.surveys ?? [];
+
+  const pastPageCount = Math.ceil(past.length / PAGE_SIZE);
+  const pastSlice = past.slice(pastPage * PAGE_SIZE, pastPage * PAGE_SIZE + PAGE_SIZE);
+  const surveyPageCount = Math.ceil(surveys.length / PAGE_SIZE);
+  const surveySlice = surveys.slice(surveyPage * PAGE_SIZE, surveyPage * PAGE_SIZE + PAGE_SIZE);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={onClose}>
@@ -151,7 +249,7 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
           <div className="flex h-60 items-center justify-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" /></div>
         ) : (
           <>
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-[40fr_60fr]">
               {/* 좌: 직무지도원 정보(편집) */}
               <div className="space-y-4">
                 <div className={T.card}>
@@ -207,26 +305,24 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
                 </div>
               </div>
 
-              {/* 우: 계약 이력 + 평가 */}
-              <div className="space-y-4">
+              {/* 우: 계약 이력 + 평가 — 좌측 전체 높이에 맞춰 3개 박스 균등 분배 */}
+              <div className="flex h-full flex-col gap-4">
                 {/* 현재 계약 */}
-                <div className={T.card}>
+                <div className={`${T.card} flex flex-col`}>
                   <h3 className="mb-3 text-sm font-black text-slate-900">현재 계약</h3>
                   {current.length === 0 ? (
                     <p className="py-2 text-sm font-semibold text-slate-300">진행 중인 계약이 없습니다.</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="flex-1 space-y-1.5">
                       {current.map(a => (
-                        <div key={a.id} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-black text-slate-900">{a.siteName}</span>
-                            <span className={`${T.badge} bg-sky-50 text-sky-600`}>진행 중</span>
-                          </div>
-                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                        <div key={a.id} className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-1">
+                          <span className="truncate font-black text-slate-900">{a.siteName}</span>
+                          <span className="flex-shrink-0 text-xs font-semibold text-slate-500">
                             {fmtPeriod(a.startDate, a.endDate)}
                             {a.workType ? ` · ${WORK_TYPE_LABEL[a.workType] ?? a.workType}` : ""}
                             {` · ${SERVICE_STEP_LABEL[a.serviceStep] ?? a.serviceStep}`}
-                          </p>
+                          </span>
+                          <span className={`${T.badge} ml-auto flex-shrink-0 bg-sky-50 text-sky-600`}>진행 중</span>
                         </div>
                       ))}
                     </div>
@@ -234,53 +330,53 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
                 </div>
 
                 {/* 과거 계약 이력 */}
-                <div className={T.card}>
+                <div className={`${T.card} flex flex-1 flex-col`}>
                   <h3 className="mb-3 text-sm font-black text-slate-900">과거 계약 이력</h3>
                   {past.length === 0 ? (
                     <p className="py-2 text-sm font-semibold text-slate-300">과거 계약 이력이 없습니다.</p>
                   ) : (
-                    <div className="space-y-2">
-                      {past.map(a => (
-                        <div key={a.id} className="flex items-center justify-between gap-2 border-b border-slate-50 py-2 last:border-b-0">
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold text-slate-800">{a.siteName}</p>
-                            <p className="text-xs font-semibold text-slate-400">{fmtPeriod(a.startDate, a.endDate)}</p>
+                    <>
+                      <div className="flex-1 space-y-1.5">
+                        {pastSlice.map(a => (
+                          <div key={a.id} className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-1">
+                            <span className="truncate font-semibold text-slate-800">{a.siteName}</span>
+                            <span className="flex-shrink-0 text-xs font-semibold text-slate-400">{fmtPeriod(a.startDate, a.endDate)}</span>
+                            <span className={`${T.badge} ml-auto flex-shrink-0 bg-slate-100 text-slate-500`}>종료</span>
                           </div>
-                          <span className={`${T.badge} bg-slate-100 text-slate-500`}>종료</span>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                      <Pager page={pastPage} pageCount={pastPageCount} onChange={setPastPage} />
+                    </>
                   )}
                 </div>
 
                 {/* 평가 결과 */}
-                <div className={T.card}>
+                <div className={`${T.card} flex flex-1 flex-col`}>
                   <h3 className="mb-3 text-sm font-black text-slate-900">만족도 평가 결과</h3>
-                  {detail.surveys.length === 0 ? (
+                  {surveys.length === 0 ? (
                     <p className="py-2 text-sm font-semibold text-slate-300">평가 이력이 없습니다.</p>
                   ) : (
-                    <div className="space-y-2">
-                      {detail.surveys.map(s => {
+                    <>
+                    <div className="flex-1 space-y-1.5">
+                      {surveySlice.map(s => {
                         const st = SURVEY_STATUS_LABEL[s.status] ?? { label: s.status, cls: "bg-slate-100 text-slate-500" };
                         return (
-                          <div key={s.id} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="truncate text-sm font-bold text-slate-700">{s.siteName || "현장 미지정"}</span>
-                              <div className="flex flex-shrink-0 items-center gap-1.5">
-                                {s.overallScore != null && (
-                                  <span className="text-sm font-black text-amber-500">★ {s.overallScore.toFixed(1)}</span>
-                                )}
-                                <span className={`${T.badge} ${st.cls}`}>{st.label}</span>
-                              </div>
-                            </div>
-                            {s.status === "RESPONDED" && s.overallScore == null && (
-                              <p className="mt-1 text-xs font-semibold text-slate-400">운영자 전달 후 결과가 표시됩니다.</p>
-                            )}
-                            {s.comment && <p className="mt-1 whitespace-pre-line text-xs font-semibold text-slate-500">{s.comment}</p>}
-                          </div>
+                          <button key={s.id} onClick={() => setSurveyDetail(s)}
+                            className="flex w-full items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-1 text-left transition hover:bg-slate-100">
+                            <span className="truncate text-sm font-bold text-slate-700">{s.siteName || "현장 미지정"}</span>
+                            <span className="flex-shrink-0 text-xs font-semibold text-slate-400">{s.respondedAt ? fmtDate(s.respondedAt) : "-"}</span>
+                            <span className="ml-auto flex flex-shrink-0 items-center gap-1.5">
+                              {s.overallScore != null && (
+                                <span className="text-sm font-black text-amber-500">★ {s.overallScore.toFixed(1)}</span>
+                              )}
+                              <span className={`${T.badge} ${st.cls}`}>{st.label}</span>
+                            </span>
+                          </button>
                         );
                       })}
                     </div>
+                    <Pager page={surveyPage} pageCount={surveyPageCount} onChange={setSurveyPage} />
+                    </>
                   )}
                 </div>
               </div>
@@ -300,6 +396,9 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
           </>
         )}
       </div>
+
+      {/* 만족도 평가 상세(서브 모달) */}
+      {surveyDetail && <SurveyDetailModal survey={surveyDetail} onClose={() => setSurveyDetail(null)} />}
     </div>
   );
 }
