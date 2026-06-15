@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
-import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import ListToolbar from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
-import { StatCardRow } from "../_components/StatCard";
-import { CheckCircle2, Copy, Send, X } from "lucide-react";
+import { CheckCircle2, Copy, Plus, Send, X } from "lucide-react";
 import { workerLabel } from "../_format";
 import { computeWorkTimes } from "@/lib/workSchedule";
 
@@ -43,7 +42,7 @@ interface Worker {
   planType: string;
   status: string;
   createdAt: string;
-  activeAssignment: { siteName: string; agencyName: string; startDate: string; assignmentId?: string; assignStatus?: string; workType?: WorkType; serviceStep?: ServiceStep; adaptationStartDate?: string | null } | null;
+  activeAssignment: { siteName: string; agencyName: string; startDate: string; assignmentId?: string; assignStatus?: string; workType?: WorkType | null; serviceStep?: ServiceStep; adaptationStartDate?: string | null; requestedWorkTypes?: string | null; replyDeadline?: string | null } | null;
 }
 
 const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
@@ -53,15 +52,19 @@ const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
 };
 const PLAN_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   STARTER:  { label: "STARTER",  tone: "sky" },
-  STANDARD: { label: "STANDARD", tone: "violet" },
+  STANDARD: { label: "STANDARD", tone: "amber" },
   PRO:      { label: "PRO",      tone: "emerald" },
 };
 // 배정 파이프라인 상태(assignment-pipeline-design.md): 선정→계약→연결→위치확정→근무
 const ASSIGN_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
+  REQUESTED: { label: "배정 요청 중",   cls: "bg-sky-50 text-sky-600" },
+  ACCEPTED:  { label: "수락·확정 대기", cls: "bg-emerald-50 text-emerald-600" },
   ASSIGNED:  { label: "계약 대기",      cls: "bg-amber-50 text-amber-600" },
   CONFIRMED: { label: "연결·위치 대기", cls: "bg-sky-50 text-sky-600" },
   ACTIVE:    { label: "근무중",         cls: "bg-emerald-50 text-emerald-600" },
 };
+// 근무형태 짧은 라벨(요청 근무형태 목록 표기용)
+const WT_TINY: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "전일", CUSTOM: "직접" };
 const PAGE_SIZE = 10;
 const WORK_TYPE_LABELS: Record<WorkType, string> = {
   AM:       "오전 (09:00~13:00)",
@@ -86,60 +89,205 @@ const WORK_TYPE_DEFAULTS: Record<WorkType, { start: string; end: string }> = {
   CUSTOM:   { start: "09:00", end: "18:00" },
 };
 
-// ── 초대 링크 발송 모달 (멀티/지정) ───────────────────────────────────
-interface Site { id: string; companyName: string; }
-type Recipient = { phone: string; name: string };
-type SentResult = { phone: string; name: string; ok: boolean; code?: string; inviteUrl?: string; error?: string };
+// ── 배정 요청 모달 ───────────────────────────────────────────────────
+// 신규/기존 현장에 직무지도원을 배정 요청. 후보는 ①위탁기관과 계약 이력 있는 직무지도원
+// (상태·계약기간 표시) 선택 또는 ②신규 전화번호 직접 추가. 현장 선택 필수.
+interface Site { id: string; companyName: string; assignedCount?: number; amCapacity?: number; pmCapacity?: number; fullDayCapacity?: number; }
+interface Candidate {
+  id: string; name: string; phone: string;
+  engaged: boolean; currentStatus: string | null; currentSiteName: string | null;
+  periodStart: string | null; periodEnd: string | null;
+  // 이력 기반 추천(현장 선택 시 계산)
+  experienceCount?: number; sameSite?: boolean; sameBizType?: boolean;
+}
+type Recipient =
+  | { kind: "worker"; workerId: string; name: string; phone: string;
+      engaged: boolean; currentSiteName: string | null; periodStart: string | null; periodEnd: string | null }
+  | { kind: "new"; name: string; phone: string };
+type SentResult = { name: string; phone: string; ok: boolean; kind: "worker" | "new"; code?: string; inviteUrl?: string; error?: string };
 
 const isValidPhone = (p: string) => /^01[0-9]{8,9}$/.test(p.replace(/-/g, "").trim());
+const fmtPhone = (p: string) => p.replace(/-/g, "").replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3");
+const fmtDate = (iso: string | null) => (iso ? iso.slice(0, 10).replace(/-/g, ".") : "");
 
-function InviteModal({ onClose }: { onClose: () => void }) {
-  const [siteId,  setSiteId]  = useState("");
+function InviteModal({ onClose, initialSiteId, initialWorkTypes, initialDeadline }: { onClose: () => void; initialSiteId?: string; initialWorkTypes?: string[]; initialDeadline?: string }) {
+  const [siteId,  setSiteId]  = useState(initialSiteId ?? "");
   const [sites,   setSites]   = useState<Site[]>([]);
-  const [rows,    setRows]    = useState<Recipient[]>([{ phone: "", name: "" }]);
+  const [siteFilter, setSiteFilter] = useState<"all" | "need" | "full">("all");
+  // 요청 근무형태(복수 선택) + 회신 기한 — 이 요청에 속한 모든 후보에 공통 적용
+  const [reqWorkTypes, setReqWorkTypes] = useState<string[]>(initialWorkTypes ?? []);
+  const [replyDeadline, setReplyDeadline] = useState(initialDeadline ?? "");
+
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [candSearch,  setCandSearch]  = useState("");
+  const [onlyUnassigned, setOnlyUnassigned] = useState(false);
+
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [directPhone, setDirectPhone] = useState("");
+  const [directName,  setDirectName]  = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
   const [results, setResults] = useState<SentResult[] | null>(null);
+  // 초기 데이터(현장·후보) 로딩 표시 — 부분 확정 진입 직후 지연 체감 완화
+  const [sitesReady, setSitesReady] = useState(false);
+  const [candsReady, setCandsReady] = useState(false);
+  const initializing = !(sitesReady && candsReady);
+  // 부분 확정 후 진입(현장 프리셀렉트): 현장·요청 근무형태는 확정 단계에서 정해졌으므로 잠금
+  const lockSite = !!initialSiteId;
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  // 이 현장에서 담당자가 탈락(DROPPED)·기한초과(EXPIRED)시킨 이전 후보 — 되살리기 대상
+  const [revivable, setRevivable] = useState<{ assignmentId: string; workerName: string; loginId: string; phone: string; status: string }[]>([]);
+  const [revivedIds, setRevivedIds] = useState<Set<string>>(new Set()); // 되살린(수락 복원) 후보 — 목록엔 남기되 '복원됨'으로 표시
 
   useEffect(() => {
     fetch("/api/admin/sites?pageSize=100")
       .then(r => r.json())
       .then(d => { if (d.success && Array.isArray(d.items)) setSites(d.items); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setSitesReady(true));
   }, []);
 
-  function updateRow(i: number, patch: Partial<Recipient>) {
-    setRows(rs => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-    setError("");
-  }
-  function addRow() { setRows(rs => [...rs, { phone: "", name: "" }]); }
-  function removeRow(i: number) { setRows(rs => (rs.length === 1 ? rs : rs.filter((_, idx) => idx !== i))); }
+  // 현장 선택 시 그 현장 기준으로 후보를 다시 조회(이력 기반 추천·정렬 반영). 되살리기 후에도 재호출(수락 복원분 제외).
+  const loadCandidates = useCallback(() => {
+    const url = siteId ? `/api/admin/workers/candidates?siteId=${siteId}` : "/api/admin/workers/candidates";
+    fetch(url)
+      .then(r => r.json())
+      .then(d => { if (d.success && Array.isArray(d.items)) setCandidates(d.items); })
+      .catch(() => {})
+      .finally(() => setCandsReady(true));
+  }, [siteId]);
+  useEffect(() => { loadCandidates(); }, [loadCandidates]);
 
-  const validRows = rows.filter(r => isValidPhone(r.phone));
+  // 이 현장의 이전 후보(탈락/기한초과) 조회 — 부분 재요청 시 우측에서 되살리기
+  useEffect(() => {
+    if (!siteId) { setRevivable([]); return; }
+    fetch("/api/admin/assignment-requests", { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success) { setRevivable([]); return; }
+        const g = (d.groups ?? []).find((x: any) => String(x.siteId) === String(siteId));
+        setRevivable((g?.candidates ?? []).filter((c: any) => c.status === "DROPPED" || c.status === "EXPIRED"));
+      })
+      .catch(() => setRevivable([]));
+  }, [siteId]);
+
+  // 정원(근무형태별 합) 대비 배정수로 충원 여부 판정. 정원 미설정(0)이면 배정 0=충원필요.
+  const siteCap = (s: Site) => (s.amCapacity ?? 0) + (s.pmCapacity ?? 0) + (s.fullDayCapacity ?? 0);
+  const isUnderstaffed = (s: Site) => {
+    const cap = siteCap(s);
+    const n = s.assignedCount ?? 0;
+    return cap > 0 ? n < cap : n === 0;
+  };
+  const filteredSites = useMemo(() => sites.filter(s => {
+    if (siteFilter === "need") return isUnderstaffed(s);
+    if (siteFilter === "full") return !isUnderstaffed(s);
+    return true;
+  }), [sites, siteFilter]);
+
+  const selectedWorkerIds = new Set(recipients.filter(r => r.kind === "worker").map(r => (r as any).workerId));
+  const selectedPhones = new Set(recipients.map(r => r.phone.replace(/-/g, "").trim()));
+
+  const filteredCandidates = useMemo(() => {
+    const q = candSearch.trim();
+    return candidates.filter(c => {
+      if (selectedWorkerIds.has(c.id)) return false; // 이미 선택됨
+      if (onlyUnassigned && c.engaged) return false; // 미배정만 필터
+      if (!q) return true;
+      return c.name.includes(q) || c.phone.replace(/-/g, "").includes(q.replace(/-/g, ""));
+    });
+  }, [candidates, candSearch, recipients, onlyUnassigned]);
+
+  function addWorker(c: Candidate) {
+    setError("");
+    setRecipients(rs => [...rs, {
+      kind: "worker", workerId: c.id, name: c.name, phone: c.phone,
+      engaged: c.engaged, currentSiteName: c.currentSiteName, periodStart: c.periodStart, periodEnd: c.periodEnd,
+    }]);
+  }
+  function addAllFiltered() {
+    if (filteredCandidates.length === 0) return;
+    setError("");
+    setRecipients(rs => [...rs, ...filteredCandidates.map(c => ({
+      kind: "worker" as const, workerId: c.id, name: c.name, phone: c.phone,
+      engaged: c.engaged, currentSiteName: c.currentSiteName, periodStart: c.periodStart, periodEnd: c.periodEnd,
+    }))]);
+  }
+  function clearRecipients() { setRecipients([]); setError(""); }
+  async function addDirect() {
+    const phone = directPhone.replace(/-/g, "").trim();
+    if (!isValidPhone(phone)) { setError("올바른 휴대전화번호를 입력하세요."); return; }
+    if (selectedPhones.has(phone)) { setError("이미 추가된 전화번호입니다."); return; }
+    setError("");
+    try {
+      // 이미 가입된 직무지도원이면 신규 초대가 아니라 기존 워커 배정 요청으로 추가
+      const res = await fetch(`/api/admin/workers/by-phone?phone=${phone}`);
+      const d = await res.json();
+      if (d.success && d.exists && d.worker) {
+        if (!d.worker.active) { setError("비활성 계정이라 배정 요청할 수 없습니다."); return; }
+        if (selectedWorkerIds.has(d.worker.id)) { setError("이미 추가된 직무지도원입니다."); return; }
+        setRecipients(rs => [...rs, {
+          kind: "worker", workerId: d.worker.id, name: d.worker.name, phone: d.worker.phone,
+          engaged: d.worker.engaged, currentSiteName: d.worker.currentSiteName,
+          periodStart: d.worker.periodStart, periodEnd: d.worker.periodEnd,
+        }]);
+      } else {
+        setRecipients(rs => [...rs, { kind: "new", name: directName.trim(), phone }]);
+      }
+    } catch {
+      // 조회 실패 시 신규로 폴백
+      setRecipients(rs => [...rs, { kind: "new", name: directName.trim(), phone }]);
+    }
+    setDirectPhone(""); setDirectName("");
+  }
+  function removeRecipient(i: number) { setRecipients(rs => rs.filter((_, idx) => idx !== i)); }
+
+  // 되살리기: 탈락/기한초과 후보를 복원(수락했던 건→수락, 미응답→회신 대기). 워커 거절은 대상 아님(목록에 없음).
+  async function revive(assignmentId: string) {
+    setError("");
+    try {
+      const res = await fetch("/api/admin/assignment-requests", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restore", assignmentId }),
+      });
+      const d = await res.json();
+      if (!d.success) { setError(d.message || "상태 변경에 실패했습니다."); return; }
+      // 복원 = 수락(ACCEPTED) 상태로 되돌아감. 목록엔 남기되 '복원됨'으로 표시(담당자 혼동 방지). 좌측 신규후보는 다시 불러 수락분 제외.
+      setRevivedIds(prev => new Set(prev).add(assignmentId));
+      loadCandidates();
+    } catch { setError("서버와 연결할 수 없습니다."); }
+  }
 
   async function handleSend() {
-    // 중복 번호 가드
-    const nums = validRows.map(r => r.phone.replace(/-/g, "").trim());
-    if (new Set(nums).size !== nums.length) { setError("중복된 전화번호가 있습니다."); return; }
-    if (validRows.length === 0) { setError("유효한 휴대전화번호를 1개 이상 입력하세요."); return; }
+    if (!siteId) { setError("배정할 현장을 선택하세요."); return; }
+    if (reqWorkTypes.length === 0) { setError("요청 근무형태를 1개 이상 선택하세요."); return; }
+    if (!replyDeadline) { setError("회신 기한을 입력하세요."); return; }
+    if (recipients.length === 0) { setError("배정할 직무지도원을 1명 이상 선택하거나 추가하세요."); return; }
     setError(""); setLoading(true);
     const out: SentResult[] = [];
-    for (const r of validRows) {
+    for (const r of recipients) {
       try {
-        const res = await fetch("/api/admin/workers/invite", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            phoneNumber: r.phone.replace(/-/g, "").trim(),
-            workerName: r.name.trim() || undefined,
-            siteId: siteId || undefined,
-          }),
-        });
-        const data = await res.json();
-        if (data.success) out.push({ phone: r.phone, name: r.name, ok: true, code: data.invite.code, inviteUrl: data.invite.inviteUrl });
-        else out.push({ phone: r.phone, name: r.name, ok: false, error: data.message });
+        if (r.kind === "worker") {
+          // 기존 워커: 배정 요청(REQUESTED) 생성 — 후보 회신(수락) 후 계약 대기로 진행.
+          const res = await fetch("/api/admin/assignments", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ workerId: r.workerId, siteId, mode: "request", requestedWorkTypes: reqWorkTypes, replyDeadline }),
+          });
+          const data = await res.json();
+          if (data.success) out.push({ name: r.name, phone: r.phone, ok: true, kind: "worker" });
+          else out.push({ name: r.name, phone: r.phone, ok: false, kind: "worker", error: data.message });
+        } else {
+          // 신규 전화번호: 가입 초대 발송
+          const res = await fetch("/api/admin/workers/invite", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phoneNumber: r.phone.replace(/-/g, "").trim(), workerName: r.name.trim() || undefined, siteId }),
+          });
+          const data = await res.json();
+          if (data.success) out.push({ name: r.name, phone: r.phone, ok: true, kind: "new", code: data.invite.code, inviteUrl: data.invite.inviteUrl });
+          else out.push({ name: r.name, phone: r.phone, ok: false, kind: "new", error: data.message });
+        }
       } catch {
-        out.push({ phone: r.phone, name: r.name, ok: false, error: "서버와 연결할 수 없습니다." });
+        out.push({ name: r.name, phone: r.phone, ok: false, kind: r.kind, error: "서버와 연결할 수 없습니다." });
       }
     }
     setResults(out);
@@ -154,44 +302,237 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 
   const okCount = results?.filter(r => r.ok).length ?? 0;
   const failCount = results ? results.length - okCount : 0;
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const REQ_WORK_TYPES: { value: string; label: string }[] = [
+    { value: "AM", label: "오전" },
+    { value: "PM", label: "오후" },
+    { value: "FULL_DAY", label: "전일" },
+  ];
+  function toggleReqWorkType(v: string) {
+    setReqWorkTypes(s => (s.includes(v) ? s.filter(x => x !== v) : [...s, v]));
+    setError("");
+  }
+
+  const SITE_FILTERS: { value: typeof siteFilter; label: string }[] = [
+    { value: "all", label: "전체" },
+    { value: "need", label: "충원 필요" },
+    { value: "full", label: "충원 완료" },
+  ];
 
   return (
     <div className={T.modalOverlay}>
-      <div className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white p-6 shadow-2xl">
+      <div className={`flex w-full flex-col overflow-hidden rounded-3xl bg-white p-6 shadow-2xl ${results ? "max-h-[80vh] max-w-md" : "h-[88vh] max-w-[62rem]"}`}>
         {!results ? (
           <>
-            <h2 className="mb-1 text-base font-black text-slate-900">직무지도원 초대 (멀티·지정)</h2>
-            <p className="mb-4 text-sm font-semibold text-slate-400">후보 1명(지정) 또는 여러 명(멀티)에게 같은 현장으로 초대 링크·인증번호를 발송합니다.</p>
-
-            <div className="mb-4">
-              <label className={T.label}>배정 현장(사업체) (선택)</label>
-              <select value={siteId} onChange={e => setSiteId(e.target.value)} className={`w-full ${T.select}`}>
-                <option value="">현장 미지정</option>
-                {sites.map(s => <option key={s.id} value={s.id}>{s.companyName}</option>)}
-              </select>
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-black text-slate-900">배정 요청</h2>
+                <p className="mt-1 text-sm font-semibold text-slate-400">현장을 선택하고, 배정할 직무지도원을 골라 요청합니다.</p>
+              </div>
+              <button onClick={onClose} className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"><X className="h-5 w-5" /></button>
             </div>
 
-            <label className={T.label}>후보 <span className="font-semibold text-slate-400">(전화번호 필수 · 이름 선택)</span></label>
-            <div className="-mr-1 max-h-[38vh] space-y-2 overflow-y-auto pr-1">
-              {rows.map((r, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="w-5 flex-shrink-0 text-center text-xs font-black text-slate-400">{i + 1}</span>
-                  <input type="tel" placeholder="01012345678" value={r.phone}
-                    onChange={e => updateRow(i, { phone: e.target.value })}
-                    className={`flex-1 ${T.input} ${r.phone && !isValidPhone(r.phone) ? "border-rose-300" : ""}`} />
-                  <input type="text" placeholder="이름(선택)" value={r.name}
-                    onChange={e => updateRow(i, { name: e.target.value })}
-                    className={`w-28 ${T.input}`} />
-                  <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1}
-                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:bg-slate-50 disabled:opacity-30">
-                    <X className="h-4 w-4" />
-                  </button>
+            <div className="-mr-1 flex-1 overflow-y-auto pr-1">
+              {initializing ? (
+                <div className="flex h-full items-center justify-center py-20">
+                  <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
                 </div>
-              ))}
+              ) : (
+              <>
+              {/* 현장 선택(필수) + 필터 — 상단 전체 너비 */}
+              <div className="mb-5">
+                <label className={T.label}>배정 현장(사업체) <span className="font-semibold text-rose-500">*</span></label>
+                {lockSite && <p className="mb-2 text-xs font-semibold text-slate-400">배정 확정 단계에서 선택한 현장으로 고정됩니다.</p>}
+                {!lockSite && (
+                  <div className="mb-2 flex gap-1.5">
+                    {SITE_FILTERS.map(f => (
+                      <button key={f.value} type="button" onClick={() => setSiteFilter(f.value)}
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
+                          siteFilter === f.value ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        }`}>
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <select value={siteId} disabled={lockSite} onChange={e => { setSiteId(e.target.value); setError(""); }}
+                  className={`w-full ${T.select} ${lockSite ? "cursor-not-allowed bg-slate-100 text-slate-500" : ""}`}>
+                  <option value="">현장을 선택하세요</option>
+                  {filteredSites.map(s => {
+                    const cap = siteCap(s);
+                    const n = s.assignedCount ?? 0;
+                    const suffix = cap > 0
+                      ? ` · 배정 ${n}/정원 ${cap}${n < cap ? " (충원 필요)" : " (충원 완료)"}`
+                      : (n > 0 ? ` · 배정 ${n}명` : " · 정원 미설정");
+                    return <option key={s.id} value={s.id}>{s.companyName}{suffix}</option>;
+                  })}
+                </select>
+              </div>
+
+              {/* 요청 근무형태(복수) + 회신 기한 — 이 요청 공통 */}
+              <div className="mb-5 grid grid-cols-2 gap-5">
+                <div>
+                  <label className={T.label}>요청 근무형태 <span className="font-semibold text-rose-500">*</span> <span className="font-semibold text-slate-400">{lockSite ? "(배정 확정 부족분으로 고정)" : "(복수 선택)"}</span></label>
+                  <div className="flex gap-2">
+                    {REQ_WORK_TYPES.map(w => {
+                      const on = reqWorkTypes.includes(w.value);
+                      return (
+                        <button key={w.value} type="button" disabled={lockSite} onClick={() => toggleReqWorkType(w.value)}
+                          className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-bold transition active:scale-95 ${
+                            on ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          } ${lockSite ? "cursor-not-allowed opacity-60 active:scale-100" : ""}`}>
+                          {w.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label className={T.label}>회신 기한 <span className="font-semibold text-rose-500">*</span> <span className="font-semibold text-slate-400">(이후 미회신 자동 탈락)</span></label>
+                  <input type="date" value={replyDeadline} min={todayStr}
+                    onChange={e => { setReplyDeadline(e.target.value); setError(""); }} className={`w-full ${T.input}`} />
+                </div>
+              </div>
+
+              {/* 좌: 후보 + 직접추가 / 우: 배정 대상 */}
+              <div className="grid grid-cols-2 gap-5">
+                {/* 좌측 */}
+                <div className="space-y-4">
+                  {/* 후보 직무지도원(계약 이력) 선택 */}
+                  <div>
+                    <label className={T.label}>직무지도원 후보 <span className="font-semibold text-slate-400">(계약 이력)</span></label>
+                    <div className="flex items-center gap-2">
+                      <input type="text" placeholder="이름 또는 전화번호 검색" value={candSearch}
+                        onChange={e => setCandSearch(e.target.value)} className={`min-w-0 flex-1 ${T.input}`} />
+                      <button type="button" onClick={() => setOnlyUnassigned(v => !v)}
+                        className={`flex-shrink-0 whitespace-nowrap rounded-xl border px-3 py-2 text-xs font-bold transition ${
+                          onlyUnassigned ? "border-slate-950 bg-slate-950 text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                        }`}>미배정</button>
+                      <button type="button" onClick={addAllFiltered} disabled={filteredCandidates.length === 0}
+                        className="flex-shrink-0 whitespace-nowrap rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40">
+                        일괄 등록{filteredCandidates.length > 0 ? ` ${filteredCandidates.length}` : ""}
+                      </button>
+                    </div>
+                    <div className="mt-2 max-h-[30vh] space-y-1.5 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50/60 p-2">
+                      {filteredCandidates.length === 0 ? (
+                        <p className="px-1 py-3 text-center text-sm font-semibold text-slate-300">
+                          {candidates.length === 0 ? "계약 이력이 있는 직무지도원이 없습니다." : "검색 결과가 없습니다."}
+                        </p>
+                      ) : filteredCandidates.map(c => (
+                        <button key={c.id} type="button" onClick={() => addWorker(c)}
+                          className="group flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-slate-950 hover:bg-slate-50">
+                          <div className="min-w-0">
+                            <p className="flex flex-wrap items-center gap-1.5 text-sm font-black text-slate-900">
+                              <span className="truncate">{c.name}</span>
+                              {c.engaged
+                                ? <span className={`${T.badge} shrink-0 bg-emerald-50 text-emerald-600`}>근무중</span>
+                                : <span className={`${T.badge} shrink-0 bg-slate-100 text-slate-500`}>미배정</span>}
+                              {c.sameSite
+                                ? <span className={`${T.badge} shrink-0 bg-sky-50 text-sky-600`}>이 현장 경험</span>
+                                : c.sameBizType
+                                  ? <span className={`${T.badge} shrink-0 bg-teal-50 text-teal-600`}>유사 업종</span>
+                                  : null}
+                            </p>
+                            <p className="mt-0.5 truncate text-xs font-semibold text-slate-400">
+                              {fmtPhone(c.phone)}
+                              {(c.experienceCount ?? 0) > 0 ? ` · 경험 ${c.experienceCount}건` : ""}
+                              {c.engaged ? ` · ${c.currentSiteName ?? "현장"}${c.periodStart ? ` · ${fmtDate(c.periodStart)}~${c.periodEnd ? fmtDate(c.periodEnd) : "무기한"}` : ""}` : ""}
+                            </p>
+                          </div>
+                          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 transition group-hover:border-slate-950 group-hover:text-slate-900"><Plus className="h-4 w-4" /></span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 직접 추가(신규 전화번호) */}
+                  <div>
+                    <label className={T.label}>직접 추가 <span className="font-semibold text-slate-400">(미가입 신규)</span></label>
+                    <div className="flex items-center gap-2">
+                      <input type="tel" placeholder="01012345678" value={directPhone}
+                        onChange={e => setDirectPhone(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") addDirect(); }}
+                        className={`min-w-0 flex-1 ${T.input} ${directPhone && !isValidPhone(directPhone) ? "border-rose-300" : ""}`} />
+                      <input type="text" placeholder="이름(선택)" value={directName}
+                        onChange={e => setDirectName(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") addDirect(); }}
+                        className={`w-24 ${T.input}`} />
+                      <button type="button" onClick={addDirect}
+                        className="flex-shrink-0 rounded-lg bg-slate-950 px-2.5 py-2 text-xs font-black text-white transition hover:bg-slate-800">추가</button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 우측: 이전 후보 되살리기 + 배정 대상 */}
+                <div>
+                  {revivable.length > 0 && (
+                    <div className="mb-4">
+                      <label className={T.label}>이전 후보 <span className="font-semibold text-slate-400">(탈락·기한초과 · 상태 변경 가능)</span></label>
+                      <p className="mb-1.5 text-xs font-semibold text-slate-400">상태 변경을 선택하면 해당 후보자가 기존에 배정 요청을 <span className="font-bold text-emerald-600">수락한 상태로 복원</span>됩니다. 추가 후보자를 선택하려면 좌측에서 검색하여 추가하시면 됩니다.</p>
+                      <div className="max-h-[20vh] space-y-1.5 overflow-y-auto rounded-xl border border-amber-100 bg-amber-50/40 p-2">
+                        {revivable.map(c => {
+                          const revived = revivedIds.has(c.assignmentId);
+                          return (
+                          <div key={c.assignmentId} className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 ${revived ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-white"}`}>
+                            <div className="min-w-0">
+                              <p className="flex items-center gap-1.5 text-sm font-black text-slate-900">
+                                <span className="truncate">{c.workerName} <span className="font-semibold text-slate-400">({c.loginId})</span></span>
+                                {revived
+                                  ? <span className={`${T.badge} shrink-0 bg-emerald-50 text-emerald-600`}>복원됨 · 수락</span>
+                                  : <span className={`${T.badge} shrink-0 bg-slate-100 text-slate-500`}>{c.status === "DROPPED" ? "탈락" : "기한 초과"}</span>}
+                              </p>
+                              <p className="mt-0.5 truncate text-xs font-semibold text-slate-400">{fmtPhone(c.phone)}{revived ? " · 이미 수락한 상태로 확정 대기" : ""}</p>
+                            </div>
+                            {revived
+                              ? <span className="flex-shrink-0 text-xs font-black text-emerald-600">✓ 복원</span>
+                              : <button type="button" onClick={() => revive(c.assignmentId)}
+                                  className="flex-shrink-0 rounded-lg border border-sky-200 bg-white px-3 py-1.5 text-xs font-black text-sky-600 transition hover:bg-sky-50 hover:border-sky-300">상태 변경</button>}
+                          </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <label className={T.label}>배정 대상 <span className="font-semibold text-slate-400">({recipients.length}명)</span></label>
+                    {recipients.length > 0 && (
+                      <button type="button" onClick={clearRecipients}
+                        className="mb-1 text-xs font-bold text-rose-500 transition hover:text-rose-700">일괄 삭제</button>
+                    )}
+                  </div>
+                  <div className="max-h-[44vh] space-y-1.5 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50/60 p-2">
+                    {recipients.length === 0 ? (
+                      <p className="px-1 py-6 text-center text-sm font-semibold text-slate-300">왼쪽에서 직무지도원을 추가하세요.</p>
+                    ) : recipients.map((r, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-1.5 text-sm font-black text-slate-900">
+                            <span className="truncate">{r.name?.trim() || "이름 미입력"}</span>
+                            {r.kind === "worker"
+                              ? (r.engaged
+                                  ? <span className={`${T.badge} shrink-0 bg-emerald-50 text-emerald-600`}>근무중</span>
+                                  : <span className={`${T.badge} shrink-0 bg-slate-100 text-slate-500`}>미배정</span>)
+                              : <span className={`${T.badge} shrink-0 bg-sky-50 text-sky-600`}>신규</span>}
+                          </p>
+                          <p className="mt-0.5 truncate text-xs font-semibold text-slate-400">
+                            {fmtPhone(r.phone)}
+                            {r.kind === "worker" && r.engaged ? ` · ${r.currentSiteName ?? "현장"}${r.periodStart ? ` · ${fmtDate(r.periodStart)}~${r.periodEnd ? fmtDate(r.periodEnd) : "무기한"}` : ""}` : ""}
+                          </p>
+                        </div>
+                        <button type="button" onClick={() => removeRecipient(i)}
+                          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:bg-slate-50">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              </>
+              )}
             </div>
-            <button type="button" onClick={addRow} className="mt-2 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-bold text-slate-500 transition hover:bg-slate-50">
-              + 후보 추가
-            </button>
 
             {error && (
               <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">{error}</div>
@@ -199,54 +540,54 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={onClose} className={T.btnSecondary}>취소</button>
-              <button onClick={handleSend} disabled={loading || validRows.length === 0}
+              <button onClick={handleSend} disabled={loading}
                 className={`${T.btnPrimary} flex items-center gap-1.5`}>
                 <Send className="h-3.5 w-3.5" />
-                {loading ? "발송 중..." : `${validRows.length}명 초대 발송`}
+                {loading ? "요청 중..." : `${recipients.length}명 배정 요청`}
               </button>
             </div>
           </>
         ) : (
           <>
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-lg font-black text-slate-900">배정 요청 완료</p>
+                  <p className="text-sm font-bold text-slate-500">성공 {okCount}명{failCount > 0 ? ` · 실패 ${failCount}명` : ""}</p>
+                </div>
               </div>
-              <div>
-                <p className="font-black text-slate-900">초대 발송 완료</p>
-                <p className="text-xs font-semibold text-slate-400">성공 {okCount}명{failCount > 0 ? ` · 실패 ${failCount}명` : ""}</p>
-              </div>
+              <button onClick={onClose} className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"><X className="h-5 w-5" /></button>
             </div>
 
-            <div className="-mr-1 max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+            <div className="-mr-1 flex-1 min-h-0 space-y-2 overflow-y-auto pr-1">
               {results.map((r, i) => (
                 <div key={i} className={`rounded-xl border p-3 ${r.ok ? "border-slate-200 bg-slate-50" : "border-rose-200 bg-rose-50"}`}>
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-black text-slate-900">
-                      {r.name?.trim() || "이름 미입력"} <span className="font-semibold text-slate-400">{r.phone.replace(/-/g, "").replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3")}</span>
+                    <p className="text-[15px] font-black text-slate-900">
+                      {r.name?.trim() || "이름 미입력"} <span className="font-bold text-slate-500">{fmtPhone(r.phone)}</span>
                     </p>
-                    {!r.ok && <span className="text-xs font-bold text-rose-600">실패</span>}
+                    {!r.ok && <span className="text-sm font-black text-rose-600">실패</span>}
                   </div>
                   {r.ok ? (
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="rounded-lg bg-white px-2 py-1 text-base font-black tracking-[4px] text-slate-900">{r.code}</span>
-                      <button onClick={() => r.inviteUrl && handleCopy(r.inviteUrl, i)}
-                        className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-700 transition hover:bg-slate-100">
-                        <Copy className="h-3.5 w-3.5" />{copiedIdx === i ? "복사됨!" : "링크 복사"}
-                      </button>
-                    </div>
+                    r.kind === "worker" ? (
+                      <p className="mt-1 text-sm font-bold text-sky-600">배정 요청 발송됨 (회신 대기) — 후보가 수락하면 계약 대기로 넘어갑니다.</p>
+                    ) : (
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="rounded-lg bg-white px-2.5 py-1.5 text-lg font-black tracking-[4px] text-slate-900">{r.code}</span>
+                        <button onClick={() => r.inviteUrl && handleCopy(r.inviteUrl, i)}
+                          className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700 transition hover:bg-slate-100">
+                          <Copy className="h-4 w-4" />{copiedIdx === i ? "복사됨!" : "링크 복사"}
+                        </button>
+                      </div>
+                    )
                   ) : (
-                    <p className="mt-1 text-xs font-semibold text-rose-600">{r.error}</p>
+                    <p className="mt-1 text-sm font-semibold text-rose-600">{r.error}</p>
                   )}
                 </div>
               ))}
-            </div>
-
-            <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-3">
-              <p className="text-xs font-semibold text-amber-700">
-                SMS 환경변수(KAKAO_ALIMTALK_*) 설정 시 자동 문자 발송됩니다. 미설정 시 위 링크·인증번호를 직접 전달해주세요.
-                수락한 후보는 <b>계약 대기(ASSIGNED)</b>로 들어오며, 목록에서 계약서를 작성·발송하세요.
-              </p>
             </div>
 
             <div className="mt-4 flex justify-end">
@@ -288,20 +629,27 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
 
   const isFullDay = workType === "FULL_DAY";
 
-  // 계약서 파생 필드(근무형태·근로계약 기간·출퇴근 지도 포함 여부) 강제 변경 시 1회 경고.
-  // 이 값들은 근로계약서 내용에서 자동 셋팅되므로, 변경하면 신규 계약서 작성이 필요함을 알린다.
-  // 계약파생 필드별로 1회씩 경고(근무형태·근로계약 기간·출퇴근 지도 — 각각 동일하게).
-  const [warnedFields, setWarnedFields] = useState<Set<string>>(new Set());
-  function warnContractChange(field: "workType" | "period" | "commute") {
-    // 연결된 계약서가 있을 때만 경고(신규 배정 최초 설정 시엔 경고 불필요)
-    if (!initial.hasContract || warnedFields.has(field)) return;
-    alert("해당 내용 변경 시 근로계약서 내용이 변경되어 신규 근로계약서 작성이 필요합니다.");
-    setWarnedFields(prev => new Set(prev).add(field));
-  }
+  // 계약 파생 필드(근무형태·근로계약 기간·출퇴근 지도 포함 여부)가 초기값에서 바뀌었는지 감지.
+  // 현장 구분(지원고용↔적응지도 전환)은 6개월 장기 계약 내 '단계 전환'이라 계약 변경이 아니므로 제외.
+  // 변경되면: 좌하단 '계약서 재작성·발송' 버튼을 깜빡여 유도하고, 저장은 막아 계약서부터 재작성하게 한다.
+  const initWorkType = initial.workType ?? "FULL_DAY";
+  const initStart = initial.startDate ? initial.startDate.slice(0, 10) : "";
+  const initEnd = initial.endDate ? initial.endDate.slice(0, 10) : "";
+  const initCommute = initial.commuteGuidanceIncluded ?? true;
+  const contractDirty =
+    workType !== initWorkType ||
+    cStart !== initStart ||
+    cEnd !== initEnd ||
+    (!isFullDay && commuteGuidanceIncluded !== initCommute) ||
+    (workType === "CUSTOM" && (
+      workStart !== (initial.customWorkStart ?? WORK_TYPE_DEFAULTS.CUSTOM.start) ||
+      workEnd !== (initial.customWorkEnd ?? WORK_TYPE_DEFAULTS.CUSTOM.end)
+    ));
+  // 계약서가 연결돼 있고 계약 파생 필드가 바뀐 경우에만 재작성 유도(신규 배정 최초 설정은 제외).
+  const needsContractRewrite = initial.hasContract && contractDirty;
 
   // 근무형태 변경 시 기본 시간으로 초기화 (이미 커스텀 값이 있으면 유지)
   function changeWorkType(wt: WorkType) {
-    if (wt !== workType) warnContractChange("workType");
     setWorkType(wt);
     const def = WORK_TYPE_DEFAULTS[wt];
     setWorkStart(def.start);
@@ -309,6 +657,11 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   }
 
   async function handleSave() {
+    // 계약 파생 필드가 바뀌었는데 계약서가 연결돼 있으면 저장 차단 → 계약서부터 재작성·발송.
+    if (needsContractRewrite) {
+      alert("근로계약 기간, 근무 형태 등 계약 관련 내용이 변경되었습니다.\n좌측 하단 '계약서 재작성·발송' 버튼을 눌러 수정 근로계약서를 작성하여 발송해 주십시오.");
+      return;
+    }
     if (!wantField && !wantAdapt) { setError("현장 구분을 1개 이상 선택하세요."); return; }
     if (!cStart || !cEnd) { setError("근로계약 시작일과 종료일을 모두 입력하세요."); return; }
     if (cEnd < cStart) { setError("종료일은 시작일 이후여야 합니다."); return; }
@@ -420,9 +773,9 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         <div>
           <label className={T.label}>근로계약 기간</label>
           <div className="flex flex-wrap items-center gap-2">
-            <input type="date" value={cStart} max={cEnd || undefined} onChange={e => { warnContractChange("period"); setCStart(e.target.value); }} className={`w-40 ${T.input}`} />
+            <input type="date" value={cStart} max={cEnd || undefined} onChange={e => setCStart(e.target.value)} className={`w-40 ${T.input}`} />
             <span className="font-semibold text-slate-400">~</span>
-            <input type="date" value={cEnd} min={cStart || undefined} onChange={e => { warnContractChange("period"); setCEnd(e.target.value); }} className={`w-40 ${T.input}`} />
+            <input type="date" value={cEnd} min={cStart || undefined} onChange={e => setCEnd(e.target.value)} className={`w-40 ${T.input}`} />
             <span className="ml-1 text-xs font-semibold text-slate-400">해당 근로계약 기간은 근로계약서 기반으로 자동 입력됩니다.</span>
           </div>
         </div>
@@ -460,7 +813,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <input type="checkbox" checked={commuteGuidanceIncluded}
-                  onChange={e => { warnContractChange("commute"); setCommuteGuidanceIncluded(e.target.checked); }}
+                  onChange={e => setCommuteGuidanceIncluded(e.target.checked)}
                   className="h-4 w-4 flex-shrink-0 accent-slate-950" />
                 <span className="text-sm font-black text-slate-900">출퇴근 지도 포함 (+60분) <span className="font-semibold text-slate-400">출근 30분 + 퇴근 30분</span></span>
               </label>
@@ -511,9 +864,11 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
             type="button"
             onClick={() => { window.location.href = `/manager/contracts?assignmentId=${assignmentId}&workerId=${worker.id}`; }}
             className={`rounded-xl border px-3.5 py-2.5 text-sm font-bold transition ${
-              initial.hasContract
-                ? "border-slate-200 text-slate-600 hover:bg-slate-50"
-                : "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100"
+              needsContractRewrite
+                ? "animate-pulse border-rose-400 bg-rose-100 font-black text-rose-700 ring-2 ring-rose-300 hover:bg-rose-200"
+                : initial.hasContract
+                  ? "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  : "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100"
             }`}
           >
             {initial.hasContract ? "계약서 재작성·발송" : "계약서 작성·발송"}
@@ -534,25 +889,49 @@ export default function WorkersPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  // 딥링크: ?q=대상 으로 진입 시 검색 시드(대시보드 운영 리스크 항목 클릭)
-  useEffect(() => {
-    const sq = new URLSearchParams(window.location.search).get("q");
-    if (sq) setQuery(sq);
-  }, []);
   const [editTarget,     setEditTarget]     = useState<{ worker: Worker; assignment: Assignment } | null>(null);
   const [showInvite,     setShowInvite]     = useState(false);
+  const [inviteSiteId,   setInviteSiteId]   = useState<string>(""); // 배정 확정 부분확정 후 자동 진입 시 현장 프리셀렉트
+  const [inviteWts,      setInviteWts]      = useState<string[]>([]); // 프리필 요청 근무형태(부족분)
+  const [inviteDeadline, setInviteDeadline] = useState<string>("");  // 프리필 회신 기한
   const [assignmentMap, setAssignmentMap] = useState<Record<string, Assignment>>({});
 
+  // 딥링크: ?q=검색 / ?requestSite=현장&wt=근무형태&deadline=기한 (배정 확정 부분확정 후 추가 모집 자동 진입)
   useEffect(() => {
-    fetch("/api/admin/workers")
+    const params = new URLSearchParams(window.location.search);
+    const sq = params.get("q");
+    if (sq) setQuery(sq);
+    const rs = params.get("requestSite");
+    if (rs) {
+      setInviteSiteId(rs);
+      setInviteWts((params.get("wt") || "").split(",").filter(Boolean));
+      setInviteDeadline(params.get("deadline") || "");
+      setShowInvite(true);
+      window.history.replaceState(null, "", "/manager/workers");
+    }
+  }, []);
+
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [reloadTick, setReloadTick] = useState(0);
+  const reload = () => setReloadTick(t => t + 1);
+
+  // 검색어 디바운스(키 입력마다 조회 방지)
+  useEffect(() => { const t = setTimeout(() => setDebouncedQuery(query), 300); return () => clearTimeout(t); }, [query]);
+  // 검색/필터 변경 시 1페이지로
+  useEffect(() => { setPage(1); }, [debouncedQuery]);
+  // 서버 페이지네이션 조회(page/검색/상태 변경 또는 수동 갱신 시)
+  useEffect(() => {
+    setLoading(true);
+    const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+    if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
+    fetch(`/api/admin/workers?${params.toString()}`)
       .then(r => r.json())
-      .then(d => { if (d.success && Array.isArray(d.data)) { setWorkers(d.data); setTotal(d.total ?? d.data.length); } })
+      .then(d => { if (d.success && Array.isArray(d.data)) { setWorkers(d.data); setTotal(d.total ?? 0); } })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [page, debouncedQuery, reloadTick]);
 
   async function openEdit(worker: Worker) {
     const assignmentId = worker.activeAssignment?.assignmentId;
@@ -583,64 +962,34 @@ export default function WorkersPage() {
     }
   }
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return workers
-      .filter(c => statusFilter.length === 0 || statusFilter.includes(c.status))
-      .filter(c => !q ||
-        c.workerName.toLowerCase().includes(q) || c.phoneNumber.includes(q) ||
-        (c.activeAssignment?.siteName ?? "").toLowerCase().includes(q) || c.loginId.toLowerCase().includes(q));
-  }, [workers, query, statusFilter]);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [query, statusFilter]);
-
-  const activeCnt   = workers.filter(c => c.status === "ACTIVE").length;
-  const pausedCnt   = workers.filter(c => c.status === "PAUSED").length;
-  const resignedCnt = workers.filter(c => c.status === "RESIGNED").length;
-  const filters: FilterChip[] = [
-    { value: "ACTIVE", label: "활성", count: activeCnt },
-    { value: "PAUSED", label: "일시정지", count: pausedCnt },
-    { value: "RESIGNED", label: "퇴사", count: resignedCnt },
-  ];
-  const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
+  // 서버에서 이미 페이지 단위로 받으므로 그대로 사용
+  const pageItems = workers;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const hasFilter = debouncedQuery.trim().length > 0;
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="직무지도원 배정 관리"
-        sub="직무지도원과 현장(사업체)의 배정 현황을 관리합니다. 목록에서 직무지도원을 선택하면 근무형태·서비스 단계·근로계약 기간 등 배정 정보를 설정할 수 있습니다."
+        sub="직무지도원의 현장(사업체) 배정 현황을 관리합니다. 신규 배정 요청과 기존 배정 내용 조회와 변경이 가능합니다."
         actions={
           <button onClick={() => setShowInvite(true)} className={`${T.btnPrimary} flex items-center gap-1.5`}>
-            <Send className="h-3.5 w-3.5" />초대 발송
+            <Send className="h-3.5 w-3.5" />배정 요청
           </button>
         }
-      />
-
-      <StatCardRow
-        cols={4}
-        items={[
-          { label: "전체", value: workers.length },
-          { label: "활성", value: activeCnt, tone: "emerald" },
-          { label: "일시정지", value: pausedCnt, tone: "amber" },
-          { label: "퇴사", value: resignedCnt, tone: "slate" },
-        ]}
       />
 
       <ListToolbar
         query={query}
         onQueryChange={setQuery}
         placeholder="이름 / 전화번호 / 현장(사업체) / 아이디 검색"
-        filters={filters}
-        selected={statusFilter}
-        onToggleFilter={toggleStatus}
       />
 
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              {["직무지도원 성명(아이디)", "전화번호", "현장(사업체)", "현장 구분", "기관", "근무형태", "배정일", "플랜", "상태"].map(h => (
+              {["직무지도원 성명(아이디)", "전화번호", "현장(사업체)", "현장 구분", "위탁기관명", "근무형태", "배정일", "플랜", "배정 현황"].map(h => (
                 <th key={h} className={T.th}>{h}</th>
               ))}
             </tr>
@@ -648,15 +997,20 @@ export default function WorkersPage() {
           <tbody>
             {loading ? (
               <tr><td colSpan={9} className={T.tdCenter}>로딩 중...</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={9} className={T.tdCenter}>{workers.length === 0 ? "직무지도원이 없습니다." : "조건에 맞는 직무지도원이 없습니다."}</td></tr>
+            ) : total === 0 ? (
+              <tr><td colSpan={9} className={T.tdCenter}>{hasFilter ? "조건에 맞는 직무지도원이 없습니다." : "직무지도원이 없습니다."}</td></tr>
             ) : pageItems.map(c => {
               const assignmentId = c.activeAssignment?.assignmentId;
               const cachedAsgn = assignmentId ? assignmentMap[assignmentId] : null;
               // 근무형태는 목록 API(activeAssignment.workType)에서 항상 표기.
               // 저장 후엔 캐시(cachedAsgn)가 우선 — 행 열람/취소만으로는 표기가 바뀌지 않음.
               const wt = (cachedAsgn?.workType ?? c.activeAssignment?.workType) as WorkType | undefined;
-              const workTypeLabel = wt ? WORK_TYPE_LABELS[wt] : (c.activeAssignment ? "미설정" : "-");
+              const reqWts = c.activeAssignment?.requestedWorkTypes;
+              const workTypeLabel = wt
+                ? WORK_TYPE_LABELS[wt]
+                : (c.activeAssignment?.assignStatus === "REQUESTED" && reqWts
+                    ? `요청: ${reqWts.split(",").map(w => WT_TINY[w] ?? w).join("·")}`
+                    : (c.activeAssignment ? "미설정" : "-"));
               // 현장 구분: 전환일 있으면 복합(2단계), 없으면 단건
               const adaptStart = cachedAsgn?.adaptationStartDate ?? c.activeAssignment?.adaptationStartDate ?? null;
               const step = (cachedAsgn?.serviceStep ?? c.activeAssignment?.serviceStep) as ServiceStep | undefined;
@@ -667,26 +1021,19 @@ export default function WorkersPage() {
                   <td className={`${T.td} whitespace-nowrap`}><span className="font-semibold text-sky-600">{workerLabel(c.workerName, c.loginId)}</span></td>
                   <td className={T.td}>{c.phoneNumber}</td>
                   <td className={`${T.td} whitespace-nowrap`}>
-                    <div className="flex items-center gap-1.5">
-                      <span className="max-w-[120px] truncate">
-                        {c.activeAssignment?.siteName
-                          ? c.activeAssignment.siteName
-                          : <span className="text-slate-400">미배정</span>}
-                      </span>
-                      {c.activeAssignment?.assignStatus && ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus] && (
-                        <span className={`${T.badge} shrink-0 ${ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus].cls}`}>
-                          {ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus].label}
-                        </span>
-                      )}
+                    <div className="max-w-[140px] truncate">
+                      {c.activeAssignment?.siteName
+                        ? c.activeAssignment.siteName
+                        : <span className="text-slate-400">미배정</span>}
                     </div>
                   </td>
                   <td className={T.td}>
                     {!c.activeAssignment ? "-"
                       : adaptStart
-                        ? <span className={`${T.badge} bg-violet-50 text-violet-600`}>복합 2단계</span>
+                        ? <span className={`${T.badge} bg-teal-50 text-teal-600`}>복합 2단계</span>
                         : <span className="text-slate-700">{step === "ADAPTATION" ? "적응지도" : "지원고용 훈련"}</span>}
                   </td>
-                  <td className={T.td}><div className="max-w-[120px] truncate">{c.activeAssignment?.agencyName || "-"}</div></td>
+                  <td className={`${T.td} whitespace-nowrap`}><div className="max-w-[160px] truncate" title={c.activeAssignment?.agencyName || undefined}>{c.activeAssignment?.agencyName || "-"}</div></td>
                   <td className={T.td}>
                     {c.activeAssignment
                       ? <span className="text-slate-700">{workTypeLabel}</span>
@@ -699,14 +1046,16 @@ export default function WorkersPage() {
                       : <span className="text-[13px] text-slate-300">무료</span>}
                   </td>
                   <td className={T.td}>
-                    <StatusBadge status={c.status} map={STATUS_BADGE} />
+                    {c.activeAssignment?.assignStatus && ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus]
+                      ? <span className={`${T.badge} shrink-0 ${ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus].cls}`}>{ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus].label}</span>
+                      : <span className="text-[13px] text-slate-300">-</span>}
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-        <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+        <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
       </div>
 
       {editTarget && (
@@ -719,7 +1068,7 @@ export default function WorkersPage() {
         />
       )}
 
-      {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
+      {showInvite && <InviteModal initialSiteId={inviteSiteId} initialWorkTypes={inviteWts} initialDeadline={inviteDeadline} onClose={() => { setShowInvite(false); setInviteSiteId(""); setInviteWts([]); setInviteDeadline(""); reload(); }} />}
     </div>
   );
 }

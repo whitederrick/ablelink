@@ -9,10 +9,10 @@ async function main() {
 
   // ─── 1. 에이전시 ───────────────────────────────────────────
   const agency = await prisma.agency.upsert({
-    where: { name: "테스트 에이전시" },
+    where: { name: "테스트 위탁기관" },
     update: {},
     create: {
-      name: "테스트 에이전시",
+      name: "테스트 위탁기관",
       phoneNumber: "02-1234-5678",
       address: "서울시 강남구 테헤란로 1",
       planType: "STANDARD",
