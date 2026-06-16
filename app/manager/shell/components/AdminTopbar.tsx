@@ -69,8 +69,10 @@ export default function AdminTopbar({
         body: JSON.stringify({ noticeId: n.id }),
       }).catch(() => {});
     }
-    // 지원요청 회신은 문의로, 그 외(문서 제출 등)는 제출 문서 확인 화면으로
-    router.push(n.ticketId ? "/manager/support" : "/manager/documents");
+    // 지원요청 회신은 문의로, 운영자 긴급 공지는 시스템 공지사항으로, 그 외(문서 제출 등)는 제출 문서 확인 화면으로
+    if (n.ticketId) router.push("/manager/support");
+    else if (n.title.startsWith("[긴급 공지]")) router.push("/manager/system-notices");
+    else router.push("/manager/documents");
   }
 
   async function markAll() {
