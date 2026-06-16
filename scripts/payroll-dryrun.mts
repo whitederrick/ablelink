@@ -11,9 +11,9 @@ try {
 } catch {}
 
 import { PrismaClient } from "@prisma/client";
-import { determineEligibility } from "../lib/payroll/insuranceEligibility.ts";
-import { computeWeeklyHoliday, scheduledMinutesForWorkType } from "../lib/payroll/weeklyHoliday.ts";
-import { computeIncomeTax, type TaxBracket } from "../lib/payroll/incomeTax.ts";
+import { determineEligibility } from "../lib/payroll/insuranceEligibility";
+import { computeWeeklyHoliday, scheduledMinutesForWorkType } from "../lib/payroll/weeklyHoliday";
+import { computeIncomeTax, type TaxBracket } from "../lib/payroll/incomeTax";
 
 const prisma = new PrismaClient();
 const won = (n: number) => Math.round(n).toLocaleString("ko-KR") + "원";
