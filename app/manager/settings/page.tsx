@@ -356,11 +356,12 @@ export default function AgencySettingsPage() {
             <p className="mb-2 text-[11px] font-semibold text-slate-400">매월 이 날짜에 <b>전월분 급여를 자동 계산(초안)</b>합니다. 발급은 담당자가 검토 후 확정해야 됩니다. 비우면 자동 생성 안 함.</p>
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-slate-500">매월</span>
-              <input type="number" min={1} max={28} value={payrollAutoDay}
+              <input type="number" min={1} max={31} value={payrollAutoDay}
                 onChange={e => setPayrollAutoDay(e.target.value)}
                 placeholder="미사용" className={`w-24 ${T.input}`} />
-              <span className="text-sm font-semibold text-slate-500">일 (1~28, 비우면 사용 안 함)</span>
+              <span className="text-sm font-semibold text-slate-500">일 (1~31, <b>31=말일</b>, 비우면 사용 안 함)</span>
             </div>
+            <p className="mt-1 text-[11px] font-semibold text-slate-400">※ 31 등 그 달에 없는 날짜는 <b>그 달 마지막 날</b>에 생성됩니다(예: 2월은 28/29일).</p>
           </div>
 
           {/* 기본 근로계약서 양식 — 계약 작성 시 기본 선택 */}

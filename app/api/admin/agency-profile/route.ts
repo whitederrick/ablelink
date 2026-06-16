@@ -51,8 +51,9 @@ export async function PATCH(req: NextRequest) {
     const data: any = {};
     if (payrollAutoDay !== undefined) {
       const n = payrollAutoDay === null || payrollAutoDay === "" ? null : Number(payrollAutoDay);
-      if (n !== null && (!Number.isInteger(n) || n < 1 || n > 28)) {
-        return NextResponse.json({ success: false, message: "급여 자동 생성일은 1~28 사이여야 합니다." }, { status: 400 });
+      // 1~31. 31(또는 그 달에 없는 날)은 그 달 말일로 보정되어 동작(말일 대응).
+      if (n !== null && (!Number.isInteger(n) || n < 1 || n > 31)) {
+        return NextResponse.json({ success: false, message: "급여 자동 생성일은 1~31 사이여야 합니다. (말일에 맞추려면 31 입력)" }, { status: 400 });
       }
       data.payrollAutoDay = n;
     }

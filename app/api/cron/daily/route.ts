@@ -246,9 +246,15 @@ export async function GET(req: NextRequest) {
     const py = km === 1 ? ky - 1 : ky;
     const pm = km === 1 ? 12 : km - 1;
     const prevYm = `${py}-${String(pm).padStart(2, "0")}`;   // 전월 YYYY-MM
+    const daysInMonth = new Date(ky, km, 0).getDate();        // 이번 달 일수
+    const isLastDay = todayDay === daysInMonth;
 
+    // 오늘 == 설정일, 또는 설정일이 이번 달 일수보다 커서 말일로 보정되는 기관(말일 대응)
     const agencies = await prisma.agency.findMany({
-      where: { payrollAutoDay: todayDay, isActive: true } as any,
+      where: {
+        isActive: true,
+        OR: [{ payrollAutoDay: todayDay }, ...(isLastDay ? [{ payrollAutoDay: { gt: daysInMonth } }] : [])],
+      } as any,
       select: { id: true },
     });
     for (const ag of agencies) {
