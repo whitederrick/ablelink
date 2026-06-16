@@ -159,7 +159,8 @@ export async function computePayrollItems(
         breakdown = { payType: "HOURLY", hourlyRate: rate, traineeCount, used2PlusRate: use2PlusRate, workedMinutes, workedHours, paidMinutes, paidHours, workedDays, pendingDays };
       } else if (contract.payType === "DAILY") {
         grossPay = workedDays * rate;
-        const avgDailyH = workedDays > 0 ? workedMinutes / workedDays / 60 : 0;
+        // 통상시급 = 일급 ÷ 1일 평균 (무급)휴게 제외 근로시간. (연장·주휴 가산 기준)
+        const avgDailyH = workedDays > 0 ? paidMinutes / workedDays / 60 : 0;
         ordinaryWage = avgDailyH > 0 ? Math.round(rate / avgDailyH) : 0;
         calcMethods["기본급"] = `${workedDays}일 × ${rate.toLocaleString()}원`;
         breakdown = { payType: "DAILY", dailyRate: rate, workedDays, workedMinutes, pendingDays };

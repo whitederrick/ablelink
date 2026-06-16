@@ -97,7 +97,7 @@ async function main() {
     const rate = use2 ? Number(c.hourlyRate2Plus) : Number(c.baseAmount);
     let gross = 0, ordinary = 0;
     if (c.payType === "HOURLY") { gross = Math.round(paidHours * rate); ordinary = rate; }
-    else if (c.payType === "DAILY") { gross = workedDays * rate; const ad = workedDays ? workedMinutes / workedDays / 60 : 0; ordinary = ad ? Math.round(rate / ad) : 0; }
+    else if (c.payType === "DAILY") { gross = workedDays * rate; const ad = workedDays ? paidMinutes / workedDays / 60 : 0; ordinary = ad ? Math.round(rate / ad) : 0; }
     else { gross = rate; ordinary = Math.round(rate / 209); }
     if (overtimeHours > 0 && ordinary > 0) gross += Math.round(overtimeHours * ordinary * 1.5);
 
