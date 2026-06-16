@@ -107,7 +107,7 @@ function makeInitialForm() {
 }
 
 export default function PayrollPage() {
-  const [tab, setTab] = useState<Tab>("contracts");
+  const [tab, setTab] = useState<Tab>("runs");
 
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -362,10 +362,11 @@ export default function PayrollPage() {
     } finally { setFinalizing(false); }
   }
 
-  const TAB_ITEMS: { key: Tab; label: string }[] = [
-    { key: "contracts", label: "💰 급여 기준" },
-    { key: "runs",      label: "📊 급여 계산" },
-    { key: "deductions", label: "⚙️ 공제 설정" },
+  // 월 급여를 메인으로, 급여 기준·공제는 설정(보조)로 뒤에 배치
+  const TAB_ITEMS: { key: Tab; label: string; group?: "settings" }[] = [
+    { key: "runs",       label: "📊 월 급여" },
+    { key: "contracts",  label: "💰 급여 기준", group: "settings" },
+    { key: "deductions", label: "⚙️ 공제",     group: "settings" },
   ];
 
   // ── 계약 탭: 검색·유형필터·페이징 ──
@@ -419,11 +420,21 @@ export default function PayrollPage() {
       <PageHeader
         title="급여 관리 (Pro+)"
         actions={
-          <div className="flex gap-2">
-            {TAB_ITEMS.map(({ key, label }) => (
+          <div className="flex flex-wrap items-center gap-2">
+            {TAB_ITEMS.filter(t => !t.group).map(({ key, label }) => (
               <button key={key} onClick={() => setTab(key)}
                 className={`rounded-xl border px-4 py-2 text-sm font-semibold transition active:scale-95 ${
                   tab === key ? "border-slate-950 bg-slate-950 font-black text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}>
+                {label}
+              </button>
+            ))}
+            <span className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
+            <span className="text-[11px] font-bold text-slate-400">설정</span>
+            {TAB_ITEMS.filter(t => t.group === "settings").map(({ key, label }) => (
+              <button key={key} onClick={() => setTab(key)}
+                className={`rounded-xl border px-3 py-2 text-[13px] font-semibold transition active:scale-95 ${
+                  tab === key ? "border-slate-950 bg-slate-950 font-black text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
                 }`}>
                 {label}
               </button>
@@ -777,7 +788,9 @@ export default function PayrollPage() {
               />
             </div>
           </div>
-          <p className="text-xs font-semibold text-slate-400">출퇴근 기록·급여 기준·공제 설정을 기반으로 자동 계산합니다.</p>
+          <div className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-2.5 text-xs font-semibold text-sky-700">
+            월 선택 → <b>계산</b>(출근부·근로계약 기준 자동) → 검토(필요 시 수정) → <b>확정</b> 시 직무지도원에게 <b>명세서가 자동 발급</b>됩니다. 소득세·4대보험은 자동 산정됩니다.
+          </div>
 
           {loadingRuns ? (
             <p className={T.empty}>로딩 중...</p>

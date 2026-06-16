@@ -1044,19 +1044,19 @@ export default function WorkersPage() {
                         : <span className="text-slate-400">미배정</span>}
                     </div>
                   </td>
-                  <td className={T.td}>
+                  <td className={`${T.td} whitespace-nowrap`}>
                     {!c.activeAssignment ? "-"
                       : adaptStart
                         ? <span className={`${T.badge} bg-teal-50 text-teal-600`}>복합 2단계</span>
                         : <span className="text-slate-700">{step === "ADAPTATION" ? "적응지도" : "지원고용 훈련"}</span>}
                   </td>
                   <td className={`${T.td} whitespace-nowrap`}><div className="max-w-[160px] truncate" title={c.activeAssignment?.agencyName || undefined}>{c.activeAssignment?.agencyName || "-"}</div></td>
-                  <td className={T.td}>
+                  <td className={`${T.td} whitespace-nowrap`}>
                     {c.activeAssignment
                       ? <span className="text-slate-700">{workTypeLabel}</span>
                       : "-"}
                   </td>
-                  <td className={T.td}>{c.activeAssignment?.startDate?.slice(0, 10) || "-"}</td>
+                  <td className={`${T.td} whitespace-nowrap`}>{c.activeAssignment?.startDate?.slice(0, 10) || "-"}</td>
                   <td className={T.td}>
                     {c.planType && c.planType !== "FREE"
                       ? <StatusBadge status={c.planType === "PREMIUM" ? "PRO" : c.planType} map={PLAN_BADGE} />
