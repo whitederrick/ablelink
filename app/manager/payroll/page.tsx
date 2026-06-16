@@ -166,6 +166,18 @@ export default function PayrollPage() {
     } finally { setLoadingContracts(false); }
   }
 
+  const [backfilling, setBackfilling] = useState(false);
+  async function handleBackfill() {
+    if (!confirm("서명된 근로계약서가 있는데 급여 기준이 없는 직무지도원에게, 계약 정보(시급·기간)로 급여 기준을 일괄 생성합니다.\n이미 있는 직무지도원은 건너뜁니다. 진행할까요?")) return;
+    setBackfilling(true);
+    try {
+      const d = await fetch("/api/admin/payroll/contracts/backfill", { method: "POST" }).then(r => r.json());
+      if (d.success) { showToast(`✅ 급여 기준 ${d.created}건 생성 (건너뜀 ${d.skipped}건)`); loadContracts(); }
+      else alert(d.message || "일괄 생성 실패");
+    } catch { alert("일괄 생성 실패"); }
+    finally { setBackfilling(false); }
+  }
+
   async function loadWorkers() {
     const res = await fetch("/api/admin/workers?pageSize=200");
     const d = await res.json();
@@ -467,9 +479,14 @@ export default function PayrollPage() {
             onToggleFilter={toggleCType}
             extra={
               !showForm ? (
-                <button className={`${T.btnPrimary} ml-auto`} onClick={() => { setForm(makeInitialForm()); setContractHint(null); setConfirmed({ base: false, rate2: false, weekly: false }); setShowForm(true); }}>
-                  + 급여 기준 등록
-                </button>
+                <div className="ml-auto flex gap-2">
+                  <button className={T.btnSecondary} onClick={handleBackfill} disabled={backfilling}>
+                    {backfilling ? "생성 중..." : "📋 계약서에서 일괄 생성"}
+                  </button>
+                  <button className={T.btnPrimary} onClick={() => { setForm(makeInitialForm()); setContractHint(null); setConfirmed({ base: false, rate2: false, weekly: false }); setShowForm(true); }}>
+                    + 급여 기준 등록
+                  </button>
+                </div>
               ) : null
             }
           />
