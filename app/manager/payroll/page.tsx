@@ -70,12 +70,18 @@ function defaultYM() {
 }
 function ymd(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 const payTypeLabel: Record<PayType, string> = { MONTHLY: "월급", DAILY: "일급", HOURLY: "시급" };
-// 4대보험 가입 유형(자동 판정 근거 표시용)
+// 4대보험 가입 유형(자동 판정) — 라벨 + 툴팁 설명
 const TIER_LABEL: Record<string, string> = {
-  DAILY_WORKER: "일용(1개월 미만)",
+  DAILY_WORKER: "일용",
   ULTRA_SHORT: "초단시간",
-  REGULAR: "일반/상용",
+  REGULAR: "일반",
   NONE: "사업소득",
+};
+const TIER_DESC: Record<string, string> = {
+  DAILY_WORKER: "1개월 미만 고용 — 고용보험·산재 가입",
+  ULTRA_SHORT: "월 60시간·8일 미만 — 산재만(계속근로 3개월↑ 시 고용보험)",
+  REGULAR: "월 60시간 이상 또는 8일 이상 — 4대보험 전부 가입",
+  NONE: "사업소득(3.3%) — 4대보험 비대상",
 };
 
 // 시급 입력 시 자동 계산 — 공단 기준 2명 이상 동시지도 시급은 120%, 주휴수당은 시급×8시간(주40시간 기준).
@@ -874,9 +880,10 @@ export default function PayrollPage() {
             <p className={T.empty}>로딩 중...</p>
           ) : (
             <div className={T.tableWrap}>
-              <table className="w-full border-collapse">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[1000px] border-collapse">
                 <thead>
-                  <tr>{["직무지도원 성명(아이디)", "근무일수", "근무시간", "지급액", "공제액", "실지급액", ""].map(h => (
+                  <tr>{["직무지도원 성명(아이디)", "소득유형", "급여유형", "보험유형", "근무일수 (인정)", "근무시간 (인정)", "지급액", "공제액", "실지급액", ""].map(h => (
                     <th key={h} className={T.th}>{h}</th>
                   ))}</tr>
                 </thead>
@@ -884,52 +891,35 @@ export default function PayrollPage() {
                   {[...selectedRun.items].sort((a, b) => a.workerName.localeCompare(b.workerName, "ko")).slice((detailPage - 1) * DETAIL_PAGE_SIZE, detailPage * DETAIL_PAGE_SIZE).map(item => {
                     const bd = item.breakdown as any;
                     const incType: IncomeType = bd?.incomeType ?? "BUSINESS";
-                    const dedBreakdown: Record<string, number> = bd?.deductionBreakdown ?? {};
                     return (
                       <tr key={item.id} className={T.trBase}>
+                        <td className={`${T.td} whitespace-nowrap`}>
+                          <span className="font-semibold">{item.workerName} <span className="text-[13px] font-normal text-slate-500">({maskLoginId(item.loginId)})</span></span>
+                          {bd?.note && <span className="ml-1.5 text-[11px] font-semibold text-amber-600">⚠ {bd.note}</span>}
+                        </td>
                         <td className={T.td}>
-                          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                            <span className="font-semibold">{item.workerName} <span className="text-[13px] font-normal text-slate-500">({maskLoginId(item.loginId)})</span></span>
-                            {bd?.note && (
-                              <span className="text-[11px] font-semibold text-amber-600">⚠ {bd.note}</span>
-                            )}
-                          </div>
-                          {bd?.payType && (
-                            <div className="mt-0.5 text-[13px] text-slate-500">
-                              <span className={`mr-1 ${T.badge} ${incType === "EMPLOYMENT" ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>
-                                {incType === "EMPLOYMENT" ? "근로소득" : "사업소득"}
-                              </span>
-                              {payTypeLabel[bd.payType as PayType]}
-                              {bd.hourlyRate && ` ${comma(bd.hourlyRate)}원/h`}
-                              {bd.used2PlusRate && ` (2명+ 적용)`}
-                              {bd.dailyRate && ` ${comma(bd.dailyRate)}원/일`}
-                              {bd.weeklyHolidayPay && ` +주휴${comma(bd.weeklyHolidayPay)}원`}
-                            </div>
-                          )}
-                          {bd?.insurance && (
-                            <div className="mt-0.5 text-[11px] font-semibold text-slate-400">
-                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">{TIER_LABEL[bd.insurance.tier] ?? bd.insurance.tier}</span>
-                              <span className="ml-1">월 {bd.insurance.monthlyHours}h · {bd.insurance.monthlyDays}일</span>
-                              {bd.insurance.employerIndustrial > 0 && (
-                                <span className="ml-1 text-slate-400">· 산재(사업주) {comma(bd.insurance.employerIndustrial)}원</span>
-                              )}
-                            </div>
-                          )}
+                          <span className={`${T.badge} ${incType === "EMPLOYMENT" ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>{incType === "EMPLOYMENT" ? "근로소득" : "사업소득"}</span>
                         </td>
-                        <td className={`${T.td} text-center text-slate-600`}>{item.workedDays}일</td>
-                        <td className={`${T.td} text-center text-slate-600`}>{fmtMin(item.workedMinutes)}</td>
-                        <td className={`${T.td} text-right font-black text-sky-600`}>{comma(item.grossPay)}원</td>
-                        <td className={`${T.td} text-right`}>
-                          <div className="flex flex-wrap items-baseline justify-end gap-x-1.5">
-                            <span className="text-rose-600 font-semibold">-{comma(item.totalDeduction)}원</span>
-                            {Object.keys(dedBreakdown).length > 0 && (
-                              <span className="text-[10px] text-slate-400">
-                                ({Object.entries(dedBreakdown).map(([k, v]) => `${k} ${comma(v)}원`).join(" · ")})
-                              </span>
-                            )}
-                          </div>
+                        <td className={`${T.td} whitespace-nowrap text-slate-700`}>{bd?.payType ? payTypeLabel[bd.payType as PayType] : "-"}</td>
+                        <td className={T.td}>
+                          {bd?.insurance ? (
+                            <span className="cursor-help whitespace-nowrap rounded bg-slate-100 px-1.5 py-0.5 text-[12px] font-semibold text-slate-500" title={TIER_DESC[bd.insurance.tier] ?? ""}>{TIER_LABEL[bd.insurance.tier] ?? bd.insurance.tier}</span>
+                          ) : "-"}
                         </td>
-                        <td className={`${T.td} text-right font-black text-emerald-600`}>{comma(item.netPay)}원</td>
+                        <td className={`${T.td} whitespace-nowrap text-slate-600`}>
+                          {item.workedDays}일{bd?.insurance && <span className="ml-1 text-[11px] text-slate-400">(인정 {bd.insurance.monthlyDays}일)</span>}
+                        </td>
+                        <td className={`${T.td} whitespace-nowrap text-slate-600`}>
+                          {fmtMin(item.workedMinutes)}{bd?.insurance && <span className="ml-1 text-[11px] text-slate-400">(인정 {bd.insurance.monthlyHours}h)</span>}
+                        </td>
+                        <td className={`${T.td} whitespace-nowrap font-black text-sky-600`}>{comma(item.grossPay)}원</td>
+                        <td className={`${T.td} whitespace-nowrap`}>
+                          <span className="cursor-help font-semibold text-rose-600"
+                            title={Object.entries(bd?.deductionBreakdown ?? {}).map(([k, v]) => `${k} ${comma(v as number)}원`).join("\n") || "공제 없음"}>
+                            -{comma(item.totalDeduction)}원
+                          </span>
+                        </td>
+                        <td className={`${T.td} whitespace-nowrap font-black text-emerald-600`}>{comma(item.netPay)}원</td>
                         <td className={T.td}>
                           <div className="flex items-center justify-end gap-1.5">
                             <a className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50"
@@ -946,6 +936,7 @@ export default function PayrollPage() {
                   })}
                 </tbody>
               </table>
+              </div>
               <Pagination className="border-t border-slate-100 px-4 py-3" page={detailPage}
                 totalPages={Math.max(1, Math.ceil(selectedRun.items.length / DETAIL_PAGE_SIZE))}
                 total={selectedRun.items.length} onPageChange={setDetailPage} />
