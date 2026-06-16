@@ -275,6 +275,7 @@ function InviteModal({ onClose, initialSiteId, initialWorkTypes, initialDeadline
     if (!siteId) { setError("배정할 현장을 선택하세요."); return; }
     if (reqWorkTypes.length === 0) { setError("요청 근무형태를 1개 이상 선택하세요."); return; }
     if (!replyDeadline) { setError("회신 기한을 입력하세요."); return; }
+    if (replyDeadline < todayStr) { setError("회신 기한은 요청일(오늘)보다 앞설 수 없습니다."); return; }
     if (recipients.length === 0) { setError("배정할 직무지도원을 1명 이상 선택하거나 추가하세요."); return; }
     setError(""); setLoading(true);
     const out: SentResult[] = [];
@@ -1001,7 +1002,8 @@ export default function WorkersPage() {
       />
 
       <div className={T.tableWrap}>
-        <table className="w-full border-collapse">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[1080px] border-collapse">
           <thead>
             <tr>
               {["직무지도원 성명(아이디)", "전화번호", "현장(사업체)", "현장 구분", "위탁기관명", "근무형태", "배정일", "플랜", "배정 현황"].map(h => (
@@ -1070,6 +1072,7 @@ export default function WorkersPage() {
             })}
           </tbody>
         </table>
+        </div>
         <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
       </div>
 

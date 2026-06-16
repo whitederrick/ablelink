@@ -33,6 +33,7 @@ const isSelectable = (s: string) => s === "ACCEPTED" || s === "DROPPED";
 type Candidate = {
   assignmentId: string; workerId: string; workerName: string; loginId: string; phone: string; status: string;
   chosenWorkType: string | null; requestedWorkTypes: string[]; replyDeadline: string | null;
+  requestedAt: string | null; // 요청 발송일(assignedAt)
 };
 type Group = { siteId: string; siteName: string; siteAddress: string; capacity: number; capAm?: number; capPm?: number; capFull?: number; candidates: Candidate[] };
 
@@ -208,23 +209,26 @@ export default function AssignmentSelectionPage() {
           ) : siteFiltered.length === 0 ? (
             <p className={T.empty}>{groups.length === 0 ? "확정할 배정 요청이 없습니다." : "조건에 맞는 현장이 없습니다."}</p>
           ) : (
-            <div className={T.tableWrap}>
-              <table className="w-full table-fixed">
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+              <table className="w-full min-w-[856px] table-fixed">
                 <colgroup>
                   <col style={{ width: "230px" }} />
                   <col />
                   <col style={{ width: "120px" }} />
                   <col style={{ width: "92px" }} />
+                  <col style={{ width: "96px" }} />
                   <col style={{ width: "104px" }} />
                 </colgroup>
                 <thead>
-                  <tr>{["현장(사업체)", "주소", "요청/수락/모집", "충족 여부", "회신 기한"].map(h => <th key={h} className={TH}>{h}</th>)}</tr>
+                  <tr>{["현장(사업체)", "주소", "요청/수락/모집", "충족 여부", "요청 일자", "회신 기한"].map(h => <th key={h} className={TH}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {pageGroups.map(g => {
                     const reqN = g.candidates.length;          // 요청 = 요청 보낸 전체
                     const accN = acceptedAllOf(g).length;      // 수락 = 요청 수락한 전체(제외 포함)
                     const nearest = Math.min(...g.candidates.map(dl));
+                    const reqTimes = g.candidates.map(c => (c.requestedAt ? new Date(c.requestedAt).getTime() : 0)).filter(t => t > 0);
+                    const reqDate = reqTimes.length ? Math.max(...reqTimes) : null; // 대표 요청일 = 가장 최근 요청
                     const active = g.siteId === selectedSiteId;
                     const full = g.capacity > 0 && accN === g.capacity;
                     const over = g.capacity > 0 && accN > g.capacity; // 수락 > 모집(초과)
@@ -240,6 +244,7 @@ export default function AssignmentSelectionPage() {
                               ? <span className={`${T.badge} bg-emerald-50 text-emerald-600`}>충족</span>
                               : <span className={`${T.badge} bg-rose-50 text-rose-600`}>미충족</span>}
                         </td>
+                        <td className={`${CELL} whitespace-nowrap text-[13px] font-bold text-slate-900`}>{reqDate ? fmtDate(new Date(reqDate).toISOString()) : "-"}</td>
                         <td className={`${CELL} whitespace-nowrap text-[13px] font-bold text-slate-900`}>{Number.isFinite(nearest) ? `~${fmtDate(new Date(nearest).toISOString())}` : "-"}</td>
                       </tr>
                     );
@@ -284,8 +289,8 @@ export default function AssignmentSelectionPage() {
                 </div>
 
                 <div className="p-4">
-                  <div className={T.tableWrap}>
-                    <table className="w-full table-fixed">
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                    <table className="w-full min-w-[700px] table-fixed">
                       <colgroup>
                         <col style={{ width: "200px" }} />
                         <col style={{ width: "132px" }} />
@@ -308,18 +313,20 @@ export default function AssignmentSelectionPage() {
                               <td className={CELL}><span className={`${T.badge} ${st.cls}`}>{st.label}</span></td>
                               <td className={`${CELL} whitespace-nowrap font-bold text-slate-900`}>{workTypeText(c)}</td>
                               <td className={CELL}>
+                                <div className="flex h-8 items-center">
                                 {selectable ? (
                                   <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
                                     <button type="button" disabled={busy} onClick={() => setPick(sel.siteId, c.assignmentId, true)}
-                                      className={`px-3 py-1.5 text-[13px] font-black transition ${isPicked ? "bg-emerald-600 text-white" : "bg-white text-slate-500 hover:bg-emerald-50 hover:text-emerald-600"}`}>선정</button>
+                                      className={`px-3 py-[5px] text-[13px] font-black transition ${isPicked ? "bg-emerald-600 text-white" : "bg-white text-slate-500 hover:bg-emerald-50 hover:text-emerald-600"}`}>선정</button>
                                     <button type="button" disabled={busy} onClick={() => setPick(sel.siteId, c.assignmentId, false)}
-                                      className={`border-l border-slate-200 px-3 py-1.5 text-[13px] font-black transition ${!isPicked ? "bg-rose-600 text-white" : "bg-white text-slate-500 hover:bg-rose-50 hover:text-rose-600"}`}>제외</button>
+                                      className={`border-l border-slate-200 px-3 py-[5px] text-[13px] font-black transition ${!isPicked ? "bg-rose-600 text-white" : "bg-white text-slate-500 hover:bg-rose-50 hover:text-rose-600"}`}>제외</button>
                                   </div>
                                 ) : c.status === "EXPIRED" ? (
                                   <span className="text-[13px] font-bold text-slate-400">선정 불가</span>
                                 ) : (
                                   <span className="text-[13px] text-slate-300">-</span>
                                 )}
+                                </div>
                               </td>
                             </tr>
                           );

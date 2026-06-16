@@ -227,6 +227,8 @@ export async function POST(req: NextRequest) {
       if (!body.replyDeadline) throw new Error("VALIDATION:replyDeadline");
       const d = new Date(body.replyDeadline);
       if (isNaN(d.getTime())) throw new Error("VALIDATION:replyDeadline");
+      // 회신 기한은 요청일(오늘, 발송일)보다 앞설 수 없음
+      if (String(body.replyDeadline).slice(0, 10) < new Date().toISOString().slice(0, 10)) throw new Error("VALIDATION:replyDeadlinePast");
       replyDeadline = d;
     }
 

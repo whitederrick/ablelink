@@ -87,8 +87,8 @@ export default function AdminSitesPage() {
         selected={statusFilter}
         onToggleFilter={toggleStatus} />
 
-      <div className={T.tableWrap}>
-        <table className="w-full border-collapse">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[1160px] border-collapse">
           <thead>
             <tr>{["ID", "현장(사업체)", "주소", "사업체 담당자 성명", "사업체 담당자 연락처", "위탁기관 담당자", "기관명", "GPS 범위", "기준점", "활성 여부"].map(h => (
               <th key={h} className={T.th}>{h}</th>

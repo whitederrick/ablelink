@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
         chosenWorkType: a.workType ?? null, // ACCEPTED면 후보가 선택한 근무형태
         requestedWorkTypes: (a.requestedWorkTypes ?? "").split(",").filter(Boolean),
         replyDeadline: a.replyDeadline ? a.replyDeadline.toISOString() : null,
+        requestedAt: a.assignedAt ? a.assignedAt.toISOString() : null, // 요청 발송 시각(assignedAt = 요청 생성/재요청 시점)
       });
     }
 

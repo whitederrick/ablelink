@@ -364,7 +364,6 @@ export default function AgencySettingsPage() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button onClick={() => { setSigMode("draw"); setSigEmpty(true); }} className={T.btnPrimary}>✍️ 서명 등록</button>
                   <button onClick={() => { setStampPreview(null); setSigMode("stamp"); }} className={T.btnPrimary}>🟥 직인 등록</button>
-                  <button onClick={() => startPhoneSign()} className={T.btnSecondary}>📱 스마트폰으로 서명</button>
                   <button onClick={deleteSignature} className={T.btnDanger}>삭제</button>
                 </div>
               </>
@@ -375,7 +374,6 @@ export default function AgencySettingsPage() {
                 <div className="flex flex-wrap justify-center gap-2">
                   <button onClick={() => { setSigMode("draw"); setSigEmpty(true); }} className={T.btnPrimary}>✍️ 서명 등록하기</button>
                   <button onClick={() => { setStampPreview(null); setSigMode("stamp"); }} className={T.btnPrimary}>🟥 직인 등록하기</button>
-                  <button onClick={() => startPhoneSign()} className={T.btnSecondary}>📱 스마트폰으로 서명</button>
                 </div>
               </div>
             )

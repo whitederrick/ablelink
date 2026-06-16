@@ -69,8 +69,8 @@ export default function WorkerAccountsPage() {
         selected={engFilter}
         onToggleFilter={toggleEng} />
 
-      <div className={T.tableWrap}>
-        <table className="w-full border-collapse">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[720px] border-collapse">
           <thead>
             <tr>{["직무지도원 성명(아이디)", "연락처", "계약 여부", "계정 상태", "급여계좌", "가입일"].map(h => (
               <th key={h} className={T.th}>{h}</th>

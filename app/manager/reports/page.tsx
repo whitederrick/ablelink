@@ -169,7 +169,8 @@ export default function TraineeReportPage() {
       {/* 테이블 */}
       {!error && (
         <div className={T.tableWrap}>
-          <table className="w-full border-collapse">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[920px] border-collapse">
             <thead>
               <tr>
                 {["훈련생(성별)", "장애유형", "상태", "현장(사업체)", "직무지도원 성명", "출근일", "일지작성", "작성률", "수행점수 (평균)", "종합평가"].map(h => (
@@ -224,6 +225,7 @@ export default function TraineeReportPage() {
               ))}
             </tbody>
           </table>
+          </div>
           {filtered.length > 0 && (
             <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
           )}
