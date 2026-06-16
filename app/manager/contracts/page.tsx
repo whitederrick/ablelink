@@ -417,6 +417,7 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
   async function handleCreate() {
     if (!manualName.trim() || !manualPhone.trim()) { setError("직무지도원 이름과 전화번호는 필수입니다."); return; }
     if (!contractStart || !contractEnd) { setError("계약 시작일과 종료일은 필수입니다."); return; }
+    if (!wageAmount || Number(wageAmount) <= 0) { setError("임금액(시급/일급/월급)은 필수입니다. 급여 자동 계산에 사용됩니다."); return; }
     setSaving(true); setError("");
     try {
       const res = await fetch("/api/admin/contracts", {
@@ -515,7 +516,7 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
 
             {/* 6. 임금 */}
             <section className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/50 p-3">
-              <label className={T.label}>6. 임금</label>
+              <label className={T.label}>6. 임금 <span className="text-rose-500">*</span></label>
               <div className="flex gap-2">
                 {([["HOURLY", "시급"], ["DAILY", "일급"], ["MONTHLY", "월급"]] as const).map(([v, l]) => (
                   <button key={v} type="button" onClick={() => setWageType(v)} className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold transition ${wageType === v ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>{l}</button>

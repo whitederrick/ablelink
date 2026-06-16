@@ -114,6 +114,10 @@ export async function POST(req: NextRequest) {
     if (!contractStart || !contractEnd) {
       throw new Error("VALIDATION:계약 시작일과 종료일은 필수입니다.");
     }
+    // 임금액 필수 — 급여 기준 자동 생성/계산의 기준값. (근로계약서 법정 필수기재 사항)
+    if (wageAmount == null || wageAmount === "" || !(Number(wageAmount) > 0)) {
+      throw new Error("VALIDATION:임금액(시급/일급/월급)은 필수입니다.");
+    }
 
     const startDate = new Date(contractStart);
     const endDate   = new Date(contractEnd);
