@@ -762,8 +762,9 @@ function payslip(p: any): Promise<Buffer> {
 //   signatures:{ employer:{imageUrl?}, worker:{imageUrl?} }
 // }
 function employmentContract(p: any): Promise<Buffer> {
-  // 양식 분기: 성동07 전용 렌더러. (북부06는 3단계 — 현재 표준으로 렌더)
+  // 양식 분기: 기관 양식 전용 렌더러(성동07·북부06).
   if (p?.templateKey === "SEONGDONG_07") return employmentContract07(p);
+  if (p?.templateKey === "NORTH_06") return employmentContract06(p);
   const doc = newDoc(20);
   const x = mm(20), W = mm(170);
   const won = (n: any) => (n == null || n === "" ? "" : `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}`);
@@ -905,10 +906,12 @@ function employmentContract(p: any): Promise<Buffer> {
   return toBuffer(doc);
 }
 
-// ── 직무지도원 표준근로계약서 (성동장애인자립생활센터 양식) ──────────
-// 갑(기관) 정보는 사용 기관 데이터로 채움. templateData: { workerBirthDate, heardAndAcknowledged }
+// ── 직무지도원 표준근로계약서 (기관 양식: 성동07·북부06 공용) ──────────
+// 갑(기관) 정보는 사용 기관 데이터로 채움. cfg로 양식별 차이(시간표/듣고인지/을 라벨/지급일) 제어.
+// templateData: { workerBirthDate, heardAndAcknowledged }
 // ※ 조문 텍스트는 원본 양식 이미지 기준 — 최종 문구는 사용자 확인/교정 대상.
-function employmentContract07(p: any): Promise<Buffer> {
+type InstContractCfg = { eulNameLabel: string; timeMode: "table" | "inline"; showHeard: boolean; defaultPayday: string };
+function instContract(p: any, cfg: InstContractCfg): Promise<Buffer> {
   const doc = newDoc(20);
   const x = mm(20), W = mm(170);
   const won = (n: any) => (n == null || n === "" ? "______" : `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}`);
@@ -946,11 +949,11 @@ function employmentContract07(p: any): Promise<Buffer> {
   sub(`① "을"의 시급은 해당 연도 최저시급(${won(p.wageAmount)}원)으로 하며, 주휴수당은 별도로 지급한다.`);
   sub(`② "을"이 장애인 훈련생(취업자)을 2인 이상 동시에 지원(직무지도)하는 경우 시급의 120%를 지급한다. 다만 지원고용 현장훈련(적응지도) 중 직무지도 훈련생의 변동이 있는 경우(1명 지도)는 해당 임금으로 계산한다.`);
   sub(`③ 별도 수당은 위탁기관 사정에 따라 지급할 수 있다.`);
-  sub(`④ 임금은 매월 1일부터 말일까지 계산하여 익월 ${p.wagePayday || "10"}일에 지급한다.`);
+  sub(`④ 임금은 매월 1일부터 말일까지 계산하여 익월 ${p.wagePayday || cfg.defaultPayday}일에 지급한다.`);
   sub(`⑤ 임금은 "을" 명의의 예금통장으로 입금한다.`);
   sub(`⑥ 월 실지급액은 사회보장료(국민연금, 건강보험, 고용보험)를 제외한 금액이다.`);
-  // ⑦ 듣고 인지함 — 체크 시 표기 + 을 서명
-  {
+  // ⑦ 듣고 인지함 — 양식에 있을 때만(07). 체크 시 표기 + 을 서명
+  if (cfg.showHeard) {
     const txt = `⑦ "을"은 "갑"으로부터 위 임금 내용을 듣고 인지함.`;
     line(txt, { indent: mm(3), gap: 2 });
     if (td.heardAndAcknowledged) {
@@ -964,9 +967,8 @@ function employmentContract07(p: any): Promise<Buffer> {
   }
 
   art("제4조【근로시간 및 휴게시간】");
-  sub(`① 근로일별 소정근로시간은 아래와 같고 지원고용 현장훈련(취업 후 적응지도) 서비스 차원의 시간으로 한다.`);
-  // 시간표
-  {
+  if (cfg.timeMode === "table") {
+    sub(`① 근로일별 소정근로시간은 아래와 같고 지원고용 현장훈련(취업 후 적응지도) 서비스 차원의 시간으로 한다.`);
     const toMin = (t?: string) => { if (!t) return null; const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
     const ws = toMin(p.workStartTime), we = toMin(p.workEndTime), bs = toMin(p.breakStartTime), be = toMin(p.breakEndTime);
     let workH = "";
@@ -974,10 +976,7 @@ function employmentContract07(p: any): Promise<Buffer> {
     const cols = [mm(48), mm(28), mm(28), mm(28), mm(38)];
     const head = ["근로일", "소정근로시간", "시업시간", "종업시간", "휴게시간"];
     const row = [
-      `${p.contractStartText || ""} ~`,
-      workH || "",
-      p.workStartTime || "",
-      p.workEndTime || "",
+      `${p.contractStartText || ""} ~`, workH || "", p.workStartTime || "", p.workEndTime || "",
       (p.breakStartTime || p.breakEndTime) ? `${p.breakStartTime || ""}~${p.breakEndTime || ""}` : "",
     ];
     const rh = mm(7);
@@ -994,8 +993,14 @@ function employmentContract07(p: any): Promise<Buffer> {
     };
     drawRow(head, true); drawRow(row, false);
     y += mm(2);
+    sub(`② 휴게시간은 제1항의 표와 같되 업무특성을 고려하여 장애인 훈련생(취업자)의 휴게시간에 따라 분할하여 부여할 수 있다.`);
+  } else {
+    const note = (p.workStartTime && p.workEndTime)
+      ? ` (시업 ${p.workStartTime} ~ 종업 ${p.workEndTime}${(p.breakStartTime || p.breakEndTime) ? `, 휴게 ${p.breakStartTime || ""}~${p.breakEndTime || ""}` : ""})`
+      : "";
+    sub(`① 소정근로시간은 1일 8시간, 주 40시간 이내에서 지원고용 현장훈련(취업 후 적응지도) 서비스 차원으로 한다.${note}`);
+    sub(`② 휴게시간은 근로시간이 4시간인 경우 30분 이상, 8시간인 경우 1시간 이상을 근로시간 도중에 부여한다.`);
   }
-  sub(`② 휴게시간은 제1항의 표와 같되 업무특성을 고려하여 장애인 훈련생(취업자)의 휴게시간에 따라 분할하여 부여할 수 있다.`);
 
   art("제5조【근무일과 휴일】");
   sub(`① "을"은 장애인 훈련생(취업자)의 근무일에 근로하고, 주휴일은 1주간 소정근로일을 개근한 경우 1일의 유급휴일을 부여한다.`);
@@ -1006,7 +1011,7 @@ function employmentContract07(p: any): Promise<Buffer> {
 
   art("제7조【복무】");
   sub(`① "을"은 업무수행 시 준수할 사항이 발생할 경우 "갑"에게 보고하여 한다.`);
-  sub(`② "을"은 "갑"이 정한 성동장애인자립생활센터 취업규칙 및 제반 규정을 준수하여야 한다.`);
+  sub(`② "을"은 "갑"이 정한 ${emp} 취업규칙 및 제반 규정을 준수하여야 한다.`);
   sub(`③ "을"은 장애인 훈련생(취업자)의 직무 적응 현장훈련(취업 후 적응지도) 서비스 중 알게 된 정보를 누설하여서는 아니 된다.`);
   sub(`④ "을"은 업무 외 사적으로 훈련생(취업자)과 부당한 행위를 하여서는 아니 된다.`);
 
@@ -1035,7 +1040,7 @@ function employmentContract07(p: any): Promise<Buffer> {
   sub(`3. 제반 관련 규정을 위반하여 중대한 민원 및 "갑"에 손실을 입혔을 경우`, { indent: mm(6) });
 
   art("제12조【근로기준법의 적용】");
-  sub(`본 계약서에 명시되지 않은 사항은 성동장애인자립생활센터 취업규칙 및 운영규정, 또는 근로기준법령 관계법령에 따른다.`);
+  sub(`본 계약서에 명시되지 않은 사항은 ${emp} 취업규칙 및 운영규정, 또는 근로기준법령 관계법령에 따른다.`);
 
   art("제13조【근로계약서 교부】");
   sub(`본 계약서는 "갑"과 "을"의 서명날인 즉시 그 효력이 발생하며, 계약서에 날인한 후 각각 1부씩 보관한다.`);
@@ -1068,7 +1073,7 @@ function employmentContract07(p: any): Promise<Buffer> {
 
   // 1행: 기관명/직인  |  이름/서명
   rowL("위탁기관명", emp); drawImg(p.signatures?.employer?.imageUrl, colL + mm(55), y); // 직인
-  rowR("이  름", wkr); drawImg(p.signatures?.worker?.imageUrl, colR + mm(50), y);
+  rowR(cfg.eulNameLabel, wkr); drawImg(p.signatures?.worker?.imageUrl, colR + mm(50), y);
   y += mm(8);
   rowL("대 표 자", p.employerRepName || ""); rowR("생년월일", fmtBirth(td.workerBirthDate)); y += mm(8);
   rowL("소 재 지", p.employerAddress || ""); rowR("연 락 처", p.workerPhone || ""); y += mm(8);
@@ -1076,6 +1081,9 @@ function employmentContract07(p: any): Promise<Buffer> {
 
   return toBuffer(doc);
 }
+// 양식별 래퍼 — 차이(시간표/듣고인지/을 라벨/지급일 기본)만 cfg로 지정. 조문은 공용(사용자 교정 대상).
+function employmentContract07(p: any): Promise<Buffer> { return instContract(p, { eulNameLabel: "이  름", timeMode: "table", showHeard: true, defaultPayday: "10" }); }
+function employmentContract06(p: any): Promise<Buffer> { return instContract(p, { eulNameLabel: "직무지도원", timeMode: "inline", showHeard: false, defaultPayday: "14" }); }
 
 export type PdfDocType = "ATTENDANCE_SHEET" | "TRAINING_DAILY_LOG" | "ADAPTATION_DAILY_LOG" | "TRAINEE_FINAL_EVAL" | "ADAPTATION_FINAL_EVAL" | "PAYSLIP" | "EMPLOYMENT_CONTRACT";
 
