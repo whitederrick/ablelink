@@ -12,7 +12,7 @@ try {
 
 import { PrismaClient } from "@prisma/client";
 import { determineEligibility } from "../lib/payroll/insuranceEligibility";
-import { computeWeeklyHoliday, scheduledMinutesForWorkType } from "../lib/payroll/weeklyHoliday";
+import { computeWeeklyHoliday } from "../lib/payroll/weeklyHoliday";
 import { computeIncomeTax, type TaxBracket } from "../lib/payroll/incomeTax";
 
 const prisma = new PrismaClient();
@@ -103,13 +103,13 @@ async function main() {
 
     // 주휴(근로소득 단시간) — PayContract.weeklyHolidayPay 고정 오버라이드 반영
     if (ordinary > 0) {
-      const days = atts.map(a => ({ dateISO: a.workDate, scheduledMinutes: scheduledMinutesForWorkType(a.assignment?.workType ?? null, a.assignment?.customWorkStart ?? null, a.assignment?.customWorkEnd ?? null) }));
+      const days = atts.map(a => { const span = minutesBetween(a.startTime, a.endTime); const wt = a.assignment?.workType; const brk = wt === "FULL_DAY" ? 60 : (wt === "CUSTOM" && span >= 240 ? 30 : 0); return { dateISO: a.workDate, scheduledMinutes: Math.max(0, span - brk) }; });
       const wh = computeWeeklyHoliday({ days, workDaysPerWeek: empContract?.workDaysPerWeek ?? 5, ordinaryWage: ordinary, flatWeeklyHolidayPay: c.weeklyHolidayPay ? Number(c.weeklyHolidayPay) : null });
       if (wh.totalHolidayPay > 0) gross += wh.totalHolidayPay;
     }
 
     // 소득유형·4대보험 자동 판정
-    const monthlyScheduledMin = atts.reduce((s, a) => s + scheduledMinutesForWorkType(a.assignment?.workType ?? null, a.assignment?.customWorkStart ?? null, a.assignment?.customWorkEnd ?? null), 0);
+    const monthlyScheduledMin = paidMinutes;
     const employmentMonths = (empContract?.contractStart && empContract?.contractEnd) ? spanDays(empContract.contractStart, empContract.contractEnd) / 30 : Infinity;
     const firstStart = firstContract?.contractStart ?? empContract?.contractStart ?? periodStartDate;
     const elig = determineEligibility(

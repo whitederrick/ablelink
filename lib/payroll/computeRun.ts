@@ -5,7 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
-import { computeWeeklyHoliday, scheduledMinutesForWorkType } from "@/lib/payroll/weeklyHoliday";
+import { computeWeeklyHoliday } from "@/lib/payroll/weeklyHoliday";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
 import { determineEligibility } from "@/lib/payroll/insuranceEligibility";
 import { Decimal } from "@prisma/client/runtime/library";
@@ -101,7 +101,7 @@ export async function computePayrollItems(
       prisma.employmentContract.findFirst({
         where: { agencyId, workerId, contractStart: { lte: periodEndDate }, contractEnd: { gte: periodStartDate } },
         orderBy: { contractStart: "desc" },
-        select: { workDaysPerWeek: true, contractStart: true, contractEnd: true },
+        select: { workDaysPerWeek: true, contractStart: true, contractEnd: true, workStartTime: true, workEndTime: true, breakStartTime: true, breakEndTime: true },
       }),
       prisma.employmentContract.findFirst({
         where: { agencyId, workerId },
@@ -140,6 +140,12 @@ export async function computePayrollItems(
       return s + Math.max(0, span - unpaidBreakMin(a.assignment?.workType, span));
     }, 0);
     const paidHours = +(paidMinutes / 60).toFixed(2);
+    // 1일 소정근로시간(분) = 근로계약서 시업~종업 − 휴게. 주휴·보험 판정의 기준(약정시간). 없으면 출근부 기반 폴백.
+    const cMin = (t?: string | null) => { if (!t) return null; const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
+    const _cs = cMin(empContract?.workStartTime), _ce = cMin(empContract?.workEndTime), _cbs = cMin(empContract?.breakStartTime), _cbe = cMin(empContract?.breakEndTime);
+    const contractDailySojeMin = (_cs != null && _ce != null && _ce > _cs)
+      ? Math.max(0, (_ce - _cs) - (_cbs != null && _cbe != null && _cbe > _cbs ? _cbe - _cbs : 0))
+      : null;
     const overtimeHours = confirmedAtt.reduce(
       (s, a) => s + a.logs.reduce((t, l) => t + Number(l.extTime1on1) + Number(l.extTimeGroup), 0), 0);
 
@@ -181,10 +187,13 @@ export async function computePayrollItems(
 
       // 주휴수당: 근로소득(EMPLOYMENT) 단시간 — 2조건 자동 산식. PayContract.weeklyHolidayPay 고정 오버라이드.
       if (contract.incomeType === "EMPLOYMENT" && ordinaryWage > 0) {
-        const days = confirmedAtt.map((a) => ({
-          dateISO: a.workDate,
-          scheduledMinutes: scheduledMinutesForWorkType(a.assignment?.workType ?? null, a.assignment?.customWorkStart ?? null, a.assignment?.customWorkEnd ?? null),
-        }));
+        // 소정근로시간 = 실질 약정 근로시간(출퇴근·휴게지도 포함, 무급휴게만 제외) = 지급시간과 동일.
+        //  오전/오후 5.5h · 전일 8h. (주휴 = (1주 소정÷40)×8×시급)
+        const days = confirmedAtt.map((a) => {
+          const span = minutesBetween(a.startTime, a.endTime);
+          const fallback = Math.max(0, span - unpaidBreakMin(a.assignment?.workType, span));
+          return { dateISO: a.workDate, scheduledMinutes: contractDailySojeMin ?? fallback };
+        });
         const wh = computeWeeklyHoliday({
           days, workDaysPerWeek: empContract?.workDaysPerWeek ?? 5, ordinaryWage,
           flatWeeklyHolidayPay: contract.weeklyHolidayPay ? Number(contract.weeklyHolidayPay) : null,
@@ -240,9 +249,10 @@ export async function computePayrollItems(
     };
 
     // ── 소득유형·4대보험 자동 판정 ──
-    const monthlyScheduledMin = confirmedAtt.reduce((s, a) => s + scheduledMinutesForWorkType(
-      a.assignment?.workType ?? null, a.assignment?.customWorkStart ?? null, a.assignment?.customWorkEnd ?? null), 0);
-    const monthlyHours = +(monthlyScheduledMin / 60).toFixed(1);
+    // 월 소정근로시간 = 1일 소정(계약서 시업~종업−휴게) × 근로일. 없으면 지급시간(출근부) 기반. 월 60h 판정 기준.
+    const monthlyHours = contractDailySojeMin != null
+      ? +((contractDailySojeMin * workedDays) / 60).toFixed(1)
+      : +(paidMinutes / 60).toFixed(1);
     const employmentMonths = (empContract?.contractStart && empContract?.contractEnd)
       ? spanDays(empContract.contractStart, empContract.contractEnd) / 30
       : Infinity;
