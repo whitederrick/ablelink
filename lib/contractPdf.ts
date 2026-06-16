@@ -43,6 +43,8 @@ export function buildContractPdfPayload(c: any) {
     specialClauses: sc,
     templateKey: c.templateKey || "STANDARD",
     templateData: (c.templateData && typeof c.templateData === "object") ? c.templateData : {},
+    // 생년월일 단일 출처 = Worker.birthDate. 레거시 계약은 templateData 폴백.
+    workerBirthDate: c.user?.birthDate || (c.templateData && (c.templateData as any).workerBirthDate) || "",
     dateText: ymdK(signedDate),
     signatures: {
       employer: { imageUrl: c.adminSignatureUrl || undefined },

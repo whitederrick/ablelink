@@ -9,6 +9,7 @@ import { workerLabel } from "../_format";
 
 type Account = {
   id: string; loginId: string; workerName: string; phoneNumber: string;
+  birthDate: string | null;
   status: string; createdAt: string;
   bankName: string | null; accountNumber: string | null; accountHolder: string | null;
   hasPassbook: boolean; passbookUrl: string | null;
@@ -144,6 +145,7 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
   // 편집 필드
   const [workerName, setWorkerName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountHolder, setAccountHolder] = useState("");
@@ -168,6 +170,7 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
         setDetail(d);
         setWorkerName(d.account.workerName || "");
         setPhoneNumber(d.account.phoneNumber || "");
+        setBirthDate(d.account.birthDate || "");
         setBankName(d.account.bankName || "");
         setAccountNumber(d.account.accountNumber || "");
         setAccountHolder(d.account.accountHolder || "");
@@ -191,6 +194,7 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
         body: JSON.stringify({
           workerName: workerName.trim(),
           phoneNumber: phoneNumber.trim() || undefined,
+          birthDate: birthDate || null,
           resetPassword: resetPw,
           bankName, accountNumber, accountHolder,
         }),
@@ -262,6 +266,10 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
                     <div>
                       <label className={T.label}>전화번호</label>
                       <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} type="tel" placeholder="010-0000-0000" className={`w-full ${T.input}`} />
+                    </div>
+                    <div>
+                      <label className={T.label}>생년월일 <span className="font-semibold text-slate-400">(근로계약서 사용)</span></label>
+                      <input value={birthDate} onChange={e => setBirthDate(e.target.value)} type="date" className={`w-full ${T.input}`} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>

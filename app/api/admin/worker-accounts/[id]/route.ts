@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const w = await prisma.worker.findUnique({
       where: { id: workerId },
       select: {
-        id: true, loginId: true, workerName: true, phoneNumber: true, status: true, createdAt: true,
+        id: true, loginId: true, workerName: true, phoneNumber: true, birthDate: true, status: true, createdAt: true,
         bankName: true, accountNumber: true, accountHolder: true, passbookImageUrl: true,
       },
     });
@@ -70,6 +70,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           loginId: w.loginId,
           workerName: w.workerName,
           phoneNumber: w.phoneNumber,
+          birthDate: w.birthDate ?? null,
           status: String(w.status),
           createdAt: w.createdAt.toISOString(),
           bankName: w.bankName ?? null,

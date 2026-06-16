@@ -20,8 +20,7 @@ export interface ContractTemplate {
   extraFields: TemplateField[];
 }
 
-const BIRTH: TemplateField = { key: "workerBirthDate", label: "직무지도원 생년월일", type: "date" };
-
+// ※ 생년월일은 Worker.birthDate(직무지도원 관리/프로필) 단일 출처 사용 — 계약별 입력 제거.
 export const CONTRACT_TEMPLATES: ContractTemplate[] = [
   {
     key: "STANDARD",
@@ -34,7 +33,6 @@ export const CONTRACT_TEMPLATES: ContractTemplate[] = [
     label: "성동장애인자립생활센터 양식",
     sub: "기관 지정 양식(디지털)",
     extraFields: [
-      BIRTH,
       { key: "heardAndAcknowledged", label: "제3조⑧ ‘듣고 인지함’ 확인", type: "checkbox", hint: "직무지도원이 계약 내용을 듣고 인지하였음" },
     ],
   },
@@ -42,7 +40,7 @@ export const CONTRACT_TEMPLATES: ContractTemplate[] = [
     key: "NORTH_06",
     label: "서울시립북부장애인종합복지관 양식",
     sub: "기관 지정 양식(스캔)",
-    extraFields: [BIRTH],
+    extraFields: [],
   },
 ];
 

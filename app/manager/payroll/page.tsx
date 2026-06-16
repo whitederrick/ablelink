@@ -159,6 +159,7 @@ export default function PayrollPage() {
   const [loadingRun, setLoadingRun] = useState(false);
   const [detailPage, setDetailPage] = useState(1);
   const [editItem, setEditItem] = useState<RunItem | null>(null);
+  const [payslipItem, setPayslipItem] = useState<{ id: string; name: string } | null>(null);
   const [finalizing, setFinalizing] = useState(false);
   const [toast, setToast] = useState("");
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 4000); };
@@ -927,9 +928,8 @@ export default function PayrollPage() {
                         <td className={`${T.td} whitespace-nowrap font-black text-emerald-600`}>{comma(item.netPay)}원</td>
                         <td className={T.td}>
                           <div className="flex items-center justify-end gap-1.5">
-                            <a className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50"
-                              href={`/api/admin/payroll/items/${item.id}/payslip`}
-                              target="_blank" rel="noopener noreferrer">명세서</a>
+                            <button className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50"
+                              onClick={() => setPayslipItem({ id: item.id, name: item.workerName })}>명세서</button>
                             {selectedRun.status === "DRAFT" && (
                               <button className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50"
                                 onClick={() => setEditItem(item)}>수정</button>
@@ -965,6 +965,21 @@ export default function PayrollPage() {
           onClose={() => setEditItem(null)}
           onSaved={handleEditSaved}
         />
+      )}
+
+      {payslipItem && (
+        <div className={T.modalOverlay} onClick={e => { if (e.target === e.currentTarget) setPayslipItem(null); }}>
+          <div className="flex h-[90vh] w-full max-w-3xl flex-col rounded-3xl bg-white p-4 shadow-2xl shadow-slate-950/20">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <p className="text-sm font-black text-slate-900">{payslipItem.name} 급여명세서</p>
+              <div className="flex gap-2">
+                <a href={`/api/admin/payroll/items/${payslipItem.id}/payslip`} target="_blank" rel="noopener noreferrer" className={T.btnSecondary}>새 창</a>
+                <button onClick={() => setPayslipItem(null)} className={T.btnSecondary}>닫기</button>
+              </div>
+            </div>
+            <iframe src={`/api/admin/payroll/items/${payslipItem.id}/payslip`} className="w-full flex-1 rounded-xl border border-slate-200" title="급여명세서" />
+          </div>
+        </div>
       )}
 
       {toast && (

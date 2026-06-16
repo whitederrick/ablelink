@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     const c = await prisma.employmentContract.findUnique({
       where: { id: cid },
       include: {
-        user: { select: { workerName: true, phoneNumber: true } },
+        user: { select: { workerName: true, phoneNumber: true, birthDate: true } },
         agency: { select: { name: true, address: true, phoneNumber: true } },
       },
     });

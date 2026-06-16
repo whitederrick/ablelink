@@ -70,5 +70,7 @@ export function buildPayslipPayload(meta: PayslipMeta, item: PayslipItemData) {
     grossPay: Number(item.grossPay),
     totalDeduction: Number(item.totalDeduction),
     netPay: Number(item.netPay),
+    // 산재보험 — 전액 사업주 부담(워커 공제 아님). 비고 표기용.
+    employerIndustrial: Number(b.insurance?.employerIndustrial ?? 0),
   };
 }

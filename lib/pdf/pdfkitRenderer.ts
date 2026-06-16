@@ -715,7 +715,9 @@ function payslip(p: any): Promise<Buffer> {
   // ── 비고(본문 전체 높이 1셀) ──
   const notes: string[] = ["[지급내역]"];
   for (const r of payRows) if (r.method) notes.push(`○ ${r.name}: ${r.method}`);
-  notes.push("", "[공제내역]", "○ 소득세: 근로소득 간이세액표", "○ 주민세: 소득세의 10%", "○ 4대보험: 연도별 요율 적용", "", "※ 통상시급은 근로계약서에 따름");
+  notes.push("", "[공제내역]", "○ 소득세: 근로소득 간이세액표", "○ 주민세: 소득세의 10%", "○ 4대보험: 연도별 요율 적용");
+  if (Number(p.employerIndustrial) > 0) notes.push(`○ 산재보험: ${Math.round(Number(p.employerIndustrial)).toLocaleString("ko-KR")}원 (전액 사업주 부담, 급여 공제 아님)`);
+  notes.push("", "※ 통상시급은 근로계약서에 따름");
   doc.lineWidth(0.6).rect(xD, bodyTop, dW, bodyH).stroke("#000");
   doc.font("KR").fontSize(7.5).fillColor("#000").text(notes.join("\n"), xD + 4, bodyTop + 4, { width: dW - 8, align: "left", lineGap: 1.5 });
 
@@ -1075,7 +1077,7 @@ function instContract(p: any, cfg: InstContractCfg): Promise<Buffer> {
   rowL("위탁기관명", emp); drawImg(p.signatures?.employer?.imageUrl, colL + mm(55), y); // 직인
   rowR(cfg.eulNameLabel, wkr); drawImg(p.signatures?.worker?.imageUrl, colR + mm(50), y);
   y += mm(8);
-  rowL("대 표 자", p.employerRepName || ""); rowR("생년월일", fmtBirth(td.workerBirthDate)); y += mm(8);
+  rowL("대 표 자", p.employerRepName || ""); rowR("생년월일", fmtBirth(p.workerBirthDate ?? td.workerBirthDate)); y += mm(8);
   rowL("소 재 지", p.employerAddress || ""); rowR("연 락 처", p.workerPhone || ""); y += mm(8);
   rowR("주    소", p.workerAddress || ""); y += mm(8);
 

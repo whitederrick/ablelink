@@ -81,11 +81,20 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { workerName, phoneNumber, resetPassword, bankName, accountNumber, accountHolder } = body;
+    const { workerName, phoneNumber, resetPassword, bankName, accountNumber, accountHolder, birthDate } = body;
 
     const updates: Record<string, any> = {};
 
     if (workerName?.trim()) updates.workerName = workerName.trim();
+
+    // 생년월일(YYYY-MM-DD, 빈 값=null) — 근로계약서(07/06) 등에 사용되는 단일 출처
+    if (birthDate !== undefined) {
+      const b = typeof birthDate === "string" && birthDate.trim() ? birthDate.trim() : null;
+      if (b && !/^\d{4}-\d{2}-\d{2}$/.test(b)) {
+        return NextResponse.json({ success: false, message: "생년월일 형식이 올바르지 않습니다. (YYYY-MM-DD)" }, { status: 400 });
+      }
+      updates.birthDate = b;
+    }
 
     // 급여 계좌 보완(매니저 입력) — 빈 문자열은 null
     const bankStr = (v: any): string | null | undefined =>
