@@ -883,9 +883,14 @@ export default function PayrollPage() {
               <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px] border-collapse">
                 <thead>
-                  <tr>{["직무지도원 성명(아이디)", "소득유형", "급여유형", "보험유형", "근무일수 (인정 일수)", "근무시간 (인정 시간)", "지급액", "공제액", "실지급액", ""].map(h => (
-                    <th key={h} className={T.th}>{h}</th>
-                  ))}</tr>
+                  <tr>{["직무지도원 성명(아이디)", "소득유형", "급여유형", "보험유형", "근무일수 (인정 일수)", "근무시간 (인정 시간)", "지급액", "공제액", "실지급액", ""].map(h => {
+                    const i = h.indexOf(" ("); // " (인정 …)" 부분만 작게
+                    return (
+                      <th key={h} className={T.th}>
+                        {i >= 0 ? <>{h.slice(0, i)}<span className="ml-0.5 text-[11px] font-semibold text-slate-400">{h.slice(i + 1)}</span></> : h}
+                      </th>
+                    );
+                  })}</tr>
                 </thead>
                 <tbody>
                   {[...selectedRun.items].sort((a, b) => a.workerName.localeCompare(b.workerName, "ko")).slice((detailPage - 1) * DETAIL_PAGE_SIZE, detailPage * DETAIL_PAGE_SIZE).map(item => {
