@@ -87,13 +87,16 @@ async function main() {
     const workedDays = atts.length;
     const workedMinutes = atts.reduce((s, a) => s + minutesBetween(a.startTime, a.endTime), 0);
     const workedHours = +(workedMinutes / 60).toFixed(2);
+    // HOURLY 지급시간 = span − 무급휴게(전일 60·CUSTOM 4h↑ 30·오전/오후 0). computeRun과 동일 규칙.
+    const paidMinutes = atts.reduce((s, a) => { const span = minutesBetween(a.startTime, a.endTime); const wt = a.assignment?.workType; const brk = wt === "FULL_DAY" ? 60 : (wt === "CUSTOM" && span >= 240 ? 30 : 0); return s + Math.max(0, span - brk); }, 0);
+    const paidHours = +(paidMinutes / 60).toFixed(2);
     const overtimeHours = atts.reduce((s, a) => s + a.logs.reduce((t, l) => t + Number(l.extTime1on1) + Number(l.extTimeGroup), 0), 0);
 
     // 기본급 + 통상시급
     const use2 = traineeCount >= 2 && c.hourlyRate2Plus != null;
     const rate = use2 ? Number(c.hourlyRate2Plus) : Number(c.baseAmount);
     let gross = 0, ordinary = 0;
-    if (c.payType === "HOURLY") { gross = Math.round(workedHours * rate); ordinary = rate; }
+    if (c.payType === "HOURLY") { gross = Math.round(paidHours * rate); ordinary = rate; }
     else if (c.payType === "DAILY") { gross = workedDays * rate; const ad = workedDays ? workedMinutes / workedDays / 60 : 0; ordinary = ad ? Math.round(rate / ad) : 0; }
     else { gross = rate; ordinary = Math.round(rate / 209); }
     if (overtimeHours > 0 && ordinary > 0) gross += Math.round(overtimeHours * ordinary * 1.5);

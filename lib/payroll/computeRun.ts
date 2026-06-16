@@ -129,6 +129,17 @@ export async function computePayrollItems(
     const workedDays = confirmedAtt.length;
     const workedMinutes = confirmedAtt.reduce((s, a) => s + minutesBetween(a.startTime, a.endTime), 0);
     const workedHours = +(workedMinutes / 60).toFixed(2);
+    // HOURLY 지급시간 = 출근 span에서 무급 휴게만 제외.
+    //  · 전일(FULL_DAY): 8h 한도 → 출퇴근·휴게 지도수당 없음, 휴게 60분 제외(9h→8h)
+    //  · 오전/오후(AM/PM): 5.5h(출근30+퇴근30+휴게지도30 포함) = span 그대로
+    //  · CUSTOM 4h↑: 통상 휴게 30분 제외
+    const unpaidBreakMin = (wt: string | null | undefined, span: number) =>
+      (wt === "FULL_DAY" ? 60 : (wt === "CUSTOM" && span >= 240 ? 30 : 0));
+    const paidMinutes = confirmedAtt.reduce((s, a) => {
+      const span = minutesBetween(a.startTime, a.endTime);
+      return s + Math.max(0, span - unpaidBreakMin(a.assignment?.workType, span));
+    }, 0);
+    const paidHours = +(paidMinutes / 60).toFixed(2);
     const overtimeHours = confirmedAtt.reduce(
       (s, a) => s + a.logs.reduce((t, l) => t + Number(l.extTime1on1) + Number(l.extTimeGroup), 0), 0);
 
@@ -142,10 +153,10 @@ export async function computePayrollItems(
 
       let ordinaryWage = 0;
       if (contract.payType === "HOURLY") {
-        grossPay = Math.round(workedHours * rate);
+        grossPay = Math.round(paidHours * rate);
         ordinaryWage = rate;
-        calcMethods["기본급"] = `${workedHours}시간 × ${rate.toLocaleString()}원`;
-        breakdown = { payType: "HOURLY", hourlyRate: rate, traineeCount, used2PlusRate: use2PlusRate, workedMinutes, workedHours, workedDays, pendingDays };
+        calcMethods["기본급"] = `${paidHours}시간 × ${rate.toLocaleString()}원 (휴게 제외)`;
+        breakdown = { payType: "HOURLY", hourlyRate: rate, traineeCount, used2PlusRate: use2PlusRate, workedMinutes, workedHours, paidMinutes, paidHours, workedDays, pendingDays };
       } else if (contract.payType === "DAILY") {
         grossPay = workedDays * rate;
         const avgDailyH = workedDays > 0 ? workedMinutes / workedDays / 60 : 0;
@@ -199,8 +210,8 @@ export async function computePayrollItems(
     if (bd.payType === "HOURLY") {
       const rate1 = Number(contract?.baseAmount ?? bd.hourlyRate ?? 0);
       const rate2 = contract?.hourlyRate2Plus != null ? Number(contract.hourlyRate2Plus) : Math.round(rate1 * 1.2);
-      const h2 = bd.used2PlusRate ? workedHours : 0;
-      const h1 = bd.used2PlusRate ? 0 : workedHours;
+      const h2 = bd.used2PlusRate ? paidHours : 0;
+      const h1 = bd.used2PlusRate ? 0 : paidHours;
       payLines.push({ key: "support1", name: "1인지원", hours: h1, amount: Math.round(h1 * rate1), method: rate1 ? `지원시간 × ${rate1.toLocaleString()}원` : "" });
       payLines.push({ key: "support2", name: "2인이상지원", hours: h2, amount: Math.round(h2 * rate2), method: rate1 ? `지원시간 × ${rate1.toLocaleString()}원 × 120%` : "" });
     } else if (contract) {
@@ -213,7 +224,7 @@ export async function computePayrollItems(
     payLines.push({ key: "paidHoliday", name: "유급휴일", hours: 0, amount: 0 });
     payLines.push({ key: "paidLeave", name: "유급연차", hours: 0, amount: 0 });
     payLines.push({ key: "education", name: "교육수당", hours: 0, amount: 0 });
-    const totalHours = +(workedHours + whHours).toFixed(1);
+    const totalHours = +((bd.payType === "HOURLY" ? paidHours : workedHours) + whHours).toFixed(1);
 
     // 기본사항
     const wa = assignments.find((a) => a.workerId === workerId);
