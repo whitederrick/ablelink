@@ -481,6 +481,9 @@ model Agency {
   govContactEmail String? @map("gov_contact_email")
   govContactName  String? @map("gov_contact_name")
 
+  // 급여 자동 DRAFT 생성일(매월 N일, 1~28). null = 자동 생성 안 함(기본). 크론이 이 날 전월분 DRAFT 생성.
+  payrollAutoDay Int? @map("payroll_auto_day")
+
   // ✅ 구독 관리
   planType   AgencyPlanType @default(FREE) @map("plan_type")
   maxWorkers Int            @default(0) @map("max_workers") // 0 = 무제한(PRO)

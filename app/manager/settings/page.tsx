@@ -28,6 +28,8 @@ export default function AgencySettingsPage() {
   // 장애인고용공단 담당자 — 일지 관리 '문서 발송' 기본 수신자
   const [govEmail, setGovEmail] = useState("");
   const [govName, setGovName] = useState("");
+  // 급여 자동 DRAFT 생성일(매월 N일, 1~28). ""=자동 생성 안 함.
+  const [payrollAutoDay, setPayrollAutoDay] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -67,6 +69,7 @@ export default function AgencySettingsPage() {
           setRepresentativeName(d.data.representativeName || "");
           setGovEmail(d.data.govContactEmail || "");
           setGovName(d.data.govContactName || "");
+          setPayrollAutoDay(d.data.payrollAutoDay != null ? String(d.data.payrollAutoDay) : "");
           setSigUrl(d.data.representativeSignatureUrl || null);
         }
       })
@@ -105,7 +108,7 @@ export default function AgencySettingsPage() {
       const r = await fetch("/api/admin/agency-profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumber, address: fullAddress, businessNumber, representativeName, govContactEmail: govEmail, govContactName: govName }),
+        body: JSON.stringify({ phoneNumber, address: fullAddress, businessNumber, representativeName, govContactEmail: govEmail, govContactName: govName, payrollAutoDay: payrollAutoDay === "" ? null : Number(payrollAutoDay) }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.message);
@@ -340,6 +343,19 @@ export default function AgencySettingsPage() {
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <input value={govName} onChange={e => setGovName(e.target.value)} placeholder="담당자명 (예: 김공단)" className={`w-full ${T.input}`} />
               <input value={govEmail} onChange={e => setGovEmail(e.target.value)} placeholder="이메일 (예: officer@kead.or.kr)" type="email" inputMode="email" className={`w-full ${T.input}`} />
+            </div>
+          </div>
+
+          {/* 급여 자동 생성일 — 매월 N일 전월분 DRAFT 자동 계산(담당자 검토·확정 필요) */}
+          <div className="border-t border-slate-100 pt-4">
+            <label className={T.label}>급여 자동 생성일</label>
+            <p className="mb-2 text-[11px] font-semibold text-slate-400">매월 이 날짜에 <b>전월분 급여를 자동 계산(초안)</b>합니다. 발급은 담당자가 검토 후 확정해야 됩니다. 비우면 자동 생성 안 함.</p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-slate-500">매월</span>
+              <input type="number" min={1} max={28} value={payrollAutoDay}
+                onChange={e => setPayrollAutoDay(e.target.value)}
+                placeholder="미사용" className={`w-24 ${T.input}`} />
+              <span className="text-sm font-semibold text-slate-500">일 (1~28, 비우면 사용 안 함)</span>
             </div>
           </div>
 

@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { computeWorkTimes, kstWallTimeToInstant } from "@/lib/workSchedule";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
+import { computePayrollItems } from "@/lib/payroll/computeRun";
+import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
@@ -32,6 +34,7 @@ export async function GET(req: NextRequest) {
   let expiryNotified = 0;
   let exemptCreated  = 0;
   let surveysSent    = 0;
+  let payrollDrafted = 0;
   const errors: string[] = [];
 
   // ── 1. 전일 미확정 출근 처리 ───────────────────────────────────
@@ -233,11 +236,40 @@ export async function GET(req: NextRequest) {
     }
   } catch (e: any) { errors.push(`만족도자동: ${e.message}`); }
 
-  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 퇴근미실행:${missedFlagged} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent}`, errors);
+  // ── 6. 매월 자동 급여 DRAFT 생성 (에이전시별 설정일) ──
+  // 오늘(KST) 날짜 == 기관 payrollAutoDay 인 기관에 대해 전월분 급여를 DRAFT로 자동 생성.
+  // 이미 해당 월 run이 있으면 건너뜀(확정/초안 보존). 명세서 발급은 담당자 확정 시(자동 X).
+  try {
+    const todayKst = kstDateStr(0);            // YYYY-MM-DD (KST)
+    const todayDay = Number(todayKst.slice(8, 10));
+    const [ky, km] = todayKst.split("-").map(Number);
+    const py = km === 1 ? ky - 1 : ky;
+    const pm = km === 1 ? 12 : km - 1;
+    const prevYm = `${py}-${String(pm).padStart(2, "0")}`;   // 전월 YYYY-MM
+
+    const agencies = await prisma.agency.findMany({
+      where: { payrollAutoDay: todayDay, isActive: true } as any,
+      select: { id: true },
+    });
+    for (const ag of agencies) {
+      try {
+        const plan = await checkAgencyPlanAccess(ag.id, "PAYROLL");
+        if (!plan.allowed) continue;
+        const exists = await prisma.payrollRun.findUnique({ where: { agencyId_yearMonth: { agencyId: ag.id, yearMonth: prevYm } }, select: { id: true } });
+        if (exists) continue; // 이미 있으면 보존(덮어쓰지 않음)
+        const { items, userCount } = await computePayrollItems(ag.id, prevYm);
+        if (userCount === 0 || items.length === 0) continue;
+        await prisma.payrollRun.create({ data: { agencyId: ag.id, yearMonth: prevYm, status: "DRAFT", items: { create: items } } });
+        payrollDrafted++;
+      } catch (e: any) { errors.push(`급여자동[${ag.id}]: ${e.message}`); }
+    }
+  } catch (e: any) { errors.push(`급여자동생성: ${e.message}`); }
+
+  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 퇴근미실행:${missedFlagged} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent} 급여초안:${payrollDrafted}`, errors);
 
   return NextResponse.json({
     success: true, yesterday,
-    autoConfirmed, missedFlagged, tokensCleared, expiryNotified, exemptCreated, surveysSent,
+    autoConfirmed, missedFlagged, tokensCleared, expiryNotified, exemptCreated, surveysSent, payrollDrafted,
     errors,
   });
 }
