@@ -261,6 +261,19 @@ export async function GET(req: NextRequest) {
         if (userCount === 0 || items.length === 0) continue;
         await prisma.payrollRun.create({ data: { agencyId: ag.id, yearMonth: prevYm, status: "DRAFT", items: { create: items } } });
         payrollDrafted++;
+        // 담당자 알림(앱 내 무료) — 활성 매니저에게 초안 생성 알림
+        try {
+          const mgrs = await prisma.manager.findMany({ where: { agencyId: ag.id, isActive: true }, select: { id: true } });
+          if (mgrs.length > 0) {
+            await prisma.managerNotice.createMany({
+              data: mgrs.map((mg) => ({
+                managerId: mg.id,
+                title: `${prevYm} 급여 초안 자동 생성`,
+                body: `${prevYm} 급여가 출근부·근로계약 기준으로 자동 계산(초안)되었습니다.\n급여 관리 → 월 급여에서 검토 후 확정해 주세요. (확정 시 직무지도원에게 명세서가 발급됩니다)`,
+              })),
+            });
+          }
+        } catch { /* 알림 실패 무시 */ }
       } catch (e: any) { errors.push(`급여자동[${ag.id}]: ${e.message}`); }
     }
   } catch (e: any) { errors.push(`급여자동생성: ${e.message}`); }
