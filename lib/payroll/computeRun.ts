@@ -1,8 +1,7 @@
 // lib/payroll/computeRun.ts
 // 월별 급여 계산(읽기 전용) — 에이전시·연월로 PayrollItem 입력값 배열을 산출한다.
-// DB에 쓰지 않는다(생성은 호출측 트랜잭션). 매월 자동 크론(cron/daily)이 사용.
-// ⚠️ 동기화 주의: 이 계산 로직은 app/api/admin/payroll/runs/route.ts POST의 인라인 계산과 "동일"하다.
-//    (현재 통합 안 함 — route는 라이브 검증된 코드라 보존) 계산 규칙 변경 시 양쪽을 함께 수정할 것.
+// DB에 쓰지 않는다(생성은 호출측 트랜잭션). **급여 계산의 단일 소스** —
+// 수동 계산(app/api/admin/payroll/runs POST)과 매월 자동 크론(cron/daily)이 모두 이 함수를 사용.
 
 import { prisma } from "@/lib/prisma";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
