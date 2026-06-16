@@ -6,6 +6,7 @@
 import { prisma } from "@/lib/prisma";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { computeWeeklyHoliday } from "@/lib/payroll/weeklyHoliday";
+import { getKrHolidays } from "@/lib/krHolidays";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
 import { determineEligibility } from "@/lib/payroll/insuranceEligibility";
 import { Decimal } from "@prisma/client/runtime/library";
@@ -101,7 +102,7 @@ export async function computePayrollItems(
       prisma.employmentContract.findFirst({
         where: { agencyId, workerId, contractStart: { lte: periodEndDate }, contractEnd: { gte: periodStartDate } },
         orderBy: { contractStart: "desc" },
-        select: { workDaysPerWeek: true, contractStart: true, contractEnd: true, workStartTime: true, workEndTime: true, breakStartTime: true, breakEndTime: true },
+        select: { workDaysPerWeek: true, weeklyHoliday: true, contractStart: true, contractEnd: true, workStartTime: true, workEndTime: true, breakStartTime: true, breakEndTime: true },
       }),
       prisma.employmentContract.findFirst({
         where: { agencyId, workerId },
@@ -185,6 +186,40 @@ export async function computePayrollItems(
         calcMethods["연장근로수당"] = `${overtimeHours}시간 × ${ordinaryWage.toLocaleString()}원 × 1.5`;
       }
 
+      // 야간(22:00~06:00)·휴일(공휴일/주휴일) 근로 자동검출 → 0.5 가산수당. (평일·주간 근무는 0)
+      //  ※ 출근부 실제 시각 기준 자동 산정 — 검출 규칙은 사용자 검토 대상.
+      if (ordinaryWage > 0) {
+        const KST = 9 * 3600 * 1000;
+        const kstMin = (d: Date) => Math.floor(((d.getTime() + KST) % 86400000) / 60000);
+        const ovl = (s: number, e: number, a: number, b: number) => Math.max(0, Math.min(e, b) - Math.max(s, a));
+        const DOW: Record<string, number> = { "일": 0, "월": 1, "화": 2, "수": 3, "목": 4, "금": 5, "토": 6 };
+        const whDow = empContract?.weeklyHoliday ? (DOW[empContract.weeklyHoliday] ?? 0) : 0; // 주휴일 요일(기본 일)
+        const holidaySet = new Set(Object.keys(getKrHolidays(y, m)));
+        let nightMin = 0, holidayMin = 0;
+        for (const a of confirmedAtt) {
+          if (!a.startTime || !a.endTime) continue;
+          const s = kstMin(a.startTime), e = kstMin(a.endTime);
+          if (e > s) nightMin += ovl(s, e, 0, 360) + ovl(s, e, 1320, 1440); // 자정 안 넘는 경우만
+          const [yy, mm2, dd] = a.workDate.split("-").map(Number);
+          const dow = new Date(Date.UTC(yy, mm2 - 1, dd)).getUTCDay();
+          if (holidaySet.has(a.workDate) || dow === whDow) holidayMin += Math.max(0, e - s);
+        }
+        if (nightMin > 0) {
+          const nightHours = +(nightMin / 60).toFixed(2);
+          const pay = Math.round(nightHours * ordinaryWage * 0.5);
+          grossPay += pay;
+          (breakdown as any).nightHours = nightHours; (breakdown as any).nightPay = pay;
+          calcMethods["야간근로수당"] = `${nightHours}시간 × ${ordinaryWage.toLocaleString()}원 × 0.5`;
+        }
+        if (holidayMin > 0) {
+          const holidayHours = +(holidayMin / 60).toFixed(2);
+          const pay = Math.round(holidayHours * ordinaryWage * 0.5);
+          grossPay += pay;
+          (breakdown as any).holidayHours = holidayHours; (breakdown as any).holidayPay = pay;
+          calcMethods["휴일근로수당"] = `${holidayHours}시간 × ${ordinaryWage.toLocaleString()}원 × 0.5`;
+        }
+      }
+
       // 주휴수당: 근로소득(EMPLOYMENT) 단시간 — 2조건 자동 산식. PayContract.weeklyHolidayPay 고정 오버라이드.
       if (contract.incomeType === "EMPLOYMENT" && ordinaryWage > 0) {
         // 소정근로시간 = 실질 약정 근로시간(출퇴근·휴게지도 포함, 무급휴게만 제외) = 지급시간과 동일.
@@ -215,7 +250,7 @@ export async function computePayrollItems(
     const owage = Number(bd.ordinaryWage ?? 0);
     const whPay = Number(bd.weeklyHolidayPay ?? 0);
     const whHours = owage > 0 ? +(whPay / owage).toFixed(1) : 0;
-    const basePay = Math.round(grossPay - Number(bd.overtimePay ?? 0) - whPay);
+    const basePay = Math.round(grossPay - Number(bd.overtimePay ?? 0) - Number(bd.nightPay ?? 0) - Number(bd.holidayPay ?? 0) - whPay);
     const payLines: { key: string; name: string; hours: number; amount: number; method?: string }[] = [];
     if (bd.payType === "HOURLY") {
       const rate1 = Number(contract?.baseAmount ?? bd.hourlyRate ?? 0);
@@ -229,6 +264,12 @@ export async function computePayrollItems(
     }
     if (Number(bd.overtimePay ?? 0) > 0) {
       payLines.push({ key: "overtime", name: "연장근로수당", hours: Number(bd.overtimeHours ?? 0), amount: Number(bd.overtimePay), method: calcMethods["연장근로수당"] ?? "" });
+    }
+    if (Number(bd.nightPay ?? 0) > 0) {
+      payLines.push({ key: "night", name: "야간근로수당", hours: Number(bd.nightHours ?? 0), amount: Number(bd.nightPay), method: calcMethods["야간근로수당"] ?? "" });
+    }
+    if (Number(bd.holidayPay ?? 0) > 0) {
+      payLines.push({ key: "holiday", name: "휴일근로수당", hours: Number(bd.holidayHours ?? 0), amount: Number(bd.holidayPay), method: calcMethods["휴일근로수당"] ?? "" });
     }
     payLines.push({ key: "weeklyHoliday", name: "주휴수당", hours: whHours, amount: whPay, method: calcMethods["주휴수당"] ?? "" });
     payLines.push({ key: "paidHoliday", name: "유급휴일", hours: 0, amount: 0 });
