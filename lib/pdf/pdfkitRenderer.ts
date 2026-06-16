@@ -762,6 +762,8 @@ function payslip(p: any): Promise<Buffer> {
 //   signatures:{ employer:{imageUrl?}, worker:{imageUrl?} }
 // }
 function employmentContract(p: any): Promise<Buffer> {
+  // 양식 분기: 성동07 전용 렌더러. (북부06는 3단계 — 현재 표준으로 렌더)
+  if (p?.templateKey === "SEONGDONG_07") return employmentContract07(p);
   const doc = newDoc(20);
   const x = mm(20), W = mm(170);
   const won = (n: any) => (n == null || n === "" ? "" : `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}`);
@@ -899,6 +901,178 @@ function employmentContract(p: any): Promise<Buffer> {
   drawSignName("주        소", p.workerAddress);
   drawSignName("연  락  처", p.workerPhone);
   drawSignName("성        명", p.workerName, sig.worker);
+
+  return toBuffer(doc);
+}
+
+// ── 직무지도원 표준근로계약서 (성동장애인자립생활센터 양식) ──────────
+// 갑(기관) 정보는 사용 기관 데이터로 채움. templateData: { workerBirthDate, heardAndAcknowledged }
+// ※ 조문 텍스트는 원본 양식 이미지 기준 — 최종 문구는 사용자 확인/교정 대상.
+function employmentContract07(p: any): Promise<Buffer> {
+  const doc = newDoc(20);
+  const x = mm(20), W = mm(170);
+  const won = (n: any) => (n == null || n === "" ? "______" : `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}`);
+  const td = p.templateData ?? {};
+
+  let y = mm(15);
+  // 제목(박스 없음, 가운데)
+  doc.font("Batang-Bold").fontSize(18).fillColor("#000").text("직무지도원 표준근로계약서", x, y, { width: W, align: "center" });
+  y += mm(12);
+
+  const line = (text: string, opts: { size?: number; bold?: boolean; indent?: number; gap?: number } = {}) => {
+    const { size = 10, bold = false, indent = 0, gap = 3 } = opts;
+    const lx = x + indent, lw = W - indent;
+    if (y + doc.heightOfString(text, { width: lw, lineGap: 2 }) > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
+    doc.font(bold ? "KR-Bold" : "KR").fontSize(size).fillColor("#000").text(text, lx, y, { width: lw, lineGap: 2 });
+    y = y + doc.heightOfString(text, { width: lw, lineGap: 2 }) + gap;
+  };
+  const art = (t: string) => line(t, { bold: true, size: 10.5, gap: 3 });
+  const sub = (t: string, o: { indent?: number } = {}) => line(t, { indent: o.indent ?? mm(3), gap: 2 });
+
+  const emp = p.employerBizName || "________________";
+  const wkr = p.workerName || "________";
+
+  line(`${emp} (이하 "갑"이라 한다)와(과) ${wkr} (이하 "을"이라 한다)는 다음과 같이 근로계약을 체결하고 상호 성실히 이행할 것을 약정한다.`, { gap: 8 });
+
+  art("제1조【근로계약기간】");
+  sub(`① "을"의 근로계약기간은 ${p.contractStartText || "____년 __월 __일"}부터 ~ ${p.contractEndText || "____년 __월 __일"}까지로 한다.`);
+  sub(`② 근로계약 만료 시 또는 훈련생(취업자) 지원고용 현장훈련(취업 후 적응지도) 등 서비스가 종료된 경우 본 계약은 종료된 것으로 간주한다.`);
+
+  art("제2조【근로 장소 및 직무】");
+  sub(`① "을"의 근로 장소는 장애인 훈련생(취업자)이 훈련(근무)하는 ( ${p.workLocation || "____________"} )으로 한다. 단, 업무상 필요한 경우 "갑"은 "을"과 협의하여 근로 장소를 변경할 수 있다.`);
+  sub(`② "을"의 직무는 장애인 훈련생(취업자)이 장애로 인하여 독자적인 현장훈련(직무수행)이 어려운 경우 직무지도를 매개하여 안정적·지속적으로 지원하는 중증장애인 지원고용 직무지도로 한다.`);
+
+  art("제3조【임금】");
+  sub(`① "을"의 시급은 해당 연도 최저시급(${won(p.wageAmount)}원)으로 하며, 주휴수당은 별도로 지급한다.`);
+  sub(`② "을"이 장애인 훈련생(취업자)을 2인 이상 동시에 지원(직무지도)하는 경우 시급의 120%를 지급한다. 다만 지원고용 현장훈련(적응지도) 중 직무지도 훈련생의 변동이 있는 경우(1명 지도)는 해당 임금으로 계산한다.`);
+  sub(`③ 별도 수당은 위탁기관 사정에 따라 지급할 수 있다.`);
+  sub(`④ 임금은 매월 1일부터 말일까지 계산하여 익월 ${p.wagePayday || "10"}일에 지급한다.`);
+  sub(`⑤ 임금은 "을" 명의의 예금통장으로 입금한다.`);
+  sub(`⑥ 월 실지급액은 사회보장료(국민연금, 건강보험, 고용보험)를 제외한 금액이다.`);
+  // ⑦ 듣고 인지함 — 체크 시 표기 + 을 서명
+  {
+    const txt = `⑦ "을"은 "갑"으로부터 위 임금 내용을 듣고 인지함.`;
+    line(txt, { indent: mm(3), gap: 2 });
+    if (td.heardAndAcknowledged) {
+      const mark = "( 듣고 인지함 )";
+      doc.font("KR-Bold").fontSize(10).fillColor("#000").text(mark, x + mm(60), y - mm(5.5));
+      const sig = p.signatures?.worker;
+      if (sig?.imageUrl && String(sig.imageUrl).startsWith("data:image")) {
+        try { doc.image(Buffer.from(sig.imageUrl.split(",")[1], "base64"), x + mm(100), y - mm(8), { fit: [mm(28), mm(11)] }); } catch { /* 무시 */ }
+      }
+    }
+  }
+
+  art("제4조【근로시간 및 휴게시간】");
+  sub(`① 근로일별 소정근로시간은 아래와 같고 지원고용 현장훈련(취업 후 적응지도) 서비스 차원의 시간으로 한다.`);
+  // 시간표
+  {
+    const toMin = (t?: string) => { if (!t) return null; const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
+    const ws = toMin(p.workStartTime), we = toMin(p.workEndTime), bs = toMin(p.breakStartTime), be = toMin(p.breakEndTime);
+    let workH = "";
+    if (ws != null && we != null) { let mins = we - ws; if (bs != null && be != null) mins -= (be - bs); workH = (mins / 60).toFixed(1).replace(/\.0$/, ""); }
+    const cols = [mm(48), mm(28), mm(28), mm(28), mm(38)];
+    const head = ["근로일", "소정근로시간", "시업시간", "종업시간", "휴게시간"];
+    const row = [
+      `${p.contractStartText || ""} ~`,
+      workH || "",
+      p.workStartTime || "",
+      p.workEndTime || "",
+      (p.breakStartTime || p.breakEndTime) ? `${p.breakStartTime || ""}~${p.breakEndTime || ""}` : "",
+    ];
+    const rh = mm(7);
+    if (y + rh * 2 > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
+    const drawRow = (vals: string[], bold: boolean) => {
+      let cx = x;
+      doc.font(bold ? "KR-Bold" : "KR").fontSize(9).fillColor("#000");
+      cols.forEach((cw, i) => {
+        doc.lineWidth(0.6).rect(cx, y, cw, rh).stroke("#000");
+        doc.text(vals[i] ?? "", cx + mm(1), y + (rh - doc.heightOfString(vals[i] ?? "", { width: cw - mm(2) })) / 2, { width: cw - mm(2), align: "center" });
+        cx += cw;
+      });
+      y += rh;
+    };
+    drawRow(head, true); drawRow(row, false);
+    y += mm(2);
+  }
+  sub(`② 휴게시간은 제1항의 표와 같되 업무특성을 고려하여 장애인 훈련생(취업자)의 휴게시간에 따라 분할하여 부여할 수 있다.`);
+
+  art("제5조【근무일과 휴일】");
+  sub(`① "을"은 장애인 훈련생(취업자)의 근무일에 근로하고, 주휴일은 1주간 소정근로일을 개근한 경우 1일의 유급휴일을 부여한다.`);
+  sub(`② 휴일·휴가 등 본 계약에 정하지 않은 사항은 근로기준법령 및 "갑"의 취업규칙에 따른다.`);
+
+  art("제6조【의무】");
+  sub(`① "을"은 직무지도 훈련일지 및 직무지도원 출근부를 매월 성실히 작성하여 "갑"에게 제출하여야 한다.`);
+
+  art("제7조【복무】");
+  sub(`① "을"은 업무수행 시 준수할 사항이 발생할 경우 "갑"에게 보고하여 한다.`);
+  sub(`② "을"은 "갑"이 정한 성동장애인자립생활센터 취업규칙 및 제반 규정을 준수하여야 한다.`);
+  sub(`③ "을"은 장애인 훈련생(취업자)의 직무 적응 현장훈련(취업 후 적응지도) 서비스 중 알게 된 정보를 누설하여서는 아니 된다.`);
+  sub(`④ "을"은 업무 외 사적으로 훈련생(취업자)과 부당한 행위를 하여서는 아니 된다.`);
+
+  art("제8조【비밀유지】");
+  sub(`① "을"은 장애인 훈련생(취업자)의 개인정보를 본래 용도로 사용하며, 다른 사람·기관에 제공하여서는 아니 된다.`);
+  sub(`② "을"은 업무수행 시 발생하는 사업장의 정보 및 장애인 훈련생(취업자)의 개인정보를 보호·관리·유지하여 누설하여서는 안 되며, 이를 위반하는 경우 모든 책임은 "을"이 진다.`);
+
+  art("제9조【재해보상】");
+  sub(`"을"이 업무상 재해를 당하였을 경우 산업재해보상보험법에 의거 보상한다.`);
+
+  art("제10조【배상】");
+  sub(`"을"은 다음 각 호에 해당하는 경우에는 "갑"에게 배상하여야 한다.`);
+  sub(`1. 거짓 또는 그 밖의 부정한 방법으로 임금을 받았을 경우`, { indent: mm(6) });
+  sub(`2. 지원고용사업의 사업적 부분의 손해를 활동하는 경우`, { indent: mm(6) });
+
+  art("제11조【계약해지 및 해고】");
+  sub(`① "갑"은 다음 각 호에 해당하는 경우 계약 만료 전이라도 계약을 해지할 수 있다.`);
+  sub(`1. "갑"이 지원고용(직무지도원 관리) 사업을 중단하였을 경우`, { indent: mm(6) });
+  sub(`2. 장애인 훈련생(취업자)의 현장훈련 거부·취소 등 현장훈련(취업)이 종료된 경우`, { indent: mm(6) });
+  sub(`3. 장애인 근로자가 속한 사업주에게 근로를 제공하는 등 직무지도원 의무를 성실히 수행하지 않을 경우`, { indent: mm(6) });
+  sub(`4. "을"이 무단·조퇴·음주·근무지 이탈, 위탁기관의 지시 불응 등 근무태도가 불성실한 경우`, { indent: mm(6) });
+  sub(`5. 신체·정신상의 이유로 업무수행이 곤란한 경우`, { indent: mm(6) });
+  sub(`② "을"은 다음 각 호에 해당하는 경우 계약을 해지할 수 있다.`);
+  sub(`1. 제8조(의무)를 이행하지 않을 경우 / 제10조(배상)에 해당하는 경우`, { indent: mm(6) });
+  sub(`2. "갑"이 지정한 장애인 훈련생(취업자)과 특별한 사유 없이 3번 이상 근로를 거부하였을 경우`, { indent: mm(6) });
+  sub(`3. 제반 관련 규정을 위반하여 중대한 민원 및 "갑"에 손실을 입혔을 경우`, { indent: mm(6) });
+
+  art("제12조【근로기준법의 적용】");
+  sub(`본 계약서에 명시되지 않은 사항은 성동장애인자립생활센터 취업규칙 및 운영규정, 또는 근로기준법령 관계법령에 따른다.`);
+
+  art("제13조【근로계약서 교부】");
+  sub(`본 계약서는 "갑"과 "을"의 서명날인 즉시 그 효력이 발생하며, 계약서에 날인한 후 각각 1부씩 보관한다.`);
+
+  // 작성일
+  y += mm(4);
+  if (y + mm(48) > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
+  doc.font("KR").fontSize(11).fillColor("#000").text(p.dateText || "          년      월      일", x, y, { width: W, align: "center" });
+  y += mm(10);
+
+  // 갑/을 2열 서명란
+  const colL = x, colR = x + mm(90);
+  doc.font("KR-Bold").fontSize(11).text("[ 갑 ]", colL, y, { width: mm(80), align: "center" });
+  doc.text("[ 을 ]", colR, y, { width: mm(80), align: "center" });
+  y += mm(9);
+
+  const fmtBirth = (b?: string) => (b ? String(b).replace(/-/g, ".") : "");
+  const drawImg = (url: string | undefined, ix: number, iy: number) => {
+    if (!url || !String(url).startsWith("data:image")) return;
+    try {
+      const img = Buffer.from(url.split(",")[1], "base64");
+      const meta = pngSize(img);
+      const square = !!meta && Math.abs(meta.w / meta.h - 1) < 0.12;
+      if (square) doc.image(img, ix, iy - mm(6), { fit: [mm(16), mm(16)] });
+      else doc.image(img, ix, iy - mm(3), { fit: [mm(28), mm(11)] });
+    } catch { /* 무시 */ }
+  };
+  const rowL = (label: string, val: string) => { doc.font("KR").fontSize(10).fillColor("#000").text(`■ ${label} : ${val || ""}`, colL, y, { width: mm(85) }); };
+  const rowR = (label: string, val: string) => { doc.font("KR").fontSize(10).fillColor("#000").text(`■ ${label} : ${val || ""}`, colR, y, { width: mm(80) }); };
+
+  // 1행: 기관명/직인  |  이름/서명
+  rowL("위탁기관명", emp); drawImg(p.signatures?.employer?.imageUrl, colL + mm(55), y); // 직인
+  rowR("이  름", wkr); drawImg(p.signatures?.worker?.imageUrl, colR + mm(50), y);
+  y += mm(8);
+  rowL("대 표 자", p.employerRepName || ""); rowR("생년월일", fmtBirth(td.workerBirthDate)); y += mm(8);
+  rowL("소 재 지", p.employerAddress || ""); rowR("연 락 처", p.workerPhone || ""); y += mm(8);
+  rowR("주    소", p.workerAddress || ""); y += mm(8);
 
   return toBuffer(doc);
 }

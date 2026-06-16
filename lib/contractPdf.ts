@@ -41,6 +41,8 @@ export function buildContractPdfPayload(c: any) {
     wagePayday: c.wagePayday,
     wagePayMethod: c.wagePayMethod,
     specialClauses: sc,
+    templateKey: c.templateKey || "STANDARD",
+    templateData: (c.templateData && typeof c.templateData === "object") ? c.templateData : {},
     dateText: ymdK(signedDate),
     signatures: {
       employer: { imageUrl: c.adminSignatureUrl || undefined },

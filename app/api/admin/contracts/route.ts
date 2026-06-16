@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess, checkQuota } from "@/lib/planGuard";
+import { isValidTemplateKey, DEFAULT_TEMPLATE_KEY } from "@/lib/contractTemplates";
 import { sendAlimtalk } from "@/lib/kakao";
 import { randomUUID } from "crypto";
 import { hash } from "bcryptjs";
@@ -109,6 +110,7 @@ export async function POST(req: NextRequest) {
       applyRepSignature,  // 대표 서명 '적용' 명시 액션(true일 때만 대표 서명 주입)
       workerAddress,
       clauseIds,  // 선택한 특약 조항 id 배열 → 스냅샷
+      templateKey, templateData,  // 계약서 양식 + 양식별 추가 입력값
     } = body;
 
     if (!contractStart || !contractEnd) {
@@ -259,6 +261,8 @@ export async function POST(req: NextRequest) {
     // ─── 계약서 생성 ────────────────────────────────────────────
     const signToken = randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7일
+    const resolvedTemplateKey = isValidTemplateKey(templateKey) ? templateKey : DEFAULT_TEMPLATE_KEY;
+    const resolvedTemplateData = templateData && typeof templateData === "object" ? templateData : undefined;
 
     const contract = await prisma.employmentContract.create({
       data: {
@@ -306,7 +310,9 @@ export async function POST(req: NextRequest) {
         tokenExpiresAt: expiresAt,
         status: "PENDING",
         createdByManagerId: scope.managerId,
-      },
+        templateKey: resolvedTemplateKey,
+        templateData: resolvedTemplateData,
+      } as any,
     });
 
     // ─── 카카오 알림톡 발송 ─────────────────────────────────────

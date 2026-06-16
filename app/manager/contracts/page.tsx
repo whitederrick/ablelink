@@ -6,6 +6,7 @@ import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import { CONTRACT_TEMPLATES, getTemplate, DEFAULT_TEMPLATE_KEY } from "@/lib/contractTemplates";
 import { StatCardRow } from "../_components/StatCard";
 import { X } from "lucide-react";
 import { computeWorkTimes, type WorkType } from "@/lib/workSchedule";
@@ -304,6 +305,10 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
   const initTimes = computeWorkTimes(initWt, initCommute, prefill?.customWorkStart, prefill?.customWorkEnd);
   const initBreak = initWt === "CUSTOM" ? { start: "13:00", end: "13:30" } : BREAK_PRESETS[initWt];
 
+  // 계약서 양식 선택 + 양식별 추가 입력값
+  const [templateKey, setTemplateKey] = useState<string>(DEFAULT_TEMPLATE_KEY);
+  const [templateData, setTemplateData] = useState<Record<string, any>>({});
+
   const [selectedUserId, setSelectedUserId] = useState(prefill?.workerId ?? "");
   const [manualName, setManualName] = useState(prefill?.workerName ?? "");
   const [manualPhone, setManualPhone] = useState(prefill?.phone ?? "");
@@ -442,6 +447,7 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
           workerAddress: workerAddress || null,
           clauseIds: selectedClauseIds,
           adminMemo: adminMemo || null,
+          templateKey, templateData,
         }),
       });
       const data = await res.json();
@@ -458,11 +464,36 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
       <div className={T.modalOverlay} onClick={() => !saving && onClose()}>
         <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white p-7 shadow-2xl shadow-slate-950/20" onClick={e => e.stopPropagation()}>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-black text-slate-900">근로계약서 생성 (표준양식)</h2>
+            <h2 className="text-base font-black text-slate-900">근로계약서 생성</h2>
             <button onClick={() => !saving && onClose()} className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:bg-slate-50"><X className="h-4 w-4" /></button>
           </div>
 
           <div className="flex-1 space-y-4 overflow-y-auto pr-1">
+            {/* 계약서 양식 선택 — 표준 외 기관 양식. 양식별 추가 입력만 동적 노출 */}
+            <section className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/50 p-3">
+              <label className={T.label}>계약서 양식</label>
+              <select value={templateKey} onChange={e => { setTemplateKey(e.target.value); setTemplateData({}); }} className={`w-full ${T.input}`}>
+                {CONTRACT_TEMPLATES.map(t => <option key={t.key} value={t.key}>{t.label}{t.sub ? ` — ${t.sub}` : ""}</option>)}
+              </select>
+              {getTemplate(templateKey).extraFields.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-[11px] font-semibold text-slate-400">이 양식에 필요한 추가 입력</p>
+                  {getTemplate(templateKey).extraFields.map(f => (
+                    f.type === "checkbox" ? (
+                      <label key={f.key} className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                        <input type="checkbox" checked={!!templateData[f.key]} onChange={e => setTemplateData(d => ({ ...d, [f.key]: e.target.checked }))} className="h-4 w-4 accent-slate-950" />
+                        {f.label}{f.hint && <span className="text-[11px] font-medium text-slate-400">· {f.hint}</span>}
+                      </label>
+                    ) : (
+                      <Field key={f.key} label={f.label} hint={f.hint}>
+                        <input type={f.type === "date" ? "date" : "text"} value={templateData[f.key] ?? ""} onChange={e => setTemplateData(d => ({ ...d, [f.key]: e.target.value }))} className={`w-full ${T.input}`} />
+                      </Field>
+                    )
+                  ))}
+                </div>
+              )}
+            </section>
+
             {/* 직무지도원 */}
             <section className="space-y-2">
               <h3 className="text-xs font-black text-slate-500">근로자(직무지도원)</h3>
