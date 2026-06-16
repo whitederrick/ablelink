@@ -644,7 +644,7 @@ export default function PayrollPage() {
                           <span className={`${T.badge} ${c.workerType === "INTERNAL" ? "bg-amber-50 text-amber-600" : "bg-slate-50 text-slate-600"}`}>
                             {c.workerType === "INTERNAL" ? "내부" : "외부"}
                           </span>
-                          <span className={`${T.badge} ${c.incomeType === "EMPLOYMENT" ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>
+                          <span className={`${T.badge} ${c.incomeType === "EMPLOYMENT" ? "bg-emerald-50 text-emerald-600" : "bg-sky-50 text-sky-600"}`}>
                             {c.incomeType === "EMPLOYMENT" ? "근로소득" : "사업소득"}
                           </span>
                           <span className={`${T.badge} bg-slate-50 text-slate-600`}>{payTypeLabel[c.payType]}</span>
@@ -883,7 +883,7 @@ export default function PayrollPage() {
               <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px] border-collapse">
                 <thead>
-                  <tr>{["직무지도원 성명(아이디)", "소득유형", "급여유형", "보험유형", "근무일수 (인정)", "근무시간 (인정)", "지급액", "공제액", "실지급액", ""].map(h => (
+                  <tr>{["직무지도원 성명(아이디)", "소득유형", "급여유형", "보험유형", "근무일수 (인정 일수)", "근무시간 (인정 시간)", "지급액", "공제액", "실지급액", ""].map(h => (
                     <th key={h} className={T.th}>{h}</th>
                   ))}</tr>
                 </thead>
@@ -898,7 +898,7 @@ export default function PayrollPage() {
                           {bd?.note && <span className="ml-1.5 text-[11px] font-semibold text-amber-600">⚠ {bd.note}</span>}
                         </td>
                         <td className={T.td}>
-                          <span className={`${T.badge} ${incType === "EMPLOYMENT" ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>{incType === "EMPLOYMENT" ? "근로소득" : "사업소득"}</span>
+                          <span className={`${T.badge} ${incType === "EMPLOYMENT" ? "bg-emerald-50 text-emerald-600" : "bg-sky-50 text-sky-600"}`}>{incType === "EMPLOYMENT" ? "근로소득" : "사업소득"}</span>
                         </td>
                         <td className={`${T.td} whitespace-nowrap text-slate-700`}>{bd?.payType ? payTypeLabel[bd.payType as PayType] : "-"}</td>
                         <td className={T.td}>
@@ -907,10 +907,10 @@ export default function PayrollPage() {
                           ) : "-"}
                         </td>
                         <td className={`${T.td} whitespace-nowrap text-slate-600`}>
-                          {item.workedDays}일{bd?.insurance && <span className="ml-1 text-[11px] text-slate-400">(인정 {bd.insurance.monthlyDays}일)</span>}
+                          {item.workedDays}일{bd?.insurance && <span className="ml-1 text-[10px] text-slate-400">(인정 {bd.insurance.monthlyDays}일)</span>}
                         </td>
                         <td className={`${T.td} whitespace-nowrap text-slate-600`}>
-                          {fmtMin(item.workedMinutes)}{bd?.insurance && <span className="ml-1 text-[11px] text-slate-400">(인정 {bd.insurance.monthlyHours}h)</span>}
+                          {fmtMin(item.workedMinutes)}{bd?.insurance && <span className="ml-1 text-[10px] text-slate-400">(인정 {bd.insurance.monthlyHours}h)</span>}
                         </td>
                         <td className={`${T.td} whitespace-nowrap font-black text-sky-600`}>{comma(item.grossPay)}원</td>
                         <td className={`${T.td} whitespace-nowrap`}>
