@@ -409,6 +409,8 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
         setEmployerAddress(d.data.address || "");
         setEmployerRepName(d.data.representativeName || "");
         setRepSignatureUrl(d.data.representativeSignatureUrl || null);
+        // 기관 기본 양식 프리필(없으면 표준 유지)
+        if (d.data.defaultContractTemplate) { setTemplateKey(d.data.defaultContractTemplate); setTemplateData({}); }
       }
     }).catch(() => {});
     fetch("/api/admin/contract-clauses").then(r => r.json()).then(d => {

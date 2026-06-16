@@ -7,13 +7,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { isValidBRN, formatBRN } from "@/lib/validateBRN";
+import { isValidTemplateKey } from "@/lib/contractTemplates";
 
 export async function GET(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
     const a: any = await prisma.agency.findUnique({
       where: { id: scope.agencyId },
-      select: { name: true, phoneNumber: true, address: true, businessNumber: true, representativeName: true, representativeSignatureUrl: true, govContactEmail: true, govContactName: true, payrollAutoDay: true } as any,
+      select: { name: true, phoneNumber: true, address: true, businessNumber: true, representativeName: true, representativeSignatureUrl: true, govContactEmail: true, govContactName: true, payrollAutoDay: true, defaultContractTemplate: true } as any,
     });
     if (!a) return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
     return NextResponse.json({
@@ -28,6 +29,7 @@ export async function GET(req: NextRequest) {
         govContactEmail: a.govContactEmail,
         govContactName: a.govContactName,
         payrollAutoDay: a.payrollAutoDay ?? null,
+        defaultContractTemplate: a.defaultContractTemplate ?? null,
       },
     });
   } catch (e: any) {
@@ -42,7 +44,7 @@ export async function PATCH(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
     const body = await req.json().catch(() => ({}));
-    const { phoneNumber, address, businessNumber, representativeName, representativeSignatureUrl, govContactEmail, govContactName, payrollAutoDay } = body;
+    const { phoneNumber, address, businessNumber, representativeName, representativeSignatureUrl, govContactEmail, govContactName, payrollAutoDay, defaultContractTemplate } = body;
 
     const str = (v: any): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
@@ -53,6 +55,11 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ success: false, message: "급여 자동 생성일은 1~28 사이여야 합니다." }, { status: 400 });
       }
       data.payrollAutoDay = n;
+    }
+    if (defaultContractTemplate !== undefined) {
+      if (defaultContractTemplate == null || defaultContractTemplate === "") data.defaultContractTemplate = null;
+      else if (isValidTemplateKey(defaultContractTemplate)) data.defaultContractTemplate = defaultContractTemplate;
+      else return NextResponse.json({ success: false, message: "유효하지 않은 계약서 양식입니다." }, { status: 400 });
     }
     if (phoneNumber !== undefined)        data.phoneNumber = str(phoneNumber);
     if (address !== undefined)            data.address = str(address);

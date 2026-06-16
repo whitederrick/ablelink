@@ -6,6 +6,7 @@ import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import { SignaturePad, type SignaturePadHandle } from "../../_components/SignaturePad";
 import { isValidBRN, formatBRN } from "@/lib/validateBRN";
+import { CONTRACT_TEMPLATES } from "@/lib/contractTemplates";
 
 type AddrItem = { addressName: string };
 
@@ -30,6 +31,8 @@ export default function AgencySettingsPage() {
   const [govName, setGovName] = useState("");
   // 급여 자동 DRAFT 생성일(매월 N일, 1~28). ""=자동 생성 안 함.
   const [payrollAutoDay, setPayrollAutoDay] = useState("");
+  // 기본 근로계약서 양식(계약 작성 시 프리필). ""=표준
+  const [defaultContractTemplate, setDefaultContractTemplate] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -70,6 +73,7 @@ export default function AgencySettingsPage() {
           setGovEmail(d.data.govContactEmail || "");
           setGovName(d.data.govContactName || "");
           setPayrollAutoDay(d.data.payrollAutoDay != null ? String(d.data.payrollAutoDay) : "");
+          setDefaultContractTemplate(d.data.defaultContractTemplate || "");
           setSigUrl(d.data.representativeSignatureUrl || null);
         }
       })
@@ -108,7 +112,7 @@ export default function AgencySettingsPage() {
       const r = await fetch("/api/admin/agency-profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumber, address: fullAddress, businessNumber, representativeName, govContactEmail: govEmail, govContactName: govName, payrollAutoDay: payrollAutoDay === "" ? null : Number(payrollAutoDay) }),
+        body: JSON.stringify({ phoneNumber, address: fullAddress, businessNumber, representativeName, govContactEmail: govEmail, govContactName: govName, payrollAutoDay: payrollAutoDay === "" ? null : Number(payrollAutoDay), defaultContractTemplate: defaultContractTemplate || null }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.message);
@@ -357,6 +361,16 @@ export default function AgencySettingsPage() {
                 placeholder="미사용" className={`w-24 ${T.input}`} />
               <span className="text-sm font-semibold text-slate-500">일 (1~28, 비우면 사용 안 함)</span>
             </div>
+          </div>
+
+          {/* 기본 근로계약서 양식 — 계약 작성 시 기본 선택 */}
+          <div className="border-t border-slate-100 pt-4">
+            <label className={T.label}>기본 근로계약서 양식</label>
+            <p className="mb-2 text-[11px] font-semibold text-slate-400">계약 작성 화면에서 이 양식이 기본 선택됩니다. (작성 시 변경 가능)</p>
+            <select value={defaultContractTemplate} onChange={e => setDefaultContractTemplate(e.target.value)} className={`w-full max-w-md ${T.input}`}>
+              <option value="">표준 근로계약서 (기본)</option>
+              {CONTRACT_TEMPLATES.filter(t => t.key !== "STANDARD").map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+            </select>
           </div>
 
           <div className="flex items-center justify-end gap-3">
