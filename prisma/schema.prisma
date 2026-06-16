@@ -1056,6 +1056,8 @@ model InsuranceRates {
   healthInsurance     Decimal @map("health_insurance")
   longTermCare        Decimal @map("long_term_care")
   employmentInsurance Decimal @map("employment_insurance")
+  // 산재보험 — 전액 사업주 부담(워커 공제 아님). 명세서·리포트 표기용. 기본 0.
+  industrialAccident  Decimal @default(0) @map("industrial_accident")
 
   @@map("insurance_rates")
 }

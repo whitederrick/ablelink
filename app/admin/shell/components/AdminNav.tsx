@@ -60,6 +60,7 @@ const groups: NavGroup[] = [
     items: [
       { href: "/admin/settings",                    label: "운영 설정값" },
       { href: "/admin/settings/income-tax",         label: "근로소득 간이세액표" },
+      { href: "/admin/settings/insurance-rates",    label: "4대보험 요율" },
       { href: "/admin/settings/categories",         label: "공지 카테고리 관리" },
       { href: "/admin/backup",                      label: "데이터 백업" },
       { href: "/admin/logs",                        label: "감사 로그" },

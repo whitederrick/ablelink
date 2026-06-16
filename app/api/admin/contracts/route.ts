@@ -64,6 +64,9 @@ export async function GET(req: NextRequest) {
         workLocation: r.workLocation,
         workType: r.workType,
         commuteGuidanceIncluded: r.commuteGuidanceIncluded,
+        // 급여 기준 프리필용 — 임금 형태/금액(HOURLY|DAILY|MONTHLY)
+        wageType: r.wageType,
+        wageAmount: r.wageAmount,
         status: r.status,
         signToken: r.signToken,
         tokenExpiresAt: r.tokenExpiresAt.toISOString(),

@@ -57,6 +57,8 @@ interface RunDetail extends RunSummary {
 interface Worker { id: string; workerName: string; }
 
 function comma(n: number) { return Math.round(n).toLocaleString("ko-KR"); }
+function digitsOnly(s: string) { return String(s ?? "").replace(/[^\d]/g, ""); }
+function commaStr(s: string) { const n = digitsOnly(s); return n ? Number(n).toLocaleString("ko-KR") : ""; }
 function fmtMin(m: number) {
   if (!m) return "-";
   return `${Math.floor(m / 60)}시간 ${m % 60}분`;
@@ -66,11 +68,20 @@ function defaultYM() {
   const d = new Date();
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 }
+function ymd(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 const payTypeLabel: Record<PayType, string> = { MONTHLY: "월급", DAILY: "일급", HOURLY: "시급" };
+// 4대보험 가입 유형(자동 판정 근거 표시용)
+const TIER_LABEL: Record<string, string> = {
+  DAILY_WORKER: "일용(1개월 미만)",
+  ULTRA_SHORT: "초단시간",
+  REGULAR: "일반/상용",
+  NONE: "사업소득",
+};
 
 // 시급 입력 시 자동 계산 — 공단 기준 2명 이상 동시지도 시급은 120%, 주휴수당은 시급×8시간(주40시간 기준).
 const RATE_2PLUS_MULTIPLIER = 1.2;
 const WEEKLY_HOLIDAY_HOURS = 8;
+const MIN_WAGE_2026 = 10320; // 2026 최저시급(원) — 급여 기준 등록 기본값
 function auto2Plus(base: number) { return base > 0 ? String(Math.round(base * RATE_2PLUS_MULTIPLIER)) : ""; }
 function autoWeeklyHoliday(base: number) { return base > 0 ? String(Math.round(base * WEEKLY_HOLIDAY_HOURS)) : ""; }
 
@@ -83,11 +94,17 @@ const DETAIL_PAGE_SIZE = 10;
 
 type Tab = "contracts" | "runs" | "deductions";
 
-const initialForm = {
-  workerId: "", workerType: "EXTERNAL" as WorkerType, payType: "HOURLY" as PayType,
-  baseAmount: "", incomeType: "BUSINESS" as IncomeType,
-  hourlyRate2Plus: "", weeklyHolidayPay: "", effectiveFrom: "", effectiveTo: "",
-};
+// 기본값: 외부·시급, 2026 최저시급(시급/120%/주휴 자동), 적용기간 오늘~+1년.
+function makeInitialForm() {
+  const start = new Date();
+  const end = new Date(); end.setFullYear(end.getFullYear() + 1); end.setDate(end.getDate() - 1);
+  return {
+    workerId: "", workerType: "EXTERNAL" as WorkerType, payType: "HOURLY" as PayType,
+    baseAmount: String(MIN_WAGE_2026), incomeType: "BUSINESS" as IncomeType,
+    hourlyRate2Plus: auto2Plus(MIN_WAGE_2026), weeklyHolidayPay: autoWeeklyHoliday(MIN_WAGE_2026),
+    effectiveFrom: ymd(start), effectiveTo: ymd(end),
+  };
+}
 
 export default function PayrollPage() {
   const [tab, setTab] = useState<Tab>("contracts");
@@ -96,11 +113,25 @@ export default function PayrollPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loadingContracts, setLoadingContracts] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(makeInitialForm);
   const [saving, setSaving] = useState(false);
   const [cQuery, setCQuery] = useState("");
   const [cTypeFilter, setCTypeFilter] = useState<string[]>([]);
   const [cPage, setCPage] = useState(1);
+  // 급여 기준 프리필 — 선택 워커의 근로계약서에서 끌어온 임금 정보(자동 입력 + 불일치 경고용)
+  const [contractHint, setContractHint] = useState<{ wageType: PayType | null; wageAmount: number; status: string } | null>(null);
+  // 자동 입력값 항목별 확인 — 시급/2인+시급/주휴를 각각 녹색 ✓로 확인해야 저장 가능(저빈도 등록이라 검토 유도)
+  const [confirmed, setConfirmed] = useState({ base: false, rate2: false, weekly: false });
+  const needRate2 = form.payType === "HOURLY";
+  const needWeekly = form.payType !== "MONTHLY";
+  const amountsConfirmed = confirmed.base && (!needRate2 || confirmed.rate2) && (!needWeekly || confirmed.weekly);
+  const confirmChip = (k: "base" | "rate2" | "weekly") =>
+    confirmed[k] ? (
+      <span className="inline-flex shrink-0 items-center text-[12px] font-black text-emerald-600">✓ 확인됨</span>
+    ) : (
+      <button type="button" onClick={() => setConfirmed(c => ({ ...c, [k]: true }))}
+        className="inline-flex shrink-0 items-center rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-2 text-[12px] font-black text-emerald-600 transition hover:bg-emerald-100">✓ 확인</button>
+    );
 
   const [deductions, setDeductions] = useState<Deduction[]>([]);
   const [loadingDed, setLoadingDed] = useState(false);
@@ -115,6 +146,7 @@ export default function PayrollPage() {
   const [rQuery, setRQuery] = useState("");
   const [rStatusFilter, setRStatusFilter] = useState<string[]>([]);
   const [rPage, setRPage] = useState(1);
+  const [rYear, setRYear] = useState(new Date().getFullYear()); // 급여 내역 조회 연도(기본 올해)
   const [calcYM, setCalcYM] = useState(defaultYM());
   const [calculating, setCalculating] = useState(false);
   const [selectedRun, setSelectedRun] = useState<RunDetail | null>(null);
@@ -138,6 +170,42 @@ export default function PayrollPage() {
     const res = await fetch("/api/admin/workers?pageSize=200");
     const d = await res.json();
     if (d.success) setWorkers((d.data || []).map((c: any) => ({ id: c.id, workerName: c.workerName })));
+  }
+
+  // 워커 선택 시: 근로계약서(서명 완료 우선·최신)에서 시급·기간 자동 프리필.
+  // 급여 전용 필드(직무지도원 유형·소득유형·공제)는 건드리지 않는다. 실패 시 수동 입력 가능.
+  async function onPickWorker(workerId: string) {
+    setForm(f => ({ ...f, workerId }));
+    setContractHint(null);
+    setConfirmed({ base: false, rate2: false, weekly: false }); // 워커 변경 → 자동값 재확인 필요
+    if (!workerId) return;
+    try {
+      const res = await fetch(`/api/admin/contracts?workerId=${workerId}`);
+      const d = await res.json();
+      if (!d.success || !Array.isArray(d.items)) return;
+      const rank = (s: string) => (s === "COMPLETED" ? 0 : s === "SIGNED" ? 1 : 2);
+      const cand = (d.items as any[])
+        .filter(c => c.status !== "CANCELLED" && c.wageAmount != null && Number(c.wageAmount) > 0)
+        .sort((a, b) => rank(a.status) - rank(b.status) || new Date(b.contractStart).getTime() - new Date(a.contractStart).getTime())[0];
+      if (!cand) return;
+      const wt = (cand.wageType as PayType | null) ?? null;
+      const base = Number(cand.wageAmount) || 0;
+      setContractHint({ wageType: wt, wageAmount: base, status: cand.status });
+      setForm(f => {
+        // 내부 직무지도원은 일급 고정 → 계약서 임금형태가 와도 DAILY 유지
+        const payType: PayType = f.workerType === "INTERNAL" ? "DAILY" : (wt ?? f.payType);
+        const isHourly = f.workerType === "EXTERNAL" && payType === "HOURLY";
+        return {
+          ...f,
+          baseAmount: String(base),
+          payType,
+          effectiveFrom: String(cand.contractStart).slice(0, 10),
+          effectiveTo: String(cand.contractEnd).slice(0, 10),
+          hourlyRate2Plus: isHourly ? auto2Plus(base) : f.hourlyRate2Plus,
+          weeklyHolidayPay: f.workerType === "EXTERNAL" ? autoWeeklyHoliday(base) : f.weeklyHolidayPay,
+        };
+      });
+    } catch { /* 프리필 실패 무시 — 수동 입력 가능 */ }
   }
 
   async function loadRuns() {
@@ -189,7 +257,9 @@ export default function PayrollPage() {
       const d = await res.json();
       if (d.success) {
         setShowForm(false);
-        setForm(initialForm);
+        setForm(makeInitialForm());
+        setContractHint(null);
+        setConfirmed({ base: false, rate2: false, weekly: false });
         loadContracts();
       } else alert(d.message);
     } finally { setSaving(false); }
@@ -293,7 +363,7 @@ export default function PayrollPage() {
   }
 
   const TAB_ITEMS: { key: Tab; label: string }[] = [
-    { key: "contracts", label: "💰 급여 계약" },
+    { key: "contracts", label: "💰 급여 기준" },
     { key: "runs",      label: "📊 급여 계산" },
     { key: "deductions", label: "⚙️ 공제 설정" },
   ];
@@ -313,17 +383,26 @@ export default function PayrollPage() {
   const toggleCType = (v: string) => setCTypeFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   // ── 계산 탭: 검색·상태필터·페이징 ──
-  const draftCnt = runs.filter(r => r.status === "DRAFT").length;
-  const finalizedCnt = runs.filter(r => r.status === "FINALIZED").length;
+  // 조회 연도 옵션 = 내역에 존재하는 연도 ∪ 올해(내림차순)
+  const rYearOptions = useMemo(() => {
+    const ys = new Set<number>(runs.map(r => Number(r.yearMonth.slice(0, 4))).filter(Boolean));
+    ys.add(new Date().getFullYear());
+    return Array.from(ys).sort((a, b) => b - a);
+  }, [runs]);
+  // 선택 연도 내역 — 통계 카드·필터 칩 카운트도 연도 기준
+  const runsOfYear = useMemo(() => runs.filter(r => Number(r.yearMonth.slice(0, 4)) === rYear), [runs, rYear]);
+  const draftCnt = runsOfYear.filter(r => r.status === "DRAFT").length;
+  const finalizedCnt = runsOfYear.filter(r => r.status === "FINALIZED").length;
   const runsFiltered = useMemo(() => {
     const q = rQuery.trim().toLowerCase();
-    return runs
+    return runsOfYear
       .filter(r => rStatusFilter.length === 0 || rStatusFilter.includes(r.status))
-      .filter(r => !q || r.yearMonth.toLowerCase().includes(q));
-  }, [runs, rQuery, rStatusFilter]);
+      .filter(r => !q || r.yearMonth.toLowerCase().includes(q))
+      .sort((a, b) => b.yearMonth.localeCompare(a.yearMonth));  // 월별(최근 월 먼저)
+  }, [runsOfYear, rQuery, rStatusFilter]);
   const rTotalPages = Math.max(1, Math.ceil(runsFiltered.length / PAGE_SIZE));
   const rPageItems = runsFiltered.slice((rPage - 1) * PAGE_SIZE, rPage * PAGE_SIZE);
-  useEffect(() => { setRPage(1); }, [rQuery, rStatusFilter]);
+  useEffect(() => { setRPage(1); }, [rQuery, rStatusFilter, rYear]);
   const toggleRStatus = (v: string) => setRStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   // ── 공제 탭: 검색·페이징 ──
@@ -359,7 +438,7 @@ export default function PayrollPage() {
           <StatCardRow
             cols={3}
             items={[
-              { label: "전체 계약", value: contracts.length },
+              { label: "전체 급여 기준", value: contracts.length },
               { label: "외부 직무지도원", value: externalCnt, tone: "sky" },
               { label: "내부 직무지도원", value: internalCnt, tone: "amber" },
             ]}
@@ -377,125 +456,135 @@ export default function PayrollPage() {
             onToggleFilter={toggleCType}
             extra={
               !showForm ? (
-                <button className={`${T.btnPrimary} ml-auto`} onClick={() => setShowForm(true)}>
-                  + 계약 등록
+                <button className={`${T.btnPrimary} ml-auto`} onClick={() => { setForm(makeInitialForm()); setContractHint(null); setConfirmed({ base: false, rate2: false, weekly: false }); setShowForm(true); }}>
+                  + 급여 기준 등록
                 </button>
               ) : null
             }
           />
 
           {showForm && (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <p className="mb-4 text-sm font-black text-slate-900">급여 계약 등록</p>
-              <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="space-y-1.5">
-                  <label className={T.label}>직무지도원</label>
-                  <select value={form.workerId} onChange={e => setForm(f => ({ ...f, workerId: e.target.value }))} className={`w-full ${T.select}`}>
-                    <option value="">선택</option>
-                    {workers.map(c => <option key={c.id} value={c.id}>{c.workerName}</option>)}
-                  </select>
+            <div className={T.modalOverlay} onClick={e => { if (e.target === e.currentTarget) { setShowForm(false); setContractHint(null); setConfirmed({ base: false, rate2: false, weekly: false }); } }}>
+              <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-7 shadow-2xl shadow-slate-950/20">
+                <p className="mb-5 text-base font-black text-slate-900">급여 기준 등록</p>
+                <div className="space-y-5">
+                  {/* 대상 — 소득유형·내부/외부는 근로계약·근태로 자동 판정(입력 제거) */}
+                  <section>
+                    <p className="mb-2 text-xs font-black text-slate-500">대상</p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className={T.label}>직무지도원</label>
+                        <select value={form.workerId} onChange={e => onPickWorker(e.target.value)} className={`w-full ${T.select}`}>
+                          <option value="">선택</option>
+                          {workers.map(c => <option key={c.id} value={c.id}>{c.workerName}</option>)}
+                        </select>
+                        {contractHint && (
+                          <p className="text-[11px] font-bold text-emerald-600">✓ 근로계약서에서 자동 입력됨 (아래에서 확인)</p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className={T.label}>급여 유형</label>
+                        <select value={form.payType}
+                          onChange={e => setForm(f => {
+                            const pt = e.target.value as PayType;
+                            const base = Number(f.baseAmount) || 0;
+                            const isHourly = pt === "HOURLY";
+                            return isHourly
+                              ? { ...f, payType: pt, hourlyRate2Plus: auto2Plus(base), weeklyHolidayPay: autoWeeklyHoliday(base) }
+                              : { ...f, payType: pt, hourlyRate2Plus: "" };
+                          })} className={`w-full ${T.select}`}>
+                          <option value="HOURLY">시급</option>
+                          <option value="DAILY">일급</option>
+                          <option value="MONTHLY">월급</option>
+                        </select>
+                        <p className="text-[11px] font-semibold text-slate-400">소득유형·4대보험은 근로계약·근태로 급여 계산 시 자동 판정됩니다.</p>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* 금액 — 각 입력칸 옆에서 ✓ 확인(저빈도 등록이라 검토 유도) */}
+                  <section>
+                    <p className="mb-2 text-xs font-black text-slate-500">금액</p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className={T.label}>{form.payType === "HOURLY" ? "시급 (원)" : form.payType === "DAILY" ? "일급 (원)" : "월급 (원)"}</label>
+                        <div className="flex items-center gap-2">
+                          <input type="text" inputMode="numeric" value={commaStr(form.baseAmount)}
+                            onChange={e => {
+                              const v = digitsOnly(e.target.value);
+                              const base = Number(v) || 0;
+                              const isHourly = form.payType === "HOURLY";
+                              // 시급 직접 입력 시 2명+ 시급(120%)·주휴수당(시급×8) 자동 재계산
+                              setForm(f => isHourly
+                                ? { ...f, baseAmount: v, hourlyRate2Plus: auto2Plus(base), weeklyHolidayPay: autoWeeklyHoliday(base) }
+                                : { ...f, baseAmount: v });
+                              setConfirmed(c => isHourly ? { base: true, rate2: false, weekly: false } : { ...c, base: true });
+                            }}
+                            placeholder={form.payType === "HOURLY" ? "예: 10,320 (2026 최저임금)" : form.payType === "DAILY" ? "예: 25,000" : "예: 2,200,000"}
+                            className={`min-w-0 flex-1 ${T.input}`} />
+                          {confirmChip("base")}
+                        </div>
+                        {contractHint && contractHint.wageType === form.payType && Number(form.baseAmount) !== contractHint.wageAmount && (
+                          <p className="text-[11px] font-semibold text-amber-600">⚠ 근로계약서 금액({comma(contractHint.wageAmount)}원)과 다릅니다. 확인하세요.</p>
+                        )}
+                      </div>
+
+                      {form.payType === "HOURLY" && (
+                        <div className="space-y-1.5">
+                          <label className={T.label}>훈련생 2명 이상 시급 (원)</label>
+                          <div className="flex items-center gap-2">
+                            <input type="text" inputMode="numeric" value={commaStr(form.hourlyRate2Plus)}
+                              onChange={e => { const v = digitsOnly(e.target.value); setForm(f => ({ ...f, hourlyRate2Plus: v })); setConfirmed(c => ({ ...c, rate2: true })); }}
+                              placeholder="예: 12,384 (최저임금×120%)"
+                              className={`min-w-0 flex-1 ${T.input}`} />
+                            {confirmChip("rate2")}
+                          </div>
+                          <p className="text-[11px] font-semibold text-slate-400">※ 시급의 120% 자동 계산 (공단 기준·2명 이상 동시지도, 수정 가능)</p>
+                        </div>
+                      )}
+
+                      {form.payType !== "MONTHLY" && (
+                        <div className="space-y-1.5">
+                          <label className={T.label}>주휴수당 (원)</label>
+                          <div className="flex items-center gap-2">
+                            <input type="text" inputMode="numeric" value={commaStr(form.weeklyHolidayPay)}
+                              onChange={e => { const v = digitsOnly(e.target.value); setForm(f => ({ ...f, weeklyHolidayPay: v })); setConfirmed(c => ({ ...c, weekly: true })); }}
+                              placeholder="시급 입력 시 자동 계산"
+                              className={`min-w-0 flex-1 ${T.input}`} />
+                            {confirmChip("weekly")}
+                          </div>
+                          <p className="text-[11px] font-semibold text-slate-400">※ 시급 × 8시간 자동 계산 (주 40시간 기준, 수정 가능)</p>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* 적용 기간 */}
+                  <section>
+                    <p className="mb-2 text-xs font-black text-slate-500">적용 기간</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className={T.label}>적용 시작일</label>
+                        <input type="date" value={form.effectiveFrom} onChange={e => setForm(f => ({ ...f, effectiveFrom: e.target.value }))} className={`w-full ${T.input}`} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className={T.label}>적용 종료일 (기본 1년)</label>
+                        <input type="date" value={form.effectiveTo} onChange={e => setForm(f => ({ ...f, effectiveTo: e.target.value }))} className={`w-full ${T.input}`} />
+                      </div>
+                    </div>
+                  </section>
                 </div>
-                <div className="space-y-1.5">
-                  <label className={T.label}>직무지도원 유형</label>
-                  <select value={form.workerType} onChange={e => {
-                    const ct = e.target.value as WorkerType;
-                    setForm(f => ({
-                      ...f, workerType: ct,
-                      payType: ct === "INTERNAL" ? "DAILY" : (f.payType === "DAILY" ? "HOURLY" : f.payType),
-                      incomeType: ct === "INTERNAL" ? "BUSINESS" : f.incomeType,
-                      hourlyRate2Plus: ct === "INTERNAL" ? "" : f.hourlyRate2Plus,
-                      weeklyHolidayPay: ct === "INTERNAL" ? "" : f.weeklyHolidayPay,
-                    }));
-                  }} className={`w-full ${T.select}`}>
-                    <option value="EXTERNAL">외부 직무지도원</option>
-                    <option value="INTERNAL">내부 직무지도원 (일급 고정)</option>
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className={T.label}>소득 유형</label>
-                  <select value={form.incomeType} disabled={form.workerType === "INTERNAL"}
-                    onChange={e => setForm(f => ({ ...f, incomeType: e.target.value as IncomeType }))} className={`w-full ${T.select} disabled:opacity-50`}>
-                    <option value="BUSINESS">사업소득 (3.3% 공제)</option>
-                    <option value="EMPLOYMENT">근로소득 (4대보험)</option>
-                  </select>
-                  {form.workerType === "INTERNAL" && (
-                    <p className="text-[11px] font-semibold text-slate-400">※ 내부 직무지도원은 사업소득만 적용</p>
+
+                <div className="mt-6 flex items-center justify-end gap-2">
+                  {!amountsConfirmed && (
+                    <span className="mr-auto text-[12px] font-semibold text-slate-400">금액 항목을 각각 ✓ 확인하면 저장할 수 있습니다.</span>
                   )}
+                  <button className={T.btnSecondary} onClick={() => { setShowForm(false); setContractHint(null); setConfirmed({ base: false, rate2: false, weekly: false }); }}>취소</button>
+                  <button className={T.btnPrimary} onClick={handleSaveContract} disabled={saving || !amountsConfirmed}
+                    title={!amountsConfirmed ? "금액 항목을 ✓ 확인해주세요." : undefined}>
+                    {saving ? "저장 중..." : "저장"}
+                  </button>
                 </div>
-                <div className="space-y-1.5">
-                  <label className={T.label}>급여 유형</label>
-                  <select value={form.payType} disabled={form.workerType === "INTERNAL"}
-                    onChange={e => setForm(f => {
-                      const pt = e.target.value as PayType;
-                      const base = Number(f.baseAmount) || 0;
-                      const isHourly = f.workerType === "EXTERNAL" && pt === "HOURLY";
-                      return isHourly
-                        ? { ...f, payType: pt, hourlyRate2Plus: auto2Plus(base), weeklyHolidayPay: autoWeeklyHoliday(base) }
-                        : { ...f, payType: pt, hourlyRate2Plus: "" };
-                    })} className={`w-full ${T.select} disabled:opacity-50`}>
-                    {form.workerType === "EXTERNAL" && <option value="HOURLY">시급</option>}
-                    <option value="DAILY">일급</option>
-                    {form.workerType === "EXTERNAL" && <option value="MONTHLY">월급</option>}
-                  </select>
-                  {form.workerType === "INTERNAL" && (
-                    <p className="text-[11px] font-semibold text-slate-400">※ 내부 직무지도원은 일급만 적용</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-3 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <div className="space-y-1.5">
-                  <label className={T.label}>{form.payType === "HOURLY" ? "시급 (원)" : form.payType === "DAILY" ? "일급 (원)" : "월급 (원)"}</label>
-                  <input type="number" value={form.baseAmount}
-                    onChange={e => setForm(f => {
-                      const v = e.target.value;
-                      const base = Number(v) || 0;
-                      const isHourly = f.workerType === "EXTERNAL" && f.payType === "HOURLY";
-                      // 시급 입력 시 2명+ 시급(120%)·주휴수당(시급×8) 자동 채움 (수정 가능)
-                      return isHourly
-                        ? { ...f, baseAmount: v, hourlyRate2Plus: auto2Plus(base), weeklyHolidayPay: autoWeeklyHoliday(base) }
-                        : { ...f, baseAmount: v };
-                    })}
-                    placeholder={form.payType === "HOURLY" ? "예: 10030 (2025 최저임금)" : form.payType === "DAILY" ? "예: 25000" : "예: 2200000"}
-                    className={`w-full ${T.input}`} />
-                </div>
-
-                {form.workerType === "EXTERNAL" && form.payType === "HOURLY" && (
-                  <div className="space-y-1.5">
-                    <label className={T.label}>훈련생 2명 이상 시급 (원)</label>
-                    <input type="number" value={form.hourlyRate2Plus}
-                      onChange={e => setForm(f => ({ ...f, hourlyRate2Plus: e.target.value }))}
-                      placeholder="예: 12036 (최저임금×120%)"
-                      className={`w-full ${T.input}`} />
-                    <p className="text-[11px] font-semibold text-slate-400">※ 시급의 120% 자동 계산 (공단 기준·2명 이상 동시지도, 수정 가능)</p>
-                  </div>
-                )}
-
-                {form.workerType === "EXTERNAL" && (
-                  <div className="space-y-1.5">
-                    <label className={T.label}>주휴수당 (원)</label>
-                    <input type="number" value={form.weeklyHolidayPay}
-                      onChange={e => setForm(f => ({ ...f, weeklyHolidayPay: e.target.value }))}
-                      placeholder="시급 입력 시 자동 계산"
-                      className={`w-full ${T.input}`} />
-                    <p className="text-[11px] font-semibold text-slate-400">※ 시급 × 8시간 자동 계산 (주 40시간 기준, 수정 가능)</p>
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  <label className={T.label}>적용 시작일</label>
-                  <input type="date" value={form.effectiveFrom} onChange={e => setForm(f => ({ ...f, effectiveFrom: e.target.value }))} className={`w-full ${T.input}`} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className={T.label}>적용 종료일 (선택)</label>
-                  <input type="date" value={form.effectiveTo} onChange={e => setForm(f => ({ ...f, effectiveTo: e.target.value }))} className={`w-full ${T.input}`} />
-                </div>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <button className={T.btnPrimary} onClick={handleSaveContract} disabled={saving}>
-                  {saving ? "저장 중..." : "저장"}
-                </button>
-                <button className={T.btnSecondary} onClick={() => setShowForm(false)}>취소</button>
               </div>
             </div>
           )}
@@ -503,7 +592,7 @@ export default function PayrollPage() {
           {loadingContracts ? (
             <p className={T.empty}>로딩 중...</p>
           ) : contractsFiltered.length === 0 ? (
-            <div className={T.tableWrap}><p className={T.tdCenter}>{contracts.length === 0 ? "등록된 급여 계약이 없습니다." : "조건에 맞는 계약이 없습니다."}</p></div>
+            <div className={T.tableWrap}><p className={T.tdCenter}>{contracts.length === 0 ? "등록된 급여 기준이 없습니다." : "조건에 맞는 급여 기준이 없습니다."}</p></div>
           ) : (
             <div className={T.tableWrap}>
               <table className="w-full border-collapse">
@@ -656,7 +745,7 @@ export default function PayrollPage() {
           <StatCardRow
             cols={3}
             items={[
-              { label: "전체 계산", value: runs.length },
+              { label: `${rYear}년 계산`, value: runsOfYear.length },
               { label: "초안", value: draftCnt, tone: "amber" },
               { label: "확정", value: finalizedCnt, tone: "emerald" },
             ]}
@@ -671,11 +760,14 @@ export default function PayrollPage() {
                 {calculating ? "계산 중..." : "⚡ 급여 계산 실행"}
               </button>
             </div>
+            <select value={rYear} onChange={e => setRYear(Number(e.target.value))} className={`w-auto ${T.select}`} title="조회 연도">
+              {rYearOptions.map(y => <option key={y} value={y}>{y}년</option>)}
+            </select>
             <div className="min-w-[260px] flex-1">
               <ListToolbar
                 query={rQuery}
                 onQueryChange={setRQuery}
-                placeholder="연월 검색 (예: 2026-06)"
+                placeholder="연월 검색 (예: 06)"
                 filters={[
                   { value: "DRAFT", label: "초안", count: draftCnt },
                   { value: "FINALIZED", label: "확정", count: finalizedCnt },
@@ -685,7 +777,7 @@ export default function PayrollPage() {
               />
             </div>
           </div>
-          <p className="text-xs font-semibold text-slate-400">출퇴근 기록·급여 계약·공제 설정을 기반으로 자동 계산합니다.</p>
+          <p className="text-xs font-semibold text-slate-400">출퇴근 기록·급여 기준·공제 설정을 기반으로 자동 계산합니다.</p>
 
           {loadingRuns ? (
             <p className={T.empty}>로딩 중...</p>
@@ -759,7 +851,7 @@ export default function PayrollPage() {
                   ))}</tr>
                 </thead>
                 <tbody>
-                  {selectedRun.items.slice((detailPage - 1) * DETAIL_PAGE_SIZE, detailPage * DETAIL_PAGE_SIZE).map(item => {
+                  {[...selectedRun.items].sort((a, b) => a.workerName.localeCompare(b.workerName, "ko")).slice((detailPage - 1) * DETAIL_PAGE_SIZE, detailPage * DETAIL_PAGE_SIZE).map(item => {
                     const bd = item.breakdown as any;
                     const incType: IncomeType = bd?.incomeType ?? "BUSINESS";
                     const dedBreakdown: Record<string, number> = bd?.deductionBreakdown ?? {};
@@ -782,6 +874,15 @@ export default function PayrollPage() {
                               {bd.used2PlusRate && ` (2명+ 적용)`}
                               {bd.dailyRate && ` ${comma(bd.dailyRate)}원/일`}
                               {bd.weeklyHolidayPay && ` +주휴${comma(bd.weeklyHolidayPay)}원`}
+                            </div>
+                          )}
+                          {bd?.insurance && (
+                            <div className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">{TIER_LABEL[bd.insurance.tier] ?? bd.insurance.tier}</span>
+                              <span className="ml-1">월 {bd.insurance.monthlyHours}h · {bd.insurance.monthlyDays}일</span>
+                              {bd.insurance.employerIndustrial > 0 && (
+                                <span className="ml-1 text-slate-400">· 산재(사업주) {comma(bd.insurance.employerIndustrial)}원</span>
+                              )}
                             </div>
                           )}
                         </td>

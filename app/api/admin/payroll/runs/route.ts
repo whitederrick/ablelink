@@ -10,6 +10,7 @@ import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { computeWeeklyHoliday, scheduledMinutesForWorkType } from "@/lib/payroll/weeklyHoliday";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
+import { determineEligibility } from "@/lib/payroll/insuranceEligibility";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const SERVICE_STEP_LABEL: Record<string, string> = {
@@ -21,6 +22,12 @@ const BUSINESS_DEDUCTION_RATE = 0.033; // 사업소득세 3.3%
 function minutesBetween(start: Date | null, end: Date | null): number {
   if (!start || !end) return 0;
   return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
+}
+
+const DAY_MS = 86400000;
+// 포함 일수(시작·종료 당일 포함). 보험 판정의 고용기간·계속근로 산정용.
+function spanDays(start: Date, end: Date): number {
+  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / DAY_MS) + 1);
 }
 
 export async function GET(req: NextRequest) {
@@ -130,7 +137,7 @@ export async function POST(req: NextRequest) {
     // 유저별 3개 쿼리를 모든 유저에 걸쳐 동시 실행
     const userDataList = await Promise.all(userIds.map(async (workerId) => {
       const userSiteIds = assignments.filter(a => a.workerId === workerId).map(a => a.siteId);
-      const [contract, attendances, traineeCount, empContract] = await Promise.all([
+      const [contract, attendances, traineeCount, empContract, firstContract] = await Promise.all([
         // 유효 급여 계약 조회
         prisma.payContract.findFirst({
           where: {
@@ -158,7 +165,7 @@ export async function POST(req: NextRequest) {
             OR: [{ endDate: null }, { endDate: { gte: periodStartDate } }],
           },
         }),
-        // 근로계약서(주휴 소정근로일수 출처) — 해당 월 겹치는 계약 최신
+        // 근로계약서(주휴 소정근로일수·고용기간·근로자성 출처) — 해당 월 겹치는 계약 최신
         prisma.employmentContract.findFirst({
           where: {
             agencyId, workerId,
@@ -166,13 +173,19 @@ export async function POST(req: NextRequest) {
             contractEnd: { gte: periodStartDate },
           },
           orderBy: { contractStart: "desc" },
-          select: { workDaysPerWeek: true },
+          select: { workDaysPerWeek: true, contractStart: true, contractEnd: true },
+        }),
+        // 최초 근로계약 시작일 — 계속근로 개월수(초단시간 고용보험 예외) 판정용
+        prisma.employmentContract.findFirst({
+          where: { agencyId, workerId },
+          orderBy: { contractStart: "asc" },
+          select: { contractStart: true },
         }),
       ]);
-      return { workerId, contract, attendances, traineeCount, empContract };
+      return { workerId, contract, attendances, traineeCount, empContract, firstContract };
     }));
 
-    for (const { workerId, contract, attendances, traineeCount, empContract } of userDataList) {
+    for (const { workerId, contract, attendances, traineeCount, empContract, firstContract } of userDataList) {
       // 급여 게이트: 심한 지각 미컨펌(보정대기) 날은 급여 산정에서 제외(출근부 PDF와 동일 기준).
       const confirmedAtt = attendances.filter((a) => !isPayrollPending({
         actualStartTime: a.actualStartTime ?? null,
@@ -307,11 +320,31 @@ export async function POST(req: NextRequest) {
         dependents, childUnder20, withholdingRate,
       };
 
+      // ── 소득유형·4대보험 자동 판정 (docs/payroll-insurance-design.md §2) ──
+      // 입력은 전부 기존 데이터에서 도출: 근로자성(근로계약+근태)·고용기간·월소정근로·계속근로.
+      const monthlyScheduledMin = confirmedAtt.reduce((s, a) => s + scheduledMinutesForWorkType(
+        a.assignment?.workType ?? null, a.assignment?.customWorkStart ?? null, a.assignment?.customWorkEnd ?? null), 0);
+      const monthlyHours = +(monthlyScheduledMin / 60).toFixed(1);
+      const employmentMonths = (empContract?.contractStart && empContract?.contractEnd)
+        ? spanDays(empContract.contractStart, empContract.contractEnd) / 30
+        : Infinity; // 계약 없으면 일용(1개월 미만) 아님
+      const firstStart = firstContract?.contractStart ?? empContract?.contractStart ?? periodStartDate;
+      const continuousMonths = spanDays(firstStart, periodEndDate) / 30;
+      const elig = determineEligibility(
+        {
+          hasEmploymentContract: !!empContract,
+          hasAttendance: workedDays > 0,
+          // 근로계약이 없고 PayContract가 사업소득으로 표시된 경우만 프리랜서(예외)
+          freelancerOverride: contract?.incomeType === "BUSINESS" && !empContract,
+        },
+        { employmentMonths, monthlyHours, monthlyDays: workedDays, continuousMonths },
+      );
+
       // ── 공제 계산 ──
       let totalDeduction = 0;
       const deductionBreakdown: Record<string, number> = {};
       const deductLines: { key: string; name: string; amount: number }[] = [];
-      const incomeType = contract?.incomeType ?? "BUSINESS";
+      const incomeType = elig.incomeType;
       const pushDed = (key: string, name: string, amount: number) => {
         deductionBreakdown[name] = amount;
         deductLines.push({ key, name, amount });
@@ -321,15 +354,17 @@ export async function POST(req: NextRequest) {
       if (incomeType === "BUSINESS") {
         pushDed("bizTax", "사업소득세(3.3%)", Math.round(grossPay * BUSINESS_DEDUCTION_RATE));
       } else {
-        // 근로소득: 소득세(간이세액표 → 8~20세 자녀공제 → 원천징수비율) + 주민세(소득세 10%) + 4대보험
+        // 근로소득: 소득세(간이세액표 → 8~20세 자녀공제 → 원천징수비율) + 주민세(소득세 10%)
         const taxR = computeIncomeTax(taxBrackets, grossPay, dependents, { childUnder20, rate: withholdingRate, childCredit: taxChildCredit });
         pushDed("incomeTax", "소득세", taxR.tax);
         pushDed("localTax", "주민세", taxR.localTax);
+        // 4대보험: 가입 보험 중 워커 공제 대상만(산재 제외 — 전액 사업주 부담)
         if (insuranceRates) {
-          pushDed("pension", "국민연금", Math.round(grossPay * Number(insuranceRates.nationalPension)));
-          pushDed("health", "건강보험", Math.round(grossPay * Number(insuranceRates.healthInsurance)));
-          pushDed("ltc", "장기요양보험", Math.round(grossPay * Number(insuranceRates.longTermCare)));
-          pushDed("employment", "고용보험", Math.round(grossPay * Number(insuranceRates.employmentInsurance)));
+          const ded = new Set(elig.workerDeductible);
+          if (ded.has("pension"))    pushDed("pension", "국민연금", Math.round(grossPay * Number(insuranceRates.nationalPension)));
+          if (ded.has("health"))     pushDed("health", "건강보험", Math.round(grossPay * Number(insuranceRates.healthInsurance)));
+          if (ded.has("ltc"))        pushDed("ltc", "장기요양보험", Math.round(grossPay * Number(insuranceRates.longTermCare)));
+          if (ded.has("employment")) pushDed("employment", "고용보험", Math.round(grossPay * Number(insuranceRates.employmentInsurance)));
         }
       }
 
@@ -344,6 +379,21 @@ export async function POST(req: NextRequest) {
 
       const netPay = grossPay - totalDeduction;
 
+      // 산재보험 — 전액 사업주 부담(워커 net 미반영). 표기/리포트용.
+      const industrialRate = insuranceRates ? Number((insuranceRates as any).industrialAccident ?? 0) : 0;
+      const employerIndustrial = elig.insurances.includes("industrial") ? Math.round(grossPay * industrialRate) : 0;
+      const insurance = {
+        incomeType,
+        tier: elig.tier,                       // DAILY_WORKER | ULTRA_SHORT | REGULAR | NONE
+        insurances: elig.insurances,           // 가입 보험(산재 포함)
+        workerDeductible: elig.workerDeductible,
+        employerIndustrial,                    // 사업주 부담 산재(원)
+        employmentMonths: Number.isFinite(employmentMonths) ? +employmentMonths.toFixed(1) : null,
+        monthlyHours,
+        monthlyDays: workedDays,
+        continuousMonths: +continuousMonths.toFixed(1),
+      };
+
       itemInputs.push({
         workerId,
         grossPay: new Decimal(grossPay),
@@ -351,7 +401,7 @@ export async function POST(req: NextRequest) {
         netPay: new Decimal(netPay),
         workedDays,
         workedMinutes,
-        breakdown: { ...breakdown, incomeType, deductionBreakdown, payLines, deductLines, basicInfo, totalHours },
+        breakdown: { ...breakdown, incomeType, deductionBreakdown, payLines, deductLines, basicInfo, totalHours, insurance },
       });
     }
 

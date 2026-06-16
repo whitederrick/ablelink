@@ -198,3 +198,131 @@ export function AnnouncementCategoryManager({ onToast }: { onToast: (m: string) 
     </div>
   );
 }
+
+type Rate = {
+  id: string; year: number;
+  nationalPension: number; healthInsurance: number; longTermCare: number;
+  employmentInsurance: number; industrialAccident: number; total: number;
+};
+
+// 4대보험 + 산재 요율(연도별). 입력은 %(예: 4.5), 저장은 분수(0.045). 급여 계산이 grossPay×요율로 공제.
+export function InsuranceRatesManager({ onToast }: { onToast: (m: string) => void }) {
+  const FIELDS = [
+    { key: "nationalPension", label: "국민연금", required: true },
+    { key: "healthInsurance", label: "건강보험", required: true },
+    { key: "longTermCare", label: "장기요양", required: true },
+    { key: "employmentInsurance", label: "고용보험", required: true },
+    { key: "industrialAccident", label: "산재(사업주)", required: false },
+  ] as const;
+  type FKey = (typeof FIELDS)[number]["key"];
+  const EMPTY = { nationalPension: "", healthInsurance: "", longTermCare: "", employmentInsurance: "", industrialAccident: "" };
+
+  const [rows, setRows] = useState<Rate[]>([]);
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [f, setF] = useState<Record<FKey, string>>({ ...EMPTY });
+  const [busy, setBusy] = useState(false);
+
+  const load = () => fetch("/api/admin/payroll/insurance-rates").then(r => r.json())
+    .then(d => { if (d.success) setRows(d.data); }).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  // 연도 변경 시 기존 요율 프리필(분수→%)
+  function pickYear(y: string) {
+    setYear(y);
+    const r = rows.find(x => String(x.year) === y);
+    if (!r) { setF({ ...EMPTY }); return; }
+    setF({
+      nationalPension: String(+(r.nationalPension * 100).toFixed(4)),
+      healthInsurance: String(+(r.healthInsurance * 100).toFixed(4)),
+      longTermCare: String(+(r.longTermCare * 100).toFixed(4)),
+      employmentInsurance: String(+(r.employmentInsurance * 100).toFixed(4)),
+      industrialAccident: String(+(r.industrialAccident * 100).toFixed(4)),
+    });
+  }
+
+  async function save() {
+    const yr = Number(year);
+    if (!Number.isInteger(yr)) { onToast("연도를 입력하세요."); return; }
+    const pct = (s: string) => (s.trim() === "" ? null : Number(s) / 100);
+    for (const fld of FIELDS) {
+      if (fld.required && pct(f[fld.key]) == null) { onToast(`${fld.label} 요율을 입력하세요.`); return; }
+    }
+    const body = {
+      year: yr,
+      nationalPension: pct(f.nationalPension),
+      healthInsurance: pct(f.healthInsurance),
+      longTermCare: pct(f.longTermCare),
+      employmentInsurance: pct(f.employmentInsurance),
+      industrialAccident: pct(f.industrialAccident) ?? 0,
+    };
+    setBusy(true);
+    try {
+      const d = await fetch("/api/admin/payroll/insurance-rates", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      }).then(r => r.json());
+      if (d.success) { onToast(`${yr}년 보험요율 저장`); load(); }
+      else onToast(d.message || "저장 실패");
+    } catch { onToast("저장 실패"); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-6">
+      <h2 className="mb-1 text-base font-black text-slate-900">4대보험 요율</h2>
+      <p className="mb-4 text-xs text-slate-500">
+        연도별 근로자 부담 요율(국민연금·건강·장기요양·고용)과 <b>산재(전액 사업주 부담)</b>를 입력합니다. 단위는 <b>%</b>(예: 4.5).
+        급여 계산 시 가입 유형(일용/초단시간/일반)에 따라 해당 보험만 자동 공제됩니다. 산재는 워커 공제에서 제외(표기용).
+      </p>
+
+      <div className="mb-3 flex flex-wrap items-end gap-2">
+        <div>
+          <label className="mb-1 block text-[11px] font-black text-slate-500">연도</label>
+          <input type="number" value={year} onChange={e => pickYear(e.target.value)} placeholder="연도"
+            className="h-10 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-sky-400" />
+        </div>
+        {FIELDS.map(fld => (
+          <div key={fld.key}>
+            <label className="mb-1 block text-[11px] font-black text-slate-500">
+              {fld.label}{fld.required && <span className="text-rose-500">*</span>} (%)
+            </label>
+            <input type="number" step="0.001" value={f[fld.key]}
+              onChange={e => setF(p => ({ ...p, [fld.key]: e.target.value }))}
+              placeholder={fld.key === "industrialAccident" ? "예: 0.7" : "예: 4.5"}
+              className="h-10 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-sky-400" />
+          </div>
+        ))}
+        <button onClick={save} disabled={busy}
+          className="h-10 rounded-xl bg-slate-950 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-40">
+          {busy ? "저장 중…" : "저장"}
+        </button>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="mt-3 overflow-x-auto rounded-xl border border-slate-100">
+          <table className="w-full min-w-[560px] border-collapse text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-[12px] font-black text-slate-500">
+                {["연도", "국민연금", "건강", "장기요양", "고용", "산재", "근로자합"].map(h => (
+                  <th key={h} className="border-b border-slate-100 px-3 py-2 text-right first:text-left">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className="cursor-pointer border-b border-slate-50 last:border-b-0 hover:bg-slate-50" onClick={() => pickYear(String(r.year))}>
+                  <td className="px-3 py-2 text-left font-black text-slate-900">{r.year}</td>
+                  <td className="px-3 py-2 text-right text-slate-700">{+(r.nationalPension * 100).toFixed(3)}%</td>
+                  <td className="px-3 py-2 text-right text-slate-700">{+(r.healthInsurance * 100).toFixed(3)}%</td>
+                  <td className="px-3 py-2 text-right text-slate-700">{+(r.longTermCare * 100).toFixed(3)}%</td>
+                  <td className="px-3 py-2 text-right text-slate-700">{+(r.employmentInsurance * 100).toFixed(3)}%</td>
+                  <td className="px-3 py-2 text-right text-slate-500">{+(r.industrialAccident * 100).toFixed(3)}%</td>
+                  <td className="px-3 py-2 text-right font-black text-sky-600">{+(r.total * 100).toFixed(3)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

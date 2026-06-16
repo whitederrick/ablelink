@@ -177,6 +177,41 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // ── 급여 기준 자동 생성 (1단계-②) ──
+  // 계약 임금정보(시급/급여형태/기간)로 급여 기준을 시드. 이미 겹치는 급여 기준이 있으면 건너뜀.
+  // 소득유형·내부외부는 저장값과 무관(급여 계산 시 자동 판정). 실패해도 서명엔 영향 없음.
+  try {
+    const wt = contract.wageType;
+    if (contract.agencyId && contract.wageAmount != null && (wt === "HOURLY" || wt === "DAILY" || wt === "MONTHLY")) {
+      const existingPay = await prisma.payContract.findFirst({
+        where: {
+          agencyId: contract.agencyId, workerId: contract.workerId,
+          effectiveFrom: { lte: contract.contractEnd },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: contract.contractStart } }],
+        },
+        select: { id: true },
+      });
+      if (!existingPay) {
+        const base = contract.wageAmount;
+        const payData: any = {
+          agencyId: contract.agencyId,
+          workerId: contract.workerId,
+          workerType: "EXTERNAL",
+          payType: wt,
+          baseAmount: base,
+          incomeType: "EMPLOYMENT",
+          hourlyRate2Plus: wt === "HOURLY" ? Math.round(base * 1.2) : null,
+          weeklyHolidayPay: wt === "HOURLY" ? Math.round(base * 8) : null,
+          effectiveFrom: contract.contractStart,
+          effectiveTo: contract.contractEnd,
+        };
+        await prisma.payContract.create({ data: payData });
+      }
+    }
+  } catch (e) {
+    console.warn("[worker/contracts] 급여 기준 자동 생성 실패:", e);
+  }
+
   // 서명 완료 후 연결(assignment-pipeline-design.md §7) — 신규/기존 분기. 실패해도 서명엔 영향 없음.
   try {
     if (user?.isTemporary) {

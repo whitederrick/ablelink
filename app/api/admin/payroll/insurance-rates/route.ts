@@ -24,12 +24,13 @@ export async function GET(req: NextRequest) {
         healthInsurance: Number(r.healthInsurance),
         longTermCare: Number(r.longTermCare),
         employmentInsurance: Number(r.employmentInsurance),
+        industrialAccident: Number((r as any).industrialAccident ?? 0), // 산재(사업주 부담, 표기용)
         total: +(
           Number(r.nationalPension) +
           Number(r.healthInsurance) +
           Number(r.longTermCare) +
           Number(r.employmentInsurance)
-        ).toFixed(6),
+        ).toFixed(6), // 워커 공제 4대보험 합(산재 제외)
       })),
     });
   } catch (e: any) {
@@ -45,12 +46,13 @@ export async function POST(req: NextRequest) {
     void scope;
 
     const body = await req.json();
-    const { year, nationalPension, healthInsurance, longTermCare, employmentInsurance } = body;
+    const { year, nationalPension, healthInsurance, longTermCare, employmentInsurance, industrialAccident } = body;
 
     if (!year || nationalPension == null || healthInsurance == null || longTermCare == null || employmentInsurance == null) {
       return NextResponse.json({ success: false, message: "필수 항목 누락" }, { status: 400 });
     }
 
+    const industrial = industrialAccident == null ? 0 : Number(industrialAccident); // 산재(선택, 기본 0)
     const rates = await prisma.insuranceRates.upsert({
       where: { year: Number(year) },
       create: {
@@ -59,13 +61,15 @@ export async function POST(req: NextRequest) {
         healthInsurance,
         longTermCare,
         employmentInsurance,
-      },
+        industrialAccident: industrial,
+      } as any,
       update: {
         nationalPension,
         healthInsurance,
         longTermCare,
         employmentInsurance,
-      },
+        industrialAccident: industrial,
+      } as any,
     });
 
     return NextResponse.json({ success: true, id: rates.id.toString() });
