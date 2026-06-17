@@ -9,6 +9,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
 import { randomUUID } from "crypto";
+import { getActiveFormSnapshot } from "@/lib/jobCoachEval";
 
 const SURVEY_TEMPLATE = "KAKAO_SURVEY_TEMPLATE_CODE";
 
@@ -40,10 +41,11 @@ export async function GET(req: NextRequest) {
         siteName: r.siteName,
         status: r.status,
         auto: r.auto,
-        // 결과 점수/코멘트는 운영자 전용 — 매니저에겐 노출하지 않음
+        // 결과: 평가표 결과는 총점만, 레거시는 종합 별점만(공유 시). 문항·의견은 운영자 전용.
         sharedWithAgency: r.sharedWithAgency,
-        overallScore: r.sharedWithAgency ? r.overallScore : null,
-        comment: r.sharedWithAgency ? r.comment : null,
+        totalScore: r.sharedWithAgency ? ((r as any).totalScore ?? null) : null,
+        overallScore: r.sharedWithAgency && (r as any).totalScore == null ? r.overallScore : null,
+        comment: null,
         sentAt: r.sentAt?.toISOString() ?? null,
         respondedAt: r.respondedAt?.toISOString() ?? null,
         createdAt: r.createdAt.toISOString(),
@@ -91,6 +93,9 @@ export async function POST(req: NextRequest) {
     const token = randomUUID();
     const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14일
 
+    // 요청 시점의 운영자 활성 평가표를 스냅샷(없으면 레거시 4항목 폴백)
+    const snapshot = await getActiveFormSnapshot();
+
     const survey = await prisma.satisfactionSurvey.create({
       data: {
         agencyId: scope.agencyId,
@@ -102,7 +107,8 @@ export async function POST(req: NextRequest) {
         status: "PENDING",
         expiresAt,
         createdByManagerId: scope.managerId,
-      },
+        ...(snapshot ? { formId: BigInt(snapshot.formId), formSnapshot: snapshot as any } : {}),
+      } as any,
     });
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";

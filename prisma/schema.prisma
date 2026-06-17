@@ -937,10 +937,18 @@ model SatisfactionSurvey {
   auto    Boolean @default(false) @map("auto") // 계약 종료 자동발송 여부
 
   // 응답
-  scores       Json?   // { professionalism, diligence, communication, support } (각 1~5)
-  overallScore Int?    @map("overall_score") // 종합 만족도 1~5
+  //  · 레거시(평가표 미연결): scores = { professionalism, diligence, communication, support } (각 1~5)
+  //  · 역량 평가표 연결 시: scores = 문항 답안(스냅샷 인덱스 기준), comment = 사업체 담당자 주관식 의견
+  scores       Json?   // 문항 답안(1~5)
+  overallScore Int?    @map("overall_score") // (레거시) 종합 만족도 1~5
   comment      String?
   sharedWithAgency Boolean @default(false) @map("shared_with_agency") // 운영자→에이전시 전달 여부
+
+  // 역량 평가표 승격 — 요청 시점의 운영자 활성 평가표를 스냅샷해 안정적으로 렌더·채점
+  formId         BigInt? @map("form_id")          // 사용된 JobCoachEvalForm(참조)
+  formSnapshot   Json?   @map("form_snapshot")     // 요청 시점 카테고리·문항·배점 스냅샷
+  categoryScores Json?   @map("category_scores")   // 카테고리별 환산 점수 [{ name, weight, score }]
+  totalScore     Int?    @map("total_score")       // 종합 환산 점수(0~100)
 
   sentAt      DateTime? @map("sent_at")
   respondedAt DateTime? @map("responded_at")

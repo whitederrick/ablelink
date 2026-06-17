@@ -59,7 +59,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       select: {
         id: true, siteName: true, status: true, overallScore: true, comment: true,
         scores: true, sharedWithAgency: true, respondedAt: true, createdAt: true,
-      },
+        totalScore: true, categoryScores: true,
+      } as any,
     });
 
     return NextResponse.json({
@@ -89,17 +90,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           serviceStep: String(a.serviceStep),
           active: ACTIVE_ASSIGN.includes(a.status),
         })),
-        surveys: surveys.map((s) => ({
-          id: String(s.id),
-          siteName: s.siteName ?? null,
-          status: String(s.status),
-          respondedAt: s.respondedAt ? s.respondedAt.toISOString() : null,
-          createdAt: s.createdAt.toISOString(),
-          sharedWithAgency: s.sharedWithAgency,
-          overallScore: s.sharedWithAgency ? s.overallScore : null,
-          comment: s.sharedWithAgency ? s.comment : null,
-          scores: s.sharedWithAgency ? (s.scores ?? null) : null,
-        })),
+        surveys: surveys.map((s: any) => {
+          // 역량 평가표 결과는 위탁기관에 '총점+카테고리'만 노출. 문항 답안·의견은 운영자 전용.
+          const isRubric = s.totalScore != null || s.categoryScores != null;
+          const shared = s.sharedWithAgency;
+          return {
+            id: String(s.id),
+            siteName: s.siteName ?? null,
+            status: String(s.status),
+            respondedAt: s.respondedAt ? s.respondedAt.toISOString() : null,
+            createdAt: s.createdAt.toISOString(),
+            sharedWithAgency: shared,
+            isRubric,
+            totalScore: shared ? (s.totalScore ?? null) : null,
+            categoryScores: shared ? (s.categoryScores ?? null) : null,
+            // 레거시(평가표 미연결)만 종합 별점·문항·코멘트 노출, 평가표 결과는 차단
+            overallScore: shared && !isRubric ? s.overallScore : null,
+            comment: shared && !isRubric ? s.comment : null,
+            scores: shared && !isRubric ? (s.scores ?? null) : null,
+          };
+        }),
       },
     });
   } catch (e: any) {

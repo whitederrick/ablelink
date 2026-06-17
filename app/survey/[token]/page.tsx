@@ -5,9 +5,12 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
-interface SurveyData { status: string; workerName: string; agencyName?: string; siteName?: string | null; recipientName?: string | null; }
+interface EvalCategory { name: string; questions: { text: string }[] }
+interface EvalForm { title: string; includeOpinion: boolean; categories: EvalCategory[] }
+interface SurveyData { status: string; workerName: string; agencyName?: string; siteName?: string | null; recipientName?: string | null; form?: EvalForm | null; }
 
-const QUESTIONS: { key: string; label: string }[] = [
+// 레거시(평가표 미연결) 폴백 문항
+const LEGACY_QUESTIONS: { key: string; label: string }[] = [
   { key: "professionalism", label: "직무지도 전문성 (장애인 직무지도 역량)" },
   { key: "diligence", label: "성실성 및 근태 (출근·시간 준수)" },
   { key: "communication", label: "의사소통 (담당자·근로자와의 소통)" },
@@ -30,8 +33,9 @@ export default function SurveyResponsePage() {
   const [data, setData] = useState<SurveyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [scores, setScores] = useState<Record<string, number>>({});
-  const [overall, setOverall] = useState(0);
+  const [scores, setScores] = useState<Record<string, number>>({});   // 레거시
+  const [overall, setOverall] = useState(0);                          // 레거시
+  const [answers, setAnswers] = useState<Record<string, number>>({}); // 평가표(키 "ci_qi")
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -45,12 +49,25 @@ export default function SurveyResponsePage() {
     }).catch(() => setError("서버 오류가 발생했습니다.")).finally(() => setLoading(false));
   }, [token]);
 
+  const form = data?.form ?? null;
+
   async function submit() {
-    for (const q of QUESTIONS) if (!scores[q.key]) { alert("모든 항목을 평가해 주세요."); return; }
-    if (!overall) { alert("종합 만족도를 평가해 주세요."); return; }
+    let payload: any;
+    if (form) {
+      for (let ci = 0; ci < form.categories.length; ci++) {
+        for (let qi = 0; qi < form.categories[ci].questions.length; qi++) {
+          if (!answers[`${ci}_${qi}`]) { alert("모든 항목을 평가해 주세요."); return; }
+        }
+      }
+      payload = { answers, comment };
+    } else {
+      for (const q of LEGACY_QUESTIONS) if (!scores[q.key]) { alert("모든 항목을 평가해 주세요."); return; }
+      if (!overall) { alert("종합 만족도를 평가해 주세요."); return; }
+      payload = { scores, overallScore: overall, comment };
+    }
     setSubmitting(true);
     try {
-      const r = await fetch(`/api/survey/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scores, overallScore: overall, comment }) });
+      const r = await fetch(`/api/survey/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await r.json();
       if (!d.success) throw new Error(d.message);
       setDone(true);
@@ -81,22 +98,47 @@ export default function SurveyResponsePage() {
           <p style={S.sub}><strong>{data.workerName}</strong> 직무지도원{data.siteName ? ` · ${data.siteName}` : ""}</p>
         </div>
         <div style={{ padding: "20px 24px" }}>
-          <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 18 }}>각 항목을 1~5점으로 평가해 주세요. (5점 = 매우 만족)</p>
-          {QUESTIONS.map(q => (
-            <div key={q.key} style={{ marginBottom: 18 }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 6 }}>{q.label}</p>
-              <Stars value={scores[q.key] || 0} onChange={v => setScores(s => ({ ...s, [q.key]: v }))} />
-            </div>
-          ))}
-          <div style={{ marginBottom: 18, paddingTop: 8, borderTop: "1px solid #f0f0f0" }}>
-            <p style={{ fontSize: 14, fontWeight: 800, color: "#111827", marginBottom: 6 }}>종합 만족도</p>
-            <Stars value={overall} onChange={setOverall} />
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 6 }}>의견 (선택)</p>
-            <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="자유롭게 의견을 남겨주세요" rows={4}
-              style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, fontSize: 14, boxSizing: "border-box", resize: "none" }} />
-          </div>
+          <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 18 }}>각 항목을 1~5점으로 평가해 주세요. (5점 = 매우 그렇다)</p>
+          {form ? (
+            <>
+              {form.categories.map((cat, ci) => (
+                <div key={ci} style={{ marginBottom: 20 }}>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: "#1e40af", margin: "0 0 10px", paddingBottom: 6, borderBottom: "1px solid #eef2ff" }}>{ci + 1}. {cat.name}</p>
+                  {cat.questions.map((q, qi) => (
+                    <div key={qi} style={{ marginBottom: 14 }}>
+                      <p style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 6 }}>{q.text}</p>
+                      <Stars value={answers[`${ci}_${qi}`] || 0} onChange={v => setAnswers(s => ({ ...s, [`${ci}_${qi}`]: v }))} />
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {form.includeOpinion && (
+                <div style={{ marginBottom: 8 }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 6 }}>의견 (선택)</p>
+                  <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="강점·보완점·특이사항을 자유롭게 남겨주세요" rows={4}
+                    style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, fontSize: 14, boxSizing: "border-box", resize: "none" }} />
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {LEGACY_QUESTIONS.map(q => (
+                <div key={q.key} style={{ marginBottom: 18 }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 6 }}>{q.label}</p>
+                  <Stars value={scores[q.key] || 0} onChange={v => setScores(s => ({ ...s, [q.key]: v }))} />
+                </div>
+              ))}
+              <div style={{ marginBottom: 18, paddingTop: 8, borderTop: "1px solid #f0f0f0" }}>
+                <p style={{ fontSize: 14, fontWeight: 800, color: "#111827", marginBottom: 6 }}>종합 만족도</p>
+                <Stars value={overall} onChange={setOverall} />
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <p style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 6 }}>의견 (선택)</p>
+                <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="자유롭게 의견을 남겨주세요" rows={4}
+                  style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, fontSize: 14, boxSizing: "border-box", resize: "none" }} />
+              </div>
+            </>
+          )}
         </div>
         <button onClick={submit} disabled={submitting}
           style={{ display: "block", width: "calc(100% - 48px)", margin: "0 24px 20px", padding: 14, background: "#2563eb", color: "#fff", fontSize: 15, fontWeight: 700, border: "none", borderRadius: 10, opacity: submitting ? 0.5 : 1, cursor: submitting ? "not-allowed" : "pointer" }}>

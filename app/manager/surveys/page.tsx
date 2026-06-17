@@ -14,7 +14,7 @@ type Status = "PENDING" | "RESPONDED" | "EXPIRED" | "CANCELLED";
 interface SurveyItem {
   id: string; workerName: string; workerLoginId: string; recipientName: string | null; recipientPhone: string;
   siteName: string | null; status: Status; auto: boolean; sharedWithAgency: boolean;
-  overallScore: number | null; comment: string | null;
+  overallScore: number | null; comment: string | null; totalScore: number | null;
   sentAt: string | null; respondedAt: string | null; createdAt: string;
 }
 
@@ -106,7 +106,13 @@ export default function ManagerSurveysPage() {
                   <td className={T.td}><div className="max-w-[110px] truncate">{s.recipientName || "-"}</div></td>
                   <td className={`${T.td} whitespace-nowrap`}>{s.recipientPhone || "-"}</td>
                   <td className={`${T.td} whitespace-nowrap`}><StatusBadge status={s.status} map={STATUS_BADGE} />{s.auto && <span className="ml-1 text-[13px] text-slate-500">자동</span>}</td>
-                  <td className={`${T.td} whitespace-nowrap`}>{s.status === "RESPONDED" ? (s.sharedWithAgency && s.overallScore != null ? <span className="font-semibold text-slate-800">종합 {s.overallScore}/5</span> : <span className="text-slate-500">운영자 확인</span>) : "-"}</td>
+                  <td className={`${T.td} whitespace-nowrap`}>{s.status === "RESPONDED"
+                    ? (s.sharedWithAgency && s.totalScore != null
+                        ? <span className="font-semibold text-sky-700">종합 {s.totalScore}/100</span>
+                        : s.sharedWithAgency && s.overallScore != null
+                          ? <span className="font-semibold text-slate-800">종합 {s.overallScore}/5</span>
+                          : <span className="text-slate-500">운영자 확인</span>)
+                    : "-"}</td>
                   <td className={`${T.td} whitespace-nowrap`}>{s.createdAt.slice(0, 10)}</td>
                 </tr>
               );

@@ -37,6 +37,10 @@ export async function GET(req: NextRequest) {
         overallScore: r.overallScore,
         comment: r.comment,
         sharedWithAgency: r.sharedWithAgency,
+        // 역량 평가표 결과(운영자는 전체 열람) — 총점·카테고리·요청시점 문항 스냅샷
+        totalScore: (r as any).totalScore ?? null,
+        categoryScores: (r as any).categoryScores ?? null,
+        formSnapshot: (r as any).formSnapshot ?? null,
         sentAt: r.sentAt?.toISOString() ?? null,
         respondedAt: r.respondedAt?.toISOString() ?? null,
         createdAt: r.createdAt.toISOString(),

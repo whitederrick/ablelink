@@ -19,10 +19,12 @@ type AssignmentRow = {
   startDate: string; endDate: string | null;
   workType: string | null; serviceStep: string; active: boolean;
 };
+type CategoryScore = { name: string; weight: number; score: number };
 type SurveyRow = {
   id: string; siteName: string | null; status: string; respondedAt: string | null;
   createdAt: string; sharedWithAgency: boolean; overallScore: number | null; comment: string | null;
   scores: Record<string, number> | null;
+  isRubric?: boolean; totalScore?: number | null; categoryScores?: CategoryScore[] | null;
 };
 type Detail = { account: Account; assignments: AssignmentRow[]; surveys: SurveyRow[] };
 
@@ -91,39 +93,75 @@ function SurveyDetailModal({ survey, onClose }: { survey: SurveyRow; onClose: ()
         </div>
 
         <div className="space-y-4">
-          {/* 종합 점수·상태 */}
-          <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-            <span className="text-sm font-semibold text-slate-500">종합 만족도</span>
-            <div className="flex items-center gap-2">
-              {survey.overallScore != null
-                ? <span className="text-lg font-black text-amber-500">★ {survey.overallScore.toFixed(1)}</span>
-                : <span className="text-sm font-semibold text-slate-400">미전달</span>}
-              <span className={`${T.badge} ${st.cls}`}>{st.label}</span>
-            </div>
-          </div>
-
-          {/* 세부 항목 점수 */}
-          {scoreEntries.length > 0 && (
-            <div className="space-y-1.5">
-              {scoreEntries.map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
-                  <span className="text-sm font-semibold text-slate-600">{SCORE_LABEL[k]}</span>
-                  <span className="text-sm font-black text-amber-500">★ {Number(v).toFixed(1)}</span>
+          {(survey.isRubric || survey.totalScore != null) ? (
+            // 역량 평가표 결과 — 위탁기관은 '총점 + 카테고리'만 열람(문항·의견은 운영자 전용)
+            survey.totalScore != null ? (
+              <>
+                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                  <span className="text-sm font-semibold text-slate-500">종합 점수</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-black text-sky-600">{survey.totalScore}<span className="text-xs text-slate-400">/100</span></span>
+                    <span className={`${T.badge} ${st.cls}`}>{st.label}</span>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* 코멘트 */}
-          <div>
-            <p className="mb-1 text-xs font-black text-slate-700">코멘트</p>
-            {survey.comment
-              ? <p className="whitespace-pre-line rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-600">{survey.comment}</p>
-              : <p className="text-sm font-semibold text-slate-300">작성된 코멘트가 없습니다.</p>}
-          </div>
-
-          {survey.status === "RESPONDED" && survey.overallScore == null && (
-            <p className="text-xs font-semibold text-slate-400">운영자 전달 후 점수·코멘트가 표시됩니다.</p>
+                {Array.isArray(survey.categoryScores) && survey.categoryScores.length > 0 && (
+                  <div className="space-y-1.5">
+                    {survey.categoryScores.map((c, i) => (
+                      <div key={i} className="rounded-lg border border-slate-100 px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold text-slate-600">{c.name}</span>
+                          <span className="text-sm font-black text-slate-800">{c.score}<span className="text-xs font-semibold text-slate-400">/{c.weight}</span></span>
+                        </div>
+                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div className="h-full rounded-full bg-sky-500" style={{ width: `${c.weight ? Math.round((c.score / c.weight) * 100) : 0}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs font-semibold text-slate-400">문항별 점수·작성 의견은 비공개입니다(시스템 운영자 보관).</p>
+              </>
+            ) : (
+              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                <span className="text-sm font-semibold text-slate-500">평가 결과</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-400">운영자 확인</span>
+                  <span className={`${T.badge} ${st.cls}`}>{st.label}</span>
+                </div>
+              </div>
+            )
+          ) : (
+            <>
+              {/* 종합 점수·상태(레거시 만족도) */}
+              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                <span className="text-sm font-semibold text-slate-500">종합 만족도</span>
+                <div className="flex items-center gap-2">
+                  {survey.overallScore != null
+                    ? <span className="text-lg font-black text-amber-500">★ {survey.overallScore.toFixed(1)}</span>
+                    : <span className="text-sm font-semibold text-slate-400">미전달</span>}
+                  <span className={`${T.badge} ${st.cls}`}>{st.label}</span>
+                </div>
+              </div>
+              {scoreEntries.length > 0 && (
+                <div className="space-y-1.5">
+                  {scoreEntries.map(([k, v]) => (
+                    <div key={k} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
+                      <span className="text-sm font-semibold text-slate-600">{SCORE_LABEL[k]}</span>
+                      <span className="text-sm font-black text-amber-500">★ {Number(v).toFixed(1)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div>
+                <p className="mb-1 text-xs font-black text-slate-700">코멘트</p>
+                {survey.comment
+                  ? <p className="whitespace-pre-line rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-600">{survey.comment}</p>
+                  : <p className="text-sm font-semibold text-slate-300">작성된 코멘트가 없습니다.</p>}
+              </div>
+              {survey.status === "RESPONDED" && survey.overallScore == null && (
+                <p className="text-xs font-semibold text-slate-400">운영자 전달 후 점수·코멘트가 표시됩니다.</p>
+              )}
+            </>
           )}
         </div>
 
@@ -374,9 +412,11 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
                             <span className="truncate text-sm font-bold text-slate-700">{s.siteName || "현장 미지정"}</span>
                             <span className="flex-shrink-0 text-xs font-semibold text-slate-400">{s.respondedAt ? fmtDate(s.respondedAt) : "-"}</span>
                             <span className="ml-auto flex flex-shrink-0 items-center gap-1.5">
-                              {s.overallScore != null && (
-                                <span className="text-sm font-black text-amber-500">★ {s.overallScore.toFixed(1)}</span>
-                              )}
+                              {s.totalScore != null
+                                ? <span className="text-sm font-black text-sky-600">{s.totalScore}점</span>
+                                : s.overallScore != null
+                                  ? <span className="text-sm font-black text-amber-500">★ {s.overallScore.toFixed(1)}</span>
+                                  : null}
                               <span className={`${T.badge} ${st.cls}`}>{st.label}</span>
                             </span>
                           </button>
