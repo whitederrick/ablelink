@@ -50,6 +50,7 @@ const RISK_ROUTE: Record<string, string> = {
   document:   "/manager/documents",
   assignment: "/manager/workers",
   site:       "/manager/sites",
+  survey_due: "/manager/workers",
 };
 
 function ActionRow({ label, count, urgent, onCountClick, showPopup, popupItems, onPopupItemClick, onPopupClose, renderPopupItem }: {
@@ -446,6 +447,7 @@ export default function AdminDashboardPage() {
                         const params = new URLSearchParams();
                         if (alert.target) params.set("q", alert.target);
                         if (alert.id) params.set("focus", alert.id);
+                        if (alert.type === "survey_due") params.set("assignState", "ended"); // 근무 종료 필터로 진입
                         const qs = params.toString();
                         router.push(qs ? `${base}?${qs}` : base);
                       }}

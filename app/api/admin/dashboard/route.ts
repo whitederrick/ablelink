@@ -20,14 +20,17 @@ export async function GET(req: Request) {
     const in10Days = new Date(today); in10Days.setDate(in10Days.getDate() + 10);
     const issueFloor = new Date(today); issueFloor.setDate(issueFloor.getDate() - 45);
     const issueFloorStr = issueFloor.toISOString().slice(0, 10);
+    // 근무 종료(배정 종료일 경과) 후 만족도 평가 미요청 — 최근 60일 이내 종료분만 환기(스테일 누적 방지)
+    const endedFloor = new Date(today); endedFloor.setDate(endedFloor.getDate() - 60);
 
-    // ── 5개 쿼리 병렬 실행 ────────────────────────────────────────
+    // ── 6개 쿼리 병렬 실행 ────────────────────────────────────────
     const [
       todayAttendances,
       recentAttendances,
       docRunsOpen,
       endingSoonAssignments,
       allActiveSites,
+      endedAssignments,
     ] = await Promise.all([
       // 1. 오늘 출근 현황
       prisma.dailyAttendance.findMany({
@@ -84,7 +87,38 @@ export async function GET(req: Request) {
           assignments: { where: { status: "ACTIVE" }, select: { id: true } },
         },
       }),
+      // 6. 근무 종료(배정 종료일 경과) — 만족도 평가 미요청 환기 후보(최근 60일)
+      prisma.siteAssignment.findMany({
+        where: { status: { in: ["ACTIVE", "CONFIRMED"] }, endDate: { lt: today, gte: endedFloor }, ...agencyFilter },
+        select: {
+          id: true, endDate: true, workerId: true,
+          user: { select: { workerName: true } },
+          site: { select: { companyName: true } },
+        },
+        orderBy: { endDate: "desc" },
+        take: 50,
+      }),
     ]);
+
+    // 근무 종료 배정 중 '만족도 평가 미요청'만 추림 — 종료일(−7일 버퍼) 이후 생성된 평가가 없으면 미요청으로 간주
+    const endedWorkerIds = [...new Set(endedAssignments.map(a => a.workerId))];
+    const endedSurveys = endedWorkerIds.length
+      ? await prisma.satisfactionSurvey.findMany({
+          where: { agencyId: scope.agencyId, workerId: { in: endedWorkerIds } },
+          select: { workerId: true, createdAt: true },
+        })
+      : [];
+    const surveyDatesByWorker = new Map<string, Date[]>();
+    for (const s of endedSurveys) {
+      const k = String(s.workerId);
+      (surveyDatesByWorker.get(k) ?? surveyDatesByWorker.set(k, []).get(k)!).push(s.createdAt);
+    }
+    const evalDue = endedAssignments.filter(a => {
+      if (!a.endDate) return false;
+      const buffer = new Date(a.endDate); buffer.setDate(buffer.getDate() - 7);
+      const dates = surveyDatesByWorker.get(String(a.workerId)) ?? [];
+      return !dates.some(d => d >= buffer);
+    });
 
     // 최근 출근기록 → 근태 이슈 직접 도출(RESOLVED 제외). 인박스 열람 여부와 무관하게 정확.
     const derivedIssues = recentAttendances
@@ -152,6 +186,17 @@ export async function GET(req: Request) {
         target: s.companyName,
         detail: "활성 직무지도원 배정 없음",
         severity: "low",
+      });
+    }
+
+    // 근무 종료 후 만족도 평가 미요청 — 배정 관리(근무 종료 필터)로 유도
+    for (const a of evalDue.slice(0, 8)) {
+      const daysAgo = Math.floor((today.getTime() - a.endDate!.getTime()) / 86400000);
+      riskAlerts.push({
+        type: "survey_due", id: String(a.id), label: "[평가]",
+        target: a.user?.workerName || "-",
+        detail: `근무 종료 ${daysAgo}일 경과 — 만족도 평가 미요청 · 『${a.site?.companyName || ""}』`,
+        severity: daysAgo >= 14 ? "medium" : "low",
       });
     }
 

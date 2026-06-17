@@ -978,6 +978,8 @@ export default function WorkersPage() {
     const params = new URLSearchParams(window.location.search);
     const sq = params.get("q");
     if (sq) setQuery(sq);
+    const as = params.get("assignState"); // 대시보드 '근무 종료 — 평가 미요청' 딥링크
+    if (as) setAssignState(as.split(",").filter(Boolean));
     const rs = params.get("requestSite");
     if (rs) {
       setInviteSiteId(rs);
