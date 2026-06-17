@@ -14,7 +14,7 @@ type Item = {
 const KIND: Record<string, { label: string; cls: string }> = {
   ANNOUNCEMENT:      { label: "공지", cls: "bg-indigo-100 text-indigo-700" },
   NOTICE_ALL:        { label: "전체", cls: "bg-slate-200 text-slate-700" },
-  NOTICE_GROUP:      { label: "그룹", cls: "bg-violet-100 text-violet-700" },
+  NOTICE_GROUP:      { label: "그룹", cls: "bg-teal-100 text-teal-700" },
   NOTICE_INDIVIDUAL: { label: "개별", cls: "bg-emerald-100 text-emerald-700" },
 };
 const TYPE_CLS: Record<string, string> = {

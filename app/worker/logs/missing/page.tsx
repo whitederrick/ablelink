@@ -28,7 +28,7 @@ const TYPE_LABEL: Record<TrainingType, string> = {
 const TYPE_COLOR: Record<TrainingType, string> = {
   PRE:        "bg-sky-100 text-sky-700",
   FIELD:      "bg-emerald-100 text-emerald-700",
-  ADAPTATION: "bg-violet-100 text-violet-700",
+  ADAPTATION: "bg-teal-100 text-teal-700",
 };
 
 function formatDate(d: string) {

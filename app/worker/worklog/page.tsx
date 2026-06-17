@@ -228,7 +228,7 @@ const ATTENDANCE_ACTIVE: Record<Attendance, string> = {
   출석: "bg-slate-950 text-white border-slate-950",
   결석: "bg-rose-500 text-white border-rose-500",
   지각: "bg-amber-500 text-white border-amber-500",
-  조퇴: "bg-violet-500 text-white border-violet-500",
+  조퇴: "bg-amber-500 text-white border-amber-500",
 };
 const ATTENDANCE_INACTIVE = "bg-slate-50 text-slate-500 border-slate-200";
 

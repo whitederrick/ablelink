@@ -89,7 +89,7 @@ const ISSUE_LABEL: Record<IssueType, string> = {
 // 콘솔 공통 소프트 톤(StatusBadge 팔레트)로 톤다운
 const ISSUE_STYLE: Record<IssueType, { className: string }> = {
   OUT_OF_RANGE: { className: "bg-amber-50 text-amber-600" }, // 기준 범위 이탈
-  TIME_ANOMALY: { className: "bg-violet-50 text-violet-600" }, // 출퇴근 시간이상
+  TIME_ANOMALY: { className: "bg-amber-50 text-amber-600" }, // 출퇴근 시간이상
   MISSING_CLOCK_IN: { className: "bg-rose-50 text-rose-600" }, // 출근 기록 누락
   MISSING_CLOCK_OUT: { className: "bg-rose-50 text-rose-600" }, // 퇴근 기록 누락
 };
@@ -1025,7 +1025,7 @@ export default function AttendanceInboxClient() {
                         {lateMin != null && (
                           <div className="mt-1.5">
                             {lateMin >= 15 ? (
-                              <span className="rounded bg-violet-50 px-1.5 py-0.5 text-xs font-black text-violet-600">{lateMin}분 지각</span>
+                              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs font-black text-amber-600">{lateMin}분 지각</span>
                             ) : (
                               <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-black text-emerald-700">정시 출근</span>
                             )}

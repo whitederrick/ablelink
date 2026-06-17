@@ -176,7 +176,7 @@ export default function AdminDocsPage() {
                     return (
                       <tr key={c.workerId} className={`${T.trBase} ${selectedWorker === c.workerId ? "bg-slate-50" : ""}`}>
                         <td className="px-2.5 py-1.5 align-middle whitespace-nowrap">
-                          <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[12px] font-black ${isAdapt ? "bg-violet-50 text-violet-600" : "bg-sky-50 text-sky-600"}`}>{isAdapt ? "적응지도" : "지원훈련"}</span>
+                          <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[12px] font-black ${isAdapt ? "bg-teal-50 text-teal-600" : "bg-sky-50 text-sky-600"}`}>{isAdapt ? "적응지도" : "지원훈련"}</span>
                         </td>
                         <td className="px-2.5 py-1.5 align-middle text-[14px] font-bold text-slate-800"><div className="max-w-[120px] truncate">{c.workerName}</div></td>
                         <td className="px-2.5 py-1.5 align-middle text-[13px] text-slate-500"><div className="max-w-[140px] truncate">{c.siteName}</div></td>

@@ -572,7 +572,7 @@ export default function BatchWorklogPage() {
             <div className="rounded-2xl bg-white p-6 shadow-sm flex flex-col items-center gap-5">
               {aiLoading ? (
                 <>
-                  <Loader2 className="h-12 w-12 animate-spin text-violet-500" />
+                  <Loader2 className="h-12 w-12 animate-spin text-sky-500" />
                   <p className="text-sm font-black text-slate-700 text-center px-4">
                     {AI_LOADING_MESSAGES[aiMsgIdx]}
                   </p>

@@ -45,7 +45,7 @@ const TYPE_LABEL: Record<TrainingType, string> = {
 const TYPE_COLOR: Record<TrainingType, string> = {
   PRE:        "bg-sky-100 text-sky-700",
   FIELD:      "bg-emerald-100 text-emerald-700",
-  ADAPTATION: "bg-violet-100 text-violet-700",
+  ADAPTATION: "bg-teal-100 text-teal-700",
 };
 
 const SCORE_LABELS = ["", "매우못함", "못함", "보통", "잘함", "매우잘함"];
@@ -178,7 +178,7 @@ export default function LogsPage() {
                 { val: "ALL",        label: "모든 일지" },
               ].map(({ val, label }) => (
                 <button key={val} onClick={() => setFilterType(val)}
-                  className={`flex-1 rounded-xl border py-2 text-xs font-black transition active:scale-95 ${filterType === val ? "border-violet-700 bg-violet-700 text-white" : "border-slate-200 bg-white text-slate-600"}`}>
+                  className={`flex-1 rounded-xl border py-2 text-xs font-black transition active:scale-95 ${filterType === val ? "border-teal-700 bg-teal-700 text-white" : "border-slate-200 bg-white text-slate-600"}`}>
                   {label}
                 </button>
               ))

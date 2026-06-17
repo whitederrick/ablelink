@@ -17,7 +17,7 @@ type NavGroup = { title: string; items: NavItem[] };
 // 등급 메타: 정렬 순위 + 배지 라벨/색(다크 네비용)
 const TIER_META: Record<PlanTier, { rank: number; label: string; cls: string }> = {
   STARTER:  { rank: 1, label: "STARTER",  cls: "bg-sky-500/15 text-sky-300" },
-  STANDARD: { rank: 2, label: "STANDARD", cls: "bg-violet-500/15 text-violet-300" },
+  STANDARD: { rank: 2, label: "STANDARD", cls: "bg-teal-500/15 text-teal-300" },
   PRO:      { rank: 3, label: "PRO",      cls: "bg-amber-500/15 text-amber-300" },
 };
 // 현재 플랜 → 접근 가능 등급(TRIAL은 전체 허용)

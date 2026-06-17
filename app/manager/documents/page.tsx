@@ -253,7 +253,7 @@ export default function ManagerDocumentsHub() {
         cols={4}
         items={[
           { label: "제출완료", value: summary.SUBMITTED, tone: "sky" },
-          { label: "확정", value: summary.CONFIRMED, tone: "violet" },
+          { label: "확정", value: summary.CONFIRMED, tone: "amber" },
           { label: "서명완료", value: summary.MANAGER_SIGNED, tone: "emerald" },
           { label: "수정요청", value: summary.CHANGES_REQUESTED, tone: "rose" },
         ]}

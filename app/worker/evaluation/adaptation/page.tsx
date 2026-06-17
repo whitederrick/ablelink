@@ -139,11 +139,11 @@ function AdaptationEvalInner() {
       </header>
 
       {/* 안내 */}
-      <div className="mx-4 mt-3 rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
-        <p className="text-xs font-semibold text-violet-700">
+      <div className="mx-4 mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+        <p className="text-xs font-semibold text-emerald-700">
           <span className="font-black">초기</span>(적응지도 시작)와 <span className="font-black">후기</span>(적응지도 종료) 각각 평가합니다.
         </p>
-        <p className="mt-1 text-[11px] text-violet-600">채점 기준: 우수 5점 · 양호 4점 · 보통 3점 · 미흡 2점 · 불량 1점</p>
+        <p className="mt-1 text-[11px] text-emerald-600">채점 기준: 우수 5점 · 양호 4점 · 보통 3점 · 미흡 2점 · 불량 1점</p>
       </div>
 
       <div className="mx-auto max-w-md space-y-3 px-4 py-3">
@@ -190,15 +190,15 @@ function AdaptationEvalInner() {
         ))}
 
         {/* 총점 */}
-        <div className="rounded-2xl bg-violet-950 px-5 py-4">
-          <p className="mb-3 text-xs font-black text-violet-300">총점 (만점 100점)</p>
+        <div className="rounded-2xl bg-emerald-950 px-5 py-4">
+          <p className="mb-3 text-xs font-black text-emerald-300">총점 (만점 100점)</p>
           <div className="flex gap-5">
-            <div className="flex-1 rounded-xl bg-violet-900 px-4 py-3 text-center">
-              <p className="text-[11px] font-semibold text-violet-300">초기 평가</p>
+            <div className="flex-1 rounded-xl bg-emerald-900 px-4 py-3 text-center">
+              <p className="text-[11px] font-semibold text-emerald-300">초기 평가</p>
               <p className="text-2xl font-black text-white">{calcTotal(scores, "initial")}점</p>
             </div>
-            <div className="flex-1 rounded-xl bg-violet-900 px-4 py-3 text-center">
-              <p className="text-[11px] font-semibold text-violet-300">후기 평가</p>
+            <div className="flex-1 rounded-xl bg-emerald-900 px-4 py-3 text-center">
+              <p className="text-[11px] font-semibold text-emerald-300">후기 평가</p>
               <p className="text-2xl font-black text-white">{calcTotal(scores, "final")}점</p>
             </div>
           </div>
@@ -211,7 +211,7 @@ function AdaptationEvalInner() {
         ) : (
           <div className="flex gap-2">
             <button onClick={save} disabled={saving || !traineeId}
-              className="min-h-14 flex-1 rounded-2xl bg-violet-700 text-base font-black text-white transition active:scale-[0.97] disabled:opacity-60">
+              className="min-h-14 flex-1 rounded-2xl bg-emerald-700 text-base font-black text-white transition active:scale-[0.97] disabled:opacity-60">
               {saving ? "저장 중..." : "저장"}
             </button>
             <button onClick={confirm} disabled={saving || !evalId}
