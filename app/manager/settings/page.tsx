@@ -312,8 +312,10 @@ export default function AgencySettingsPage() {
             </div>
           </div>
 
-          {/* 사업장 주소 (검색) */}
-          <div className="border-t border-slate-100 pt-4">
+          {/* 사업장 주소 + 공단 담당자 좌우 2열 배치 */}
+          <div className="grid grid-cols-1 gap-5 border-t border-slate-100 pt-4 lg:grid-cols-2">
+            {/* 사업장 주소 (검색) */}
+            <div>
             <label className={T.label}>사업장 주소</label>
             <div className="flex gap-2">
               <input
@@ -339,10 +341,10 @@ export default function AgencySettingsPage() {
             )}
             <input value={address} readOnly placeholder="검색 후 선택된 주소" className={`mt-2 w-full ${T.input} bg-slate-50`} />
             <input value={addrDetail} onChange={e => setAddrDetail(e.target.value)} placeholder="상세주소 (동/호 등, 선택)" className={`mt-2 w-full ${T.input}`} />
-          </div>
+            </div>
 
-          {/* 장애인고용공단 담당자(복수) — 일지 관리 '문서 발송' 기본 수신자 */}
-          <div className="border-t border-slate-100 pt-4">
+            {/* 장애인고용공단 담당자(복수) — 일지 관리 '문서 발송' 기본 수신자 */}
+            <div>
             <label className={T.label}>장애인고용공단 담당자</label>
             <p className="mb-2 text-[11px] font-semibold text-slate-400">‘일지 관리 → 문서 발송’의 기본 수신자로 채워집니다. 여러 명 등록하면 발송 시 전원에게 보냅니다. (발송 시 수정 가능)</p>
             <div className="space-y-2">
@@ -366,6 +368,7 @@ export default function AgencySettingsPage() {
               disabled={govContacts.length >= 10}
               className={`${T.btnSecondary} mt-2 disabled:opacity-40`}
             >+ 담당자 추가</button>
+            </div>
           </div>
 
           {/* 급여 자동 생성일 — 매월 N일 전월분 DRAFT 자동 계산(담당자 검토·확정 필요) */}
