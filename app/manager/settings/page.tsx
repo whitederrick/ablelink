@@ -277,7 +277,7 @@ export default function AgencySettingsPage() {
     <div className="space-y-5">
       <PageHeader title="사업주 정보 관리" sub="근로계약서 생성 시 사업주(갑) 정보·서명으로 자동 입력됩니다." />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[13fr_7fr]">
         {/* 기본 정보 */}
         <div className={`${T.card} space-y-4`}>
           <p className="text-sm font-black text-slate-900">기본 정보</p>
@@ -398,8 +398,8 @@ export default function AgencySettingsPage() {
           </div>
         </div>
 
-        {/* 대표자 서명 / 직인 — 왼쪽 폭은 유지하고 이 카드만 30% 좁게(오른쪽 여백) */}
-        <div className={`${T.card} w-full lg:max-w-[70%]`}>
+        {/* 대표자 서명 / 직인 — 오른쪽 30% 축소(왼쪽 65% : 오른쪽 35%) */}
+        <div className={T.card}>
           <p className="mb-1 text-sm font-black text-slate-900">대표자 서명 / 직인</p>
           <p className="mb-1 text-xs font-semibold text-slate-400">등록한 <strong>대표자 서명</strong> 또는 <strong>직인</strong>이 근로계약서 사업주(갑) 서명란에 자동 삽입됩니다.<br />둘 중 하나를 선택해 등록하세요.</p>
           <p className="mb-3 text-xs font-semibold text-rose-500">만약 등록하지 않으면 근로계약서에 서명 또는 직인이 포함되지 않습니다.</p>
