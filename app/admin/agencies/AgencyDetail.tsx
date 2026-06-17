@@ -4,8 +4,9 @@
 // onClose 제공 시 모달 모드(닫기 버튼), 미제공 시 페이지 모드(router.back).
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Users, MapPin, Activity, Cpu, UserPlus, Copy } from "lucide-react";
+import { ArrowLeft, Building2, Users, MapPin, Activity, Cpu, UserPlus, Copy, FileText } from "lucide-react";
 import { T } from "../_styles";
+import { RESTRICTED_TEMPLATES } from "@/lib/contractTemplates";
 
 const PLAN_COLORS: Record<string, string> = {
   FREE:     "bg-slate-100 text-slate-600",
@@ -20,6 +21,7 @@ type AgencyDetail = {
   trialEndsAt: string | null; subscribedAt: string | null; nextBillingAt: string | null;
   maxWorkers: number; maxSites: number; createdAt: string;
   billingCycle: string; customAmount: number | null; billingNote: string | null;
+  defaultContractTemplate: string | null; allowedContractTemplates: string[];
 };
 type Manager = { id: string; loginId: string; displayName: string | null; isActive: boolean; lastLoginAt: string | null };
 type Site    = { id: string; companyName: string; traineeCount: number };
@@ -73,6 +75,11 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
   const [inviteUrl,  setInviteUrl]  = useState("");
   const [togglingId, setTogglingId] = useState("");
 
+  // 계약서 전용 양식 부여
+  const [grantedTpls, setGrantedTpls] = useState<string[]>([]);
+  const [savingTpls,  setSavingTpls]  = useState(false);
+  const [tplMsg,      setTplMsg]      = useState("");
+
   // 하단 패널 내부 페이징(목록이 늘어나도 모달 높이 고정)
   const [mgrPage,    setMgrPage]    = useState(1);
   const [sitePage,   setSitePage]   = useState(1);
@@ -93,6 +100,7 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
         setDealCycle(d.agency.billingCycle === "ANNUAL" ? "ANNUAL" : "MONTHLY");
         setDealAmount(d.agency.customAmount != null ? String(d.agency.customAmount) : "");
         setDealNote(d.agency.billingNote ?? "");
+        setGrantedTpls(Array.isArray(d.agency.allowedContractTemplates) ? d.agency.allowedContractTemplates : []);
       } else {
         setError(d.message ?? "로드 실패");
       }
@@ -153,6 +161,26 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
       }
     } catch { setDealMsg("서버 오류"); }
     finally { setSavingDeal(false); }
+  }
+
+  async function saveTemplates() {
+    setSavingTpls(true); setTplMsg("");
+    try {
+      const res = await fetch(`/api/admin/system/agencies/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ allowedContractTemplates: grantedTpls }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        setTplMsg("저장되었습니다. 해당 기관 계약서 양식 목록에 즉시 반영됩니다.");
+        setAgency(a => a ? { ...a, allowedContractTemplates: grantedTpls } : a);
+      } else setTplMsg(d.message ?? "저장 실패");
+    } catch { setTplMsg("서버 오류"); }
+    finally { setSavingTpls(false); }
+  }
+  function toggleTpl(key: string) {
+    setGrantedTpls(p => p.includes(key) ? p.filter(k => k !== key) : [...p, key]);
   }
 
   if (loading) return (
@@ -282,6 +310,36 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
             {dealMsg && <p className="text-[11px] font-semibold text-slate-500">{dealMsg}</p>}
           </div>
         </div>
+      </div>
+
+      {/* 계약서 전용 양식 부여 — 운영자가 제작·등록한 기관 전용 양식을 이 기관에 부여 */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="mb-2.5 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <FileText className="h-4 w-4 text-slate-500" />
+              <p className="text-sm font-black text-slate-700">계약서 전용 양식 부여</p>
+            </div>
+            <p className="mt-0.5 text-[11px] text-slate-400">체크한 전용 양식만 이 기관의 계약서 작성 화면에 노출됩니다. (표준 양식은 항상 사용 가능)</p>
+          </div>
+          <button onClick={saveTemplates} disabled={savingTpls} className={`${T.btnPrimary} shrink-0 py-1.5`}>{savingTpls ? "저장 중..." : "양식 저장"}</button>
+        </div>
+        {RESTRICTED_TEMPLATES.length === 0 ? (
+          <p className="text-xs text-slate-400">등록된 전용 양식이 없습니다.</p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {RESTRICTED_TEMPLATES.map(t => (
+              <label key={t.key} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 transition ${grantedTpls.includes(t.key) ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
+                <input type="checkbox" checked={grantedTpls.includes(t.key)} onChange={() => toggleTpl(t.key)} className="h-4 w-4 accent-slate-950" />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-bold text-slate-800">{t.label}</span>
+                  <span className="block text-[11px] font-semibold text-slate-400">{t.key}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+        {tplMsg && <p className="mt-2 text-[11px] font-semibold text-slate-500">{tplMsg}</p>}
       </div>
 
       {/* 하단: 관리자 | 현장 | 직무지도원 (각 패널 내부 페이징) */}

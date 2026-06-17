@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { requireManagerSession } from "@/lib/managerScope";
 
-const VALID_CATEGORIES = ["GENERAL", "DATA_FIX", "BILLING", "OTHER"];
+const VALID_CATEGORIES = ["GENERAL", "DATA_FIX", "BILLING", "CONTRACT_TEMPLATE", "OTHER"];
 
 function ticketToJson(t: any) {
   return {

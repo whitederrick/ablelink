@@ -5,6 +5,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 import { logAudit } from "@/lib/auditLog";
+import { RESTRICTED_TEMPLATES } from "@/lib/contractTemplates";
+
+const RESTRICTED_KEYS = new Set(RESTRICTED_TEMPLATES.map(t => t.key));
 
 export async function PATCH(
   req: NextRequest,
@@ -17,7 +20,7 @@ export async function PATCH(
     const agencyId = parseBigInt(id);
     if (!agencyId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const body = await req.json();
-    const { planType, trialEndsAt, maxWorkers, maxSites, billingCycle, customAmount, billingNote } = body;
+    const { planType, trialEndsAt, maxWorkers, maxSites, billingCycle, customAmount, billingNote, allowedContractTemplates } = body;
 
     const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
     if (!agency) return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
@@ -45,6 +48,16 @@ export async function PATCH(
       updateData.customAmount = n;
     }
     if (billingNote !== undefined)  updateData.billingNote = billingNote ? String(billingNote).slice(0, 500) : null;
+    // 위탁기관 전용 계약서 양식 부여(운영자만). 알려진 전용 양식 키만 허용.
+    if (allowedContractTemplates !== undefined) {
+      if (!Array.isArray(allowedContractTemplates)) {
+        return NextResponse.json({ success: false, message: "부여 양식 목록 형식이 올바르지 않습니다." }, { status: 400 });
+      }
+      const cleaned = Array.from(new Set(
+        allowedContractTemplates.filter((k: any) => typeof k === "string" && RESTRICTED_KEYS.has(k))
+      ));
+      updateData.allowedContractTemplates = cleaned;
+    }
 
     await prisma.agency.update({ where: { id: agency.id }, data: updateData });
 

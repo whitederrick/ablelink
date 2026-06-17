@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess, checkQuota } from "@/lib/planGuard";
-import { isValidTemplateKey, DEFAULT_TEMPLATE_KEY } from "@/lib/contractTemplates";
+import { isValidTemplateKey, DEFAULT_TEMPLATE_KEY, canUseTemplate } from "@/lib/contractTemplates";
 import { sendAlimtalk } from "@/lib/kakao";
 import { randomUUID } from "crypto";
 import { hash } from "bcryptjs";
@@ -230,9 +230,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── 사업주(갑) 정보: 미입력 시 위탁기관 정보로 자동 채움(스냅샷 보존) ──
-    const agencyRow = await prisma.agency.findUnique({
+    const agencyRow: any = await prisma.agency.findUnique({
       where: { id: agencyId },
-      select: { name: true, phoneNumber: true, address: true, representativeName: true, representativeSignatureUrl: true },
+      select: { name: true, phoneNumber: true, address: true, representativeName: true, representativeSignatureUrl: true, allowedContractTemplates: true } as any,
     });
 
     // ─── 특약 조항 스냅샷: 선택한 조항 id → {title, body} 배열(작성 시점 보존) ──
@@ -261,7 +261,9 @@ export async function POST(req: NextRequest) {
     // ─── 계약서 생성 ────────────────────────────────────────────
     const signToken = randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7일
-    const resolvedTemplateKey = isValidTemplateKey(templateKey) ? templateKey : DEFAULT_TEMPLATE_KEY;
+    // 전용 양식은 본 기관에 부여된 경우에만 사용. 미부여 양식은 표준으로 강등.
+    const reqTemplateKey = isValidTemplateKey(templateKey) ? templateKey : DEFAULT_TEMPLATE_KEY;
+    const resolvedTemplateKey = canUseTemplate(reqTemplateKey, agencyRow?.allowedContractTemplates ?? []) ? reqTemplateKey : DEFAULT_TEMPLATE_KEY;
     const resolvedTemplateData = templateData && typeof templateData === "object" ? templateData : undefined;
 
     const contract = await prisma.employmentContract.create({

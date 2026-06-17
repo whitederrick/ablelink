@@ -21,6 +21,7 @@ const CAT_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   GENERAL: { label: "일반 문의", tone: "sky" },
   DATA_FIX: { label: "데이터 수정", tone: "violet" },
   BILLING: { label: "결제·구독", tone: "emerald" },
+  CONTRACT_TEMPLATE: { label: "계약서 양식", tone: "amber" },
   OTHER: { label: "기타", tone: "slate" },
 };
 const SUP_STATUS: Record<string, { label: string; tone: BadgeTone }> = {

@@ -7,14 +7,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { isValidBRN, formatBRN } from "@/lib/validateBRN";
-import { isValidTemplateKey } from "@/lib/contractTemplates";
+import { isValidTemplateKey, canUseTemplate } from "@/lib/contractTemplates";
 
 export async function GET(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
     const a: any = await prisma.agency.findUnique({
       where: { id: scope.agencyId },
-      select: { name: true, phoneNumber: true, address: true, businessNumber: true, representativeName: true, representativeSignatureUrl: true, govContactEmail: true, govContactName: true, payrollAutoDay: true, defaultContractTemplate: true } as any,
+      select: { name: true, phoneNumber: true, address: true, businessNumber: true, representativeName: true, representativeSignatureUrl: true, govContactEmail: true, govContactName: true, payrollAutoDay: true, defaultContractTemplate: true, allowedContractTemplates: true } as any,
     });
     if (!a) return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
     return NextResponse.json({
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
         govContactName: a.govContactName,
         payrollAutoDay: a.payrollAutoDay ?? null,
         defaultContractTemplate: a.defaultContractTemplate ?? null,
+        allowedContractTemplates: Array.isArray(a.allowedContractTemplates) ? a.allowedContractTemplates : [],
       },
     });
   } catch (e: any) {
@@ -59,8 +60,15 @@ export async function PATCH(req: NextRequest) {
     }
     if (defaultContractTemplate !== undefined) {
       if (defaultContractTemplate == null || defaultContractTemplate === "") data.defaultContractTemplate = null;
-      else if (isValidTemplateKey(defaultContractTemplate)) data.defaultContractTemplate = defaultContractTemplate;
-      else return NextResponse.json({ success: false, message: "유효하지 않은 계약서 양식입니다." }, { status: 400 });
+      else if (!isValidTemplateKey(defaultContractTemplate)) return NextResponse.json({ success: false, message: "유효하지 않은 계약서 양식입니다." }, { status: 400 });
+      else {
+        // 전용 양식은 운영자가 본 기관에 부여한 경우에만 기본 양식으로 설정 가능
+        const ag: any = await prisma.agency.findUnique({ where: { id: scope.agencyId }, select: { allowedContractTemplates: true } as any });
+        if (!canUseTemplate(defaultContractTemplate, ag?.allowedContractTemplates ?? [])) {
+          return NextResponse.json({ success: false, message: "본 기관에 부여되지 않은 전용 양식입니다. 운영자에게 양식 등록을 요청하세요." }, { status: 403 });
+        }
+        data.defaultContractTemplate = defaultContractTemplate;
+      }
     }
     if (phoneNumber !== undefined)        data.phoneNumber = str(phoneNumber);
     if (address !== undefined)            data.address = str(address);

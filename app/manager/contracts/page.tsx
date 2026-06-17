@@ -6,7 +6,7 @@ import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
-import { CONTRACT_TEMPLATES, getTemplate, DEFAULT_TEMPLATE_KEY } from "@/lib/contractTemplates";
+import { getTemplate, DEFAULT_TEMPLATE_KEY, visibleTemplates, canUseTemplate } from "@/lib/contractTemplates";
 import { StatCardRow } from "../_components/StatCard";
 import { X } from "lucide-react";
 import { computeWorkTimes, type WorkType } from "@/lib/workSchedule";
@@ -279,6 +279,31 @@ function ClauseManagerModal({ onClose }: { onClose: () => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// 계약서 양식 미리보기 (견본 데이터로 선택 양식 PDF 렌더)
+// ─────────────────────────────────────────────────────────────
+function TemplatePreviewModal({ templateKey, templateData, onClose }: { templateKey: string; templateData: Record<string, any>; onClose: () => void; }) {
+  const tpl = getTemplate(templateKey);
+  const url = `/api/admin/contracts/preview?templateKey=${encodeURIComponent(templateKey)}&data=${encodeURIComponent(JSON.stringify(templateData || {}))}`;
+  return (
+    <div className={T.modalOverlay} style={{ zIndex: 1200 }} onClick={onClose}>
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white p-7 shadow-2xl shadow-slate-950/20" onClick={e => e.stopPropagation()}>
+        <div className="mb-3 flex items-start justify-between">
+          <div>
+            <h3 className="text-base font-black text-slate-900">양식 미리보기 — {tpl.label}</h3>
+            <p className="mt-0.5 text-xs font-semibold text-slate-400">견본(샘플) 데이터로 양식 레이아웃을 보여줍니다. 실제 계약은 저장되지 않습니다.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <a href={url} target="_blank" rel="noopener noreferrer" className={T.btnSecondary}>새 창</a>
+            <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:bg-slate-50"><X className="h-4 w-4" /></button>
+          </div>
+        </div>
+        <iframe src={url} className="h-[72vh] w-full rounded-xl border border-slate-200" title="양식 미리보기" />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // 계약서 생성 (표준양식)
 // ─────────────────────────────────────────────────────────────
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
@@ -308,6 +333,10 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
   // 계약서 양식 선택 + 양식별 추가 입력값
   const [templateKey, setTemplateKey] = useState<string>(DEFAULT_TEMPLATE_KEY);
   const [templateData, setTemplateData] = useState<Record<string, any>>({});
+  const [showPreview, setShowPreview] = useState(false);
+  // 본 기관에 노출 가능한 양식 = 공용 + 운영자가 부여한 전용 양식
+  const [allowedTemplates, setAllowedTemplates] = useState<string[]>([]);
+  const templateOptions = useMemo(() => visibleTemplates(allowedTemplates), [allowedTemplates]);
 
   const [selectedUserId, setSelectedUserId] = useState(prefill?.workerId ?? "");
   const [manualName, setManualName] = useState(prefill?.workerName ?? "");
@@ -409,8 +438,12 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
         setEmployerAddress(d.data.address || "");
         setEmployerRepName(d.data.representativeName || "");
         setRepSignatureUrl(d.data.representativeSignatureUrl || null);
-        // 기관 기본 양식 프리필(없으면 표준 유지)
-        if (d.data.defaultContractTemplate) { setTemplateKey(d.data.defaultContractTemplate); setTemplateData({}); }
+        const allowed: string[] = Array.isArray(d.data.allowedContractTemplates) ? d.data.allowedContractTemplates : [];
+        setAllowedTemplates(allowed);
+        // 기관 기본 양식 프리필(없거나 사용 불가면 표준 유지)
+        if (d.data.defaultContractTemplate && canUseTemplate(d.data.defaultContractTemplate, allowed)) {
+          setTemplateKey(d.data.defaultContractTemplate); setTemplateData({});
+        }
       }
     }).catch(() => {});
     fetch("/api/admin/contract-clauses").then(r => r.json()).then(d => {
@@ -473,10 +506,16 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
           <div className="flex-1 space-y-4 overflow-y-auto pr-1">
             {/* 계약서 양식 선택 — 표준 외 기관 양식. 양식별 추가 입력만 동적 노출 */}
             <section className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/50 p-3">
-              <label className={T.label}>계약서 양식</label>
+              <div className="flex items-center justify-between">
+                <label className={T.label}>계약서 양식</label>
+                <button type="button" onClick={() => setShowPreview(true)} className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100">미리보기</button>
+              </div>
               <select value={templateKey} onChange={e => { setTemplateKey(e.target.value); setTemplateData({}); }} className={`w-full ${T.input}`}>
-                {CONTRACT_TEMPLATES.map(t => <option key={t.key} value={t.key}>{t.label}{t.sub ? ` — ${t.sub}` : ""}</option>)}
+                {templateOptions.map(t => <option key={t.key} value={t.key}>{t.label}{t.sub ? ` — ${t.sub}` : ""}</option>)}
               </select>
+              <p className="text-[11px] font-semibold text-slate-400">
+                기관 전용 계약서 양식이 필요하면 <a href="/manager/support" target="_blank" className="font-bold text-sky-600 underline">운영자에게 양식 등록 요청</a>하세요. 운영자가 양식을 제작·부여하면 여기 목록에 표시됩니다.
+              </p>
               {getTemplate(templateKey).extraFields.length > 0 && (
                 <div className="space-y-2 pt-1">
                   <p className="text-[11px] font-semibold text-slate-400">이 양식에 필요한 추가 입력</p>
@@ -648,6 +687,7 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
         </div>
       </div>
       {showSearch && <WorkerSearchPopup onSelect={handleSelectWorker} onClose={() => setShowSearch(false)} />}
+      {showPreview && <TemplatePreviewModal templateKey={templateKey} templateData={templateData} onClose={() => setShowPreview(false)} />}
     </>
   );
 }

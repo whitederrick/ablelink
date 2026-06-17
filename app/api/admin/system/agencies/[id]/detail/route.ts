@@ -62,6 +62,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         billingCycle: agency.billingCycle,
         customAmount: agency.customAmount,
         billingNote:  agency.billingNote,
+        defaultContractTemplate: (agency as any).defaultContractTemplate ?? null,
+        allowedContractTemplates: Array.isArray((agency as any).allowedContractTemplates) ? (agency as any).allowedContractTemplates : [],
         createdAt:    agency.createdAt.toISOString(),
       },
       managers: managers.map(m => ({

@@ -487,6 +487,9 @@ model Agency {
   // 근로계약서 기본 양식(미지정 시 STANDARD). 계약 작성 시 프리필.
   defaultContractTemplate String? @map("default_contract_template")
 
+  // 위탁기관 전용 계약서 양식 부여 목록(운영자가 부여). 전체 공용 양식(STANDARD)은 무관하게 사용 가능.
+  allowedContractTemplates String[] @default([]) @map("allowed_contract_templates")
+
   // ✅ 구독 관리
   planType   AgencyPlanType @default(FREE) @map("plan_type")
   maxWorkers Int            @default(0) @map("max_workers") // 0 = 무제한(PRO)
