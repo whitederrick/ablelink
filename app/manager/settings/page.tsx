@@ -376,7 +376,7 @@ export default function AgencySettingsPage() {
             {/* 급여 자동 생성일 */}
             <div>
             <label className={T.label}>급여 자동 생성일</label>
-            <p className="mb-2 text-[11px] font-semibold text-slate-400">매월 해당 날짜에 <b>전월분 급여를 자동 계산</b>합니다. <span className="text-rose-500">최종 명세서 발급은 담당자가 검토 후 확정해야 됩니다. 날짜 미입력시 자동 생성되지 않습니다.</span></p>
+            <p className="mb-2 text-[11px] font-semibold text-slate-400">매월 해당 날짜에 <b>전월분 급여를 자동 계산</b>합니다.<br /><span className="text-rose-500">최종 명세서 발급은 담당자가 검토 후 확정해야 됩니다. 날짜 미입력시 자동 생성되지 않습니다.</span></p>
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-slate-500">매월</span>
               <input type="number" min={1} max={31} value={payrollAutoDay}
