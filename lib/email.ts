@@ -47,7 +47,7 @@ export async function sendEmailWithPdf(opts: {
 
 // 여러 PDF를 한 통에 첨부(일지 관리 '문서 발송' — 현장별/직무지도원별 묶음).
 export async function sendEmailWithAttachments(opts: {
-  to: string;
+  to: string | string[];
   subject: string;
   body: string;
   attachments: { filename: string; content: Buffer }[];
@@ -55,7 +55,7 @@ export async function sendEmailWithAttachments(opts: {
 }) {
   const { error } = await getResend().emails.send({
     from: opts.from || DEFAULT_FROM,
-    to: [opts.to],
+    to: Array.isArray(opts.to) ? opts.to : [opts.to],
     subject: opts.subject,
     text: opts.body,
     attachments: opts.attachments,

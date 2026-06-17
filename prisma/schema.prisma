@@ -478,8 +478,11 @@ model Agency {
   representativeSignatureUrl String? @map("representative_signature_url")
 
   // 장애인고용공단 담당자 — 일지 관리 '문서 발송' 기본 수신자 (2026-06-10)
+  // 아래 단일 컬럼은 하위호환용(첫 담당자와 동기화). 복수 담당자는 govContacts 사용. (2026-06-18)
   govContactEmail String? @map("gov_contact_email")
   govContactName  String? @map("gov_contact_name")
+  // 복수 공단 담당자 — [{ name, email }] JSON 배열. 발송 시 전원 기본 수신자. (2026-06-18)
+  govContacts Json? @map("gov_contacts")
 
   // 급여 자동 DRAFT 생성일(매월 N일, 1~28). null = 자동 생성 안 함(기본). 크론이 이 날 전월분 DRAFT 생성.
   payrollAutoDay Int? @map("payroll_auto_day")

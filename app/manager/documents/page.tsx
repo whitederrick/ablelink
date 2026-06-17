@@ -57,8 +57,9 @@ export default function ManagerDocumentsHub() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sendOpen, setSendOpen] = useState(false);
   const [sendTo, setSendTo] = useState("");
-  const [govName, setGovName] = useState("");
-  const [govEmailDefault, setGovEmailDefault] = useState("");
+  const [govContacts, setGovContacts] = useState<{ name: string; email: string }[]>([]);
+  const govEmailDefault = govContacts.map(c => c.email).filter(Boolean).join(", ");
+  const govNames = govContacts.map(c => c.name).filter(Boolean).join(" · ");
   const [sendGroupBy, setSendGroupBy] = useState<"site" | "worker" | "none">("site");
   const [sendMsg, setSendMsg] = useState("");
   const [sending, setSending] = useState(false);
@@ -67,7 +68,7 @@ export default function ManagerDocumentsHub() {
   useEffect(() => {
     fetch("/api/admin/agency-profile")
       .then(r => r.json())
-      .then(d => { if (d.success) { setGovEmailDefault(d.data?.govContactEmail || ""); setGovName(d.data?.govContactName || ""); } })
+      .then(d => { if (d.success) setGovContacts(Array.isArray(d.data?.govContacts) ? d.data.govContacts : []); })
       .catch(() => {});
   }, []);
 
@@ -180,8 +181,10 @@ export default function ManagerDocumentsHub() {
   }
 
   async function doSend() {
-    const to = sendTo.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) { showToast("유효한 수신자 이메일을 입력해주세요."); return; }
+    const emails = sendTo.split(/[,;]/).map(s => s.trim()).filter(Boolean);
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (emails.length === 0 || !emails.every(e => re.test(e))) { showToast("유효한 수신자 이메일을 입력해주세요. (여러 명은 쉼표로 구분)"); return; }
+    const to = emails.join(",");
     setSending(true);
     try {
       const res = await fetch(`/api/admin/document-runs/send`, {
@@ -423,7 +426,7 @@ export default function ManagerDocumentsHub() {
                 <input value={sendTo} onChange={e => setSendTo(e.target.value)} type="email" inputMode="email"
                   placeholder="officer@kead.or.kr" className={`w-full ${T.input}`} />
                 <p className="mt-1 text-[11px] font-semibold text-slate-400">
-                  {govEmailDefault ? `설정 기본값${govName ? ` · ${govName}` : ""} (수정 가능)` : "설정 > 사업주 정보 관리에서 공단 담당자를 저장하면 기본값으로 채워집니다."}
+                  {govEmailDefault ? `설정 기본값${govNames ? ` · ${govNames}` : ""} · 여러 명은 쉼표(,)로 구분 (수정 가능)` : "설정 > 사업주 정보 관리에서 공단 담당자를 저장하면 기본값으로 채워집니다."}
                 </p>
               </div>
 

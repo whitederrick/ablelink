@@ -26,9 +26,8 @@ export default function AgencySettingsPage() {
   const [addrDetail, setAddrDetail] = useState("");
   const [businessNumber, setBusinessNumber] = useState("");
   const [representativeName, setRepresentativeName] = useState("");
-  // 장애인고용공단 담당자 — 일지 관리 '문서 발송' 기본 수신자
-  const [govEmail, setGovEmail] = useState("");
-  const [govName, setGovName] = useState("");
+  // 장애인고용공단 담당자(복수) — 일지 관리 '문서 발송' 기본 수신자
+  const [govContacts, setGovContacts] = useState<{ name: string; email: string }[]>([{ name: "", email: "" }]);
   // 급여 자동 DRAFT 생성일(매월 N일, 1~28). ""=자동 생성 안 함.
   const [payrollAutoDay, setPayrollAutoDay] = useState("");
   // 기본 근로계약서 양식(계약 작성 시 프리필). ""=표준
@@ -70,8 +69,10 @@ export default function AgencySettingsPage() {
           setAddress(d.data.address || "");
           setBusinessNumber(d.data.businessNumber || "");
           setRepresentativeName(d.data.representativeName || "");
-          setGovEmail(d.data.govContactEmail || "");
-          setGovName(d.data.govContactName || "");
+          {
+            const list = Array.isArray(d.data.govContacts) ? d.data.govContacts : [];
+            setGovContacts(list.length ? list.map((c: any) => ({ name: c?.name || "", email: c?.email || "" })) : [{ name: "", email: "" }]);
+          }
           setPayrollAutoDay(d.data.payrollAutoDay != null ? String(d.data.payrollAutoDay) : "");
           setDefaultContractTemplate(d.data.defaultContractTemplate || "");
           setSigUrl(d.data.representativeSignatureUrl || null);
@@ -112,7 +113,7 @@ export default function AgencySettingsPage() {
       const r = await fetch("/api/admin/agency-profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumber, address: fullAddress, businessNumber, representativeName, govContactEmail: govEmail, govContactName: govName, payrollAutoDay: payrollAutoDay === "" ? null : Number(payrollAutoDay), defaultContractTemplate: defaultContractTemplate || null }),
+        body: JSON.stringify({ phoneNumber, address: fullAddress, businessNumber, representativeName, govContacts: govContacts.filter(c => c.name.trim() || c.email.trim()), payrollAutoDay: payrollAutoDay === "" ? null : Number(payrollAutoDay), defaultContractTemplate: defaultContractTemplate || null }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.message);
@@ -340,14 +341,31 @@ export default function AgencySettingsPage() {
             <input value={addrDetail} onChange={e => setAddrDetail(e.target.value)} placeholder="상세주소 (동/호 등, 선택)" className={`mt-2 w-full ${T.input}`} />
           </div>
 
-          {/* 장애인고용공단 담당자 — 일지 관리 '문서 발송' 기본 수신자 */}
+          {/* 장애인고용공단 담당자(복수) — 일지 관리 '문서 발송' 기본 수신자 */}
           <div className="border-t border-slate-100 pt-4">
             <label className={T.label}>장애인고용공단 담당자</label>
-            <p className="mb-2 text-[11px] font-semibold text-slate-400">‘일지 관리 → 문서 발송’의 기본 수신자로 채워집니다. (발송 시 수정 가능)</p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <input value={govName} onChange={e => setGovName(e.target.value)} placeholder="담당자명 (예: 김공단)" className={`w-full ${T.input}`} />
-              <input value={govEmail} onChange={e => setGovEmail(e.target.value)} placeholder="이메일 (예: officer@kead.or.kr)" type="email" inputMode="email" className={`w-full ${T.input}`} />
+            <p className="mb-2 text-[11px] font-semibold text-slate-400">‘일지 관리 → 문서 발송’의 기본 수신자로 채워집니다. 여러 명 등록하면 발송 시 전원에게 보냅니다. (발송 시 수정 가능)</p>
+            <div className="space-y-2">
+              {govContacts.map((c, i) => (
+                <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1.4fr_auto]">
+                  <input value={c.name} onChange={e => setGovContacts(prev => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="담당자명 (예: 김공단)" className={`w-full ${T.input}`} />
+                  <input value={c.email} onChange={e => setGovContacts(prev => prev.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="이메일 (예: officer@kead.or.kr)" type="email" inputMode="email" className={`w-full ${T.input}`} />
+                  <button
+                    type="button"
+                    onClick={() => setGovContacts(prev => { const n = prev.filter((_, j) => j !== i); return n.length ? n : [{ name: "", email: "" }]; })}
+                    disabled={govContacts.length === 1 && !c.name.trim() && !c.email.trim()}
+                    className={`${T.btnSecondary} shrink-0 disabled:opacity-40`}
+                    title="이 담당자 삭제"
+                  >삭제</button>
+                </div>
+              ))}
             </div>
+            <button
+              type="button"
+              onClick={() => setGovContacts(prev => prev.length >= 10 ? prev : [...prev, { name: "", email: "" }])}
+              disabled={govContacts.length >= 10}
+              className={`${T.btnSecondary} mt-2 disabled:opacity-40`}
+            >+ 담당자 추가</button>
           </div>
 
           {/* 급여 자동 생성일 — 매월 N일 전월분 DRAFT 자동 계산(담당자 검토·확정 필요) */}
@@ -380,10 +398,11 @@ export default function AgencySettingsPage() {
           </div>
         </div>
 
-        {/* 대표자 서명 / 직인 */}
-        <div className={T.card}>
+        {/* 대표자 서명 / 직인 — 왼쪽 폭은 유지하고 이 카드만 30% 좁게(오른쪽 여백) */}
+        <div className={`${T.card} w-full lg:max-w-[70%]`}>
           <p className="mb-1 text-sm font-black text-slate-900">대표자 서명 / 직인</p>
-          <p className="mb-3 text-xs font-semibold text-slate-400">등록한 <strong>대표자 서명</strong> 또는 <strong>직인</strong>이 근로계약서 사업주(갑) 서명란에 자동 삽입됩니다. 둘 중 하나를 선택해 등록하세요.</p>
+          <p className="mb-1 text-xs font-semibold text-slate-400">등록한 <strong>대표자 서명</strong> 또는 <strong>직인</strong>이 근로계약서 사업주(갑) 서명란에 자동 삽입됩니다.<br />둘 중 하나를 선택해 등록하세요.</p>
+          <p className="mb-3 text-xs font-semibold text-rose-500">만약 등록하지 않으면 근로계약서에 서명 또는 직인이 포함되지 않습니다.</p>
 
           {sigMode === "view" ? (
             sigUrl ? (

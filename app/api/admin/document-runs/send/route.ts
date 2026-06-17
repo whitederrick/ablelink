@@ -33,11 +33,13 @@ export async function POST(req: NextRequest) {
     const scope = await requireManagerSession(req);
     const body = await req.json().catch(() => ({}));
 
-    const to = String(body?.to || "").trim();
+    // 복수 수신자 허용(쉼표/세미콜론 구분) — 공단 담당자 여러 명에게 동시 발송
+    const toList = String(body?.to || "").split(/[,;]/).map(s => s.trim()).filter(Boolean);
     const groupBy = (["site", "worker", "none"].includes(body?.groupBy) ? body.groupBy : "site") as "site" | "worker" | "none";
     const message = String(body?.message || "").trim();
     const idsRaw: unknown = body?.ids;
-    if (!EMAIL_RE.test(to)) return NextResponse.json({ success: false, message: "유효한 수신자 이메일을 입력해주세요." }, { status: 400 });
+    if (toList.length === 0 || !toList.every(e => EMAIL_RE.test(e))) return NextResponse.json({ success: false, message: "유효한 수신자 이메일을 입력해주세요. (여러 명은 쉼표로 구분)" }, { status: 400 });
+    if (toList.length > 20) return NextResponse.json({ success: false, message: "수신자는 최대 20명까지 지정할 수 있습니다." }, { status: 400 });
     if (!Array.isArray(idsRaw) || idsRaw.length === 0) return NextResponse.json({ success: false, message: "발송할 문서를 선택해주세요." }, { status: 400 });
 
     const ids = idsRaw.map(String).filter(s => /^\d+$/.test(s)).map(s => BigInt(s));
@@ -150,7 +152,7 @@ export async function POST(req: NextRequest) {
         `■ 첨부 문서: ${attachments.length}건\n\n` +
         `Able-Link에서 발송된 메일입니다.`;
       try {
-        await sendEmailWithAttachments({ to, subject, body: text, attachments });
+        await sendEmailWithAttachments({ to: toList, subject, body: text, attachments });
         sent++;
         sentRunIds.push(...groupRunIds);
       } catch (e: any) {
