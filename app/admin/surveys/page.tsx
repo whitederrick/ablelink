@@ -74,7 +74,7 @@ export default function AdminSurveysPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="직무지도원 만족도 평가 결과" sub="모든 위탁기관의 직무지도원 만족도 평가 결과를 조회하고, 위탁기관에 전달할 수 있습니다." />
+      <PageHeader title="직무지도원 평가 결과 관리" sub="모든 위탁기관의 직무지도원 역량 평가 결과를 조회하고(문항·의견·총점), 위탁기관에 총점·카테고리만 전달할 수 있습니다." />
 
       <StatCardRow
         cols={3}

@@ -155,6 +155,16 @@ export async function GET(req: NextRequest) {
     const counts: Record<string, number> = { ACTIVE: 0, PAUSED: 0, RESIGNED: 0 };
     for (const g of statusGroups) counts[String(g.status)] = g._count._all;
 
+    // 배정별 평가 요청 상태(만족도 평가와 동일 assignmentId 키로 동기화). 근무 종료=배정 종료일.
+    const asgnIds = rows.map(u => u.assignments[0]?.id).filter((v): v is bigint => v != null);
+    const svRows = asgnIds.length ? await prisma.satisfactionSurvey.findMany({
+      where: { assignmentId: { in: asgnIds } } as any,
+      orderBy: { createdAt: "desc" },
+      select: { assignmentId: true, status: true } as any,
+    }) : [];
+    const surveyByAsgn = new Map<string, string>();
+    for (const s of svRows as any[]) { const k = String(s.assignmentId); if (s.assignmentId != null && !surveyByAsgn.has(k)) surveyByAsgn.set(k, s.status); }
+
     return NextResponse.json({
       success: true,
       page,
@@ -177,6 +187,8 @@ export async function GET(req: NextRequest) {
           agencyName: u.assignments[0].agency?.name || "-",
           startDate: u.assignments[0].startDate.toISOString(),
           endDate: u.assignments[0].endDate?.toISOString() ?? null,
+          // 평가 요청 상태(만족도 평가와 동일 assignmentId 키). 근무 종료=배정 종료일(endDate).
+          evalStatus: surveyByAsgn.get(String(u.assignments[0].id)) ?? null,
           serviceStep: String(u.assignments[0].serviceStep),
           adaptationStartDate: u.assignments[0].adaptationStartDate?.toISOString() ?? null,
           workType: u.assignments[0].workType ? String(u.assignments[0].workType) : null,

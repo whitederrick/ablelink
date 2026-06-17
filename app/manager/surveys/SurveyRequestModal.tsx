@@ -13,6 +13,8 @@ export type SurveyPrefillWorker = {
   id: string; workerName: string; phoneNumber?: string; siteName?: string | null;
   // 사업체 담당자(알림톡 수신자) 자동 입력 — 배정 진입 시 현장 정보로 채움
   recipientName?: string; recipientPhone?: string;
+  // 종료 배정 연결(만족도 평가·배정 관리 동기화 키)
+  assignmentId?: string | null;
 };
 
 export default function SurveyRequestModal({ prefillWorker, onClose, onCreated }: {
@@ -50,7 +52,7 @@ export default function SurveyRequestModal({ prefillWorker, onClose, onCreated }
     try {
       const r = await fetch("/api/admin/surveys", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workerId: worker.id, recipientName, recipientPhone, siteName: siteName || worker.siteName }),
+        body: JSON.stringify({ workerId: worker.id, assignmentId: prefillWorker?.assignmentId ?? undefined, recipientName, recipientPhone, siteName: siteName || worker.siteName }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.message);

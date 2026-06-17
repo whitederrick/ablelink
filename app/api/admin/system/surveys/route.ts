@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
 import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
 import { randomUUID } from "crypto";
+import { getFormSnapshotById } from "@/lib/jobCoachEval";
 
 const SURVEY_TEMPLATE = "KAKAO_SURVEY_TEMPLATE_CODE";
 
@@ -62,12 +63,29 @@ export async function POST(req: NextRequest) {
     await requireAdminSession(req);
     const body = await req.json().catch(() => ({}));
 
-    // 발송 컨텍스트 해석(두 경로 공통)
+    // 발송 컨텍스트 해석
     let agencyId: bigint, workerId: bigint, workerName: string;
     let contractId: bigint | null = null;
+    let assignmentId: bigint | null = null;
     let siteName: string | null = null;
 
-    if (body?.contractId != null && String(body.contractId) !== "") {
+    if (body?.assignmentId != null && String(body.assignmentId) !== "") {
+      // ── 배정(현장 근무) 단위 — 매니저 워크리스트와 동일 키 ──
+      let aid: bigint;
+      try { aid = BigInt(body.assignmentId); } catch { return NextResponse.json({ success: false, message: "잘못된 배정 ID" }, { status: 400 }); }
+      const asg = await prisma.siteAssignment.findUnique({
+        where: { id: aid },
+        select: { id: true, agencyId: true, workerId: true, site: { select: { companyName: true } }, user: { select: { workerName: true } } },
+      });
+      if (!asg || !asg.agencyId) return NextResponse.json({ success: false, message: "배정을 찾을 수 없습니다." }, { status: 404 });
+      const dup = await prisma.satisfactionSurvey.findFirst({ where: { assignmentId: asg.id, status: { in: ["PENDING", "RESPONDED"] } } as any, select: { status: true } });
+      if (dup) return NextResponse.json({ success: false, message: dup.status === "RESPONDED" ? "이미 평가가 완료된 배정입니다." : "이미 평가 요청이 진행 중입니다." }, { status: 409 });
+      assignmentId = asg.id;
+      agencyId = asg.agencyId;
+      workerId = asg.workerId;
+      workerName = asg.user?.workerName ?? "직무지도원";
+      siteName = asg.site?.companyName ?? null;
+    } else if (body?.contractId != null && String(body.contractId) !== "") {
       // ── 대상(계약) 기반 ──
       let cid: bigint;
       try { cid = BigInt(body.contractId); } catch { return NextResponse.json({ success: false, message: "대상 계약을 선택하세요." }, { status: 400 }); }
@@ -132,17 +150,22 @@ export async function POST(req: NextRequest) {
     }
 
     const token = randomUUID();
+    // 운영자 요청도 매니저와 동일하게 요청 시점 활성 평가표를 스냅샷(없으면 레거시 폴백)
+    let formIdBig: bigint | null = null;
+    if (body?.formId != null && String(body.formId) !== "") { try { formIdBig = BigInt(body.formId); } catch {} }
+    const snapshot = await getFormSnapshotById(formIdBig);
     const survey = await prisma.satisfactionSurvey.create({
       data: {
-        agencyId, workerId, contractId,
+        agencyId, workerId, contractId, assignmentId,
         recipientName: recipientName || null,
         recipientPhone: phone,
         siteName,
         token,
         status: "PENDING",
         auto: false, // 운영자 수동(매니저 아님): createdByManagerId=null 로 OPERATOR 구분
-        expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-      },
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30일(미회신 자동 종료 기준)
+        ...(snapshot ? { formId: BigInt(snapshot.formId), formSnapshot: snapshot as any } : {}),
+      } as any,
     });
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";

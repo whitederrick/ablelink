@@ -9,7 +9,6 @@ import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { CheckCircle2, Copy, Plus, Send, X } from "lucide-react";
 import { workerLabel } from "../_format";
 import { computeWorkTimes } from "@/lib/workSchedule";
-import SurveyRequestModal from "../surveys/SurveyRequestModal";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM";
 type ServiceStep = "PRE_TRAINING" | "FIELD_TRAINING" | "ADAPTATION";
@@ -43,7 +42,7 @@ interface Worker {
   planType: string;
   status: string;
   createdAt: string;
-  activeAssignment: { siteName: string; agencyName: string; startDate: string; endDate?: string | null; assignmentId?: string; assignStatus?: string; workType?: WorkType | null; serviceStep?: ServiceStep; adaptationStartDate?: string | null; requestedWorkTypes?: string | null; replyDeadline?: string | null } | null;
+  activeAssignment: { siteName: string; agencyName: string; startDate: string; endDate?: string | null; evalStatus?: string | null; assignmentId?: string; assignStatus?: string; workType?: WorkType | null; serviceStep?: ServiceStep; adaptationStartDate?: string | null; requestedWorkTypes?: string | null; replyDeadline?: string | null } | null;
 }
 
 const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
@@ -64,14 +63,13 @@ const ASSIGN_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   CONFIRMED: { label: "연결·위치 대기", cls: "bg-sky-50 text-sky-600" },
   ACTIVE:    { label: "근무중",         cls: "bg-emerald-50 text-emerald-600" },
   ENDED:     { label: "근무 종료",      cls: "bg-slate-100 text-slate-500" },
+  EVAL_REQ:  { label: "평가 요청",      cls: "bg-amber-50 text-amber-600" },
+  EVAL_DONE: { label: "평가 완료",      cls: "bg-emerald-50 text-emerald-600" },
 };
 
-// 근무 종료 = 배정 종료일이 지난 경우(ACTIVE/CONFIRMED). ENDED 상태는 코드상 미설정이라 날짜로 판정.
-function isWorkEnded(a: { assignStatus?: string; endDate?: string | null } | null | undefined): boolean {
-  if (!a) return false;
-  if (a.assignStatus === "ENDED") return true;
-  if (a.assignStatus !== "ACTIVE" && a.assignStatus !== "CONFIRMED") return false;
-  if (!a.endDate) return false;
+// 근무 종료 = 배정 종료일(현장 근무 종료)이 지난 경우. 평가는 배정(현장) 단위.
+function isWorkEnded(a: { endDate?: string | null } | null | undefined): boolean {
+  if (!a || !a.endDate) return false;
   return a.endDate.slice(0, 10) < new Date().toISOString().slice(0, 10);
 }
 // 근무형태 짧은 라벨(요청 근무형태 목록 표기용)
@@ -653,18 +651,8 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   const [cEnd, setCEnd]     = useState(initial.endDate ? initial.endDate.slice(0, 10) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  // 만족도 평가 요청(배정 종료 직무지도원 대상) — 근무 종료(배정 종료일 경과) 후에만 가능
-  const [showSurvey, setShowSurvey] = useState(false);
+  // 근무(배정) 종료 여부 — 계약서 작성·발송 버튼 표시 제어용. (만족도 평가 요청은 '만족도 평가' 화면에서만)
   const workEnded = isWorkEnded(worker.activeAssignment);
-  // 현장(사업체) 담당자 — 평가 요청 시 알림톡 수신자로 자동 입력
-  const [bizContact, setBizContact] = useState<{ name: string; phone: string }>({ name: "", phone: "" });
-  useEffect(() => {
-    if (!initial.siteId) return;
-    fetch(`/api/admin/sites/${initial.siteId}`, { cache: "no-store" })
-      .then(r => r.json())
-      .then(d => { if (d?.success && d.item) setBizContact({ name: d.item.businessContactName || "", phone: d.item.businessContactPhone || "" }); })
-      .catch(() => {});
-  }, [initial.siteId]);
 
   const isFullDay = workType === "FULL_DAY";
 
@@ -675,10 +663,9 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   const initStart = initial.startDate ? initial.startDate.slice(0, 10) : "";
   const initEnd = initial.endDate ? initial.endDate.slice(0, 10) : "";
   const initCommute = initial.commuteGuidanceIncluded ?? true;
+  // 배정 기간(cStart/cEnd)은 계약과 별개 → 계약서 재작성 트리거에서 제외(조기 배정 종료가 계약 변경을 요구하면 안 됨).
   const contractDirty =
     workType !== initWorkType ||
-    cStart !== initStart ||
-    cEnd !== initEnd ||
     (!isFullDay && commuteGuidanceIncluded !== initCommute) ||
     (workType === "CUSTOM" && (
       workStart !== (initial.customWorkStart ?? WORK_TYPE_DEFAULTS.CUSTOM.start) ||
@@ -702,8 +689,8 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
       return;
     }
     if (!wantField && !wantAdapt) { setError("현장 구분을 1개 이상 선택하세요."); return; }
-    if (!cStart || !cEnd) { setError("근로계약 시작일과 종료일을 모두 입력하세요."); return; }
-    if (cEnd < cStart) { setError("종료일은 시작일 이후여야 합니다."); return; }
+    if (!cStart || !cEnd) { setError("배정 시작일과 종료일을 모두 입력하세요."); return; }
+    if (cEnd < cStart) { setError("배정 종료일은 시작일 이후여야 합니다."); return; }
     const dual = wantField && wantAdapt;
     if (dual) {
       if (!splitDate) { setError("적응지도 전환일을 입력하세요."); return; }
@@ -764,7 +751,6 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   }
 
   return (
-    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={onClose}>
       <div className="w-full max-w-[62rem] max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-3">
@@ -809,15 +795,17 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
           <p className="mt-1.5 text-xs font-semibold text-slate-400">현장을 모두 선택할 경우, 설정한 날짜를 기준으로 취업 후 적응지도로 전환되며 기존 작성 일지는 보존됩니다.</p>
         </div>
 
-        {/* 계약(배정) 기간 — 수동 입력. 직무지도원 계약은 반드시 종료일 존재 */}
+        {/* 배정 기간(현장 근무) — 이 현장에서의 근무 기간. 종료일 경과 = 근무 종료(평가 대상). 근로계약 기간(6개월)과는 별개. */}
         <div>
-          <label className={T.label}>근로계약 기간</label>
+          <label className={T.label}>배정 기간 <span className="font-semibold text-slate-400">(이 현장 근무 기간)</span></label>
           <div className="flex flex-wrap items-center gap-2">
             <input type="date" value={cStart} max={cEnd || undefined} onChange={e => setCStart(e.target.value)} className={`w-40 ${T.input}`} />
             <span className="font-semibold text-slate-400">~</span>
             <input type="date" value={cEnd} min={cStart || undefined} onChange={e => setCEnd(e.target.value)} className={`w-40 ${T.input}`} />
-            <span className="ml-1 text-xs font-semibold text-slate-400">해당 근로계약 기간은 근로계약서 기반으로 자동 입력됩니다.</span>
+            <button type="button" onClick={() => setCEnd(new Date().toISOString().slice(0, 10))}
+              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-100">오늘로 배정 종료</button>
           </div>
+          <p className="mt-1 text-xs font-semibold text-slate-400">현장 근무가 끝나면 종료일을 그날로 설정하세요. 종료일이 지나면 ‘근무 종료’가 되어 평가 요청 대상이 됩니다. (전체 근로계약 기간과는 별개)</p>
         </div>
 
         {/* 근무형태 — 한 줄 배치(작게). CUSTOM만 직접 시간 입력 */}
@@ -917,19 +905,9 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
                 {initial.hasContract ? "계약서 재작성·발송" : "계약서 작성·발송"}
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => setShowSurvey(true)}
-              disabled={!workEnded}
-              title={workEnded ? undefined : "근무(배정 종료일)가 종료된 후에 평가를 요청할 수 있습니다."}
-              className={`rounded-xl border px-3.5 py-2.5 text-sm font-bold transition ${
-                workEnded
-                  ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
-                  : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300"
-              }`}
-            >
-              만족도 평가 요청
-            </button>
+            {workEnded && (
+              <span className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-semibold text-slate-400">만족도 평가는 ‘만족도 평가’ 화면에서 요청</span>
+            )}
           </div>
           <div className="flex gap-2">
             <button onClick={onClose} className={T.btnSecondary}>취소</button>
@@ -940,22 +918,6 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         </div>
       </div>
     </div>
-
-    {showSurvey && (
-      <SurveyRequestModal
-        prefillWorker={{
-          id: worker.id,
-          workerName: worker.workerName,
-          phoneNumber: worker.phoneNumber,
-          siteName: worker.activeAssignment?.siteName ?? null,
-          recipientName: bizContact.name,
-          recipientPhone: bizContact.phone,
-        }}
-        onClose={() => setShowSurvey(false)}
-        onCreated={() => setShowSurvey(false)}
-      />
-    )}
-    </>
   );
 }
 
@@ -1134,7 +1096,12 @@ export default function WorkersPage() {
                   <td className={T.td}>
                     {(() => {
                       const ended = isWorkEnded(c.activeAssignment);
-                      const key = ended ? "ENDED" : c.activeAssignment?.assignStatus;
+                      const ev = c.activeAssignment?.evalStatus;
+                      // 평가 상태 우선(만족도 평가와 동기화) → 근무 종료 → 배정 파이프라인
+                      const key = ev === "RESPONDED" ? "EVAL_DONE"
+                        : ev === "PENDING" ? "EVAL_REQ"
+                        : ended ? "ENDED"
+                        : c.activeAssignment?.assignStatus;
                       return key && ASSIGN_STATUS_BADGE[key]
                         ? <span className={`${T.badge} shrink-0 ${ASSIGN_STATUS_BADGE[key].cls}`}>{ASSIGN_STATUS_BADGE[key].label}</span>
                         : <span className="text-[13px] text-slate-300">-</span>;

@@ -28,8 +28,13 @@ const groups: NavGroup[] = [
       { href: "/admin/workers",     label: "직무지도원 현황 관리" },
       { href: "/admin/sites",       label: "현장(Site) 현황 관리" },
       { href: "/admin/attendances", label: "근태 현황 관리" },
-      { href: "/admin/survey-requests", label: "직무지도원 평가 요청 관리" },
-      { href: "/admin/surveys",     label: "직무지도원 만족도 평가 결과" },
+    ],
+  },
+  {
+    title: "직무지도원 평가",
+    items: [
+      { href: "/admin/survey-requests", label: "직무지도원 평가 관리" },
+      { href: "/admin/eval-forms",      label: "직무지도원 평가표 관리" },
     ],
   },
   {
@@ -45,7 +50,6 @@ const groups: NavGroup[] = [
       { href: "/admin/talent",      label: "인재풀 검색" },
       { href: "/admin/recruit",     label: "직무지도 공고" },
       { href: "/admin/professions", label: "자격 검증" },
-      { href: "/admin/eval-forms",  label: "직무지도원 평가 관리" },
     ],
   },
   {

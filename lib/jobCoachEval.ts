@@ -12,22 +12,43 @@ export type CategoryScore = { name: string; weight: number; score: number };
 // 답안 키 = "{카테고리index}_{문항index}" → 1~5
 export type EvalAnswers = Record<string, number>;
 
-export async function getActiveFormSnapshot(): Promise<EvalSnapshot | null> {
-  const f = await prisma.jobCoachEvalForm.findFirst({
-    where: { isActive: true },
-    include: { categories: { orderBy: { sortOrder: "asc" }, include: { questions: { orderBy: { sortOrder: "asc" } } } } },
-  });
-  if (!f || f.categories.length === 0) return null;
+const FORM_INCLUDE = { categories: { orderBy: { sortOrder: "asc" as const }, include: { questions: { orderBy: { sortOrder: "asc" as const } } } } };
+
+function toSnapshot(f: any): EvalSnapshot | null {
+  if (!f || !f.categories?.length) return null;
   return {
     formId: f.id.toString(),
     title: f.title,
     includeOpinion: f.includeOpinion,
-    categories: f.categories.map(c => ({
+    categories: f.categories.map((c: any) => ({
       name: c.name,
-      weight: c.questions.reduce((s, q) => s + q.maxScore, 0),
-      questions: c.questions.map(q => ({ text: q.text, maxScore: q.maxScore })),
+      weight: c.questions.reduce((s: number, q: any) => s + q.maxScore, 0),
+      questions: c.questions.map((q: any) => ({ text: q.text, maxScore: q.maxScore })),
     })),
   };
+}
+
+export async function getActiveFormSnapshot(): Promise<EvalSnapshot | null> {
+  const f = await prisma.jobCoachEvalForm.findFirst({ where: { isActive: true }, include: FORM_INCLUDE });
+  return toSnapshot(f);
+}
+
+// 특정 평가표로 스냅샷(없거나 빈 폼이면 활성 평가표 폴백)
+export async function getFormSnapshotById(formId: bigint | null | undefined): Promise<EvalSnapshot | null> {
+  if (formId == null) return getActiveFormSnapshot();
+  const f = await prisma.jobCoachEvalForm.findUnique({ where: { id: formId }, include: FORM_INCLUDE });
+  return toSnapshot(f) ?? getActiveFormSnapshot();
+}
+
+// 평가표 선택 목록(활성 우선). 매니저·운영자 발송 모달의 평가표 선택용.
+export async function listEvalForms(): Promise<{ id: string; title: string; isActive: boolean; questionCount: number }[]> {
+  const forms = await prisma.jobCoachEvalForm.findMany({
+    orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
+    include: { categories: { include: { questions: { select: { id: true } } } } },
+  });
+  return forms
+    .filter(f => f.categories.some(c => c.questions.length > 0))
+    .map(f => ({ id: f.id.toString(), title: f.title, isActive: f.isActive, questionCount: f.categories.reduce((s, c) => s + c.questions.length, 0) }));
 }
 
 // 스냅샷 타입 가드(런타임 JSON 검증용 — 최소한)

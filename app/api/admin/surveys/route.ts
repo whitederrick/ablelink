@@ -9,7 +9,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
 import { randomUUID } from "crypto";
-import { getActiveFormSnapshot } from "@/lib/jobCoachEval";
+import { getFormSnapshotById } from "@/lib/jobCoachEval";
 
 const SURVEY_TEMPLATE = "KAKAO_SURVEY_TEMPLATE_CODE";
 
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { workerId, recipientName, recipientPhone, siteName } = body;
+    const { workerId, recipientName, recipientPhone, siteName, assignmentId, formId } = body;
     if (!workerId) throw new Error("VALIDATION:평가 대상 직무지도원을 선택하세요.");
     const phone = String(recipientPhone ?? "").trim();
     if (!/^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/.test(phone)) {
@@ -81,6 +81,14 @@ export async function POST(req: NextRequest) {
     let widBig: bigint;
     try { widBig = BigInt(workerId); } catch { throw new Error("VALIDATION:잘못된 직무지도원 ID"); }
 
+    // 평가는 '종료 배정(assignmentId)'에 묶음 — 본 기관·해당 직무지도원의 배정만 허용
+    let assignmentIdBig: bigint | null = null;
+    if (assignmentId != null && String(assignmentId) !== "") {
+      try { assignmentIdBig = BigInt(assignmentId); } catch { throw new Error("VALIDATION:잘못된 배정 ID"); }
+      const asg = await prisma.siteAssignment.findUnique({ where: { id: assignmentIdBig }, select: { agencyId: true, workerId: true } });
+      if (!asg || asg.agencyId !== scope.agencyId || asg.workerId !== widBig) throw new Error("VALIDATION:해당 배정을 찾을 수 없습니다.");
+    }
+
     // 본인 위탁기관와 계약 이력이 있는 직무지도원만 조사 요청 가능
     const linked = await prisma.employmentContract.findFirst({
       where: { agencyId: scope.agencyId, workerId: widBig },
@@ -88,18 +96,30 @@ export async function POST(req: NextRequest) {
     });
     if (!linked) throw new Error("VALIDATION:본인 위탁기관와 계약 이력이 있는 직무지도원만 요청할 수 있습니다.");
 
+    // 중복 차단(동기화): 같은 종료 배정에 진행중/완료 평가가 있으면 재요청 불가(만료·취소는 재요청 허용)
+    if (assignmentIdBig != null) {
+      const dup = await prisma.satisfactionSurvey.findFirst({
+        where: { assignmentId: assignmentIdBig, status: { in: ["PENDING", "RESPONDED"] } } as any,
+        select: { status: true },
+      });
+      if (dup) throw new Error(dup.status === "RESPONDED" ? "VALIDATION:이미 평가가 완료된 배정입니다." : "VALIDATION:이미 평가 요청이 진행 중입니다.");
+    }
+
     const worker = await prisma.worker.findUnique({ where: { id: widBig }, select: { workerName: true } });
 
     const token = randomUUID();
-    const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14일
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30일(미회신 시 자동 종료 기준)
 
-    // 요청 시점의 운영자 활성 평가표를 스냅샷(없으면 레거시 4항목 폴백)
-    const snapshot = await getActiveFormSnapshot();
+    // 선택한 평가표(미선택 시 활성 평가표) 스냅샷(없으면 레거시 4항목 폴백)
+    let formIdBig: bigint | null = null;
+    if (formId != null && String(formId) !== "") { try { formIdBig = BigInt(formId); } catch {} }
+    const snapshot = await getFormSnapshotById(formIdBig);
 
     const survey = await prisma.satisfactionSurvey.create({
       data: {
         agencyId: scope.agencyId,
         workerId: widBig,
+        assignmentId: assignmentIdBig,
         recipientName: recipientName?.trim() || null,
         recipientPhone: phone,
         siteName: siteName?.trim() || null,

@@ -236,6 +236,16 @@ export async function GET(req: NextRequest) {
     }
   } catch (e: any) { errors.push(`만족도자동: ${e.message}`); }
 
+  // ── 5b. 미회신 평가 자동 종료 — 만료(30일) 경과한 PENDING 평가는 '미회신 종료'(EXPIRED)로. 재요청 가능. ──
+  let surveysExpired = 0;
+  try {
+    const r = await prisma.satisfactionSurvey.updateMany({
+      where: { status: "PENDING", expiresAt: { lt: now } },
+      data: { status: "EXPIRED" },
+    });
+    surveysExpired = r.count;
+  } catch (e: any) { errors.push(`평가만료: ${e.message}`); }
+
   // ── 6. 매월 자동 급여 DRAFT 생성 (에이전시별 설정일) ──
   // 오늘(KST) 날짜 == 기관 payrollAutoDay 인 기관에 대해 전월분 급여를 DRAFT로 자동 생성.
   // 이미 해당 월 run이 있으면 건너뜀(확정/초안 보존). 명세서 발급은 담당자 확정 시(자동 X).
@@ -284,7 +294,7 @@ export async function GET(req: NextRequest) {
     }
   } catch (e: any) { errors.push(`급여자동생성: ${e.message}`); }
 
-  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 퇴근미실행:${missedFlagged} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent} 급여초안:${payrollDrafted}`, errors);
+  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 퇴근미실행:${missedFlagged} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent} 평가만료:${surveysExpired} 급여초안:${payrollDrafted}`, errors);
 
   return NextResponse.json({
     success: true, yesterday,

@@ -925,7 +925,8 @@ model SatisfactionSurvey {
   id        BigInt @id @default(autoincrement())
   agencyId  BigInt @map("agency_id")
   workerId  BigInt @map("worker_id") // 평가 대상 직무지도원
-  contractId BigInt? @map("contract_id") // 연결 계약(자동발송 시)
+  assignmentId BigInt? @map("assignment_id") // 평가 대상 배정(현장 근무 단위) — 평가 동기화 키. 근무 종료=배정 종료
+  contractId BigInt? @map("contract_id") // 참조용 연결 계약(있으면)
 
   // 수신자(사업체 담당자) — 알림톡 발송 대상
   recipientName  String? @map("recipient_name")
