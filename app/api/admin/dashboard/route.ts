@@ -61,7 +61,7 @@ export async function GET(req: Request) {
       // 3. 제출 문서 현황 — 매니저 처리 대기(제출완료/확정/수정요청) 최근 50건
       prisma.documentRun.findMany({
         where: { agencyId: scope.agencyId, signStage: { in: ["SUBMITTED", "CONFIRMED", "CHANGES_REQUESTED"] } },
-        take: 50,
+        take: 200,
         orderBy: { updatedAt: "desc" },
         select: {
           id: true, docType: true, dueAt: true, currentVersionId: true, signStage: true,
@@ -96,7 +96,7 @@ export async function GET(req: Request) {
           site: { select: { companyName: true } },
         },
         orderBy: { endDate: "desc" },
-        take: 50,
+        take: 100,
       }),
     ]);
 
@@ -143,23 +143,26 @@ export async function GET(req: Request) {
     const unassignedSites = allActiveSites.filter(s => s.assignments.length === 0);
 
     // ── 6. 운영 리스크 알림 ───────────────────────────────────────
+    // 소스별 동일 상한(누락 최소화). 클라이언트는 5개씩 페이징하므로 상한만큼 페이지가 늘어남.
+    const RISK_CAP = 50;
     const riskAlerts: Array<{
       type: string; id?: string; label: string; target: string; detail: string; severity: "high" | "medium" | "low";
     }> = [];
 
-    for (const issue of derivedIssues.slice(0, 15)) {
-      const daysAgo = Math.floor((now.getTime() - new Date(`${issue.workDate}T00:00:00Z`).getTime()) / 86400000);
-      if (daysAgo >= 3) {
-        riskAlerts.push({
-          type: "attendance", id: String(issue.id), label: "[근태]",
-          target: issue.workerName,
-          detail: `${daysAgo}일 경과 미확인 근태 — 『${issue.siteName}』`,
-          severity: daysAgo >= 7 ? "high" : "medium",
-        });
-      }
+    // 미확인 근태: 조건(3일 경과) 충족분을 먼저 거른 뒤 상한 적용(상한에 가려 누락되지 않도록)
+    const staleAttendance = derivedIssues
+      .map(issue => ({ issue, daysAgo: Math.floor((now.getTime() - new Date(`${issue.workDate}T00:00:00Z`).getTime()) / 86400000) }))
+      .filter(x => x.daysAgo >= 3);
+    for (const { issue, daysAgo } of staleAttendance.slice(0, RISK_CAP)) {
+      riskAlerts.push({
+        type: "attendance", id: String(issue.id), label: "[근태]",
+        target: issue.workerName,
+        detail: `${daysAgo}일 경과 미확인 근태 — 『${issue.siteName}』`,
+        severity: daysAgo >= 7 ? "high" : "medium",
+      });
     }
 
-    for (const r of docRunsOpen.filter(r => r.signStage === "SUBMITTED").slice(0, 8)) {
+    for (const r of docRunsOpen.filter(r => r.signStage === "SUBMITTED").slice(0, RISK_CAP)) {
       riskAlerts.push({
         type: "document", id: String(r.id), label: "[문서]",
         target: r.worker?.workerName || "-",
@@ -168,7 +171,7 @@ export async function GET(req: Request) {
       });
     }
 
-    for (const a of endingSoonAssignments.slice(0, 8)) {
+    for (const a of endingSoonAssignments.slice(0, RISK_CAP)) {
       const daysLeft = a.endDate
         ? Math.ceil((a.endDate.getTime() - today.getTime()) / 86400000)
         : 0;
@@ -180,7 +183,7 @@ export async function GET(req: Request) {
       });
     }
 
-    for (const s of unassignedSites.slice(0, 3)) {
+    for (const s of unassignedSites.slice(0, RISK_CAP)) {
       riskAlerts.push({
         type: "site", id: String(s.id), label: "[미배정]",
         target: s.companyName,
@@ -190,7 +193,7 @@ export async function GET(req: Request) {
     }
 
     // 근무 종료 후 만족도 평가 미요청 — 배정 관리(근무 종료 필터)로 유도
-    for (const a of evalDue.slice(0, 8)) {
+    for (const a of evalDue.slice(0, RISK_CAP)) {
       const daysAgo = Math.floor((today.getTime() - a.endDate!.getTime()) / 86400000);
       riskAlerts.push({
         type: "survey_due", id: String(a.id), label: "[평가]",
@@ -242,7 +245,7 @@ export async function GET(req: Request) {
             ? Math.ceil((a.endDate.getTime() - today.getTime()) / 86400000)
             : null,
         })),
-        riskAlerts: riskAlerts.slice(0, 20),
+        riskAlerts: riskAlerts.slice(0, RISK_CAP * 5),
         todayList: todayAttendances.map(a => ({
           id: a.id.toString(),
           workerName: a.user?.workerName || "-",
