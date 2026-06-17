@@ -103,32 +103,37 @@ function SendModal({ item, onClose, onSent }: { item: Item; onClose: () => void;
 }
 
 const PICK_SIZE = 10;
-function RequestPickerModal({ items, onPick, onClose }: { items: Item[]; onPick: (it: Item) => void; onClose: () => void }) {
+function RequestPickerModal({ onPick, onClose }: { onPick: (it: Item) => void; onClose: () => void }) {
   const [q, setQ] = useState("");
+  const [debQ, setDebQ] = useState("");
   const [pp, setPp] = useState(1);
-  const list = useMemo(() => {
-    const needs = items.filter(it => actionOf(it.requestStatus) === "needs");
-    const s = q.trim().toLowerCase();
-    return s ? needs.filter(it => it.workerName.toLowerCase().includes(s) || (it.siteName ?? "").toLowerCase().includes(s) || it.agencyName.toLowerCase().includes(s)) : needs;
-  }, [items, q]);
-  useEffect(() => { setPp(1); }, [q]);
-  const pages = Math.max(1, Math.ceil(list.length / PICK_SIZE));
-  const slice = list.slice((pp - 1) * PICK_SIZE, pp * PICK_SIZE);
+  const [list, setList] = useState<Item[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { const t = setTimeout(() => setDebQ(q), 300); return () => clearTimeout(t); }, [q]);
+  useEffect(() => { setPp(1); }, [debQ]);
+  useEffect(() => {
+    setLoading(true);
+    const params = new URLSearchParams({ page: String(pp), pageSize: String(PICK_SIZE), state: "needs" });
+    if (debQ.trim()) params.set("q", debQ.trim());
+    fetch(`/api/admin/system/survey-targets?${params}`).then(r => r.json()).then(d => { if (d.success) { setList(d.items); setTotal(d.total); } }).catch(() => {}).finally(() => setLoading(false));
+  }, [pp, debQ]);
+  const pages = Math.max(1, Math.ceil(total / PICK_SIZE));
   return (
     <div className={T.modalOverlay} onClick={onClose}>
       <div className="flex max-h-[82vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-black text-slate-900">평가 요청 — 대상 선택 <span className="text-sm font-semibold text-slate-400">({list.length})</span></h2>
+            <h2 className="text-base font-black text-slate-900">평가 요청 — 대상 선택 <span className="text-sm font-semibold text-slate-400">({total})</span></h2>
             <p className="mt-0.5 text-xs font-semibold text-slate-400">근무(배정)가 종료됐고 아직 평가를 요청하지 않은 직무지도원입니다. (전체 위탁기관)</p>
           </div>
           <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-slate-50"><X className="h-4 w-4" /></button>
         </div>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="직무지도원·현장·위탁기관 검색" className={`mb-3 w-full ${T.input}`} />
         <div className="flex-1 overflow-y-auto rounded-xl border border-slate-100">
-          {slice.length === 0 ? (
-            <p className="px-4 py-10 text-center text-sm font-semibold text-slate-300">{items.filter(it => actionOf(it.requestStatus) === "needs").length === 0 ? "평가 미요청 대상이 없습니다." : "검색 결과가 없습니다."}</p>
-          ) : slice.map(it => (
+          {loading ? <p className="px-4 py-10 text-center text-sm font-semibold text-slate-300">불러오는 중...</p>
+          : list.length === 0 ? <p className="px-4 py-10 text-center text-sm font-semibold text-slate-300">평가 미요청 대상이 없습니다.</p>
+          : list.map(it => (
             <button key={it.assignmentId} onClick={() => onPick(it)} className="flex w-full items-center justify-between gap-2 border-b border-slate-50 px-4 py-2.5 text-left transition last:border-b-0 hover:bg-sky-50">
               <div className="min-w-0">
                 <p className="text-sm font-black text-slate-900">{it.workerName} <span className="font-semibold text-slate-400">· {it.agencyName}</span>
@@ -140,7 +145,7 @@ function RequestPickerModal({ items, onPick, onClose }: { items: Item[]; onPick:
             </button>
           ))}
         </div>
-        <Pagination className="pt-3" page={pp} totalPages={pages} total={list.length} onPageChange={setPp} />
+        <Pagination className="pt-3" page={pp} totalPages={pages} total={total} onPageChange={setPp} />
       </div>
     </div>
   );
@@ -193,30 +198,39 @@ function ResultDetail({ d, onToggleShare }: { d: Detail; onToggleShare: () => vo
 
 export default function AdminEvalManagePage() {
   const [items, setItems] = useState<Item[]>([]);
+  const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState({ needs: 0, requested: 0, done: 0 });
   const [details, setDetails] = useState<Record<string, Detail>>({});
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [stateFilter, setStateFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
+  const [tick, setTick] = useState(0);
+  const reload = () => setTick(t => t + 1);
   const [showPicker, setShowPicker] = useState(false);
   const [sendItem, setSendItem] = useState<Item | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
 
-  function load() {
+  useEffect(() => { const t = setTimeout(() => setDebouncedQuery(query), 300); return () => clearTimeout(t); }, [query]);
+  useEffect(() => { setPage(1); }, [debouncedQuery, stateFilter]);
+  useEffect(() => {
     setLoading(true);
+    const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+    if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
+    if (stateFilter.length) params.set("state", stateFilter.join(","));
     Promise.all([
-      fetch("/api/admin/system/survey-targets").then(r => r.json()),
+      fetch(`/api/admin/system/survey-targets?${params}`).then(r => r.json()),
       fetch("/api/admin/system/surveys").then(r => r.json()),
     ]).then(([wl, sv]) => {
-      if (wl.success) setItems(wl.items);
+      if (wl.success) { setItems(wl.items); setTotal(wl.total); setCounts(wl.counts); }
       if (sv.success) {
         const map: Record<string, Detail> = {};
         for (const s of sv.items) map[String(s.id)] = s;
         setDetails(map);
       }
     }).catch(() => {}).finally(() => setLoading(false));
-  }
-  useEffect(() => { load(); }, []);
+  }, [page, debouncedQuery, stateFilter, tick]);
 
   async function toggleShare(d: Detail) {
     await fetch("/api/admin/system/surveys", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: d.id, sharedWithAgency: !d.sharedWithAgency }) });
@@ -224,21 +238,11 @@ export default function AdminEvalManagePage() {
     setItems(prev => prev.map(it => it.surveyId === d.id ? { ...it, sharedWithAgency: !d.sharedWithAgency } : it));
   }
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return items
-      .filter(it => stateFilter.length === 0 || stateFilter.includes(actionOf(it.requestStatus)))
-      .filter(it => !q || it.workerName.toLowerCase().includes(q) || (it.siteName ?? "").toLowerCase().includes(q) || it.agencyName.toLowerCase().includes(q));
-  }, [items, query, stateFilter]);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [query, stateFilter]);
-
-  const cnt = (a: "needs" | "requested" | "done") => items.filter(it => actionOf(it.requestStatus) === a).length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const filters: FilterChip[] = [
-    { value: "needs", label: "평가 미요청", count: cnt("needs") },
-    { value: "requested", label: "평가 요청", count: cnt("requested") },
-    { value: "done", label: "평가 완료", count: cnt("done") },
+    { value: "needs", label: "평가 미요청", count: counts.needs },
+    { value: "requested", label: "평가 요청", count: counts.requested },
+    { value: "done", label: "평가 완료", count: counts.done },
   ];
   const toggle = (v: string) => setStateFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
@@ -253,9 +257,9 @@ export default function AdminEvalManagePage() {
       <StatCardRow
         cols={3}
         items={[
-          { label: "평가 미요청", value: cnt("needs"), tone: cnt("needs") > 0 ? "rose" : "slate" },
-          { label: "평가 요청(대기)", value: cnt("requested"), tone: "amber" },
-          { label: "평가 완료", value: cnt("done"), tone: "emerald" },
+          { label: "평가 미요청", value: counts.needs, tone: counts.needs > 0 ? "rose" : "slate" },
+          { label: "평가 요청(대기)", value: counts.requested, tone: "amber" },
+          { label: "평가 완료", value: counts.done, tone: "emerald" },
         ]}
       />
 
@@ -263,11 +267,11 @@ export default function AdminEvalManagePage() {
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full min-w-[1100px] border-collapse">
-          <thead><tr>{["위탁기관", "직무지도원", "현장(사업체)", "사업체 담당자 성명", "전화번호", "배정 종료", "상태", "결과", "관리"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{["위탁기관", "직무지도원", "현장(사업체)", "사업체 담당자 성명", "전화번호", "배정 종료", "진행 상태", "결과", "관리"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
           <tbody>
             {loading ? <tr><td colSpan={9} className={T.tdCenter}>로딩 중...</td></tr>
-            : filtered.length === 0 ? <tr><td colSpan={9} className={T.tdCenter}>{items.length === 0 ? "근무 종료된 직무지도원이 없습니다." : "조건에 맞는 대상이 없습니다."}</td></tr>
-            : pageItems.map(it => {
+            : items.length === 0 ? <tr><td colSpan={9} className={T.tdCenter}>{total === 0 ? "근무 종료된 직무지도원이 없습니다." : "조건에 맞는 대상이 없습니다."}</td></tr>
+            : items.map(it => {
               const act = actionOf(it.requestStatus);
               const detail = it.surveyId ? details[it.surveyId] : undefined;
               const open = openId === it.assignmentId;
@@ -302,10 +306,10 @@ export default function AdminEvalManagePage() {
         </table>
       </div>
 
-      <Pagination page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+      <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
 
-      {showPicker && <RequestPickerModal items={items} onPick={(it) => { setShowPicker(false); setSendItem(it); }} onClose={() => setShowPicker(false)} />}
-      {sendItem && <SendModal item={sendItem} onClose={() => setSendItem(null)} onSent={load} />}
+      {showPicker && <RequestPickerModal onPick={(it) => { setShowPicker(false); setSendItem(it); }} onClose={() => setShowPicker(false)} />}
+      {sendItem && <SendModal item={sendItem} onClose={() => setSendItem(null)} onSent={reload} />}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { CheckCircle2, Copy, Plus, Send, X } from "lucide-react";
 import { workerLabel } from "../_format";
 import { computeWorkTimes } from "@/lib/workSchedule";
+import SurveyRequestModal from "../surveys/SurveyRequestModal";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM";
 type ServiceStep = "PRE_TRAINING" | "FIELD_TRAINING" | "ADAPTATION";
@@ -625,9 +626,9 @@ function InviteModal({ onClose, initialSiteId, initialWorkTypes, initialDeadline
   );
 }
 
-function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: {
+function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved, onSurveySent }: {
   worker: Worker; assignmentId: string; initial: Assignment;
-  onClose: () => void; onSaved: (updated: Assignment) => void;
+  onClose: () => void; onSaved: (updated: Assignment) => void; onSurveySent?: () => void;
 }) {
   const [workType, setWorkType] = useState<WorkType>(initial.workType ?? "FULL_DAY");
   // 현장 구분(복수 선택): 지원고용 훈련 / 적응지도. 둘 다면 전환일 기준 1배정을 단계 분할.
@@ -651,8 +652,25 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   const [cEnd, setCEnd]     = useState(initial.endDate ? initial.endDate.slice(0, 10) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  // 근무(배정) 종료 여부 — 계약서 작성·발송 버튼 표시 제어용. (만족도 평가 요청은 '만족도 평가' 화면에서만)
   const workEnded = isWorkEnded(worker.activeAssignment);
+  // 만족도 평가 요청 — 근무(배정) 종료 + 미요청일 때만(만족도 평가 화면과 동일 배정 키로 동기화·중복 차단)
+  const [showSurvey, setShowSurvey] = useState(false);
+  const evalStatus = worker.activeAssignment?.evalStatus ?? null;
+  const evalRequested = evalStatus === "PENDING" || evalStatus === "RESPONDED";
+  const canRequestEval = workEnded && !evalRequested;
+  const evalBtnLabel = evalStatus === "RESPONDED" ? "평가 완료됨"
+    : evalStatus === "PENDING" ? "평가 요청됨"
+    : (evalStatus === "EXPIRED" || evalStatus === "CANCELLED") ? "만족도 평가 재요청"
+    : "만족도 평가 요청";
+  // 현장(사업체) 담당자 — 평가 요청 시 알림톡 수신자로 자동 입력
+  const [bizContact, setBizContact] = useState<{ name: string; phone: string }>({ name: "", phone: "" });
+  useEffect(() => {
+    if (!initial.siteId) return;
+    fetch(`/api/admin/sites/${initial.siteId}`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => { if (d?.success && d.item) setBizContact({ name: d.item.businessContactName || "", phone: d.item.businessContactPhone || "" }); })
+      .catch(() => {});
+  }, [initial.siteId]);
 
   const isFullDay = workType === "FULL_DAY";
 
@@ -751,6 +769,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={onClose}>
       <div className="w-full max-w-[62rem] max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-3">
@@ -846,7 +865,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
                 <span className="text-sm font-black text-slate-900">출퇴근 지도 포함 (+60분) <span className="font-semibold text-slate-400">출근 30분 + 퇴근 30분</span></span>
               </label>
               <p className="flex items-center text-xs font-bold text-rose-600">
-                ※ 휴게시간 지도(30분)는 4시간 근무 시 무조건 포함됩니다.
+                ※ 휴게시간 지도(30분)는 4시간 근무 시 기본값으로 포함됩니다.
               </p>
             </div>
           )}
@@ -905,9 +924,19 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
                 {initial.hasContract ? "계약서 재작성·발송" : "계약서 작성·발송"}
               </button>
             )}
-            {workEnded && (
-              <span className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-semibold text-slate-400">만족도 평가는 ‘만족도 평가’ 화면에서 요청</span>
-            )}
+            <button
+              type="button"
+              onClick={() => setShowSurvey(true)}
+              disabled={!canRequestEval}
+              title={canRequestEval ? undefined : (!workEnded ? "근무(배정)가 종료된 후에 평가를 요청할 수 있습니다." : "이미 평가가 요청되었습니다.")}
+              className={`rounded-xl border px-3.5 py-2.5 text-sm font-bold transition ${
+                canRequestEval
+                  ? "animate-pulse border-rose-400 bg-rose-100 font-black text-rose-700 ring-2 ring-rose-300 hover:bg-rose-200"
+                  : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300"
+              }`}
+            >
+              {evalBtnLabel}
+            </button>
           </div>
           <div className="flex gap-2">
             <button onClick={onClose} className={T.btnSecondary}>취소</button>
@@ -918,6 +947,23 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         </div>
       </div>
     </div>
+
+    {showSurvey && (
+      <SurveyRequestModal
+        prefillWorker={{
+          id: worker.id,
+          workerName: worker.workerName,
+          phoneNumber: worker.phoneNumber,
+          siteName: worker.activeAssignment?.siteName ?? null,
+          recipientName: bizContact.name,
+          recipientPhone: bizContact.phone,
+          assignmentId: worker.activeAssignment?.assignmentId ?? null,
+        }}
+        onClose={() => setShowSurvey(false)}
+        onCreated={() => { setShowSurvey(false); onSurveySent?.(); }}
+      />
+    )}
+    </>
   );
 }
 
@@ -1123,6 +1169,7 @@ export default function WorkersPage() {
           initial={editTarget.assignment}
           onClose={() => setEditTarget(null)}
           onSaved={updated => setAssignmentMap(prev => ({ ...prev, [updated.id]: updated }))}
+          onSurveySent={() => { setEditTarget(null); reload(); }}
         />
       )}
 

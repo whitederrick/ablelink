@@ -1,17 +1,21 @@
 // app/api/admin/system/survey-targets/route.ts
-// 운영자(시스템): 직무지도원 평가 워크리스트 — 전체 위탁기관의 '종료(임박 포함) 계약 × 평가요청 상태'.
-// 공용 로직 lib/evalWorklist 사용(매니저용과 동일, 단 운영자는 전체 기관 + 종료 임박 포함).
+// 운영자(시스템): 직무지도원 평가 워크리스트 — 전체 위탁기관 '종료 배정 × 평가요청 상태'. 서버 페이지네이션.
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/adminScope";
-import { getEvalWorklist } from "@/lib/evalWorklist";
+import { getEvalWorklistPage } from "@/lib/evalWorklist";
 
 export async function GET(req: NextRequest) {
   try {
     await requireAdminSession(req);
-    const items = await getEvalWorklist();
-    return NextResponse.json({ success: true, items });
+    const sp = new URL(req.url).searchParams;
+    const page = Number(sp.get("page") || 1);
+    const pageSize = Number(sp.get("pageSize") || 10);
+    const q = sp.get("q") || "";
+    const states = (sp.get("state") || "").split(",").map(s => s.trim()).filter(Boolean);
+    const result = await getEvalWorklistPage({ page, pageSize, q, states });
+    return NextResponse.json({ success: true, ...result });
   } catch (e: any) {
     if (e instanceof Response) return e;
     console.error("[system/survey-targets GET]", e);

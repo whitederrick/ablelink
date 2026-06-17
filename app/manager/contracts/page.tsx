@@ -858,23 +858,22 @@ export default function AdminContractsPage() {
 
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
-          <thead><tr>{["직무지도원 성명(아이디)", "전화번호", "계약 기간", "근무장소", "상태", "서명일", "관리"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{["직무지도원 성명(아이디)", "전화번호", "계약 기간", "근무장소", "서명일", "진행 상태"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={7} className={T.tdCenter}>로딩 중...</td></tr>
-            : filtered.length === 0 ? <tr><td colSpan={7} className={T.tdCenter}>{contracts.length === 0 ? "계약서가 없습니다." : "조건에 맞는 계약서가 없습니다."}</td></tr>
+            {loading ? <tr><td colSpan={6} className={T.tdCenter}>로딩 중...</td></tr>
+            : filtered.length === 0 ? <tr><td colSpan={6} className={T.tdCenter}>{contracts.length === 0 ? "계약서가 없습니다." : "조건에 맞는 계약서가 없습니다."}</td></tr>
             : pageItems.map(c => {
               return (
-                <tr key={c.id} className={T.trBase}>
+                <tr key={c.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50`} onClick={() => setDetailId(c.id)}>
                   <td className={`${T.td} whitespace-nowrap`}>{workerLabel(c.workerName, c.loginId)}</td>
                   <td className={T.td}>{c.userPhone || "-"}</td>
                   <td className={`${T.td} whitespace-nowrap`}>{c.contractStart?.slice(0, 10)} ~ {c.contractEnd?.slice(0, 10)}</td>
                   <td className={T.td}><div className="max-w-[200px] truncate">{c.workLocation || c.siteName || <span className="text-slate-400">미지정</span>}</div></td>
-                  <td className={T.td}><StatusBadge status={c.status} map={STATUS_BADGE} /></td>
-                  <td className={T.td}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
+                  <td className={`${T.td} whitespace-nowrap`}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>
-                    <div className="flex gap-1.5">
-                      <button onClick={() => setDetailId(c.id)} className="inline-flex h-7 items-center rounded-lg border border-slate-200 px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50">상세</button>
-                      {c.status === "PENDING" && <button onClick={() => copyLink(c.signToken)} className="inline-flex h-7 items-center rounded-lg border border-sky-200 bg-sky-50 px-2.5 text-[13px] font-bold text-sky-700 hover:bg-sky-100">링크</button>}
+                    <div className="flex items-center gap-1.5">
+                      <StatusBadge status={c.status} map={STATUS_BADGE} />
+                      {c.status === "PENDING" && <button onClick={e => { e.stopPropagation(); copyLink(c.signToken); }} className="inline-flex h-7 items-center rounded-lg border border-sky-200 bg-sky-50 px-2.5 text-[13px] font-bold text-sky-700 hover:bg-sky-100">서명 링크</button>}
                     </div>
                   </td>
                 </tr>
