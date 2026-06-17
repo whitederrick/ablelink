@@ -346,7 +346,7 @@ export default function AgencySettingsPage() {
             {/* 장애인고용공단 담당자(복수) — 일지 관리 '문서 발송' 기본 수신자 */}
             <div>
             <label className={T.label}>장애인고용공단 담당자</label>
-            <p className="mb-2 text-[11px] font-semibold text-slate-400">‘일지 관리 → 문서 발송’의 기본 수신자로 채워집니다. 여러 명 등록하면 발송 시 전원에게 보냅니다. (발송 시 수정 가능)</p>
+            <p className="mb-2 text-[11px] font-semibold text-slate-400">일지를 수신 받을 기본 수신자입니다. 여러 명 등록하면 전체 인원에게 발송됩니다.</p>
             <div className="space-y-2">
               {govContacts.map((c, i) => (
                 <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1.4fr_auto]">
@@ -371,10 +371,12 @@ export default function AgencySettingsPage() {
             </div>
           </div>
 
-          {/* 급여 자동 생성일 — 매월 N일 전월분 DRAFT 자동 계산(담당자 검토·확정 필요) */}
-          <div className="border-t border-slate-100 pt-4">
+          {/* 급여 자동 생성일 + 기본 근로계약서 양식 좌우 2열 배치 */}
+          <div className="grid grid-cols-1 gap-5 border-t border-slate-100 pt-4 lg:grid-cols-2">
+            {/* 급여 자동 생성일 */}
+            <div>
             <label className={T.label}>급여 자동 생성일</label>
-            <p className="mb-2 text-[11px] font-semibold text-slate-400">매월 이 날짜에 <b>전월분 급여를 자동 계산(초안)</b>합니다. 발급은 담당자가 검토 후 확정해야 됩니다. 비우면 자동 생성 안 함.</p>
+            <p className="mb-2 text-[11px] font-semibold text-slate-400">매월 해당 날짜에 <b>전월분 급여를 자동 계산</b>합니다. <span className="text-rose-500">최종 명세서 발급은 담당자가 검토 후 확정해야 됩니다. 날짜 미입력시 자동 생성되지 않습니다.</span></p>
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-slate-500">매월</span>
               <input type="number" min={1} max={31} value={payrollAutoDay}
@@ -383,16 +385,17 @@ export default function AgencySettingsPage() {
               <span className="text-sm font-semibold text-slate-500">일 (1~31, <b>31=말일</b>, 비우면 사용 안 함)</span>
             </div>
             <p className="mt-1 text-[11px] font-semibold text-slate-400">※ 31 등 그 달에 없는 날짜는 <b>그 달 마지막 날</b>에 생성됩니다(예: 2월은 28/29일).</p>
-          </div>
+            </div>
 
-          {/* 기본 근로계약서 양식 — 계약 작성 시 기본 선택 */}
-          <div className="border-t border-slate-100 pt-4">
+            {/* 기본 근로계약서 양식 */}
+            <div>
             <label className={T.label}>기본 근로계약서 양식</label>
-            <p className="mb-2 text-[11px] font-semibold text-slate-400">계약 작성 화면에서 이 양식이 기본 선택됩니다. (작성 시 변경 가능)</p>
+            <p className="mb-2 text-[11px] font-semibold text-slate-400">근로계약서 작성 시 선택된 양식으로 기본 적용됩니다.</p>
             <select value={defaultContractTemplate} onChange={e => setDefaultContractTemplate(e.target.value)} className={`w-full max-w-md ${T.input}`}>
               <option value="">표준 근로계약서 (기본)</option>
               {CONTRACT_TEMPLATES.filter(t => t.key !== "STANDARD").map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-3">
