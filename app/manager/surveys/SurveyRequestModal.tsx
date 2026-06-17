@@ -9,7 +9,11 @@ import { X } from "lucide-react";
 import { T } from "../_styles";
 
 type SearchResult = { id: string; workerName: string; phoneNumber: string; siteName: string | null };
-export type SurveyPrefillWorker = { id: string; workerName: string; phoneNumber?: string; siteName?: string | null };
+export type SurveyPrefillWorker = {
+  id: string; workerName: string; phoneNumber?: string; siteName?: string | null;
+  // 사업체 담당자(알림톡 수신자) 자동 입력 — 배정 진입 시 현장 정보로 채움
+  recipientName?: string; recipientPhone?: string;
+};
 
 export default function SurveyRequestModal({ prefillWorker, onClose, onCreated }: {
   prefillWorker?: SurveyPrefillWorker | null;
@@ -22,8 +26,8 @@ export default function SurveyRequestModal({ prefillWorker, onClose, onCreated }
   const [worker, setWorker] = useState<SearchResult | null>(
     prefillWorker ? { id: prefillWorker.id, workerName: prefillWorker.workerName, phoneNumber: prefillWorker.phoneNumber ?? "", siteName: prefillWorker.siteName ?? null } : null
   );
-  const [recipientName, setRecipientName] = useState("");
-  const [recipientPhone, setRecipientPhone] = useState("");
+  const [recipientName, setRecipientName] = useState(prefillWorker?.recipientName ?? "");
+  const [recipientPhone, setRecipientPhone] = useState(prefillWorker?.recipientPhone ?? "");
   const [siteName, setSiteName] = useState(prefillWorker?.siteName ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");

@@ -9,6 +9,7 @@ import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { CheckCircle2, Copy, Plus, Send, X } from "lucide-react";
 import { workerLabel } from "../_format";
 import { computeWorkTimes } from "@/lib/workSchedule";
+import SurveyRequestModal from "../surveys/SurveyRequestModal";
 
 type WorkType = "AM" | "PM" | "FULL_DAY" | "CUSTOM";
 type ServiceStep = "PRE_TRAINING" | "FIELD_TRAINING" | "ADAPTATION";
@@ -42,7 +43,7 @@ interface Worker {
   planType: string;
   status: string;
   createdAt: string;
-  activeAssignment: { siteName: string; agencyName: string; startDate: string; assignmentId?: string; assignStatus?: string; workType?: WorkType | null; serviceStep?: ServiceStep; adaptationStartDate?: string | null; requestedWorkTypes?: string | null; replyDeadline?: string | null } | null;
+  activeAssignment: { siteName: string; agencyName: string; startDate: string; endDate?: string | null; assignmentId?: string; assignStatus?: string; workType?: WorkType | null; serviceStep?: ServiceStep; adaptationStartDate?: string | null; requestedWorkTypes?: string | null; replyDeadline?: string | null } | null;
 }
 
 const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
@@ -55,14 +56,24 @@ const PLAN_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   STANDARD: { label: "STANDARD", tone: "amber" },
   PRO:      { label: "PRO",      tone: "emerald" },
 };
-// 배정 파이프라인 상태(assignment-pipeline-design.md): 선정→계약→연결→위치확정→근무
+// 배정 파이프라인 상태(assignment-pipeline-design.md): 선정→계약→연결→위치확정→근무→종료
 const ASSIGN_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   REQUESTED: { label: "배정 요청 중",   cls: "bg-sky-50 text-sky-600" },
   ACCEPTED:  { label: "수락·확정 대기", cls: "bg-emerald-50 text-emerald-600" },
   ASSIGNED:  { label: "계약 대기",      cls: "bg-amber-50 text-amber-600" },
   CONFIRMED: { label: "연결·위치 대기", cls: "bg-sky-50 text-sky-600" },
   ACTIVE:    { label: "근무중",         cls: "bg-emerald-50 text-emerald-600" },
+  ENDED:     { label: "근무 종료",      cls: "bg-slate-100 text-slate-500" },
 };
+
+// 근무 종료 = 배정 종료일이 지난 경우(ACTIVE/CONFIRMED). ENDED 상태는 코드상 미설정이라 날짜로 판정.
+function isWorkEnded(a: { assignStatus?: string; endDate?: string | null } | null | undefined): boolean {
+  if (!a) return false;
+  if (a.assignStatus === "ENDED") return true;
+  if (a.assignStatus !== "ACTIVE" && a.assignStatus !== "CONFIRMED") return false;
+  if (!a.endDate) return false;
+  return a.endDate.slice(0, 10) < new Date().toISOString().slice(0, 10);
+}
 // 근무형태 짧은 라벨(요청 근무형태 목록 표기용)
 const WT_TINY: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "전일", CUSTOM: "직접" };
 const PAGE_SIZE = 10;
@@ -642,6 +653,18 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   const [cEnd, setCEnd]     = useState(initial.endDate ? initial.endDate.slice(0, 10) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // 만족도 평가 요청(배정 종료 직무지도원 대상) — 근무 종료(배정 종료일 경과) 후에만 가능
+  const [showSurvey, setShowSurvey] = useState(false);
+  const workEnded = isWorkEnded(worker.activeAssignment);
+  // 현장(사업체) 담당자 — 평가 요청 시 알림톡 수신자로 자동 입력
+  const [bizContact, setBizContact] = useState<{ name: string; phone: string }>({ name: "", phone: "" });
+  useEffect(() => {
+    if (!initial.siteId) return;
+    fetch(`/api/admin/sites/${initial.siteId}`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => { if (d?.success && d.item) setBizContact({ name: d.item.businessContactName || "", phone: d.item.businessContactPhone || "" }); })
+      .catch(() => {});
+  }, [initial.siteId]);
 
   const isFullDay = workType === "FULL_DAY";
 
@@ -741,6 +764,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={onClose}>
       <div className="w-full max-w-[62rem] max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-3">
@@ -876,19 +900,37 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         {error && <p className="mb-3 mt-5 text-sm font-semibold text-rose-600">{error}</p>}
 
         <div className="mt-7 flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={() => { window.location.href = `/manager/contracts?assignmentId=${assignmentId}&workerId=${worker.id}`; }}
-            className={`rounded-xl border px-3.5 py-2.5 text-sm font-bold transition ${
-              needsContractRewrite
-                ? "animate-pulse border-rose-400 bg-rose-100 font-black text-rose-700 ring-2 ring-rose-300 hover:bg-rose-200"
-                : initial.hasContract
-                  ? "border-slate-200 text-slate-600 hover:bg-slate-50"
-                  : "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100"
-            }`}
-          >
-            {initial.hasContract ? "계약서 재작성·발송" : "계약서 작성·발송"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* 근무 종료된 배정은 계약(근로) 종료 → 계약서 작성·발송 숨김(소급 발급은 '근로계약서 관리'에서 가능). 대신 만족도 평가 요청 활성. */}
+            {!workEnded && (
+              <button
+                type="button"
+                onClick={() => { window.location.href = `/manager/contracts?assignmentId=${assignmentId}&workerId=${worker.id}`; }}
+                className={`rounded-xl border px-3.5 py-2.5 text-sm font-bold transition ${
+                  needsContractRewrite
+                    ? "animate-pulse border-rose-400 bg-rose-100 font-black text-rose-700 ring-2 ring-rose-300 hover:bg-rose-200"
+                    : initial.hasContract
+                      ? "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      : "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100"
+                }`}
+              >
+                {initial.hasContract ? "계약서 재작성·발송" : "계약서 작성·발송"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowSurvey(true)}
+              disabled={!workEnded}
+              title={workEnded ? undefined : "근무(배정 종료일)가 종료된 후에 평가를 요청할 수 있습니다."}
+              className={`rounded-xl border px-3.5 py-2.5 text-sm font-bold transition ${
+                workEnded
+                  ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+                  : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300"
+              }`}
+            >
+              만족도 평가 요청
+            </button>
+          </div>
           <div className="flex gap-2">
             <button onClick={onClose} className={T.btnSecondary}>취소</button>
             <button onClick={handleSave} disabled={saving} className={T.btnPrimary}>
@@ -898,6 +940,22 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved }: 
         </div>
       </div>
     </div>
+
+    {showSurvey && (
+      <SurveyRequestModal
+        prefillWorker={{
+          id: worker.id,
+          workerName: worker.workerName,
+          phoneNumber: worker.phoneNumber,
+          siteName: worker.activeAssignment?.siteName ?? null,
+          recipientName: bizContact.name,
+          recipientPhone: bizContact.phone,
+        }}
+        onClose={() => setShowSurvey(false)}
+        onCreated={() => setShowSurvey(false)}
+      />
+    )}
+    </>
   );
 }
 
@@ -905,6 +963,7 @@ export default function WorkersPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [assignState, setAssignState] = useState<string[]>([]); // 배정 현황 필터(근무중/계약대기/근무종료)
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [editTarget,     setEditTarget]     = useState<{ worker: Worker; assignment: Assignment } | null>(null);
@@ -936,18 +995,19 @@ export default function WorkersPage() {
   // 검색어 디바운스(키 입력마다 조회 방지)
   useEffect(() => { const t = setTimeout(() => setDebouncedQuery(query), 300); return () => clearTimeout(t); }, [query]);
   // 검색/필터 변경 시 1페이지로
-  useEffect(() => { setPage(1); }, [debouncedQuery]);
+  useEffect(() => { setPage(1); }, [debouncedQuery, assignState]);
   // 서버 페이지네이션 조회(page/검색/상태 변경 또는 수동 갱신 시)
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
     if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
+    if (assignState.length) params.set("assignState", assignState.join(","));
     fetch(`/api/admin/workers?${params.toString()}`)
       .then(r => r.json())
       .then(d => { if (d.success && Array.isArray(d.data)) { setWorkers(d.data); setTotal(d.total ?? 0); } })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [page, debouncedQuery, reloadTick]);
+  }, [page, debouncedQuery, assignState, reloadTick]);
 
   async function openEdit(worker: Worker) {
     const assignmentId = worker.activeAssignment?.assignmentId;
@@ -999,6 +1059,13 @@ export default function WorkersPage() {
         query={query}
         onQueryChange={setQuery}
         placeholder="이름 / 전화번호 / 현장(사업체) / 아이디 검색"
+        filters={[
+          { value: "working", label: "근무중" },
+          { value: "pending_contract", label: "계약 대기" },
+          { value: "ended", label: "근무 종료" },
+        ]}
+        selected={assignState}
+        onToggleFilter={(v) => setAssignState(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v])}
       />
 
       <div className={T.tableWrap}>
@@ -1063,9 +1130,13 @@ export default function WorkersPage() {
                       : <span className="text-[13px] text-slate-300">무료</span>}
                   </td>
                   <td className={T.td}>
-                    {c.activeAssignment?.assignStatus && ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus]
-                      ? <span className={`${T.badge} shrink-0 ${ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus].cls}`}>{ASSIGN_STATUS_BADGE[c.activeAssignment.assignStatus].label}</span>
-                      : <span className="text-[13px] text-slate-300">-</span>}
+                    {(() => {
+                      const ended = isWorkEnded(c.activeAssignment);
+                      const key = ended ? "ENDED" : c.activeAssignment?.assignStatus;
+                      return key && ASSIGN_STATUS_BADGE[key]
+                        ? <span className={`${T.badge} shrink-0 ${ASSIGN_STATUS_BADGE[key].cls}`}>{ASSIGN_STATUS_BADGE[key].label}</span>
+                        : <span className="text-[13px] text-slate-300">-</span>;
+                    })()}
                   </td>
                 </tr>
               );

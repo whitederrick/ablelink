@@ -2,11 +2,10 @@
 
 // 직무지도원 관리 상세 — 목록 행 클릭 시 뜨는 모달(현장 관리 모달과 동일 구성·사이즈).
 // 인적 정보·급여계좌 수정 + 현재/과거 계약(배정) 이력 + 만족도 평가 결과 조회.
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { T } from "../_styles";
 import { workerLabel } from "../_format";
-import SurveyRequestModal from "../surveys/SurveyRequestModal";
 
 type Account = {
   id: string; loginId: string; workerName: string; phoneNumber: string;
@@ -157,39 +156,29 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
   const [pastPage, setPastPage] = useState(0);
   const [surveyPage, setSurveyPage] = useState(0);
   const [surveyDetail, setSurveyDetail] = useState<SurveyRow | null>(null);
-  const [showSurveyReq, setShowSurveyReq] = useState(false);
 
-  // 상세 로드(초기 + 평가 요청 후 갱신 공용). 폼 필드는 최초 로드 시에만 채움.
-  const loadDetail = useCallback(async (opts?: { fillForm?: boolean }) => {
-    const fillForm = opts?.fillForm ?? false;
-    try {
-      const res = await fetch(`/api/admin/worker-accounts/${workerId}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok || !data?.success) throw new Error(data?.message || "FAILED");
-      const d: Detail = data.data;
-      setDetail(d);
-      if (fillForm) {
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/admin/worker-accounts/${workerId}`, { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok || !data?.success) throw new Error(data?.message || "FAILED");
+        if (!alive) return;
+        const d: Detail = data.data;
+        setDetail(d);
         setWorkerName(d.account.workerName || "");
         setPhoneNumber(d.account.phoneNumber || "");
         setBirthDate(d.account.birthDate || "");
         setBankName(d.account.bankName || "");
         setAccountNumber(d.account.accountNumber || "");
         setAccountHolder(d.account.accountHolder || "");
+      } catch {
+        if (alive) { alert("상세 조회에 실패했습니다."); onClose(); }
+      } finally {
+        if (alive) setLoading(false);
       }
-      return true;
-    } catch {
-      return false;
-    }
-  }, [workerId]);
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      setLoading(true);
-      const ok = await loadDetail({ fillForm: true });
-      if (!alive) return;
-      if (!ok) { alert("상세 조회에 실패했습니다."); onClose(); return; }
-      setLoading(false);
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -371,15 +360,9 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
 
                 {/* 평가 결과 */}
                 <div className={`${T.card} flex flex-1 flex-col`}>
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-black text-slate-900">만족도 평가</h3>
-                    <button onClick={() => setShowSurveyReq(true)}
-                      className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100">
-                      + 평가 요청
-                    </button>
-                  </div>
+                  <h3 className="mb-3 text-sm font-black text-slate-900">만족도 평가 결과</h3>
                   {surveys.length === 0 ? (
-                    <p className="py-2 text-sm font-semibold text-slate-300">평가 이력이 없습니다. 직무지도 종료 전후로 사업체 담당자에게 평가를 요청하세요.</p>
+                    <p className="py-2 text-sm font-semibold text-slate-300">평가 이력이 없습니다.</p>
                   ) : (
                     <>
                     <div className="flex-1 space-y-1.5">
@@ -424,20 +407,6 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
 
       {/* 만족도 평가 상세(서브 모달) */}
       {surveyDetail && <SurveyDetailModal survey={surveyDetail} onClose={() => setSurveyDetail(null)} />}
-
-      {/* 만족도 평가 요청(서브 모달) — 해당 직무지도원 prefill */}
-      {showSurveyReq && acc && (
-        <SurveyRequestModal
-          prefillWorker={{
-            id: workerId,
-            workerName: acc.workerName,
-            phoneNumber: acc.phoneNumber,
-            siteName: (current[0]?.siteName ?? past[0]?.siteName) ?? null,
-          }}
-          onClose={() => setShowSurveyReq(false)}
-          onCreated={() => { setShowSurveyReq(false); loadDetail(); }}
-        />
-      )}
     </div>
   );
 }

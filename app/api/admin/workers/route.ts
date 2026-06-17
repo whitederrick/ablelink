@@ -94,6 +94,24 @@ export async function GET(req: NextRequest) {
     const statuses = (searchParams.get("status") || "").split(",").map(s => s.trim()).filter(s => VALID_W_STATUS.includes(s));
     const listWhere: Prisma.WorkerWhereInput = statuses.length ? { ...where, status: { in: statuses as any } } : where;
 
+    // 배정 현황 필터(근무중/계약대기/근무종료). '근무 종료'=배정 종료일 경과(ENDED 상태 미사용).
+    const todayStart = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+    const agencyScope = { site: { is: { agencyId: scope.agencyId } } } as const;
+    const stateSel = (searchParams.get("assignState") || "").split(",").map(s => s.trim()).filter(Boolean);
+    const stateOr: Prisma.WorkerWhereInput[] = [];
+    if (stateSel.includes("working")) {
+      stateOr.push({ assignments: { some: { ...agencyScope, status: AssignStatus.ACTIVE, OR: [{ endDate: null }, { endDate: { gte: todayStart } }] } } });
+    }
+    if (stateSel.includes("pending_contract")) {
+      stateOr.push({ assignments: { some: { ...agencyScope, status: AssignStatus.ASSIGNED } } });
+    }
+    if (stateSel.includes("ended")) {
+      stateOr.push({ assignments: { some: { ...agencyScope, status: { in: [AssignStatus.ACTIVE, AssignStatus.CONFIRMED] }, endDate: { lt: todayStart } } } });
+    }
+    if (stateOr.length) {
+      listWhere.AND = [...(Array.isArray(listWhere.AND) ? listWhere.AND : listWhere.AND ? [listWhere.AND] : []), { OR: stateOr }];
+    }
+
     const [total, rows, statusGroups, pendingRequestCount] = await Promise.all([
       prisma.worker.count({ where: listWhere }),
       prisma.worker.findMany({
@@ -117,6 +135,7 @@ export async function GET(req: NextRequest) {
               id: true,
               status: true,
               startDate: true,
+              endDate: true,
               serviceStep: true,
               adaptationStartDate: true,
               workType: true,
@@ -157,6 +176,7 @@ export async function GET(req: NextRequest) {
           siteName: u.assignments[0].site?.companyName || "-",
           agencyName: u.assignments[0].agency?.name || "-",
           startDate: u.assignments[0].startDate.toISOString(),
+          endDate: u.assignments[0].endDate?.toISOString() ?? null,
           serviceStep: String(u.assignments[0].serviceStep),
           adaptationStartDate: u.assignments[0].adaptationStartDate?.toISOString() ?? null,
           workType: u.assignments[0].workType ? String(u.assignments[0].workType) : null,
