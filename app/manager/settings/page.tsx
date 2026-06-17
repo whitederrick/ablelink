@@ -281,7 +281,7 @@ export default function AgencySettingsPage() {
         {/* 기본 정보 */}
         <div className={`${T.card} space-y-4`}>
           <p className="text-sm font-black text-slate-900">기본 정보</p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div>
               <label className={T.label}>사업체명</label>
               <input value={name} disabled className={`w-full ${T.input} bg-slate-50 text-slate-400`} />
