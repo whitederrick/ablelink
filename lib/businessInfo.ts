@@ -29,7 +29,7 @@ export const BUSINESS_INFO: BusinessInfo = {
   mailOrderNo: null,      // TODO: 제0000-지역-0000호 (통신판매업 신고 후)
   address: null,          // TODO: 사업장 주소
   phone: null,            // TODO: 고객센터 전화
-  email: "contact@able-link.co.kr", // 문의용(회신 가능) — 메일함 생성 필요(아래 답변 참조)
+  email: "platforest.inc@gmail.com", // 문의용(회신 가능). 도메인 메일함은 보류(신규 도메인 무료전달 다 막힘) — 우선 gmail 직접 표기
   hosting: "Vercel Inc.",
   privacyOfficer: null,   // TODO: 개인정보 보호책임자
 };
