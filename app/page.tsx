@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowRight, Building2, CreditCard, FileText, MapPin, Sparkles, Users } from "lucide-react";
+import LegalFooter from "@/components/LegalFooter";
 
 export const metadata: Metadata = {
   title: "Able-Link — 장애인 직무지도원 관리 서비스",
@@ -80,9 +81,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <p className="pb-2 text-center text-xs font-semibold text-slate-400">
-          © 2026 Able-Link · Provided by Platforest
-        </p>
+        <LegalFooter />
       </section>
     </main>
   );
