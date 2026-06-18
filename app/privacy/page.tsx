@@ -36,6 +36,7 @@ export default function PrivacyPage() {
               <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
                 <p className="mb-1 font-black text-rose-700">원본 이미지 비보관 원칙</p>
                 <p className="text-slate-700">회사는 <strong>신분증 사본·통장 사본 등 원본 이미지를 수집·보관하지 않습니다.</strong> 본인 확인 또는 계좌 확인이 필요한 경우, 인증기관을 통해 검증한 <strong>결과값(성명·생년월일·연계정보(CI) 등)만</strong> 저장합니다.</p>
+                <p className="mt-2 text-slate-700">회사는 수집된 개인정보를 보호하기 위해 접근 권한 최소화, 방화벽 설치, 데이터 암호화(DB 전송 및 저장 시) 등 기술적·관리적 보호 조치를 수행합니다.</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <p className="mb-2 font-black text-slate-900">위탁기관 관리자 (필수)</p>
@@ -63,7 +64,7 @@ export default function PrivacyPage() {
             <ul className="mt-2 list-disc space-y-1.5 pl-5">
               <li>이용자가 사전에 동의한 경우</li>
               <li>법령에 의해 요구되는 경우</li>
-              <li>위탁기관가 소속 직무지도원의 근태·문서 정보를 조회하는 경우 (서비스의 본질적 기능)</li>
+              <li>본 서비스는 기관-직무지도원 간의 업무 위수탁 관계에 기초하여, 위탁기관은 계약 관계에 있는 직무지도원의 근태 및 관련 업무 데이터에 한해 열람 권한을 가지며, 회사는 이를 중개하는 역할을 수행합니다.</li>
             </ul>
           </section>
 
@@ -96,6 +97,7 @@ export default function PrivacyPage() {
               <li>위치정보는 출근 또는 퇴근 버튼을 누르는 시점에만 수집되며, 상시 추적하지 않습니다.</li>
               <li>수집된 위치정보는 근무지 반경 확인 목적에만 사용되며, 제3자에게 제공되지 않습니다.</li>
               <li>이용자는 기기 설정에서 위치 권한을 거부할 수 있으나, 이 경우 출퇴근 기록 기능이 제한될 수 있습니다.</li>
+              <li>회사는 「위치정보의 보호 및 이용 등에 관한 법률」에 따라 위치정보 수집·이용·제공 사실 확인 자료를 자동 기록하며, 동 자료를 같은 법령이 정하는 바에 따라 6개월 이상 보존합니다.</li>
             </ol>
           </section>
 

@@ -35,7 +35,7 @@ export default function RefundPage() {
             <h2 className="mb-3 text-base font-black text-slate-900">제3조 (청약철회)</h2>
             <ul className="list-disc space-y-1.5 pl-5">
               <li>결제일로부터 7일 이내이고, 유료 기능을 실질적으로 이용하지 않은 경우 청약철회 및 전액 환불이 가능합니다.</li>
-              <li>다만 결제 후 PDF 생성·전자서명·급여계산 등 유료 기능을 사용하기 시작한 경우, 콘텐츠 제공이 개시된 것으로 보아 청약철회가 제한될 수 있습니다.</li>
+              <li>다만 유료 서비스 내 PDF 생성, 전자서명 등 핵심 기능이 1회 이상 발생한 경우에는 서비스를 이용한 것으로 간주하여, 콘텐츠 제공이 개시된 것으로 보아 청약철회가 제한될 수 있습니다.</li>
             </ul>
           </section>
 
@@ -58,7 +58,12 @@ export default function RefundPage() {
           </section>
 
           <section>
-            <h2 className="mb-3 text-base font-black text-slate-900">제6조 (문의)</h2>
+            <h2 className="mb-3 text-base font-black text-slate-900">제6조 (환불 비용)</h2>
+            <p>회사의 귀책사유가 없는 이용자의 단순 변심으로 인한 환불 시, 결제 대행 수수료 등 환불 처리에 소요되는 실비는 환불 금액에서 공제될 수 있습니다.</p>
+          </section>
+
+          <section>
+            <h2 className="mb-3 text-base font-black text-slate-900">제7조 (문의)</h2>
             <p>환불 신청 및 문의는 고객센터를 통해 접수합니다. 연락처는 하단 사업자정보를 참고해 주세요.</p>
           </section>
         </div>
