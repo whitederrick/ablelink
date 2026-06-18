@@ -27,7 +27,8 @@ export type ProFeature =
   | "CONTRACT_ONLINE"   // 전자 근로계약서
   | "RECRUIT_POST"      // 매칭: 직무지도 공고 등록·자동배정 (수요측)
   | "TALENT_SOURCING"   // 매칭: 인재풀 검색·역제안 (프리미엄 소싱)
-  | "SATISFACTION_SURVEY"; // 직무지도원 만족도 조사
+  | "SATISFACTION_SURVEY" // 직무지도원 만족도 조사
+  | "VERIFICATION";     // 신분·통장 확인(본인인증·계좌 예금주 조회) — 벤더 종량 과금
 
 export type PremiumFeature = StarterFeature | StandardFeature | ProFeature;
 
@@ -46,6 +47,7 @@ const PRO_FEATURES = new Set<PremiumFeature>([
   "RECRUIT_POST",
   "TALENT_SOURCING",
   "SATISFACTION_SURVEY",
+  "VERIFICATION",
 ]);
 
 export interface PlanCheckResult {

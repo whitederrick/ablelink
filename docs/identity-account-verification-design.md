@@ -126,9 +126,16 @@ model EmploymentContract {
 
 **P2 — (불필요)** 통장 이미지가 없으므로 폐기 마이그레이션 불필요. P0에서 컬럼 드롭 완료.
 
-**P3 — 본인 확인(신원)** — 디지털 우선 + 비디지털 폴백
-- 디지털: **휴대폰/카카오 본인인증** → CI 저장(스키마에 이미 `Worker.ciKey` 존재, 재활용 검토). 계약 서명 단계에 삽입(`signerCi`).
-- 비디지털(고령·앱없음): **매니저 대면 확인 기록**(`identityMethod=INPERSON` + 매니저ID·일시) + (선택)신분증 **진위확인 API**(유효/무효 결과만, 이미지 비보관).
+**P3 — 본인 확인(신원)** — 골격 완료(2026-06-18)
+- 스키마: `identityVerifiedAt`/`identityMethod`/`identityVerifiedBy` + CI는 `Worker.ciKey` 재활용.
+- `lib/verify/identity.ts`(provider 추상화, 키 미설정 시 configured=false).
+- `POST /api/admin/worker-accounts/[id]/verify-identity`:
+  - `mode=inperson`: **매니저 대면 확인 즉시 가능**(무비용·수동·플랜 게이트 없음).
+  - `mode=digital`: 휴대폰/카카오 본인인증 토큰 검증(**PRO 게이트 + 벤더 키** 필요, 키 미설정 시 503).
+- 인적관리 상세 모달: "대면 본인 확인" 버튼 + 인증 뱃지.
+- 디지털 활성화: `lib/verify/identity.ts callProvider()` 구현 + 프론트 본인인증 SDK 연결.
+
+**구독 연계(2026-06-18)**: `planGuard`에 `VERIFICATION`(PRO) 추가. 계좌 인증·디지털 본인인증은 PRO 게이트. **대면 확인은 무비용이라 게이트 제외.**
 
 **P4 — 동일성·자동화** (진행 예정)
 - 계약 당사자 CI ↔ 계좌 예금주 일치 뱃지(인적관리/계약 화면).

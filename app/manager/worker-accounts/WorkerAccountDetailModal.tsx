@@ -13,6 +13,7 @@ type Account = {
   status: string; createdAt: string;
   bankName: string | null; accountNumber: string | null; accountHolder: string | null;
   accountVerifiedAt: string | null; accountHolderVerified: boolean | null;
+  identityVerifiedAt: string | null; identityMethod: string | null;
 };
 type AssignmentRow = {
   id: string; siteName: string; status: string;
@@ -194,6 +195,10 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
   const [verifying, setVerifying] = useState(false);
   const [verifyMsg, setVerifyMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // 본인 확인(신원)
+  const [idVerifying, setIdVerifying] = useState(false);
+  const [idMsg, setIdMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
   // 과거 계약 이력·평가 결과 페이지(0-base)
   const [pastPage, setPastPage] = useState(0);
   const [surveyPage, setSurveyPage] = useState(0);
@@ -247,6 +252,28 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
       }
     } catch { setVerifyMsg({ ok: false, text: "계좌 인증 중 오류가 발생했습니다." }); }
     finally { setVerifying(false); }
+  }
+
+  async function onVerifyIdentityInPerson() {
+    if (!confirm("실물 신분증을 직접 확인하셨나요?\n대면 본인 확인 사실이 기록됩니다.")) return;
+    setIdVerifying(true); setIdMsg(null);
+    try {
+      const res = await fetch(`/api/admin/worker-accounts/${workerId}/verify-identity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "inperson" }),
+      });
+      const data = await res.json();
+      setIdMsg({ ok: !!data.success, text: data.message || (data.success ? "기록되었습니다." : "실패") });
+      if (data.success) {
+        try {
+          const r = await fetch(`/api/admin/worker-accounts/${workerId}`, { cache: "no-store" });
+          const d = await r.json();
+          if (d?.success) setDetail(d.data);
+        } catch { /* noop */ }
+      }
+    } catch { setIdMsg({ ok: false, text: "처리 중 오류가 발생했습니다." }); }
+    finally { setIdVerifying(false); }
   }
 
   async function onSave() {
@@ -374,6 +401,26 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
                     </div>
                     <p className="text-[11px] font-semibold text-slate-400">은행·계좌번호로 예금주를 조회해 본인 계좌인지 확인합니다. (직무지도원 조작 불필요)</p>
                   </div>
+                </div>
+
+                {/* 본인 확인(신원) */}
+                <div className={T.card}>
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-black text-slate-900">본인 확인</h3>
+                    {acc?.identityVerifiedAt && (
+                      <span className={`${T.badge} bg-emerald-50 text-emerald-600`}>
+                        ✓ {acc.identityMethod === "INPERSON" ? "대면 확인" : acc.identityMethod === "KAKAO" ? "카카오 인증" : acc.identityMethod === "MOBILE" ? "휴대폰 인증" : "확인"} {acc.identityVerifiedAt.slice(0, 10)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={onVerifyIdentityInPerson} disabled={idVerifying}
+                      className={`${T.btnSecondary} disabled:opacity-40`}>
+                      {idVerifying ? "처리 중..." : "대면 본인 확인"}
+                    </button>
+                    {idMsg && <span className={`text-xs font-semibold ${idMsg.ok ? "text-emerald-600" : "text-rose-600"}`}>{idMsg.text}</span>}
+                  </div>
+                  <p className="mt-2 text-[11px] font-semibold text-slate-400">실물 신분증을 직접 확인한 경우 기록합니다(이미지 미저장). 휴대폰·카카오 본인인증은 추후 제공됩니다.</p>
                 </div>
 
                 {/* 임시 비밀번호 발급 */}

@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { verifyAccountHolder } from "@/lib/verify/account";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +23,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       select: { bankName: true, accountNumber: true, accountHolder: true },
     });
     if (!owned) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+
+    // 구독 연계: 계좌 인증은 PRO 기능(벤더 종량 과금)
+    const plan = await checkAgencyPlanAccess(scope.agencyId, "VERIFICATION");
+    if (!plan.allowed) {
+      return NextResponse.json({ success: false, code: "PLAN", message: plan.message ?? "PRO 플랜에서 사용 가능합니다." }, { status: 403 });
+    }
 
     const body = await req.json().catch(() => ({}));
     const bankName = String(body?.bankName ?? owned.bankName ?? "").trim();

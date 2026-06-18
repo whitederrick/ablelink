@@ -49,6 +49,10 @@ model Worker {
   accountVerifiedAt     DateTime? @map("account_verified_at")
   accountHolderVerified Boolean?  @map("account_holder_verified")
   accountVerifyMethod   String?   @map("account_verify_method") // NAME_INQUIRY | ONE_WON
+  // 본인 확인(신원) 결과 — 이미지 비보관, 결과값만 (2026-06-18, P3). CI는 위 ciKey 재활용.
+  identityVerifiedAt    DateTime? @map("identity_verified_at")
+  identityMethod        String?   @map("identity_method")      // MOBILE | KAKAO | INPERSON | ID_AUTHENTICITY
+  identityVerifiedBy    BigInt?   @map("identity_verified_by") // 대면 확인 처리한 매니저
   // 생년월일(YYYY-MM-DD) — 임금명세서 기재용 (2026-06-10)
   birthDate       String? @map("birth_date")
 
