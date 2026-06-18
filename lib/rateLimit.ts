@@ -90,14 +90,27 @@ function memoryRateLimit(key: string): RateLimitResult {
 
 // ── 공개 API ─────────────────────────────────────────────────
 export async function checkRateLimit(key: string): Promise<RateLimitResult> {
-  if (redis) return redisRateLimit(key);
+  if (redis) {
+    try {
+      return await redisRateLimit(key);
+    } catch (err) {
+      // Redis(Upstash) 장애·DNS 실패 등으로 접근 불가하면 인메모리로 폴백.
+      // rate limit 인프라 문제로 로그인 자체가 막히면 안 됨.
+      console.error("[rateLimit] Redis 접근 실패, 인메모리 폴백:", err);
+      return memoryRateLimit(key);
+    }
+  }
   return memoryRateLimit(key);
 }
 
 export async function resetRateLimit(key: string): Promise<void> {
   if (redis) {
-    await redis.del(`rl:count:${key}`, `rl:block:${key}`);
-  } else {
-    store.delete(key);
+    try {
+      await redis.del(`rl:count:${key}`, `rl:block:${key}`);
+      return;
+    } catch (err) {
+      console.error("[rateLimit] Redis reset 실패, 인메모리 폴백:", err);
+    }
   }
+  store.delete(key);
 }
