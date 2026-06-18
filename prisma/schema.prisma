@@ -1508,6 +1508,8 @@ model SupportTicket {
   reply     String?
   repliedBy BigInt?             @map("replied_by") // 회신한 시스템 운영자
   repliedAt DateTime?           @map("replied_at")
+  // 첨부파일 — [{ path, name, size, mime }] JSON. path는 비공개 버킷 경로(조회 시 signed URL). (2026-06-18)
+  attachments Json?             @map("attachments")
   createdAt DateTime            @default(now()) @map("created_at")
   updatedAt DateTime            @updatedAt @map("updated_at")
 

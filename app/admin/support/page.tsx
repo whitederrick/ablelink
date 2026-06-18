@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Send } from "lucide-react";
+import { Send, Paperclip } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
@@ -9,21 +9,30 @@ import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
 
+type Attachment = { idx: number; name: string; size: number; mime: string };
 type Ticket = {
   id: string; agencyId: string; agencyName: string | null;
   adminLogin: string | null; category: string; title: string; body: string;
   status: "OPEN" | "REPLIED" | "CLOSED";
   reply: string | null; replierLogin: string | null;
   repliedAt: string | null; createdAt: string;
+  attachments?: Attachment[];
 };
 
 const CAT_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   GENERAL: { label: "일반 문의", tone: "sky" },
-  DATA_FIX: { label: "데이터 수정", tone: "violet" },
+  SYSTEM: { label: "시스템", tone: "violet" },
+  DATA_FIX: { label: "데이터", tone: "rose" },
   BILLING: { label: "결제·구독", tone: "emerald" },
   CONTRACT_TEMPLATE: { label: "계약서 양식", tone: "amber" },
   OTHER: { label: "기타", tone: "slate" },
 };
+
+function fmtSize(n: number): string {
+  if (n < 1024) return `${n}B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)}KB`;
+  return `${(n / 1024 / 1024).toFixed(1)}MB`;
+}
 const SUP_STATUS: Record<string, { label: string; tone: BadgeTone }> = {
   OPEN: { label: "답변 대기", tone: "amber" },
   REPLIED: { label: "답변 완료", tone: "emerald" },
@@ -179,6 +188,24 @@ export default function AdminSupportPage() {
                 <p className="mb-1 text-[11px] font-black uppercase tracking-wide text-slate-400">문의 내용</p>
                 <p className="whitespace-pre-wrap text-sm text-slate-700">{selected.body}</p>
               </div>
+
+              {selected.attachments && selected.attachments.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[11px] font-black uppercase tracking-wide text-slate-400">첨부파일 ({selected.attachments.length})</p>
+                  <ul className="space-y-1">
+                    {selected.attachments.map(a => (
+                      <li key={a.idx}>
+                        <a href={`/api/admin/support/${selected.id}/attachment?i=${a.idx}`} target="_blank" rel="noreferrer"
+                          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 hover:bg-sky-50">
+                          <Paperclip className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                          <span className="flex-1 truncate text-sm font-semibold text-sky-700">{a.name}</span>
+                          <span className="shrink-0 text-[11px] font-semibold text-slate-400">{fmtSize(a.size)}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {selected.reply && replyId !== selected.id && (
                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">

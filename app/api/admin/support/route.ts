@@ -6,10 +6,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { requireManagerSession } from "@/lib/managerScope";
+import { normalizeAttachments } from "@/lib/supportStorage";
 
-const VALID_CATEGORIES = ["GENERAL", "DATA_FIX", "BILLING", "CONTRACT_TEMPLATE", "OTHER"];
+const VALID_CATEGORIES = ["GENERAL", "SYSTEM", "DATA_FIX", "BILLING", "CONTRACT_TEMPLATE", "OTHER"];
 
 function ticketToJson(t: any) {
+  // 클라이언트에는 경로(path) 제외, 다운로드는 인덱스 기반 엔드포인트로.
+  const attachments = normalizeAttachments(t.attachments).map((a, i) => ({ idx: i, name: a.name, size: a.size, mime: a.mime }));
   return {
     id:           t.id.toString(),
     agencyId:     t.agencyId.toString(),
@@ -23,6 +26,7 @@ function ticketToJson(t: any) {
     replierLogin: t.replier?.loginId ?? null,
     repliedAt:    t.repliedAt?.toISOString() ?? null,
     createdAt:    t.createdAt.toISOString(),
+    attachments,
   };
 }
 
@@ -59,11 +63,12 @@ export async function POST(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
 
-    const { title, body, category = "GENERAL" } = await req.json();
+    const { title, body, category = "GENERAL", attachments } = await req.json();
     if (!title?.trim() || !body?.trim())
       return NextResponse.json({ success: false, message: "제목과 내용은 필수입니다." }, { status: 400 });
 
     const cat = VALID_CATEGORIES.includes(category) ? category : "GENERAL";
+    const cleanAttachments = normalizeAttachments(attachments);
 
     const ticket = await prisma.supportTicket.create({
       data: {
@@ -72,7 +77,8 @@ export async function POST(req: NextRequest) {
         title:     title.trim(),
         body:      body.trim(),
         category:  cat,
-      },
+        attachments: cleanAttachments.length ? (cleanAttachments as any) : undefined,
+      } as any,
     });
 
     return NextResponse.json({ success: true, id: ticket.id.toString() });

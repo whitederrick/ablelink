@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
+import { normalizeAttachments } from "@/lib/supportStorage";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -45,6 +46,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         repliedAt:    ticket.repliedAt?.toISOString() ?? null,
         createdAt:    ticket.createdAt.toISOString(),
         updatedAt:    ticket.updatedAt.toISOString(),
+        attachments:  normalizeAttachments((ticket as any).attachments).map((a, i) => ({ idx: i, name: a.name, size: a.size, mime: a.mime })),
       },
     });
   } catch (e: any) {
