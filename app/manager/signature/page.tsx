@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import { SignaturePad, type SignaturePadHandle } from "../../_components/SignaturePad";
@@ -79,7 +80,7 @@ export default function ManagerSignaturePage() {
     <div className="space-y-4">
       <PageHeader
         title="관리자 서명 관리"
-        sub={<>{displayName && `${displayName}님 · `}등록 서명은 문서의 <strong>(위탁기관/공단) 담당자</strong> 서명란에 자동 삽입됩니다.</>}
+        sub={<>{displayName && `${displayName}님 · `}관리자의 서명은 직무지도원이 제출하는 일지에 자동으로 삽입됩니다.</>}
       />
 
       <div className={T.card}>
@@ -128,6 +129,10 @@ export default function ManagerSignaturePage() {
 
       <div className={T.card}>
         <p className="mb-3 text-sm font-black text-slate-900">서명 사용 안내</p>
+        <p className="mb-3 flex items-start gap-1.5 text-sm font-semibold text-rose-500">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <span>서명을 등록하지 않으면 직무지도원 제출 일지 등에 서명이 반영되지 않습니다.</span>
+        </p>
         <ul className="space-y-1.5 pl-5 text-sm font-semibold text-slate-500" style={{ listStyleType: "disc" }}>
           <li><strong className="text-slate-700">(위탁기관/공단) 담당자</strong> → 현재 로그인한 위탁기관 관리자 서명 자동 삽입</li>
           <li className="font-semibold text-rose-500">⚠️ 서명 패드 전체에 꽉 차게 서명하셔야 문서에 적정 크기로 표시됩니다</li>
