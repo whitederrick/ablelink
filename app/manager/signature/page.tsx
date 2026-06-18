@@ -131,8 +131,8 @@ export default function ManagerSignaturePage() {
         <ul className="space-y-1.5 pl-5 text-sm font-semibold text-slate-500" style={{ listStyleType: "disc" }}>
           <li><strong className="text-slate-700">(위탁기관/공단) 담당자</strong> → 현재 로그인한 위탁기관 관리자 서명 자동 삽입</li>
           <li className="list-none font-semibold text-rose-500">⚠️ 서명 패드 전체에 꽉 차게 서명하셔야 문서에 적정 크기로 표시됩니다</li>
-          <li className="list-none font-semibold text-rose-500">⚠️ 서명을 등록하지 않으면 직무지도원 제출 일지 등에 서명이 반영되지 않습니다.</li>
           <li><strong className="text-slate-700">직무지도원</strong> → 직무지도원이 앱에서 등록한 서명 자동 삽입</li>
+          <li className="list-none font-semibold text-rose-500">⚠️ 서명을 등록하지 않으면 직무지도원 제출 일지 등에 서명이 반영되지 않습니다.</li>
           <li><strong className="text-slate-700">사업체 담당자</strong> → 문서 생성 화면에서 QR코드/링크로 현장 즉석 서명</li>
           <li className="list-none font-semibold text-rose-500">⚠️ 사업체 담당자의 서명은 저장 및 재활용이 불가합니다. 서명 필요 시 현장 즉시 서명으로 진행됩니다.</li>
         </ul>
