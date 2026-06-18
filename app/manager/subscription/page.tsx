@@ -177,7 +177,7 @@ export default function SubscriptionPage() {
               {PLANS.map(p => {
                 const isCurrent = plan === p.id;
                 return (
-                  <div key={p.id} className={`relative rounded-2xl border-2 bg-white p-5 ${p.recommended ? "border-slate-950" : "border-slate-100"}`}>
+                  <div key={p.id} className={`relative flex h-full flex-col rounded-2xl border-2 bg-white p-5 ${p.recommended ? "border-slate-950" : "border-slate-100"}`}>
                     {p.recommended && (
                       <div className="absolute -top-3 right-4 rounded-full bg-slate-950 px-3 py-0.5 text-[11px] font-black text-white">추천</div>
                     )}
@@ -187,7 +187,7 @@ export default function SubscriptionPage() {
                       <span className="text-sm font-semibold text-slate-400">원/월</span>
                     </div>
                     <p className="mt-1 text-xs font-semibold text-slate-400">직무지도원·현장 무제한 · VAT 별도</p>
-                    <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
+                    <div className="mt-4 flex-1 space-y-2 border-t border-slate-100 pt-4">
                       {p.features.map((f, i) => (
                         <div key={i} className="flex items-center gap-2">
                           <Check className="h-3.5 w-3.5 flex-shrink-0 text-slate-950" />
