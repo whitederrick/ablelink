@@ -6,7 +6,6 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
-import { resolvePassbookUrl } from "@/lib/passbookStorage";
 import { AssignStatus } from "@prisma/client";
 
 const ACTIVE_ASSIGN: AssignStatus[] = [AssignStatus.ACTIVE, AssignStatus.ASSIGNED, AssignStatus.CONFIRMED];
@@ -36,11 +35,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       where: { id: workerId },
       select: {
         id: true, loginId: true, workerName: true, phoneNumber: true, birthDate: true, status: true, createdAt: true,
-        bankName: true, accountNumber: true, accountHolder: true, passbookImageUrl: true,
+        bankName: true, accountNumber: true, accountHolder: true,
       },
     });
     if (!w) return NextResponse.json({ success: false, message: "직무지도원을 찾을 수 없습니다." }, { status: 404 });
-    const passbookUrl = await resolvePassbookUrl(w.passbookImageUrl ?? null);
 
     // 계약(배정) 이력 — 본 위탁기관 현장만, 최신순
     const assignments = await prisma.siteAssignment.findMany({
@@ -77,8 +75,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           bankName: w.bankName ?? null,
           accountNumber: w.accountNumber ?? null,
           accountHolder: w.accountHolder ?? null,
-          hasPassbook: !!w.passbookImageUrl,
-          passbookUrl,
         },
         assignments: assignments.map((a) => ({
           id: String(a.id),

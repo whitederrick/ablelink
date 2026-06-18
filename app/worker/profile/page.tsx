@@ -24,13 +24,10 @@ export default function WorkerProfilePage() {
   const [msg,      setMsg]      = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [isTemp,   setIsTemp]   = useState(false);
 
-  // 급여 계좌(통장사본)
+  // 급여 계좌
   const [bankName,      setBankName]      = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountHolder, setAccountHolder] = useState("");
-  const [hasPassbook,   setHasPassbook]   = useState(false);
-  const [pbUploading,   setPbUploading]   = useState(false);
-  const [pbMsg,         setPbMsg]         = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   // 이메일 아이디 변경
   const [emailStep,    setEmailStep]    = useState<EmailStep>("idle");
@@ -61,7 +58,6 @@ export default function WorkerProfilePage() {
           setBankName(d.user.bankName ?? "");
           setAccountNumber(d.user.accountNumber ?? "");
           setAccountHolder(d.user.accountHolder ?? "");
-          setHasPassbook(d.user.hasPassbook ?? false);
         }
       })
       .finally(() => setLoading(false));
@@ -122,37 +118,6 @@ export default function WorkerProfilePage() {
       setMsg({ type: "err", text: "저장 중 오류가 발생했습니다." });
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handlePassbookUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // 같은 파일 재선택 허용
-    if (!file) return;
-    setPbMsg(null); setPbUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/worker/passbook", { method: "POST", body: fd });
-      const d = await res.json();
-      if (!d.success) { setPbMsg({ type: "err", text: d.message }); return; }
-      setHasPassbook(true);
-      setPbMsg({ type: "ok", text: "통장사본이 저장되었습니다." });
-    } catch {
-      setPbMsg({ type: "err", text: "업로드에 실패했습니다. 잠시 후 다시 시도해주세요." });
-    } finally {
-      setPbUploading(false);
-    }
-  }
-
-  async function handleViewPassbook() {
-    try {
-      const res = await fetch("/api/worker/passbook");
-      const d = await res.json();
-      if (d.success && d.url) window.open(d.url, "_blank");
-      else setPbMsg({ type: "err", text: "통장사본을 불러올 수 없습니다." });
-    } catch {
-      setPbMsg({ type: "err", text: "통장사본을 불러올 수 없습니다." });
     }
   }
 
@@ -284,14 +249,14 @@ export default function WorkerProfilePage() {
             <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
           </button>
 
-          {/* 급여 계좌 (통장사본) */}
+          {/* 급여 계좌 */}
           <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
             <div>
               <p className="flex items-center gap-1.5 text-sm font-black text-slate-700">
                 <CreditCard className="h-3.5 w-3.5 text-slate-400" />
                 급여 계좌
               </p>
-              <p className="mt-1 text-xs font-semibold text-slate-400">급여 이체에 사용됩니다. 정확히 입력하고 통장사본을 등록해 주세요.</p>
+              <p className="mt-1 text-xs font-semibold text-slate-400">급여 이체에 사용됩니다. 정확히 입력해 주세요.</p>
             </div>
             <input type="text" value={bankName} onChange={e => setBankName(e.target.value)}
               placeholder="은행명 (예: 국민은행)" className={INPUT_CLS} />
@@ -299,24 +264,7 @@ export default function WorkerProfilePage() {
               placeholder="계좌번호 ('-' 포함 입력)" inputMode="numeric" className={INPUT_CLS} />
             <input type="text" value={accountHolder} onChange={e => setAccountHolder(e.target.value)}
               placeholder="예금주" className={INPUT_CLS} />
-            <div className="flex items-center gap-2">
-              <label className="flex-1">
-                <input type="file" accept="image/*,application/pdf" onChange={handlePassbookUpload} disabled={pbUploading} className="hidden" />
-                <span className="flex min-h-12 w-full cursor-pointer items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 text-sm font-bold text-slate-600 transition active:scale-[0.98]">
-                  {pbUploading ? "업로드 중..." : hasPassbook ? "통장사본 다시 올리기" : "통장사본 올리기"}
-                </span>
-              </label>
-              {hasPassbook && (
-                <button type="button" onClick={handleViewPassbook}
-                  className="min-h-12 shrink-0 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition active:scale-95">
-                  보기
-                </button>
-              )}
-            </div>
-            {pbMsg && (
-              <p className={`text-xs font-bold ${pbMsg.type === "ok" ? "text-emerald-600" : "text-rose-600"}`}>{pbMsg.text}</p>
-            )}
-            <p className="text-[11px] font-semibold text-slate-400">계좌 정보는 아래 &quot;저장&quot; 버튼으로, 통장사본은 선택 즉시 저장됩니다.</p>
+            <p className="text-[11px] font-semibold text-slate-400">계좌 정보는 아래 &quot;저장&quot; 버튼으로 저장됩니다.</p>
           </div>
 
           {/* 비밀번호 변경 */}

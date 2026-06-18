@@ -6,7 +6,6 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
-import { resolvePassbookUrl } from "@/lib/passbookStorage";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 
@@ -24,7 +23,7 @@ async function assertAgencyWorker(workerId: bigint, agencyId: bigint) {
   return !!worker;
 }
 
-// GET: 직무지도원 상세(급여 계좌 + 통장사본 signed URL 포함)
+// GET: 직무지도원 상세(급여 계좌)
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -38,17 +37,14 @@ export async function GET(
     }
     const w = await prisma.worker.findUnique({
       where: { id: workerId },
-      select: { bankName: true, accountNumber: true, accountHolder: true, passbookImageUrl: true },
+      select: { bankName: true, accountNumber: true, accountHolder: true },
     });
-    const passbookUrl = await resolvePassbookUrl(w?.passbookImageUrl ?? null);
     return NextResponse.json({
       success: true,
       data: {
         bankName: w?.bankName ?? null,
         accountNumber: w?.accountNumber ?? null,
         accountHolder: w?.accountHolder ?? null,
-        hasPassbook: !!w?.passbookImageUrl,
-        passbookUrl,
       },
     });
   } catch (e: any) {

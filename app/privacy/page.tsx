@@ -29,7 +29,11 @@ export default function PrivacyPage() {
             <div className="space-y-3">
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <p className="mb-2 font-black text-slate-900">직무지도원 (필수)</p>
-                <p>성명, 휴대전화번호, 이메일 주소, 비밀번호(암호화), GPS 위치정보(근무 중 출퇴근 시), 서비스 이용 기록</p>
+                <p>성명, 휴대전화번호, 이메일 주소, 비밀번호(암호화), 생년월일, 급여 이체용 계좌 정보(은행·계좌번호·예금주), GPS 위치정보(근무 중 출퇴근 시), 서비스 이용 기록</p>
+              </div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                <p className="mb-1 font-black text-rose-700">원본 이미지 비보관 원칙</p>
+                <p className="text-slate-700">회사는 <strong>신분증 사본·통장 사본 등 원본 이미지를 수집·보관하지 않습니다.</strong> 본인 확인 또는 계좌 확인이 필요한 경우, 인증기관을 통해 검증한 <strong>결과값(성명·생년월일·연계정보(CI) 등)만</strong> 저장합니다.</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <p className="mb-2 font-black text-slate-900">위탁기관 관리자 (필수)</p>

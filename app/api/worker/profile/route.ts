@@ -16,15 +16,14 @@ export async function GET(req: NextRequest) {
     where:  { id: BigInt(session.workerId) },
     select: {
       id: true, workerName: true, phoneNumber: true, loginId: true, isTemporary: true,
-      bankName: true, accountNumber: true, accountHolder: true, passbookImageUrl: true, birthDate: true,
+      bankName: true, accountNumber: true, accountHolder: true, birthDate: true,
     },
   });
   if (!user) return NextResponse.json({ success: false, message: "사용자를 찾을 수 없습니다." }, { status: 404 });
 
-  const { passbookImageUrl, ...rest } = user;
   return NextResponse.json({
     success: true,
-    user: { ...rest, id: user.id.toString(), hasPassbook: !!passbookImageUrl },
+    user: { ...user, id: user.id.toString() },
   });
 }
 
