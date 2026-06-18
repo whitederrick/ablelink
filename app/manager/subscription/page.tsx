@@ -164,7 +164,7 @@ export default function SubscriptionPage() {
                 <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-50 p-3">
                   <Check className="h-4 w-4 flex-shrink-0 text-emerald-600" />
                   <p className="text-xs font-bold text-emerald-700">
-                    운영자 협상가 적용: {agency.billingCycle === "ANNUAL" ? "연" : "월"} {agency.customAmount.toLocaleString()}원
+                    운영자 협상가 적용: {agency.billingCycle === "ANNUAL" ? "연" : "월"} {agency.customAmount.toLocaleString()}원 (VAT 포함)
                     <span className="ml-1 font-semibold text-emerald-600">(표준가 대신 이 금액으로 결제됩니다)</span>
                   </p>
                 </div>
@@ -193,7 +193,7 @@ export default function SubscriptionPage() {
                       <span className="text-3xl font-black text-slate-900">{p.price.toLocaleString()}</span>
                       <span className="text-sm font-semibold text-slate-400">원/월</span>
                     </div>
-                    <p className="mt-1 text-xs font-semibold text-slate-400">직무지도원·현장 무제한 · VAT 별도</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-400">직무지도원·현장 무제한 · VAT 포함</p>
                     <div className="mt-4 flex-1 space-y-2 border-t border-slate-100 pt-4">
                       {p.features.map((f, i) => (
                         <div key={i} className="flex items-center gap-2">
@@ -215,7 +215,7 @@ export default function SubscriptionPage() {
                 );
               })}
             </div>
-            <p className="text-xs font-semibold text-slate-400">카드 등록 후 매월 자동 결제됩니다. 문의: able-link.co.kr</p>
+            <p className="text-xs font-semibold text-slate-400">표시된 모든 금액은 부가세(VAT) 포함입니다. 카드 등록 후 매월 자동 결제됩니다. 문의: able-link.co.kr</p>
           </div>
         )}
       </div>
