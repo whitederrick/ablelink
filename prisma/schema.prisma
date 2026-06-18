@@ -44,6 +44,11 @@ model Worker {
   bankName        String? @map("bank_name")
   accountNumber   String? @map("account_number")
   accountHolder   String? @map("account_holder")
+  // 계좌 인증(예금주 조회) 결과 — 이미지 비보관, 결과값만 (2026-06-18, P1)
+  bankCode              String?   @map("bank_code")
+  accountVerifiedAt     DateTime? @map("account_verified_at")
+  accountHolderVerified Boolean?  @map("account_holder_verified")
+  accountVerifyMethod   String?   @map("account_verify_method") // NAME_INQUIRY | ONE_WON
   // 생년월일(YYYY-MM-DD) — 임금명세서 기재용 (2026-06-10)
   birthDate       String? @map("birth_date")
 

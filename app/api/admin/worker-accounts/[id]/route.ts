@@ -36,6 +36,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       select: {
         id: true, loginId: true, workerName: true, phoneNumber: true, birthDate: true, status: true, createdAt: true,
         bankName: true, accountNumber: true, accountHolder: true,
+        accountVerifiedAt: true, accountHolderVerified: true,
       },
     });
     if (!w) return NextResponse.json({ success: false, message: "직무지도원을 찾을 수 없습니다." }, { status: 404 });
@@ -75,6 +76,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           bankName: w.bankName ?? null,
           accountNumber: w.accountNumber ?? null,
           accountHolder: w.accountHolder ?? null,
+          accountVerifiedAt: w.accountVerifiedAt ? w.accountVerifiedAt.toISOString() : null,
+          accountHolderVerified: w.accountHolderVerified ?? null,
         },
         assignments: assignments.map((a) => ({
           id: String(a.id),

@@ -12,6 +12,7 @@ type Account = {
   birthDate: string | null;
   status: string; createdAt: string;
   bankName: string | null; accountNumber: string | null; accountHolder: string | null;
+  accountVerifiedAt: string | null; accountHolderVerified: boolean | null;
 };
 type AssignmentRow = {
   id: string; siteName: string; status: string;
@@ -189,6 +190,10 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
   const [resetPw, setResetPw] = useState(false);
   const [tempPw, setTempPw] = useState<string | null>(null);
 
+  // 계좌 인증(예금주 조회)
+  const [verifying, setVerifying] = useState(false);
+  const [verifyMsg, setVerifyMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
   // 과거 계약 이력·평가 결과 페이지(0-base)
   const [pastPage, setPastPage] = useState(0);
   const [surveyPage, setSurveyPage] = useState(0);
@@ -220,6 +225,29 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workerId]);
+
+  async function onVerifyAccount() {
+    if (!accountNumber.trim()) { setVerifyMsg({ ok: false, text: "계좌번호를 입력해주세요." }); return; }
+    setVerifying(true); setVerifyMsg(null);
+    try {
+      const res = await fetch(`/api/admin/worker-accounts/${workerId}/verify-account`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bankName, accountNumber, accountHolder }),
+      });
+      const data = await res.json();
+      setVerifyMsg({ ok: !!data.success && data.matched !== false, text: data.message || (data.success ? "인증 완료" : "인증 실패") });
+      if (data.success) {
+        // 인증 결과 뱃지 갱신
+        try {
+          const r = await fetch(`/api/admin/worker-accounts/${workerId}`, { cache: "no-store" });
+          const d = await r.json();
+          if (d?.success) setDetail(d.data);
+        } catch { /* noop */ }
+      }
+    } catch { setVerifyMsg({ ok: false, text: "계좌 인증 중 오류가 발생했습니다." }); }
+    finally { setVerifying(false); }
+  }
 
   async function onSave() {
     if (!workerName.trim()) return alert("이름을 입력하세요.");
@@ -323,8 +351,13 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
 
                 {/* 급여 계좌 */}
                 <div className={T.card}>
-                  <div className="mb-3 flex items-center justify-between">
+                  <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 className="text-sm font-black text-slate-900">급여 계좌</h3>
+                    {acc?.accountVerifiedAt && (
+                      acc.accountHolderVerified
+                        ? <span className={`${T.badge} bg-emerald-50 text-emerald-600`}>✓ 예금주 확인 {acc.accountVerifiedAt.slice(0, 10)}</span>
+                        : <span className={`${T.badge} bg-rose-50 text-rose-600`}>예금주 불일치</span>
+                    )}
                   </div>
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
@@ -332,6 +365,14 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
                       <div><label className={T.label}>예금주</label><input value={accountHolder} onChange={e => setAccountHolder(e.target.value)} placeholder="예금주" className={`w-full ${T.input}`} /></div>
                     </div>
                     <div><label className={T.label}>계좌번호</label><input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} placeholder="계좌번호" className={`w-full ${T.input}`} /></div>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={onVerifyAccount} disabled={verifying}
+                        className={`${T.btnSecondary} disabled:opacity-40`}>
+                        {verifying ? "인증 중..." : "계좌 인증"}
+                      </button>
+                      {verifyMsg && <span className={`text-xs font-semibold ${verifyMsg.ok ? "text-emerald-600" : "text-rose-600"}`}>{verifyMsg.text}</span>}
+                    </div>
+                    <p className="text-[11px] font-semibold text-slate-400">은행·계좌번호로 예금주를 조회해 본인 계좌인지 확인합니다. (직무지도원 조작 불필요)</p>
                   </div>
                 </div>
 
