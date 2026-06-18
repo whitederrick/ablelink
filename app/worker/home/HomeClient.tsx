@@ -711,48 +711,56 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
                   )}
                 </button>
                 {showNotices && (
-                  <div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-slate-100 bg-white shadow-xl shadow-slate-950/10">
-                    <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                      <p className="text-sm font-black text-slate-900">알림</p>
-                      <div className="flex items-center gap-3">
-                        {unreadNotices > 0 && (
-                          <button onClick={markAllRead} className="text-[11px] font-black text-sky-600 active:scale-95">모두 읽음</button>
-                        )}
-                        <button onClick={() => setShowNotices(false)} aria-label="닫기"><X className="h-4 w-4 text-slate-400" /></button>
+                  <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
+                    onClick={() => setShowNotices(false)}
+                  >
+                    <div
+                      className="w-full max-w-sm overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl shadow-slate-950/10"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                        <p className="text-sm font-black text-slate-900">알림</p>
+                        <div className="flex items-center gap-3">
+                          {unreadNotices > 0 && (
+                            <button onClick={markAllRead} className="text-[11px] font-black text-sky-600 active:scale-95">모두 읽음</button>
+                          )}
+                          <button onClick={() => setShowNotices(false)} aria-label="닫기"><X className="h-4 w-4 text-slate-400" /></button>
+                        </div>
                       </div>
-                    </div>
-                    {notices.length === 0 ? (
-                      <div className="px-4 py-8 text-center text-sm font-semibold text-slate-400">알림이 없습니다.</div>
-                    ) : (
-                      <div className="max-h-80 divide-y divide-slate-50 overflow-y-auto">
-                        {notices.map(n => {
-                          const go = () => {
-                            setShowNotices(false);
-                            if (!n.read) {
-                              setUnreadNotices(c => Math.max(0, c - 1));
-                              setNotices(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
-                            }
-                            router.push(`/worker/notices?open=${n.id}`);
-                          };
-                          return (
-                            <div
-                              key={n.id}
-                              onClick={go}
-                              className={`cursor-pointer px-4 py-3 transition active:bg-slate-50 ${n.read ? "" : "bg-rose-50"}`}
-                            >
-                              <p className={`text-xs font-black ${n.type === "REJECT" ? "text-rose-600" : "text-slate-700"}`}>
-                                {n.title}
-                              </p>
-                              <p className="mt-0.5 line-clamp-1 text-xs font-semibold text-slate-500">{n.body}</p>
-                              <div className="mt-1 flex items-center justify-between">
-                                <p className="text-[10px] text-slate-300">{new Date(n.createdAt).toLocaleDateString("ko-KR")}</p>
-                                <span className="text-[10px] font-black text-sky-600">자세히 →</span>
+                      {notices.length === 0 ? (
+                        <div className="px-4 py-8 text-center text-sm font-semibold text-slate-400">알림이 없습니다.</div>
+                      ) : (
+                        <div className="max-h-[60vh] divide-y divide-slate-50 overflow-y-auto">
+                          {notices.map(n => {
+                            const go = () => {
+                              setShowNotices(false);
+                              if (!n.read) {
+                                setUnreadNotices(c => Math.max(0, c - 1));
+                                setNotices(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
+                              }
+                              router.push(`/worker/notices?open=${n.id}`);
+                            };
+                            return (
+                              <div
+                                key={n.id}
+                                onClick={go}
+                                className={`cursor-pointer px-4 py-3 transition active:bg-slate-50 ${n.read ? "" : "bg-rose-50"}`}
+                              >
+                                <p className={`text-xs font-black ${n.type === "REJECT" ? "text-rose-600" : "text-slate-700"}`}>
+                                  {n.title}
+                                </p>
+                                <p className="mt-0.5 line-clamp-1 text-xs font-semibold text-slate-500">{n.body}</p>
+                                <div className="mt-1 flex items-center justify-between">
+                                  <p className="text-[10px] text-slate-300">{new Date(n.createdAt).toLocaleDateString("ko-KR")}</p>
+                                  <span className="text-[10px] font-black text-sky-600">자세히 →</span>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
