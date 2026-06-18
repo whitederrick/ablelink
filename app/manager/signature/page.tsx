@@ -138,6 +138,7 @@ export default function ManagerSignaturePage() {
           <li className="font-semibold text-rose-500">⚠️ 서명 패드 전체에 꽉 차게 서명하셔야 문서에 적정 크기로 표시됩니다</li>
           <li><strong className="text-slate-700">직무지도원</strong> → 직무지도원이 앱에서 등록한 서명 자동 삽입</li>
           <li><strong className="text-slate-700">사업체 담당자</strong> → 문서 생성 화면에서 QR코드/링크로 현장 즉석 서명</li>
+          <li className="list-none font-semibold text-rose-500">사업체 담당자의 서명은 저장 및 재활용이 불가합니다. 서명 필요 시 현장 즉시 서명으로 진행됩니다.</li>
         </ul>
       </div>
 
