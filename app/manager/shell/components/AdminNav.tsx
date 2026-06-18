@@ -87,7 +87,7 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    title: "구독/지원",
+    title: "운영관리",
     items: [
       { href: "/manager/settings",     label: "사업주 정보 관리" },
       { href: "/manager/signature",    label: "관리자 서명 관리" },
