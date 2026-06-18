@@ -711,14 +711,11 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
                   )}
                 </button>
                 {showNotices && (
-                  <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
-                    onClick={() => setShowNotices(false)}
-                  >
-                    <div
-                      className="w-full max-w-sm overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl shadow-slate-950/10"
-                      onClick={e => e.stopPropagation()}
-                    >
+                  <>
+                    {/* 바깥 탭 닫기(투명 — 화면을 어둡게 덮지 않음) */}
+                    <div className="fixed inset-0 z-40" onClick={() => setShowNotices(false)} aria-hidden="true" />
+                    {/* 상단 드롭다운 높이 유지 + 화면 가로 중앙 정렬(좁은 폰 좌측 잘림 방지) */}
+                    <div className="fixed left-1/2 top-[4.25rem] z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl shadow-slate-950/10">
                       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                         <p className="text-sm font-black text-slate-900">알림</p>
                         <div className="flex items-center gap-3">
@@ -761,7 +758,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
                         </div>
                       )}
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
 
