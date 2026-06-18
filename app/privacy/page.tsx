@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BUSINESS_INFO } from "@/lib/businessInfo";
 
 export const metadata: Metadata = { title: "개인정보처리방침 — Able-Link" };
 
@@ -6,6 +7,7 @@ export default function PrivacyPage() {
   return (
     <main className="min-h-dvh bg-slate-50 px-5 py-8">
       <div className="mx-auto max-w-2xl">
+        <a href="/" className="mb-5 inline-block text-sm font-bold text-slate-400 hover:text-slate-700">← 홈으로</a>
         <h1 className="mb-2 text-2xl font-black text-slate-900">개인정보처리방침</h1>
         <p className="mb-8 text-sm font-semibold text-slate-400">시행일: 2026년 1월 1일</p>
 
@@ -13,7 +15,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="mb-3 text-base font-black text-slate-900">제1조 (개인정보의 처리 목적)</h2>
-            <p>플라포레스트(이하 "회사")는 Able-Link 서비스 제공을 위해 다음 목적으로 개인정보를 처리합니다.</p>
+            <p>플랫포레스트(이하 "회사")는 Able-Link 서비스 제공을 위해 다음 목적으로 개인정보를 처리합니다.</p>
             <ul className="mt-2 list-disc space-y-1.5 pl-5">
               <li>회원 가입 및 본인 확인</li>
               <li>GPS 기반 출퇴근 기록 및 근태 관리</li>
@@ -76,9 +78,11 @@ export default function PrivacyPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  <tr><td className="px-4 py-3">Amazon Web Services</td><td className="px-4 py-3">이메일 발송 (AWS SES), 데이터 저장</td></tr>
+                  <tr><td className="px-4 py-3">Resend</td><td className="px-4 py-3">이메일 발송</td></tr>
                   <tr><td className="px-4 py-3">Supabase</td><td className="px-4 py-3">데이터베이스 운영</td></tr>
                   <tr><td className="px-4 py-3">Vercel</td><td className="px-4 py-3">서비스 호스팅</td></tr>
+                  <tr><td className="px-4 py-3">토스페이먼츠</td><td className="px-4 py-3">구독 결제 처리</td></tr>
+                  <tr><td className="px-4 py-3">포트원(PortOne)</td><td className="px-4 py-3">본인인증·계좌 예금주 조회</td></tr>
                   <tr><td className="px-4 py-3">알리고</td><td className="px-4 py-3">SMS 및 카카오 알림톡 발송</td></tr>
                 </tbody>
               </table>
@@ -111,7 +115,7 @@ export default function PrivacyPage() {
             <h2 className="mb-3 text-base font-black text-slate-900">제8조 (개인정보 보호책임자)</h2>
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <p className="font-black text-slate-900">개인정보 보호책임자</p>
-              <p className="mt-1 text-slate-600">소속: 플라포레스트 | 이메일: able-link.co.kr</p>
+              <p className="mt-1 text-slate-600">소속: 플랫포레스트 | 이메일: {BUSINESS_INFO.email}</p>
               <p className="mt-1 text-xs text-slate-400">개인정보 관련 문의, 불만, 피해 구제 등의 사항은 위 연락처로 문의해 주세요.</p>
             </div>
           </section>
@@ -123,8 +127,8 @@ export default function PrivacyPage() {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <p className="text-xs font-semibold text-slate-500">
-              사업자명: 플라포레스트 | 서비스명: Able-Link<br />
-              문의: able-link.co.kr | 시행일: 2026년 1월 1일
+              사업자명: 플랫포레스트 | 서비스명: Able-Link<br />
+              문의: {BUSINESS_INFO.email} | 시행일: 2026년 1월 1일
             </p>
           </div>
         </div>

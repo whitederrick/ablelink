@@ -14,24 +14,27 @@ const LINKS = [
 export default function LegalFooter() {
   const rows = businessInfoRows();
   return (
-    <footer className="mt-10 border-t border-slate-200 pt-6 text-slate-400">
-      <nav className="flex flex-wrap gap-x-4 gap-y-2 text-xs font-bold text-slate-500">
+    <footer className="mt-8 border-t border-slate-200 pt-5 text-center text-slate-400">
+      <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs font-bold text-slate-500">
         {LINKS.map((l) => (
-          <Link key={l.href} href={l.href} className="hover:text-slate-700">{l.label}</Link>
+          <Link key={l.href} href={l.href} target="_blank" rel="noopener noreferrer" className="hover:text-slate-700">{l.label}</Link>
         ))}
       </nav>
 
-      <dl className="mt-4 space-y-1 text-[11px] font-semibold leading-5">
-        {rows.map((r) => (
-          <div key={r.label} className="flex gap-1.5">
-            <dt className="shrink-0 text-slate-400">{r.label}</dt>
-            <dd className="text-slate-500">{r.value}</dd>
-          </div>
-        ))}
-      </dl>
+      {/* 사업자정보 — 확보분만 한 줄(·구분)로 가운데 정렬, 좁으면 자동 줄바꿈 */}
+      {rows.length > 0 && (
+        <p className="mt-4 text-[11px] font-semibold leading-5 text-slate-500">
+          {rows.map((r, i) => (
+            <span key={r.label}>
+              {i > 0 && <span className="px-1.5 text-slate-300">·</span>}
+              <span className="text-slate-400">{r.label}</span> {r.value}
+            </span>
+          ))}
+        </p>
+      )}
 
-      <p className="mt-4 text-[11px] font-semibold text-slate-400">
-        © 2026 {BUSINESS_INFO.serviceName} · Provided by {BUSINESS_INFO.companyName}
+      <p className="mt-3 text-[11px] font-semibold text-slate-400">
+        © 2026 {BUSINESS_INFO.serviceName} · Provided by {BUSINESS_INFO.companyNameEn ?? BUSINESS_INFO.companyName}
       </p>
     </footer>
   );

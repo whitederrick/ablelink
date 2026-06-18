@@ -8,6 +8,7 @@ import Script from "next/script";
 import { Check, Sparkles } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import { BUSINESS_INFO } from "@/lib/businessInfo";
 
 interface AgencySub {
   id: string; name: string; planType: string;
@@ -215,7 +216,7 @@ export default function SubscriptionPage() {
                 );
               })}
             </div>
-            <p className="text-xs font-semibold text-slate-400">표시된 모든 금액은 부가세(VAT) 포함입니다. 카드 등록 후 매월 자동 결제됩니다. 문의: able-link.co.kr</p>
+            <p className="text-xs font-semibold text-slate-400">표시된 모든 금액은 부가세(VAT) 포함입니다. 카드 등록 후 매월 자동 결제됩니다. 문의: {BUSINESS_INFO.email}</p>
           </div>
         )}
       </div>

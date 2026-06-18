@@ -7,7 +7,8 @@
 
 export interface BusinessInfo {
   serviceName: string;
-  companyName: string;            // 상호
+  companyName: string;            // 상호(등록 한글 상호) — 약관/방침 본문에 사용
+  companyNameEn: string | null;   // 영문 상호(병기용) — 상호 표시줄·영문 카피라이트
   representative: string | null;  // 대표자명
   bizRegNo: string | null;        // 사업자등록번호
   mailOrderNo: string | null;     // 통신판매업 신고번호 (구매안전서비스 이용확인증 → 신고 후 부여)
@@ -21,13 +22,14 @@ export interface BusinessInfo {
 // 미확보(null) 항목은 footer에서 자동 숨김. 실값 확보 시 이 한 곳만 채우고 배포하면 전체 반영.
 export const BUSINESS_INFO: BusinessInfo = {
   serviceName: "Able-Link",
-  companyName: "플라포레스트",
+  companyName: "플랫포레스트",
+  companyNameEn: "Platforest",
   representative: null,   // TODO: 대표자명
   bizRegNo: null,         // TODO: 000-00-00000
   mailOrderNo: null,      // TODO: 제0000-지역-0000호 (통신판매업 신고 후)
   address: null,          // TODO: 사업장 주소
   phone: null,            // TODO: 고객센터 전화
-  email: null,            // TODO: 문의 이메일 (현 약관/방침의 'able-link.co.kr'는 도메인 오기)
+  email: "contact@able-link.co.kr", // 문의용(회신 가능) — 메일함 생성 필요(아래 답변 참조)
   hosting: "Vercel Inc.",
   privacyOfficer: null,   // TODO: 개인정보 보호책임자
 };
@@ -35,7 +37,7 @@ export const BUSINESS_INFO: BusinessInfo = {
 // footer 등에서 "라벨: 값"으로 뿌릴 때 null은 빼고 채워진 항목만 반환.
 export function businessInfoRows(b: BusinessInfo = BUSINESS_INFO): { label: string; value: string }[] {
   const rows: { label: string; value: string | null }[] = [
-    { label: "상호", value: b.companyName },
+    { label: "상호", value: b.companyNameEn ? `${b.companyName}(${b.companyNameEn})` : b.companyName },
     { label: "대표자", value: b.representative },
     { label: "사업자등록번호", value: b.bizRegNo },
     { label: "통신판매업 신고번호", value: b.mailOrderNo },

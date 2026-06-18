@@ -1,5 +1,5 @@
 // app/api/worker/docs/generate/route.ts
-// PDF 생성 + AWS SES 이메일 발송 (PREMIUM 전용)
+// PDF 생성 + Resend 이메일 발송 (PREMIUM 전용)
 
 export const runtime = "nodejs";
 

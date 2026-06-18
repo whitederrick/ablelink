@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BUSINESS_INFO } from "@/lib/businessInfo";
 
 export const metadata: Metadata = { title: "서비스 이용약관 — Able-Link" };
 
@@ -6,6 +7,7 @@ export default function TermsPage() {
   return (
     <main className="min-h-dvh bg-slate-50 px-5 py-8">
       <div className="mx-auto max-w-2xl">
+        <a href="/" className="mb-5 inline-block text-sm font-bold text-slate-400 hover:text-slate-700">← 홈으로</a>
         <h1 className="mb-2 text-2xl font-black text-slate-900">서비스 이용약관</h1>
         <p className="mb-8 text-sm font-semibold text-slate-400">시행일: 2026년 1월 1일</p>
 
@@ -13,7 +15,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="mb-3 text-base font-black text-slate-900">제1조 (목적)</h2>
-            <p>이 약관은 플라포레스트(이하 "회사")가 운영하는 Able-Link 서비스(이하 "서비스")의 이용 조건 및 절차, 회사와 이용자 간의 권리, 의무 및 책임 사항을 규정함을 목적으로 합니다.</p>
+            <p>이 약관은 플랫포레스트(이하 "회사")가 운영하는 Able-Link 서비스(이하 "서비스")의 이용 조건 및 절차, 회사와 이용자 간의 권리, 의무 및 책임 사항을 규정함을 목적으로 합니다.</p>
           </section>
 
           <section>
@@ -108,8 +110,8 @@ export default function TermsPage() {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <p className="text-xs font-semibold text-slate-500">
-              사업자명: 플라포레스트 | 서비스명: Able-Link<br />
-              문의: able-link.co.kr | 시행일: 2026년 1월 1일
+              사업자명: 플랫포레스트 | 서비스명: Able-Link<br />
+              문의: {BUSINESS_INFO.email} | 시행일: 2026년 1월 1일
             </p>
           </div>
         </div>

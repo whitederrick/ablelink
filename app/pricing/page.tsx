@@ -54,6 +54,7 @@ export default function PricingPage() {
   return (
     <main className="min-h-dvh bg-slate-50 px-5 py-8">
       <div className="mx-auto max-w-2xl">
+        <a href="/" className="mb-5 inline-block text-sm font-bold text-slate-400 hover:text-slate-700">← 홈으로</a>
         <h1 className="mb-2 text-2xl font-black text-slate-900">요금안내</h1>
         <p className="mb-8 text-sm font-semibold text-slate-500">
           위탁기관 단위 월 정액제입니다. 표시 금액은 <strong className="text-slate-700">월 기준·부가세(VAT) 포함</strong>이며,

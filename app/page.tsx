@@ -18,7 +18,7 @@ const FEATURES = [
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-8 text-slate-900">
-      <section className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-sm flex-col justify-between">
+      <section className="mx-auto max-w-sm">
         {/* 브랜드 */}
         <div className="pt-8">
           <div className="mb-6 flex items-center gap-3">
@@ -39,7 +39,7 @@ export default function LandingPage() {
         </div>
 
         {/* 메인 액션 */}
-        <div className="space-y-3">
+        <div className="mt-8 space-y-3">
           <Link
             href="/worker/login"
             className="flex min-h-[4.5rem] items-center justify-between rounded-3xl bg-slate-950 px-5 text-white shadow-lg shadow-slate-950/20 transition active:scale-[0.98]"
