@@ -426,7 +426,7 @@ export default function ManagerDocumentsHub() {
                 <input value={sendTo} onChange={e => setSendTo(e.target.value)} type="email" inputMode="email"
                   placeholder="officer@kead.or.kr" className={`w-full ${T.input}`} />
                 <p className="mt-1 text-[11px] font-semibold text-slate-400">
-                  {govEmailDefault ? `설정 기본값${govNames ? ` · ${govNames}` : ""} · 여러 명은 쉼표(,)로 구분 (수정 가능)` : "설정 > 사업주 정보 관리에서 공단 담당자를 저장하면 기본값으로 채워집니다."}
+                  {govEmailDefault ? `설정 기본값${govNames ? ` · ${govNames}` : ""} · 여러 명은 쉼표(,)로 구분 (수정 가능)` : "운영관리 > 위탁기관 정보 관리에서 공단 담당자를 저장하면 기본값으로 채워집니다."}
                 </p>
               </div>
 

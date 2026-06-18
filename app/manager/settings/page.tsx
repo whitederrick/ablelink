@@ -269,7 +269,7 @@ export default function AgencySettingsPage() {
   if (loading) {
     return (
       <div className="space-y-5">
-        <PageHeader title="사업주 정보 관리" sub="근로계약서 생성 시 사업주(갑) 정보로 자동 입력됩니다." />
+        <PageHeader title="위탁기관 정보 관리" sub="위탁기관의 기본 정보와 서비스 이용에 필요한 정보를 입력 및 관리합니다." />
         <div className={T.card}><p className={T.empty}>로딩 중...</p></div>
       </div>
     );
@@ -277,7 +277,7 @@ export default function AgencySettingsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="사업주 정보 관리" sub="근로계약서 생성 시 사업주(갑) 정보·서명으로 자동 입력됩니다." />
+      <PageHeader title="위탁기관 정보 관리" sub="위탁기관의 기본 정보와 서비스 이용에 필요한 정보를 입력 및 관리합니다." />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[13fr_7fr]">
         {/* 기본 정보 */}
