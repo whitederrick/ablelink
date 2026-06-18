@@ -25,7 +25,7 @@ export default function RefundPage() {
             <h2 className="mb-3 text-base font-black text-slate-900">제2조 (구독 및 결제)</h2>
             <ul className="list-disc space-y-1.5 pl-5">
               <li>유료 서비스는 위탁기관(사업자) 단위 월 정액 구독이며, 매 결제주기 시작 시 선결제됩니다.</li>
-              <li>표시 금액은 부가가치세 별도이며, 결제 시 부가세가 합산 청구될 수 있습니다.</li>
+              <li>표시 금액은 부가가치세(VAT)가 포함된 금액입니다.</li>
               <li>요금제·금액은 <a href="/pricing" className="font-black text-sky-600">요금안내</a> 페이지에 따릅니다.</li>
             </ul>
           </section>

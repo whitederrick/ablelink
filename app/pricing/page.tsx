@@ -56,7 +56,7 @@ export default function PricingPage() {
       <div className="mx-auto max-w-2xl">
         <h1 className="mb-2 text-2xl font-black text-slate-900">요금안내</h1>
         <p className="mb-8 text-sm font-semibold text-slate-500">
-          위탁기관 단위 월 정액제입니다. 표시 금액은 <strong className="text-slate-700">월 기준·부가세 별도</strong>이며,
+          위탁기관 단위 월 정액제입니다. 표시 금액은 <strong className="text-slate-700">월 기준·부가세(VAT) 포함</strong>이며,
           규모(직무지도원·현장 수)에 따른 추가 비용은 없습니다.
         </p>
 
