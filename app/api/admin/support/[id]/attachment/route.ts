@@ -19,15 +19,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const ticket: any = await prisma.supportTicket.findUnique({
       where: { id: ticketId },
-      select: { agencyId: true, attachments: true } as any,
+      select: { agencyId: true, attachments: true, replyAttachments: true } as any,
     });
     if (!ticket) return NextResponse.json({ success: false, message: "티켓을 찾을 수 없습니다." }, { status: 404 });
     if (session.kind === "manager" && ticket.agencyId !== session.agencyId) {
       return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
     }
 
-    const idx = Number(new URL(req.url).searchParams.get("i"));
-    const list = normalizeAttachments(ticket.attachments);
+    const sp = new URL(req.url).searchParams;
+    const which = sp.get("which") === "reply" ? "reply" : "ticket";
+    const idx = Number(sp.get("i"));
+    const list = normalizeAttachments(which === "reply" ? ticket.replyAttachments : ticket.attachments);
     if (!Number.isInteger(idx) || idx < 0 || idx >= list.length) {
       return NextResponse.json({ success: false, message: "첨부파일을 찾을 수 없습니다." }, { status: 404 });
     }

@@ -2,7 +2,7 @@
 
 // 직무지도원 관리 상세 — 목록 행 클릭 시 뜨는 모달(현장 관리 모달과 동일 구성·사이즈).
 // 인적 정보·급여계좌 수정 + 현재/과거 계약(배정) 이력 + 만족도 평가 결과 조회.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { T } from "../_styles";
 import { workerLabel } from "../_format";
@@ -190,6 +190,10 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
   const [resetPw, setResetPw] = useState(false);
   const [tempPw, setTempPw] = useState<string | null>(null);
 
+  // 통장사본 — 매니저가 직무지도원 대신 등록
+  const [pbUploading, setPbUploading] = useState(false);
+  const pbInputRef = useRef<HTMLInputElement>(null);
+
   // 과거 계약 이력·평가 결과 페이지(0-base)
   const [pastPage, setPastPage] = useState(0);
   const [surveyPage, setSurveyPage] = useState(0);
@@ -221,6 +225,31 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workerId]);
+
+  async function refreshDetail() {
+    try {
+      const res = await fetch(`/api/admin/worker-accounts/${workerId}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data?.success) setDetail(data.data);
+    } catch { /* noop */ }
+  }
+
+  async function onPickPassbook(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { alert("파일 크기는 10MB 이하여야 합니다."); return; }
+    setPbUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/admin/worker-accounts/${workerId}/passbook`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.success) await refreshDetail();
+      else alert(data.message || "통장사본 업로드에 실패했습니다.");
+    } catch { alert("통장사본 업로드에 실패했습니다."); }
+    finally { setPbUploading(false); }
+  }
 
   async function onSave() {
     if (!workerName.trim()) return alert("이름을 입력하세요.");
@@ -326,10 +355,18 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
                 <div className={T.card}>
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-sm font-black text-slate-900">급여 계좌</h3>
-                    {acc?.hasPassbook && acc.passbookUrl
-                      ? <a href={acc.passbookUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100">통장사본 보기</a>
-                      : <span className="text-[11px] font-semibold text-slate-400">통장사본 미등록</span>}
+                    <div className="flex items-center gap-1.5">
+                      {acc?.hasPassbook && acc.passbookUrl
+                        ? <a href={acc.passbookUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100">통장사본 보기</a>
+                        : <span className="text-[11px] font-semibold text-slate-400">미등록</span>}
+                      <input ref={pbInputRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={onPickPassbook} />
+                      <button type="button" onClick={() => pbInputRef.current?.click()} disabled={pbUploading}
+                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                        {pbUploading ? "업로드 중..." : acc?.hasPassbook ? "다시 올리기" : "통장사본 올리기"}
+                      </button>
+                    </div>
                   </div>
+                  <p className="mb-2 text-[11px] font-semibold text-slate-400">직무지도원이 직접 못 올리는 경우 매니저가 대신 등록할 수 있습니다. (이미지·PDF, 10MB)</p>
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div><label className={T.label}>은행명</label><input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="은행명" className={`w-full ${T.input}`} /></div>

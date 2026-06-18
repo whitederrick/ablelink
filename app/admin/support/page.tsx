@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { Send, Paperclip } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { Send, Paperclip, X } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
@@ -17,7 +17,12 @@ type Ticket = {
   reply: string | null; replierLogin: string | null;
   repliedAt: string | null; createdAt: string;
   attachments?: Attachment[];
+  replyAttachments?: Attachment[];
 };
+
+const MAX_FILES = 5;
+const MAX_SIZE = 10 * 1024 * 1024;
+type PendingAttachment = { path: string; name: string; size: number; mime: string };
 
 const CAT_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   GENERAL: { label: "일반 문의", tone: "sky" },
@@ -49,8 +54,11 @@ export default function AdminSupportPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [replyId, setReplyId]   = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [replyAttachments, setReplyAttachments] = useState<PendingAttachment[]>([]);
+  const [replyUploading, setReplyUploading] = useState(false);
   const [sending, setSending]   = useState(false);
   const [toast, setToast]       = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3500); };
 
@@ -81,6 +89,28 @@ export default function AdminSupportPage() {
   function openReply(id: string, existingReply: string | null) {
     setReplyId(id);
     setReplyText(existingReply ?? "");
+    setReplyAttachments([]);
+  }
+
+  async function onPickReplyFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (!picked.length) return;
+    if (replyAttachments.length + picked.length > MAX_FILES) { showToast(`첨부는 최대 ${MAX_FILES}개까지 가능합니다.`); return; }
+    setReplyUploading(true);
+    for (const file of picked) {
+      if (file.size > MAX_SIZE) { showToast(`${file.name}: 10MB를 초과합니다.`); continue; }
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("name", file.name);
+      try {
+        const res = await fetch("/api/admin/support/upload", { method: "POST", body: fd });
+        const d = await res.json();
+        if (d.success) setReplyAttachments(prev => [...prev, d.attachment]);
+        else showToast(d.message ?? `${file.name} 업로드 실패`);
+      } catch { showToast(`${file.name} 업로드 실패`); }
+    }
+    setReplyUploading(false);
   }
 
   async function sendReply(id: string) {
@@ -89,7 +119,7 @@ export default function AdminSupportPage() {
     const res  = await fetch(`/api/admin/support/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reply: replyText }),
+      body: JSON.stringify({ reply: replyText, ...(replyAttachments.length ? { replyAttachments } : {}) }),
     });
     const data = await res.json();
     setSending(false);
@@ -97,6 +127,7 @@ export default function AdminSupportPage() {
       showToast("회신이 완료되었습니다.");
       setReplyId(null);
       setReplyText("");
+      setReplyAttachments([]);
       load();
     } else {
       showToast(data.message ?? "실패");
@@ -213,6 +244,20 @@ export default function AdminSupportPage() {
                     회신 ({selected.replierLogin ?? "운영자"}{selected.repliedAt ? ` · ${new Date(selected.repliedAt).toLocaleDateString("ko-KR")}` : ""})
                   </p>
                   <p className="whitespace-pre-wrap text-sm text-slate-700">{selected.reply}</p>
+                  {selected.replyAttachments && selected.replyAttachments.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {selected.replyAttachments.map(a => (
+                        <li key={a.idx}>
+                          <a href={`/api/admin/support/${selected.id}/attachment?which=reply&i=${a.idx}`} target="_blank" rel="noreferrer"
+                            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 hover:bg-sky-50">
+                            <Paperclip className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                            <span className="flex-1 truncate text-sm font-semibold text-sky-700">{a.name}</span>
+                            <span className="shrink-0 text-[11px] font-semibold text-slate-400">{fmtSize(a.size)}</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 
@@ -226,9 +271,33 @@ export default function AdminSupportPage() {
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 resize-none"
                     autoFocus
                   />
+
+                  {/* 답변 첨부 */}
+                  <div>
+                    <input ref={fileInputRef} type="file" multiple className="hidden"
+                      accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.hwp,.hwpx,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+                      onChange={onPickReplyFiles} />
+                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={replyUploading || replyAttachments.length >= MAX_FILES}
+                      className={`${T.btnSecondary} inline-flex items-center gap-1.5 text-xs disabled:opacity-40`}>
+                      <Paperclip className="h-3.5 w-3.5" />{replyUploading ? "업로드 중..." : "파일 첨부"}
+                    </button>
+                    {replyAttachments.length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {replyAttachments.map((a, i) => (
+                          <li key={i} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
+                            <Paperclip className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                            <span className="flex-1 truncate text-sm font-semibold text-slate-700">{a.name}</span>
+                            <button type="button" onClick={() => setReplyAttachments(prev => prev.filter((_, j) => j !== i))}
+                              className="shrink-0 text-slate-400 hover:text-rose-500"><X className="h-4 w-4" /></button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
                   <div className="flex gap-2">
-                    <button onClick={() => { setReplyId(null); setReplyText(""); }} className={T.btnSecondary}>취소</button>
-                    <button onClick={() => sendReply(selected.id)} disabled={sending} className={T.btnPrimary + " flex items-center gap-1.5"}>
+                    <button onClick={() => { setReplyId(null); setReplyText(""); setReplyAttachments([]); }} className={T.btnSecondary}>취소</button>
+                    <button onClick={() => sendReply(selected.id)} disabled={sending || replyUploading} className={T.btnPrimary + " flex items-center gap-1.5"}>
                       <Send className="h-3.5 w-3.5" />{sending ? "전송 중..." : "회신 전송"}
                     </button>
                   </div>

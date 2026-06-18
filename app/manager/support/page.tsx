@@ -16,6 +16,7 @@ type Ticket = {
   reply: string | null; replierLogin: string | null;
   repliedAt: string | null; createdAt: string;
   attachments?: Attachment[];
+  replyAttachments?: Attachment[];
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -402,6 +403,20 @@ export default function ManagerSupportPage() {
                     운영팀 답변 {selected.repliedAt ? `· ${new Date(selected.repliedAt).toLocaleDateString("ko-KR")}` : ""}
                   </p>
                   <p className="whitespace-pre-wrap text-sm text-slate-800">{selected.reply}</p>
+                  {selected.replyAttachments && selected.replyAttachments.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {selected.replyAttachments.map(a => (
+                        <li key={a.idx}>
+                          <a href={`/api/admin/support/${selected.id}/attachment?which=reply&i=${a.idx}`} target="_blank" rel="noreferrer"
+                            className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-1.5 hover:bg-emerald-50">
+                            <Paperclip className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                            <span className="flex-1 truncate text-sm font-semibold text-emerald-700">{a.name}</span>
+                            <span className="shrink-0 text-[11px] font-semibold text-slate-400">{fmtSize(a.size)}</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 

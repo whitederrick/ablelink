@@ -13,6 +13,7 @@ const VALID_CATEGORIES = ["GENERAL", "SYSTEM", "DATA_FIX", "BILLING", "CONTRACT_
 function ticketToJson(t: any) {
   // 클라이언트에는 경로(path) 제외, 다운로드는 인덱스 기반 엔드포인트로.
   const attachments = normalizeAttachments(t.attachments).map((a, i) => ({ idx: i, name: a.name, size: a.size, mime: a.mime }));
+  const replyAttachments = normalizeAttachments(t.replyAttachments).map((a, i) => ({ idx: i, name: a.name, size: a.size, mime: a.mime }));
   return {
     id:           t.id.toString(),
     agencyId:     t.agencyId.toString(),
@@ -27,6 +28,7 @@ function ticketToJson(t: any) {
     repliedAt:    t.repliedAt?.toISOString() ?? null,
     createdAt:    t.createdAt.toISOString(),
     attachments,
+    replyAttachments,
   };
 }
 
