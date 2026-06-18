@@ -188,6 +188,8 @@ export async function GET(request: NextRequest) {
         siteName:        assignment?.site?.companyName ?? null,
         assignmentStart: assignment?.startDate?.toISOString().slice(0, 10) ?? null,
         assignmentEnd:   assignment?.endDate?.toISOString().slice(0, 10)   ?? null,
+        // 출퇴근 버튼 면제(자동기록·시프티 병행) 배정만 '출퇴근 없이 일괄 작성' 노출 대상.
+        attendanceButtonExempt: (assignment as any)?.attendanceButtonExempt ?? false,
         // 조회 월 말일 기준 단계(전환일 반영). 일별 일지 종류는 작성 시점 API에서 해당일 기준으로 판정.
         trainingType: effectiveTrainingType(assignment?.serviceStep, (assignment as any)?.adaptationStartDate, endDate),
         days: dayMap,

@@ -99,6 +99,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 404 });
     }
 
+    // 출퇴근 버튼 면제(자동기록·시프티 병행) 배정만 일괄 작성 허용.
+    // 일반 배정은 출퇴근 버튼으로 기록해야 하므로 서버에서도 차단(UI 비노출 + 이중 방어).
+    if (!assignment.attendanceButtonExempt) {
+      return NextResponse.json(
+        { success: false, message: "이 현장은 출퇴근 버튼으로 기록하는 배정입니다. 일괄 작성 대상이 아닙니다." },
+        { status: 403 },
+      );
+    }
+
     const times = computeWorkTimes(
       assignment.workType,
       assignment.commuteGuidanceIncluded,

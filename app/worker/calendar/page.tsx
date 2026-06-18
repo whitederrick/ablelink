@@ -36,6 +36,7 @@ interface CalendarData {
   siteName: string | null;
   assignmentStart: string | null;
   assignmentEnd: string | null;
+  attendanceButtonExempt: boolean;
   days: Record<string, DayData>;
   holidays: Record<string, string>;
   customHolidays: Record<string, string>;
@@ -283,16 +284,19 @@ export default function CalendarPage() {
           </p>
         )}
 
-        {/* 출퇴근 없이 출근부 일괄 생성 (시프티 병행 편의 기능) */}
-        <div className="px-4 pt-3">
-          <button
-            onClick={() => { setBulkResult(null); setBulkSheet(true); }}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 py-3 text-sm font-black text-sky-700 transition active:scale-[0.98]"
-          >
-            <CalendarDays className="h-4 w-4" aria-hidden="true" />
-            출퇴근 없이 출근부 일괄 작성
-          </button>
-        </div>
+        {/* 출퇴근 없이 출근부 일괄 생성 — 출퇴근 버튼 면제(자동기록·시프티 병행) 배정에서만 노출.
+            일반 배정은 출퇴근 버튼으로 기록해야 하므로 일괄 작성 비노출. */}
+        {data?.attendanceButtonExempt && (
+          <div className="px-4 pt-3">
+            <button
+              onClick={() => { setBulkResult(null); setBulkSheet(true); }}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 py-3 text-sm font-black text-sky-700 transition active:scale-[0.98]"
+            >
+              <CalendarDays className="h-4 w-4" aria-hidden="true" />
+              출퇴근 없이 출근부 일괄 작성
+            </button>
+          </div>
+        )}
 
         {/* 위탁기관 휴무일 변경 요청 배너 */}
         {pendingReqs.length > 0 && (
