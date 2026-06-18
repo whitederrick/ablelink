@@ -40,6 +40,7 @@ export default function AgencySettingsPage() {
   const [addrQuery, setAddrQuery] = useState("");
   const [addrResults, setAddrResults] = useState<AddrItem[]>([]);
   const [addrLoading, setAddrLoading] = useState(false);
+  const [addrMsg, setAddrMsg] = useState("");  // 사업장 주소 입력 아래 전용 안내(검색 결과 없음/실패)
 
   // 대표자 서명
   const [sigUrl, setSigUrl] = useState<string | null>(null);
@@ -84,7 +85,7 @@ export default function AgencySettingsPage() {
 
   async function searchAddress() {
     if (!addrQuery.trim()) return;
-    setAddrLoading(true); setAddrResults([]);
+    setAddrLoading(true); setAddrResults([]); setAddrMsg("");
     try {
       const r = await fetch(`/api/geo/search-address?q=${encodeURIComponent(addrQuery.trim())}`, { cache: "no-store" });
       const d = await r.json();
@@ -92,9 +93,9 @@ export default function AgencySettingsPage() {
         d?.items?.map((x: any) => ({ addressName: x.addressName ?? x.address_name })) ||
         d?.documents?.map((x: any) => ({ addressName: x.addressName ?? x.address_name })) || [];
       setAddrResults(items);
-      if (items.length === 0) setMsg({ ok: false, text: "주소 검색 결과가 없습니다." });
+      if (items.length === 0) setAddrMsg("주소 검색 결과가 없습니다.");
     } catch {
-      setMsg({ ok: false, text: "주소 검색에 실패했습니다." });
+      setAddrMsg("주소 검색에 실패했습니다.");
     } finally {
       setAddrLoading(false);
     }
@@ -102,6 +103,7 @@ export default function AgencySettingsPage() {
   function pickAddress(it: AddrItem) {
     setAddress(it.addressName);
     setAddrResults([]);
+    setAddrMsg("");
     setAddrQuery("");
   }
 
@@ -329,6 +331,7 @@ export default function AgencySettingsPage() {
                 {addrLoading ? "검색중..." : "주소검색"}
               </button>
             </div>
+            {addrMsg && <p className="mt-1 text-[11px] font-semibold text-rose-500">{addrMsg}</p>}
             {addrResults.length > 0 && (
               <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-slate-200">
                 {addrResults.map((it, i) => (
