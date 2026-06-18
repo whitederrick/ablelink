@@ -2,6 +2,11 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
 
+// 설치 가능(installable) 조건 충족용 fetch 핸들러.
+//  Chrome/Android는 "fetch 핸들러가 등록된 서비스워커"가 있어야 beforeinstallprompt(홈 화면 추가)를
+//  발생시킨다. 캐싱은 하지 않고 요청을 그대로 네트워크에 흘려보낸다(respondWith 미호출 = 기본 동작).
+self.addEventListener("fetch", () => { /* no-op pass-through */ });
+
 // 페이지 → SW 메시지로 알림 표시 (백그라운드에서도 동작)
 self.addEventListener("message", e => {
   if (e.data?.type !== "SHOW_ALARM") return;
