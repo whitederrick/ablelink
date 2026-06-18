@@ -390,7 +390,8 @@ export default function AgencySettingsPage() {
             {/* 기본 근로계약서 양식 */}
             <div>
             <label className={T.label}>기본 근로계약서 양식</label>
-            <p className="mb-2 text-[11px] font-semibold text-slate-400">근로계약서 작성 시 선택된 양식으로 기본 적용됩니다.</p>
+            <p className="mb-1 text-[11px] font-semibold text-slate-400">근로계약서 작성 시 선택된 양식으로 기본 적용됩니다.</p>
+            <p className="mb-2 text-[11px] font-semibold text-rose-500">근로계약서 양식을 등록은 운영자 문의를 통해 가능합니다.(계약서 양식 등록 요청)</p>
             <select value={defaultContractTemplate} onChange={e => setDefaultContractTemplate(e.target.value)} className={`w-full max-w-md ${T.input}`}>
               <option value="">표준 근로계약서 (기본)</option>
               {CONTRACT_TEMPLATES.filter(t => t.key !== "STANDARD").map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
