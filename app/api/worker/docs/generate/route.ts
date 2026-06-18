@@ -12,14 +12,9 @@ import { buildDocFileName } from "@/lib/pdf/filename";
 import { sendEmailWithPdf } from "@/lib/email";
 import { getKrHolidayDates } from "@/lib/krHolidays";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
-import { overtimeMinutesForDay } from "@/lib/attendance/overtime";
-import { isPayrollPending } from "@/lib/attendance/payrollGate";
+import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
 
 // ── 유틸 ──────────────────────────────────────────────────────
-function fmtHHMM(d: Date): string {
-  const kst = new Date(d.getTime() + 9 * 3600000);
-  return `${String(kst.getUTCHours()).padStart(2,"0")}:${String(kst.getUTCMinutes()).padStart(2,"0")}`;
-}
 function fmtDot(s: string) { return s.replace(/-/g, "."); }
 function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`; }
 function scoreLabel(n?: number | null): string {
@@ -147,80 +142,22 @@ export async function POST(request: NextRequest) {
     let fileName: string;
 
     if (docType === "ATTENDANCE_SHEET") {
-      const attendances = await prisma.dailyAttendance.findMany({
-        where: { workerId, workDate: { gte: start, lte: end } },
-        include: { logs: { select: { extTime1on1: true, extTimeGroup: true } } },
-        orderBy: { workDate: "asc" },
-      });
-
-      // 1:1 vs 1:多 구분은 "이 현장(site)에 배정된 훈련생 수"로 결정(워커 입력 아님).
-      //  1명 → 일반(1:1) 칸에 인정 지도시간 / 2명+ → 1:多 칸에. (둘 다 채우지 않음)
-      const traineeCount = await prisma.traineePlacement.count({
-        where: {
-          siteId: site.id, status: "ACTIVE",
-          startDate: { lte: new Date(end + "T23:59:59+09:00") },
-          OR: [{ endDate: null }, { endDate: { gte: new Date(start + "T00:00:00+09:00") } }],
-        },
-      });
-      const isMulti = traineeCount >= 2;
-      const recognizedHours = docTimes.measHours; // 근무형태 인정시간(전일 8 / 오전·오후 4.5~5.5)
-
-      const entries = attendances.map(a => {
-        // 급여 게이트: 심한 지각 + 미컨펌이면 출근부에 기본값 미확정 → "보정대기"
-        const pending = isPayrollPending({
-          actualStartTime: a.actualStartTime ?? null,
-          actualEndTime: a.actualEndTime ?? null,
-          payrollConfirmedAt: a.payrollConfirmedAt ?? null,
+      ({ payload, fileName } = await buildAttendanceSheetPayload({
+        workerId,
+        start, end,
+        siteId: site.id,
+        companyName: site.companyName,
+        workerName: user?.workerName || "",
+        workerPhone: user?.phoneNumber || user?.loginId || "",
+        fallbackAssignment: {
           workType: (assignment as any).workType ?? null,
           commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? null,
           customWorkStart: (assignment as any).customWorkStart ?? null,
           customWorkEnd: (assignment as any).customWorkEnd ?? null,
-          exempt: (assignment as any).attendanceButtonExempt ?? false,
-        });
-        const baseH = pending ? 0 : recognizedHours;
-        // 연장 = 일반 배정은 퇴근시각 자동(전일 저녁식사 1h 제외), 면제 배정은 일지 수동입력.
-        const extH  = pending ? 0 : +(overtimeMinutesForDay({
-          workType: (assignment as any).workType,
-          exempt: (assignment as any).attendanceButtonExempt,
-          actualEndTime: a.actualEndTime,
-          commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded,
-          customWorkStart: (assignment as any).customWorkStart,
-          customWorkEnd: (assignment as any).customWorkEnd,
-          manualExtHours: a.logs.reduce((s,l) => s + Number(l.extTime1on1) + Number(l.extTimeGroup), 0),
-        }) / 60).toFixed(2);
-        return {
-          date: a.workDate,
-          start: pending ? "" : (a.startTime ? fmtHHMM(a.startTime) : ""),
-          end:   pending ? "" : (a.endTime   ? fmtHHMM(a.endTime)   : ""),
-          pending,
-          hours: baseH,
-          multiHours: isMulti ? baseH : 0,
-          _ext: extH,
-        };
-      });
-
-      const baseTotal = entries.reduce((s,e) => s + Number(e.hours), 0);
-      const extTotal  = entries.reduce((s,e) => s + Number(e._ext), 0);
-
-      payload = {
-        workerName: user?.workerName || "",
-        workerPhone: user?.phoneNumber || user?.loginId || "",
-        companyName: site.companyName,
-        periodStartYMD: fmtDot(start),
-        periodEndYMD:   fmtDot(end),
-        totalDays: entries.length,
-        totalHours: baseTotal + extTotal,
-        weeklyHolidayCount: 0,
-        monthlyLeaveCount: 0,
-        allowanceTotalWon: "0",
-        oneToOneHours:    isMulti ? 0 : baseTotal,
-        oneToManyHours:   isMulti ? baseTotal : 0,
-        otOneToOneHours:  isMulti ? 0 : extTotal,
-        otOneToManyHours: isMulti ? extTotal : 0,
-        entries: entries.map(({ _ext, ...e }) => e),
+          attendanceButtonExempt: (assignment as any).attendanceButtonExempt ?? null,
+        },
         signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
-      };
-      fileName = buildDocFileName("ATTENDANCE_SHEET", { companyName: site.companyName, start, end });
+      }));
 
     } else if (docType === "TRAINING_DAILY_LOG") {
       if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });

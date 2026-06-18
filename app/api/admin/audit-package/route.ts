@@ -10,16 +10,11 @@ import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
-import { isPayrollPending } from "@/lib/attendance/payrollGate";
-import { overtimeMinutesForDay } from "@/lib/attendance/overtime";
+import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
 import JSZip from "jszip";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-function fmtHHMM(d: Date): string {
-  const kst = new Date(d.getTime() + 9 * 3600000);
-  return `${String(kst.getUTCHours()).padStart(2, "0")}:${String(kst.getUTCMinutes()).padStart(2, "0")}`;
-}
 function fmtDot(s: string) { return s.replace(/-/g, "."); }
 function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`; }
 function scoreLabel(n?: number | null) {
@@ -98,16 +93,6 @@ export async function GET(request: NextRequest) {
       companyManager: { name: "", imageUrl: undefined },
     };
 
-    // 출근부용 데이터
-    const attendances = await prisma.dailyAttendance.findMany({
-      where: { workerId, workDate: { gte: start, lte: end } },
-      include: {
-        logs: { select: { extTime1on1: true, extTimeGroup: true } },
-        assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true } },
-      },
-      orderBy: { workDate: "asc" },
-    });
-
     // 이 현장의 훈련생
     const trainees = await prisma.trainee.findMany({
       where: { currentSiteId: site.id },
@@ -119,59 +104,22 @@ export async function GET(request: NextRequest) {
 
     // 1) 출근부
     {
-      // 1:1 vs 1:多 = 현장 배정 훈련생 수로 택1. 일별 = 근무형태 인정시간. 연장 = 퇴근시각 자동/면제는 수동.
-      const traineeCount = await prisma.traineePlacement.count({
-        where: {
-          siteId: site.id, status: "ACTIVE",
-          startDate: { lte: new Date(end + "T23:59:59+09:00") },
-          OR: [{ endDate: null }, { endDate: { gte: new Date(start + "T00:00:00+09:00") } }],
+      const { payload } = await buildAttendanceSheetPayload({
+        workerId,
+        start, end,
+        siteId: site.id,
+        companyName: site.companyName,
+        workerName: user?.workerName || "",
+        workerPhone: user?.phoneNumber || user?.loginId || "",
+        fallbackAssignment: {
+          workType: (assignment as any).workType ?? null,
+          commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? null,
+          customWorkStart: (assignment as any).customWorkStart ?? null,
+          customWorkEnd: (assignment as any).customWorkEnd ?? null,
+          attendanceButtonExempt: (assignment as any).attendanceButtonExempt ?? null,
         },
-      });
-      const isMulti = traineeCount >= 2;
-      const recognizedHours = docTimes.measHours;
-      const entries = attendances.map(a => {
-        const pending = isPayrollPending({
-          actualStartTime: a.actualStartTime ?? null,
-          actualEndTime: a.actualEndTime ?? null,
-          payrollConfirmedAt: a.payrollConfirmedAt ?? null,
-          workType: a.assignment?.workType ?? null,
-          commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded ?? null,
-          customWorkStart: a.assignment?.customWorkStart ?? null,
-          customWorkEnd: a.assignment?.customWorkEnd ?? null,
-          exempt: a.assignment?.attendanceButtonExempt ?? false,
-        });
-        const baseH = pending ? 0 : recognizedHours;
-        const extH  = pending ? 0 : +(overtimeMinutesForDay({
-          workType: a.assignment?.workType,
-          exempt: a.assignment?.attendanceButtonExempt,
-          actualEndTime: a.actualEndTime,
-          commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded,
-          customWorkStart: a.assignment?.customWorkStart,
-          customWorkEnd: a.assignment?.customWorkEnd,
-          manualExtHours: a.logs.reduce((s, l) => s + Number(l.extTime1on1) + Number(l.extTimeGroup), 0),
-        }) / 60).toFixed(2);
-        return {
-          date: a.workDate,
-          start: pending ? "" : (a.startTime ? fmtHHMM(a.startTime) : ""),
-          end:   pending ? "" : (a.endTime   ? fmtHHMM(a.endTime)   : ""),
-          pending,
-          hours: baseH,
-          multiHours: isMulti ? baseH : 0,
-          _ext: extH,
-        };
-      });
-      const baseTotal = entries.reduce((s, e) => s + Number(e.hours), 0);
-      const extTotal  = entries.reduce((s, e) => s + Number(e._ext), 0);
-      const payload = {
-        workerName:  user?.workerName || "", workerPhone: user?.phoneNumber || user?.loginId || "",
-        companyName: site.companyName, periodStartYMD: fmtDot(start), periodEndYMD: fmtDot(end),
-        totalDays: entries.length, totalHours: baseTotal + extTotal, weeklyHolidayCount: 0, monthlyLeaveCount: 0,
-        allowanceTotalWon: "0",
-        oneToOneHours: isMulti ? 0 : baseTotal, oneToManyHours: isMulti ? baseTotal : 0,
-        otOneToOneHours: isMulti ? 0 : extTotal, otOneToManyHours: isMulti ? extTotal : 0,
-        entries: entries.map(({ _ext, ...e }) => e),
         signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
-      };
+      });
       const buf = await renderPdfToBuffer({ documentType: "ATTENDANCE_SHEET" as DocumentType, payload });
       zip.file("출근부.pdf", buf);
     }
