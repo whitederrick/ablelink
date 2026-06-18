@@ -5,7 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
-import { overtimeMinutesForDay } from "@/lib/attendance/overtime";
+import { overtimeMinutesForDay, workEndMinutesForDay } from "@/lib/attendance/overtime";
 import { computeWeeklyHoliday } from "@/lib/payroll/weeklyHoliday";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
@@ -211,9 +211,15 @@ export async function computePayrollItems(
         for (const a of confirmedAtt) {
           if (!a.startTime || !a.endTime) continue;
           const s = kstMin(a.startTime), e = kstMin(a.endTime);
-          // 야간(22시+)은 연장 포함 실제 퇴근시각까지 검출. 면제 배정은 실제시각이 없어 고정 종료 사용.
+          // 야간(22시+)은 연장 포함 실효 퇴근시각까지 검출. 일반 배정=실제 퇴근시각, 면제 배정=고정 종료+수동 연장.
           // (전일 저녁식사 18:00~19:00 갭은 야간창 22:00 이전이라 영향 없음)
-          const eNight = a.actualEndTime ? Math.max(e, kstMin(a.actualEndTime)) : e;
+          const eNight = workEndMinutesForDay({
+            workType: a.assignment?.workType,
+            exempt: a.assignment?.attendanceButtonExempt,
+            scheduledEndMin: e,
+            actualEndTime: a.actualEndTime,
+            manualExtHours: a.logs.reduce((t, l) => t + Number(l.extTime1on1) + Number(l.extTimeGroup), 0),
+          });
           if (eNight > s) nightMin += ovl(s, eNight, 0, 360) + ovl(s, eNight, 1320, 1440); // 자정 안 넘는 경우만
           const [yy, mm2, dd] = a.workDate.split("-").map(Number);
           const dow = new Date(Date.UTC(yy, mm2 - 1, dd)).getUTCDay();

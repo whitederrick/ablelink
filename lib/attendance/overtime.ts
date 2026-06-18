@@ -43,6 +43,31 @@ export function overtimeMinutesForDay(opts: {
   );
 }
 
+/**
+ * 하루 "실효 근무 종료" 벽시계 분(KST 0~1439) — 야간(22:00+)·휴일 가산 검출용 단일 출처.
+ *  · 면제(자동기록) 배정: 실제 퇴근시각이 없으므로 [고정 종료 + (전일이면 저녁식사 1h) + 수동입력 연장]으로 산정.
+ *    → 면제 배정의 수동 연장도 야간창(22:00+)에 닿으면 야간가산이 잡힌다.
+ *  · 일반(버튼) 배정: 실제 퇴근시각(actualEndTime)과 고정 종료 중 늦은 쪽(기존 동작 보존). 없으면 고정 종료.
+ *  · 자정 넘김은 비대상(기존 가정 유지).
+ */
+export function workEndMinutesForDay(opts: {
+  workType: string | null | undefined;
+  exempt: boolean | null | undefined;
+  scheduledEndMin: number;        // 고정 종료(벽시계 분)
+  actualEndTime?: Date | null;
+  manualExtHours?: number | null; // 면제 배정 수동입력(시간)
+}): number {
+  if (opts.exempt) {
+    const otMin = Math.max(0, Math.round((opts.manualExtHours ?? 0) * 60));
+    if (otMin <= 0) return opts.scheduledEndMin;
+    const dinner = opts.workType === "FULL_DAY" ? FULL_DAY_DINNER_MIN : 0;
+    return opts.scheduledEndMin + dinner + otMin;
+  }
+  return opts.actualEndTime
+    ? Math.max(opts.scheduledEndMin, kstMinutes(opts.actualEndTime))
+    : opts.scheduledEndMin;
+}
+
 /** 퇴근시각 기준 연장근로 "분" 자동 산정. */
 export function computeOvertimeMinutes(
   workType: string | null | undefined,
