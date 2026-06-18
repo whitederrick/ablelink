@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     const audioBlob = formData.get("audio") as Blob | null;
     const traineeName = (formData.get("traineeName") as string) || "훈련생";
     const taskScore = Number(formData.get("taskScore") ?? 3);
-    const sentenceCount = Math.min(4, Math.max(2, Number(formData.get("sentenceCount") ?? 2)));
+    const sentenceCount = Math.min(3, Math.max(1, Number(formData.get("sentenceCount") ?? 2)));
 
     if (!audioBlob || audioBlob.size === 0) {
       return NextResponse.json({ success: false, message: "음성 파일이 없습니다." }, { status: 400 });

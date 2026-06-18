@@ -25,6 +25,8 @@ function fmtH(h: number): string {
 export type DailyDocTimes = {
   trainingTimeH: string;  // 훈련시간 (예: "4H")
   measTimeH: string;      // 수행정도 아래 측정시간 (예: "5.5H")
+  trainingHours: number;  // 훈련시간 숫자값 (예: 4)
+  measHours: number;      // 측정(인정) 시간 숫자값 (예: 5.5)
   workTimeRange: string;  // 근무시간 범위 (예: "08:30~13:30")
   guidanceYN: "Y" | "N";  // 출퇴근·휴게 지도 여부
 };
@@ -52,11 +54,22 @@ export function dailyDocTimes(
     trainH = 4; // AM / PM
   }
 
-  const measH = trainH + (commute ? 1.5 : 0);
+  // 측정(인정)시간 = 훈련시간 + 휴게/출퇴근 지도시간.
+  //  · 전일(FULL_DAY): 8H 고정(출퇴근·휴게 지도 미포함, 점심은 별도 무급).
+  //  · 오전/오후(AM/PM): 휴게지도 0.5H 항상 포함 + 출퇴근지도(앞30+뒤30=1H) 인정 시 추가.
+  //      → 인정 5.5H(08:30~14:00 / 12:30~18:00), 미인정 4.5H(09:00~13:30 / 13:00~17:30).
+  //  · 커스텀(CUSTOM): 관리자 지정 창 기준(기존 동작 유지, commute 시 +1.5).
+  let extraH: number;
+  if (workType === "FULL_DAY") extraH = 0;
+  else if (workType === "CUSTOM") extraH = commute ? 1.5 : 0;
+  else extraH = 0.5 + (commute ? 1.0 : 0); // AM / PM
+  const measH = trainH + extraH;
 
   return {
     trainingTimeH: fmtH(trainH),
     measTimeH: fmtH(measH),
+    trainingHours: trainH,
+    measHours: measH,
     workTimeRange: `${wt.start}~${wt.end}`,
     guidanceYN: commute ? "Y" : "N",
   };

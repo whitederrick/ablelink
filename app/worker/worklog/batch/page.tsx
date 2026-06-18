@@ -525,7 +525,7 @@ export default function BatchWorklogPage() {
             <div className="rounded-2xl bg-white p-5 shadow-sm space-y-3">
               <p className="text-base font-black text-slate-900">④ AI 생성 문장 수</p>
               <div className="flex gap-2">
-                {[2, 3, 4].map(n => (
+                {[1, 2, 3].map(n => (
                   <button
                     key={n}
                     onClick={() => setSentenceCount(n)}

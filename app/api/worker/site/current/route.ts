@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
         commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? true,
         customWorkStart: (assignment as any).customWorkStart ?? null,
         customWorkEnd: (assignment as any).customWorkEnd ?? null,
+        attendanceButtonExempt: (assignment as any).attendanceButtonExempt ?? false,
         traineeCount: site.trainees.length,
         trainees: site.trainees.map(t => ({
           id: t.id.toString(),

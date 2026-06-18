@@ -9,7 +9,6 @@ import {
   ChevronRight,
   CircleDollarSign,
   ClipboardList,
-  Download,
   FileText,
   FileWarning,
   Home,
@@ -23,6 +22,7 @@ import {
   Sparkles,
   User,
   X,
+  Zap,
 } from "lucide-react";
 import type { WorkerPayload } from "../_lib/session";
 import type { HomeSummary } from "@/lib/worker/homeSummary";
@@ -267,6 +267,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
     variant?: "danger" | "default";
   } | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false); // 좌하단 고정 퀵메뉴(FAB) 펼침
   const profileRef = useRef<HTMLButtonElement>(null);
 
   const [clockInAlert,  setClockInAlert]  = useState(initialData?.alarm.clockInAlertMinutes ?? 3);
@@ -1157,21 +1158,9 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
           </div>
         )}
 
-        {/* ── 빠른 작업 (흩어진 단축버튼 통합) ── */}
+        {/* ── AI 일지 일괄 작성 (빠른 작업은 좌하단 고정 퀵메뉴로 이동) ── */}
         {hasSite && (
           <div>
-            <p className="mb-3 px-1 text-sm font-black text-slate-800">빠른 작업</p>
-            <div className="grid grid-cols-2 gap-2.5">
-              <QuickAction icon={FileText}  label="문서 보기"   sub="출근부·일지 PDF" onClick={() => router.push("/worker/docs/view")} />
-              <QuickAction icon={PenLine}  label="내 근로계약서" sub="계약서 조회·PDF" onClick={() => router.push("/worker/contracts")} />
-              <QuickAction icon={CircleDollarSign} label="급여명세서" sub="월별 급여 조회·PDF" onClick={() => router.push("/worker/payroll")} />
-              <QuickAction icon={ClipboardList} label="일지 목록" sub="작성한 일지" onClick={() => router.push("/worker/logs")} />
-              <QuickAction icon={CheckCircle2} label="출근부 확정" sub="월별 확정" onClick={() => router.push("/worker/review/attendance")} />
-              <QuickAction icon={PenLine} label="일지 확정" sub="월별 확정" onClick={() => router.push("/worker/review/logs")} />
-              <QuickAction icon={Megaphone} label="공지사항" sub="공지·알림 모아보기" onClick={() => router.push("/worker/notices")} />
-              <QuickAction icon={Download} label="내보내기" sub="출근부·일지 엑셀/CSV" onClick={() => router.push("/worker/export")} />
-            </div>
-
             {/* AI 일괄 작성 */}
             <button
               onClick={() => router.push("/worker/worklog/batch")}
@@ -1394,6 +1383,49 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
         </div>
       )}
 
+      {/* ── 좌하단 고정 퀵메뉴(FAB) — 스크롤해도 항상 표시, 탭하면 위로 펼침 ── */}
+      {hasSite && (
+        <>
+          {quickOpen && (
+            <div className="fixed inset-0 z-40" onClick={() => setQuickOpen(false)} aria-hidden="true" />
+          )}
+          <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 w-full max-w-md -translate-x-1/2 px-4">
+            <div className="flex flex-col items-start gap-2">
+              {quickOpen && (
+                <div className="flex flex-col gap-2">
+                  {[
+                    { icon: CheckCircle2,      label: "출근부 확정", href: "/worker/review/attendance" },
+                    { icon: PenLine,           label: "일지 확정",   href: "/worker/review/logs" },
+                    { icon: ClipboardList,     label: "일지 목록",   href: "/worker/logs" },
+                    { icon: CircleDollarSign,  label: "급여명세서",  href: "/worker/payroll" },
+                    { icon: Megaphone,         label: "공지사항",    href: "/worker/notices" },
+                  ].map(({ icon: Icon, label, href }) => (
+                    <button
+                      key={href}
+                      onClick={() => { setQuickOpen(false); router.push(href); }}
+                      className="pointer-events-auto flex items-center gap-2.5 rounded-full border border-slate-200 bg-white py-2.5 pl-2.5 pr-4 shadow-lg transition active:scale-95"
+                    >
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100">
+                        <Icon className="h-[18px] w-[18px] text-slate-700" aria-hidden="true" />
+                      </span>
+                      <span className="text-sm font-black text-slate-800">{label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => setQuickOpen(o => !o)}
+                aria-label="빠른 작업 메뉴"
+                aria-expanded={quickOpen}
+                className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-950 text-white shadow-xl transition active:scale-95"
+              >
+                {quickOpen ? <X className="h-6 w-6" aria-hidden="true" /> : <Zap className="h-6 w-6" aria-hidden="true" />}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ── 하단 네비게이션 ── */}
       <nav className="fixed bottom-0 left-1/2 z-40 flex w-full max-w-md -translate-x-1/2 border-t border-slate-100 bg-white pb-safe-bottom">
         {NAV_ITEMS.map(({ icon: Icon, label, href }) => {
@@ -1416,26 +1448,6 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
         })}
       </nav>
     </div>
-  );
-}
-
-// ─── 빠른 작업 버튼 ──────────────────────────────────────────
-function QuickAction({ icon: Icon, label, sub, onClick }: {
-  icon: any; label: string; sub: string; onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3.5 text-left shadow-sm transition active:scale-[0.97]"
-    >
-      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100">
-        <Icon className="h-5 w-5 text-slate-600" aria-hidden="true" />
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-black text-slate-900">{label}</p>
-        <p className="truncate text-[11px] font-semibold text-slate-400">{sub}</p>
-      </div>
-    </button>
   );
 }
 

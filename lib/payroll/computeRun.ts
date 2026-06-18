@@ -5,6 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
+import { overtimeMinutesForDay } from "@/lib/attendance/overtime";
 import { computeWeeklyHoliday } from "@/lib/payroll/weeklyHoliday";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
@@ -147,8 +148,19 @@ export async function computePayrollItems(
     const contractDailySojeMin = (_cs != null && _ce != null && _ce > _cs)
       ? Math.max(0, (_ce - _cs) - (_cbs != null && _cbe != null && _cbe > _cbs ? _cbe - _cbs : 0))
       : null;
-    const overtimeHours = confirmedAtt.reduce(
-      (s, a) => s + a.logs.reduce((t, l) => t + Number(l.extTime1on1) + Number(l.extTimeGroup), 0), 0);
+    // 연장근로 = 일반 배정은 퇴근시각(actualEndTime) 자동 산정(전일은 저녁식사 1h 무급 제외),
+    //            출퇴근버튼 면제 배정은 일지 수동입력(extTime). 분 단위.
+    const overtimeMinutes = confirmedAtt.reduce(
+      (s, a) => s + overtimeMinutesForDay({
+        workType: a.assignment?.workType,
+        exempt: a.assignment?.attendanceButtonExempt,
+        actualEndTime: a.actualEndTime ?? null,
+        commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded,
+        customWorkStart: a.assignment?.customWorkStart,
+        customWorkEnd: a.assignment?.customWorkEnd,
+        manualExtHours: a.logs.reduce((t, l) => t + Number(l.extTime1on1) + Number(l.extTimeGroup), 0),
+      }), 0);
+    const overtimeHours = +(overtimeMinutes / 60).toFixed(2);
 
     let grossPay = 0;
     const calcMethods: Record<string, string> = {};
@@ -199,7 +211,10 @@ export async function computePayrollItems(
         for (const a of confirmedAtt) {
           if (!a.startTime || !a.endTime) continue;
           const s = kstMin(a.startTime), e = kstMin(a.endTime);
-          if (e > s) nightMin += ovl(s, e, 0, 360) + ovl(s, e, 1320, 1440); // 자정 안 넘는 경우만
+          // 야간(22시+)은 연장 포함 실제 퇴근시각까지 검출. 면제 배정은 실제시각이 없어 고정 종료 사용.
+          // (전일 저녁식사 18:00~19:00 갭은 야간창 22:00 이전이라 영향 없음)
+          const eNight = a.actualEndTime ? Math.max(e, kstMin(a.actualEndTime)) : e;
+          if (eNight > s) nightMin += ovl(s, eNight, 0, 360) + ovl(s, eNight, 1320, 1440); // 자정 안 넘는 경우만
           const [yy, mm2, dd] = a.workDate.split("-").map(Number);
           const dow = new Date(Date.UTC(yy, mm2 - 1, dd)).getUTCDay();
           if (holidaySet.has(a.workDate) || dow === whDow) holidayMin += Math.max(0, e - s);

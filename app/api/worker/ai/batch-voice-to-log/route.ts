@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     const dateTo    = (formData.get("dateTo")    as string || "").trim();
     const workingDatesJson = (formData.get("workingDates") as string || "");
     const traineesJson = (formData.get("trainees") as string || "[]");
-    const sentenceCount = Math.min(4, Math.max(2, Number(formData.get("sentenceCount") ?? 2)));
+    const sentenceCount = Math.min(3, Math.max(1, Number(formData.get("sentenceCount") ?? 2)));
 
     if (!audioBlob || audioBlob.size === 0) {
       return NextResponse.json({ success: false, message: "음성 파일이 없습니다." }, { status: 400 });

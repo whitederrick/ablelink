@@ -19,6 +19,7 @@ interface SiteInfo {
   trialEndsAt?: string | null;
   customWorkStart?: string | null;
   customWorkEnd?: string | null;
+  attendanceButtonExempt?: boolean;
   premiumAccess?: boolean;
   premiumMessage?: string | null;
 }
@@ -63,166 +64,7 @@ function adminGuidance(workType: string, commuteIncluded: boolean) {
   return { commute: commuteIncluded, breakTime: true };
 }
 
-// ─── 시계 다이얼 피커 ───────────────────────────────────────────
-function ClockPicker({ value, onChange, onClose, label }: {
-  value: string; onChange: (v: string) => void; onClose: () => void; label?: string;
-}) {
-  const [hStr, mStr] = value.split(":");
-  const [mode, setMode] = useState<"hour" | "minute">("hour");
-  const [hour, setHour] = useState(parseInt(hStr ?? "9", 10));
-  const [minute, setMinute] = useState(parseInt(mStr ?? "0", 10));
-  const [manualH, setManualH] = useState(String(parseInt(hStr ?? "9", 10)).padStart(2, "0"));
-  const [manualM, setManualM] = useState(String(parseInt(mStr ?? "0", 10)).padStart(2, "0"));
-
-  const SIZE = 240; const CX = SIZE / 2; const CY = SIZE / 2;
-  const R_OUTER = 95; const R_INNER = 60; const HAND_OUTER = 80; const HAND_INNER = 48;
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  function draw() {
-    const canvas = canvasRef.current; if (!canvas) return;
-    const ctx = canvas.getContext("2d"); if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = SIZE * dpr; canvas.height = SIZE * dpr;
-    canvas.style.width = SIZE + "px"; canvas.style.height = SIZE + "px";
-    ctx.scale(dpr, dpr); ctx.clearRect(0, 0, SIZE, SIZE);
-    ctx.fillStyle = "#f3f4f6"; ctx.beginPath(); ctx.arc(CX, CY, SIZE / 2 - 1, 0, Math.PI * 2); ctx.fill();
-
-    if (mode === "hour") {
-      const outer = Array.from({ length: 12 }, (_, i) => ({ val: i === 0 ? 12 : i, idx: i }));
-      const inner = Array.from({ length: 12 }, (_, i) => ({ val: i === 0 ? 0 : i + 12, idx: i }));
-      const isOuter = hour >= 1 && hour <= 12;
-      const selIdx = isOuter ? (hour === 12 ? 0 : hour) : (hour === 0 ? 0 : hour - 12);
-      const handR = isOuter ? HAND_OUTER : HAND_INNER;
-      const ang = (selIdx / 12) * Math.PI * 2 - Math.PI / 2;
-      const hx = CX + Math.cos(ang) * handR; const hy = CY + Math.sin(ang) * handR;
-      ctx.strokeStyle = "#111827"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(CX, CY); ctx.lineTo(hx, hy); ctx.stroke();
-      ctx.fillStyle = "#111827"; ctx.beginPath(); ctx.arc(CX, CY, 5, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(hx, hy, 20, 0, Math.PI * 2); ctx.fill();
-      outer.forEach(({ val, idx }) => {
-        const a = (idx / 12) * Math.PI * 2 - Math.PI / 2;
-        const nx = CX + Math.cos(a) * R_OUTER; const ny = CY + Math.sin(a) * R_OUTER;
-        const sel = isOuter && idx === selIdx;
-        ctx.font = `${sel ? "700" : "400"} 15px -apple-system,sans-serif`;
-        ctx.fillStyle = sel ? "#fff" : "#374151"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText(String(val), nx, ny);
-      });
-      inner.forEach(({ val, idx }) => {
-        const a = (idx / 12) * Math.PI * 2 - Math.PI / 2;
-        const nx = CX + Math.cos(a) * R_INNER; const ny = CY + Math.sin(a) * R_INNER;
-        const sel = !isOuter && idx === selIdx;
-        if (sel) { ctx.fillStyle = "#111827"; ctx.beginPath(); ctx.arc(nx, ny, 15, 0, Math.PI * 2); ctx.fill(); }
-        ctx.font = `${sel ? "700" : "400"} 11px -apple-system,sans-serif`;
-        ctx.fillStyle = sel ? "#fff" : "#9ca3af"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText(String(val), nx, ny);
-      });
-    } else {
-      const mins = Array.from({ length: 12 }, (_, i) => i * 5);
-      const selIdx = Math.round(minute / 5) % 12;
-      const ang = (selIdx / 12) * Math.PI * 2 - Math.PI / 2;
-      const hx = CX + Math.cos(ang) * HAND_OUTER; const hy = CY + Math.sin(ang) * HAND_OUTER;
-      ctx.strokeStyle = "#111827"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(CX, CY); ctx.lineTo(hx, hy); ctx.stroke();
-      ctx.fillStyle = "#111827"; ctx.beginPath(); ctx.arc(CX, CY, 5, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(hx, hy, 20, 0, Math.PI * 2); ctx.fill();
-      mins.forEach((val, i) => {
-        const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
-        const nx = CX + Math.cos(a) * R_OUTER; const ny = CY + Math.sin(a) * R_OUTER;
-        const sel = i === selIdx;
-        ctx.font = `${sel ? "700" : "400"} 14px -apple-system,sans-serif`;
-        ctx.fillStyle = sel ? "#fff" : "#374151"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText(String(val).padStart(2, "0"), nx, ny);
-      });
-      if (minute % 5 !== 0) {
-        ctx.font = "600 14px -apple-system,sans-serif"; ctx.fillStyle = "#6b7280";
-        ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText(String(minute).padStart(2, "0"), CX, CY);
-      }
-    }
-  }
-
-  useEffect(() => { draw(); }, [mode, hour, minute]);
-
-  function interact(clientX: number, clientY: number) {
-    const canvas = canvasRef.current; if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const dx = clientX - rect.left - CX; const dy = clientY - rect.top - CY;
-    if (Math.sqrt(dx * dx + dy * dy) < 15) return;
-    let angle = Math.atan2(dy, dx) + Math.PI / 2;
-    if (angle < 0) angle += Math.PI * 2;
-    const idx = Math.round(angle / (Math.PI * 2 / 12)) % 12;
-    if (mode === "hour") {
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const h = dist < 72 ? (idx === 0 ? 0 : idx + 12) : (idx === 0 ? 12 : idx);
-      setHour(h); setManualH(String(h).padStart(2, "0"));
-      setTimeout(() => setMode("minute"), 200);
-    } else {
-      const m = idx * 5; setMinute(m); setManualM(String(m).padStart(2, "0"));
-    }
-  }
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.50)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 320, boxShadow: "0 20px 60px rgba(0,0,0,0.20)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 18px 10px", borderBottom: "1px solid #f3f4f6" }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>{label ?? "시간 선택"}</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#9ca3af" }}>✕</button>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "16px 0 8px" }}>
-          {[
-            { val: manualH, setVal: setManualH, apply: (v: string) => { const h = Math.min(23, Math.max(0, parseInt(v.replace(/\D/g, "") || "0", 10))); setHour(h); setManualH(String(h).padStart(2, "0")); }, active: mode === "hour", label: "시", onFocus: () => setMode("hour") },
-            { val: manualM, setVal: setManualM, apply: (v: string) => { const m = Math.min(59, Math.max(0, parseInt(v.replace(/\D/g, "") || "0", 10))); setMinute(m); setManualM(String(m).padStart(2, "0")); }, active: mode === "minute", label: "분", onFocus: () => setMode("minute") },
-          ].reduce((acc, item, i) => {
-            acc.push(
-              <div key={item.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 600 }}>{item.label}</span>
-                <input style={{ width: 64, height: 48, textAlign: "center", border: "none", borderRadius: 10, fontSize: 28, fontWeight: 800, outline: "none", cursor: "pointer", background: item.active ? "#111827" : "#f3f4f6", color: item.active ? "#fff" : "#111827" }}
-                  value={item.val} inputMode="numeric" maxLength={2}
-                  onChange={e => item.setVal(e.target.value)}
-                  onBlur={e => item.apply(e.target.value)}
-                  onFocus={item.onFocus} />
-              </div>
-            );
-            if (i === 0) acc.push(<span key="colon" style={{ fontSize: 26, fontWeight: 700, color: "#d1d5db", marginTop: 16 }}>:</span>);
-            return acc;
-          }, [] as React.ReactNode[])}
-        </div>
-        <p style={{ textAlign: "center", fontSize: 11, color: "#9ca3af", margin: "0 0 4px", fontWeight: 500 }}>
-          {mode === "hour" ? "시를 선택하면 분으로 이동합니다" : "분을 선택하세요"}
-        </p>
-        <div style={{ display: "flex", justifyContent: "center", padding: "4px 0 16px" }}>
-          <canvas ref={canvasRef} onClick={e => interact(e.clientX, e.clientY)}
-            onTouchEnd={e => { e.preventDefault(); const t = e.changedTouches[0]; if (t) interact(t.clientX, t.clientY); }}
-            style={{ cursor: "pointer", borderRadius: "50%", touchAction: "none", display: "block" }} />
-        </div>
-        <div style={{ padding: "0 20px 20px" }}>
-          <button onClick={() => { onChange(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`); onClose(); }}
-            style={{ width: "100%", padding: "13px", background: "#111827", color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-            확인
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TimeInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label?: string; }) {
-  const [open, setOpen] = useState(false);
-  const [hh, mm] = value.split(":");
-  return (
-    <>
-      <div className="flex flex-col items-center gap-1.5">
-        {label && <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">{label}</span>}
-        <button onClick={() => setOpen(true)}
-          className="min-w-[82px] rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-center text-[22px] font-black tabular-nums text-slate-900 transition active:scale-95">
-          {hh}:{mm}
-        </button>
-      </div>
-      {open && <ClockPicker value={value} onChange={v => { onChange(v); setOpen(false); }} onClose={() => setOpen(false)} label={label} />}
-    </>
-  );
-}
+// (연장 수동입력 제거에 따라 시계 다이얼 피커 ClockPicker/TimeInput 삭제 — 2026-06-18)
 
 const ATTENDANCE_ACTIVE: Record<Attendance, string> = {
   출석: "bg-slate-950 text-white border-slate-950",
@@ -262,10 +104,8 @@ function WorklogForm() {
   const [isCommuteGuide, setIsCommuteGuide] = useState(false);
   const [isBreakGuide, setIsBreakGuide] = useState(false);
 
-  // 연장지도 (직무지도원 입력 가능)
-  const [isExtraGuide, setIsExtraGuide] = useState(false);
-  const [extraStart, setExtraStart] = useState("17:00");
-  const [extraEnd, setExtraEnd] = useState("18:00");
+  // 연장지도(2026-06-18): 일반 배정=퇴근시각 기준 자동 산정. 출퇴근버튼 면제(자동기록) 배정만 수동입력.
+  const [extraHours, setExtraHours] = useState(""); // 면제 배정 수동 연장(시간)
 
   // 일지 내용
   const today = new Date();
@@ -295,8 +135,10 @@ function WorklogForm() {
   const [loadingLog, setLoadingLog] = useState(false);
 
   const premium = siteInfo.premiumAccess ?? false;
+  const isExempt = siteInfo.attendanceButtonExempt ?? false;
   const core = diffHours(guideTimes.start, guideTimes.end);
-  const extra = isExtraGuide ? diffHours(extraStart, extraEnd) : 0;
+  // 일반 배정은 퇴근시각 기준 자동 산정(급여·출근부에서 처리) → 일지엔 0. 면제 배정만 수동입력값 사용.
+  const extra = isExempt ? (parseFloat(extraHours) || 0) : 0;
   const bonus = calcBonus(isCommuteGuide, isBreakGuide);
   const isMulti = siteInfo.traineeCount > 1;
   const totalTime = parseFloat((core + extra + bonus).toFixed(1));
@@ -313,8 +155,6 @@ function WorklogForm() {
         if (!attendanceId && d.data.attendanceId) setResolvedAttendanceId(d.data.attendanceId);
         const t = adminTimes(d.data.workType, d.data.customWorkStart, d.data.customWorkEnd);
         setGuideTimes(t);
-        setExtraStart(t.workEnd);
-        setExtraEnd(t.workEnd === "18:00" ? "19:00" : t.workEnd === "13:00" ? "14:00" : t.workEnd === "17:00" ? "18:00" : "19:00");
         const g = adminGuidance(d.data.workType, d.data.commuteGuidanceIncluded ?? false);
         setIsCommuteGuide(g.commute);
         setIsBreakGuide(g.breakTime);
@@ -355,8 +195,9 @@ function WorklogForm() {
         setMeasurementTime(l.measurementTime || "");
         setContent(l.content || "");
         setSpecialNotes(l.specialNotes || "");
-        // 연장지도: extTime1on1 > 0이면 체크
-        if (l.extTime1on1 > 0 || l.extTimeGroup > 0) setIsExtraGuide(true);
+        // 면제 배정 수동 연장값 복원(일반 배정은 자동이라 0).
+        const ext = (Number(l.extTime1on1) || 0) + (Number(l.extTimeGroup) || 0);
+        if (ext > 0) setExtraHours(String(ext));
       }
     }).catch(() => {}).finally(() => setLoadingLog(false));
   }, [logId]);
@@ -480,10 +321,12 @@ function WorklogForm() {
           attendanceId: resolvedAttendanceId || undefined,
           trainingType,
           attendance,
-          time1on1: isMulti ? 0 : core + extra,
-          timeGroup: isMulti ? core + extra : 0,
-          extTime1on1: 0,
-          extTimeGroup: 0,
+          // 정규(core)와 연장(extra)을 분리 저장. 연장은 면제 배정의 수동입력만 값이 있고,
+          // 일반 배정은 0(급여·출근부가 퇴근시각으로 자동 산정).
+          time1on1: isMulti ? 0 : core,
+          timeGroup: isMulti ? core : 0,
+          extTime1on1: isMulti ? 0 : extra,
+          extTimeGroup: isMulti ? extra : 0,
           totalRecognizedTime: totalTime,
           taskName,
           taskScore,
@@ -683,29 +526,33 @@ function WorklogForm() {
                 </label>
                 <label className="flex cursor-not-allowed items-center gap-2 opacity-60">
                   <input type="checkbox" checked={isBreakGuide} disabled className="h-4 w-4 accent-slate-950" />
-                  <span className="text-sm font-semibold text-slate-700">지도 및 휴게시간 지도 여부 (관리자 설정)</span>
+                  <span className="text-sm font-semibold text-slate-700">휴게시간 지도 (관리자 설정)</span>
                 </label>
               </>
             )}
-            {/* 연장지도: 직무지도원 입력 */}
-            <label className="flex cursor-pointer items-center gap-2">
-              <input type="checkbox" checked={isExtraGuide} onChange={e => setIsExtraGuide(e.target.checked)} className="h-4 w-4 accent-slate-950" />
-              <span className="text-sm font-semibold text-slate-700">연장 지도</span>
-            </label>
           </div>
 
-          {/* 연장 시간 입력 */}
-          {isExtraGuide && (
+          {/* 연장 지도: 면제(자동기록) 배정만 수동입력, 그 외는 퇴근시각 기준 자동 */}
+          {isExempt ? (
             <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-black text-rose-600">연장 시간</span>
-                <span className="text-lg font-black tabular-nums text-rose-600">{extra}H</span>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-black text-rose-600">연장 지도 시간</span>
+                <span className="text-[11px] font-semibold text-rose-400">자동기록 배정 — 직접 입력</span>
               </div>
-              <div className="flex items-center justify-center gap-5">
-                <TimeInput value={extraStart} onChange={setExtraStart} label="시작" />
-                <span className="mt-4 text-lg font-light text-slate-300">—</span>
-                <TimeInput value={extraEnd} onChange={setExtraEnd} label="종료" />
+              <div className="flex items-center gap-2">
+                <input type="number" min="0" step="0.5" value={extraHours}
+                  onChange={e => setExtraHours(e.target.value)}
+                  placeholder="0"
+                  className="w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-rose-400" />
+                <span className="text-sm font-bold text-slate-500">시간</span>
               </div>
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[13px] font-semibold leading-relaxed text-slate-500">
+                연장 지도는 <span className="font-black text-slate-700">퇴근 시각을 기준으로 자동 계산</span>되어 급여·출근부에 반영됩니다.{" "}
+                전일 근무는 저녁식사 1시간(18:00~19:00)을 제외합니다. 별도 입력이 필요 없습니다.
+              </p>
             </div>
           )}
         </div>
@@ -770,7 +617,7 @@ function WorklogForm() {
             </span>
             <div className="flex items-center gap-2">
               <div className="flex overflow-hidden rounded-xl border border-slate-200">
-                {[2, 3, 4].map(n => (
+                {[1, 2, 3].map(n => (
                   <button key={n} type="button" onClick={() => setSentenceCount(n)}
                     className={`px-2.5 py-1.5 text-xs font-black transition ${sentenceCount === n ? "bg-slate-950 text-white" : "bg-white text-slate-400"}`}>
                     {n}문
@@ -819,7 +666,7 @@ function WorklogForm() {
           {[
             { label: isMulti ? "1:多 지도 시간" : "1:1 지도 시간", value: `${(core + extra).toFixed(1)} H`, red: false },
             { label: "출퇴근/휴게 인정",  value: `${bonus.toFixed(1)} H`,          red: false },
-            { label: "연장 지도",         value: `${extra.toFixed(1)} H`,          red: true  },
+            { label: "연장 지도",         value: isExempt ? `${extra.toFixed(1)} H` : "퇴근시각 기준 자동", red: isExempt },
           ].map(row => (
             <div key={row.label} className="mb-2 flex justify-between">
               <span className={`text-sm font-semibold ${row.red ? "text-rose-500" : "text-slate-500"}`}>{row.label}</span>

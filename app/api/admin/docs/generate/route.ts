@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer } from "@/lib/pdf";
 import { sendEmailWithPdf } from "@/lib/email";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
+import { overtimeMinutesForDay } from "@/lib/attendance/overtime";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { sigRequirement } from "@/lib/docs/requiredSignatures";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
@@ -119,11 +120,24 @@ export async function POST(request: NextRequest) {
       const attendances = await prisma.dailyAttendance.findMany({
         where: { workerId, workDate:{ gte:start, lte:end } },
         include: {
-          logs:{ select:{ time1on1:true, timeGroup:true, extTime1on1:true, extTimeGroup:true } },
+          logs:{ select:{ extTime1on1:true, extTimeGroup:true } },
           assignment:{ select:{ workType:true, commuteGuidanceIncluded:true, customWorkStart:true, customWorkEnd:true, attendanceButtonExempt:true } },
         },
         orderBy: { workDate:"asc" },
       });
+
+      // 1:1 vs 1:多 구분은 "이 현장(site)에 배정된 훈련생 수"로 결정(워커 입력 아님).
+      //  1명 → 일반(1:1) 칸에 인정 지도시간 / 2명+ → 1:多 칸에. (둘 다 채우지 않음)
+      const traineeCount = await prisma.traineePlacement.count({
+        where: {
+          siteId: site.id, status: "ACTIVE",
+          startDate: { lte: new Date(end + "T23:59:59+09:00") },
+          OR: [{ endDate: null }, { endDate: { gte: new Date(start + "T00:00:00+09:00") } }],
+        },
+      });
+      const isMulti = traineeCount >= 2;
+      const recognizedHours = docTimes.measHours; // 근무형태 인정시간(전일 8 / 오전·오후 4.5~5.5)
+
       const entries = attendances.map(a => {
         // 퇴근 미실행(퇴근 버튼 미실행·미확정)인 날은 시각 미확정 → 출근부에 '보정대기'로 표기.
         const missedClockOut = !a.endTime && !(a.assignment?.attendanceButtonExempt ?? false);
@@ -137,25 +151,39 @@ export async function POST(request: NextRequest) {
           customWorkEnd: a.assignment?.customWorkEnd ?? null,
           exempt: a.assignment?.attendanceButtonExempt ?? false,
         });
+        const baseH = pending ? 0 : recognizedHours;
+        // 연장 = 일반 배정은 퇴근시각 자동(전일 저녁식사 1h 제외), 면제 배정은 일지 수동입력.
+        const extH  = pending ? 0 : +(overtimeMinutesForDay({
+          workType: a.assignment?.workType,
+          exempt: a.assignment?.attendanceButtonExempt,
+          actualEndTime: a.actualEndTime,
+          commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded,
+          customWorkStart: a.assignment?.customWorkStart,
+          customWorkEnd: a.assignment?.customWorkEnd,
+          manualExtHours: a.logs.reduce((s,l) => s + Number(l.extTime1on1) + Number(l.extTimeGroup), 0),
+        }) / 60).toFixed(2);
         return {
           date: a.workDate,
           start: pending ? "" : (a.startTime ? fmtHHMM(a.startTime) : ""),
           end:   pending ? "" : (a.endTime   ? fmtHHMM(a.endTime)   : ""),
           pending,
-          hours:      pending ? 0 : a.logs.reduce((s,l) => s+Number(l.time1on1)+Number(l.extTime1on1), 0),
-          multiHours: pending ? 0 : a.logs.reduce((s,l) => s+Number(l.timeGroup)+Number(l.extTimeGroup), 0),
+          hours:      baseH,
+          multiHours: isMulti ? baseH : 0,
+          _ext: extH,
         };
       });
-      const totalHours = entries.reduce((s,e) => s+Number(e.hours), 0);
-      const oneToMany  = entries.reduce((s,e) => s+Number(e.multiHours), 0);
+      const baseTotal = entries.reduce((s,e) => s+Number(e.hours), 0);
+      const extTotal  = entries.reduce((s,e) => s+Number(e._ext), 0);
       payload = {
         workerName: user?.workerName||"", workerPhone: user?.phoneNumber||user?.loginId||"",
         companyName: site.companyName, periodStartYMD: fmtDot(start), periodEndYMD: fmtDot(end),
-        totalDays: entries.length, totalHours,
+        totalDays: entries.length, totalHours: baseTotal + extTotal,
         weeklyHolidayCount:0, monthlyLeaveCount:0, allowanceTotalWon:"0",
-        oneToOneHours: totalHours-oneToMany, oneToManyHours: oneToMany,
-        otOneToOneHours:0, otOneToManyHours:0,
-        entries,
+        oneToOneHours:    isMulti ? 0 : baseTotal,
+        oneToManyHours:   isMulti ? baseTotal : 0,
+        otOneToOneHours:  isMulti ? 0 : extTotal,
+        otOneToManyHours: isMulti ? extTotal : 0,
+        entries: entries.map(({ _ext, ...e }) => e),
         signatures: { govAgent: sigs.govAgent, companyManager: { name:"", imageUrl:undefined }, worker: sigs.worker },
       };
       fileName = `출근부_${site.companyName}_${start}_${end}.pdf`;
