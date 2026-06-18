@@ -137,9 +137,10 @@ model EmploymentContract {
 
 **구독 연계(2026-06-18)**: `planGuard`에 `VERIFICATION`(PRO) 추가. 계좌 인증·디지털 본인인증은 PRO 게이트. **대면 확인은 무비용이라 게이트 제외.**
 
-**P4 — 동일성·자동화** (진행 예정)
-- 계약 당사자 CI ↔ 계좌 예금주 일치 뱃지(인적관리/계약 화면).
-- 급여 이체 자동화 시 **검증된 계좌만 허용**([[payroll_automation_design_2026_06_16]] 연계).
+**P4 — 동일성·자동화** — 골격 완료(2026-06-18)
+- `lib/verify/payoutEligibility.ts`: `payoutGate(worker)`(계좌 검증 + 본인 확인 충족 시 이체 가능) + `verificationSummary()`.
+- 키 없이도 현재 필드로 판정 동작. 급여 자동이체 기능이 생기면 실행 직전 `payoutGate()` 호출만 연결.
+- **남은 강화(키 후)**: CI ↔ 예금주명 정밀 동일성(동명이인 분별) — `payoutGate()` 내 TODO.
 
 ---
 
