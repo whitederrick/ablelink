@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendAlimtalk } from "@/lib/kakao";
+import { getAcknowledgement } from "@/lib/contractTemplates";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
   const contract = await prisma.employmentContract.findUnique({
     where: { signToken: token },
     include: {
-      user: { select: { workerName: true, phoneNumber: true } },
+      user: { select: { workerName: true, phoneNumber: true, signatureUrl: true } },
       agency: { select: { name: true, address: true, phoneNumber: true } },
     },
   });
@@ -92,6 +93,10 @@ export async function GET(req: NextRequest) {
       workerSignedAt: contract.workerSignedAt?.toISOString() ?? null,
       adminSignedAt: contract.adminSignedAt?.toISOString() ?? null,
       workerSignatureUrl: contract.workerSignatureUrl,
+      // 양식 — 07 성동은 제3조⑧ '듣고 인지함' 손글씨 입력 필요
+      templateKey: (contract as any).templateKey ?? "STANDARD",
+      // 프로필에 저장된 전자서명 — 있으면 서명란에 자동 채움(다시 그리기 가능)
+      savedSignatureUrl: contract.user.signatureUrl || null,
     },
   });
 }
@@ -99,10 +104,19 @@ export async function GET(req: NextRequest) {
 // POST: 직무지도원 서명 처리
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { token, signatureUrl, workerFilledSiteName, workerFilledWorkType, workerFilledAddress } = body;
+  const { token, signatureUrl, workerFilledSiteName, workerFilledWorkType, workerFilledAddress, heardHandwritingUrl } = body;
 
   if (!token || !signatureUrl) {
     return NextResponse.json({ success: false, message: "필수 항목이 없습니다." }, { status: 400 });
+  }
+  // 듣고 인지함 손글씨(07 성동) — 있으면 형식·크기 검증
+  if (heardHandwritingUrl != null) {
+    if (typeof heardHandwritingUrl !== "string" || !heardHandwritingUrl.startsWith("data:image/")) {
+      return NextResponse.json({ success: false, message: "잘못된 손글씨 형식입니다." }, { status: 400 });
+    }
+    if (heardHandwritingUrl.length > 2 * 1024 * 1024) {
+      return NextResponse.json({ success: false, message: "손글씨 이미지가 너무 큽니다." }, { status: 400 });
+    }
   }
   if (typeof token !== "string" || token.length > 128) {
     return NextResponse.json({ success: false, message: "잘못된 토큰입니다." }, { status: 400 });
@@ -139,6 +153,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: "이미 서명이 완료된 계약서입니다." }, { status: 409 });
   }
 
+  // 양식이 '듣고 인지함' 손글씨를 요구하면 필수. (양식 정의 기반 — 신규 양식 추가 시 설정만으로 동작)
+  const ack = getAcknowledgement((contract as any).templateKey);
+  if (ack && !heardHandwritingUrl) {
+    return NextResponse.json({ success: false, message: `'${ack.guideText}' 손글씨 작성이 필요합니다.` }, { status: 400 });
+  }
+  // templateData 병합(기존 값 보존 + 손글씨 저장)
+  const mergedTemplateData = heardHandwritingUrl
+    ? { ...((contract as any).templateData && typeof (contract as any).templateData === "object" ? (contract as any).templateData : {}), heardHandwritingUrl }
+    : undefined;
+
   const user = await prisma.worker.findUnique({
     where: { id: contract.workerId },
     select: { workerName: true, phoneNumber: true, isTemporary: true },
@@ -153,6 +177,7 @@ export async function POST(req: NextRequest) {
       workerFilledSiteName: workerFilledSiteName || null,
       workerFilledWorkType: workerFilledWorkType || null,
       workerFilledAddress: workerFilledAddress || null,
+      ...(mergedTemplateData ? { templateData: mergedTemplateData } : {}),
     },
   });
 

@@ -12,7 +12,10 @@ const LINKS = [
 ];
 
 export default function LegalFooter() {
-  const rows = businessInfoRows();
+  const allRows = businessInfoRows();
+  // 호스팅 제공(투명성 표기)은 별도 줄로 분리, 나머지 사업자정보는 윗줄.
+  const rows = allRows.filter((r) => r.label !== "호스팅 제공");
+  const hostingRow = allRows.find((r) => r.label === "호스팅 제공");
   return (
     <footer className="mt-8 border-t border-slate-200 pt-5 text-center text-slate-400">
       <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs font-bold text-slate-500">
@@ -30,6 +33,13 @@ export default function LegalFooter() {
               <span className="text-slate-400">{r.label}</span> {r.value}
             </span>
           ))}
+        </p>
+      )}
+
+      {/* 호스팅 제공 — 별도 줄 */}
+      {hostingRow && (
+        <p className="mt-1 text-[11px] font-semibold leading-5 text-slate-500">
+          <span className="text-slate-400">{hostingRow.label}</span> {hostingRow.value}
         </p>
       )}
 

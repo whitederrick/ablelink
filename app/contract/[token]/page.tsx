@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { getAcknowledgement } from "@/lib/contractTemplates";
 
 type ContractStatus = "PENDING" | "SIGNED" | "COMPLETED" | "CANCELLED";
 
@@ -41,33 +42,45 @@ interface ContractData {
   specialClauses: { title: string; body: string }[];
   workerSignedAt: string | null;
   workerSignatureUrl: string | null;
+  templateKey: string;
+  savedSignatureUrl: string | null;
 }
 
-// ── 서명 캔버스 ───────────────────────────────────────────────
-function SignatureCanvas({ onSigned }: { onSigned: (dataUrl: string) => void }) {
+// ── 서명/손글씨 캔버스 ────────────────────────────────────────
+// guideText 지정 시: 캔버스 뒤에 회색 가이드 문구를 띄워 따라쓰기(손글씨)용으로 사용.
+// 캔버스 자체는 투명 → 내보낸 PNG에는 사용자의 획만 담김(가이드 미포함).
+function SignatureCanvas({ onSigned, guideText, confirmLabel = "서명 확인", cw = 340, ch = 176, guideFontSize = 28 }: { onSigned: (dataUrl: string) => void; guideText?: string; confirmLabel?: string; cw?: number; ch?: number; guideFontSize?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const [hasSig, setHasSig] = useState(false);
 
   function getPos(e: React.TouchEvent | React.MouseEvent) {
     const rect = canvasRef.current!.getBoundingClientRect();
-    if ("touches" in e) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
+    const sx = canvasRef.current!.width / rect.width, sy = canvasRef.current!.height / rect.height;
+    if ("touches" in e) return { x: (e.touches[0].clientX - rect.left) * sx, y: (e.touches[0].clientY - rect.top) * sy };
+    return { x: ((e as React.MouseEvent).clientX - rect.left) * sx, y: ((e as React.MouseEvent).clientY - rect.top) * sy };
   }
   function start(e: React.TouchEvent | React.MouseEvent) { e.preventDefault(); drawing.current = true; const ctx = canvasRef.current!.getContext("2d")!; const { x, y } = getPos(e); ctx.beginPath(); ctx.moveTo(x, y); }
-  function move(e: React.TouchEvent | React.MouseEvent) { e.preventDefault(); if (!drawing.current) return; const ctx = canvasRef.current!.getContext("2d")!; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.strokeStyle = "#111827"; const { x, y } = getPos(e); ctx.lineTo(x, y); ctx.stroke(); setHasSig(true); }
+  function move(e: React.TouchEvent | React.MouseEvent) { e.preventDefault(); if (!drawing.current) return; const ctx = canvasRef.current!.getContext("2d")!; ctx.lineWidth = Math.max(2.5, canvasRef.current!.width / 130); ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111827"; const { x, y } = getPos(e); ctx.lineTo(x, y); ctx.stroke(); setHasSig(true); }
   function end() { drawing.current = false; }
   function clear() { const c = canvasRef.current!; c.getContext("2d")!.clearRect(0, 0, c.width, c.height); setHasSig(false); }
   function confirm() { if (!hasSig) return; onSigned(canvasRef.current!.toDataURL("image/png")); }
 
   return (
     <div>
-      <canvas ref={canvasRef} width={340} height={160}
-        style={{ border: "1.5px solid #d1d5db", borderRadius: 8, background: "#fafafa", touchAction: "none", width: "100%", maxWidth: 340, display: "block" }}
-        onMouseDown={start} onMouseMove={move} onMouseUp={end} onTouchStart={start} onTouchMove={move} onTouchEnd={end} />
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: cw }}>
+        {guideText && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#dde1e7", fontSize: guideFontSize, fontWeight: 500, letterSpacing: 3, pointerEvents: "none", userSelect: "none" }}>
+            {guideText}
+          </div>
+        )}
+        <canvas ref={canvasRef} width={cw} height={ch}
+          style={{ position: "relative", border: "1.5px solid #d1d5db", borderRadius: 8, background: guideText ? "transparent" : "#fafafa", touchAction: "none", width: "100%", maxWidth: cw, display: "block" }}
+          onMouseDown={start} onMouseMove={move} onMouseUp={end} onTouchStart={start} onTouchMove={move} onTouchEnd={end} />
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 8, maxWidth: cw }}>
         <button type="button" onClick={clear} style={{ flex: 1, padding: "9px", border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff", fontSize: 13, cursor: "pointer", color: "#6b7280" }}>다시 쓰기</button>
-        <button type="button" onClick={confirm} disabled={!hasSig} style={{ flex: 2, padding: "9px", border: "none", borderRadius: 8, background: hasSig ? "#2563eb" : "#e5e7eb", color: hasSig ? "#fff" : "#9ca3af", fontSize: 13, fontWeight: 700, cursor: hasSig ? "pointer" : "not-allowed" }}>서명 확인</button>
+        <button type="button" onClick={confirm} disabled={!hasSig} style={{ flex: 2, padding: "9px", border: "none", borderRadius: 8, background: hasSig ? "#2563eb" : "#e5e7eb", color: hasSig ? "#fff" : "#9ca3af", fontSize: 13, fontWeight: 700, cursor: hasSig ? "pointer" : "not-allowed" }}>{confirmLabel}</button>
       </div>
     </div>
   );
@@ -146,6 +159,7 @@ export default function ContractSignPage() {
   const [error, setError] = useState("");
   const [addr, setAddr] = useState("");
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+  const [heardHwUrl, setHeardHwUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -156,6 +170,7 @@ export default function ContractSignPage() {
       .then(d => {
         if (!d.success) { setError(d.message); return; }
         setData(d.data);
+        if (d.data.savedSignatureUrl) setSignatureUrl(d.data.savedSignatureUrl); // 저장된 서명 자동 채움
         if (d.data.workerFilledAddress) setAddr(d.data.workerFilledAddress);
         else if (d.data.workerAddress) setAddr(d.data.workerAddress);
       })
@@ -164,14 +179,16 @@ export default function ContractSignPage() {
   }, [token]);
 
   async function handleSubmit() {
-    if (!signatureUrl) { alert("서명을 입력해주세요."); return; }
     if (!data) return;
+    const ack = getAcknowledgement(data.templateKey);
+    if (ack && !heardHwUrl) { alert(`'${ack.guideText}'을(를) 따라 작성해주세요.`); return; }
+    if (!signatureUrl) { alert("서명을 입력해주세요."); return; }
     if (!addr.trim() && !data.workerAddress) { alert("근로자 주소를 입력해주세요."); return; }
     setSubmitting(true);
     try {
       const res = await fetch("/api/worker/contracts", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, signatureUrl, workerFilledAddress: addr || null }),
+        body: JSON.stringify({ token, signatureUrl, workerFilledAddress: addr || null, heardHandwritingUrl: heardHwUrl || null }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.message);
@@ -198,13 +215,15 @@ export default function ContractSignPage() {
   }
 
   const needAddr = !data.workerAddress;
+  const ack = getAcknowledgement(data.templateKey); // 손글씨 '듣고 인지함' 요구 양식 여부
+  const docTitle = data.templateKey === "STANDARD" ? "단시간근로자 표준근로계약서" : "직무지도원 표준근로계약서";
 
   return (
     <div style={ps.page}>
       <div style={ps.card}>
         <div style={ps.header}>
           <div style={ps.agencyBadge}>{data.employerBizName || data.agencyName}</div>
-          <h1 style={ps.title}>단시간근로자 표준근로계약서</h1>
+          <h1 style={ps.title}>{docTitle}</h1>
           <p style={ps.sub}>{data.workerName}님의 서명을 요청드립니다</p>
         </div>
 
@@ -217,20 +236,43 @@ export default function ContractSignPage() {
           </div>
         )}
 
+        {ack && (
+          <div style={ps.section}>
+            <h3 style={ps.sectionTitle}>임금 내용 확인 (손글씨)</h3>
+            <p style={{ fontSize: 12.5, color: "#6b7280", margin: "0 0 12px", lineHeight: 1.6 }}>
+              제3조(임금)의 내용을 듣고 인지하였음을 확인합니다. 아래 회색 안내 문구 <strong>&quot;{ack.guideText}&quot;</strong>를 그대로 따라 손으로 작성해 주세요.
+            </p>
+            {heardHwUrl ? (
+              <div style={{ textAlign: "center" }}>
+                <img src={heardHwUrl} alt={ack.guideText} style={{ maxWidth: "100%", border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff" }} />
+                <button type="button" onClick={() => setHeardHwUrl(null)} style={{ marginTop: 8, padding: "6px 16px", border: "1px solid #e5e7eb", borderRadius: 6, background: "#fff", fontSize: 13, cursor: "pointer" }}>다시 작성</button>
+              </div>
+            ) : <SignatureCanvas onSigned={setHeardHwUrl} guideText={ack.guideText} confirmLabel="작성 확인" cw={640} ch={210} guideFontSize={66} />}
+          </div>
+        )}
+
         <div style={ps.section}>
           <h3 style={ps.sectionTitle}>근로자 서명</h3>
           {signatureUrl ? (
             <div style={{ textAlign: "center" }}>
-              <img src={signatureUrl} alt="서명" style={{ maxWidth: "100%", border: "1px solid #e5e7eb", borderRadius: 8 }} />
+              {signatureUrl === data.savedSignatureUrl && (
+                <p style={{ fontSize: 12.5, color: "#059669", margin: "0 0 8px", fontWeight: 600 }}>✓ 저장된 전자서명을 불러왔어요. 그대로 사용하거나 다시 서명할 수 있어요.</p>
+              )}
+              <img src={signatureUrl} alt="서명" style={{ maxWidth: "100%", border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff" }} />
               <button type="button" onClick={() => setSignatureUrl(null)} style={{ marginTop: 8, padding: "6px 16px", border: "1px solid #e5e7eb", borderRadius: 6, background: "#fff", fontSize: 13, cursor: "pointer" }}>다시 서명</button>
             </div>
           ) : <SignatureCanvas onSigned={setSignatureUrl} />}
         </div>
 
-        <button onClick={handleSubmit} disabled={!signatureUrl || submitting}
-          style={{ ...ps.submitBtn, opacity: signatureUrl && !submitting ? 1 : 0.5, cursor: signatureUrl && !submitting ? "pointer" : "not-allowed" }}>
-          {submitting ? "제출 중..." : "계약서 서명 완료"}
-        </button>
+        {(() => {
+          const canSubmit = !!signatureUrl && (!ack || !!heardHwUrl) && !submitting;
+          return (
+            <button onClick={handleSubmit} disabled={!canSubmit}
+              style={{ ...ps.submitBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" }}>
+              {submitting ? "제출 중..." : "계약서 서명 완료"}
+            </button>
+          );
+        })()}
         <p style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", marginTop: 12 }}>서명 시 위 계약 내용에 동의하는 것으로 간주됩니다.</p>
       </div>
     </div>

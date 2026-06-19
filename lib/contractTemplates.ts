@@ -15,12 +15,20 @@ export interface TemplateField {
   hint?: string;
 }
 
+// 본문 손글씨 '듣고 인지함' 확인 — 일부 양식(예: 성동07)은 직무지도원이 계약 서명 시
+// 가이드 문구를 화면에 띄우고 그대로 따라 손글씨로 작성해야 한다. (서명 이미지와는 별개)
+// 캡처 결과는 EmploymentContract.templateData.heardHandwritingUrl 에 저장되고, 렌더러가 본문에 그린다.
+export interface AcknowledgementConfig {
+  guideText: string;       // 화면에 따라쓰기 가이드로 표시 + 미작성 시 본문 회색 안내로 표시할 문구
+}
+
 export interface ContractTemplate {
   key: string;
   label: string;
   sub?: string;            // 선택 화면 보조 설명
   restricted?: boolean;    // true = 위탁기관 전용(부여된 기관만). 미지정/false = 전체 공용.
   extraFields: TemplateField[];
+  acknowledgement?: AcknowledgementConfig; // 지정 시 서명 화면에 손글씨 '듣고 인지함' 입력을 요구
 }
 
 // ※ 생년월일은 Worker.birthDate(직무지도원 관리/프로필) 단일 출처 사용 — 계약별 입력 제거.
@@ -35,9 +43,9 @@ export const CONTRACT_TEMPLATES: ContractTemplate[] = [
     key: "SEONGDONG_07",
     label: "성동장애인자립생활센터_근로계약서",
     restricted: true,
-    extraFields: [
-      { key: "heardAndAcknowledged", label: "제3조⑧ ‘듣고 인지함’ 확인", type: "checkbox", hint: "직무지도원이 계약 내용을 듣고 인지하였음" },
-    ],
+    extraFields: [],
+    // 제3조⑧ — 직무지도원이 서명 시 "듣고 인지했음"을 따라 손글씨로 직접 작성(렌더러가 본문에 배치)
+    acknowledgement: { guideText: "듣고 인지했음" },
   },
   {
     key: "NORTH_06",
@@ -57,6 +65,10 @@ export const RESTRICTED_TEMPLATES = CONTRACT_TEMPLATES.filter(t => t.restricted)
 
 export function getTemplate(key: string | null | undefined): ContractTemplate {
   return CONTRACT_TEMPLATES.find(t => t.key === key) ?? CONTRACT_TEMPLATES[0];
+}
+// 해당 양식이 손글씨 '듣고 인지함'을 요구하면 그 설정을, 아니면 null 반환.
+export function getAcknowledgement(key: string | null | undefined): AcknowledgementConfig | null {
+  return getTemplate(key).acknowledgement ?? null;
 }
 export function isValidTemplateKey(key: unknown): key is string {
   return typeof key === "string" && CONTRACT_TEMPLATE_KEYS.includes(key);

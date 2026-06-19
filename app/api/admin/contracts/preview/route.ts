@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
       employerAddress: agency?.address || "서울특별시 ○○구 ○○로 00",
       employerRepName: "○ ○ ○",
       agency: { name: agency?.name || "", phoneNumber: agency?.phoneNumber || "", address: agency?.address || "" },
-      user: { workerName: "홍길동 (견본)", phoneNumber: "010-1234-5678", birthDate: "1990-01-01" },
+      user: { workerName: "홍길동", phoneNumber: "010-1234-5678", birthDate: "1990-01-01" },
       workerAddress: "서울특별시 ○○구 ○○로 00",
       contractStart: new Date(Date.UTC(2026, 0, 2)),
       contractEnd: new Date(Date.UTC(2026, 11, 31)),
