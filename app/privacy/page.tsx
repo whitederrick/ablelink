@@ -134,6 +134,10 @@ export default function PrivacyPage() {
             </p>
           </div>
         </div>
+
+        <div className="mt-8 text-center">
+          <a href="/" className="inline-block rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100">← 홈으로</a>
+        </div>
       </div>
     </main>
   );
