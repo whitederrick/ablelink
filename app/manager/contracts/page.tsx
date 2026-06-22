@@ -700,9 +700,24 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
 function DetailModal({ id, onClose }: { id: string; onClose: () => void }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    fetch(`/api/admin/contracts/${id}`).then(r => r.json()).then(d => { if (d.success) setData(d.data); }).finally(() => setLoading(false));
-  }, [id]);
+  const [rev, setRev] = useState(0); // PDF iframe 캐시 버스팅
+  const [applying, setApplying] = useState(false);
+  function load() {
+    return fetch(`/api/admin/contracts/${id}`).then(r => r.json()).then(d => { if (d.success) setData(d.data); }).finally(() => setLoading(false));
+  }
+  useEffect(() => { load(); }, [id]);
+
+  async function applyRepSignature() {
+    if (!confirm("이 계약서에 사업주 대표자명·직인을 적용할까요?\n기관에 등록된 대표 서명/직인이 들어갑니다.")) return;
+    setApplying(true);
+    try {
+      const res = await fetch(`/api/admin/contracts/${id}/apply-rep-signature`, { method: "POST" });
+      const d = await res.json();
+      alert(d.message || (d.success ? "적용되었습니다." : "실패"));
+      if (d.success) { await load(); setRev(v => v + 1); }
+    } catch { alert("처리 중 오류가 발생했습니다."); }
+    finally { setApplying(false); }
+  }
 
   const pdfUrl = `/api/admin/contracts/${id}?format=pdf`;
   const wt: Record<string, string> = { HOURLY: "시급", DAILY: "일급", MONTHLY: "월급" };
@@ -713,13 +728,18 @@ function DetailModal({ id, onClose }: { id: string; onClose: () => void }) {
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-black text-slate-900">근로계약서 상세</h2>
           <div className="flex items-center gap-2">
+            {data && !data.adminSignatureUrl && (
+              <button onClick={applyRepSignature} disabled={applying} className={`${T.btnSecondary} disabled:opacity-40`}>
+                {applying ? "적용 중..." : "사업주 직인 적용"}
+              </button>
+            )}
             <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className={T.btnPrimary}>PDF 보기 / 다운로드</a>
             <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:bg-slate-50"><X className="h-4 w-4" /></button>
           </div>
         </div>
         {loading ? <p className={T.empty}>로딩 중...</p> : !data ? <p className={T.empty}>불러올 수 없습니다.</p> : (
           <div className="flex-1 space-y-4 overflow-y-auto pr-1">
-            <iframe src={pdfUrl} className="h-[55vh] w-full rounded-xl border border-slate-200" title="계약서 미리보기" />
+            <iframe src={`${pdfUrl}&t=${rev}`} className="h-[55vh] w-full rounded-xl border border-slate-200" title="계약서 미리보기" />
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
               {[
                 ["근로자", data.workerName], ["연락처", data.workerPhone],
