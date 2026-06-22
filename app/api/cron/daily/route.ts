@@ -125,6 +125,7 @@ export async function GET(req: NextRequest) {
               title: `근로계약 만료 D-${offsetDays} 안내`,
               body: `사업장: ${siteName}\n계약 종료일: ${contractEndStr}\n재계약이 필요하면 담당 위탁기관로 연락해 주세요.`,
               type: "WARN",
+              link: "/worker/contracts",
             },
           });
           expiryNotified++;
@@ -239,11 +240,45 @@ export async function GET(req: NextRequest) {
   // ── 5b. 미회신 평가 자동 종료 — 만료(30일) 경과한 PENDING 평가는 '미회신 종료'(EXPIRED)로. 재요청 가능. ──
   let surveysExpired = 0;
   try {
-    const r = await prisma.satisfactionSurvey.updateMany({
+    const expiring = await prisma.satisfactionSurvey.findMany({
       where: { status: "PENDING", expiresAt: { lt: now } },
-      data: { status: "EXPIRED" },
+      select: { id: true, agencyId: true, workerId: true, createdByManagerId: true } as any,
     });
-    surveysExpired = r.count;
+    if (expiring.length > 0) {
+      await prisma.satisfactionSurvey.updateMany({
+        where: { id: { in: (expiring as any[]).map(s => s.id) } },
+        data: { status: "EXPIRED" },
+      });
+      surveysExpired = expiring.length;
+      // 요청자(작성 의뢰 매니저, 없으면 기관 활성 매니저)에게 '기한 만료 — 재요청 필요' 알림(앱 내 무료)
+      try {
+        const workerIds = [...new Set((expiring as any[]).map(s => s.workerId))];
+        const workers = await prisma.worker.findMany({ where: { id: { in: workerIds } }, select: { id: true, workerName: true } });
+        const nameOf = new Map(workers.map(w => [w.id.toString(), w.workerName]));
+        const agencyMgrCache = new Map<string, bigint[]>();
+        const notices: { managerId: bigint; title: string; body: string; link: string }[] = [];
+        for (const s of expiring as any[]) {
+          let mids: bigint[] = [];
+          if (s.createdByManagerId) mids = [s.createdByManagerId];
+          else if (s.agencyId) {
+            const key = s.agencyId.toString();
+            if (!agencyMgrCache.has(key)) {
+              const mgrs = await prisma.manager.findMany({ where: { agencyId: s.agencyId, isActive: true }, select: { id: true } });
+              agencyMgrCache.set(key, mgrs.map(m => m.id));
+            }
+            mids = agencyMgrCache.get(key)!;
+          }
+          const name = nameOf.get(s.workerId.toString()) ?? "직무지도원";
+          for (const mid of mids) notices.push({
+            managerId: mid,
+            title: `[평가 만료] ${name} 만족도 조사 미회신`,
+            body: `${name} 직무지도원 만족도(역량) 평가가 응답 기한 내 회신되지 않아 종료되었습니다. 필요 시 재요청해 주세요.`,
+            link: "/manager/reports",
+          });
+        }
+        if (notices.length > 0) await (prisma as any).managerNotice.createMany({ data: notices });
+      } catch (e: any) { errors.push(`평가만료알림: ${e.message}`); }
+    }
   } catch (e: any) { errors.push(`평가만료: ${e.message}`); }
 
   // ── 6. 매월 자동 급여 DRAFT 생성 (에이전시별 설정일) ──
