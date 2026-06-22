@@ -32,10 +32,34 @@ export async function POST(req: NextRequest) {
 
     const asgn = await prisma.siteAssignment.findFirst({
       where: { id: BigInt(assignmentId), workerId, status: "REQUESTED" },
-      select: { id: true, siteId: true, replyDeadline: true, requestedWorkTypes: true, site: { select: { companyName: true } } },
+      select: { id: true, siteId: true, replyDeadline: true, requestedWorkTypes: true, site: { select: { companyName: true, ownerManagerId: true, agencyId: true } } },
     });
     if (!asgn) {
       return NextResponse.json({ success: false, message: "회신할 배정 요청을 찾을 수 없습니다." }, { status: 404 });
+    }
+
+    // 배정 회신(수락/거절)을 담당 매니저(없으면 기관 전체 활성 매니저)에게 알림 — 비대칭 해소.
+    async function notifyManagers(statusText: string) {
+      try {
+        const site = asgn!.site;
+        let managerIds: bigint[] = [];
+        if (site?.ownerManagerId) managerIds = [site.ownerManagerId];
+        else if (site?.agencyId) {
+          const mgrs = await prisma.manager.findMany({ where: { agencyId: site.agencyId, isActive: true }, select: { id: true } });
+          managerIds = mgrs.map(m => m.id);
+        }
+        if (managerIds.length === 0) return;
+        const w = await prisma.worker.findUnique({ where: { id: workerId }, select: { workerName: true } });
+        const name = w?.workerName ?? "직무지도원";
+        await (prisma as any).managerNotice.createMany({
+          data: managerIds.map(mid => ({
+            managerId: mid,
+            title: `[배정 회신] ${name} — ${statusText}`,
+            body: `${name} 직무지도원이 '${site?.companyName ?? "현장"}' 배정 요청에 ${statusText}했습니다.`,
+            link: "/manager/workers",
+          })),
+        });
+      } catch (e) { console.warn("[assignment/respond] 매니저 알림 실패:", e); }
     }
 
     // 회신 기한 초과 → 자동 탈락(EXPIRED)
@@ -52,6 +76,7 @@ export async function POST(req: NextRequest) {
         where: { id: asgn.id, status: "REQUESTED" },
         data: { status: "REJECTED", rejectedAt: new Date(), statusReason: "후보 거절" },
       });
+      await notifyManagers("거절");
       return NextResponse.json({ success: true, status: "REJECTED", message: "배정 요청을 거절했습니다." });
     }
 
@@ -81,6 +106,7 @@ export async function POST(req: NextRequest) {
         where: { id: asgn.id, status: "REQUESTED" },
         data: { status: "ASSIGNED", workType, commuteGuidanceIncluded, connectedAt: new Date() },
       });
+      await notifyManagers("수락(계약 대기)");
       return NextResponse.json({
         success: true, status: "ASSIGNED",
         message: "배정 요청을 수락했습니다. 계약서 작성을 기다려주세요.",
@@ -93,6 +119,7 @@ export async function POST(req: NextRequest) {
       where: { id: asgn.id, status: "REQUESTED" },
       data: { status: "ACCEPTED", workType, commuteGuidanceIncluded, connectedAt: new Date() },
     });
+    await notifyManagers("수락(확정 대기)");
     return NextResponse.json({
       success: true, status: "ACCEPTED",
       message: "배정 요청을 수락했습니다. 담당자 확정을 기다려주세요.",

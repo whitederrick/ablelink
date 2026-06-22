@@ -53,6 +53,30 @@ export async function POST(req: NextRequest, { params }: Params) {
   const comment = typeof body.comment === "string" ? body.comment.slice(0, 1000) : null;
   const snap = isEvalSnapshot((s as any).formSnapshot) ? ((s as any).formSnapshot as EvalSnapshot) : null;
 
+  // 응답 완료 시 요청자(작성 의뢰 매니저, 없으면 기관 활성 매니저)에게 알림 — 응답 추적 비대칭 해소.
+  async function notifyResult() {
+    try {
+      const w = await prisma.worker.findUnique({ where: { id: s!.workerId }, select: { workerName: true } });
+      const name = w?.workerName ?? "직무지도원";
+      let managerIds: bigint[] = [];
+      const by = (s as any).createdByManagerId as bigint | null;
+      if (by) managerIds = [by];
+      else if (s!.agencyId) {
+        const mgrs = await prisma.manager.findMany({ where: { agencyId: s!.agencyId, isActive: true }, select: { id: true } });
+        managerIds = mgrs.map(m => m.id);
+      }
+      if (managerIds.length === 0) return;
+      await (prisma as any).managerNotice.createMany({
+        data: managerIds.map(mid => ({
+          managerId: mid,
+          title: `[평가 응답] ${name} 만족도 조사 응답 완료`,
+          body: `${name} 직무지도원에 대한 만족도(역량) 평가 응답이 접수되었습니다. 결과를 확인해 주세요.`,
+          link: "/manager/reports",
+        })),
+      });
+    } catch (e) { console.warn("[survey respond] 요청자 알림 실패:", e); }
+  }
+
   if (snap) {
     // 역량 평가표 채점 — 답안 키 "{ci}_{qi}" 각 1~5
     const answers: Record<string, number> = {};
@@ -67,6 +91,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       where: { id: s.id },
       data: { scores: answers, comment, categoryScores: categoryScores as any, totalScore, status: "RESPONDED", respondedAt: new Date() } as any,
     });
+    await notifyResult();
     return NextResponse.json({ success: true, message: "응답이 제출되었습니다. 감사합니다." });
   }
 
@@ -89,5 +114,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     data: { scores, overallScore: overall, comment, status: "RESPONDED", respondedAt: new Date() },
   });
 
+  await notifyResult();
   return NextResponse.json({ success: true, message: "응답이 제출되었습니다. 감사합니다." });
 }

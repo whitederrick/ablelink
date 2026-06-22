@@ -16,6 +16,7 @@ type MgrNotice = {
   ticketId: string | null;
   title: string;
   body: string;
+  link?: string | null;
   readAt: string | null;
   createdAt: string;
 };
@@ -69,8 +70,9 @@ export default function AdminTopbar({
         body: JSON.stringify({ noticeId: n.id }),
       }).catch(() => {});
     }
-    // 지원요청 회신은 문의로, 운영자 긴급 공지는 시스템 공지사항으로, 그 외(문서 제출 등)는 제출 문서 확인 화면으로
-    if (n.ticketId) router.push("/manager/support");
+    // 알림에 바로가기(link)가 있으면 우선 사용. 없으면 휴리스틱(문의/긴급공지/문서).
+    if (n.link) router.push(n.link);
+    else if (n.ticketId) router.push("/manager/support");
     else if (n.title.startsWith("[긴급 공지]")) router.push("/manager/system-notices");
     else router.push("/manager/documents");
   }

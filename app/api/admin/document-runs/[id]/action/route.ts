@@ -33,8 +33,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const now = new Date();
 
+    // 문서 식별 라벨(승인/수정요청 알림 공용): 문서명(+훈련생) · 기간
+    const docLabel = DOC_LABEL[run.docType] ?? run.docType;
+    let traineeName = "";
+    if (run.traineeId != null) {
+      const t = await prisma.trainee.findUnique({ where: { id: run.traineeId }, select: { name: true } });
+      traineeName = t?.name ? `(${t.name})` : "";
+    }
+    const docTitle = `${docLabel}${traineeName} · ${run.periodStart.toISOString().slice(0, 10)}~${run.periodEnd.toISOString().slice(0, 10)}`;
+
     if (action === "confirm") {
       await prisma.documentRun.update({ where: { id: runId }, data: { signStage: "CONFIRMED" } });
+      // 워커에게 승인(확정) 알림 — 반려만 알리던 비대칭 해소.
+      try {
+        await (prisma as any).workerNotice.create({
+          data: {
+            workerId: run.workerId,
+            agencyId: run.agencyId,
+            title: `[승인] ${docTitle}`,
+            body: `제출하신 문서가 승인(확정)되었습니다.\n\n■ 문서: ${docTitle}`,
+            type: "INFO",
+            kind: "NOTICE_INDIVIDUAL",
+            link: "/worker/docs",
+          },
+        });
+      } catch (e) { console.warn("[document-runs confirm] 워커 알림 실패:", e); }
       return NextResponse.json({ success: true, signStage: "CONFIRMED" });
     }
 
@@ -57,17 +80,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (action === "request-changes") {
       const reason = String(body?.reason || "").trim();
       await prisma.documentRun.update({ where: { id: runId }, data: { signStage: "CHANGES_REQUESTED" } });
-
-      // 어떤 문서인지 구체 명시: 문서명(+훈련생) + 기간
-      const docLabel = DOC_LABEL[run.docType] ?? run.docType;
-      let traineeName = "";
-      if (run.traineeId != null) {
-        const t = await prisma.trainee.findUnique({ where: { id: run.traineeId }, select: { name: true } });
-        traineeName = t?.name ? `(${t.name})` : "";
-      }
-      const ps = run.periodStart.toISOString().slice(0, 10);
-      const pe = run.periodEnd.toISOString().slice(0, 10);
-      const docTitle = `${docLabel}${traineeName} · ${ps}~${pe}`;
 
       await (prisma as any).workerNotice.create({
         data: {

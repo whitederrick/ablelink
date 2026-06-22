@@ -1785,6 +1785,7 @@ model ManagerNotice {
   ticketId  BigInt?   @map("ticket_id")
   title     String
   body      String
+  link      String?   // 바로가기 경로(예: /manager/assignments). 처리필요 알림용.
   readAt    DateTime? @map("read_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
