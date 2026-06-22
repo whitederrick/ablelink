@@ -1187,7 +1187,13 @@ export default function AttendanceInboxClient() {
                       )
                     );
                   } else {
-                    updateSelected((it) => pushTimeline(it, "담당자 보완 요청", modal.draft));
+                    // 보완 요청 — 서버 반영(사유 요청과 동일 패턴: 멱등·알림·타임라인)
+                    const { ok, json } = await postJson<{ success: boolean; message?: string }>(
+                      `/api/admin/attendance-inbox/${selected.id}/request-supplement`,
+                      { message: modal.draft }
+                    ).catch(() => ({ ok: false, status: 0, json: null as any }));
+                    if (!ok) { alert(json?.message || "보완 요청에 실패했습니다."); setModal({ type: "NONE" }); return; }
+                    await reloadItems();
                   }
 
                   setModal({ type: "NONE" });

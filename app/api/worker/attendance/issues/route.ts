@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
         requestedAt: true,
         dailyAttendance: { select: { workDate: true, site: { select: { companyName: true } } } },
         events: {
-          where: { type: "REASON_REQUESTED" },
+          where: { type: { in: ["REASON_REQUESTED", "SUPPLEMENT_REQUESTED"] } },
           orderBy: { createdAt: "desc" },
           take: 1,
           select: { message: true },
