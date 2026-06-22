@@ -1135,16 +1135,19 @@ export default function AttendanceInboxClient() {
                   if (!selected) return;
 
                   if (modal.type === "REQUEST_REASON") {
-                    const { ok } = await postJson<{ success: boolean }>(
+                    const { ok, json } = await postJson<{ success: boolean; message?: string }>(
                       `/api/admin/attendance-inbox/${selected.id}/request-reason`,
                       { message: modal.draft }
-                    ).catch(() => ({ ok: false, status: 0, json: null }));
+                    ).catch(() => ({ ok: false, status: 0, json: null as any }));
+
+                    // 중복 차단(이미 요청됨) 등 실패 시 서버 메시지 표시하고 중단(로컬 반영 안 함)
+                    if (!ok) { alert(json?.message || "요청에 실패했습니다."); setModal({ type: "NONE" }); return; }
 
                     updateSelected((it) =>
                       pushTimeline(
                         { ...it, status: "WORKER_REASON_MISSING" },
                         "담당자 사유 등록 요청",
-                        ok ? modal.draft : `${modal.draft}\n\n(서버 반영 실패: 로컬 반영)`
+                        modal.draft
                       )
                     );
                   } else {
