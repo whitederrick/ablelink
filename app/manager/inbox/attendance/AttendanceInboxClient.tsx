@@ -14,6 +14,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import PageHeader from "../../_components/PageHeader";
 import Pagination from "../../_components/Pagination";
+import { T } from "../../_styles";
 
 type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
 type IssueFilter = IssueType | "ALL";
@@ -772,83 +773,71 @@ export default function AttendanceInboxClient() {
               <div className="text-xs text-slate-400">정렬: 날짜 최신순</div>
             </div>
 
-            {/* 제목줄 — 행 구성 안내 */}
-            <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50 px-6 py-2 text-[11px] font-black text-slate-500">
-              <div className="min-w-0 flex-1">직무지도원 성명 · 현장(사업체) · 근무일</div>
-              <div className="shrink-0">이슈 / 보정</div>
-              <div className="shrink-0">처리 상태</div>
+            {/* 목록 — 컬럼 테이블(다른 화면 표준, 제목·데이터 좌측 정렬) */}
+            <div className="overflow-x-auto">
+              <table className="w-full [&_th]:px-2.5 [&_td]:px-2.5">
+                <thead>
+                  <tr>
+                    {["직무지도원 성명", "현장(사업체)", "근무일", "이슈/보정 현황", "처리 상태"].map((h) => (
+                      <th key={h} className={T.th}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageItems.length === 0 ? (
+                    <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400">조건에 해당하는 항목이 없습니다.</td></tr>
+                  ) : (
+                    pageItems.map((it) => {
+                      const active = it.id === selectedId;
+                      const { shown, rest, hasAny } = getListIssueBadges(it);
+                      return (
+                        <tr
+                          key={it.id}
+                          data-item-id={it.id}
+                          onClick={() => setSelectedId(it.id)}
+                          className={cx(
+                            "cursor-pointer border-b border-slate-50 transition",
+                            active ? "bg-sky-50" : "hover:bg-slate-50"
+                          )}
+                        >
+                          <td className={`${T.td} whitespace-nowrap font-semibold text-slate-900`}>{it.workerName}</td>
+                          <td className={T.td}><div className="max-w-[120px] truncate">{it.siteName}</div></td>
+                          <td className={`${T.td} whitespace-nowrap`}>{fmtYmdDots(it.workDate)}</td>
+                          <td className={T.td}>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {it.payrollPending ? (
+                                <span className="inline-flex items-center rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">보정대기</span>
+                              ) : null}
+                              {hasAny ? (
+                                <>
+                                  {shown.map((t) => (
+                                    <span key={t} className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${ISSUE_STYLE[t].className}`}>{ISSUE_LABEL[t]}</span>
+                                  ))}
+                                  {rest > 0 ? (<span className="inline-flex items-center rounded-full bg-black/10 px-2 py-0.5 text-xs font-semibold text-slate-700">+{rest}</span>) : null}
+                                </>
+                              ) : (!it.payrollPending ? <span className="text-slate-300">-</span> : null)}
+                            </div>
+                          </td>
+                          <td className={T.td}>
+                            <span className={[
+                              "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] font-semibold text-white",
+                              it.status === "ADMIN_RESOLVED" ? "bg-emerald-600"
+                                : it.status === "WORKER_REPLIED" ? "bg-sky-600"
+                                : it.status === "WORKER_REASON_MISSING" ? "bg-rose-600"
+                                : "bg-slate-600",
+                            ].join(" ")}>
+                              {STATUS_LABEL[it.status]}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
 
             <div className="p-2">
-              <div className="space-y-[3px] p-2">
-                {pageItems.length === 0 ? (
-                  <div className="rounded-xl border p-6 text-sm text-slate-500">조건에 해당하는 항목이 없습니다.</div>
-                ) : (
-                  pageItems.map((it) => {
-                    const active = it.id === selectedId;
-                    const { shown, rest, hasAny } = getListIssueBadges(it);
-
-                    return (
-                      <button
-                        key={it.id}
-                        type="button"
-                        data-item-id={it.id}
-                        onClick={() => setSelectedId(it.id)}
-                        className={cx(
-                          "w-full rounded-lg border border-slate-100 px-4 py-[5px] text-left transition",
-                          active ? "border-sky-300 bg-sky-50 ring-2 ring-sky-200" : "hover:bg-slate-50"
-                        )}
-                      >
-                        <div className="mb-0 flex items-center gap-3">
-                          <div className="min-w-0 flex-1 truncate text-[15px] font-medium text-slate-800">
-                            {it.workerName}
-                            <span className="text-slate-300"> · </span>
-                            {it.siteName}
-                            <span className="text-slate-300"> · </span>
-                            {fmtYmdDots(it.workDate)}
-                          </div>
-
-                          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                            {it.payrollPending ? (
-                              <span className="inline-flex items-center rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">
-                                보정대기
-                              </span>
-                            ) : null}
-                            {hasAny ? (
-                              <>
-                                {shown.map((t) => (
-                                  <span
-                                    key={t}
-                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${ISSUE_STYLE[t].className}`}
-                                  >
-                                    {ISSUE_LABEL[t]}
-                                  </span>
-                                ))}
-                                {rest > 0 ? (
-                                  <span className="inline-flex items-center rounded-full bg-black/10 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                                    +{rest}
-                                  </span>
-                                ) : null}
-                              </>
-                            ) : null}
-                          </div>
-
-                          <span className={[
-                            "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 py-1 text-[11px] font-semibold text-white",
-                            it.status === "ADMIN_RESOLVED" ? "bg-emerald-600"
-                              : it.status === "WORKER_REPLIED" ? "bg-sky-600"
-                              : it.status === "WORKER_REASON_MISSING" ? "bg-rose-600"
-                              : "bg-slate-600",
-                          ].join(" ")}>
-                            {STATUS_LABEL[it.status]}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-
               {/* pagination — 공용 컴포넌트 */}
               <Pagination className="mt-3 px-1" page={page} totalPages={totalPages} total={viewItems.length} onPageChange={setPage} />
             </div>
