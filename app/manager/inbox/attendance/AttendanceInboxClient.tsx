@@ -698,7 +698,7 @@ export default function AttendanceInboxClient() {
 
           {/* 보정대기 건 확인(별도) + 이슈 필터(단일) — 보정대기는 단일선택과 별개로 좌측 분리 */}
           <div className="col-span-12 lg:col-span-6">
-            <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
+            <div className="flex flex-wrap items-start gap-x-10 gap-y-3">
               {/* 보정대기 건 확인 — 큰 이슈 사항, 단일선택 이슈 필터와 독립 */}
               <div>
                 <label className="mb-1 block text-sm font-semibold text-slate-700">보정대기 건 확인</label>
@@ -712,7 +712,7 @@ export default function AttendanceInboxClient() {
                       : "border-rose-200 bg-white text-rose-600 hover:bg-rose-50",
                   )}
                 >
-                  ⛔ 보정대기(급여보류){payrollPendingCount > 0 ? ` ${payrollPendingCount}` : ""}
+                  ⛔ 보정대기(급여보류)<span className="ml-1 inline-block w-5 text-center tabular-nums">{payrollPendingCount > 0 ? payrollPendingCount : ""}</span>
                 </button>
               </div>
 
