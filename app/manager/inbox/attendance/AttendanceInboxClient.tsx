@@ -767,8 +767,8 @@ export default function AttendanceInboxClient() {
           <div className="h-full rounded-xl border border-slate-100 bg-white">
             <div className="flex items-center justify-between border-b border-gray-50 px-4 py-3">
               <div className="flex items-baseline gap-2">
-                <div className="text-sm font-semibold text-slate-800">목록 조회</div>
-                <div className="text-sm ml-1 text-sky-600">{loading ? "불러오는 중…" : `(총 ${viewItems.length}건)`}</div>
+                <div className="text-base font-semibold text-slate-800">목록 조회</div>
+                {loading ? <div className="ml-1 text-sm text-sky-600">불러오는 중…</div> : null}
               </div>
               <div className="text-xs text-slate-400">정렬: 날짜 최신순</div>
             </div>
