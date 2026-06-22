@@ -39,10 +39,13 @@ export function isIllegalBusinessIncome(hasEmploymentContract: boolean, chosen: 
 }
 
 export interface InsuranceInput {
-  employmentMonths: number; // 고용기간(개월, 계약 시작~종료). 계약 없으면 Infinity(일용 아님).
+  employmentMonths: number; // 고용기간(개월, 계약 시작~종료). 계약 없으면 Infinity(일용 아님). 표기·폴백용.
   monthlyHours: number;     // 월 소정근로시간
   monthlyDays: number;      // 월 근로일수
   continuousMonths: number; // 계속근로 개월수(최초 계약/배정 시작~현재)
+  // 일용(1개월 미만) 판정 — 달력 기준(2월 등 월별 일수 차이 반영). 주어지면 이 값을 우선 사용,
+  // 없으면 employmentMonths < 1 로 폴백(하위호환).
+  employmentUnderOneMonth?: boolean;
 }
 
 export interface InsuranceResult {
@@ -66,8 +69,9 @@ export function determineInsurances(incomeType: IncomeType, x: InsuranceInput): 
   if (incomeType === "BUSINESS") {
     return { tier: "NONE", insurances: [], workerDeductible: [] };
   }
-  // 일용근로자: 1개월 미만 고용
-  if (x.employmentMonths < 1) {
+  // 일용근로자: 1개월 미만 고용(달력 기준 우선, 없으면 employmentMonths < 1 폴백)
+  const underOneMonth = x.employmentUnderOneMonth ?? (x.employmentMonths < 1);
+  if (underOneMonth) {
     return { tier: "DAILY_WORKER", insurances: ["employment", "industrial"], workerDeductible: ["employment"] };
   }
   // 일반 단시간/상용: 월 소정근로 60시간 이상 또는 월 8일 이상

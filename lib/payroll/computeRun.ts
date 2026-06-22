@@ -27,6 +27,23 @@ function spanDays(start: Date, end: Date): number {
   return Math.max(0, Math.floor((end.getTime() - start.getTime()) / DAY_MS) + 1);
 }
 
+// start에 n개월 더하기(달력 기준, 말일 클램프). UTC 기준.
+function addMonthsClampUTC(d: Date, n: number): Date {
+  const day = d.getUTCDate();
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
+  const lastDay = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  t.setUTCDate(Math.min(day, lastDay));
+  return t;
+}
+
+// 계약기간[start, end](양끝 포함)이 달력 기준 1개월 미만인가 → 일용근로자 판정.
+// 1개월 이상 = (start + 1개월) <= (end + 1일). 월별 일수 차이(2월 28/29 등)를 정확히 반영.
+function isUnderOneCalendarMonth(start: Date, end: Date): boolean {
+  const startPlus1 = addMonthsClampUTC(start, 1).getTime();
+  const endPlus1 = end.getTime() + DAY_MS;
+  return startPlus1 > endPlus1;
+}
+
 export type PayrollItemInput = {
   workerId: bigint;
   grossPay: Decimal;
@@ -318,6 +335,10 @@ export async function computePayrollItems(
     const employmentMonths = (empContract?.contractStart && empContract?.contractEnd)
       ? spanDays(empContract.contractStart, empContract.contractEnd) / 30
       : Infinity;
+    // 일용 판정은 달력 기준(월별 일수 차이 반영). 계약 없으면 일용 아님.
+    const employmentUnderOneMonth = (empContract?.contractStart && empContract?.contractEnd)
+      ? isUnderOneCalendarMonth(empContract.contractStart, empContract.contractEnd)
+      : false;
     const firstStart = firstContract?.contractStart ?? empContract?.contractStart ?? periodStartDate;
     const continuousMonths = spanDays(firstStart, periodEndDate) / 30;
     const elig = determineEligibility(
@@ -326,7 +347,7 @@ export async function computePayrollItems(
         hasAttendance: workedDays > 0,
         freelancerOverride: contract?.incomeType === "BUSINESS" && !empContract,
       },
-      { employmentMonths, monthlyHours, monthlyDays: workedDays, continuousMonths },
+      { employmentMonths, monthlyHours, monthlyDays: workedDays, continuousMonths, employmentUnderOneMonth },
     );
 
     // ── 공제 계산 ──

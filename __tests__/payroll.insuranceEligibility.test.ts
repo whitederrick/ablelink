@@ -74,6 +74,16 @@ describe("determineInsurances (4대보험 차등)", () => {
     const r = determineInsurances("EMPLOYMENT", { employmentMonths: 0.9, monthlyHours: 200, monthlyDays: 25, continuousMonths: 1 });
     expect(r.tier).toBe("DAILY_WORKER");
   });
+
+  it("달력 기준 boolean 우선: employmentUnderOneMonth=true면 employmentMonths 커도 일용", () => {
+    const r = determineInsurances("EMPLOYMENT", { ...base, employmentMonths: 12, employmentUnderOneMonth: true });
+    expect(r.tier).toBe("DAILY_WORKER");
+  });
+
+  it("달력 기준 boolean 우선: employmentUnderOneMonth=false면 employmentMonths 작아도 일용 아님", () => {
+    const r = determineInsurances("EMPLOYMENT", { ...base, employmentMonths: 0.9, employmentUnderOneMonth: false, monthlyHours: 80, monthlyDays: 20 });
+    expect(r.tier).toBe("REGULAR");
+  });
 });
 
 describe("determineEligibility (통합)", () => {
