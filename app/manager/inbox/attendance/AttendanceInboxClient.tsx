@@ -761,9 +761,10 @@ export default function AttendanceInboxClient() {
       </div>
 
       {/* ===== Main 2-pane ===== */}
-      <div className="grid grid-cols-12 gap-4">
+      {/* 목록:상세 = 55:45 (11fr:9fr) — 우측을 원래(50:50) 대비 약 10% 축소 */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[11fr_9fr]">
         {/* Left list */}
-        <div className="col-span-12 lg:col-span-7 xl:col-span-7">
+        <div className="min-w-0">
           <div className="h-full rounded-xl border border-slate-100 bg-white">
             <div className="flex items-center justify-between border-b border-gray-50 px-4 py-3">
               <div className="flex items-baseline gap-2">
@@ -845,7 +846,7 @@ export default function AttendanceInboxClient() {
         </div>
 
         {/* Right detail */}
-        <div className="col-span-12 lg:col-span-5 xl:col-span-5">
+        <div className="min-w-0">
           <div className="flex h-full flex-col rounded-xl border border-slate-100 bg-white p-5">
             {!selected ? (
               <div className="rounded-xl border p-6 text-sm text-slate-500">좌측 목록에서 항목을 선택하세요.</div>
