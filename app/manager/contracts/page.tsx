@@ -612,18 +612,19 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
               </div>
             </section>
 
-            {/* 사업주 */}
+            {/* 사업주 — 본 기관 정보 자동 입력(수정 잠금). 변경은 설정 한 곳에서만. */}
             <section className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/50 p-3">
-              <label className={T.label}>사업주(갑) — 위탁기관 정보 자동 입력 (수정 가능)</label>
-              {(!employerRepName || !employerPhone || !employerAddress) && (
-                <p className="text-[11px] font-semibold text-amber-600">대표자·전화·주소가 비어 있으면 <a href="/manager/settings" target="_blank" className="underline">사업주 정보 설정</a>에서 미리 등록하면 매번 자동 입력됩니다.</p>
+              <label className={T.label}>사업주(갑) — 본 기관 정보 자동 입력 · 수정 불가</label>
+              {(!employerBizName || !employerRepName || !employerPhone || !employerAddress) && (
+                <p className="text-[11px] font-semibold text-amber-600">비어 있는 항목은 <a href="/manager/settings" target="_blank" className="underline">사업주 정보 설정</a>에서 등록하세요. 계약서에 자동 반영됩니다.</p>
               )}
               <div className="grid grid-cols-2 gap-2">
-                <input value={employerBizName} onChange={e => setEmployerBizName(e.target.value)} placeholder="사업체명" className={`w-full ${T.input}`} />
-                <input value={employerPhone} onChange={e => setEmployerPhone(e.target.value)} placeholder="전화" className={`w-full ${T.input}`} />
+                <input value={employerBizName} readOnly tabIndex={-1} placeholder="사업체명" className={`w-full ${T.input} cursor-not-allowed bg-slate-100 text-slate-500`} />
+                <input value={employerPhone} readOnly tabIndex={-1} placeholder="전화" className={`w-full ${T.input} cursor-not-allowed bg-slate-100 text-slate-500`} />
               </div>
-              <input value={employerAddress} onChange={e => setEmployerAddress(e.target.value)} placeholder="주소" className={`w-full ${T.input}`} />
-              <input value={employerRepName} onChange={e => setEmployerRepName(e.target.value)} placeholder="대표자명" className={`w-full ${T.input}`} />
+              <input value={employerAddress} readOnly tabIndex={-1} placeholder="주소" className={`w-full ${T.input} cursor-not-allowed bg-slate-100 text-slate-500`} />
+              <input value={employerRepName} readOnly tabIndex={-1} placeholder="대표자명" className={`w-full ${T.input} cursor-not-allowed bg-slate-100 text-slate-500`} />
+              <p className="text-[11px] font-medium text-slate-400">사업체명·대표자·주소·전화는 <a href="/manager/settings" target="_blank" className="underline">사업주 정보 설정</a>에서만 변경됩니다(계약마다 수정 불가).</p>
 
               {/* 대표 서명 적용 (명시적 액션) */}
               <div className="mt-1 rounded-xl border border-slate-200 bg-white p-2.5">

@@ -297,11 +297,11 @@ export async function POST(req: NextRequest) {
         overtimeRate:   toInt(overtimeRate),
         wagePayday:     str(wagePayday),
         wagePayMethod:  str(wagePayMethod),
-        // 사업주 스냅샷(자동채움+수정값)
-        employerBizName: str(employerBizName) ?? agencyRow?.name ?? null,
-        employerPhone:   str(employerPhone) ?? agencyRow?.phoneNumber ?? null,
-        employerAddress: str(employerAddress) ?? agencyRow?.address ?? null,
-        employerRepName: str(employerRepName) ?? agencyRow?.representativeName ?? null,
+        // 사업주(갑) 스냅샷 — 본 기관 등록값으로 고정. 클라이언트 override 무시(타 기관명 오기입 방지·작성 폼 수정 잠금과 일치).
+        employerBizName: agencyRow?.name ?? null,
+        employerPhone:   agencyRow?.phoneNumber ?? null,
+        employerAddress: agencyRow?.address ?? null,
+        employerRepName: agencyRow?.representativeName ?? null,
         workerAddress:   str(workerAddress),
         // 사업주(갑) 서명: 작성 화면에서 '대표 서명 적용'을 명시적으로 선택한 경우에만 주입.
         //  (자동 주입 금지 — 미선택 시 대표 서명칸은 비어 발송된다.)
