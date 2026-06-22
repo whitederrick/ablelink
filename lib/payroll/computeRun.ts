@@ -9,7 +9,7 @@ import { overtimeMinutesForDay, workEndMinutesForDay } from "@/lib/attendance/ov
 import { computeWeeklyHoliday } from "@/lib/payroll/weeklyHoliday";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
-import { determineEligibility } from "@/lib/payroll/insuranceEligibility";
+import { determineEligibility, isIllegalBusinessIncome, type IncomeType } from "@/lib/payroll/insuranceEligibility";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const SERVICE_STEP_LABEL: Record<string, string> = {
@@ -355,6 +355,10 @@ export async function computePayrollItems(
     const deductionBreakdown: Record<string, number> = {};
     const deductLines: { key: string; name: string; amount: number }[] = [];
     const incomeType = elig.incomeType;
+    // P2-5: 근로계약이 있는데 급여 기준이 사업소득(BUSINESS)으로 설정된 위법 소지 — 경고만(계산은 근로소득으로 자동 처리됨).
+    if (contract?.incomeType && isIllegalBusinessIncome(!!empContract, contract.incomeType as IncomeType)) {
+      (breakdown as any).incomeWarn = "근로계약 존재 — 사업소득(3.3%) 설정은 위법 소지(근로소득으로 자동 계산됨)";
+    }
     const pushDed = (key: string, name: string, amount: number) => {
       deductionBreakdown[name] = amount;
       deductLines.push({ key, name, amount });

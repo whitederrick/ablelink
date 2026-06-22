@@ -897,11 +897,18 @@ export default function PayrollPage() {
                   {[...selectedRun.items].sort((a, b) => a.workerName.localeCompare(b.workerName, "ko")).slice((detailPage - 1) * DETAIL_PAGE_SIZE, detailPage * DETAIL_PAGE_SIZE).map(item => {
                     const bd = item.breakdown as any;
                     const incType: IncomeType = bd?.incomeType ?? "BUSINESS";
+                    // P1-4 이상치: 급여 0원·급여 기준 없음·사업소득 충돌 경고 → 행 강조
+                    const warn = bd?.incomeWarn as string | undefined;
+                    const isZeroPay = Number(item.netPay) <= 0;
+                    const noPayContract = bd?.note === "급여 계약 없음";
+                    const anomalous = isZeroPay || noPayContract || !!warn;
                     return (
-                      <tr key={item.id} className={T.trBase}>
+                      <tr key={item.id} className={`${T.trBase} ${anomalous ? "bg-amber-50/50" : ""}`}>
                         <td className={`${T.td} whitespace-nowrap`}>
                           <span className="font-semibold">{item.workerName} <span className="text-[13px] font-normal text-slate-500">({maskLoginId(item.loginId)})</span></span>
+                          {isZeroPay && <span className="ml-1.5 inline-flex items-center rounded bg-rose-100 px-1.5 py-0.5 text-[11px] font-bold text-rose-600">급여 0원</span>}
                           {bd?.note && <span className="ml-1.5 text-[11px] font-semibold text-amber-600">⚠ {bd.note}</span>}
+                          {warn && <span className="ml-1.5 text-[11px] font-semibold text-rose-600">⚠ {warn}</span>}
                         </td>
                         <td className={T.td}>
                           <span className={`${T.badge} ${incType === "EMPLOYMENT" ? "bg-emerald-50 text-emerald-600" : "bg-sky-50 text-sky-600"}`}>{incType === "EMPLOYMENT" ? "근로소득" : "사업소득"}</span>
