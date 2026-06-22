@@ -9,6 +9,16 @@ import { getKstDateString } from "@/lib/time";
 import { getConfigNumber } from "@/lib/systemConfig";
 import { isPayrollPending, lateMinutes, earlyLeaveMinutes, SERIOUS_LATE_MIN } from "@/lib/attendance/payrollGate";
 
+// 타임라인 이벤트(AttendanceIssueEvent.type) → 한글 라벨
+const EVENT_LABEL: Record<string, string> = {
+  ISSUE_CREATED:        "이슈 등록",
+  REASON_REQUESTED:     "담당자 사유 등록 요청",
+  REASON_REPLIED:       "직무지도원 사유 회신",
+  SUPPLEMENT_REQUESTED: "담당자 보완 요청",
+  RESOLVED:             "담당자 처리 완료",
+  MEMO_UPDATED:         "운영 메모 갱신",
+};
+
 type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
 type InboxStatus =
   | "ADMIN_UNCONFIRMED"
@@ -180,7 +190,9 @@ export async function GET(req: Request) {
     // ── 성능: 행별 순차 DB 조회/쓰기(N+1) 제거 ──
     //  1) 면제 제외 + 이슈 있는 행만 후보 수집(행별 컨텍스트 1회 계산)
     //  2) 기존 이슈 일괄 findMany(1쿼리)  3) 신규만 create / 변경된 OPEN만 update(불필요 쓰기 스킵)
-    const issueSelect = { dailyAttendanceId: true, status: true, issueTypes: true, workerReasonText: true, adminMemo: true, updatedAt: true, createdAt: true } as const;
+    const issueSelect = { dailyAttendanceId: true, status: true, issueTypes: true, workerReasonText: true, adminMemo: true, updatedAt: true, createdAt: true,
+      events: { select: { id: true, type: true, message: true, createdAt: true }, orderBy: { createdAt: "asc" }, take: 50 },
+    } as const;
 
     type Cand = {
       r: (typeof rows)[number]; derived: IssueType[];
@@ -300,7 +312,12 @@ export async function GET(req: Request) {
         missedClockOut: r.status === "WORKING" && r.workDate < today && !r.isFinalClosed,
         seriousLateMin: itemThreshold,
         updatedAt: (upserted.updatedAt ?? upserted.createdAt).toISOString(),
-        timeline: [],
+        timeline: (((upserted as any).events ?? []) as any[]).map((e) => ({
+          id: e.id.toString(),
+          at: e.createdAt.toISOString(),
+          label: EVENT_LABEL[e.type] ?? e.type,
+          detail: e.message ?? null,
+        })),
       });
     }
 

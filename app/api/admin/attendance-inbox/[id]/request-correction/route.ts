@@ -21,11 +21,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const att = await prisma.dailyAttendance.findFirst({
       where: { id: attendanceId, site: { agencyId: scope.agencyId } },
-      select: { id: true, workerId: true, workDate: true, payrollConfirmedAt: true },
+      select: { id: true, workerId: true, workDate: true, payrollConfirmedAt: true, correctionRequestedAt: true },
     });
     if (!att) return NextResponse.json({ success: false, message: "NOT_FOUND" }, { status: 404 });
     if (att.payrollConfirmedAt) {
       return NextResponse.json({ success: false, message: "이미 보정이 확정된 출근 기록입니다." }, { status: 409 });
+    }
+    // 멱등: 이미 보정 요청을 보냈으면 중복 발송 차단(직무지도원 수정요청/확정 전까지).
+    if (att.correctionRequestedAt) {
+      return NextResponse.json({ success: false, code: "ALREADY_REQUESTED", message: "이미 시각 보정을 요청했습니다. 직무지도원 회신을 기다려주세요." }, { status: 409 });
     }
 
     const body = await req.json().catch(() => ({} as any));

@@ -20,6 +20,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
     if (!att) return NextResponse.json({ success: false, message: "NOT_FOUND" }, { status: 404 });
 
+    // 멱등: 이미 사유 등록을 요청해 직무지도원 회신 대기 중(REQUESTED)이면 중복 발송 차단.
+    const existingIssue = await prisma.attendanceIssue.findUnique({ where: { dailyAttendanceId }, select: { status: true } });
+    if (existingIssue?.status === "REQUESTED") {
+      return NextResponse.json({ success: false, code: "ALREADY_REQUESTED", message: "이미 사유 등록을 요청했습니다. 직무지도원 회신을 기다려주세요." }, { status: 409 });
+    }
+
     const body = await req.json().catch(() => ({} as any));
     const message =
       typeof body?.message === "string" && body.message.trim()
