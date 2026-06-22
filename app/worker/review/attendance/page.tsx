@@ -16,6 +16,7 @@ type AttRec = {
   isFinalClosed: boolean;
   isGpsModified: boolean;
   status: string;
+  correctionRequested?: boolean; // 관리자가 이 날 시각 보정을 요청함
 };
 
 type EditReq = {
@@ -94,6 +95,18 @@ export default function AttendanceReviewPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // 딥링크(?date=YYYY-MM-DD): 해당 월로 이동 + 그 날 강조/스크롤. (관리자 보정 요청 알림 바로가기)
+  const [highlightDate, setHighlightDate] = useState("");
+  useEffect(() => {
+    const d = new URLSearchParams(window.location.search).get("date");
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) { setYearMonth(d.slice(0, 7)); setHighlightDate(d); }
+  }, []);
+  useEffect(() => {
+    if (!highlightDate || loading) return;
+    const el = document.querySelector(`[data-day="${highlightDate}"]`);
+    if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
+  }, [records, highlightDate, loading]);
+
   function changeMonth(delta: number) {
     const [y, m] = yearMonth.split("-").map(Number);
     const d = new Date(y, m - 1 + delta, 1);
@@ -160,6 +173,17 @@ export default function AttendanceReviewPage() {
     setReqModal(null);
     if (data.success) { showToast(data.message); load(); }
     else showToast(data.message || "요청 실패");
+  }
+
+  // 수정 요청 모달 열기. PENDING 요청이 있으면 그 값으로 프리필(요청 변경/재제출 — POST가 기존 PENDING을 갱신).
+  function openEditModal(rec: AttRec, existing?: EditReq) {
+    setReqModal({
+      rec,
+      proposedStart: existing?.proposedStart || rec.startTime || "",
+      proposedEnd:   existing?.proposedEnd   || rec.endTime   || "",
+      reason:        existing?.reason || "",
+      submitting: false,
+    });
   }
 
   // 해당 출근 기록의 최근 수정 요청 찾기
@@ -274,11 +298,20 @@ export default function AttendanceReviewPage() {
               const hours  = calcHours(rec.startTime, rec.endTime);
               const req    = getReq(rec.id);
 
+              const needsCorrection = !!rec.correctionRequested && (!req || req.status !== "APPROVED");
               return (
-                <div key={rec.id}
+                <div key={rec.id} data-day={rec.workDate}
                   className={`rounded-2xl border bg-white px-4 py-3 transition ${
+                    rec.workDate === highlightDate ? "border-amber-400 ring-2 ring-amber-200" :
+                    needsCorrection ? "border-amber-300" :
                     rec.isFinalClosed ? "border-emerald-100" : "border-slate-100"
                   }`}>
+                  {needsCorrection && (
+                    <div className="mb-2 flex items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-amber-500" />
+                      <span className="text-[11px] font-bold text-amber-700">관리자가 이 날 출퇴근 시각 보정을 요청했어요 — 아래 ‘수정 요청’으로 정확한 시각을 제출해주세요.</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3">
                     {/* 날짜 */}
                     <div className="w-14 flex-shrink-0 text-center">
@@ -333,19 +366,13 @@ export default function AttendanceReviewPage() {
                           <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-600">
                             <CheckCircle2 className="h-3 w-3" />확정
                           </span>
-                          {/* 확정 후에도 수정 요청 가능 */}
-                          {(!req || req.status === "REJECTED") && (
+                          {/* 확정 후에도 수정 요청 가능. PENDING이면 '요청 변경'(기존 요청 갱신) */}
+                          {(!req || req.status === "REJECTED" || req.status === "PENDING") && (
                             <button
-                              onClick={() => setReqModal({
-                                rec,
-                                proposedStart: rec.startTime || "",
-                                proposedEnd:   rec.endTime   || "",
-                                reason: "",
-                                submitting: false,
-                              })}
+                              onClick={() => openEditModal(rec, req?.status === "PENDING" ? req : undefined)}
                               className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500 active:scale-95"
                             >
-                              <PenLine className="h-3 w-3" />수정 요청
+                              <PenLine className="h-3 w-3" />{req?.status === "PENDING" ? "요청 변경" : "수정 요청"}
                             </button>
                           )}
                         </>
@@ -355,18 +382,12 @@ export default function AttendanceReviewPage() {
                             className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-black text-white active:scale-95">
                             확정
                           </button>
-                          {(!req || req.status === "REJECTED") && (
+                          {(!req || req.status === "REJECTED" || req.status === "PENDING") && (
                             <button
-                              onClick={() => setReqModal({
-                                rec,
-                                proposedStart: rec.startTime || "",
-                                proposedEnd:   rec.endTime   || "",
-                                reason: "",
-                                submitting: false,
-                              })}
+                              onClick={() => openEditModal(rec, req?.status === "PENDING" ? req : undefined)}
                               className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-semibold text-slate-600 active:scale-95"
                             >
-                              <PenLine className="h-3 w-3" />수정 요청
+                              <PenLine className="h-3 w-3" />{req?.status === "PENDING" ? "요청 변경" : "수정 요청"}
                             </button>
                           )}
                         </div>

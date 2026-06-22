@@ -41,6 +41,8 @@ export async function GET(req: NextRequest) {
         isFinalClosed: r.isFinalClosed,
         isGpsModified: r.isGpsModified,
         status:        r.status,
+        // 관리자가 이 날 시각 보정을 요청했는지(미확정 상태에서만 의미). 워커 검토 화면 강조용.
+        correctionRequested: !!r.correctionRequestedAt && !r.payrollConfirmedAt,
       })),
     });
   } catch (e: any) {

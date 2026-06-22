@@ -49,7 +49,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             (note ? `\n\n요청 메모: ${note}` : "") +
             `\n\n아래를 눌러 정확한 출퇴근 시각으로 수정요청을 제출해주세요. (승인 전까지 급여 산정이 보류됩니다.)`,
           type: "WARN",
-          link: "/worker/review/attendance",
+          link: `/worker/review/attendance?date=${att.workDate}`,
         },
       });
     } catch { /* 비치명적 */ }

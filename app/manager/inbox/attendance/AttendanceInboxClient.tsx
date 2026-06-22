@@ -70,6 +70,7 @@ type InboxItem = {
   correctionRequestedAt?: string | null; // 위탁기관→워커 시각 보정 요청 시각
   seriousLateMin?: number;        // 심한지각/조퇴 기준(분, 기본 30)
   missedClockOut?: boolean;       // 퇴근 미실행(과거 WORKING·미확정) → 매니저 표준시각 확정 가능
+  hasPendingEdit?: boolean;       // 직무지도원이 제출한 수정요청이 승인 대기 중 → 보정요청 대신 '검토' 유도
 
   updatedAt: string; // ISO
   timeline: TimelineEvent[];
@@ -240,6 +241,7 @@ async function fetchInboxItems(filters: {
         correctionRequestedAt: it.correctionRequestedAt ?? null,
         seriousLateMin: typeof it.seriousLateMin === "number" ? it.seriousLateMin : 30,
         missedClockOut: Boolean(it.missedClockOut),
+        hasPendingEdit: Boolean(it.hasPendingEdit),
 
         updatedAt: String(it.updatedAt || new Date().toISOString()),
         timeline: Array.isArray(it.timeline) ? it.timeline : [],
@@ -936,6 +938,10 @@ export default function AttendanceInboxClient() {
                         {selected.correctionRequestedAt ? (
                           <span className="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-lg border border-rose-200 bg-white px-3 text-[13px] font-bold text-rose-600">
                             ✓ 보정요청됨 ({new Date(selected.correctionRequestedAt).toLocaleDateString()})
+                          </span>
+                        ) : selected.hasPendingEdit ? (
+                          <span className="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-lg border border-amber-300 bg-amber-50 px-3 text-[13px] font-bold text-amber-700">
+                            ⏳ 수정요청 제출됨 — 검토 후 승인하세요
                           </span>
                         ) : (
                           <button

@@ -151,6 +151,8 @@ export async function GET(req: Request) {
         endDistanceM: true,
         user: { select: { id: true, workerName: true } },
         site: { select: { id: true, companyName: true, lateThresholdMin: true } },
+        // 직무지도원이 제출한 수정요청 중 승인 대기(PENDING)가 있으면 보정요청 대신 '검토' 유도(중복 요청 방지).
+        editRequests: { where: { status: "PENDING" }, select: { id: true }, take: 1 },
         // ✅ workType은 Site가 아닌 SiteAssignment에 있음
         assignment: {
           select: {
@@ -290,6 +292,7 @@ export async function GET(req: Request) {
         lateMinutes: lateMin,
         earlyLeaveMinutes: earlyMin,
         payrollPending: isPayrollPending(gateInput, itemThreshold),
+        hasPendingEdit: (r.editRequests?.length ?? 0) > 0,
         payrollConfirmedAt: r.payrollConfirmedAt ? r.payrollConfirmedAt.toISOString() : null,
         correctionRequestedAt: r.correctionRequestedAt ? r.correctionRequestedAt.toISOString() : null,
         // 퇴근 미실행(보정대기): 과거 날짜 + 아직 WORKING(퇴근 안 누름) + 미확정.
