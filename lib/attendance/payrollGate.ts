@@ -70,8 +70,9 @@ export function earlyLeaveMinutes(a: PayrollGateInput): number | null {
 export function isPayrollPending(a: PayrollGateInput, thresholdMin: number = SERIOUS_LATE_MIN): boolean {
   if (a.exempt) return false;        // 버튼 면제 배정 → 실제시각 무시(보정대기 없음)
   if (a.payrollConfirmedAt) return false;
+  const thr = Math.max(thresholdMin, 1); // 0(무관용)도 정시는 제외, 1분 이상 지각부터 적용
   const late = lateMinutes(a);
-  if (late != null && late >= thresholdMin) return true;
+  if (late != null && late >= thr) return true;
   const early = earlyLeaveMinutes(a);
-  return early != null && early >= thresholdMin;
+  return early != null && early >= thr;
 }

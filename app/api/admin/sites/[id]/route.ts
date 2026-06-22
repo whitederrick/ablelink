@@ -208,8 +208,8 @@ export async function PATCH(
     // 지각 인정 기준(분). null/빈값 = 위탁기관 기본값 상속(컬럼 null로 저장).
     if (body.lateThresholdMin !== undefined) {
       const v = body.lateThresholdMin === null || body.lateThresholdMin === "" ? null : Number(body.lateThresholdMin);
-      if (v !== null && (!Number.isInteger(v) || v < 1 || v > 180)) {
-        throw new Error("VALIDATION:lateThresholdMin (1~180)");
+      if (v !== null && (!Number.isInteger(v) || v < 0 || v > 180)) {
+        throw new Error("VALIDATION:lateThresholdMin (0~180)");
       }
       (data as any).lateThresholdMin = v;
     }

@@ -17,6 +17,7 @@ type SiteDetail = {
 type AddrItem = { addressName: string; x: string; y: string };
 
 const RANGE_PRESETS = [50, 100, 150, 200, 300, 500];
+const LATE_PRESETS = [0, 5, 10, 15, 20, 25, 30, 35, 40]; // 지각 기준 프리셋(분)
 
 // 이 모달 전용 카드 — 전역 T.card(p-5)보다 상하 여백을 줄임(px-5 py-4). 카드 간 간격은 별도로 넓힘.
 const CARD = "rounded-2xl border border-slate-200 bg-white px-5 py-4";
@@ -40,7 +41,8 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
   const [gpsLat, setGpsLat] = useState("");
   const [gpsLon, setGpsLon] = useState("");
   const [allowanceRange, setAllowanceRange] = useState(100);
-  const [lateThresholdMin, setLateThresholdMin] = useState<string>(""); // ""=위탁기관 기본값 상속
+  const [lateThresholdMin, setLateThresholdMin] = useState<string>(""); // ""=위탁기관 기본값 상속. 저장 기준값(프리셋/직접 공통)
+  const [customLate, setCustomLate] = useState<string>("");             // '직접 설정' 입력칸 텍스트(프리셋 클릭 시 비움)
   const [agencyDefaultLate, setAgencyDefaultLate] = useState<number>(30); // 위탁기관 기본 지각 기준(표시용)
   const [amCapacity, setAmCapacity] = useState(0);
   const [pmCapacity, setPmCapacity] = useState(0);
@@ -103,7 +105,12 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
         setGpsLat(String(it.gpsLat ?? ""));
         setGpsLon(String(it.gpsLon ?? ""));
         setAllowanceRange(it.allowanceRange ?? 100);
-        setLateThresholdMin(it.lateThresholdMin != null ? String(it.lateThresholdMin) : "");
+        {
+          const lv = it.lateThresholdMin != null ? String(it.lateThresholdMin) : "";
+          setLateThresholdMin(lv);
+          // 프리셋에 없는 값(예: 22분)만 직접 설정칸에 노출. 프리셋 값/미설정은 칸 비움.
+          setCustomLate(lv !== "" && !LATE_PRESETS.includes(Number(lv)) ? lv : "");
+        }
         setAmCapacity(it.amCapacity ?? 0);
         setPmCapacity(it.pmCapacity ?? 0);
         setFullDayCapacity(it.fullDayCapacity ?? 0);
@@ -159,7 +166,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
     if (isNaN(allowanceRange) || allowanceRange < 50 || allowanceRange > 1000) return alert("GPS 허용 범위는 50~1000m 사이로 설정하세요.");
     if (lateThresholdMin.trim() !== "") {
       const lt = Number(lateThresholdMin);
-      if (!Number.isInteger(lt) || lt < 1 || lt > 180) return alert("지각 기준은 1~180분 사이로 설정하세요. (비우면 기관 기본값 사용)");
+      if (!Number.isInteger(lt) || lt < 0 || lt > 180) return alert("지각 기준은 0~180분 사이로 설정하세요. (비우면 기관 기본값 사용)");
     }
     if (isCreate && isAdmin && !agencyId) return alert("기관을 선택하세요.");
     setSaving(true);
@@ -341,16 +348,18 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                 <h3 className="mb-1 text-sm font-black text-slate-900">⏰ 지각 인정 기준</h3>
                 <p className="mb-3 text-xs font-semibold text-slate-400">출근이 표준 시업시각보다 이 시간 이상 늦으면 <b>지각</b>으로 표시하고, (미컨펌 시) 급여 보류(보정대기)됩니다. <b>비우면 위탁기관 기본값</b>을 따릅니다.</p>
                 <div className="flex flex-wrap items-center gap-2">
-                  {[15, 30, 45, 60].map(v => (
-                    <button key={v} type="button" onClick={() => setLateThresholdMin(String(v))}
-                      className={`rounded-xl border px-4 py-2 text-sm font-semibold transition active:scale-95 ${lateThresholdMin === String(v) ? "border-slate-950 bg-slate-950 font-black text-white" : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"}`}>{v}분</button>
+                  {LATE_PRESETS.map(v => (
+                    <button key={v} type="button" onClick={() => { setLateThresholdMin(String(v)); setCustomLate(""); }}
+                      className={`rounded-xl border px-3 py-2 text-sm font-semibold transition active:scale-95 ${customLate === "" && lateThresholdMin === String(v) ? "border-slate-950 bg-slate-950 font-black text-white" : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"}`}>{v}분</button>
                   ))}
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-semibold text-slate-500">직접 설정</span>
-                    <input type="number" min={1} max={180} step={15} value={lateThresholdMin} onChange={e => setLateThresholdMin(e.target.value)} placeholder="기관값" className={`w-28 text-center ${T.input}`} />
+                    <input type="number" min={0} max={180} value={customLate}
+                      onChange={e => { setCustomLate(e.target.value); setLateThresholdMin(e.target.value); }}
+                      placeholder="분" className={`w-24 text-center ${T.input}`} />
                     <span className="text-sm font-semibold text-slate-500">분</span>
                   </div>
-                  <button type="button" onClick={() => setLateThresholdMin("")}
+                  <button type="button" onClick={() => { setLateThresholdMin(""); setCustomLate(""); }}
                     className="ml-auto rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-50">기관 기본값 사용</button>
                 </div>
                 <p className="mt-2 text-sm font-bold text-slate-600">

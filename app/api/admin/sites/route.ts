@@ -220,8 +220,8 @@ export async function POST(req: NextRequest) {
 
     // 지각 인정 기준(분, 선택). null/빈값 = 위탁기관 기본값 상속.
     const lateThresholdMin = body.lateThresholdMin == null || body.lateThresholdMin === "" ? null : Number(body.lateThresholdMin);
-    if (lateThresholdMin !== null && (!Number.isInteger(lateThresholdMin) || lateThresholdMin < 1 || lateThresholdMin > 180)) {
-      throw new Error("VALIDATION:lateThresholdMin (1~180)");
+    if (lateThresholdMin !== null && (!Number.isInteger(lateThresholdMin) || lateThresholdMin < 0 || lateThresholdMin > 180)) {
+      throw new Error("VALIDATION:lateThresholdMin (0~180)");
     }
 
     // manager: 본인 agency / admin(운영자): body.agencyId 지정 필수

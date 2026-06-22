@@ -586,7 +586,7 @@ export default function AttendanceInboxClient() {
     //    실제 시각 없으면(과거 기록·일괄생성) 판정 안 함. 지각 기준=현장/기관 설정값(seriousLateMin, 기본 30).
     const expectedStartMin = getExpectedStartMin(it);
     const actualInMin = isoToLocalMin(it.actualClockInAt);
-    const lateThreshold = it.seriousLateMin ?? 30;
+    const lateThreshold = Math.max(it.seriousLateMin ?? 30, 1); // 0(무관용)도 1분 이상 지각부터
     if (expectedStartMin != null && actualInMin != null && actualInMin - expectedStartMin >= lateThreshold) {
       set.add("TIME_ANOMALY");
     }
