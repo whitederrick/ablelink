@@ -354,9 +354,8 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                     className="ml-auto rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-50">기관 기본값 사용</button>
                 </div>
                 <p className="mt-2 text-sm font-bold text-slate-600">
-                  {lateThresholdMin.trim() === ""
-                    ? <>현재 적용: <span className="text-sky-600">기관 기본값 {agencyDefaultLate}분</span></>
-                    : <>현재 적용: <span className="text-sky-600">이 현장 {lateThresholdMin}분</span></>}
+                  현재 현장(사이트) 지각 인정 기준 : <span className="text-sky-600">{lateThresholdMin.trim() === "" ? agencyDefaultLate : lateThresholdMin}분 이내</span>
+                  <span className="ml-1 text-xs font-semibold text-slate-400">{lateThresholdMin.trim() === "" ? "(기관 기본값)" : "(현장 전용)"}</span>
                 </p>
               </div>
 
