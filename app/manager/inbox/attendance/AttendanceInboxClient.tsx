@@ -962,7 +962,7 @@ export default function AttendanceInboxClient() {
                       <span className="text-sm font-bold text-amber-800">직무지도원이 퇴근 버튼을 누르지 않은 날입니다.</span>
                     </div>
                     <p className="mt-2 text-[13px] font-medium text-amber-800/90">
-                      출근부에 퇴근 시각이 비어 있습니다(급여 산정 제외). 직무지도원이 앱에서 사유와 함께 퇴근을 처리하도록 안내해 주세요.
+                      출근부에 퇴근 시각이 비어 있습니다(급여 산정 제외). 직무지도원이 사유와 함께 퇴근을 처리하도록 안내해 주세요.
                       끝내 처리되지 않으면 아래에서 <b>표준 퇴근시각</b>으로 확정할 수 있습니다(매니저 책임 확정).
                     </p>
                     <div className="mt-3">
