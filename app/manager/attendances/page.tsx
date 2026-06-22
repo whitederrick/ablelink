@@ -18,6 +18,7 @@ const ATT_BADGE = {
   working: { label: "근무중", tone: "sky" as const },
   before: { label: "출근전", tone: "slate" as const },
   gps: { label: "이탈", tone: "amber" as const },
+  normal: { label: "정상", tone: "emerald" as const },
 };
 
 const AttendanceMap = dynamic(() => import("./AttendanceMap"), { ssr: false });
@@ -349,15 +350,15 @@ export default function AttendancesPage() {
                       <span className="font-semibold text-slate-500">{formatTime(row.endTime)}</span>
                     )}
                   </td>
-                  <td className={T.td}>
+                  <td className={`${T.td} text-left`}>
                     <StatusBadge status={row.isFinalClosed ? "done" : row.startTime ? "working" : "before"} map={ATT_BADGE} />
                   </td>
-                  <td className={T.td}>
+                  <td className={`${T.td} text-left`}>
                     {row.isGpsModified
                       ? <StatusBadge status="gps" map={ATT_BADGE} />
                       : row.withinRange === true
-                      ? <span className="font-semibold text-emerald-600">정상</span>
-                      : "-"}
+                      ? <StatusBadge status="normal" map={ATT_BADGE} />
+                      : <span className="text-slate-300">-</span>}
                   </td>
                   <td className={`${T.td} ${row.startDistanceM && row.startDistanceM > 100 ? "font-semibold text-orange-600" : ""}`}>
                     {row.startDistanceM != null ? `${Math.round(row.startDistanceM)}m` : "-"}
