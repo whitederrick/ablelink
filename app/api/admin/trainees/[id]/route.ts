@@ -15,7 +15,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await req.json();
-    const { name, gender, birthDate, phoneNumber, guardianPhoneNumber,
+    const { name, gender, birthDate, phoneNumber, guardianPhoneNumber, guardianPhoneNumber2,
             disabilityType, severity, status, note } = body;
 
     const trainee = await prisma.trainee.findUnique({
@@ -30,7 +30,8 @@ export async function PATCH(
     if (gender !== undefined)              updateData.gender              = gender;
     if (birthDate !== undefined)           updateData.birthDate           = birthDate || null;
     if (phoneNumber !== undefined)         updateData.phoneNumber         = phoneNumber || null;
-    if (guardianPhoneNumber !== undefined) updateData.guardianPhoneNumber = guardianPhoneNumber || null;
+    if (guardianPhoneNumber !== undefined)  updateData.guardianPhoneNumber  = guardianPhoneNumber || null;
+    if (guardianPhoneNumber2 !== undefined) updateData.guardianPhoneNumber2 = guardianPhoneNumber2 || null;
     if (disabilityType !== undefined)      updateData.disabilityType      = disabilityType;
     if (severity !== undefined)            updateData.severity            = severity;
     if (note !== undefined)                updateData.note                = note?.trim() || null;

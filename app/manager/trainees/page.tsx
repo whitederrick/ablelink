@@ -94,7 +94,7 @@ export default function TraineesPage() {
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full min-w-[920px] border-collapse">
           <thead>
-            <tr>{["이름", "현장(사업체)", "성별", "생년월일", "연락처", "보호자 연락처", "장애유형", "장애정도", "상태"].map(h => (
+            <tr>{["이름", "현장(사업체)", "성별", "생년월일", "훈련생 연락처", "보호자 연락처", "장애유형", "장애정도", "상태"].map(h => (
               <th key={h} className={T.th}>{h}</th>
             ))}</tr>
           </thead>
@@ -110,7 +110,7 @@ export default function TraineesPage() {
                 <td className={`${T.td} whitespace-nowrap`}>{t.gender === "M" ? "남" : "여"}</td>
                 <td className={`${T.td} whitespace-nowrap`}>{t.birthDate || "-"}</td>
                 <td className={`${T.td} whitespace-nowrap`}>{t.phoneNumber || "-"}</td>
-                <td className={`${T.td} whitespace-nowrap`}>{t.guardianPhoneNumber || "-"}</td>
+                <td className={`${T.td} whitespace-nowrap`}>{[t.guardianPhoneNumber, t.guardianPhoneNumber2].filter(Boolean).join(" / ") || "-"}</td>
                 <td className={T.td}><div className="max-w-[120px] truncate">{t.disabilityType}</div></td>
                 <td className={`${T.td} whitespace-nowrap`}>{t.severity}</td>
                 <td className={`${T.td} whitespace-nowrap`}><StatusBadge status={t.status} map={STATUS_BADGE} /></td>

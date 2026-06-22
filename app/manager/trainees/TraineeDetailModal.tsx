@@ -8,7 +8,7 @@ import { T } from "../_styles";
 
 export type Trainee = {
   id: string; siteId: string; siteName: string; name: string; gender: string;
-  birthDate: string | null; phoneNumber: string | null; guardianPhoneNumber: string | null;
+  birthDate: string | null; phoneNumber: string | null; guardianPhoneNumber: string | null; guardianPhoneNumber2: string | null;
   disabilityType: string; severity: string; status: string; note: string | null; createdAt: string;
 };
 type Site = { id: string; companyName: string };
@@ -36,6 +36,7 @@ export default function TraineeDetailModal({ trainee, sites, onClose, onSaved }:
   const [birthDate, setBirthDate]                 = useState(trainee?.birthDate ?? "");
   const [phoneNumber, setPhoneNumber]             = useState(trainee?.phoneNumber ?? "");
   const [guardianPhoneNumber, setGuardianPhone]   = useState(trainee?.guardianPhoneNumber ?? "");
+  const [guardianPhoneNumber2, setGuardianPhone2] = useState(trainee?.guardianPhoneNumber2 ?? "");
   const [disabilityType, setDisabilityType]       = useState(trainee?.disabilityType ?? "지적장애");
   const [severity, setSeverity]                   = useState(trainee?.severity ?? "경증");
   const [status, setStatus]                       = useState(trainee?.status ?? "TRAINING");
@@ -51,6 +52,7 @@ export default function TraineeDetailModal({ trainee, sites, onClose, onSaved }:
         birthDate: birthDate || null,
         phoneNumber: phoneNumber || null,
         guardianPhoneNumber: guardianPhoneNumber || null,
+        guardianPhoneNumber2: guardianPhoneNumber2 || null,
         disabilityType, severity, note: note || null,
       };
       if (!isCreate) payload.status = status;
@@ -122,12 +124,16 @@ export default function TraineeDetailModal({ trainee, sites, onClose, onSaved }:
             <h3 className="mb-3 text-sm font-black text-slate-900">연락처</h3>
             <div className="space-y-3">
               <div>
-                <label className={T.label}>연락처</label>
+                <label className={T.label}>훈련생 연락처</label>
                 <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="010-0000-0000" className={`w-full ${T.input}`} />
               </div>
               <div>
-                <label className={T.label}>보호자 연락처</label>
+                <label className={T.label}>보호자 연락처 1</label>
                 <input value={guardianPhoneNumber} onChange={e => setGuardianPhone(e.target.value)} placeholder="010-0000-0000" className={`w-full ${T.input}`} />
+              </div>
+              <div>
+                <label className={T.label}>보호자 연락처 2 <span className="font-semibold text-slate-400">(선택)</span></label>
+                <input value={guardianPhoneNumber2} onChange={e => setGuardianPhone2(e.target.value)} placeholder="010-0000-0000" className={`w-full ${T.input}`} />
               </div>
             </div>
           </div>

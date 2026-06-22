@@ -323,6 +323,7 @@ model Trainee {
   gender              String
   phoneNumber         String?       @map("phone_number")
   guardianPhoneNumber String?
+  guardianPhoneNumber2 String?      @map("guardian_phone_number2") // 보호자 연락처 2(선택)
   disabilityType      String        @map("disability_type")
   severity            String
   status              TraineeStatus @default(TRAINING)

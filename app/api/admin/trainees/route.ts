@@ -32,8 +32,9 @@ export async function GET(req: NextRequest) {
           name:                t.name,
           gender:              t.gender,
           birthDate:           t.birthDate ?? null,
-          phoneNumber:         t.phoneNumber ?? null,
-          guardianPhoneNumber: t.guardianPhoneNumber ?? null,
+          phoneNumber:          t.phoneNumber ?? null,
+          guardianPhoneNumber:  t.guardianPhoneNumber ?? null,
+          guardianPhoneNumber2: t.guardianPhoneNumber2 ?? null,
           disabilityType:      t.disabilityType,
           severity:            t.severity,
           status:              t.status,
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
     const agencyId = scope.agencyId;
 
     const body = await req.json();
-    const { siteId, name, gender, birthDate, phoneNumber, guardianPhoneNumber,
+    const { siteId, name, gender, birthDate, phoneNumber, guardianPhoneNumber, guardianPhoneNumber2,
             disabilityType, severity, note } = body;
 
     if (!siteId || !name?.trim() || !gender || !disabilityType || !severity)
@@ -81,8 +82,9 @@ export async function POST(req: NextRequest) {
         name:                name.trim(),
         gender,
         birthDate:           birthDate || null,
-        phoneNumber:         phoneNumber || null,
-        guardianPhoneNumber: guardianPhoneNumber || null,
+        phoneNumber:          phoneNumber || null,
+        guardianPhoneNumber:  guardianPhoneNumber || null,
+        guardianPhoneNumber2: guardianPhoneNumber2 || null,
         disabilityType,
         severity,
         note:                note?.trim() || null,
