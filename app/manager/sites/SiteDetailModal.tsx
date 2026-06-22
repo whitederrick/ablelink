@@ -41,6 +41,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
   const [gpsLon, setGpsLon] = useState("");
   const [allowanceRange, setAllowanceRange] = useState(100);
   const [lateThresholdMin, setLateThresholdMin] = useState<string>(""); // ""=위탁기관 기본값 상속
+  const [agencyDefaultLate, setAgencyDefaultLate] = useState<number>(30); // 위탁기관 기본 지각 기준(표시용)
   const [amCapacity, setAmCapacity] = useState(0);
   const [pmCapacity, setPmCapacity] = useState(0);
   const [fullDayCapacity, setFullDayCapacity] = useState(0);
@@ -119,6 +120,16 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteId]);
+
+  // 위탁기관 기본 지각 기준(표시용) — 현장 미설정 시 적용되는 값
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/admin/agency-profile", { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => { if (alive && d?.success && d.data?.lateThresholdMin != null) setAgencyDefaultLate(Number(d.data.lateThresholdMin)); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   async function searchAddress() {
     if (!addrQ.trim()) return;
@@ -336,12 +347,17 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                   ))}
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-semibold text-slate-500">직접 설정</span>
-                    <input type="number" min={1} max={180} step={15} value={lateThresholdMin} onChange={e => setLateThresholdMin(e.target.value)} placeholder="기관값" className={`w-24 text-center ${T.input}`} />
+                    <input type="number" min={1} max={180} step={15} value={lateThresholdMin} onChange={e => setLateThresholdMin(e.target.value)} placeholder={`기관값 ${agencyDefaultLate}`} className={`w-24 text-center ${T.input}`} />
                     <span className="text-sm font-semibold text-slate-500">분</span>
                   </div>
                   <button type="button" onClick={() => setLateThresholdMin("")}
                     className="ml-auto rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-50">기관 기본값 사용</button>
                 </div>
+                <p className="mt-2 text-sm font-bold text-slate-600">
+                  {lateThresholdMin.trim() === ""
+                    ? <>현재 적용: <span className="text-sky-600">기관 기본값 {agencyDefaultLate}분</span></>
+                    : <>현재 적용: <span className="text-sky-600">이 현장 {lateThresholdMin}분</span></>}
+                </p>
               </div>
 
               {/* 근무형태별 필요 직무지도원 정원 */}
