@@ -763,7 +763,7 @@ export default function AttendanceInboxClient() {
       {/* ===== Main 2-pane ===== */}
       <div className="grid grid-cols-12 gap-4">
         {/* Left list */}
-        <div className="col-span-12 lg:col-span-6 xl:col-span-6">
+        <div className="col-span-12 lg:col-span-7 xl:col-span-7">
           <div className="h-full rounded-xl border border-slate-100 bg-white">
             <div className="flex items-center justify-between border-b border-gray-50 px-4 py-3">
               <div className="flex items-baseline gap-2">
@@ -845,7 +845,7 @@ export default function AttendanceInboxClient() {
         </div>
 
         {/* Right detail */}
-        <div className="col-span-12 lg:col-span-6 xl:col-span-6">
+        <div className="col-span-12 lg:col-span-5 xl:col-span-5">
           <div className="flex h-full flex-col rounded-xl border border-slate-100 bg-white p-5">
             {!selected ? (
               <div className="rounded-xl border p-6 text-sm text-slate-500">좌측 목록에서 항목을 선택하세요.</div>
