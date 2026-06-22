@@ -145,10 +145,10 @@ export default function ManagerLogsPage() {
         <p className={T.empty}>조건에 맞는 일지가 없습니다.</p>
       ):(
         <div className={T.tableWrap}>
-          <table className="w-full">
+          <table className="w-full [&_th]:px-2.5 [&_td]:px-2.5">
             <thead>
               <tr>
-                {["날짜", "직무지도원 성명", "훈련생", "유형", "상태", "현장(사업체)", "훈련시간", "출결 여부", "수행 과제", ""].map(h => <th key={h} className={T.th}>{h}</th>)}
+                {["날짜", "직무지도원 성명", "훈련생 성명", "유형", "상태", "현장(사업체)", "훈련시간", "출결 여부", "수행 과제", "일지 내용"].map(h => <th key={h} className={T.th}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -163,7 +163,7 @@ export default function ManagerLogsPage() {
                   <td className={`${T.td} whitespace-nowrap`}>{l.totalTime}h</td>
                   <td className={T.td}>{l.attendance}</td>
                   <td className={`${T.td} text-[13px] text-slate-500`}><div className="max-w-[160px] truncate">{l.taskName || "-"}</div></td>
-                  <td className={T.td}><span className="text-[13px] font-semibold text-sky-600">상세</span></td>
+                  <td className={`${T.td} text-[13px] text-slate-600`}><div className="max-w-[280px] truncate">{l.content || "-"}</div></td>
                 </tr>
               ))}
             </tbody>
@@ -182,7 +182,11 @@ export default function ManagerLogsPage() {
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-1.5">
-                  <p className="text-base font-black text-slate-900">{detail.workerName} → {detail.traineeName}</p>
+                  <p className="text-base font-black text-slate-900">
+                    <span className="text-[13px] font-bold text-slate-400">직무지도원</span> {detail.workerName}
+                    <span className="mx-1.5 font-semibold text-slate-300">|</span>
+                    <span className="text-[13px] font-bold text-slate-400">훈련생</span> {detail.traineeName}
+                  </p>
                   <StatusBadge status={detail.isCompleted?"confirmed":"pending"} map={LOG_BADGE} />
                 </div>
                 <p className="mt-0.5 text-[13px] font-semibold text-slate-400">
