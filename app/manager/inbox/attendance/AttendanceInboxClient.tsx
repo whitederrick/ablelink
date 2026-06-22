@@ -31,6 +31,7 @@ type PeriodPreset = "TODAY" | "LAST_7" | "LAST_14" | "LAST_30" | "CUSTOM";
 type TimelineEvent = {
   id: string;
   at: string; // ISO
+  type?: string;          // AttendanceIssueEvent.type (MEMO_UPDATED 등) — 수정/삭제 가능 여부 판별
   label: string;
   detail?: string | null;
 };
@@ -453,6 +454,16 @@ export default function AttendanceInboxClient() {
   /** actions (DB 연동: 일부 엔드포인트는 없을 수 있으므로 실패 시 UI만 업데이트) */
   const [modal, setModal] = useState<ModalState>({ type: "NONE" });
   const [savingMemo, setSavingMemo] = useState(false);
+  const [memoDraft, setMemoDraft] = useState(""); // 운영 메모 입력칸(노트 추가형 — 저장 후 비움)
+
+  // 선택 항목 변경 시 메모 입력칸 초기화
+  useEffect(() => { setMemoDraft(""); }, [selectedId]);
+
+  // 서버에서 항목 다시 불러와 갱신(선택/페이지 유지) — 타임라인 등 반영.
+  async function reloadItems() {
+    const data = await fetchInboxItems({ q, period, customFrom, customTo, statuses, issue });
+    setItems(data);
+  }
 
   function pushTimeline(it: InboxItem, label: string, detail?: string | null) {
     const nextEvent: TimelineEvent = { id: uid("tl"), at: new Date().toISOString(), label, detail: detail ?? null };
@@ -533,20 +544,40 @@ export default function AttendanceInboxClient() {
     }
   }
 
+  // 운영 메모 '추가'(노트형) — 저장 후 입력칸 비우고 타임라인 갱신.
   async function saveAdminMemo() {
     if (!selected) return;
-
-    const memo = selected.adminMemo ?? "";
+    const memo = memoDraft.trim();
+    if (!memo) return;
     setSavingMemo(true);
     try {
-      const { ok } = await patchJson<{ success: boolean }>(`/api/admin/attendance-inbox/${selected.id}/memo`, { memo }).catch(
-        () => ({ ok: false, status: 0, json: null })
+      const { ok, json } = await patchJson<{ success: boolean; message?: string }>(`/api/admin/attendance-inbox/${selected.id}/memo`, { memo }).catch(
+        () => ({ ok: false, status: 0, json: null as any })
       );
-
-      updateSelected((it) => pushTimeline(it, ok ? "운영 메모 저장" : "운영 메모 저장(로컬)", memo ? memo : null));
+      if (!ok) { alert(json?.message || "메모 저장에 실패했습니다."); return; }
+      setMemoDraft("");
+      await reloadItems(); // 타임라인에 새 메모 반영
     } finally {
       setSavingMemo(false);
     }
+  }
+
+  // 타임라인 메모(MEMO_UPDATED) 수정
+  async function editMemoEvent(eventId: string, current: string) {
+    const next = prompt("운영 메모 수정", current ?? "");
+    if (next == null) return;
+    if (!next.trim()) { alert("메모 내용을 입력하세요. (삭제는 삭제 버튼을 사용)"); return; }
+    const { ok, json } = await patchJson<{ success: boolean; message?: string }>(`/api/admin/attendance-inbox/events/${eventId}`, { message: next.trim() }).catch(() => ({ ok: false, status: 0, json: null as any }));
+    if (!ok) { alert(json?.message || "수정 실패"); return; }
+    await reloadItems();
+  }
+
+  // 타임라인 메모(MEMO_UPDATED) 삭제
+  async function deleteMemoEvent(eventId: string) {
+    if (!confirm("이 운영 메모를 삭제할까요?")) return;
+    const { ok, json } = await apiCallJson<{ success: boolean; message?: string }>(`/api/admin/attendance-inbox/events/${eventId}`, { method: "DELETE" }).catch(() => ({ ok: false, status: 0, json: null as any }));
+    if (!ok) { alert(json?.message || "삭제 실패"); return; }
+    await reloadItems();
   }
 
   /** derived (detail) */
@@ -1065,9 +1096,17 @@ export default function AttendanceInboxClient() {
                     ) : (
                       selected.timeline.map((ev) => (
                         <div key={ev.id} className="rounded-xl border p-3">
-                          <div className="flex items-baseline justify-between">
+                          <div className="flex items-baseline justify-between gap-2">
                             <div className="text-sm font-semibold">{ev.label}</div>
-                            <div className="text-xs text-slate-400">{new Date(ev.at).toLocaleString()}</div>
+                            <div className="flex items-center gap-2">
+                              {ev.type === "MEMO_UPDATED" && (
+                                <>
+                                  <button onClick={() => editMemoEvent(ev.id, ev.detail ?? "")} className="text-[11px] font-bold text-slate-500 hover:text-slate-900">수정</button>
+                                  <button onClick={() => deleteMemoEvent(ev.id)} className="text-[11px] font-bold text-rose-500 hover:text-rose-700">삭제</button>
+                                </>
+                              )}
+                              <div className="text-xs text-slate-400">{new Date(ev.at).toLocaleString()}</div>
+                            </div>
                           </div>
                           {ev.detail ? <div className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">{ev.detail}</div> : null}
                         </div>
@@ -1078,25 +1117,22 @@ export default function AttendanceInboxClient() {
 
                 {/* Memo */}
                 <div className="flex min-h-0 flex-col">
-                  <SectionTitle title="운영 메모" note="운영 관점에서 확인 사항/조치 내역을 기록합니다." />
+                  <SectionTitle title="운영 메모" note="메모를 추가하면 타임라인에 기록됩니다. 항목은 타임라인에서 수정/삭제할 수 있어요." />
                   <div className="mt-2 flex items-start gap-2">
                     <textarea
-                      defaultValue={selected.adminMemo ?? ""}
-                      onChange={(e) =>
-                        updateSelected((it) => ({ ...it, adminMemo: e.target.value, updatedAt: new Date().toISOString() }))
-                      }
+                      value={memoDraft}
+                      onChange={(e) => setMemoDraft(e.target.value)}
                       className="h-14 flex-1 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400"
-                      placeholder="운영 메모를 입력하세요"
+                      placeholder="운영 메모 추가… (저장하면 비워지고 타임라인에 기록)"
                     />
                     <button
                       onClick={saveAdminMemo}
-                      disabled={savingMemo}
+                      disabled={savingMemo || !memoDraft.trim()}
                       className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
                     >
-                      메모 저장
+                      메모 추가
                     </button>
                   </div>
-                  <div className="mt-1 text-xs text-slate-400">마지막 갱신: {new Date(selected.updatedAt).toLocaleString()}</div>
                 </div>
                 </div>
               </>

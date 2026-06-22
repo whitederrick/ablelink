@@ -315,6 +315,7 @@ export async function GET(req: Request) {
         timeline: (((upserted as any).events ?? []) as any[]).map((e) => ({
           id: e.id.toString(),
           at: e.createdAt.toISOString(),
+          type: e.type,
           label: EVENT_LABEL[e.type] ?? e.type,
           detail: e.message ?? null,
         })),
