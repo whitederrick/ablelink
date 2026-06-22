@@ -347,7 +347,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                   ))}
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-semibold text-slate-500">직접 설정</span>
-                    <input type="number" min={1} max={180} step={15} value={lateThresholdMin} onChange={e => setLateThresholdMin(e.target.value)} placeholder={`기관값 ${agencyDefaultLate}`} className={`w-24 text-center ${T.input}`} />
+                    <input type="number" min={1} max={180} step={15} value={lateThresholdMin} onChange={e => setLateThresholdMin(e.target.value)} placeholder="기관값" className={`w-28 text-center ${T.input}`} />
                     <span className="text-sm font-semibold text-slate-500">분</span>
                   </div>
                   <button type="button" onClick={() => setLateThresholdMin("")}
