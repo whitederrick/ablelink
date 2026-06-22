@@ -65,6 +65,20 @@ export async function PATCH(
         data: updateData,
       });
 
+      // 워커 알림: 수정요청 승인 반영.
+      try {
+        await (prisma as any).workerNotice.create({
+          data: {
+            workerId: request.workerId,
+            agencyId: siteAgencyId,
+            title: `[수정 승인] ${request.attendance.workDate} 출근부`,
+            body: `${request.attendance.workDate} 출근부 시각 수정요청이 승인되어 반영되었습니다.`,
+            type: "INFO",
+            link: "/worker/review/attendance",
+          },
+        });
+      } catch (e) { console.warn("[edit-request approve] 워커 알림 실패:", e); }
+
       return NextResponse.json({ success: true, message: "수정 요청이 승인되었습니다. 출근 기록이 업데이트되었습니다." });
     } else {
       // 반려
@@ -72,6 +86,22 @@ export async function PATCH(
         where: { id: request.id },
         data: { status: "REJECTED", adminNote: adminNote?.trim() || null, reviewedAt: now },
       });
+
+      // 워커 알림: 반려 + 재제출 안내(반려 건은 새 수정요청으로 다시 제출 가능).
+      try {
+        await (prisma as any).workerNotice.create({
+          data: {
+            workerId: request.workerId,
+            agencyId: siteAgencyId,
+            title: `[수정 반려] ${request.attendance.workDate} 출근부`,
+            body: `${request.attendance.workDate} 출근부 시각 수정요청이 반려되었습니다.` +
+              (adminNote?.trim() ? `\n사유: ${adminNote.trim()}` : "") +
+              `\n\n필요하면 정확한 시각으로 다시 수정요청을 제출해주세요.`,
+            type: "WARN",
+            link: "/worker/review/attendance",
+          },
+        });
+      } catch (e) { console.warn("[edit-request reject] 워커 알림 실패:", e); }
 
       return NextResponse.json({ success: true, message: "수정 요청이 반려되었습니다." });
     }

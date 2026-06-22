@@ -23,10 +23,32 @@ export async function POST(req: NextRequest) {
     // 본인 기록인지 확인
     const attendance = await prisma.dailyAttendance.findUnique({
       where: { id: attId },
-      select: { id: true, workerId: true, workDate: true },
+      select: { id: true, workerId: true, workDate: true, site: { select: { agencyId: true, ownerManagerId: true } } },
     });
     if (!attendance || attendance.workerId !== workerId) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    }
+
+    // 수정요청 제출/재제출을 담당 매니저(없으면 기관 활성 매니저)에게 알림 — 회신 도달성.
+    async function notifyManagers(kind: string) {
+      try {
+        const site: any = (attendance as any).site;
+        let managerIds: bigint[] = [];
+        if (site?.ownerManagerId) managerIds = [site.ownerManagerId];
+        else if (site?.agencyId) {
+          const mgrs = await prisma.manager.findMany({ where: { agencyId: site.agencyId, isActive: true }, select: { id: true } });
+          managerIds = mgrs.map(m => m.id);
+        }
+        if (managerIds.length === 0) return;
+        await (prisma as any).managerNotice.createMany({
+          data: managerIds.map(mid => ({
+            managerId: mid,
+            title: `[출근부 수정요청] ${session!.workerName} · ${attendance!.workDate}`,
+            body: `${session!.workerName} 직무지도원이 ${attendance!.workDate} 출근부 시각 수정을 ${kind}했습니다. 검토 후 승인/반려해 주세요.`,
+            link: "/manager/attendance-edit-requests",
+          })),
+        });
+      } catch (e) { console.warn("[edit-request] 매니저 알림 실패:", e); }
     }
 
     // 동일 출근 기록에 대한 PENDING 요청이 있으면 덮어쓰기(update) 아니면 새로 생성
@@ -43,6 +65,7 @@ export async function POST(req: NextRequest) {
           proposedEnd:   proposedEnd   || null,
         },
       });
+      await notifyManagers("업데이트(재제출)");
       return NextResponse.json({ success: true, message: "수정 요청이 업데이트되었습니다." });
     }
 
@@ -57,6 +80,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await notifyManagers("제출");
     return NextResponse.json({ success: true, message: "수정 요청이 제출되었습니다. 위탁기관 관리자 승인 후 반영됩니다." });
   } catch (e: any) {
     console.error("[worker/attendance/edit-request POST]", e);
