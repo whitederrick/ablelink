@@ -438,6 +438,8 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
         setEmployerAddress(d.data.address || "");
         setEmployerRepName(d.data.representativeName || "");
         setRepSignatureUrl(d.data.representativeSignatureUrl || null);
+        // 직인/대표 서명이 등록돼 있으면 기본 적용(ON). 매니저가 원하면 체크 해제 가능.
+        setApplyRepSignature(!!d.data.representativeSignatureUrl);
         const allowed: string[] = Array.isArray(d.data.allowedContractTemplates) ? d.data.allowedContractTemplates : [];
         setAllowedTemplates(allowed);
         // 기관 기본 양식 프리필(없거나 사용 불가면 표준 유지)
