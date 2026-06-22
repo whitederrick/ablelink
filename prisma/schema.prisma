@@ -128,6 +128,8 @@ model Site {
   gpsLat         Decimal @map("gps_lat")
   gpsLon         Decimal @map("gps_lon")
   allowanceRange Int     @default(100) @map("allowance_range")
+  // 지각 인정 기준(분). null = 위탁기관 기본값(Agency.lateThresholdMin) 상속. 현장별 오버라이드.
+  lateThresholdMin Int?  @map("late_threshold_min")
 
   // ✅ WORKER_ENTRY / 클린징 대비
   isVerified     Boolean        @default(true) @map("is_verified")
@@ -496,6 +498,8 @@ model Agency {
 
   // 급여 자동 DRAFT 생성일(매월 N일, 1~28). null = 자동 생성 안 함(기본). 크론이 이 날 전월분 DRAFT 생성.
   payrollAutoDay Int? @map("payroll_auto_day")
+  // 지각 인정 기준(분). 기본 30. 이 값 이상 늦으면 지각 표시 + (미컨펌 시) 보정대기=급여 보류. 위탁기관별 설정.
+  lateThresholdMin Int @default(30) @map("late_threshold_min")
 
   // 근로계약서 기본 양식(미지정 시 STANDARD). 계약 작성 시 프리필.
   defaultContractTemplate String? @map("default_contract_template")

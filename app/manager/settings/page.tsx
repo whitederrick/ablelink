@@ -30,6 +30,8 @@ export default function AgencySettingsPage() {
   const [govContacts, setGovContacts] = useState<{ name: string; email: string }[]>([{ name: "", email: "" }]);
   // 급여 자동 DRAFT 생성일(매월 N일, 1~28). ""=자동 생성 안 함.
   const [payrollAutoDay, setPayrollAutoDay] = useState("");
+  // 지각 인정 기준(분) — 기관 기본값. 현장에서 미설정 시 이 값 적용. 기본 30.
+  const [lateThresholdMin, setLateThresholdMin] = useState("30");
   // 기본 근로계약서 양식(계약 작성 시 프리필). ""=표준
   const [defaultContractTemplate, setDefaultContractTemplate] = useState("");
   const [loading, setLoading] = useState(true);
@@ -75,6 +77,7 @@ export default function AgencySettingsPage() {
             setGovContacts(list.length ? list.map((c: any) => ({ name: c?.name || "", email: c?.email || "" })) : [{ name: "", email: "" }]);
           }
           setPayrollAutoDay(d.data.payrollAutoDay != null ? String(d.data.payrollAutoDay) : "");
+          setLateThresholdMin(d.data.lateThresholdMin != null ? String(d.data.lateThresholdMin) : "30");
           setDefaultContractTemplate(d.data.defaultContractTemplate || "");
           setSigUrl(d.data.representativeSignatureUrl || null);
         }
@@ -115,7 +118,7 @@ export default function AgencySettingsPage() {
       const r = await fetch("/api/admin/agency-profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumber, address: fullAddress, businessNumber, representativeName, govContacts: govContacts.filter(c => c.name.trim() || c.email.trim()), payrollAutoDay: payrollAutoDay === "" ? null : Number(payrollAutoDay), defaultContractTemplate: defaultContractTemplate || null }),
+        body: JSON.stringify({ phoneNumber, address: fullAddress, businessNumber, representativeName, govContacts: govContacts.filter(c => c.name.trim() || c.email.trim()), payrollAutoDay: payrollAutoDay === "" ? null : Number(payrollAutoDay), lateThresholdMin: lateThresholdMin === "" ? 30 : Number(lateThresholdMin), defaultContractTemplate: defaultContractTemplate || null }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.message);
@@ -388,6 +391,18 @@ export default function AgencySettingsPage() {
               <span className="text-sm font-semibold text-slate-500">일 (1~31, <b>31=말일</b>, 비우면 사용 안 함)</span>
             </div>
             <p className="mt-1 text-[11px] font-semibold text-slate-400">※ 31 등 그 달에 없는 날짜는 <b>그 달 마지막 날</b>에 생성됩니다(예: 2월은 28/29일).</p>
+            </div>
+
+            {/* 지각 인정 기준(기관 기본값) */}
+            <div>
+            <label className={T.label}>지각 인정 기준 (기관 기본값)</label>
+            <p className="mb-2 text-[11px] font-semibold text-slate-400">출근이 표준 시업시각보다 이 시간 이상 늦으면 <b>지각</b>으로 표시하고, (미컨펌 시) 급여 보류(보정대기)됩니다.<br />현장별로 따로 정하지 않으면 이 기본값이 적용됩니다.</p>
+            <div className="flex items-center gap-2">
+              <input type="number" min={1} max={180} step={15} value={lateThresholdMin}
+                onChange={e => setLateThresholdMin(e.target.value)}
+                className={`w-24 ${T.input}`} />
+              <span className="text-sm font-semibold text-slate-500">분 (기본 30, 15분 단위 권장·직접 입력 가능)</span>
+            </div>
             </div>
 
             {/* 기본 근로계약서 양식 */}

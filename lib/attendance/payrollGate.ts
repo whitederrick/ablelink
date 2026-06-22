@@ -66,11 +66,12 @@ export function earlyLeaveMinutes(a: PayrollGateInput): number | null {
  *  - 심한 지각(>=30분) 또는 심한 조퇴(>=30분) 이고, 아직 위탁기관 컨펌(payrollConfirmedAt) 전이면 true.
  *  - 보정 대기인 날은 출근부 PDF에 기본값을 박지 않고 "보정대기"로 표시한다.
  */
-export function isPayrollPending(a: PayrollGateInput): boolean {
+// thresholdMin: 위탁기관별 지각/조퇴 인정 기준(분). 미지정 시 기본 30(SERIOUS_LATE_MIN).
+export function isPayrollPending(a: PayrollGateInput, thresholdMin: number = SERIOUS_LATE_MIN): boolean {
   if (a.exempt) return false;        // 버튼 면제 배정 → 실제시각 무시(보정대기 없음)
   if (a.payrollConfirmedAt) return false;
   const late = lateMinutes(a);
-  if (late != null && late >= SERIOUS_LATE_MIN) return true;
+  if (late != null && late >= thresholdMin) return true;
   const early = earlyLeaveMinutes(a);
-  return early != null && early >= SERIOUS_EARLY_LEAVE_MIN;
+  return early != null && early >= thresholdMin;
 }

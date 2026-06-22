@@ -68,8 +68,9 @@ export async function computePayrollItems(
   const periodStartDate = new Date(periodStart + "T00:00:00+09:00");
   const periodEndDate = new Date(periodEnd + "T23:59:59+09:00");
 
-  const [insuranceRates, agencyDeductions, assignments, incomeTaxRow] = await Promise.all([
+  const [insuranceRates, agencyRow, agencyDeductions, assignments, incomeTaxRow] = await Promise.all([
     prisma.insuranceRates.findFirst({ where: { year: { lte: y } }, orderBy: { year: "desc" } }),
+    prisma.agency.findUnique({ where: { id: agencyId }, select: { lateThresholdMin: true } as any }),
     prisma.agencyDeduction.findMany({ where: { agencyId, isActive: true } }),
     prisma.siteAssignment.findMany({
       where: {
@@ -84,6 +85,7 @@ export async function computePayrollItems(
   ]);
   const taxBrackets: TaxBracket[] = Array.isArray(incomeTaxRow?.data) ? (incomeTaxRow!.data as any) : [];
   const taxChildCredit = (incomeTaxRow?.meta as any)?.childCredit;
+  const lateThresholdMin = (agencyRow as any)?.lateThresholdMin ?? 30; // 보정대기 게이트 기준(위탁기관별)
 
   const userIds = [...new Set(assignments.map((a) => a.workerId))];
   if (userIds.length === 0) return { items: [], userCount: 0 };
@@ -106,7 +108,7 @@ export async function computePayrollItems(
         select: {
           workDate: true, startTime: true, endTime: true,
           actualStartTime: true, actualEndTime: true, payrollConfirmedAt: true,
-          assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true } },
+          assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true, site: { select: { lateThresholdMin: true } } } },
           logs: { select: { extTime1on1: true, extTimeGroup: true } },
         },
       }),
@@ -133,6 +135,7 @@ export async function computePayrollItems(
 
   for (const { workerId, contract, attendances, traineeCount, empContract, firstContract } of userDataList) {
     // 급여 게이트: 심한 지각 미컨펌(보정대기) 날은 급여 산정에서 제외(출근부 PDF와 동일 기준).
+    // 지각 기준 = 현장값(site.lateThresholdMin) ?? 위탁기관 기본값 ?? 30.
     const confirmedAtt = attendances.filter((a) => !isPayrollPending({
       actualStartTime: a.actualStartTime ?? null,
       actualEndTime: a.actualEndTime ?? null,
@@ -142,7 +145,7 @@ export async function computePayrollItems(
       customWorkStart: a.assignment?.customWorkStart ?? null,
       customWorkEnd: a.assignment?.customWorkEnd ?? null,
       exempt: a.assignment?.attendanceButtonExempt ?? false,
-    }));
+    }, (a.assignment as any)?.site?.lateThresholdMin ?? lateThresholdMin));
     const pendingDays = attendances.length - confirmedAtt.length;
 
     const workedDays = confirmedAtt.length;

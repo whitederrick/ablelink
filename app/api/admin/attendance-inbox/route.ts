@@ -99,6 +99,9 @@ export async function GET(req: Request) {
 
     // 소속 기관만 조회
     const agencyId = scope.agencyId;
+    // 지각 인정 기준 폴백(위탁기관 기본값). 현장에 별도 설정 있으면 그 값 우선.
+    const agencyRow: any = agencyId ? await prisma.agency.findUnique({ where: { id: agencyId }, select: { lateThresholdMin: true } as any }) : null;
+    const agencyLateThreshold: number = agencyRow?.lateThresholdMin ?? 30;
 
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") ?? "").trim();
@@ -147,7 +150,7 @@ export async function GET(req: Request) {
         startDistanceM: true,
         endDistanceM: true,
         user: { select: { id: true, workerName: true } },
-        site: { select: { id: true, companyName: true } },
+        site: { select: { id: true, companyName: true, lateThresholdMin: true } },
         // ✅ workType은 Site가 아닌 SiteAssignment에 있음
         assignment: {
           select: {
@@ -261,6 +264,8 @@ export async function GET(req: Request) {
       };
       const lateMin = lateMinutes(gateInput);
       const earlyMin = earlyLeaveMinutes(gateInput);
+      // 이 건의 지각 기준 = 현장값 ?? 위탁기관 기본값.
+      const itemThreshold: number = (r.site as any)?.lateThresholdMin ?? agencyLateThreshold;
 
       items.push({
         id: r.id.toString(),
@@ -284,13 +289,13 @@ export async function GET(req: Request) {
         // 급여 보호 게이트
         lateMinutes: lateMin,
         earlyLeaveMinutes: earlyMin,
-        payrollPending: isPayrollPending(gateInput),
+        payrollPending: isPayrollPending(gateInput, itemThreshold),
         payrollConfirmedAt: r.payrollConfirmedAt ? r.payrollConfirmedAt.toISOString() : null,
         correctionRequestedAt: r.correctionRequestedAt ? r.correctionRequestedAt.toISOString() : null,
         // 퇴근 미실행(보정대기): 과거 날짜 + 아직 WORKING(퇴근 안 누름) + 미확정.
         // 직무지도원이 끝내 처리 안 하면 매니저가 표준시각으로 확정 가능.
         missedClockOut: r.status === "WORKING" && r.workDate < today && !r.isFinalClosed,
-        seriousLateMin: SERIOUS_LATE_MIN,
+        seriousLateMin: itemThreshold,
         updatedAt: (upserted.updatedAt ?? upserted.createdAt).toISOString(),
         timeline: [],
       });

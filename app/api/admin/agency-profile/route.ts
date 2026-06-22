@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     const scope = await requireManagerSession(req);
     const a: any = await prisma.agency.findUnique({
       where: { id: scope.agencyId },
-      select: { name: true, phoneNumber: true, address: true, businessNumber: true, representativeName: true, representativeSignatureUrl: true, govContactEmail: true, govContactName: true, govContacts: true, payrollAutoDay: true, defaultContractTemplate: true, allowedContractTemplates: true } as any,
+      select: { name: true, phoneNumber: true, address: true, businessNumber: true, representativeName: true, representativeSignatureUrl: true, govContactEmail: true, govContactName: true, govContacts: true, payrollAutoDay: true, lateThresholdMin: true, defaultContractTemplate: true, allowedContractTemplates: true } as any,
     });
     if (!a) return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
     const govContacts = normalizeGovContacts(a.govContacts, a.govContactName, a.govContactEmail);
@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
         govContactEmail: govContacts[0]?.email ?? a.govContactEmail,
         govContactName: govContacts[0]?.name ?? a.govContactName,
         payrollAutoDay: a.payrollAutoDay ?? null,
+        lateThresholdMin: a.lateThresholdMin ?? 30,
         defaultContractTemplate: a.defaultContractTemplate ?? null,
         allowedContractTemplates: Array.isArray(a.allowedContractTemplates) ? a.allowedContractTemplates : [],
       },
@@ -68,7 +69,7 @@ export async function PATCH(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
     const body = await req.json().catch(() => ({}));
-    const { phoneNumber, address, businessNumber, representativeName, representativeSignatureUrl, govContactEmail, govContactName, govContacts, payrollAutoDay, defaultContractTemplate } = body;
+    const { phoneNumber, address, businessNumber, representativeName, representativeSignatureUrl, govContactEmail, govContactName, govContacts, payrollAutoDay, lateThresholdMin, defaultContractTemplate } = body;
 
     const str = (v: any): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
@@ -80,6 +81,14 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ success: false, message: "급여 자동 생성일은 1~31 사이여야 합니다. (말일에 맞추려면 31 입력)" }, { status: 400 });
       }
       data.payrollAutoDay = n;
+    }
+    if (lateThresholdMin !== undefined) {
+      const n = Number(lateThresholdMin);
+      // 지각 기준(분). 1~180 범위(기본 30). 위탁기관 기본값.
+      if (!Number.isInteger(n) || n < 1 || n > 180) {
+        return NextResponse.json({ success: false, message: "지각 기준은 1~180분 사이여야 합니다." }, { status: 400 });
+      }
+      data.lateThresholdMin = n;
     }
     if (defaultContractTemplate !== undefined) {
       if (defaultContractTemplate == null || defaultContractTemplate === "") data.defaultContractTemplate = null;

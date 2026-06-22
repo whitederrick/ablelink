@@ -93,6 +93,15 @@ export async function buildAttendanceSheetPayload(
   });
   const isMulti = traineeCount >= 2;
 
+  // 지각 인정 기준(분) = 현장값 ?? 위탁기관 기본값 ?? 30. 보정대기 게이트와 동일 기준.
+  const siteRow: any = await prisma.site.findUnique({ where: { id: siteId }, select: { lateThresholdMin: true, agencyId: true } as any });
+  let lateThresholdMin: number | null = siteRow?.lateThresholdMin ?? null;
+  if (lateThresholdMin == null && siteRow?.agencyId) {
+    const ag: any = await prisma.agency.findUnique({ where: { id: siteRow.agencyId }, select: { lateThresholdMin: true } as any });
+    lateThresholdMin = ag?.lateThresholdMin ?? null;
+  }
+  const resolvedLateThreshold = lateThresholdMin ?? 30;
+
   const entries = attendances.map(a => {
     // 일별 배정 우선, 없으면 단일 배정 폴백.
     const af: AttendanceAssignmentFields = (a as any).assignment ?? fallbackAssignment;
@@ -112,7 +121,7 @@ export async function buildAttendanceSheetPayload(
       customWorkStart: af.customWorkStart ?? null,
       customWorkEnd: af.customWorkEnd ?? null,
       exempt: af.attendanceButtonExempt ?? false,
-    });
+    }, resolvedLateThreshold);
     const baseH = pending ? 0 : recognizedHours;
     // 연장 = 일반 배정은 퇴근시각 자동(전일 저녁식사 1h 제외), 면제 배정은 일지 수동입력.
     const extH = pending ? 0 : +(overtimeMinutesForDay({

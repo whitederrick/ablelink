@@ -583,10 +583,11 @@ export default function AttendanceInboxClient() {
     }
 
     // ✅ Step 3) 지각(TIME_ANOMALY) — 실제 출근 버튼 시각 기준(고정시각 아님).
-    //    실제 시각 없으면(과거 기록·일괄생성) 판정 안 함. 표준보다 10분 이상 늦으면 지각.
+    //    실제 시각 없으면(과거 기록·일괄생성) 판정 안 함. 지각 기준=현장/기관 설정값(seriousLateMin, 기본 30).
     const expectedStartMin = getExpectedStartMin(it);
     const actualInMin = isoToLocalMin(it.actualClockInAt);
-    if (expectedStartMin != null && actualInMin != null && actualInMin - expectedStartMin >= 15) {
+    const lateThreshold = it.seriousLateMin ?? 30;
+    if (expectedStartMin != null && actualInMin != null && actualInMin - expectedStartMin >= lateThreshold) {
       set.add("TIME_ANOMALY");
     }
 
