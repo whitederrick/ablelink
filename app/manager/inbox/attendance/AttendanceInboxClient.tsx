@@ -779,9 +779,12 @@ export default function AttendanceInboxClient() {
               <table className="w-full [&_th]:px-2.5 [&_td]:px-2.5">
                 <thead>
                   <tr>
-                    {["직무지도원 성명", "현장(사업체)", "근무일", "이슈/보정 현황", "처리 상태"].map((h) => (
-                      <th key={h} className={T.th}>{h}</th>
-                    ))}
+                    {/* 성명·현장·근무일·상태는 내용폭으로 고정(w-px), 이슈/보정 현황이 남는 너비를 차지 */}
+                    <th className={`${T.th} w-px whitespace-nowrap`}>직무지도원 성명</th>
+                    <th className={`${T.th} w-px whitespace-nowrap`}>현장(사업체)</th>
+                    <th className={`${T.th} w-px whitespace-nowrap`}>근무일</th>
+                    <th className={T.th}>이슈/보정 현황</th>
+                    <th className={`${T.th} w-px whitespace-nowrap`}>처리 상태</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -801,9 +804,9 @@ export default function AttendanceInboxClient() {
                             active ? "bg-sky-50" : "hover:bg-slate-50"
                           )}
                         >
-                          <td className={`${T.td} whitespace-nowrap font-semibold text-slate-900`}>{it.workerName}</td>
-                          <td className={T.td}><div className="max-w-[120px] truncate">{it.siteName}</div></td>
-                          <td className={`${T.td} whitespace-nowrap`}>{fmtYmdDots(it.workDate)}</td>
+                          <td className={`${T.td} w-px whitespace-nowrap font-semibold text-slate-900`}>{it.workerName}</td>
+                          <td className={`${T.td} w-px`}><div className="max-w-[140px] truncate">{it.siteName}</div></td>
+                          <td className={`${T.td} w-px whitespace-nowrap`}>{fmtYmdDots(it.workDate)}</td>
                           <td className={T.td}>
                             <div className="flex flex-wrap items-center gap-1.5">
                               {it.payrollPending ? (
@@ -819,7 +822,7 @@ export default function AttendanceInboxClient() {
                               ) : (!it.payrollPending ? <span className="text-slate-300">-</span> : null)}
                             </div>
                           </td>
-                          <td className={T.td}>
+                          <td className={`${T.td} w-px whitespace-nowrap`}>
                             <span className={[
                               "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] font-semibold text-white",
                               it.status === "ADMIN_RESOLVED" ? "bg-emerald-600"
