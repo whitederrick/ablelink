@@ -24,14 +24,14 @@ export const BUSINESS_INFO: BusinessInfo = {
   serviceName: "Able-Link",
   companyName: "플랫포레스트",
   companyNameEn: "Platforest",
-  representative: null,   // TODO: 대표자명
-  bizRegNo: null,         // TODO: 000-00-00000
+  representative: "곽은하",
+  bizRegNo: "197-86-02010",
   mailOrderNo: null,      // TODO: 제0000-지역-0000호 (통신판매업 신고 후)
-  address: null,          // TODO: 사업장 주소
-  phone: null,            // TODO: 고객센터 전화
+  address: "서울특별시 금천구 디지털로 130, 13층 1309호 (가산동, 남성프라자)",
+  phone: "010-8484-7141",
   email: "platforest.inc@gmail.com", // 문의용(회신 가능). 도메인 메일함은 보류(신규 도메인 무료전달 다 막힘) — 우선 gmail 직접 표기
   hosting: "Vercel Inc.",
-  privacyOfficer: null,   // TODO: 개인정보 보호책임자
+  privacyOfficer: "곽은하(대표)",
 };
 
 // footer 등에서 "라벨: 값"으로 뿌릴 때 null은 빼고 채워진 항목만 반환.
