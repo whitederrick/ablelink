@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             title:     `지원요청 회신: ${ticket.title}`,
             body:      reply.trim(),
           },
-        }).catch(() => {}); // 알림 생성 실패는 회신 자체에 영향 없음
+        }).catch((e) => { console.error("[admin/support reply managerNotice]", e); }); // 알림 생성 실패는 회신 자체에 영향 없음
       }
 
       return NextResponse.json({ success: true, id: updated.id.toString() });

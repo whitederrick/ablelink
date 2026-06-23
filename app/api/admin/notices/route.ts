@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
     // 매니저가 직무지도원에게 보낸 알림만. 시스템 공지(kind=SYSTEM, 레거시 "[시스템 공지]" 제목)는
     // 별도 '시스템 공지사항' 화면에서만 노출하므로 여기서 제외한다.
-    const notices = await (prisma as any).workerNotice.findMany({
+    const notices = await prisma.workerNotice.findMany({
       where: {
         agencyId,
         kind: { not: "SYSTEM" },
@@ -45,6 +45,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (e: any) {
     if (e instanceof Response) return e;
+    console.error("[admin/notices GET]", e);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "대상 직무지도원이 없습니다." }, { status: 404 });
 
     const noticeType = ["INFO", "WARN", "REJECT"].includes(type) ? type : "INFO";
-    const result = await (prisma as any).workerNotice.createMany({
+    const result = await prisma.workerNotice.createMany({
       data: targetIds.map(uid => ({
         workerId: uid, agencyId,
         title: String(title).slice(0, 100),
@@ -126,6 +127,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, sent: result.count });
   } catch (e: any) {
     if (e instanceof Response) return e;
+    console.error("[admin/notices POST]", e);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

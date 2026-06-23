@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     await resetRateLimit(rateLimitKey);
 
     // 활동(휴면) 상태 판정용 마지막 로그인 시각 갱신
-    await prisma.worker.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
+    await prisma.worker.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch((e) => { console.error("[worker/login lastLoginAt]", e); });
 
     // 활성 배정 조회
     const today = new Date();
