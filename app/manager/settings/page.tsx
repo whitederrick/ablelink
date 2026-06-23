@@ -6,7 +6,7 @@ import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import { SignaturePad, type SignaturePadHandle } from "../../_components/SignaturePad";
 import { isValidBRN, formatBRN } from "@/lib/validateBRN";
-import { CONTRACT_TEMPLATES } from "@/lib/contractTemplates";
+import { visibleTemplates } from "@/lib/contractTemplates";
 
 type AddrItem = { addressName: string };
 
@@ -34,6 +34,8 @@ export default function AgencySettingsPage() {
   const [lateThresholdMin, setLateThresholdMin] = useState("30");
   // 기본 근로계약서 양식(계약 작성 시 프리필). ""=표준
   const [defaultContractTemplate, setDefaultContractTemplate] = useState("");
+  // 본 기관에 부여된 전용 양식 키 목록(드롭다운 노출 필터용)
+  const [allowedTemplates, setAllowedTemplates] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -79,6 +81,7 @@ export default function AgencySettingsPage() {
           setPayrollAutoDay(d.data.payrollAutoDay != null ? String(d.data.payrollAutoDay) : "");
           setLateThresholdMin(d.data.lateThresholdMin != null ? String(d.data.lateThresholdMin) : "30");
           setDefaultContractTemplate(d.data.defaultContractTemplate || "");
+          setAllowedTemplates(Array.isArray(d.data.allowedContractTemplates) ? d.data.allowedContractTemplates : []);
           setSigUrl(d.data.representativeSignatureUrl || null);
         }
       })
@@ -412,7 +415,7 @@ export default function AgencySettingsPage() {
             <p className="mb-2 text-[11px] font-semibold text-rose-500">근로계약서 양식을 등록은 운영자 문의를 통해 가능합니다.(계약서 양식 등록 요청)</p>
             <select value={defaultContractTemplate} onChange={e => setDefaultContractTemplate(e.target.value)} className={`w-full max-w-md ${T.input}`}>
               <option value="">표준 근로계약서 (기본)</option>
-              {CONTRACT_TEMPLATES.filter(t => t.key !== "STANDARD").map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+              {visibleTemplates(allowedTemplates).filter(t => t.key !== "STANDARD").map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
             </div>
           </div>
