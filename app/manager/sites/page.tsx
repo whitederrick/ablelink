@@ -26,10 +26,14 @@ export default function AdminSitesPage() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
-  // 딥링크: ?q=대상 으로 진입 시 검색 시드(대시보드 운영 리스크 항목 클릭)
+  // 딥링크: ?q=대상 검색 시드 + ?focus=현장ID 로 해당 현장 상세 자동 오픈(대시보드 미배정 Site 클릭)
+  const [focusId, setFocusId] = useState<string | null>(null);
   useEffect(() => {
-    const sq = new URLSearchParams(window.location.search).get("q");
+    const sp = new URLSearchParams(window.location.search);
+    const sq = sp.get("q");
+    const sf = sp.get("focus");
     if (sq) setQ(sq);
+    if (sf) setFocusId(sf);
   }, []);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<SiteItem[]>([]);
@@ -63,6 +67,13 @@ export default function AdminSitesPage() {
   useEffect(() => { fetchList(page); }, [page]);
   // 필터 변경 시 1페이지부터 재조회
   useEffect(() => { if (page !== 1) setPage(1); else fetchList(1); /* eslint-disable-next-line */ }, [statusFilter]);
+
+  // 딥링크 focus: 목록이 로드되면 해당 현장 상세 모달을 1회 자동 오픈
+  useEffect(() => {
+    if (!focusId || items.length === 0) return;
+    if (items.some(it => it.id === focusId)) setDetailId(focusId);
+    setFocusId(null);
+  }, [focusId, items]);
 
   function onSearch() {
     if (page !== 1) setPage(1); else fetchList(1);

@@ -39,10 +39,14 @@ export default function ManagerDocumentsHub() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  // 딥링크: ?q=대상 으로 진입 시 검색 시드(대시보드 운영 리스크 항목 클릭)
+  // 딥링크: ?q=대상 검색 시드 + ?focus=문서ID 로 해당 문서 미리보기 자동 오픈(대시보드 제출 문서 현황 클릭)
+  const [focusId, setFocusId] = useState<string | null>(null);
   useEffect(() => {
-    const sq = new URLSearchParams(window.location.search).get("q");
+    const sp = new URLSearchParams(window.location.search);
+    const sq = sp.get("q");
+    const sf = sp.get("focus");
     if (sq) setQ(sq);
+    if (sf) setFocusId(sf);
   }, []);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
@@ -100,6 +104,14 @@ export default function ManagerDocumentsHub() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // 딥링크 focus: 목록이 로드되면 해당 문서 미리보기를 1회 자동 오픈
+  useEffect(() => {
+    if (!focusId || items.length === 0) return;
+    const target = items.find(it => it.id === focusId);
+    if (target) openPreview(target);
+    setFocusId(null);
+  }, [focusId, items]);
 
   const summary = useMemo(() => {
     const c = { SUBMITTED: 0, CONFIRMED: 0, MANAGER_SIGNED: 0, CHANGES_REQUESTED: 0 } as Record<string, number>;

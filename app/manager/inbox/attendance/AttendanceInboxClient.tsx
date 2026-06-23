@@ -423,10 +423,9 @@ export default function AttendanceInboxClient() {
 
         setItems(data);
         setPage(1);
-        setSelectedId((prev) => {
-          if (prev && data.some((d) => d.id === prev)) return prev;
-          return data[0]?.id ?? null;
-        });
+        // 기본 선택 없음: 사용자가 목록에서 직접 고르거나 딥링크(focus)로 진입한 경우에만 우측 상세 표시.
+        // (이전엔 data[0]을 자동 선택해, 대시보드에서 특정인을 눌러도 목록 최상단이 열리는 문제가 있었음)
+        setSelectedId((prev) => (prev && data.some((d) => d.id === prev) ? prev : null));
       } finally {
         if (alive) setLoading(false);
       }

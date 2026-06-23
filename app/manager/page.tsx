@@ -222,14 +222,14 @@ export default function AdminDashboardPage() {
   // 정렬: daily(매일 챙겨야 하는 것)를 앞, 기간·마감성(보고서·배정 종료)을 뒤로.
   const SUMMARY_CARDS = [
     // ── daily ──
-    { label: "오늘 근무",       value: s?.todayWorking ?? 0,        unit: "명", urgent: false, onClick: undefined as (() => void) | undefined },
+    { label: "오늘 근무",       value: s?.todayWorking ?? 0,        unit: "명", urgent: false, onClick: () => router.push("/manager/attendances") },
     { label: "미확인 근태",     value: s?.unconfirmedCount ?? 0,    unit: "건", urgent: (s?.unconfirmedCount ?? 0) > 0, onClick: () => router.push("/manager/inbox/attendance") },
     { label: "출근부 수정 요청", value: pendingEditReqs,             unit: "건", urgent: pendingEditReqs > 0, onClick: () => router.push("/manager/attendance-edit-requests") },
-    { label: "일지 미완료",     value: s?.logPendingCount ?? 0,     unit: "건", urgent: (s?.logPendingCount ?? 0) > 0, onClick: undefined, sub: `완료: ${s?.logDoneCount ?? 0}건` },
+    { label: "일지 미완료",     value: s?.logPendingCount ?? 0,     unit: "건", urgent: (s?.logPendingCount ?? 0) > 0, onClick: () => router.push("/manager/logs"), sub: `완료: ${s?.logDoneCount ?? 0}건` },
     // ── 기간·마감성 ──
     { label: "문서 확정 대기", value: s?.docPendingSubmit ?? 0,    unit: "건", urgent: (s?.docPendingSubmit ?? 0) > 0, onClick: () => router.push("/manager/documents") },
     { label: "문서 서명 대기", value: s?.docOverdue ?? 0,          unit: "건", urgent: false, onClick: () => router.push("/manager/documents") },
-    { label: "배정 종료 임박",  value: s?.endingIn5 ?? 0,           unit: "명", urgent: (s?.endingIn5 ?? 0) > 0, onClick: undefined, sub: `D-10: ${s?.endingIn10 ?? 0}명` },
+    { label: "배정 종료 임박",  value: s?.endingIn5 ?? 0,           unit: "명", urgent: (s?.endingIn5 ?? 0) > 0, onClick: () => router.push("/manager/workers"), sub: `D-10: ${s?.endingIn10 ?? 0}명` },
     { label: "미배정 Site",     value: s?.unassignedSiteCount ?? 0, unit: "건", urgent: (s?.unassignedSiteCount ?? 0) > 0, onClick: () => router.push("/manager/sites") },
   ];
 
@@ -299,7 +299,7 @@ export default function AdminDashboardPage() {
               onCountClick={() => setPopup(p => p === "attendance_time" ? null : "attendance_time")}
               showPopup={popup === "attendance_time"}
               popupItems={timeIssues}
-              onPopupItemClick={() => router.push("/manager/inbox/attendance")}
+              onPopupItemClick={(item: any) => router.push(`/manager/inbox/attendance?q=${encodeURIComponent(item.workerName)}&focus=${item.id}`)}
               onPopupClose={() => setPopup(null)}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
@@ -314,7 +314,7 @@ export default function AdminDashboardPage() {
               onCountClick={() => setPopup(p => p === "attendance_gps" ? null : "attendance_gps")}
               showPopup={popup === "attendance_gps"}
               popupItems={gpsIssues}
-              onPopupItemClick={() => router.push("/manager/inbox/attendance")}
+              onPopupItemClick={(item: any) => router.push(`/manager/inbox/attendance?q=${encodeURIComponent(item.workerName)}&focus=${item.id}`)}
               onPopupClose={() => setPopup(null)}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
@@ -333,7 +333,7 @@ export default function AdminDashboardPage() {
               onCountClick={() => setPopup(p => p === "doc_pending" ? null : "doc_pending")}
               showPopup={popup === "doc_pending"}
               popupItems={docPendingList}
-              onPopupItemClick={() => router.push("/manager/documents")}
+              onPopupItemClick={(item: any) => router.push(`/manager/documents?q=${encodeURIComponent(item.workerName)}&focus=${item.id}`)}
               onPopupClose={() => setPopup(null)}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
@@ -348,7 +348,7 @@ export default function AdminDashboardPage() {
               onCountClick={() => setPopup(p => p === "doc_overdue" ? null : "doc_overdue")}
               showPopup={popup === "doc_overdue"}
               popupItems={docOverdueList}
-              onPopupItemClick={() => router.push("/manager/documents")}
+              onPopupItemClick={(item: any) => router.push(`/manager/documents?q=${encodeURIComponent(item.workerName)}&focus=${item.id}`)}
               onPopupClose={() => setPopup(null)}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
@@ -367,7 +367,7 @@ export default function AdminDashboardPage() {
               onCountClick={() => setPopup(p => p === "assign_ending" ? null : "assign_ending")}
               showPopup={popup === "assign_ending"}
               popupItems={d?.assignmentAlerts ?? []}
-              onPopupItemClick={() => router.push("/manager/workers")}
+              onPopupItemClick={(item: any) => router.push(`/manager/workers?q=${encodeURIComponent(item.workerName)}`)}
               onPopupClose={() => setPopup(null)}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
@@ -384,7 +384,7 @@ export default function AdminDashboardPage() {
               onCountClick={() => setPopup(p => p === "unassigned_site" ? null : "unassigned_site")}
               showPopup={popup === "unassigned_site"}
               popupItems={d?.summary?.unassignedSiteList ?? []}
-              onPopupItemClick={() => router.push("/manager/sites")}
+              onPopupItemClick={(item: any) => router.push(`/manager/sites?q=${encodeURIComponent(item.companyName)}&focus=${item.id}`)}
               onPopupClose={() => setPopup(null)}
               renderPopupItem={(item: any) => (
                 <div className="flex items-center gap-2">
