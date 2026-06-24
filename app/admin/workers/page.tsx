@@ -272,9 +272,9 @@ export default function WorkersPage() {
       ):(
         <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-slate-100 bg-slate-50">
+            <thead><tr>
               {["이름/아이디","연락처","소속 위탁기관","현장","상태","작업"].map(h=>(
-                <th key={h} className="px-4 py-1.5 text-left text-xs font-black uppercase tracking-wide text-slate-500">{h}</th>
+                <th key={h} className={T.th}>{h}</th>
               ))}
             </tr></thead>
             <tbody className="divide-y divide-slate-50">

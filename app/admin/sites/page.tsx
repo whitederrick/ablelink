@@ -7,7 +7,10 @@ import PageHeader from "../_components/PageHeader";
 import { T } from "../_styles";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
+import StatusBadge from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
+
+const SITE_STATUS_MAP = { ACTIVE: { label: "활성", tone: "sky" as const }, INACTIVE: { label: "비활성", tone: "rose" as const } };
 import { MapPin, Users, Building2 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -91,9 +94,9 @@ export default function SitesPage() {
       ):(
         <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-slate-100 bg-slate-50">
+            <thead><tr>
               {["현장명","직종","위탁기관","훈련생","직무지도원","주소","상태"].map(h=>(
-                <th key={h} className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">{h}</th>
+                <th key={h} className={T.th}>{h}</th>
               ))}
             </tr></thead>
             <tbody className="divide-y divide-slate-50">
@@ -126,10 +129,8 @@ export default function SitesPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-[15px] font-medium text-slate-800 max-w-[200px] truncate">{s.address||"-"}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-black ${s.isActive ? "bg-sky-50 text-sky-600" : "bg-rose-50 text-rose-600"}`}>
-                      {s.isActive ? "활성" : "비활성"}
-                    </span>
+                  <td className={T.td}>
+                    <StatusBadge status={s.isActive ? "ACTIVE" : "INACTIVE"} map={SITE_STATUS_MAP} />
                   </td>
                 </tr>
               ))}

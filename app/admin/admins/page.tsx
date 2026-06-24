@@ -6,7 +6,10 @@ import PageHeader from "../_components/PageHeader";
 import { T } from "../_styles";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
+import StatusBadge from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
+
+const ACTIVE_STATUS_MAP = { ACTIVE: { label: "활성", tone: "sky" as const }, INACTIVE: { label: "비활성", tone: "rose" as const } };
 
 const PAGE_SIZE = 10;
 
@@ -324,9 +327,7 @@ export default function AdminsPage() {
                     {a.lastLoginAt ? new Date(a.lastLoginAt).toLocaleDateString("ko-KR") : "없음"}
                   </td>
                   <td className="px-5 py-1.5">
-                    <span className={`${T.badge} ${a.isActive ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
-                      {a.isActive ? "활성" : "비활성"}
-                    </span>
+                    <StatusBadge status={a.isActive ? "ACTIVE" : "INACTIVE"} map={ACTIVE_STATUS_MAP} />
                   </td>
                   <td className="px-5 py-1.5">
                     <div className="flex items-center justify-center gap-1.5">
