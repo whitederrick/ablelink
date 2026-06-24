@@ -60,6 +60,23 @@ export const CONTRACT_TEMPLATES: ContractTemplate[] = [
     wageTypes: ["HOURLY"], // 본문(제3조)이 시급제 전제 — 시급 선택 시에만 사용
     extraFields: [],
   },
+  // 06/07 기반 일급/월급 겸용 버전 — 제3조①②③만 임금유형에 따라 분기(렌더러 wageArticleSegs).
+  // ⚠️ 일급/월급 제3조 문구는 초안 — 기관/법무 검토 후 사용.
+  {
+    key: "SEONGDONG_07_SALARY",
+    label: "[월급/일급계약] 성동장애인자립생활센터_근로계약서",
+    restricted: true,
+    wageTypes: ["DAILY", "MONTHLY"],
+    extraFields: [],
+    acknowledgement: { guideText: "듣고 인지했음" },
+  },
+  {
+    key: "NORTH_06_SALARY",
+    label: "[월급/일급계약] 서울시립북부장애인종합복지관_근로계약서",
+    restricted: true,
+    wageTypes: ["DAILY", "MONTHLY"],
+    extraFields: [],
+  },
 ];
 
 export const CONTRACT_TEMPLATE_KEYS = CONTRACT_TEMPLATES.map(t => t.key);

@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { renderContractPdf } from "@/lib/contractPdf";
-import { isValidTemplateKey, DEFAULT_TEMPLATE_KEY, canUseTemplate } from "@/lib/contractTemplates";
+import { isValidTemplateKey, DEFAULT_TEMPLATE_KEY, canUseTemplate, templateWageTypes } from "@/lib/contractTemplates";
 
 export async function GET(req: NextRequest) {
   try {
@@ -37,6 +37,11 @@ export async function GET(req: NextRequest) {
     // 본 기관에 부여되지 않은 전용 양식은 미리보기 불가 → 표준으로 대체
     if (!canUseTemplate(templateKey, agency?.allowedContractTemplates ?? [])) templateKey = DEFAULT_TEMPLATE_KEY;
 
+    // 양식이 허용하는 임금유형으로 견본 구성(시급제 양식=시급, 월급/일급 양식=월급). 라벨↔금액 불일치 방지.
+    const wts = templateWageTypes(templateKey);
+    const sampleWageType = wts.includes("MONTHLY") ? "MONTHLY" : wts.includes("HOURLY") ? "HOURLY" : wts[0];
+    const sampleWageAmount = sampleWageType === "MONTHLY" ? "2096270" : "10030";
+
     // 견본 계약 객체 — buildContractPdfPayload가 기대하는 형태로 구성(저장 안 함).
     const sample = {
       employerBizName: agency?.name || "○○위탁기관",
@@ -56,8 +61,8 @@ export async function GET(req: NextRequest) {
       breakEndTime: "11:30",
       workDaysPerWeek: "5",
       weeklyHoliday: "일",
-      wageType: "HOURLY",
-      wageAmount: "10030",
+      wageType: sampleWageType,
+      wageAmount: sampleWageAmount,
       bonusExists: false,
       bonusAmount: null,
       extraPayExists: false,

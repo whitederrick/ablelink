@@ -765,8 +765,8 @@ function payslip(p: any): Promise<Buffer> {
 // }
 function employmentContract(p: any): Promise<Buffer> {
   // 양식 분기: 기관 양식 전용 렌더러(성동07·북부06).
-  if (p?.templateKey === "SEONGDONG_07") return employmentContract07(p);
-  if (p?.templateKey === "NORTH_06") return employmentContract06(p);
+  if (p?.templateKey === "SEONGDONG_07" || p?.templateKey === "SEONGDONG_07_SALARY") return employmentContract07(p);
+  if (p?.templateKey === "NORTH_06" || p?.templateKey === "NORTH_06_SALARY") return employmentContract06(p);
   const doc = newDoc(20);
   const x = mm(20), W = mm(170);
   const won = (n: any) => (n == null || n === "" ? "" : `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}`);
@@ -908,6 +908,22 @@ function employmentContract(p: any): Promise<Buffer> {
   return toBuffer(doc);
 }
 
+// 임금유형별 제3조①②③ 문구(일급/월급 겸용 양식용). HOURLY는 null → 호출부가 기존 시급 문구를 그대로 사용(시급 양식 무회귀).
+// ⚠️ 일급/월급 문구는 표준 근로계약서 임금 조항을 참고한 초안 — 기관/법무 검토 필요.
+function wageArticleSegs(p: any, won: (n: any) => string, traineeWord: string): { sys: string; rate: string; gain: string } | null {
+  if (p?.wageType === "MONTHLY") return {
+    sys: "월급제",
+    rate: `"을"의 월급은 금 ${won(p.wageAmount)}원으로 하며, 주휴수당을 포함한다.`,
+    gain: `"을"이 ${traineeWord}(취업자)을 2인 이상 동시에 지원(직무지도)하는 경우 위탁기관이 정하는 기준에 따라 수당을 가산하여 지급한다.`,
+  };
+  if (p?.wageType === "DAILY") return {
+    sys: "일급제",
+    rate: `"을"의 일급은 금 ${won(p.wageAmount)}원이며, 주휴수당은 별도로 지급한다.`,
+    gain: `"을"이 ${traineeWord}(취업자)을 2인 이상 동시에 지원(직무지도)하는 경우 일급의 120%를 지급한다. 다만 지원고용 현장훈련(적응지도) 중 직무지도 훈련생의 변동이 있는 경우(1명 지도) 일할로 계산한다.`,
+  };
+  return null; // HOURLY
+}
+
 // ── 직무지도원 표준근로계약서 (기관 양식: 성동07·북부06 공용) ──────────
 // 갑(기관) 정보는 사용 기관 데이터로 채움. cfg로 양식별 차이(시간표/듣고인지/을 라벨/지급일) 제어.
 // templateData: { workerBirthDate, heardAndAcknowledged }
@@ -991,9 +1007,10 @@ function instContract(p: any, cfg: InstContractCfg): Promise<Buffer> {
   divider();
 
   art("제3조【임금】");
-  sub(`① "을"의 임금은 지원고용 사업안내에 따라 시급제로 지급된다.`);
-  para([`② `, { uw: `"을"의 시급은 당해 연도 최저시급(${won(p.wageAmount)}원)이며, 주휴수당은 별도로 지급한다.` }]);
-  para([`③ `, { uw: `"을"이 훈련생(취업자)을 2인 이상 동시에 지원(직무지도)하는 경우 시급의 120%를 지급한다. 다만 지원고용 현장훈련(적응지도) 중 직무지도 훈련생의 변동이 있는 경우(1명 지도) 일할로 계산한다.` }]);
+  const w06 = wageArticleSegs(p, won, "훈련생");
+  sub(`① "을"의 임금은 지원고용 사업안내에 따라 ${w06?.sys ?? "시급제"}로 지급된다.`);
+  para([`② `, { uw: w06?.rate ?? `"을"의 시급은 당해 연도 최저시급(${won(p.wageAmount)}원)이며, 주휴수당은 별도로 지급한다.` }]);
+  para([`③ `, { uw: w06?.gain ?? `"을"이 훈련생(취업자)을 2인 이상 동시에 지원(직무지도)하는 경우 시급의 120%를 지급한다. 다만 지원고용 현장훈련(적응지도) 중 직무지도 훈련생의 변동이 있는 경우(1명 지도) 일할로 계산한다.` }]);
   sub(`④ 임금 외의 수당은 주휴수당 및 월차수당을 지급한다.`);
   sub(`⑤ 임금지급일은 지원고용 현장훈련(취업 후 적응지도) 종료 후 14일 이내로 지급한다. 다만 훈련지도 일수가 1개월을 초과하는 경우 월단위로 지급할 수 있다.`);
   sub(`⑥ 지급일이 휴일인 경우 전일에 지급하며, 지급방법은 "을" 명의의 통장으로 입금한다.`);
@@ -1403,9 +1420,10 @@ function instContract07(p: any): Promise<Buffer> {
   divider();
 
   art("제3조【임금】");
-  sub(`① "을"의 임금은 지원고용 사업안내에 따라 시급제로 지급된다.`);
-  para([`② `, { uw: `"을"의 시급은 당해 연도 최저시급(${won(p.wageAmount)}원)이며, 주휴수당은 별도로 지급한다.` }]);
-  para([`③ `, { uw: `"을"이 장애인 훈련생(취업자)을 2인 이상 동시에 지원(직무지도)하는 경우 시급의 120%를 지급한다. 다만 지원고용 현장훈련(적응지도) 중 직무지도 훈련생의 변동이 있는 경우(1명 지도) 일할로 계산한다.` }]);
+  const w07 = wageArticleSegs(p, won, "장애인 훈련생");
+  sub(`① "을"의 임금은 지원고용 사업안내에 따라 ${w07?.sys ?? "시급제"}로 지급된다.`);
+  para([`② `, { uw: w07?.rate ?? `"을"의 시급은 당해 연도 최저시급(${won(p.wageAmount)}원)이며, 주휴수당은 별도로 지급한다.` }]);
+  para([`③ `, { uw: w07?.gain ?? `"을"이 장애인 훈련생(취업자)을 2인 이상 동시에 지원(직무지도)하는 경우 시급의 120%를 지급한다. 다만 지원고용 현장훈련(적응지도) 중 직무지도 훈련생의 변동이 있는 경우(1명 지도) 일할로 계산한다.` }]);
   sub(`④ 별도 수당은 위탁기관 사정에 따라 지급할 수 있다.`);
   para([`⑤ 임금은 매월 1일부터 말일까지를 계산하여 익월 `, D(p.wagePayday || "10"), `일에 지급한다.`]);
   sub(`⑥ 지급일이 휴일인 경우 전일에 지급하며, 지급방법은 "을" 명의의 통장으로 입금한다.`);
