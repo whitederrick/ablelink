@@ -22,11 +22,16 @@ export interface AcknowledgementConfig {
   guideText: string;       // 화면에 따라쓰기 가이드로 표시 + 미작성 시 본문 회색 안내로 표시할 문구
 }
 
+// 임금 지급 유형. 표준 양식은 전체 허용, 기관 전용 양식은 본문이 특정 유형(예: 시급제)으로 고정 서술돼 있어 제한할 수 있다.
+export type WageType = "HOURLY" | "DAILY" | "MONTHLY";
+export const ALL_WAGE_TYPES: WageType[] = ["HOURLY", "DAILY", "MONTHLY"];
+
 export interface ContractTemplate {
   key: string;
   label: string;
   sub?: string;            // 선택 화면 보조 설명
   restricted?: boolean;    // true = 위탁기관 전용(부여된 기관만). 미지정/false = 전체 공용.
+  wageTypes?: WageType[];  // 이 양식으로 작성 가능한 임금유형(미지정=전체). 본문이 특정 유형 전제로 쓰인 양식은 제한.
   extraFields: TemplateField[];
   acknowledgement?: AcknowledgementConfig; // 지정 시 서명 화면에 손글씨 '듣고 인지함' 입력을 요구
 }
@@ -41,16 +46,18 @@ export const CONTRACT_TEMPLATES: ContractTemplate[] = [
   },
   {
     key: "SEONGDONG_07",
-    label: "성동장애인자립생활센터_근로계약서",
+    label: "[시급계약] 성동장애인자립생활센터_근로계약서",
     restricted: true,
+    wageTypes: ["HOURLY"], // 본문(제3조)이 시급제 전제 — 시급 선택 시에만 사용
     extraFields: [],
     // 제3조⑧ — 직무지도원이 서명 시 "듣고 인지했음"을 따라 손글씨로 직접 작성(렌더러가 본문에 배치)
     acknowledgement: { guideText: "듣고 인지했음" },
   },
   {
     key: "NORTH_06",
-    label: "서울시립북부장애인종합복지관_근로계약서",
+    label: "[시급계약] 서울시립북부장애인종합복지관_근로계약서",
     restricted: true,
+    wageTypes: ["HOURLY"], // 본문(제3조)이 시급제 전제 — 시급 선택 시에만 사용
     extraFields: [],
   },
 ];
@@ -85,4 +92,13 @@ export function canUseTemplate(key: string, allowed: string[] | null | undefined
   if (!t) return false;
   if (!t.restricted) return true;
   return (allowed ?? []).includes(key);
+}
+
+// 해당 양식으로 작성 가능한 임금유형(미지정 양식=전체)
+export function templateWageTypes(key: string | null | undefined): WageType[] {
+  return getTemplate(key).wageTypes ?? ALL_WAGE_TYPES;
+}
+// 해당 양식을 특정 임금유형으로 쓸 수 있는가
+export function canUseTemplateForWage(key: string | null | undefined, wageType: string | null | undefined): boolean {
+  return !!wageType && templateWageTypes(key).includes(wageType as WageType);
 }

@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess, checkQuota } from "@/lib/planGuard";
-import { isValidTemplateKey, DEFAULT_TEMPLATE_KEY, canUseTemplate } from "@/lib/contractTemplates";
+import { isValidTemplateKey, DEFAULT_TEMPLATE_KEY, canUseTemplate, canUseTemplateForWage } from "@/lib/contractTemplates";
 import { sendAlimtalk } from "@/lib/kakao";
 import { randomUUID } from "crypto";
 import { hash } from "bcryptjs";
@@ -263,7 +263,9 @@ export async function POST(req: NextRequest) {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7일
     // 전용 양식은 본 기관에 부여된 경우에만 사용. 미부여 양식은 표준으로 강등.
     const reqTemplateKey = isValidTemplateKey(templateKey) ? templateKey : DEFAULT_TEMPLATE_KEY;
-    const resolvedTemplateKey = canUseTemplate(reqTemplateKey, agencyRow?.allowedContractTemplates ?? []) ? reqTemplateKey : DEFAULT_TEMPLATE_KEY;
+    const grantedTemplateKey = canUseTemplate(reqTemplateKey, agencyRow?.allowedContractTemplates ?? []) ? reqTemplateKey : DEFAULT_TEMPLATE_KEY;
+    // 양식이 본문상 특정 임금유형 전제(예: 시급제 양식)인데 다른 유형으로 작성하면 표준으로 강등(라벨 불일치 방지).
+    const resolvedTemplateKey = canUseTemplateForWage(grantedTemplateKey, str(wageType)) ? grantedTemplateKey : DEFAULT_TEMPLATE_KEY;
     const resolvedTemplateData = templateData && typeof templateData === "object" ? templateData : undefined;
 
     const contract = await prisma.employmentContract.create({

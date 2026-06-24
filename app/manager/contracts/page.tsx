@@ -6,7 +6,7 @@ import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
-import { getTemplate, DEFAULT_TEMPLATE_KEY, visibleTemplates, canUseTemplate } from "@/lib/contractTemplates";
+import { getTemplate, DEFAULT_TEMPLATE_KEY, visibleTemplates, canUseTemplate, templateWageTypes, canUseTemplateForWage } from "@/lib/contractTemplates";
 import { StatCardRow } from "../_components/StatCard";
 import { X } from "lucide-react";
 import { computeWorkTimes, type WorkType } from "@/lib/workSchedule";
@@ -336,7 +336,6 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
   const [showPreview, setShowPreview] = useState(false);
   // 본 기관에 노출 가능한 양식 = 공용 + 운영자가 부여한 전용 양식
   const [allowedTemplates, setAllowedTemplates] = useState<string[]>([]);
-  const templateOptions = useMemo(() => visibleTemplates(allowedTemplates), [allowedTemplates]);
 
   const [selectedUserId, setSelectedUserId] = useState(prefill?.workerId ?? "");
   const [manualName, setManualName] = useState(prefill?.workerName ?? "");
@@ -379,6 +378,22 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
   const [weeklyHoliday, setWeeklyHoliday] = useState("일");
   const [wageType, setWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("MONTHLY");
   const [wageAmount, setWageAmount] = useState("");
+  // 노출 양식 = (공용+부여) 중 현재 임금유형으로 쓸 수 있는 것만. 기관 전용 시급제 양식은 시급 선택 시에만 노출.
+  const templateOptions = useMemo(
+    () => visibleTemplates(allowedTemplates).filter(t => canUseTemplateForWage(t.key, wageType)),
+    [allowedTemplates, wageType]
+  );
+  // 임금유형 변경 시: 현재 양식이 그 유형을 지원하지 않으면 표준으로 되돌림
+  const onWageTypeChange = (v: "HOURLY" | "DAILY" | "MONTHLY") => {
+    setWageType(v);
+    if (!canUseTemplateForWage(templateKey, v)) { setTemplateKey(DEFAULT_TEMPLATE_KEY); setTemplateData({}); }
+  };
+  // 양식 변경 시: 현재 임금유형을 지원하지 않으면 그 양식이 허용하는 첫 유형으로 맞춤
+  const onTemplateChange = (key: string) => {
+    setTemplateKey(key); setTemplateData({});
+    const wts = templateWageTypes(key);
+    if (!wts.includes(wageType)) setWageType(wts[0]);
+  };
   const [bonusExists, setBonusExists] = useState(false);
   const [bonusAmount, setBonusAmount] = useState("");
   const [extraPayExists, setExtraPayExists] = useState(false);
@@ -442,9 +457,11 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
         setApplyRepSignature(!!d.data.representativeSignatureUrl);
         const allowed: string[] = Array.isArray(d.data.allowedContractTemplates) ? d.data.allowedContractTemplates : [];
         setAllowedTemplates(allowed);
-        // 기관 기본 양식 프리필(없거나 사용 불가면 표준 유지)
+        // 기관 기본 양식 프리필(없거나 사용 불가면 표준 유지). 양식이 현재 임금유형을 지원 안 하면 그 양식의 첫 유형으로 맞춤.
         if (d.data.defaultContractTemplate && canUseTemplate(d.data.defaultContractTemplate, allowed)) {
-          setTemplateKey(d.data.defaultContractTemplate); setTemplateData({});
+          const key = d.data.defaultContractTemplate;
+          setTemplateKey(key); setTemplateData({});
+          setWageType(prev => templateWageTypes(key).includes(prev) ? prev : templateWageTypes(key)[0]);
         }
       }
     }).catch(() => {});
@@ -512,7 +529,7 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
                 <label className={T.label}>계약서 양식</label>
                 <button type="button" onClick={() => setShowPreview(true)} className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100">미리보기</button>
               </div>
-              <select value={templateKey} onChange={e => { setTemplateKey(e.target.value); setTemplateData({}); }} className={`w-full ${T.input}`}>
+              <select value={templateKey} onChange={e => onTemplateChange(e.target.value)} className={`w-full ${T.input}`}>
                 {templateOptions.map(t => <option key={t.key} value={t.key}>{t.label}{t.sub ? ` — ${t.sub}` : ""}</option>)}
               </select>
               <p className="text-[11px] font-semibold text-slate-400">
@@ -592,10 +609,16 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
             <section className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/50 p-3">
               <label className={T.label}>6. 임금 <span className="text-rose-500">*</span></label>
               <div className="flex gap-2">
-                {([["HOURLY", "시급"], ["DAILY", "일급"], ["MONTHLY", "월급"]] as const).map(([v, l]) => (
-                  <button key={v} type="button" onClick={() => setWageType(v)} className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold transition ${wageType === v ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>{l}</button>
-                ))}
+                {([["HOURLY", "시급"], ["DAILY", "일급"], ["MONTHLY", "월급"]] as const).map(([v, l]) => {
+                  const ok = canUseTemplateForWage(templateKey, v);
+                  return (
+                    <button key={v} type="button" disabled={!ok} onClick={() => onWageTypeChange(v)} title={ok ? "" : `현재 양식(${getTemplate(templateKey).label})은 이 임금유형을 지원하지 않습니다`} className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold transition ${wageType === v ? "border-slate-950 bg-slate-950 text-white" : !ok ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>{l}</button>
+                  );
+                })}
               </div>
+              {templateWageTypes(templateKey).length < 3 && (
+                <p className="text-[11px] font-semibold text-slate-400">현재 양식은 <span className="text-slate-600">{templateWageTypes(templateKey).map(w => ({ HOURLY: "시급", DAILY: "일급", MONTHLY: "월급" }[w])).join("·")}</span>만 지원합니다. 다른 임금유형은 표준 근로계약서를 사용하세요.</p>
+              )}
               <div className="flex items-center gap-2"><input type="number" value={wageAmount} onChange={e => setWageAmount(e.target.value)} placeholder="임금액" className={`w-full ${T.input}`} /><span className="text-sm text-slate-400">원</span></div>
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex items-center gap-2 text-sm font-semibold text-slate-600"><input type="checkbox" checked={bonusExists} onChange={e => setBonusExists(e.target.checked)} className="h-4 w-4 accent-slate-950" />상여금 있음</label>
