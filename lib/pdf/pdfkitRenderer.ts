@@ -920,6 +920,7 @@ function instContract(p: any, cfg: InstContractCfg): Promise<Buffer> {
   const td = p.templateData ?? {};
 
   const BODY = 10.5; // 본문 크기(자동 밑줄은 10pt↑에서 1pt 고정)
+  const CS = 0.4;    // 본문 자간(07과 동일)
   let y = mm(22);  // 상단 여백 확대
 
   // 제목 — 원본과 동일 명조(Batang) 계열, 볼드 제거, 자간 넓게
@@ -955,12 +956,12 @@ function instContract(p: any, cfg: InstContractCfg): Promise<Buffer> {
     };
     const plain = segs.map(text).join("");
     doc.font(font).fontSize(size);
-    const h = doc.heightOfString(plain, { width: lw, lineGap: 3, indent: firstIndent });
+    const h = doc.heightOfString(plain, { width: lw, lineGap: 2, indent: firstIndent, characterSpacing: CS });
     if (y + h > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
     const y0 = y;
     segs.forEach((s, i) => {
       // 자동 밑줄(위치 정확) — 굵기는 폰트<10이면 0.5pt
-      const o: any = { width: lw, lineGap: 3, continued: i !== segs.length - 1, underline: typeof s !== "string" };
+      const o: any = { width: lw, lineGap: 2, continued: i !== segs.length - 1, underline: typeof s !== "string", characterSpacing: CS };
       if (i === 0 && firstIndent) o.indent = firstIndent;
       doc.font(font).fontSize(size).fillColor("#000");
       if (i === 0) doc.text(text(s), lx, y0, o); else doc.text(text(s), o);
@@ -1051,7 +1052,7 @@ function instContract(p: any, cfg: InstContractCfg): Promise<Buffer> {
   sub(`③ 휴일(공휴일)에 관한 사항은 근로기준법 제55조에 정한 바로 한다.`);
   sub(`④ "갑"은 "을"이 유급 또는 무급휴일에 근로한 경우에는 근로기준법에 따른 대체 휴무를 부여하거나, 수당을 지급한다.`);
   sub(`⑤ 연차유급휴가는 근로기준법에 따라 부여하며, 연차유급휴가 사용 시에는 장애인 훈련생(취업자)과 협의를 통하여 사용하여야 한다.`);
-  sub(`⑥ 제1항과 제6항에도 불구하고 "을"의 소정근로시간이 15시간, 월 60시간 미만인 경우에는 주휴일과 연차유급휴가를 적용하지 아니한다.`);
+  sub(`⑥ 제1항과 제5항에도 불구하고 "을"의 소정근로시간이 주 15시간, 월 60시간 미만인 경우에는 주휴일과 연차유급휴가를 적용하지 아니한다.`);
   divider();
 
   art("제6조【의무】");
@@ -1105,8 +1106,8 @@ function instContract(p: any, cfg: InstContractCfg): Promise<Buffer> {
   sub(`① 본 계약은 "갑"와 "을"의 서명날인 즉시 그 효력이 발생하여 계약서를 날인한 후 각각 1부씩 보관한다.`);
   divider();
 
-  // 작성일 — 위·아래 구분선 사이 가운데 (여백 최소)
-  if (y + mm(48) > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
+  // 작성일 + 갑/을 서명란이 한 페이지에 함께 들어가도록 충분한 잔여공간 확보(부족 시 새 페이지)
+  if (y + mm(70) > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
   y += mm(2);
   doc.font("Batang").fontSize(12).fillColor("#000").text(p.dateText || "          년      월      일", x, y, { width: W, align: "center" });
   y += mm(9);
