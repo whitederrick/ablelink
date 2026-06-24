@@ -290,6 +290,7 @@ export default function AdminContractsPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -376,7 +377,7 @@ export default function AdminContractsPage() {
             ) : filtered.length === 0 ? (
               <tr><td colSpan={8} className={T.tdCenter}>{contracts.length === 0 ? "계약서가 없습니다." : "조건에 맞는 계약서가 없습니다."}</td></tr>
             ) : pageItems.map(c => (
-                <tr key={c.id} className={T.trBase}>
+                <tr key={c.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50`} onClick={() => setDetailId(c.id)}>
                   <td className={`${T.td} whitespace-nowrap`}>{c.agencyName}</td>
                   <td className={T.td}>
                     <span className="font-semibold text-slate-800">{c.workerName}</span>
@@ -390,7 +391,7 @@ export default function AdminContractsPage() {
                   <td className={T.td}><StatusBadge status={c.status} map={CONTRACT_BADGE} /></td>
                   <td className={`${T.td}`}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>
-                    <button onClick={() => copyLink(c.signToken)} className={T.btnSecondary}>링크 복사</button>
+                    <button onClick={(e) => { e.stopPropagation(); copyLink(c.signToken); }} className={T.btnSecondary}>링크 복사</button>
                   </td>
                 </tr>
               ))}
@@ -410,6 +411,53 @@ export default function AdminContractsPage() {
           }}
         />
       )}
+
+      {detailId && <AdminContractDetailModal id={detailId} onClose={() => setDetailId(null)} />}
+    </div>
+  );
+}
+
+// 운영자 전용 — 근로계약서 읽기 상세(PDF + 정보). 작성·취소·서명 등 액션은 위탁기관 담당자(/manager) 몫.
+function AdminContractDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetch(`/api/admin/contracts/${id}`).then(r => r.json()).then(d => { if (d.success) setData(d.data); }).finally(() => setLoading(false));
+  }, [id]);
+
+  const pdfUrl = `/api/admin/contracts/${id}?format=pdf`;
+  const wt: Record<string, string> = { HOURLY: "시급", DAILY: "일급", MONTHLY: "월급" };
+
+  return (
+    <div className={T.modalOverlay} onClick={onClose} style={{ zIndex: 1050 }}>
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white p-7 shadow-2xl shadow-slate-950/20" onClick={e => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-black text-slate-900">근로계약서 상세 (조회)</h2>
+          <div className="flex items-center gap-2">
+            <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className={T.btnPrimary}>PDF 보기 / 다운로드</a>
+            <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:bg-slate-50"><X className="h-4 w-4" /></button>
+          </div>
+        </div>
+        {loading ? <p className="py-10 text-center text-sm font-semibold text-slate-400">로딩 중...</p> : !data ? <p className="py-10 text-center text-sm font-semibold text-slate-400">불러올 수 없습니다.</p> : (
+          <div className="flex-1 space-y-4 overflow-y-auto pr-1">
+            <iframe src={pdfUrl} className="h-[55vh] w-full rounded-xl border border-slate-200" title="계약서 미리보기" />
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+              {[
+                ["위탁기관", data.agencyName || "-"],
+                ["근로자", data.workerName], ["연락처", data.workerPhone],
+                ["계약기간", `${data.contractStart} ~ ${data.contractEnd}`],
+                ["근무장소", data.workLocation || "-"], ["업무내용", data.jobDescription || "-"],
+                ["소정근로", `${data.workStartTime || "-"} ~ ${data.workEndTime || "-"}`],
+                ["임금", data.wageAmount ? `${wt[data.wageType] || ""} ${Number(data.wageAmount).toLocaleString()}원` : "-"],
+                ["사업주", data.employerBizName || "-"], ["대표자", data.employerRepName || "-"],
+                ["상태", CONTRACT_BADGE[data.status]?.label || data.status],
+              ].map(([k, v]) => (
+                <div key={k as string} className="flex gap-2 border-b border-slate-50 py-1"><span className="w-20 flex-shrink-0 font-semibold text-slate-400">{k}</span><span className="font-semibold text-slate-700">{v}</span></div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
