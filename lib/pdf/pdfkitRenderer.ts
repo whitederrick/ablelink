@@ -1337,9 +1337,10 @@ function instContract07(p: any): Promise<Buffer> {
   const won = (n: any) => (n == null || n === "" ? "______" : `${Math.round(Number(n) || 0).toLocaleString("ko-KR")}`);
   const td = p.templateData ?? {};
   const BODY = 10.5;
+  const CS = 0.4;   // 본문 자간(전체 넓힘)
   let y = mm(22);
 
-  doc.font("Batang").fontSize(18).fillColor("#000").text("직무지도원 표준근로계약서", x, y, { width: W, align: "center", characterSpacing: 0.5 });
+  doc.font("Batang-Bold").fontSize(18).fillColor("#000").text("직무지도원 표준근로계약서", x, y, { width: W, align: "center", characterSpacing: 1.0 });
   y += mm(15);
 
   const divider = (gapBefore = mm(2.4), gapAfter = mm(2.4)) => {
@@ -1369,11 +1370,11 @@ function instContract07(p: any): Promise<Buffer> {
     const measureFont = bold || hasUw ? "Batang-Bold" : "Batang";
     const plain = segs.map(text).join("");
     doc.font(measureFont).fontSize(size);
-    const h = doc.heightOfString(plain, { width: lw, lineGap: 3, indent: firstIndent });
+    const h = doc.heightOfString(plain, { width: lw, lineGap: 2, indent: firstIndent, characterSpacing: CS });
     if (y + h > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
     const y0 = y;
     segs.forEach((s, i) => {
-      const o: any = { width: lw, lineGap: 3, continued: i !== segs.length - 1, underline: isU(s) };
+      const o: any = { width: lw, lineGap: 2, continued: i !== segs.length - 1, underline: isU(s), characterSpacing: CS };
       if (i === 0 && firstIndent) o.indent = firstIndent;
       doc.font(bold ? "Batang-Bold" : (isU(s) ? "Batang-Bold" : "Batang")).fontSize(size).fillColor("#000");
       if (i === 0) doc.text(text(s), lx, y0, o); else doc.text(text(s), o);
@@ -1405,7 +1406,7 @@ function instContract07(p: any): Promise<Buffer> {
   para([`② `, { uw: `"을"의 시급은 당해 연도 최저시급(${won(p.wageAmount)}원)이며, 주휴수당은 별도로 지급한다.` }]);
   para([`③ `, { uw: `"을"이 장애인 훈련생(취업자)을 2인 이상 동시에 지원(직무지도)하는 경우 시급의 120%를 지급한다. 다만 지원고용 현장훈련(적응지도) 중 직무지도 훈련생의 변동이 있는 경우(1명 지도) 일할로 계산한다.` }]);
   sub(`④ 별도 수당은 위탁기관 사정에 따라 지급할 수 있다.`);
-  sub(`⑤ 임금은 매월 1일부터 말일까지를 계산하여 익월 ${p.wagePayday || "10"}일에 지급한다.`);
+  para([`⑤ 임금은 매월 1일부터 말일까지를 계산하여 익월 `, D(p.wagePayday || "10"), `일에 지급한다.`]);
   sub(`⑥ 지급일이 휴일인 경우 전일에 지급하며, 지급방법은 "을" 명의의 통장으로 입금한다.`);
   sub(`⑦ 월 실지급액은 사회보험료(국민연금, 건강보험, 고용보험)를 제외한 금액이다.`);
   // ⑧ 듣고 인지 — 첫 괄호=손글씨(따라쓰기), 둘째 괄호=작은 서명(본문용). 한 줄 수동 배치.
@@ -1464,7 +1465,7 @@ function instContract07(p: any): Promise<Buffer> {
   sub(`③ 휴일(공휴일 및 대체공휴일)에 관한 사항은 근로기준법 제55조에 정한 바로 한다.`);
   sub(`④ "갑"은 "을"이 유급 또는 무급휴일에 근로한 경우에는 근로기준법에 따른 대체휴무를 부여하거나, 수당을 지급한다.`);
   sub(`⑤ 연차유급휴가는 근로기준법에 따라 부여하며, 연차유급휴가 사용 시에는 장애인 훈련생(취업자)과 협의를 통하여 사용하여야 한다.`);
-  sub(`⑥ 제1항과 제6항에도 불구하고 "을"의 소정 근로시간이 4주 동안(4주 미만으로 근로하는 경우에는 그 기간)을 평균하여 1주 동안 15시간인 경우에는 주휴일, 관공서의 공휴일에 관한 규정에 의한 공휴일 및 대체공휴일과 연차유급휴가, 퇴직급여제도를 적용하지 아니한다.`);
+  sub(`⑥ 제1항과 제5항에도 불구하고 "을"의 소정 근로시간이 4주 동안(4주 미만으로 근로하는 경우에는 그 기간)을 평균하여 1주 동안 15시간 미만인 경우에는 주휴일, 관공서의 공휴일에 관한 규정에 의한 공휴일 및 대체공휴일과 연차유급휴가, 퇴직급여제도를 적용하지 아니한다.`);
   divider();
 
   art("제6조【의무】");
@@ -1518,8 +1519,8 @@ function instContract07(p: any): Promise<Buffer> {
   sub(`본 계약은 "갑"과 "을"의 서명날인 즉시 그 효력이 발생하며 계약서에 날인한 후 각각 1부씩 보관한다.`);
   divider();
 
-  // 작성일 — 위·아래 구분선 사이
-  if (y + mm(48) > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
+  // 작성일 + 갑/을 서명란이 한 페이지에 함께 들어가도록 충분한 잔여공간 확보(부족 시 새 페이지)
+  if (y + mm(70) > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
   y += mm(2);
   doc.font("Batang").fontSize(12).fillColor("#000").text(p.dateText || "          년      월      일", x, y, { width: W, align: "center" });
   y += mm(9);
