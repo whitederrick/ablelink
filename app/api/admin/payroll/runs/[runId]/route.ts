@@ -159,7 +159,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ run
     try {
       const items = await prisma.payrollItem.findMany({ where: { runId: run.id }, select: { workerId: true } });
       if (items.length > 0) {
-        await (prisma as any).workerNotice.createMany({
+        await prisma.workerNotice.createMany({
           data: items.map((it) => ({
             workerId: it.workerId,
             agencyId: run.agencyId,

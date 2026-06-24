@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await prisma.documentRun.update({ where: { id: runId }, data: { signStage: "CONFIRMED" } });
       // 워커에게 승인(확정) 알림 — 반려만 알리던 비대칭 해소.
       try {
-        await (prisma as any).workerNotice.create({
+        await prisma.workerNotice.create({
           data: {
             workerId: run.workerId,
             agencyId: run.agencyId,
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const reason = String(body?.reason || "").trim();
       await prisma.documentRun.update({ where: { id: runId }, data: { signStage: "CHANGES_REQUESTED" } });
 
-      await (prisma as any).workerNotice.create({
+      await prisma.workerNotice.create({
         data: {
           workerId: run.workerId,
           agencyId: run.agencyId,

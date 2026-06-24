@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
           if (e?.code === "P2002") {
             newUser = await prisma.worker.create({
               data: {
-                loginId: `${baseLogin}_${Date.now()}`,
+                loginId: `${baseLogin}_${Date.now()}_${randomUUID().slice(0, 8)}`, // 재충돌 방지(랜덤 접미)
                 password: await hash(randomUUID(), 12),
                 workerName: name,
                 phoneNumber: phone,

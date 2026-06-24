@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
         if (managerIds.length === 0) return;
         const w = await prisma.worker.findUnique({ where: { id: workerId }, select: { workerName: true } });
         const name = w?.workerName ?? "직무지도원";
-        await (prisma as any).managerNotice.createMany({
+        await prisma.managerNotice.createMany({
           data: managerIds.map(mid => ({
             managerId: mid,
             title: `[배정 회신] ${name} — ${statusText}`,

@@ -43,7 +43,7 @@ function CorrectionTool() {
     if (flag) p.set("flag", flag);
     fetch(`/api/admin/system/attendances?${p}`)
       .then(r => r.json()).then(d => { if (d.success) setRows(d.records); })
-      .catch(() => {}).finally(() => setLoading(false));
+      .catch(e => console.error("[admin/attendances] 목록 로드 실패", e)).finally(() => setLoading(false));
   }
 
   return (

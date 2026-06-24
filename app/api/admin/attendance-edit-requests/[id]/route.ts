@@ -67,7 +67,7 @@ export async function PATCH(
 
       // 워커 알림: 수정요청 승인 반영.
       try {
-        await (prisma as any).workerNotice.create({
+        await prisma.workerNotice.create({
           data: {
             workerId: request.workerId,
             agencyId: siteAgencyId,
@@ -89,7 +89,7 @@ export async function PATCH(
 
       // 워커 알림: 반려 + 재제출 안내(반려 건은 새 수정요청으로 다시 제출 가능).
       try {
-        await (prisma as any).workerNotice.create({
+        await prisma.workerNotice.create({
           data: {
             workerId: request.workerId,
             agencyId: siteAgencyId,

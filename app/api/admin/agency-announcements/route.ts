@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       });
       const targetIds = [...new Map(assignments.map(a => [a.workerId.toString(), a.workerId])).values()];
       if (targetIds.length > 0) {
-        await (prisma as any).workerNotice.createMany({
+        await prisma.workerNotice.createMany({
           data: targetIds.map(uid => ({
             workerId: uid, agencyId: scope.agencyId,
             title: title.slice(0, 100),

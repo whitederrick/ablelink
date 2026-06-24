@@ -242,22 +242,22 @@ export async function GET(req: NextRequest) {
   try {
     const expiring = await prisma.satisfactionSurvey.findMany({
       where: { status: "PENDING", expiresAt: { lt: now } },
-      select: { id: true, agencyId: true, workerId: true, createdByManagerId: true } as any,
+      select: { id: true, agencyId: true, workerId: true, createdByManagerId: true },
     });
     if (expiring.length > 0) {
       await prisma.satisfactionSurvey.updateMany({
-        where: { id: { in: (expiring as any[]).map(s => s.id) } },
+        where: { id: { in: expiring.map(s => s.id) } },
         data: { status: "EXPIRED" },
       });
       surveysExpired = expiring.length;
       // 요청자(작성 의뢰 매니저, 없으면 기관 활성 매니저)에게 '기한 만료 — 재요청 필요' 알림(앱 내 무료)
       try {
-        const workerIds = [...new Set((expiring as any[]).map(s => s.workerId))];
+        const workerIds = [...new Set(expiring.map(s => s.workerId))];
         const workers = await prisma.worker.findMany({ where: { id: { in: workerIds } }, select: { id: true, workerName: true } });
         const nameOf = new Map(workers.map(w => [w.id.toString(), w.workerName]));
         const agencyMgrCache = new Map<string, bigint[]>();
         const notices: { managerId: bigint; title: string; body: string; link: string }[] = [];
-        for (const s of expiring as any[]) {
+        for (const s of expiring) {
           let mids: bigint[] = [];
           if (s.createdByManagerId) mids = [s.createdByManagerId];
           else if (s.agencyId) {
@@ -276,7 +276,7 @@ export async function GET(req: NextRequest) {
             link: "/manager/reports",
           });
         }
-        if (notices.length > 0) await (prisma as any).managerNotice.createMany({ data: notices });
+        if (notices.length > 0) await prisma.managerNotice.createMany({ data: notices });
       } catch (e: any) { errors.push(`평가만료알림: ${e.message}`); }
     }
   } catch (e: any) { errors.push(`평가만료: ${e.message}`); }
@@ -299,7 +299,7 @@ export async function GET(req: NextRequest) {
       where: {
         isActive: true,
         OR: [{ payrollAutoDay: todayDay }, ...(isLastDay ? [{ payrollAutoDay: { gt: daysInMonth } }] : [])],
-      } as any,
+      },
       select: { id: true },
     });
     for (const ag of agencies) {

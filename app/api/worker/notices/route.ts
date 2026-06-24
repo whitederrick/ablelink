@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const notices: any[] = await (prisma as any).workerNotice.findMany({
+    const notices: any[] = await prisma.workerNotice.findMany({
       where: { workerId: BigInt(session.workerId) },
       orderBy: { createdAt: "desc" },
       take: 50,

@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
           managerIds = mgrs.map(m => m.id);
         }
         if (managerIds.length === 0) return;
-        await (prisma as any).managerNotice.createMany({
+        await prisma.managerNotice.createMany({
           data: managerIds.map(mid => ({
             managerId: mid,
             title: `[출근부 수정요청] ${session!.workerName} · ${attendance!.workDate}`,

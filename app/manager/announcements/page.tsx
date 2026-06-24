@@ -57,12 +57,12 @@ export default function AgencyAnnouncementsPage() {
 
   const load = useCallback(() => {
     fetch("/api/admin/agency-announcements").then(r => r.json())
-      .then(d => { if (d.success) setItems(d.announcements); }).catch(() => {}).finally(() => setLoading(false));
+      .then(d => { if (d.success) setItems(d.announcements); }).catch(e => console.error("[manager/announcements] 목록 로드 실패", e)).finally(() => setLoading(false));
   }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     fetch("/api/admin/announcement-categories").then(r => r.json())
-      .then(d => { if (d.success) setCategories(d.categories); }).catch(() => {});
+      .then(d => { if (d.success) setCategories(d.categories); }).catch(e => console.error("[manager/announcements] 카테고리 로드 실패", e));
   }, []);
 
   // 필터링 + 정렬(고정 우선, 최신순)

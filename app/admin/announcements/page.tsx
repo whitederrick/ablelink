@@ -45,7 +45,7 @@ export default function AnnouncementsPage() {
     fetch("/api/admin/system/announcements")
       .then(r => r.json())
       .then(d => { if (d.success) setList(d.announcements); })
-      .catch(() => {})
+      .catch(e => console.error("[admin/announcements] 목록 로드 실패", e))
       .finally(() => setLoading(false));
   }
 

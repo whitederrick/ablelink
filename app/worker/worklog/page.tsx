@@ -169,7 +169,7 @@ function WorklogForm() {
           }
         }
       }
-    }).catch(() => {});
+    }).catch(e => console.error("[worker/worklog] 현장 정보 로드 실패", e));
   }, []);
 
   // #8: 훈련생 선택/변경 시 최근 수행과제 목록 로드
@@ -178,7 +178,7 @@ function WorklogForm() {
     fetch(`/api/worker/logs/recent-tasks?traineeId=${traineeId}`)
       .then(r => r.json())
       .then(d => { if (d.success) setRecentTasks(d.tasks); })
-      .catch(() => {});
+      .catch(e => console.error("[worker/worklog] 최근 수행과제 로드 실패", e));
   }, [traineeId]);
 
   // 수정 모드: 기존 일지 로드
@@ -199,7 +199,7 @@ function WorklogForm() {
         const ext = (Number(l.extTime1on1) || 0) + (Number(l.extTimeGroup) || 0);
         if (ext > 0) setExtraHours(String(ext));
       }
-    }).catch(() => {}).finally(() => setLoadingLog(false));
+    }).catch(e => console.error("[worker/worklog] 일지 로드 실패", e)).finally(() => setLoadingLog(false));
   }, [logId]);
 
   // 임시 저장

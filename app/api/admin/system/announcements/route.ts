@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     // 직무지도원 알림 fan-out (전체 발송일 때만)
     if (targets.length > 0) {
-      await (prisma as any).workerNotice.createMany({
+      await prisma.workerNotice.createMany({
         data: targets.map(t => ({
           workerId:    t.workerId,
           agencyId:  t.agencyId,
