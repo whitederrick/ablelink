@@ -394,15 +394,18 @@ async function main() {
     }
     talentIds.push(w.id);
   }
-  // 모집공고(매니저 등록 + 운영자 등록)
-  let nRecruit = 0;
+  // 모집공고(매니저 등록=위탁기관 공고 + 운영자 등록=마켓플레이스). 비운영자 공고는 3개 기관에 분산.
+  let nRecruit = 0, agRot = 0;
   for (let i = 0; i < 8; i++) {
     const byAdmin = i % 3 === 0;
+    const link = byAdmin
+      ? { createdByAdminId: adminId }
+      : (() => { const ag = agencyMeta[agRot++ % agencyMeta.length]; return { agencyId: ag.id, createdByManagerId: ag.mgrId }; })();
     await prisma.recruitPost.create({
       data: { title: `${["카페 바리스타 보조","물류 포장","사무 보조","제과 보조","세탁 보조"][i % 5]} 직무지도 모집`, companyName: `모집사업체 ${i + 1}`, profession: "JOB_COACH",
         address: `서울특별시 ${["성동구","마포구","노원구","강남구"][i % 4]} 모집로 ${i + 1}`, region: ["성동구","마포구","노원구","강남구"][i % 4], workHours: "09:00~18:00", workDays: "월~금",
         payInfo: "시급 10,320원", serviceStart: dayFromNow(7), serviceEnd: dayFromNow(180), headcount: 1 + (i % 2), description: "지원고용 현장훈련 직무지도원을 모집합니다.", status: "OPEN",
-        ...(byAdmin ? { createdByAdminId: adminId } : { agencyId: A1.id, createdByManagerId: A1.mgrId }), contactName: "담당자", contactPhone: "02-0000-0000" },
+        ...link, contactName: "담당자", contactPhone: "02-0000-0000" },
     });
     nRecruit++;
   }
