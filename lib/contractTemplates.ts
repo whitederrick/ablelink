@@ -82,8 +82,6 @@ export const CONTRACT_TEMPLATES: ContractTemplate[] = [
 export const CONTRACT_TEMPLATE_KEYS = CONTRACT_TEMPLATES.map(t => t.key);
 export const DEFAULT_TEMPLATE_KEY = "STANDARD";
 
-// 전체 공용 양식(restricted 아님)
-export const PUBLIC_TEMPLATES = CONTRACT_TEMPLATES.filter(t => !t.restricted);
 // 위탁기관 전용 양식(운영자 부여 대상)
 export const RESTRICTED_TEMPLATES = CONTRACT_TEMPLATES.filter(t => t.restricted);
 

@@ -24,10 +24,6 @@ export const WORK_TYPE_LABELS: Record<WorkType, string> = {
   CUSTOM: "직접입력",
 };
 
-export function isWorkType(v: unknown): v is WorkType {
-  return typeof v === "string" && (VALID_WORK_TYPES as readonly string[]).includes(v);
-}
-
 export interface WorkTimes {
   start: string; // "HH:MM" (KST 벽시계)
   end: string; // "HH:MM"
