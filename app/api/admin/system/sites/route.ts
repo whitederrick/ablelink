@@ -39,6 +39,7 @@ export async function GET(req: Request) {
         traineeCount: s.trainees.length,
         workerCount:   s.assignments.length,
         workers:      s.assignments.map(a => ({ id: a.user.id.toString(), name: a.user.workerName })),
+        isActive:    (s as any).isActive ?? true,
         createdAt:   (s as any).createdAt?.toISOString() ?? null,
       })),
     });

@@ -22,6 +22,7 @@ type SiteItem = {
   agencyId: string|null; agencyName: string|null; planType: string|null;
   traineeCount: number; workerCount: number;
   workers: {id:string;name:string}[];
+  isActive: boolean;
 };
 
 export default function SitesPage() {
@@ -91,12 +92,12 @@ export default function SitesPage() {
         <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-slate-100 bg-slate-50">
-              {["현장명","직종","위탁기관","훈련생","직무지도원","주소"].map(h=>(
+              {["현장명","직종","위탁기관","훈련생","직무지도원","주소","상태"].map(h=>(
                 <th key={h} className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-500">{h}</th>
               ))}
             </tr></thead>
             <tbody className="divide-y divide-slate-50">
-              {filtered.length===0?(<tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">{sites.length===0?"현장이 없습니다.":"조건에 맞는 현장이 없습니다."}</td></tr>)
+              {filtered.length===0?(<tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-400">{sites.length===0?"현장이 없습니다.":"조건에 맞는 현장이 없습니다."}</td></tr>)
               :pageItems.map(s=>(
                 <tr key={s.id} onClick={()=>router.push(`/admin/sites/${s.id}`)} className="cursor-pointer hover:bg-slate-50 transition">
                   <td className="px-4 py-3 text-[15px] font-medium text-slate-800">
@@ -125,6 +126,11 @@ export default function SitesPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-[15px] font-medium text-slate-800 max-w-[200px] truncate">{s.address||"-"}</td>
+                  <td className="px-4 py-3">
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-black ${s.isActive ? "bg-sky-50 text-sky-600" : "bg-rose-50 text-rose-600"}`}>
+                      {s.isActive ? "활성" : "비활성"}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
