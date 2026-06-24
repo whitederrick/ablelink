@@ -3,7 +3,7 @@
 // 직무지도 매칭 — 공급측(워커/user) 공고 검색·조회
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Search, MapPin, Clock, Users, ClipboardList, Send } from "lucide-react";
+import { ChevronLeft, Search, MapPin, Clock, Users, ClipboardList, Send, Building2 } from "lucide-react";
 
 // 매칭은 현재 직무지도원 직종만 운영 → 직종 필터 미노출(서버도 JOB_COACH 강제).
 const PROF_LABEL: Record<string, string> = {
@@ -98,7 +98,9 @@ export default function RecruitBrowsePage() {
               >
                 <div className="flex items-center gap-2">
                   <span className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-black text-sky-600">{PROF_LABEL[p.profession] ?? p.profession}</span>
-                  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500">{p.agencyName ?? "Able-Link"}</span>
+                  {p.agencyName
+                    ? <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600"><Building2 className="h-3 w-3" />{p.agencyName}</span>
+                    : <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-700">마켓플레이스</span>}
                   {p.myApplication && (
                     <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-600">{APP_LABEL[p.myApplication.status]}</span>
                   )}
