@@ -721,11 +721,12 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
 // ─────────────────────────────────────────────────────────────
 // 계약서 상세 조회
 // ─────────────────────────────────────────────────────────────
-function DetailModal({ id, onClose }: { id: string; onClose: () => void }) {
+function DetailModal({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged?: () => void }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [rev, setRev] = useState(0); // PDF iframe 캐시 버스팅
   const [applying, setApplying] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   function load() {
     return fetch(`/api/admin/contracts/${id}`).then(r => r.json()).then(d => { if (d.success) setData(d.data); }).finally(() => setLoading(false));
   }
@@ -743,6 +744,18 @@ function DetailModal({ id, onClose }: { id: string; onClose: () => void }) {
     finally { setApplying(false); }
   }
 
+  async function cancelContract() {
+    if (!confirm("이 계약서를 취소할까요?\n서명 전(대기) 상태에서만 취소되며, 직무지도원에게 취소 안내가 전달됩니다.\n다른 양식/임금유형으로 다시 작성하려면 취소 후 새로 생성하세요.")) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/admin/contracts/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "cancel" }) });
+      const d = await res.json();
+      alert(d.message || (d.success ? "취소되었습니다." : "실패"));
+      if (d.success) { onChanged?.(); onClose(); }
+    } catch { alert("처리 중 오류가 발생했습니다."); }
+    finally { setCancelling(false); }
+  }
+
   const pdfUrl = `/api/admin/contracts/${id}?format=pdf`;
   const wt: Record<string, string> = { HOURLY: "시급", DAILY: "일급", MONTHLY: "월급" };
 
@@ -755,6 +768,11 @@ function DetailModal({ id, onClose }: { id: string; onClose: () => void }) {
             {data && !data.adminSignatureUrl && (
               <button onClick={applyRepSignature} disabled={applying} className={`${T.btnSecondary} disabled:opacity-40`}>
                 {applying ? "적용 중..." : "사업주 직인 적용"}
+              </button>
+            )}
+            {data && data.status === "PENDING" && (
+              <button onClick={cancelContract} disabled={cancelling} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-100 disabled:opacity-40">
+                {cancelling ? "취소 중..." : "계약 취소"}
               </button>
             )}
             <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className={T.btnPrimary}>PDF 보기 / 다운로드</a>
@@ -932,7 +950,7 @@ export default function AdminContractsPage() {
 
       {showCreate && <CreateContractModal prefill={prefill} onClose={() => { setShowCreate(false); setPrefill(undefined); }} onCreated={(url) => { setLastCreatedUrl(url); loadContracts(); }} />}
       {showClauses && <ClauseManagerModal onClose={() => setShowClauses(false)} />}
-      {detailId && <DetailModal id={detailId} onClose={() => setDetailId(null)} />}
+      {detailId && <DetailModal id={detailId} onClose={() => setDetailId(null)} onChanged={loadContracts} />}
     </div>
   );
 }
