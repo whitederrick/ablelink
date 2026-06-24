@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
@@ -13,6 +13,7 @@ type ReviewRow = {
   workerId: string;
   workerName: string;
   phoneNumber: string;
+  agencyName: string;
   siteName: string;
   attendance:  { total: number; confirmed: number };
   logs:        { total: number; confirmed: number };
@@ -172,13 +173,13 @@ export default function AdminReviewPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
+                <th className="px-4 py-3 text-left text-xs font-black text-slate-500">위탁기관</th>
                 <th className="px-4 py-3 text-left text-xs font-black text-slate-500">직무지도원</th>
                 <th className="px-4 py-3 text-left text-xs font-black text-slate-500">사업체</th>
                 <th className="px-4 py-3 text-center text-xs font-black text-slate-500">출근부</th>
                 <th className="px-4 py-3 text-center text-xs font-black text-slate-500">일지</th>
                 <th className="px-4 py-3 text-center text-xs font-black text-slate-500">종합평가</th>
                 <th className="px-4 py-3 text-center text-xs font-black text-slate-500">상태</th>
-                <th className="px-4 py-3 text-center text-xs font-black text-slate-500">반려</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -189,6 +190,7 @@ export default function AdminReviewPage() {
                   (r.evaluations.total === 0 || r.evaluations.confirmed >= r.evaluations.total);
                 return (
                   <tr key={r.workerId} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 text-sm font-semibold text-slate-600">{r.agencyName}</td>
                     <td className="px-4 py-3">
                       <p className="font-black text-slate-900">{r.workerName}</p>
                       <p className="text-xs font-semibold text-slate-400">{r.phoneNumber}</p>
@@ -209,14 +211,6 @@ export default function AdminReviewPage() {
                       }`}>
                         {allDone ? "완료" : "미완료"}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => { setRejectModal({ workerId: r.workerId, workerName: r.workerName }); setRejectMsg(""); }}
-                        className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-black text-rose-600 hover:bg-rose-100 active:scale-95"
-                      >
-                        <AlertTriangle className="h-3 w-3" />반려
-                      </button>
                     </td>
                   </tr>
                 );

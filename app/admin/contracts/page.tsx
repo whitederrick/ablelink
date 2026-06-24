@@ -21,7 +21,7 @@ const CONTRACT_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
 const PAGE_SIZE = 10;
 
 interface ContractItem {
-  id: string; workerId: string; workerName: string; userPhone: string;
+  id: string; workerId: string; workerName: string; userPhone: string; agencyName: string;
   contractStart: string; contractEnd: string; siteName: string | null;
   workType: string | null; status: ContractStatus; signToken: string;
   workerSignedAt: string | null; adminSignedAt: string | null; createdAt: string;
@@ -327,9 +327,8 @@ export default function AdminContractsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="근로계약서 관리"
-        sub="직무지도원 전자 근로계약서를 생성하고 발송·서명 상태를 관리합니다."
-        actions={<button onClick={() => setShowCreate(true)} className={T.btnPrimary}>+ 계약서 생성</button>}
+        title="근로계약서 현황"
+        sub="전체 위탁기관의 근로계약서 발송·서명 상태를 조회합니다. (계약 작성·발송은 위탁기관 담당자 화면에서)"
       />
 
       <StatCardRow
@@ -367,17 +366,18 @@ export default function AdminContractsPage() {
       <div className={T.tableWrap}>
         <table className="w-full border-collapse">
           <thead>
-            <tr>{["직무지도원", "계약 기간", "사업체", "근무형태", "상태", "서명일", "링크"].map(h => (
+            <tr>{["위탁기관", "직무지도원", "계약 기간", "사업체", "근무형태", "상태", "서명일", "링크"].map(h => (
               <th key={h} className={T.th}>{h}</th>
             ))}</tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className={T.tdCenter}>로딩 중...</td></tr>
+              <tr><td colSpan={8} className={T.tdCenter}>로딩 중...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={7} className={T.tdCenter}>{contracts.length === 0 ? "계약서가 없습니다." : "조건에 맞는 계약서가 없습니다."}</td></tr>
+              <tr><td colSpan={8} className={T.tdCenter}>{contracts.length === 0 ? "계약서가 없습니다." : "조건에 맞는 계약서가 없습니다."}</td></tr>
             ) : pageItems.map(c => (
                 <tr key={c.id} className={T.trBase}>
+                  <td className={`${T.td} whitespace-nowrap`}>{c.agencyName}</td>
                   <td className={T.td}>
                     <span className="font-semibold text-slate-800">{c.workerName}</span>
                     {c.userPhone && <span className="ml-1.5 text-[13px] text-slate-500">{c.userPhone}</span>}

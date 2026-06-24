@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess, checkQuota } from "@/lib/planGuard";
 import { isValidTemplateKey, DEFAULT_TEMPLATE_KEY, canUseTemplate, canUseTemplateForWage } from "@/lib/contractTemplates";
 import { sendAlimtalk } from "@/lib/kakao";
@@ -23,13 +23,14 @@ function errToStatus(msg: string) {
 // GET: 계약서 목록
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
+    // 매니저=본 기관만, 운영자=전체 기관 횡단 조회(읽기 전용 오버사이트)
+    const session = await requireAdminOrManagerSession(req);
     const { searchParams } = new URL(req.url);
     const workerId = searchParams.get("workerId");
     const status = searchParams.get("status");
 
     const where: any = {};
-    where.agencyId = scope.agencyId;
+    if (session.kind === "manager") where.agencyId = session.agencyId;
     if (workerId) {
       try { where.workerId = BigInt(workerId); }
       catch { return NextResponse.json({ success: false, message: "잘못된 userId입니다." }, { status: 400 }); }
@@ -48,6 +49,7 @@ export async function GET(req: NextRequest) {
       take: 50,
       include: {
         user: { select: { workerName: true, loginId: true, phoneNumber: true } },
+        agency: { select: { name: true } },
       },
     });
 
@@ -59,6 +61,7 @@ export async function GET(req: NextRequest) {
         workerName: r.user.workerName,
         loginId: r.user.loginId,
         userPhone: r.user.phoneNumber,
+        agencyName: (r as any).agency?.name ?? "-",
         contractStart: r.contractStart.toISOString(),
         contractEnd: r.contractEnd.toISOString(),
         siteName: r.siteName,

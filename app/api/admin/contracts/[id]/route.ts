@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
 import { renderContractPdf } from "@/lib/contractPdf";
 
 type Params = { params: Promise<{ id: string }> };
@@ -44,7 +44,8 @@ function serialize(c: any) {
 
 export async function GET(req: NextRequest, { params }: Params) {
   try {
-    const scope = await requireManagerSession(req);
+    // 매니저=본 기관만, 운영자=전체 기관 계약 조회(읽기·PDF)
+    const session = await requireAdminOrManagerSession(req);
     const { id } = await params;
     let cid: bigint;
     try { cid = BigInt(id); } catch { return NextResponse.json({ success: false, message: "잘못된 ID" }, { status: 400 }); }
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         agency: { select: { name: true, address: true, phoneNumber: true } },
       },
     });
-    if (!c || c.agencyId !== scope.agencyId) {
+    if (!c || (session.kind === "manager" && c.agencyId !== session.agencyId)) {
       return NextResponse.json({ success: false, message: "계약서를 찾을 수 없습니다." }, { status: 404 });
     }
 

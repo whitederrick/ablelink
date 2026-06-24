@@ -1,12 +1,13 @@
 export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
+    // 매니저=본 기관만, 운영자=전체 기관 횡단 조회
+    const session = await requireAdminOrManagerSession(req);
 
     const { searchParams } = new URL(req.url);
     const yearMonth = searchParams.get("yearMonth") ?? "";
@@ -19,13 +20,14 @@ export async function GET(req: NextRequest) {
 
     const assignments = await prisma.siteAssignment.findMany({
       where: {
-        agencyId: scope.agencyId,
+        ...(session.kind === "manager" ? { agencyId: session.agencyId } : {}),
         status:   { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] },
       },
       select: {
         id:   true,
         user: { select: { id: true, workerName: true, phoneNumber: true } },
         site: { select: { companyName: true } },
+        agency: { select: { name: true } },
       },
       orderBy: { assignedAt: "desc" },
     });
@@ -77,13 +79,14 @@ export async function GET(req: NextRequest) {
     for (const r of logRows)  { const c = logMap.get(r.writerId.toString());  if (c) { c.total++; if (r.isCompleted)  c.confirmed++; } }
     for (const r of evalRows) { const c = evalMap.get(r.writerId.toString()); if (c) { c.total++; if (r.isConfirmed)  c.confirmed++; } }
 
-    const rows = users.map(({ user, site }) => {
+    const rows = users.map(({ user, site, agency }) => {
       const uid  = user.id.toString();
       const lock = lockMap.get(uid) ?? { locked: false, managerFinalAt: null };
       return {
         workerId:               uid,
         workerName:             user.workerName,
         phoneNumber:          user.phoneNumber,
+        agencyName:           agency?.name ?? "-",
         siteName:             site?.companyName ?? "-",
         attendance:           attMap.get(uid)  ?? { total: 0, confirmed: 0 },
         logs:                 logMap.get(uid)  ?? { total: 0, confirmed: 0 },
