@@ -204,6 +204,29 @@ async function main() {
     console.log(`🏢 ${A.name}: 담당자 ${A.mgr} · 워커 ${A.workers} · 현장 ${A.workers} · 배정 ${active.length}`);
   }
 
+  // ── 3b) 다중 기관 이력 워커 — 3개 기관에 과거/현재 배정(매칭에서 여러 위탁기관 공고 + 마켓플레이스 동시 노출 검증용) ──
+  const multiWorker = await prisma.worker.create({
+    data: { loginId: "coach-multi", password: workerPw, workerName: "다기관경력", phoneNumber: "010-7777-7777",
+      status: "ACTIVE", openToOffers: true, planType: "PRO",
+      bankName: "국민", accountNumber: "7777000077", accountHolder: "다기관경력",
+      birthDate: "1988-03-15", residenceAddress: "서울특별시 중구 다기관로 1" },
+  });
+  await prisma.workerProfession.create({ data: { workerId: multiWorker.id, profession: "JOB_COACH", isPrimary: true, experienceYears: 6, verifyStatus: "VERIFIED" } });
+  for (let mi = 0; mi < agencyMeta.length; mi++) {
+    const am = agencyMeta[mi];
+    const site = await prisma.site.create({
+      data: { companyName: `${am.name.slice(0, 2)} 이전현장`, address: `서울특별시 중구 경력로 ${mi + 1}`, gpsLat: 37.56 + mi * 0.003, gpsLon: 126.98 + mi * 0.003,
+        allowanceRange: 200, agencyId: am.id, ownerManagerId: am.mgrId, businessType: BIZTYPES[mi % BIZTYPES.length],
+        businessContactName: "김담당", businessContactPhone: "010-9999-0000", isActive: true, isVerified: true, basePointConfirmed: true },
+    });
+    await prisma.siteAssignment.create({
+      data: { workerId: multiWorker.id, siteId: site.id, agencyId: am.id, assignedByManagerId: am.mgrId,
+        status: mi === 0 ? "ACTIVE" : "ENDED", serviceStep: "FIELD_TRAINING" as any, workType: "FULL_DAY", attendanceMode: "APP_GPS",
+        startDate: dayFromNow(-200 + mi * 30), isMainWorker: true, connectedAt: dayFromNow(-198 + mi * 30) },
+    });
+  }
+  console.log(`👥 다중 기관 이력 워커: coach-multi (010-7777-7777) · ${agencyMeta.length}개 기관 배정`);
+
   // ── 4) 근태 + 훈련일지 + 수정요청 + 휴무 ─────────────────────────────────────
   let nAtt = 0, nLog = 0, nEdit = 0, nHol = 0;
   for (let ai = 0; ai < AGENCIES.length; ai++) {
