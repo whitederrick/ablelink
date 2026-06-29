@@ -267,7 +267,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
     variant?: "danger" | "default";
   } | null>(null);
   const [showProfile, setShowProfile] = useState(false);
-  const [quickOpen, setQuickOpen] = useState(false); // 좌하단 고정 퀵메뉴(FAB) 펼침
+  const [quickOpen, setQuickOpen] = useState(false); // 하단 중앙 고정 퀵메뉴(FAB) 펼침
   const profileRef = useRef<HTMLButtonElement>(null);
 
   const [clockInAlert,  setClockInAlert]  = useState(initialData?.alarm.clockInAlertMinutes ?? 3);
@@ -1163,7 +1163,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
           </div>
         )}
 
-        {/* ── AI 일지 일괄 작성 (빠른 작업은 좌하단 고정 퀵메뉴로 이동) ── */}
+        {/* ── AI 일지 일괄 작성 (빠른 작업은 하단 중앙 고정 퀵메뉴로 이동) ── */}
         {hasSite && (
           <div>
             {/* AI 일괄 작성 */}
@@ -1388,14 +1388,14 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
         </div>
       )}
 
-      {/* ── 좌하단 고정 퀵메뉴(FAB) — 스크롤해도 항상 표시, 탭하면 위로 펼침 ── */}
+      {/* ── 하단 중앙 고정 퀵메뉴(FAB) — 스크롤해도 항상 표시, 탭하면 위로 펼침 ── */}
       {hasSite && (
         <>
           {quickOpen && (
             <div className="fixed inset-0 z-40" onClick={() => setQuickOpen(false)} aria-hidden="true" />
           )}
           <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 w-full max-w-md -translate-x-1/2 px-4">
-            <div className="flex flex-col items-start gap-2">
+            <div className="flex flex-col items-center gap-2">
               {quickOpen && (
                 <div className="flex flex-col gap-2">
                   {[

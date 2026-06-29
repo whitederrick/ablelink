@@ -427,9 +427,13 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
           </select>
           <button onClick={assignWorker} disabled={assigning || !selectedWorkerId} className={T.btnPrimary}>{assigning ? "배정 중…" : "배정"}</button>
         </div>
-        <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-          <input type="checkbox" checked={assignExempt} onChange={e => setAssignExempt(e.target.checked)} className="h-4 w-4 accent-slate-950" />
-          <span className="text-xs font-bold text-slate-600">출퇴근 관리 면제 (시프티 병행 — 근무형태 기준 출근부 자동 생성)</span>
+        <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <input type="checkbox" checked={assignExempt} onChange={e => setAssignExempt(e.target.checked)} className="mt-0.5 h-4 w-4 accent-slate-950" />
+          <span className="text-xs font-bold leading-relaxed text-rose-600">
+            신규 배정 직무지도원의 출퇴근 관리 면제 허용 여부를 선택할 수 있습니다. (시프티 병행 - 근무형태 기준 출근부 자동 생성)
+            <br />
+            기존에 배정된 직무지도원의 경우, 상단의 전체 면제 또는 개별 면제 버튼을 통해 적용해야 합니다.
+          </span>
         </label>
         {workerOptions.length === 0 && (
           <p className="mt-2 text-xs font-semibold text-amber-500">배정 가능한 {item.requiredProfession ? (PROF_LABEL[item.requiredProfession] ?? "") + " 자격 " : ""}직무지도원이 없습니다.</p>

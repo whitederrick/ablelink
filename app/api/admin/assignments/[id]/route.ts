@@ -46,7 +46,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const scope = await requireManagerSession(req);
+    // 듀얼: 매니저=본 기관 배정만, 운영자(x-admin-context)=전체. (출퇴근 면제·근무형태 수정)
+    const session = await requireAdminOrManagerSession(req);
     const { id } = await params;
     const assignmentId = BigInt(id);
 
@@ -73,14 +74,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ success: false, message: "직접입력 근무시간은 HH:MM 형식으로 입력해주세요." }, { status: 400 });
     }
 
-    // 자기 위탁기관 배정만 수정 가능
-    const agencyId = scope.agencyId;
+    // 매니저는 본 기관 배정만, 운영자는 전체
     const existing = await prisma.siteAssignment.findUnique({
       where: { id: assignmentId },
       select: { agencyId: true },
     });
     if (!existing) return NextResponse.json({ success: false, message: "NOT_FOUND" }, { status: 404 });
-    if (existing.agencyId !== agencyId) return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
+    if (session.kind === "manager" && existing.agencyId !== session.agencyId) return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
 
     // 수동 계약기간(전자계약서 PRO 전용 대비) — 배정 기간이 접근 판정의 계약기간 역할
     const updateData: any = { workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd };

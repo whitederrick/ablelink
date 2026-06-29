@@ -53,6 +53,8 @@ export async function POST(request: NextRequest) {
     const traineeName = (formData.get("traineeName") as string) || "훈련생";
     const taskScore = Number(formData.get("taskScore") ?? 3);
     const sentenceCount = Math.min(3, Math.max(1, Number(formData.get("sentenceCount") ?? 2)));
+    // 원문 그대로 모드: STT 결과를 Gemini 다듬기 없이 그대로 사용
+    const rawMode = formData.get("raw") === "1" || formData.get("raw") === "true";
 
     if (!audioBlob || audioBlob.size === 0) {
       return NextResponse.json({ success: false, message: "음성 파일이 없습니다." }, { status: 400 });
@@ -99,6 +101,11 @@ export async function POST(request: NextRequest) {
 
     if (!transcript) {
       return NextResponse.json({ success: false, message: "음성을 인식할 수 없습니다. 다시 시도해주세요." });
+    }
+
+    // 원문 그대로 모드: 다듬지 않고 STT 결과를 그대로 반환(Gemini 미호출)
+    if (rawMode) {
+      return NextResponse.json({ success: true, content: transcript, transcript, raw: true });
     }
 
     // ── STEP 2: Gemini로 일지 문장 변환 ──────────────────────

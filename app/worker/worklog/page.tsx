@@ -123,7 +123,10 @@ function WorklogForm() {
   const [isRecording, setIsRecording] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [recordingSec, setRecordingSec] = useState(0);
-  const [sentenceCount, setSentenceCount] = useState(2);
+  const [sentenceCount, setSentenceCount] = useState(1);
+  const [inputMode, setInputMode] = useState<"raw" | "ai">("raw"); // 선택된 입력 방식(기본=음성 원문)
+  const recRawRef = useRef(false);                          // 이번 녹음이 원문(STT만)인지
+  const [recMode, setRecMode] = useState<"raw" | "ai" | null>(null); // 녹음 중인 버튼 표시용
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -217,8 +220,10 @@ function WorklogForm() {
   }, [content, draftKey, logId]);
 
   // 음성 녹음
-  async function startRecording() {
+  async function startRecording(raw: boolean) {
     if (!premium) { alert(siteInfo.premiumMessage || "음성 AI 변환은 유료 기능이에요.\n근로계약 기간 중에 사용할 수 있어요."); return; }
+    recRawRef.current = raw;
+    setRecMode(raw ? "raw" : "ai");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
@@ -237,6 +242,7 @@ function WorklogForm() {
           form.append("traineeName", traineeName);
           form.append("taskScore", String(taskScore));
           form.append("sentenceCount", String(sentenceCount));
+          form.append("raw", recRawRef.current ? "1" : "0");
           const res = await fetch("/api/worker/ai/voice-to-log", { method: "POST", body: form });
           const data = await res.json();
           if (data.success && data.content) setContent(data.content);
@@ -277,6 +283,7 @@ function WorklogForm() {
   function stopRecording() {
     mediaRef.current?.stop();
     setIsRecording(false);
+    setRecMode(null);
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setRecordingSec(0);
   }
@@ -611,28 +618,41 @@ function WorklogForm() {
 
         {/* ── 지도사항 / 평가 및 지도사항 ── */}
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3">
             <span className="text-sm font-black text-slate-700">
               {isAdaptation ? "지도사항" : "평가 및 지도사항"}
             </span>
-            <div className="flex items-center gap-2">
+          </div>
+
+          {/* 음성 입력 — 원문(STT만) / AI(단어만 말해도 문장 생성) 중 하나 선택. 한 줄 나란히(줄바꿈 금지) */}
+          <div className="mb-3 flex flex-nowrap items-center gap-1.5">
+            <button type="button"
+              onClick={recMode === "raw" ? stopRecording : () => { setInputMode("raw"); startRecording(true); }}
+              disabled={aiLoading || recMode === "ai"}
+              className={`flex items-center gap-1.5 rounded-xl px-2 py-2 text-xs font-black transition active:scale-95 disabled:opacity-50 ${recMode === "raw" ? "bg-rose-500 text-white" : inputMode === "raw" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-400"}`}>
+              {aiLoading && recRawRef.current ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />받아쓰는 중...</>
+                : recMode === "raw" ? <><Square className="h-3.5 w-3.5" />중지</>
+                : <><Mic className="h-3.5 w-3.5" />음성 원문 입력</>}
+            </button>
+
+            {/* AI 음성 입력 + 문장 수(바로 옆에 묶음) */}
+            <div className="flex items-center gap-1.5">
+              <button type="button"
+                onClick={recMode === "ai" ? stopRecording : () => { if (inputMode !== "ai") setSentenceCount(1); setInputMode("ai"); startRecording(false); }}
+                disabled={aiLoading || recMode === "raw"}
+                className={`flex items-center gap-1.5 rounded-xl px-2 py-2 text-xs font-black transition active:scale-95 disabled:opacity-50 ${recMode === "ai" ? "bg-rose-500 text-white" : inputMode === "ai" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-400"}`}>
+                {aiLoading && !recRawRef.current ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />AI 변환 중...</>
+                  : recMode === "ai" ? <><Square className="h-3.5 w-3.5" />중지</>
+                  : <><Mic className="h-3.5 w-3.5" />AI 자동 입력</>}
+              </button>
               <div className="flex overflow-hidden rounded-xl border border-slate-200">
                 {[1, 2, 3].map(n => (
-                  <button key={n} type="button" onClick={() => setSentenceCount(n)}
-                    className={`px-2.5 py-1.5 text-xs font-black transition ${sentenceCount === n ? "bg-slate-950 text-white" : "bg-white text-slate-400"}`}>
-                    {n}문
+                  <button key={n} type="button" onClick={() => { setInputMode("ai"); setSentenceCount(n); }} disabled={isRecording || aiLoading}
+                    className={`px-1.5 py-1.5 text-xs font-black transition ${inputMode === "ai" && sentenceCount === n ? "bg-slate-950 text-white" : "bg-white text-slate-300"}`}>
+                    {n}문장
                   </button>
                 ))}
               </div>
-              <button type="button"
-                onClick={isRecording ? stopRecording : startRecording}
-                disabled={aiLoading}
-                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black text-white transition active:scale-95 disabled:opacity-70 ${isRecording ? "bg-rose-500" : "bg-slate-950"}`}>
-                {aiLoading ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />AI 변환 중...</>
-                  : isRecording ? <><Square className="h-3.5 w-3.5" />중지</>
-                  : <><Mic className="h-3.5 w-3.5" />음성입력</>}
-                {!premium && <span className="ml-1 rounded bg-white/20 px-1 py-px text-[9px] font-black">PRO</span>}
-              </button>
             </div>
           </div>
           {isRecording && (
