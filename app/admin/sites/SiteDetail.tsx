@@ -15,6 +15,7 @@ type SiteDetailT = {
   gpsLat: string; gpsLon: string; allowanceRange: number;
   agencyId: string | null; agencyName: string;
   businessContactName: string | null; businessContactPhone: string | null; businessContactEmail: string | null;
+  govContacts?: { name: string; email: string }[];
   ownerManagerId: string | null; ownerManagerName: string | null;
   requiredProfession: string | null;
   basePointConfirmed: boolean; basePointApprovalStatus: string; basePointUpdatedAt: string | null;
@@ -61,6 +62,7 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
   const [businessContactName, setBusinessContactName] = useState("");
   const [businessContactPhone, setBusinessContactPhone] = useState("");
   const [businessContactEmail, setBusinessContactEmail] = useState("");
+  const [govContacts, setGovContacts] = useState<{ name: string; email: string }[]>([]);
 
   const [ownerManagerId, setOwnerManagerId] = useState("");
   const [ownerManagers, setOwnerManagers] = useState<{ id: string; name: string }[]>([]);
@@ -176,6 +178,7 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
       setBusinessContactName(it.businessContactName || "");
       setBusinessContactPhone(it.businessContactPhone || "");
       setBusinessContactEmail(it.businessContactEmail || "");
+      setGovContacts(Array.isArray(it.govContacts) ? it.govContacts : []);
       setOwnerManagerId(it.ownerManagerId || "");
       fetch(`/api/admin/site-owners?agencyId=${it.agencyId ?? ""}`, { headers: ACG, cache: "no-store" })
         .then(r => r.json())
@@ -211,6 +214,7 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
           gpsLat: Number(gpsLat), gpsLon: Number(gpsLon), allowanceRange: finalRange,
           businessContactName: businessContactName.trim(), businessContactPhone: businessContactPhone.trim(),
           businessContactEmail: businessContactEmail.trim() || null, ownerManagerId: ownerManagerId || null,
+          govContacts: govContacts.map(c => ({ name: c.name.trim(), email: c.email.trim() })).filter(c => c.email),
         }),
       });
       const data = await res.json();
@@ -325,6 +329,30 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
           <Field label="담당자 연락처 *" value={businessContactPhone} onChange={setBusinessContactPhone} />
           <Field label="담당자 이메일 (선택)" value={businessContactEmail} onChange={setBusinessContactEmail} />
         </div>
+      </div>
+
+      {/* 현장별 공단 담당자 */}
+      <div className={T.card}>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-black text-slate-900">장애인고용공단 담당자 (현장별)</h2>
+          <button onClick={() => setGovContacts(p => [...p, { name: "", email: "" }])} className={`${T.btnSecondary} py-1.5`}>+ 추가</button>
+        </div>
+        <p className="mb-3 text-xs font-semibold text-slate-400">일지를 이 현장으로 묶어 발송할 때 자동 수신처가 됩니다. 비우면 위탁기관 기본 공단 담당자가 사용됩니다.</p>
+        {govContacts.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-[13px] font-semibold text-slate-400">현장 전용 공단 담당자가 없습니다. (기관 기본값 사용)</p>
+        ) : (
+          <div className="space-y-2">
+            {govContacts.map((c, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input value={c.name} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                  placeholder="담당자명" className={`w-[130px] ${T.input}`} />
+                <input value={c.email} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))}
+                  placeholder="이메일 (수신처) *" className={`flex-1 ${T.input}`} />
+                <button onClick={() => setGovContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 담당 관리자 */}

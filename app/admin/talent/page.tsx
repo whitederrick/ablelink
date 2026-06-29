@@ -60,7 +60,9 @@ export default function ManagerTalentPage() {
   const router = useRouter();
   const [cands, setCands] = useState<Cand[]>([]);
   const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
   const [region, setRegion] = useState("");
+  const [minExp, setMinExp] = useState(0);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>("rating");
   const sorted = useMemo(() => sortCands(cands, sortBy), [cands, sortBy]);
@@ -98,16 +100,18 @@ export default function ManagerTalentPage() {
     setLoading(true);
     try {
       const sp = new URLSearchParams();
+      if (q.trim()) sp.set("q", q.trim());
       if (region.trim()) sp.set("region", region.trim());
+      if (minExp > 0) sp.set("minExp", String(minExp));
       if (verifiedOnly) sp.set("verifiedOnly", "1");
       const r = await fetch(`/api/admin/talent?${sp}`, { headers: { "x-admin-context": "1" } });
       const d = await r.json();
       if (d.success) setCands(d.candidates);
       else if (r.status === 401) router.replace("/admin/login");
     } finally { setLoading(false); }
-  }, [region, verifiedOnly, router]);
+  }, [q, region, minExp, verifiedOnly, router]);
 
-  useEffect(() => { load(); }, [verifiedOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [verifiedOnly, minExp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function openDetail(c: Cand) {
     setDetailFor(c); setDetail(null); setDetailLoading(true); setExpPage(1); setRevPage(1);
@@ -143,17 +147,26 @@ export default function ManagerTalentPage() {
 
       <div className="mb-4">
         <ListToolbar
-          query={region}
-          onQueryChange={setRegion}
-          placeholder="지역 검색"
+          query={q}
+          onQueryChange={setQ}
+          placeholder="이름·소개·지역 검색"
           onSearch={load}
           filters={[{ value: "verified", label: "검증된 자격만" }] as FilterChip[]}
           selected={verifiedOnly ? ["verified"] : []}
           onToggleFilter={() => setVerifiedOnly(v => !v)}
           extra={
-            <select value={sortBy} onChange={e => setSortBy(e.target.value as SortKey)} className={`w-auto ${T.select}`}>
-              {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            <>
+              <select value={minExp} onChange={e => setMinExp(Number(e.target.value))} className={`w-auto ${T.select}`}>
+                <option value={0}>경력 전체</option>
+                <option value={1}>1년 이상</option>
+                <option value={3}>3년 이상</option>
+                <option value={5}>5년 이상</option>
+                <option value={10}>10년 이상</option>
+              </select>
+              <select value={sortBy} onChange={e => setSortBy(e.target.value as SortKey)} className={`w-auto ${T.select}`}>
+                {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </>
           }
         />
       </div>

@@ -37,8 +37,15 @@ export async function POST(req: NextRequest) {
     const toList = String(body?.to || "").split(/[,;]/).map(s => s.trim()).filter(Boolean);
     const groupBy = (["site", "worker", "none"].includes(body?.groupBy) ? body.groupBy : "site") as "site" | "worker" | "none";
     const message = String(body?.message || "").trim();
+    // 현장별 공단 담당자 자동 수신처(현장 묶음 전용) — 각 현장의 govContacts(없으면 기관 기본값)로 발송
+    const useSiteContacts = body?.useSiteContacts === true;
     const idsRaw: unknown = body?.ids;
-    if (toList.length === 0 || !toList.every(e => EMAIL_RE.test(e))) return NextResponse.json({ success: false, message: "유효한 수신자 이메일을 입력해주세요. (여러 명은 쉼표로 구분)" }, { status: 400 });
+    if (useSiteContacts) {
+      if (groupBy !== "site") return NextResponse.json({ success: false, message: "현장별 공단 담당자 발송은 '현장' 묶음에서만 가능합니다." }, { status: 400 });
+      if (toList.length && !toList.every(e => EMAIL_RE.test(e))) return NextResponse.json({ success: false, message: "추가 수신자 이메일 형식이 올바르지 않습니다." }, { status: 400 });
+    } else {
+      if (toList.length === 0 || !toList.every(e => EMAIL_RE.test(e))) return NextResponse.json({ success: false, message: "유효한 수신자 이메일을 입력해주세요. (여러 명은 쉼표로 구분)" }, { status: 400 });
+    }
     if (toList.length > 20) return NextResponse.json({ success: false, message: "수신자는 최대 20명까지 지정할 수 있습니다." }, { status: 400 });
     if (!Array.isArray(idsRaw) || idsRaw.length === 0) return NextResponse.json({ success: false, message: "발송할 문서를 선택해주세요." }, { status: 400 });
 
@@ -53,14 +60,17 @@ export async function POST(req: NextRequest) {
         id: true, docType: true, traineeId: true, periodStart: true, periodEnd: true,
         managerSignatureUrl: true, managerSignerName: true,
         worker: { select: { id: true, workerName: true } },
-        site: { select: { id: true, companyName: true } },
+        site: { select: { id: true, companyName: true, govContacts: true } },
         currentVersion: { select: { sourceData: true } },
       },
     });
     if (runs.length === 0) return NextResponse.json({ success: false, message: "발송 가능한 문서가 없습니다." }, { status: 404 });
 
-    const agency = await prisma.agency.findUnique({ where: { id: scope.agencyId }, select: { name: true } });
+    const agency = await prisma.agency.findUnique({ where: { id: scope.agencyId }, select: { name: true, govContacts: true } });
     const agencyName = agency?.name ?? "위탁기관";
+    // 기관 기본 공단 담당자 이메일(현장별 미설정 시 폴백)
+    const agencyGovEmails = (Array.isArray(agency?.govContacts) ? agency!.govContacts as any[] : [])
+      .map(c => String(c?.email ?? "").trim()).filter(e => EMAIL_RE.test(e));
 
     // 훈련생 이름
     const traineeIds = [...new Set(runs.map(r => r.traineeId).filter((v): v is bigint => v != null))];
@@ -144,6 +154,16 @@ export async function POST(req: NextRequest) {
 
       if (attachments.length === 0) { failures.push(label); continue; }
 
+      // 수신처 결정: 현장별 자동이면 현장 govContacts(없으면 기관 기본값) + 추가 수신자, 아니면 입력한 toList.
+      let recipients = toList;
+      if (useSiteContacts) {
+        const siteGov = (Array.isArray(grpRuns[0]?.site?.govContacts) ? grpRuns[0].site!.govContacts as any[] : [])
+          .map(c => String(c?.email ?? "").trim()).filter(e => EMAIL_RE.test(e));
+        const base = siteGov.length ? siteGov : agencyGovEmails;
+        recipients = [...new Set([...base, ...toList])];
+        if (recipients.length === 0) { failures.push(`${label}(수신처 없음)`); continue; }
+      }
+
       const subject = `[Able-Link] ${agencyName} 제출문서 — ${label} (${attachments.length}건)`;
       const text =
         (message ? `${message}\n\n` : "") +
@@ -152,7 +172,7 @@ export async function POST(req: NextRequest) {
         `■ 첨부 문서: ${attachments.length}건\n\n` +
         `Able-Link에서 발송된 메일입니다.`;
       try {
-        await sendEmailWithAttachments({ to: toList, subject, body: text, attachments });
+        await sendEmailWithAttachments({ to: recipients, subject, body: text, attachments });
         sent++;
         sentRunIds.push(...groupRunIds);
       } catch (e: any) {

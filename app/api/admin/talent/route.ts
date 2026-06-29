@@ -22,11 +22,14 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const region = (searchParams.get("region") || "").trim();
+    const q = (searchParams.get("q") || "").trim();
+    const minExp = Math.max(0, Number(searchParams.get("minExp") || 0) || 0);
     const verifiedOnly = searchParams.get("verifiedOnly") === "1";
 
     // 매칭은 직무지도원 직종만 운영 — 서버에서 강제.
     const profWhere: any = { profession: "JOB_COACH" };
     if (verifiedOnly) profWhere.verifyStatus = "VERIFIED";
+    if (minExp > 0) profWhere.experienceYears = { gte: minExp };
 
     const where: any = {
       openToOffers: true,
@@ -34,6 +37,11 @@ export async function GET(req: NextRequest) {
       professions: { some: profWhere },
     };
     if (region) where.residenceAddress = { contains: region, mode: "insensitive" };
+    if (q) where.OR = [
+      { workerName: { contains: q, mode: "insensitive" } },
+      { bio: { contains: q, mode: "insensitive" } },
+      { residenceAddress: { contains: q, mode: "insensitive" } },
+    ];
 
     const workers = await prisma.worker.findMany({
       where,

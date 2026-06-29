@@ -11,6 +11,7 @@ type SiteDetail = {
   gpsLat: string; gpsLon: string; allowanceRange: number; lateThresholdMin?: number | null; agencyName: string;
   amCapacity?: number; pmCapacity?: number; fullDayCapacity?: number;
   businessContactName: string | null; businessContactPhone: string | null; businessContactEmail: string | null;
+  govContacts?: { name: string; email: string }[];
   ownerManagerId: string | null; ownerManagerName: string | null;
   basePointConfirmed: boolean; basePointApprovalStatus: string; isActive: boolean;
 };
@@ -51,6 +52,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
   const [businessContactName, setBusinessContactName] = useState("");
   const [businessContactPhone, setBusinessContactPhone] = useState("");
   const [businessContactEmail, setBusinessContactEmail] = useState("");
+  const [govContacts, setGovContacts] = useState<{ name: string; email: string }[]>([]);
 
   const [ownerManagerId, setOwnerManagerId] = useState("");
   const [ownerManagers, setOwnerManagers] = useState<{ id: string; name: string }[]>([]);
@@ -117,6 +119,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
         setBusinessContactName(it.businessContactName || "");
         setBusinessContactPhone(it.businessContactPhone || "");
         setBusinessContactEmail(it.businessContactEmail || "");
+        setGovContacts(Array.isArray(it.govContacts) ? it.govContacts : []);
         setOwnerManagerId(it.ownerManagerId || "");
       } catch {
         if (alive) { alert("상세 조회에 실패했습니다."); onClose(); }
@@ -180,6 +183,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
         businessContactName: businessContactName.trim(),
         businessContactPhone: businessContactPhone.trim(),
         businessContactEmail: businessContactEmail.trim() || null,
+        govContacts: govContacts.map(c => ({ name: c.name.trim(), email: c.email.trim() })).filter(c => c.email),
         ownerManagerId: ownerManagerId || "",
       };
       if (isCreate && isAdmin) payload.agencyId = agencyId;
@@ -312,6 +316,27 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                       <div><label className={T.label}>담당자 연락처 *</label><input value={businessContactPhone} onChange={e => setBusinessContactPhone(e.target.value)} className={`w-full ${T.input}`} placeholder="010-0000-0000" /></div>
                       <div><label className={T.label}>담당자 이메일 (선택)</label><input value={businessContactEmail} onChange={e => setBusinessContactEmail(e.target.value)} className={`w-full ${T.input}`} /></div>
                     </div>
+                  </div>
+
+                  <div className={CARD}>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-black text-slate-900">장애인고용공단 담당자 (현장별)</h3>
+                      <button type="button" onClick={() => setGovContacts(p => [...p, { name: "", email: "" }])} className={`${T.btnSecondary} py-1.5`}>+ 추가</button>
+                    </div>
+                    <p className="mb-3 text-xs font-semibold text-slate-400">일지를 이 현장으로 묶어 발송할 때 자동 수신처가 됩니다. 비우면 위탁기관 기본 공단 담당자가 사용됩니다.</p>
+                    {govContacts.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-[13px] font-semibold text-slate-400">현장 전용 공단 담당자가 없습니다. (기관 기본값 사용)</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {govContacts.map((c, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <input value={c.name} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="담당자명" className={`w-[120px] ${T.input}`} />
+                            <input value={c.email} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="이메일 (수신처) *" className={`flex-1 ${T.input}`} />
+                            <button type="button" onClick={() => setGovContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className={CARD}>

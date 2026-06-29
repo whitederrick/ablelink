@@ -40,6 +40,7 @@ function toRow(r: any) {
     businessContactName: r.businessContactName ?? null,
     businessContactPhone: r.businessContactPhone ?? null,
     businessContactEmail: r.businessContactEmail ?? null,
+    govContacts: Array.isArray(r.govContacts) ? r.govContacts : [],
 
     requiredProfession: r.requiredProfession ?? null,
 
@@ -94,6 +95,7 @@ export async function GET(
         businessContactName: true,
         businessContactPhone: true,
         businessContactEmail: true,
+        govContacts: true,
         requiredProfession: true,
         basePointConfirmed: true,
         basePointAuthority: true,
@@ -176,6 +178,15 @@ export async function PATCH(
     }
     if (businessContactEmail !== undefined) {
       data.businessContactEmail = businessContactEmail || null;
+    }
+
+    // ✅ 현장별 공단 담당자 — [{ name, email }] (이메일 있는 항목만 저장, 비면 null=기관 기본값 사용)
+    if (body.govContacts !== undefined) {
+      const arr = Array.isArray(body.govContacts) ? body.govContacts : [];
+      const clean = arr
+        .map((c: any) => ({ name: String(c?.name ?? "").trim(), email: String(c?.email ?? "").trim() }))
+        .filter((c: { email: string }) => c.email);
+      (data as any).govContacts = clean.length ? clean : null;
     }
 
     if (companyName !== undefined) {
@@ -262,6 +273,7 @@ export async function PATCH(
         businessContactName: true,
         businessContactPhone: true,
         businessContactEmail: true,
+        govContacts: true,
         basePointConfirmed: true,
         basePointAuthority: true,
         basePointApprovalStatus: true,

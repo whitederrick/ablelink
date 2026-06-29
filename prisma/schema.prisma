@@ -180,6 +180,10 @@ model Site {
   businessContactPhone String? @map("business_contact_phone")
   businessContactEmail String? @map("business_contact_email")
 
+  // 현장(사업체)별 장애인고용공단 담당자 — [{ name, email }] JSON. 비우면 기관(Agency.govContacts) 기본값 사용.
+  // 일지 발송을 현장별로 묶을 때 해당 현장의 공단 담당자가 수신처로 자동 채워짐. (2026-06-29)
+  govContacts Json? @map("gov_contacts")
+
   // ✅ 직무/사이트 pool 매칭 속성
   businessType       String?     @map("business_type") // 사업 유형 (제조/서비스/유통 등)
   requiredProfession Profession? @map("required_profession") // 필요 직종

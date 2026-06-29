@@ -65,6 +65,7 @@ export default function ManagerDocumentsHub() {
   const govEmailDefault = govContacts.map(c => c.email).filter(Boolean).join(", ");
   const govNames = govContacts.map(c => c.name).filter(Boolean).join(" · ");
   const [sendGroupBy, setSendGroupBy] = useState<"site" | "worker" | "none">("site");
+  const [useSiteGov, setUseSiteGov] = useState(false);
   const [sendMsg, setSendMsg] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -193,15 +194,20 @@ export default function ManagerDocumentsHub() {
   }
 
   async function doSend() {
+    const siteGov = useSiteGov && sendGroupBy === "site";
     const emails = sendTo.split(/[,;]/).map(s => s.trim()).filter(Boolean);
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (emails.length === 0 || !emails.every(e => re.test(e))) { showToast("유효한 수신자 이메일을 입력해주세요. (여러 명은 쉼표로 구분)"); return; }
+    if (!siteGov) {
+      if (emails.length === 0 || !emails.every(e => re.test(e))) { showToast("유효한 수신자 이메일을 입력해주세요. (여러 명은 쉼표로 구분)"); return; }
+    } else if (emails.length && !emails.every(e => re.test(e))) {
+      showToast("추가 수신자 이메일 형식이 올바르지 않습니다."); return;
+    }
     const to = emails.join(",");
     setSending(true);
     try {
       const res = await fetch(`/api/admin/document-runs/send`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: [...selected], to, groupBy: sendGroupBy, message: sendMsg.trim() }),
+        body: JSON.stringify({ ids: [...selected], to, groupBy: sendGroupBy, message: sendMsg.trim(), useSiteContacts: siteGov }),
       });
       const d = await res.json();
       if (!d.success) {
@@ -434,11 +440,13 @@ export default function ManagerDocumentsHub() {
 
             <div className="mt-5 space-y-4">
               <div>
-                <label className={T.label}>수신자 이메일</label>
+                <label className={T.label}>{useSiteGov && sendGroupBy === "site" ? "추가 수신자 이메일 (선택)" : "수신자 이메일"}</label>
                 <input value={sendTo} onChange={e => setSendTo(e.target.value)} type="email" inputMode="email"
                   placeholder="officer@kead.or.kr" className={`w-full ${T.input}`} />
                 <p className="mt-1 text-[11px] font-semibold text-slate-400">
-                  {govEmailDefault ? `설정 기본값${govNames ? ` · ${govNames}` : ""} · 여러 명은 쉼표(,)로 구분 (수정 가능)` : "운영관리 > 위탁기관 정보 관리에서 공단 담당자를 저장하면 기본값으로 채워집니다."}
+                  {useSiteGov && sendGroupBy === "site"
+                    ? "현장별 공단 담당자에게 자동 발송됩니다. 추가로 받을 사람만 입력하세요."
+                    : govEmailDefault ? `설정 기본값${govNames ? ` · ${govNames}` : ""} · 여러 명은 쉼표(,)로 구분 (수정 가능)` : "운영관리 > 위탁기관 정보 관리에서 공단 담당자를 저장하면 기본값으로 채워집니다."}
                 </p>
               </div>
 
@@ -455,6 +463,12 @@ export default function ManagerDocumentsHub() {
                 <p className="mt-1 text-[11px] font-semibold text-slate-400">
                   {sendGroupBy === "site" ? "현장 단위로 한 통에 묶어 발송합니다." : sendGroupBy === "worker" ? "직무지도원 단위로 한 통에 묶어 발송합니다." : "문서마다 개별 메일로 발송합니다."}
                 </p>
+                {sendGroupBy === "site" && (
+                  <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                    <input type="checkbox" checked={useSiteGov} onChange={e => setUseSiteGov(e.target.checked)} className="h-4 w-4 accent-slate-950" />
+                    <span className="text-[13px] font-bold text-slate-700">현장별 공단 담당자에게 자동 발송 <span className="font-semibold text-slate-400">(현장에 지정된 공단 담당자, 없으면 기관 기본값)</span></span>
+                  </label>
+                )}
               </div>
 
               <div>
