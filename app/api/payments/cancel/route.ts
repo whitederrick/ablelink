@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
         tossCustomerKey: null,
         nextBillingAt: null,
         subscriptionId: null,
+        subscriptionCanceledAt: new Date(),
         maxWorkers: free.maxWorkers,
         maxSites: free.maxSites,
       },

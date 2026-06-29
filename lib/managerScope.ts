@@ -49,6 +49,19 @@ export async function requireAdminOrManagerSession(req: Request): Promise<DualSe
     readAdminSessionFromRequest(req),
   ]);
 
+  // 운영자 콘솔에서 호출(x-admin-context: 1 헤더 또는 adminctx=1 쿼리)이면, 매니저 쿠키가 함께 있어도 admin으로 동작.
+  // (헤더를 못 싣는 iframe/href PDF·첨부 URL 대비 쿼리파라미터도 허용. 운영자+매니저 동시 로그인 시 매니저 우선 방지)
+  let preferAdmin = req.headers.get("x-admin-context") === "1";
+  if (!preferAdmin) { try { preferAdmin = new URL(req.url).searchParams.get("adminctx") === "1"; } catch { /* noop */ } }
+  if (adm && preferAdmin) {
+    const adminId = parseBigInt(adm.sub);
+    if (adminId) {
+      const admin = await prisma.admin.findUnique({ where: { id: adminId }, select: { isActive: true } });
+      if (admin && admin.isActive)
+        return { kind: "admin", adminId, loginId: String(adm.loginId) };
+    }
+  }
+
   if (mgr) {
     const managerId = parseBigInt(mgr.sub);
     const agencyId  = parseBigInt(mgr.agencyId);

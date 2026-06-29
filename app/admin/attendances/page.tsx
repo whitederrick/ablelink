@@ -255,7 +255,7 @@ export default function AttendancesPage() {
       const from = `${yearMonth}-01`;
       const to = `${yearMonth}-${pad2(new Date(y, m, 0).getDate())}`;
       const params = new URLSearchParams({ type, from, to });
-      const res = await fetch(`/api/admin/export/csv?${params}`);
+      const res = await fetch(`/api/admin/export/csv?${params}`, { headers: { "x-admin-context": "1" } });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         const msg = data?.message || res.statusText;
@@ -290,7 +290,7 @@ export default function AttendancesPage() {
       const to = `${yearMonth}-${pad2(new Date(y, m, 0).getDate())}`;
       const params = new URLSearchParams({ from, to, pageSize: "500", page: "1" });
       if (search.trim()) params.set("q", search.trim());
-      const res = await fetch(`/api/admin/attendances?${params}`);
+      const res = await fetch(`/api/admin/attendances?${params}`, { headers: { "x-admin-context": "1" } });
       const data = await res.json();
       if (data.success) { setItems(data.items || []); setTotal(data.total || 0); }
     } catch {} finally { setLoading(false); }
@@ -306,12 +306,12 @@ export default function AttendancesPage() {
     { mode: "list",       label: "목록",    Icon: List },
     { mode: "map",        label: "지도",    Icon: MapIcon },
     { mode: "monthly",    label: "월별현황", Icon: CalendarDays },
-    { mode: "correction", label: "교정 도구", Icon: Wrench },
+    { mode: "correction", label: "이상 점검", Icon: Wrench },
   ];
 
   return (
     <div className="space-y-5">
-      <PageHeader title="근태 현황 관리" sub="전체 위탁기관의 출퇴근 기록을 월별로 조회하고, 지도·월별 현황·교정 도구로 점검·보정합니다." />
+      <PageHeader title="근태 현황 관리" sub="전체 위탁기관의 출퇴근 기록을 월별로 조회하고, 지도·월별 현황·이상 점검으로 점검합니다." />
 
       <StatCardRow
         cols={4}
@@ -378,11 +378,22 @@ export default function AttendancesPage() {
       ) : items.length === 0 ? (
         <div className={T.tableWrap}><p className={T.empty}>해당 기간에 근태 기록이 없습니다.</p></div>
       ) : (
-        <div className={T.tableWrap}>
-          <table className="w-full border-collapse">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+          <table className="w-full min-w-[900px] table-fixed border-collapse">
+            <colgroup>
+              <col className="w-[104px]" />{/* 날짜 */}
+              <col className="w-[110px]" />{/* 직무지도원 */}
+              <col className="w-[130px]" />{/* 연락처 */}
+              <col className="w-[170px]" />{/* 현장 */}
+              <col className="w-[72px]" />{/* 출근 */}
+              <col className="w-[72px]" />{/* 퇴근 */}
+              <col className="w-[84px]" />{/* 상태 */}
+              <col className="w-[72px]" />{/* GPS */}
+              <col className="w-[90px]" />{/* 출근 거리 */}
+            </colgroup>
             <thead>
               <tr>
-                {["날짜", "직무지도원", "현장", "출근", "퇴근", "상태", "GPS", "출근 거리"].map(h => (
+                {["날짜", "직무지도원", "연락처", "현장", "출근", "퇴근", "상태", "GPS", "출근 거리"].map(h => (
                   <th key={h} className={T.th}>{h}</th>
                 ))}
               </tr>
@@ -390,16 +401,14 @@ export default function AttendancesPage() {
             <tbody>
               {items.slice((listPage - 1) * LIST_PAGE_SIZE, listPage * LIST_PAGE_SIZE).map(row => (
                 <tr key={row.id} className={T.trBase}>
-                  <td className={`${T.td}`}>{row.workDate}</td>
-                  <td className={T.td}>
-                    <span className="font-semibold text-slate-800">{row.user?.workerName || "-"}</span>
-                    {row.user?.phoneNumber && <span className="ml-1.5 text-[13px] text-slate-500">{row.user.phoneNumber}</span>}
-                  </td>
-                  <td className={T.td}>{row.site?.companyName || "-"}</td>
-                  <td className={`${T.td} ${row.startTime ? "font-semibold text-emerald-600" : "text-slate-300"}`}>
+                  <td className={`${T.td} tabular-nums`}>{row.workDate}</td>
+                  <td className={`${T.td} truncate`}><span className="font-semibold text-slate-800">{row.user?.workerName || "-"}</span></td>
+                  <td className={`${T.td} truncate`}>{row.user?.phoneNumber || "-"}</td>
+                  <td className={`${T.td} truncate`}>{row.site?.companyName || "-"}</td>
+                  <td className={`${T.td} tabular-nums ${row.startTime ? "font-semibold text-emerald-600" : "text-slate-300"}`}>
                     {formatTime(row.startTime)}
                   </td>
-                  <td className={`${T.td} ${row.endTime ? "text-slate-700" : "text-slate-300"}`}>
+                  <td className={`${T.td} tabular-nums ${row.endTime ? "text-slate-700" : "text-slate-300"}`}>
                     {formatTime(row.endTime)}
                   </td>
                   <td className={T.td}>
@@ -416,7 +425,7 @@ export default function AttendancesPage() {
                       ? <span className="text-sm font-semibold text-emerald-600">정상</span>
                       : <span className="text-slate-300">-</span>}
                   </td>
-                  <td className={`${T.td} ${row.startDistanceM && row.startDistanceM > 100 ? "font-semibold text-orange-600" : "text-slate-700"}`}>
+                  <td className={`${T.td} tabular-nums ${row.startDistanceM && row.startDistanceM > 100 ? "font-semibold text-orange-600" : "text-slate-700"}`}>
                     {row.startDistanceM != null ? `${Math.round(row.startDistanceM)}m` : "-"}
                   </td>
                 </tr>

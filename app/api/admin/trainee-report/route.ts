@@ -5,7 +5,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 
@@ -13,12 +13,15 @@ function pad2(n: number) { return String(n).padStart(2, "0"); }
 
 export async function GET(request: NextRequest) {
   try {
-    const scope    = await requireManagerSession(request);
-    const agencyId = scope.agencyId;
+    // 듀얼: 운영자=전체 기관(플랜 게이트 면제), 매니저=본인 기관
+    const session  = await requireAdminOrManagerSession(request);
+    const agencyId = session.kind === "manager" ? session.agencyId : undefined;
 
-    const planCheck = await checkAgencyPlanAccess(agencyId, "TRAINEE_REPORT");
-    if (!planCheck.allowed) {
-      return NextResponse.json({ success: false, message: planCheck.message }, { status: 403 });
+    if (session.kind === "manager") {
+      const planCheck = await checkAgencyPlanAccess(session.agencyId, "TRAINEE_REPORT");
+      if (!planCheck.allowed) {
+        return NextResponse.json({ success: false, message: planCheck.message }, { status: 403 });
+      }
     }
 
     const { searchParams } = new URL(request.url);
@@ -31,7 +34,7 @@ export async function GET(request: NextRequest) {
 
     // 위탁기관 소속 활성 배정 전체
     const assignments = await prisma.siteAssignment.findMany({
-      where: { agencyId, status: "ACTIVE" },
+      where: { ...(agencyId ? { agencyId } : {}), status: "ACTIVE" },
       include: {
         user: { select: { id: true, workerName: true } },
         site: { select: { companyName: true, id: true } },

@@ -626,9 +626,9 @@ function InviteModal({ onClose, initialSiteId, initialWorkTypes, initialDeadline
   );
 }
 
-function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved, onSurveySent }: {
+function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved, onSurveySent, onCancelled }: {
   worker: Worker; assignmentId: string; initial: Assignment;
-  onClose: () => void; onSaved: (updated: Assignment) => void; onSurveySent?: () => void;
+  onClose: () => void; onSaved: (updated: Assignment) => void; onSurveySent?: () => void; onCancelled?: () => void;
 }) {
   const [workType, setWorkType] = useState<WorkType>(initial.workType ?? "FULL_DAY");
   // 현장 구분(복수 선택): 지원고용 훈련 / 적응지도. 둘 다면 전환일 기준 1배정을 단계 분할.
@@ -751,6 +751,19 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved, on
       onClose();
     } catch (e: any) {
       setError(e.message || "저장에 실패했습니다.");
+    } finally { setSaving(false); }
+  }
+
+  async function handleCancelAssignment() {
+    if (!confirm("이 배정을 취소(종료)하시겠습니까?\n종료 후 다른 현장으로 재배정할 수 있습니다.")) return;
+    setSaving(true); setError("");
+    try {
+      const res = await fetch(`/api/admin/assignments/${assignmentId}`, { method: "DELETE", headers: { "Content-Type": "application/json" } });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      onCancelled?.();
+    } catch (e: any) {
+      setError(e.message || "배정 취소에 실패했습니다.");
     } finally { setSaving(false); }
   }
 
@@ -883,21 +896,21 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved, on
           </div>
         </div>
 
-        {/* 출퇴근 버튼 미적용 여부(시프티 병행) — 운영자 전용. 매니저는 현재 상태만 확인 */}
+        {/* 출퇴근 관리 면제(시프티 병행) — 운영자 전용. 매니저는 현재 상태만 확인 */}
         <div>
-          <label className={T.label}>출퇴근 버튼 미적용 여부</label>
+          <label className={T.label}>출퇴근 관리 면제 여부</label>
           <div className={`flex items-center gap-3 rounded-xl border p-3 ${
             attendanceButtonExempt ? "border-rose-200 bg-rose-50" : "border-sky-200 bg-sky-50"
           }`}>
             <span className={`inline-flex flex-shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-black ${
               attendanceButtonExempt ? "bg-rose-100 text-rose-700" : "bg-sky-100 text-sky-700"
             }`}>
-              {attendanceButtonExempt ? "미적용 중" : "적용 중"}
+              {attendanceButtonExempt ? "면제 중" : "정상(버튼 사용)"}
             </span>
             <div>
               <span className="text-sm font-black text-slate-900">출퇴근 버튼 없이 자동 출근부 작성</span>
               <p className="mt-0.5 text-xs font-semibold text-slate-400">
-                직무지도원이 출퇴근 버튼으로 직접 출퇴근 시간을 기록합니다. 해당 적용 여부 변경은 시스템 운영자만 가능합니다.
+                면제 시 직무지도원이 출퇴근 버튼을 누르지 않아도 근무형태 기준으로 출근부가 자동 작성됩니다. 면제 여부 변경은 시스템 운영자만 가능합니다.
               </p>
             </div>
           </div>
@@ -937,9 +950,14 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved, on
             >
               {evalBtnLabel}
             </button>
+            {!workEnded && (
+              <button type="button" onClick={handleCancelAssignment} disabled={saving} className={T.btnDanger}>
+                배정 취소
+              </button>
+            )}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className={T.btnSecondary}>취소</button>
+            <button onClick={onClose} className={T.btnSecondary}>닫기</button>
             <button onClick={handleSave} disabled={saving} className={T.btnPrimary}>
               {saving ? "저장 중..." : "저장"}
             </button>
@@ -1170,6 +1188,7 @@ export default function WorkersPage() {
           onClose={() => setEditTarget(null)}
           onSaved={updated => setAssignmentMap(prev => ({ ...prev, [updated.id]: updated }))}
           onSurveySent={() => { setEditTarget(null); reload(); }}
+          onCancelled={() => { setEditTarget(null); reload(); }}
         />
       )}
 

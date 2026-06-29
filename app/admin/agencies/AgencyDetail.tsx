@@ -52,7 +52,9 @@ function MiniPager({ page, total, size, onPage }: { page: number; total: number;
   );
 }
 
-export default function AgencyDetail({ id, onClose }: { id: string; onClose?: () => void }) {
+const PLANS = ["FREE", "TRIAL", "STARTER", "STANDARD", "PRO"];
+
+export default function AgencyDetail({ id, onClose, onChanged }: { id: string; onClose?: () => void; onChanged?: () => void }) {
   const router  = useRouter();
 
   const [agency,   setAgency]   = useState<AgencyDetail | null>(null);
@@ -63,6 +65,14 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState("");
 
+  // 구독 플랜·한도 변경
+  const [editPlan,       setEditPlan]       = useState("");
+  const [editTrial,      setEditTrial]      = useState("");
+  const [editMaxWorkers, setEditMaxWorkers] = useState("");
+  const [editMaxSites,   setEditMaxSites]   = useState("");
+  const [savingPlan,     setSavingPlan]     = useState(false);
+  const [planMsg,        setPlanMsg]        = useState("");
+
   // 결제 딜 설정 (건바이건)
   const [dealCycle,  setDealCycle]  = useState<"MONTHLY" | "ANNUAL">("MONTHLY");
   const [dealAmount, setDealAmount] = useState("");
@@ -71,9 +81,11 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
   const [dealMsg,    setDealMsg]    = useState("");
 
   // 관리자 초대/토글
-  const [inviting,   setInviting]   = useState(false);
-  const [inviteUrl,  setInviteUrl]  = useState("");
-  const [togglingId, setTogglingId] = useState("");
+  const [inviting,    setInviting]    = useState(false);
+  const [inviteUrl,   setInviteUrl]   = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteMsg,   setInviteMsg]   = useState("");
+  const [togglingId,  setTogglingId]  = useState("");
 
   // 계약서 전용 양식 부여
   const [grantedTpls, setGrantedTpls] = useState<string[]>([]);
@@ -97,6 +109,10 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
         setSites(d.sites);
         setWorkers(d.workers);
         setStats(d.stats);
+        setEditPlan(d.agency.planType);
+        setEditTrial(d.agency.trialEndsAt ? d.agency.trialEndsAt.slice(0, 10) : "");
+        setEditMaxWorkers(String(d.agency.maxWorkers ?? 0));
+        setEditMaxSites(String(d.agency.maxSites ?? 0));
         setDealCycle(d.agency.billingCycle === "ANNUAL" ? "ANNUAL" : "MONTHLY");
         setDealAmount(d.agency.customAmount != null ? String(d.agency.customAmount) : "");
         setDealNote(d.agency.billingNote ?? "");
@@ -111,16 +127,20 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
   useEffect(() => { loadDetail(); }, [loadDetail]);
 
   async function issueInvite() {
-    setInviting(true); setInviteUrl("");
+    setInviting(true); setInviteUrl(""); setInviteMsg("");
     try {
       const res = await fetch(`/api/admin/system/agencies/${id}/manager-invite`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ email: inviteEmail.trim() || null }),
       });
       const d = await res.json();
-      if (d.success) setInviteUrl(d.inviteUrl);
-      else alert(d.message || "초대 발급 실패");
+      if (d.success) {
+        setInviteUrl(d.inviteUrl);
+        if (d.emailSent) setInviteMsg(`초대 메일을 ${inviteEmail.trim()} 으로 발송했습니다.`);
+        else if (d.emailError) setInviteMsg(d.emailError);
+        else setInviteMsg("초대 링크를 발급했습니다. 복사해 전달해주세요.");
+      } else alert(d.message || "초대 발급 실패");
     } catch { alert("서버 오류"); }
     finally { setInviting(false); }
   }
@@ -138,6 +158,29 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
       await loadDetail(false);
     } catch { alert("서버 오류"); }
     finally { setTogglingId(""); }
+  }
+
+  async function savePlan() {
+    setSavingPlan(true); setPlanMsg("");
+    try {
+      const res = await fetch(`/api/admin/system/agencies/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          planType: editPlan,
+          trialEndsAt: editPlan === "TRIAL" ? (editTrial || null) : null,
+          maxWorkers: Number(editMaxWorkers) || 0,
+          maxSites: Number(editMaxSites) || 0,
+        }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        setPlanMsg("저장되었습니다.");
+        setAgency(a => a ? { ...a, planType: editPlan, trialEndsAt: editPlan === "TRIAL" ? (editTrial || null) : null, maxWorkers: Number(editMaxWorkers) || 0, maxSites: Number(editMaxSites) || 0 } : a);
+        onChanged?.();
+      } else setPlanMsg(d.message ?? "저장 실패");
+    } catch { setPlanMsg("서버 오류"); }
+    finally { setSavingPlan(false); }
   }
 
   async function saveDeal() {
@@ -235,6 +278,38 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
             <p className="mt-1 text-xs font-semibold text-slate-400">{s.l}</p>
           </div>
         ))}
+      </div>
+
+      {/* 구독 플랜·한도 변경 — 목록에서 옮겨온 핵심 작업 */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-black text-slate-700">구독 플랜 · 한도</p>
+            <p className="mt-0.5 text-[11px] text-slate-400">플랜을 변경하고 직무지도원/현장 등록 한도를 설정합니다. (0 = 무제한)</p>
+          </div>
+          <button onClick={savePlan} disabled={savingPlan} className={`${T.btnPrimary} shrink-0 py-1.5`}>{savingPlan ? "저장 중..." : "플랜 저장"}</button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-slate-500">플랜</label>
+            <select value={editPlan} onChange={e => setEditPlan(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400">
+              {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-slate-500">체험 종료일{editPlan !== "TRIAL" && " (TRIAL 전용)"}</label>
+            <input type="date" value={editTrial} disabled={editPlan !== "TRIAL"} onChange={e => setEditTrial(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400 disabled:opacity-50" />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-slate-500">최대 직무지도원</label>
+            <input type="number" min="0" value={editMaxWorkers} onChange={e => setEditMaxWorkers(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400" />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-slate-500">최대 현장</label>
+            <input type="number" min="0" value={editMaxSites} onChange={e => setEditMaxSites(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400" />
+          </div>
+        </div>
+        {planMsg && <p className="mt-2 text-[11px] font-semibold text-slate-500">{planMsg}</p>}
       </div>
 
       {/* 상단: 좌(구독 정보 + AI 사용량) | 우(결제 딜 설정) */}
@@ -356,6 +431,13 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
               <UserPlus className="h-3 w-3" />{inviting ? "..." : "초대"}
             </button>
           </div>
+          <div className="mb-2">
+            <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+              placeholder="이메일 입력 시 초대 메일 자동 발송 (선택)"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-900 outline-none focus:border-sky-400" />
+            <p className="mt-1 text-[10px] text-slate-400">비우고 초대를 누르면 링크만 발급됩니다.</p>
+          </div>
+          {inviteMsg && <p className="mb-2 text-[11px] font-semibold text-slate-600">{inviteMsg}</p>}
           {inviteUrl && (
             <div className="mb-2 rounded-lg border border-sky-100 bg-sky-50 p-2">
               <p className="mb-1 text-[10px] font-black text-sky-700">초대 링크(7일)</p>
@@ -436,6 +518,11 @@ export default function AgencyDetail({ id, onClose }: { id: string; onClose?: ()
             </>
           )}
         </div>
+      </div>
+
+      {/* 하단 닫기 — 매니저 상세 모달과 동일 형태 */}
+      <div className="mt-5 flex items-center justify-end gap-2">
+        <button onClick={() => onClose ? onClose() : router.back()} className={T.btnSecondary}>닫기</button>
       </div>
     </div>
   );

@@ -136,7 +136,7 @@ export default function AdminSiteNewPage() {
   return (
     <div className="max-w-2xl space-y-5">
       <PageHeader
-        title="현장(Site) 신규 등록"
+        title="현장(사업체) 신규 등록"
         actions={<Link href="/admin/sites" className={T.btnSecondary}>← 목록으로</Link>}
       />
 

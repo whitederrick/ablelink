@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Plus, UserCheck, UserX, KeyRound, Pencil, Mail, Phone } from "lucide-react";
+import { Plus } from "lucide-react";
 import PageHeader from "../_components/PageHeader";
 import { T } from "../_styles";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
@@ -92,7 +92,11 @@ export default function AdminsPage() {
     });
     const data = await res.json();
     setProcessing(false);
-    if (data.success) { showToast(data.message); load(); }
+    if (data.success) {
+      showToast(data.message);
+      setDetailTarget(t => (t && t.id === admin.id ? { ...t, isActive: !t.isActive } : t));
+      load();
+    }
     else showToast(data.message || "실패");
   }
 
@@ -223,7 +227,7 @@ export default function AdminsPage() {
 
       {/* 비밀번호 초기화 모달 */}
       {resetTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-5">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-5">
           <div className="w-full max-w-xs rounded-2xl bg-white p-6 shadow-2xl">
             <p className="mb-1 text-base font-black text-slate-900">비밀번호 초기화</p>
             <p className="mb-4 text-sm text-slate-500">{resetTarget.loginId}</p>
@@ -279,79 +283,60 @@ export default function AdminsPage() {
                   className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400" />
               </div>
             </div>
-            <div className="mt-5 flex gap-2">
-              <button onClick={() => setDetailTarget(null)}
-                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 active:scale-95">닫기</button>
-              <button onClick={saveDetail} disabled={processing}
-                className="flex-1 rounded-xl bg-slate-950 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">
-                {processing ? "저장 중..." : "저장"}
-              </button>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
+              <div className="flex items-center gap-2">
+                <button onClick={() => toggleActive(detailTarget)} disabled={processing}
+                  className={detailTarget.isActive ? T.btnDanger
+                    : "inline-flex items-center justify-center min-h-10 rounded-xl border border-emerald-200 bg-white px-3 py-1.5 text-sm font-semibold text-emerald-600 transition hover:bg-emerald-50 active:scale-95"}>
+                  {detailTarget.isActive ? "비활성화" : "활성화"}
+                </button>
+                <button onClick={() => setResetTarget(detailTarget)} className={T.btnSecondary}>비밀번호 초기화</button>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setDetailTarget(null)} className={T.btnSecondary}>닫기</button>
+                <button onClick={saveDetail} disabled={processing} className={T.btnPrimary}>
+                  {processing ? "저장 중..." : "저장"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {loading ? (
-        <div className="flex h-40 items-center justify-center">
-          <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="px-5 py-2 text-left text-xs font-black uppercase tracking-wide text-slate-500">계정</th>
-                <th className="px-5 py-2 text-left text-xs font-black uppercase tracking-wide text-slate-500">연락처</th>
-                <th className="px-5 py-2 text-left text-xs font-black uppercase tracking-wide text-slate-500">마지막 로그인</th>
-                <th className="px-5 py-2 text-left text-xs font-black uppercase tracking-wide text-slate-500">상태</th>
-                <th className="px-5 py-3 text-center text-xs font-black uppercase tracking-wide text-slate-500">작업</th>
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[820px] table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[150px]" />{/* 아이디 */}
+            <col className="w-[110px]" />{/* 이름 */}
+            <col className="w-[220px]" />{/* 이메일 */}
+            <col className="w-[140px]" />{/* 연락처 */}
+            <col className="w-[120px]" />{/* 마지막 로그인 */}
+            <col className="w-[88px]" />{/* 상태 */}
+          </colgroup>
+          <thead>
+            <tr>{["아이디", "이름", "이메일", "연락처", "마지막 로그인", "상태"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={6} className={T.tdCenter}>로딩 중...</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={6} className={T.tdCenter}>{admins.length === 0 ? "운영자가 없습니다." : "조건에 맞는 운영자가 없습니다."}</td></tr>
+            ) : pageItems.map(a => (
+              <tr key={a.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50 ${!a.isActive ? "opacity-50" : ""}`} onClick={() => openDetail(a)}>
+                <td className={`${T.td} truncate`}><span className="font-bold text-sky-600">{a.loginId}</span></td>
+                <td className={`${T.td} truncate`}>{a.displayName || "-"}</td>
+                <td className={`${T.td} truncate`}>{a.email || "-"}</td>
+                <td className={`${T.td} truncate`}>{a.phone || "-"}</td>
+                <td className={T.td}>{a.lastLoginAt ? new Date(a.lastLoginAt).toLocaleDateString("ko-KR").slice(2) : "없음"}</td>
+                <td className={T.td}><StatusBadge status={a.isActive ? "ACTIVE" : "INACTIVE"} map={ACTIVE_STATUS_MAP} /></td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {filtered.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-slate-400">{admins.length===0?"운영자가 없습니다.":"조건에 맞는 운영자가 없습니다."}</td></tr>
-              ) : pageItems.map(a => (
-                <tr key={a.id} className={`hover:bg-slate-50 transition ${!a.isActive ? "opacity-50" : ""}`}>
-                  <td className="px-5 py-1.5">
-                    <button onClick={() => openDetail(a)} className="text-[15px] font-black text-slate-900 hover:text-sky-600 hover:underline">{a.loginId}</button>
-                    {a.displayName ? <span className="text-[13px] text-slate-500"> ({a.displayName})</span> : ""}
-                  </td>
-                  <td className="px-5 py-1.5 text-[13px] text-slate-600">
-                    <div className="flex items-center gap-3">
-                      {a.email && <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5 text-slate-400" />{a.email}</span>}
-                      {a.phone && <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5 text-slate-400" />{a.phone}</span>}
-                      {!a.email && !a.phone && <span className="text-slate-300">—</span>}
-                    </div>
-                  </td>
-                  <td className="px-5 py-1.5 text-[15px] font-medium text-slate-800">
-                    {a.lastLoginAt ? new Date(a.lastLoginAt).toLocaleDateString("ko-KR") : "없음"}
-                  </td>
-                  <td className="px-5 py-1.5">
-                    <StatusBadge status={a.isActive ? "ACTIVE" : "INACTIVE"} map={ACTIVE_STATUS_MAP} />
-                  </td>
-                  <td className="px-5 py-1.5">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <button onClick={() => openDetail(a)} title="상세·편집"
-                        className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 active:scale-95">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => setResetTarget(a)} title="비밀번호 초기화"
-                        className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 active:scale-95">
-                        <KeyRound className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => toggleActive(a)} disabled={processing}
-                        title={a.isActive ? "비활성화" : "활성화"}
-                        className={`rounded-lg border p-1.5 active:scale-95 ${a.isActive ? "border-rose-200 text-rose-500 hover:bg-rose-50" : "border-emerald-200 text-emerald-600 hover:bg-emerald-50"}`}>
-                        {a.isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
-        </div>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {filtered.length > 0 && (
+        <Pagination className="pt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
       )}
 
       {toast && (

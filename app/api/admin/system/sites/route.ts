@@ -16,6 +16,7 @@ export async function GET(req: Request) {
       where: q ? { companyName: { contains: q } } : undefined,
       include: {
         agency: { select: { id: true, name: true, planType: true } },
+        ownerManager: { select: { displayName: true, loginId: true } },
         trainees: { where: { status: "TRAINING" }, select: { id: true } },
         assignments: {
           where: { status: { in: ["ACTIVE", "ASSIGNED", "CONFIRMED"] } },
@@ -36,6 +37,12 @@ export async function GET(req: Request) {
         agencyId:    s.agency?.id?.toString() ?? null,
         agencyName:  s.agency?.name ?? null,
         planType:    s.agency?.planType ?? null,
+        businessContactName:  (s as any).businessContactName ?? null,
+        businessContactPhone: (s as any).businessContactPhone ?? null,
+        ownerManagerName:     s.ownerManager?.displayName ?? s.ownerManager?.loginId ?? null,
+        allowanceRange:       (s as any).allowanceRange ?? null,
+        basePointConfirmed:   (s as any).basePointConfirmed ?? false,
+        basePointApprovalStatus: (s as any).basePointApprovalStatus ?? null,
         traineeCount: s.trainees.length,
         workerCount:   s.assignments.length,
         workers:      s.assignments.map(a => ({ id: a.user.id.toString(), name: a.user.workerName })),

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { ChevronDown, Plus, X, ExternalLink } from "lucide-react";
+import { Plus, X } from "lucide-react";
+import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import AgencyDetail from "./AgencyDetail";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
@@ -15,7 +16,7 @@ type Agency = {
   id: string; name: string; planType: string; trialEndsAt: string | null;
   nextBillingAt: string | null; subscribedAt: string | null;
   maxWorkers: number; maxSites: number;
-  createdAt: string; managerCount: number; siteCount: number;
+  createdAt: string; managerCount: number; siteCount: number; workerCount: number;
 };
 
 const PLAN_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
@@ -32,9 +33,6 @@ export default function AgenciesPage() {
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
   const [planFilter, setPlanFilter] = useState<string[]>([]);
-  const [editId, setEditId]     = useState<string|null>(null);
-  const [editPlan, setEditPlan] = useState(""); const [editTrial, setEditTrial] = useState("");
-  const [editMaxWorkers, setEditMaxWorkers] = useState(""); const [editMaxSites, setEditMaxSites] = useState("");
   const [processing, setProcessing] = useState(false);
   const [toast, setToast]       = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -50,21 +48,12 @@ export default function AgenciesPage() {
   },[]);
   useEffect(()=>{load();},[load]);
 
-  function openEdit(a: Agency){setEditId(a.id);setEditPlan(a.planType);setEditTrial(a.trialEndsAt?a.trialEndsAt.slice(0,10):"");setEditMaxWorkers(String(a.maxWorkers));setEditMaxSites(String(a.maxSites));}
-
-  async function savePlan(){
-    if(!editId)return; setProcessing(true);
-    const res=await fetch(`/api/admin/system/agencies/${editId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({planType:editPlan,trialEndsAt:editTrial||null,maxWorkers:Number(editMaxWorkers)||0,maxSites:Number(editMaxSites)||0})});
-    const data=await res.json(); setProcessing(false);
-    if(data.success){showToast(data.message);setEditId(null);load();}else showToast(data.message||"실패");
-  }
-
   async function createAgency(){
     if(!form.name||!form.managerLoginId||!form.managerPassword){showToast("필수 항목을 입력해주세요.");return;}
     setProcessing(true);
     const res=await fetch("/api/admin/system/agencies",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});
     const data=await res.json(); setProcessing(false);
-    if(data.success){showToast("위탁기관가 생성되었습니다.");setShowCreate(false);setForm({name:"",planType:"FREE",managerLoginId:"",managerPassword:"",managerDisplayName:""});load();}else showToast(data.message||"생성 실패");
+    if(data.success){showToast("위탁기관이 생성되었습니다.");setShowCreate(false);setForm({name:"",planType:"FREE",managerLoginId:"",managerPassword:"",managerDisplayName:""});load();}else showToast(data.message||"생성 실패");
   }
 
   const filtered = useMemo(() => {
@@ -79,11 +68,13 @@ export default function AgenciesPage() {
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   useEffect(() => { setPage(1); }, [search, planFilter]);
 
+  const COLS = ["위탁기관명", "구독 플랜", "관리자 수", "현장 수", "직무지도원 수", "한도 (지도원/현장)", "가입일"];
+
   return (
     <div>
       <PageHeader
         title="위탁기관 관리"
-        sub="위탁기관를 등록하고 상세 정보 및 구독 플랜을 관리합니다."
+        sub="위탁기관을 등록하고, 목록에서 기관을 선택하면 상세 정보·구독 플랜을 확인·변경할 수 있습니다."
         actions={
           <button onClick={()=>setShowCreate(true)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white active:scale-95">
             <Plus className="h-4 w-4" />위탁기관 등록
@@ -146,64 +137,49 @@ export default function AgenciesPage() {
         />
       </div>
 
-      {loading?(
-        <div className="flex h-40 items-center justify-center"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950"/></div>
-      ):(
-        <div className="space-y-2">
-          {filtered.length===0?(
-            <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white"><p className="text-sm text-slate-400">{agencies.length===0?"위탁기관가 없습니다.":"조건에 맞는 위탁기관가 없습니다."}</p></div>
-          ):pageItems.map(a=>(
-            <div key={a.id} className="rounded-xl border border-slate-200 bg-white">
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
-                <button onClick={() => setDetailId(a.id)} className="shrink-0 max-w-[200px] truncate text-[15px] font-black text-slate-900 hover:text-sky-600 hover:underline">{a.name}</button>
-                <StatusBadge status={a.planType} map={PLAN_BADGE} />
-                <span className="shrink-0 text-[13px] font-semibold text-slate-500">관리자 {a.managerCount} · 현장 {a.siteCount}</span>
-                <span className="shrink-0 text-[13px] text-slate-400">한도 {a.maxWorkers||"∞"}/{a.maxSites||"∞"}</span>
-                {a.trialEndsAt&&<span className="shrink-0 text-[13px] text-amber-600">체험~{new Date(a.trialEndsAt).toLocaleDateString("ko-KR").slice(2)}</span>}
-                {a.nextBillingAt&&<span className="shrink-0 text-[13px] text-emerald-600">결제 {new Date(a.nextBillingAt).toLocaleDateString("ko-KR").slice(2)}</span>}
-                <span className="ml-auto shrink-0 text-xs font-semibold text-slate-400">가입 {new Date(a.createdAt).toLocaleDateString("ko-KR").slice(2)}</span>
-                <button onClick={() => setDetailId(a.id)}
-                  className="shrink-0 flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
-                  상세 <ExternalLink className="h-3 w-3"/>
-                </button>
-                <button onClick={()=>editId===a.id?setEditId(null):openEdit(a)}
-                  className="shrink-0 flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
-                  플랜 <ChevronDown className={`h-3 w-3 transition ${editId===a.id?"rotate-180":""}`}/>
-                </button>
-              </div>
-              {editId===a.id&&(
-                <div className="border-t border-slate-100 px-3.5 pb-3.5 pt-3.5">
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                    <div><label className="mb-1 block text-[11px] font-semibold text-slate-500">플랜</label>
-                      <select value={editPlan} onChange={e=>setEditPlan(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400">
-                        {PLANS.map(p=><option key={p} value={p}>{p}</option>)}
-                      </select></div>
-                    {editPlan==="TRIAL"&&<div><label className="mb-1 block text-[11px] font-semibold text-slate-500">체험 종료일</label>
-                      <input type="date" value={editTrial} onChange={e=>setEditTrial(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/></div>}
-                    <div><label className="mb-1 block text-[11px] font-semibold text-slate-500">최대 직무지도원 (0=무제한)</label>
-                      <input type="number" min="0" value={editMaxWorkers} onChange={e=>setEditMaxWorkers(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/></div>
-                    <div><label className="mb-1 block text-[11px] font-semibold text-slate-500">최대 현장 수 (0=무제한)</label>
-                      <input type="number" min="0" value={editMaxSites} onChange={e=>setEditMaxSites(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold outline-none focus:border-sky-400"/></div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={()=>setEditId(null)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 active:scale-95">취소</button>
-                    <button onClick={savePlan} disabled={processing} className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-black text-white active:scale-95 disabled:opacity-60">{processing?"...":"저장"}</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-          {filtered.length > 0 && (
-            <Pagination className="pt-2" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
-          )}
-        </div>
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[880px] table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[210px]" />{/* 위탁기관명 */}
+            <col className="w-[110px]" />{/* 구독 플랜 */}
+            <col className="w-[90px]" />{/* 관리자 수 */}
+            <col className="w-[80px]" />{/* 현장 수 */}
+            <col className="w-[110px]" />{/* 직무지도원 수 */}
+            <col className="w-[150px]" />{/* 한도 */}
+            <col className="w-[100px]" />{/* 가입일 */}
+          </colgroup>
+          <thead>
+            <tr>{COLS.map(h => <th key={h} className={T.th}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={COLS.length} className={T.tdCenter}>로딩 중...</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={COLS.length} className={T.tdCenter}>{agencies.length === 0 ? "위탁기관이 없습니다." : "조건에 맞는 위탁기관이 없습니다."}</td></tr>
+            ) : pageItems.map(a => (
+              <tr key={a.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50`} onClick={() => setDetailId(a.id)}>
+                <td className={`${T.td} truncate`}><span className="font-bold text-sky-600">{a.name}</span></td>
+                <td className={T.td}><StatusBadge status={a.planType} map={PLAN_BADGE} /></td>
+                <td className={T.td}>{a.managerCount}</td>
+                <td className={T.td}>{a.siteCount}</td>
+                <td className={T.td}>{a.workerCount}</td>
+                <td className={T.td}>{a.maxWorkers || "∞"} / {a.maxSites || "∞"}</td>
+                <td className={T.td}>{new Date(a.createdAt).toLocaleDateString("ko-KR").slice(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {filtered.length > 0 && (
+        <Pagination className="pt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
       )}
 
-      {/* 위탁기관 상세 모달 */}
+      {/* 위탁기관 상세 모달 — 플랜 변경 등 모든 작업은 모달 안에서 */}
       {detailId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-5" onClick={() => setDetailId(null)}>
           <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <AgencyDetail key={detailId} id={detailId} onClose={() => setDetailId(null)} />
+            <AgencyDetail key={detailId} id={detailId} onClose={() => setDetailId(null)} onChanged={load} />
           </div>
         </div>
       )}

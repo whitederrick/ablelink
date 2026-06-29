@@ -18,6 +18,19 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
     });
 
+    // 직무지도원 수 — 상세와 동일 기준(ACTIVE/ASSIGNED/CONFIRMED 배정의 고유 직무지도원)으로 기관별 집계
+    const asg = await prisma.siteAssignment.findMany({
+      where: { status: { in: ["ACTIVE", "ASSIGNED", "CONFIRMED"] } },
+      select: { agencyId: true, workerId: true },
+      distinct: ["agencyId", "workerId"],
+    });
+    const workerCountByAgency = new Map<string, number>();
+    for (const r of asg) {
+      if (r.agencyId == null) continue;
+      const k = r.agencyId.toString();
+      workerCountByAgency.set(k, (workerCountByAgency.get(k) ?? 0) + 1);
+    }
+
     return NextResponse.json({
       success: true,
       agencies: agencies.map(a => ({
@@ -32,6 +45,7 @@ export async function GET(req: Request) {
         createdAt:   a.createdAt.toISOString(),
         managerCount: a._count.managerAccounts,
         siteCount:    a._count.sites,
+        workerCount:  workerCountByAgency.get(a.id.toString()) ?? 0,
       })),
     });
   } catch (e: any) {

@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
 
 function errStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -53,7 +53,9 @@ function formatKst(iso: Date | null | undefined): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
+    // 듀얼: 운영자(admin)는 전체 기관·보관기간 무제한, 매니저는 본인 기관·플랜 보관기간 적용.
+    const session = await requireAdminOrManagerSession(req);
+    const isAdmin = session.kind === "admin";
     const { searchParams } = new URL(req.url);
 
     const type = (searchParams.get("type") || "attendance").trim();
@@ -67,8 +69,8 @@ export async function GET(req: NextRequest) {
     if (fromStr && !isDateOnly(fromStr)) throw new Error("VALIDATION:from");
     if (toStr   && !isDateOnly(toStr))   throw new Error("VALIDATION:to");
 
-    // 플랜 조회
-    const agencyId = scope.agencyId;
+    // 플랜 조회 — 운영자는 전체(agency 필터 없음), 매니저는 본인 기관
+    const agencyId = session.kind === "manager" ? session.agencyId : undefined;
     let planType = "FREE";
     if (agencyId) {
       const agency = await prisma.agency.findUnique({
@@ -78,8 +80,8 @@ export async function GET(req: NextRequest) {
       planType = agency?.planType ?? "FREE";
     }
 
-    // 보관기간 기반 earliest 날짜 계산
-    const months = retentionMonths(planType);
+    // 보관기간 기반 earliest 날짜 계산 (운영자는 무제한 → 클램프 없음)
+    const months = isAdmin ? null : retentionMonths(planType);
     const today = new Date();
     let earliest: string | null = null;
     if (months !== null) {

@@ -5,15 +5,17 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireAdminOrManagerSession } from "@/lib/managerScope";
 
 export async function GET(request: NextRequest) {
   try {
-    const scope = await requireManagerSession(request);
+    // 듀얼: 운영자=전체 기관, 매니저=본인 기관
+    const session = await requireAdminOrManagerSession(request);
+    const agencyId = session.kind === "manager" ? session.agencyId : undefined;
 
-    // 활성 배정된 Site별 훈련생 현황 (AGENCY 관리자는 자기 위탁기관만)
+    // 활성 배정된 Site별 훈련생 현황 (매니저는 자기 위탁기관만, 운영자는 전체)
     const assignments = await prisma.siteAssignment.findMany({
-      where: { status: "ACTIVE", ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
+      where: { status: "ACTIVE", ...(agencyId ? { agencyId } : {}) },
       include: {
         site: {
           include: {

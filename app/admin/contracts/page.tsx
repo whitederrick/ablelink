@@ -36,6 +36,10 @@ const WORK_TYPE_LABELS: Record<string, string> = {
   AM: "오전 4H (09:00~12:00)", PM: "오후 4H (13:00~17:00)",
   FULL_DAY: "전일 8H (09:00~18:00)", CUSTOM: "직접 입력",
 };
+// 목록 표기용 라벨(셀 1줄 유지 — 시간 명시)
+const SHORT_WT: Record<string, string> = {
+  AM: "오전 09:00~12:00", PM: "오후 13:00~17:00", FULL_DAY: "전일 09:00~18:00", CUSTOM: "직접입력",
+};
 
 function formatPeriod(start: string | null, end: string | null): string {
   if (!start) return "-";
@@ -60,7 +64,7 @@ function WorkerSearchPopup({ onSelect, onClose }: {
     const t = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await fetch(`/api/admin/contracts/worker-search?q=${encodeURIComponent(query.trim())}`);
+        const res = await fetch(`/api/admin/contracts/worker-search?q=${encodeURIComponent(query.trim())}`, { headers: { "x-admin-context": "1" } });
         const data = await res.json();
         if (data.success) setResults(data.items);
       } finally { setSearching(false); setSearched(true); }
@@ -314,7 +318,7 @@ export default function AdminContractsPage() {
   const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   useEffect(() => {
-    fetch("/api/admin/contracts")
+    fetch("/api/admin/contracts", { headers: { "x-admin-context": "1" } })
       .then(r => r.json())
       .then(c => { if (c.success) setContracts(c.items); })
       .catch(() => {})
@@ -328,7 +332,7 @@ export default function AdminContractsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="근로계약서 현황"
+        title="근로계약서 현황 관리"
         sub="전체 위탁기관의 근로계약서 발송·서명 상태를 조회합니다. (계약 작성·발송은 위탁기관 담당자 화면에서)"
       />
 
@@ -364,50 +368,60 @@ export default function AdminContractsPage() {
         </div>
       )}
 
-      <div className={T.tableWrap}>
-        <table className="w-full border-collapse">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[1220px] table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[140px]" />{/* 위탁기관 */}
+            <col className="w-[100px]" />{/* 직무지도원 */}
+            <col className="w-[120px]" />{/* 연락처 */}
+            <col className="w-[160px]" />{/* 계약 기간 */}
+            <col className="w-[140px]" />{/* 사업체 */}
+            <col className="w-[150px]" />{/* 근무형태(시간 명시) */}
+            <col className="w-[120px]" />{/* 상태 */}
+            <col className="w-[110px]" />{/* 서명일 */}
+            <col className="w-[96px]" />{/* 링크 */}
+          </colgroup>
           <thead>
-            <tr>{["위탁기관", "직무지도원", "계약 기간", "사업체", "근무형태", "상태", "서명일", "링크"].map(h => (
+            <tr>{["위탁기관", "직무지도원", "연락처", "계약 기간", "사업체", "근무형태", "상태", "서명일", "링크"].map(h => (
               <th key={h} className={T.th}>{h}</th>
             ))}</tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className={T.tdCenter}>로딩 중...</td></tr>
+              <tr><td colSpan={9} className={T.tdCenter}>로딩 중...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={8} className={T.tdCenter}>{contracts.length === 0 ? "계약서가 없습니다." : "조건에 맞는 계약서가 없습니다."}</td></tr>
+              <tr><td colSpan={9} className={T.tdCenter}>{contracts.length === 0 ? "계약서가 없습니다." : "조건에 맞는 계약서가 없습니다."}</td></tr>
             ) : pageItems.map(c => (
                 <tr key={c.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50`} onClick={() => setDetailId(c.id)}>
-                  <td className={`${T.td} whitespace-nowrap`}>{c.agencyName}</td>
-                  <td className={T.td}>
-                    <span className="font-semibold text-slate-800">{c.workerName}</span>
-                    {c.userPhone && <span className="ml-1.5 text-[13px] text-slate-500">{c.userPhone}</span>}
-                  </td>
-                  <td className={`${T.td} whitespace-nowrap`}>
-                    {c.contractStart?.slice(0, 10)} ~ {c.contractEnd?.slice(0, 10)}
-                  </td>
-                  <td className={`${T.td}`}>{c.siteName || <span className="text-slate-300">미지정</span>}</td>
-                  <td className={`${T.td}`}>{c.workType ? (WORK_TYPE_LABELS[c.workType] ?? c.workType) : <span className="text-slate-300">미지정</span>}</td>
+                  <td className={`${T.td} truncate`}>{c.agencyName}</td>
+                  <td className={`${T.td} truncate`}><span className="font-semibold text-slate-800">{c.workerName}</span></td>
+                  <td className={`${T.td} truncate`}>{c.userPhone || "-"}</td>
+                  <td className={`${T.td} truncate`}>{c.contractStart?.slice(0, 10)} ~ {c.contractEnd?.slice(0, 10)}</td>
+                  <td className={`${T.td} truncate`}>{c.siteName || <span className="text-slate-300">미지정</span>}</td>
+                  <td className={`${T.td} truncate`}>{c.workType ? (SHORT_WT[c.workType] ?? c.workType) : <span className="text-slate-300">미지정</span>}</td>
                   <td className={T.td}><StatusBadge status={c.status} map={CONTRACT_BADGE} /></td>
-                  <td className={`${T.td}`}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
+                  <td className={T.td}>{c.workerSignedAt ? c.workerSignedAt.slice(0, 10) : "-"}</td>
                   <td className={T.td}>
-                    <button onClick={(e) => { e.stopPropagation(); copyLink(c.signToken); }} className={T.btnSecondary}>링크 복사</button>
+                    <button onClick={(e) => { e.stopPropagation(); copyLink(c.signToken); }}
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 active:scale-95">
+                      링크 복사
+                    </button>
                   </td>
                 </tr>
               ))}
           </tbody>
         </table>
-        {filtered.length > 0 && (
-          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
-        )}
       </div>
+      {filtered.length > 0 && (
+        <Pagination className="pt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+      )}
 
       {showCreate && (
         <CreateContractModal
           onClose={() => setShowCreate(false)}
           onCreated={(_, url) => {
             setLastCreatedUrl(url);
-            fetch("/api/admin/contracts").then(r => r.json()).then(d => { if (d.success) setContracts(d.items); });
+            fetch("/api/admin/contracts", { headers: { "x-admin-context": "1" } }).then(r => r.json()).then(d => { if (d.success) setContracts(d.items); });
           }}
         />
       )}
@@ -422,15 +436,15 @@ function AdminContractDetailModal({ id, onClose }: { id: string; onClose: () => 
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    fetch(`/api/admin/contracts/${id}`).then(r => r.json()).then(d => { if (d.success) setData(d.data); }).finally(() => setLoading(false));
+    fetch(`/api/admin/contracts/${id}`, { headers: { "x-admin-context": "1" } }).then(r => r.json()).then(d => { if (d.success) setData(d.data); }).finally(() => setLoading(false));
   }, [id]);
 
-  const pdfUrl = `/api/admin/contracts/${id}?format=pdf`;
+  const pdfUrl = `/api/admin/contracts/${id}?format=pdf&adminctx=1`;
   const wt: Record<string, string> = { HOURLY: "시급", DAILY: "일급", MONTHLY: "월급" };
 
   return (
     <div className={T.modalOverlay} onClick={onClose} style={{ zIndex: 1050 }}>
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white p-7 shadow-2xl shadow-slate-950/20" onClick={e => e.stopPropagation()}>
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white p-7 shadow-2xl shadow-slate-950/20" onClick={e => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-black text-slate-900">근로계약서 상세 (조회)</h2>
           <div className="flex items-center gap-2">

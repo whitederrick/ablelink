@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
         subscriptionId: chargeData.orderId,
         subscribedAt: now,
         nextBillingAt,
+        subscriptionCanceledAt: null,
         trialStartedAt: null,
         trialEndsAt: null,
         maxWorkers: limits.maxWorkers,

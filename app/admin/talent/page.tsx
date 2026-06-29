@@ -87,7 +87,7 @@ export default function ManagerTalentPage() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch("/api/admin/sites?pageSize=100", { cache: "no-store" });
+        const r = await fetch("/api/admin/sites?pageSize=100", { cache: "no-store", headers: { "x-admin-context": "1" } });
         const d = await r.json();
         if (d.success) setSites((d.items || []).map((s: any) => ({ id: s.id, companyName: s.companyName, agencyName: s.agencyName })));
       } catch { /* noop */ }
@@ -100,7 +100,7 @@ export default function ManagerTalentPage() {
       const sp = new URLSearchParams();
       if (region.trim()) sp.set("region", region.trim());
       if (verifiedOnly) sp.set("verifiedOnly", "1");
-      const r = await fetch(`/api/admin/talent?${sp}`);
+      const r = await fetch(`/api/admin/talent?${sp}`, { headers: { "x-admin-context": "1" } });
       const d = await r.json();
       if (d.success) setCands(d.candidates);
       else if (r.status === 401) router.replace("/admin/login");
@@ -112,7 +112,7 @@ export default function ManagerTalentPage() {
   async function openDetail(c: Cand) {
     setDetailFor(c); setDetail(null); setDetailLoading(true); setExpPage(1); setRevPage(1);
     try {
-      const r = await fetch(`/api/admin/talent/${c.id}`);
+      const r = await fetch(`/api/admin/talent/${c.id}`, { headers: { "x-admin-context": "1" } });
       const d = await r.json();
       if (d.success) setDetail(d.candidate);
     } finally { setDetailLoading(false); }
@@ -125,7 +125,7 @@ export default function ManagerTalentPage() {
     setSending(true);
     try {
       const r = await fetch("/api/admin/talent/offer", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json", "x-admin-context": "1" },
         body: JSON.stringify({ workerId: offerTo.id, siteName: offerSite.trim() || undefined, siteId: offerSiteId || undefined, message: offerMsg.trim() || undefined, serviceStart: offerStart, serviceEnd: offerEnd }),
       });
       const d = await r.json();

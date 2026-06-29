@@ -4,23 +4,24 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkRateLimit } from "@/lib/rateLimit";
 
 export async function GET(req: NextRequest) {
   try {
-    const scope    = await requireManagerSession(req);
-    const agencyId = scope.agencyId;
+    // 듀얼: 운영자=전체 기관, 매니저=본인 기관
+    const session  = await requireAdminOrManagerSession(req);
+    const agencyId = session.kind === "manager" ? session.agencyId : undefined;
 
     const { searchParams } = new URL(req.url);
     const limit = Math.min(100, Number(searchParams.get("limit") ?? 50));
 
-    // 매니저가 직무지도원에게 보낸 알림만. 시스템 공지(kind=SYSTEM, 레거시 "[시스템 공지]" 제목)는
+    // 직무지도원에게 보낸 알림만. 시스템 공지(kind=SYSTEM, 레거시 "[시스템 공지]" 제목)는
     // 별도 '시스템 공지사항' 화면에서만 노출하므로 여기서 제외한다.
     const notices = await prisma.workerNotice.findMany({
       where: {
-        agencyId,
+        ...(agencyId ? { agencyId } : {}),
         kind: { not: "SYSTEM" },
         NOT: { title: { startsWith: "[시스템 공지]" } },
       },
@@ -52,11 +53,13 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const scope    = await requireManagerSession(req);
-    const agencyId = scope.agencyId;
+    // 듀얼: 운영자(admin)는 기관 무관 개별 발송, 매니저는 본인 기관 전체/그룹/개별
+    const session  = await requireAdminOrManagerSession(req);
+    const isAdmin  = session.kind === "admin";
+    const agencyId = isAdmin ? undefined : session.agencyId;
 
     // 레이트리밋(알림 폭주 방지)
-    const rl = await checkRateLimit(`notice-send:${scope.managerId}`);
+    const rl = await checkRateLimit(`notice-send:${isAdmin ? `admin:${session.adminId}` : session.managerId}`);
     if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
 
     const body = await req.json().catch(() => ({}));
@@ -73,6 +76,11 @@ export async function POST(req: NextRequest) {
         : Array.isArray(userIds) && userIds.length > 0 ? "INDIVIDUAL"
         : siteId ? "GROUP"
         : "ALL";
+
+    // 운영자는 전체/그룹 일괄 발송을 막고 개별 발송만 허용(플랫폼 전체 오발송 방지)
+    if (isAdmin && mode !== "INDIVIDUAL") {
+      return NextResponse.json({ success: false, message: "운영자는 개별(특정 직무지도원) 발송만 지원합니다." }, { status: 400 });
+    }
 
     const activeStatuses = ["ASSIGNED", "CONFIRMED", "ACTIVE"] as const;
     let targetIds: bigint[] = [];
@@ -112,18 +120,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "대상 직무지도원이 없습니다." }, { status: 404 });
 
     const noticeType = ["INFO", "WARN", "REJECT"].includes(type) ? type : "INFO";
-    const result = await prisma.workerNotice.createMany({
-      data: targetIds.map(uid => ({
-        workerId: uid, agencyId,
+
+    // 운영자: WorkerNotice.agencyId가 필수라 대상 워커의 (최근 배정) 기관을 조회해 채움
+    const agencyByWorker = new Map<string, bigint>();
+    if (isAdmin) {
+      const asg = await prisma.siteAssignment.findMany({
+        where: { workerId: { in: targetIds } },
+        select: { workerId: true, agencyId: true },
+        orderBy: { startDate: "desc" },
+      });
+      for (const a of asg) {
+        const k = a.workerId.toString();
+        if (a.agencyId != null && !agencyByWorker.has(k)) agencyByWorker.set(k, a.agencyId);
+      }
+    }
+
+    const rows = targetIds.map(uid => {
+      const ag = isAdmin ? agencyByWorker.get(uid.toString()) : agencyId;
+      if (!ag) return null;
+      return {
+        workerId: uid, agencyId: ag,
         title: String(title).slice(0, 100),
         body:  String(msgBody).slice(0, 1000),
         type:  noticeType,
         kind,
         yearMonth: yearMonth || null,
         link: typeof link === "string" && link ? link.slice(0, 300) : null,
-      })),
-    });
+      };
+    }).filter((r): r is NonNullable<typeof r> => r !== null);
 
+    if (rows.length === 0) return NextResponse.json({ success: false, message: "대상 직무지도원의 소속 기관을 확인할 수 없습니다." }, { status: 404 });
+
+    const result = await prisma.workerNotice.createMany({ data: rows });
     return NextResponse.json({ success: true, sent: result.count });
   } catch (e: any) {
     if (e instanceof Response) return e;

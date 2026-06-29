@@ -5,8 +5,44 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
 import { VALID_WORK_TYPES, type WorkType, computeWorkTimes } from "@/lib/workSchedule";
+
+// 배정 취소(종료) — 위탁기관 담당자(매니저)·시스템 운영자 공통.
+// 진행 중(REQUESTED/ACCEPTED/ASSIGNED/CONFIRMED/ACTIVE) 배정을 ENDED로 종료 → 재배정 가능.
+const CANCELABLE = ["REQUESTED", "ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"];
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await requireAdminOrManagerSession(req);
+    const { id } = await params;
+    const assignmentId = BigInt(id);
+
+    const existing = await prisma.siteAssignment.findUnique({
+      where: { id: assignmentId },
+      select: { agencyId: true, status: true },
+    });
+    if (!existing) return NextResponse.json({ success: false, message: "배정을 찾을 수 없습니다." }, { status: 404 });
+    if (session.kind === "manager" && existing.agencyId !== session.agencyId) {
+      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    }
+    if (!CANCELABLE.includes(existing.status)) {
+      return NextResponse.json({ success: false, message: "이미 종료된 배정입니다." }, { status: 409 });
+    }
+
+    let reason = "배정 취소";
+    try { const b = await req.json(); if (b?.reason) reason = String(b.reason).trim() || reason; } catch { /* body 없음 */ }
+
+    await prisma.siteAssignment.update({
+      where: { id: assignmentId },
+      data: { status: "ENDED", endedAt: new Date(), statusReason: reason },
+    });
+    return NextResponse.json({ success: true, message: "배정이 취소(종료)되었습니다." });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    console.error("[admin/assignments/[id] DELETE]", e);
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
+  }
+}
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

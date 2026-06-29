@@ -52,7 +52,7 @@ export default function ManagerRecruitNewPage() {
     setSaving(true);
     try {
       const r = await fetch("/api/admin/recruit-posts", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+        method: "POST", headers: { "Content-Type": "application/json", "x-admin-context": "1" }, body: JSON.stringify(form),
       });
       const d = await r.json();
       if (d.success) router.push("/admin/recruit");

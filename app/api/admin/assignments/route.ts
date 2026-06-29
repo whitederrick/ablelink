@@ -216,6 +216,22 @@ export async function POST(req: NextRequest) {
     // 배정 요청 모드: mode === "request" → 즉시 ASSIGNED가 아니라 REQUESTED(요청 중) 생성.
     // 요청 근무형태(복수)·회신 기한을 저장하고, 후보 수락 시 workType이 확정된다.
     const isRequest = body.mode === "request";
+
+    // ✅ 직접 배정(요청 아님)은 동시에 한 현장만 — 다른 현장에 진행 중 배정(ASSIGNED/CONFIRMED/ACTIVE)이 있으면 차단.
+    //    (한 직무지도원이 여러 현장에 무분별하게 꽂히는 것 방지. 요청/후보 흐름은 제외.)
+    if (!isRequest) {
+      const otherActive = await prisma.siteAssignment.findFirst({
+        where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { siteId } },
+        select: { site: { select: { companyName: true } } },
+      });
+      if (otherActive) {
+        return NextResponse.json(
+          { success: false, message: `이미 다른 현장(${otherActive.site?.companyName ?? "-"})에 배정되어 있습니다. 기존 배정을 종료한 뒤 다시 배정해주세요.` },
+          { status: 409 },
+        );
+      }
+    }
+
     let requestedWorkTypesCsv: string | null = null;
     let replyDeadline: Date | null = null;
     if (isRequest) {

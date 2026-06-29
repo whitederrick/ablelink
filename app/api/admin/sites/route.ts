@@ -90,10 +90,8 @@ export async function GET(req: NextRequest) {
     if (typeof isActive === "boolean") and.push({ isActive });
     if (agencyId) and.push({ agencyId });
 
-    // ✅ 관리자(로그인): 본인 담당 현장 + 미지정(공용) 현장만. 운영자(admin)는 전체.
-    if (session.kind === "manager") {
-      and.push({ OR: [{ ownerManagerId: session.managerId }, { ownerManagerId: null }] });
-    }
+    // ✅ 같은 위탁기관 관리자는 기관의 모든 현장을 공유한다(agency 단위 스코프).
+    //    ownerManagerId는 가시성 게이트가 아니라 '담당자 표시'용으로만 사용. (운영자(admin)는 전체)
 
     if (q) {
       and.push({

@@ -64,7 +64,7 @@ export default function AdminSupportPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch(`/api/admin/support`)
+    fetch(`/api/admin/support`, { headers: { "x-admin-context": "1" } })
       .then(r => r.json())
       .then(d => { if (d.success) setTickets(d.tickets); })
       .catch(() => {})
@@ -104,7 +104,7 @@ export default function AdminSupportPage() {
       fd.append("file", file);
       fd.append("name", file.name);
       try {
-        const res = await fetch("/api/admin/support/upload", { method: "POST", body: fd });
+        const res = await fetch("/api/admin/support/upload", { method: "POST", body: fd, headers: { "x-admin-context": "1" } });
         const d = await res.json();
         if (d.success) setReplyAttachments(prev => [...prev, d.attachment]);
         else showToast(d.message ?? `${file.name} 업로드 실패`);
@@ -118,7 +118,7 @@ export default function AdminSupportPage() {
     setSending(true);
     const res  = await fetch(`/api/admin/support/${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-admin-context": "1" },
       body: JSON.stringify({ reply: replyText, ...(replyAttachments.length ? { replyAttachments } : {}) }),
     });
     const data = await res.json();

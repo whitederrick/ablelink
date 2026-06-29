@@ -15,6 +15,11 @@ const PVERIFY_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   VERIFIED: { label: "승인됨", tone: "emerald" },
   REJECTED: { label: "반려됨", tone: "rose" },
 };
+const LIST_STATUS: Record<string, { label: string; tone: BadgeTone }> = {
+  PENDING:  { label: "검증 대기", tone: "amber" },
+  VERIFIED: { label: "승인", tone: "emerald" },
+  REJECTED: { label: "반려", tone: "rose" },
+};
 const PAGE_SIZE = 10;
 
 interface Item {
@@ -96,53 +101,51 @@ export default function AdminProfessionsPage() {
         />
       </div>
 
-      <div className={T.tableWrap}>
-        <table className="w-full">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[980px] table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[110px]" />{/* 신청자 */}
+            <col className="w-[130px]" />{/* 연락처 */}
+            <col className="w-[100px]" />{/* 직종 */}
+            <col className="w-[140px]" />{/* 자격번호 */}
+            <col className="w-[110px]" />{/* 자격 취득일 */}
+            <col className="w-[70px]" />{/* 경력 */}
+            <col className="w-[80px]" />{/* 증빙 */}
+            <col className="w-[100px]" />{/* 신청일 */}
+            <col className="w-[96px]" />{/* 상태 */}
+          </colgroup>
           <thead>
-            <tr>
-              <th className={T.th}>신청자</th>
-              <th className={T.th}>직종</th>
-              <th className={T.th}>자격번호</th>
-              <th className={T.th}>경력</th>
-              <th className={T.th}>신청일</th>
-              <th className={T.th}></th>
-            </tr>
+            <tr>{["신청자","연락처","직종","자격번호","자격 취득일","경력","증빙","신청일","상태"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className={T.empty}>불러오는 중…</td></tr>
+              <tr><td colSpan={9} className={T.tdCenter}>불러오는 중…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className={T.empty}>해당 상태의 자격 신청이 없습니다.</td></tr>
-            ) : (
-              pageItems.map((it) => (
-                <tr key={it.id} className={T.trBase}>
-                  <td className={T.td}>
-                    {it.worker.name} <span className="text-[13px] text-slate-500">({it.worker.phoneNumber})</span>
-                  </td>
-                  <td className={T.td}>{PROF_LABEL[it.profession] ?? it.profession}</td>
-                  <td className={T.td}>{it.certNumber || <span className="text-slate-400">미입력</span>}</td>
-                  <td className={T.td}>{it.experienceYears}년</td>
-                  <td className={T.td}>{it.createdAt.slice(0, 10)}</td>
-                  <td className={T.td}>
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button onClick={() => setDetail(it)} className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">상세·증빙</button>
-                      {it.verifyStatus === "PENDING" ? (
-                        <>
-                          <button onClick={() => decide(it.id, "reject")} className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-[13px] font-semibold text-rose-600 hover:bg-rose-50 active:scale-95">반려</button>
-                          <button onClick={() => decide(it.id, "approve")} className="inline-flex items-center justify-center rounded-lg bg-slate-950 px-2.5 py-1 text-[13px] font-black text-white hover:bg-slate-800 active:scale-95">승인</button>
-                        </>
-                      ) : (
-                        <StatusBadge status={it.verifyStatus} map={PVERIFY_BADGE} />
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
+              <tr><td colSpan={9} className={T.tdCenter}>해당 상태의 자격 신청이 없습니다.</td></tr>
+            ) : pageItems.map((it) => (
+              <tr key={it.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50`} onClick={() => setDetail(it)}>
+                <td className={`${T.td} truncate`}><span className="font-bold text-sky-600">{it.worker.name}</span></td>
+                <td className={`${T.td} truncate`}>{it.worker.phoneNumber || "-"}</td>
+                <td className={`${T.td} truncate`}>{PROF_LABEL[it.profession] ?? it.profession}</td>
+                <td className={`${T.td} truncate`}>{it.certNumber || <span className="text-slate-400">미입력</span>}</td>
+                <td className={T.td}>{it.certifiedAt ? it.certifiedAt.slice(0, 10) : <span className="text-slate-400">-</span>}</td>
+                <td className={T.td}>{it.experienceYears}년</td>
+                <td className={T.td}>
+                  {it.certDocUrl
+                    ? <span className={`${T.badge} bg-emerald-50 text-emerald-600`}>있음</span>
+                    : <span className={`${T.badge} bg-amber-50 text-amber-600`}>없음</span>}
+                </td>
+                <td className={T.td}>{it.createdAt.slice(0, 10)}</td>
+                <td className={T.td}><StatusBadge status={it.verifyStatus} map={LIST_STATUS} /></td>
+              </tr>
+            ))}
           </tbody>
         </table>
-        <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
       </div>
+
+      {filtered.length > 0 && (
+        <Pagination className="pt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+      )}
 
       {/* 상세·증빙 검토 모달 */}
       {detail && (

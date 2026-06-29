@@ -12,7 +12,7 @@ export async function GET(req: Request) {
       select: {
         id: true, name: true, planType: true, isActive: true,
         maxWorkers: true, maxSites: true,
-        trialEndsAt: true, nextBillingAt: true, subscribedAt: true, tossBillingKey: true,
+        trialEndsAt: true, nextBillingAt: true, subscribedAt: true, subscriptionCanceledAt: true, tossBillingKey: true,
         _count: { select: { managerAccounts: true, sites: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -37,6 +37,7 @@ export async function GET(req: Request) {
           subscribedAt:    subscribedAt?.toISOString() ?? null,
           nextBillingAt:   nextBillingAt?.toISOString() ?? null,
           trialEndsAt:     trialEndsAt?.toISOString() ?? null,
+          canceledAt:      a.subscriptionCanceledAt?.toISOString() ?? null,
           isTrialExpired,
           isBillingOverdue,
           hasBillingKey:   !!a.tossBillingKey,

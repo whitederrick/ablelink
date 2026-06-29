@@ -5,14 +5,16 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireAdminOrManagerSession } from "@/lib/managerScope";
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
+    // 듀얼: 운영자=전체 기관, 매니저=본인 기관
+    const session = await requireAdminOrManagerSession(req);
+    const agencyId = session.kind === "manager" ? session.agencyId : undefined;
 
     const agencies = await prisma.agency.findMany({
-      where: { id: scope.agencyId },
+      where: { ...(agencyId ? { id: agencyId } : {}) },
       include: {
         sites: { where: { isActive: true }, select: { id: true } },
         assignments: { where: { status: "ACTIVE" }, select: { id: true } },

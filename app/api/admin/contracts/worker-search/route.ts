@@ -5,11 +5,13 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireAdminOrManagerSession } from "@/lib/managerScope";
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
+    // 듀얼: 운영자=전체 기관 계약 이력, 매니저=본인 기관
+    const session = await requireAdminOrManagerSession(req);
+    const agencyId = session.kind === "manager" ? session.agencyId : undefined;
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") ?? "").trim();
 
@@ -17,7 +19,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, items: [] });
     }
 
-    const contractFilter = { some: { agencyId: scope.agencyId } };
+    const contractFilter = agencyId ? { some: { agencyId } } : { some: {} };
 
     const users = await prisma.worker.findMany({
       where: {

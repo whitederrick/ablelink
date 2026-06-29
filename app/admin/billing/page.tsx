@@ -8,12 +8,13 @@ import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
+import AgencyDetail from "../agencies/AgencyDetail";
 
 const PLAN_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
-  FREE: { label: "FREE", tone: "slate" },
+  FREE: { label: "구독 없음", tone: "slate" },
   TRIAL: { label: "TRIAL", tone: "amber" },
   STARTER: { label: "STARTER", tone: "sky" },
-  STANDARD: { label: "STANDARD", tone: "violet" },
+  STANDARD: { label: "STANDARD", tone: "sky" },
   PRO: { label: "PRO", tone: "emerald" },
 };
 const PAGE_SIZE = 10;
@@ -21,6 +22,7 @@ const PAGE_SIZE = 10;
 type BillingRow = {
   id: string; name: string; planType: string; isActive: boolean;
   subscribedAt: string | null; nextBillingAt: string | null; trialEndsAt: string | null;
+  canceledAt: string | null;
   isTrialExpired: boolean; isBillingOverdue: boolean; hasBillingKey: boolean;
   managerCount: number; siteCount: number;
 };
@@ -36,6 +38,7 @@ export default function BillingPage() {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   function load() {
     setLoading(true);
@@ -98,64 +101,80 @@ export default function BillingPage() {
         />
       </div>
 
-      {loading ? (
-        <div className="flex h-40 items-center justify-center">
-          <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
-        </div>
-      ) : (
-        <div className={T.tableWrap}>
-          <table className="w-full">
-            <thead>
-              <tr>
-                {["위탁기관","플랜","구독 시작","다음 결제","체험 종료","빌링키","관리자","현장","상태"].map(h => (
-                  <th key={h} className={T.th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={9} className={T.empty}>{rows.length===0?"데이터가 없습니다.":"조건에 맞는 결과가 없습니다."}</td></tr>
-              ) : pageItems.map(r => (
-                <tr key={r.id} className={T.trBase}>
-                  <td className={T.td}>
-                    {r.name}{!r.isActive && <span className="ml-1.5 text-[13px] text-slate-500">(비활성)</span>}
-                  </td>
-                  <td className={T.td}>
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[980px] table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[170px]" />{/* 위탁기관 */}
+            <col className="w-[100px]" />{/* 플랜 */}
+            <col className="w-[110px]" />{/* 구독 시작 */}
+            <col className="w-[120px]" />{/* 다음 결제 */}
+            <col className="w-[110px]" />{/* 체험 종료 */}
+            <col className="w-[90px]" />{/* 빌링키 */}
+            <col className="w-[84px]" />{/* 관리자 */}
+            <col className="w-[84px]" />{/* 현장 */}
+            <col className="w-[84px]" />{/* 상태 */}
+          </colgroup>
+          <thead>
+            <tr>{["위탁기관","플랜","구독 시작","다음 결제","체험 종료","빌링키","관리자","현장","상태"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={9} className={T.tdCenter}>로딩 중...</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={9} className={T.tdCenter}>{rows.length===0?"데이터가 없습니다.":"조건에 맞는 결과가 없습니다."}</td></tr>
+            ) : pageItems.map(r => {
+              const canceled = !!r.canceledAt || (r.planType === "FREE" && !!r.subscribedAt && !r.hasBillingKey);
+              return (
+              <tr key={r.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50`} onClick={() => setDetailId(r.id)}>
+                <td className={`${T.td} truncate`}>
+                  <span className="font-bold text-sky-600">{r.name}</span>{!r.isActive && <span className="ml-1.5 text-[13px] text-slate-400">(비활성)</span>}
+                </td>
+                <td className={T.td}>
+                  <span className="flex items-center gap-1.5">
                     <StatusBadge status={r.planType} map={PLAN_BADGE} />
-                  </td>
-                  <td className={T.td + " tabular-nums"}>{fmt(r.subscribedAt)}</td>
-                  <td className={T.td + " tabular-nums"}>
-                    {r.nextBillingAt ? (
-                      <span className={r.isBillingOverdue ? "font-black text-rose-600" : "text-slate-700"}>
-                        {r.isBillingOverdue && <AlertCircle className="mr-1 inline h-3.5 w-3.5" />}
-                        {fmt(r.nextBillingAt)}
-                      </span>
-                    ) : "-"}
-                  </td>
-                  <td className={T.td + " tabular-nums"}>
-                    {r.trialEndsAt ? (
-                      <span className={r.isTrialExpired ? "text-slate-400 line-through" : "text-amber-700"}>
-                        {fmt(r.trialEndsAt)}
-                      </span>
-                    ) : "-"}
-                  </td>
-                  <td className={T.td}>
-                    <span className={r.hasBillingKey ? "text-emerald-600 font-semibold" : "text-slate-400"}>
-                      {r.hasBillingKey ? "등록됨" : "없음"}
+                    {canceled && <span className={`${T.badge} bg-rose-50 text-rose-600`}>해지</span>}
+                  </span>
+                </td>
+                <td className={`${T.td} tabular-nums`}>{fmt(r.subscribedAt)}</td>
+                <td className={`${T.td} tabular-nums`}>
+                  {canceled ? (
+                    <span className="font-semibold text-rose-600">해지 {fmt(r.canceledAt)}</span>
+                  ) : r.nextBillingAt ? (
+                    <span className={r.isBillingOverdue ? "font-black text-rose-600" : "text-slate-700"}>
+                      {r.isBillingOverdue && <AlertCircle className="mr-1 inline h-3.5 w-3.5" />}{fmt(r.nextBillingAt)}
                     </span>
-                  </td>
-                  <td className={T.td + " text-center"}>{r.managerCount}명</td>
-                  <td className={T.td + " text-center"}>{r.siteCount}개소</td>
-                  <td className={T.td}>
-                    <span className={`${T.badge} ${r.isActive ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
-                      {r.isActive ? "활성" : "비활성"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+                  ) : "-"}
+                </td>
+                <td className={`${T.td} tabular-nums`}>
+                  {r.trialEndsAt ? (
+                    <span className={r.isTrialExpired ? "text-slate-400 line-through" : "text-amber-700"}>{fmt(r.trialEndsAt)}</span>
+                  ) : "-"}
+                </td>
+                <td className={T.td}>
+                  <span className={r.hasBillingKey ? "font-semibold text-emerald-600" : "text-slate-400"}>{r.hasBillingKey ? "등록됨" : "없음"}</span>
+                </td>
+                <td className={T.td}>{r.managerCount}명</td>
+                <td className={T.td}>{r.siteCount}개소</td>
+                <td className={T.td}>
+                  <span className={`${T.badge} ${r.isActive ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>{r.isActive ? "활성" : "비활성"}</span>
+                </td>
+              </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {filtered.length > 0 && (
+        <Pagination className="pt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+      )}
+
+      {/* 구독 상세 모달 — 위탁기관 상세(플랜·결제 딜 변경) 재사용 */}
+      {detailId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-5" onClick={() => setDetailId(null)}>
+          <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <AgencyDetail key={detailId} id={detailId} onClose={() => setDetailId(null)} onChanged={load} />
+          </div>
         </div>
       )}
     </div>

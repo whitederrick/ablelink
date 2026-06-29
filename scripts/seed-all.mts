@@ -164,7 +164,7 @@ async function main() {
 
       const worker = await prisma.worker.create({
         data: {
-          loginId: `coach-${ai + 1}-${w + 1}`, password: workerPw, workerName: wName, phoneNumber: phone,
+          loginId: phone.replace(/-/g, ""), password: workerPw, workerName: wName, phoneNumber: phone,
           status: "ACTIVE", openToOffers: w % 4 === 0, planType: w % 3 === 0 ? "PRO" : "FREE",
           bankName: ["국민","신한","우리","하나","농협"][w % 5], accountNumber: `1234${pad2(w)}5678${pad2(ai)}`, accountHolder: wName,
           birthDate: `19${85 + (w % 12)}-0${(w % 8) + 1}-1${w % 9}`, residenceAddress: `서울특별시 ${["성동구","마포구","노원구"][ai]} 행복로 ${w + 1}`,
@@ -206,7 +206,7 @@ async function main() {
 
   // ── 3b) 다중 기관 이력 워커 — 3개 기관에 과거/현재 배정(매칭에서 여러 위탁기관 공고 + 마켓플레이스 동시 노출 검증용) ──
   const multiWorker = await prisma.worker.create({
-    data: { loginId: "coach-multi", password: workerPw, workerName: "다기관경력", phoneNumber: "010-7777-7777",
+    data: { loginId: "01077777777", password: workerPw, workerName: "다기관경력", phoneNumber: "010-7777-7777",
       status: "ACTIVE", openToOffers: true, planType: "PRO",
       bankName: "국민", accountNumber: "7777000077", accountHolder: "다기관경력",
       birthDate: "1988-03-15", residenceAddress: "서울특별시 중구 다기관로 1" },
@@ -382,7 +382,7 @@ async function main() {
   for (let i = 0; i < REQ_PLAN.length; i++) {
     const p = REQ_PLAN[i];
     const cand = await prisma.worker.create({
-      data: { loginId: `cand-${i + 1}`, password: workerPw, workerName: NAMES[(nameIdx + i) % NAMES.length], phoneNumber: `010-4${pad2(i)}00-${pad2(i)}000`, status: "ACTIVE", openToOffers: true },
+      data: { loginId: `0104${pad2(i)}00${pad2(i)}000`, password: workerPw, workerName: NAMES[(nameIdx + i) % NAMES.length], phoneNumber: `010-4${pad2(i)}00-${pad2(i)}000`, status: "ACTIVE", openToOffers: true },
     });
     const accepted = p.status === "ACCEPTED", closed = ["REJECTED", "DROPPED", "EXPIRED"].includes(p.status), wt0 = p.wt.split(",")[0];
     await prisma.siteAssignment.create({
@@ -408,7 +408,7 @@ async function main() {
   for (let i = 0; i < TALENT.length; i++) {
     const s = TALENT[i];
     const w = await prisma.worker.create({
-      data: { loginId: `talent-${i + 1}`, password: workerPw, workerName: s.name, phoneNumber: `010-45${pad2(i)}0-${pad2(i)}000`, status: "ACTIVE", openToOffers: true,
+      data: { loginId: `01045${pad2(i)}0${pad2(i)}000`, password: workerPw, workerName: s.name, phoneNumber: `010-45${pad2(i)}0-${pad2(i)}000`, status: "ACTIVE", openToOffers: true,
         residenceAddress: s.region, bio: `${s.region} 기반 직무지도 ${s.years}년. 현장훈련·출퇴근 지도·문서화 경험.`, birthDate: `199${i % 9}-0${(i % 8) + 1}-1${i % 9}`, ratingAvg: s.avg, ratingCount: s.cnt, planType: s.pro ? "PRO" : "FREE" },
     });
     await prisma.workerProfession.create({ data: { workerId: w.id, profession: "JOB_COACH", isPrimary: true, isActive: true, experienceYears: s.years, verifyStatus: s.verify as any } });

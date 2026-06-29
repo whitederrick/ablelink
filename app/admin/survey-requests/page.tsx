@@ -3,14 +3,14 @@
 // 운영자: 직무지도원 평가 관리 — 요청 + 결과 통합.
 //  · 매니저 만족도 평가와 동일한 '배정(현장 근무) 종료' 워크리스트(전체 위탁기관 + 위탁기관명).
 //  · 상태(평가 미요청/평가 요청/평가 완료)·검색·발송 + 평가 완료 행 클릭 시 결과 상세(문항·의견·총점)·위탁기관 전달 토글.
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
-import { X, ChevronDown } from "lucide-react";
+import { X } from "lucide-react";
 
 type ReqStatus = "NONE" | "PENDING" | "RESPONDED" | "EXPIRED" | "CANCELLED";
 interface Item {
@@ -151,35 +151,54 @@ function RequestPickerModal({ onPick, onClose }: { onPick: (it: Item) => void; o
   );
 }
 
-// 평가 완료 결과 상세(운영자 전체 열람 + 위탁기관 전달 토글)
+// 평가 완료 결과 상세 — 기본: 종합·영역 요약. '상세 항목별 결과 보기' → 같은 모달에서 문항별(배점/평가) 펼침.
 function ResultDetail({ d, onToggleShare }: { d: Detail; onToggleShare: () => void }) {
+  const [showItems, setShowItems] = useState(false);
+  const hasForm = !!d.formSnapshot && d.totalScore != null;
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {d.totalScore != null
           ? <span className="rounded-xl bg-sky-600 px-3 py-1.5 text-sm font-black text-white">종합 {d.totalScore}/100</span>
           : d.overallScore != null ? <span className="rounded-xl bg-amber-500 px-3 py-1.5 text-sm font-black text-white">종합 {d.overallScore}/5</span> : null}
         {d.formSnapshot && <span className="text-xs font-semibold text-slate-400">{d.formSnapshot.title}</span>}
-        <button onClick={onToggleShare} className={`ml-auto rounded-lg px-2.5 py-1 text-xs font-bold ${d.sharedWithAgency ? "bg-emerald-50 text-emerald-600" : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}>{d.sharedWithAgency ? "위탁기관 전달됨 ✓" : "위탁기관 전달하기"}</button>
+        <div className="ml-auto flex items-center gap-2">
+          {hasForm && (
+            <button onClick={() => setShowItems(s => !s)} className="rounded-lg border border-sky-200 bg-white px-2.5 py-1 text-xs font-bold text-sky-700 hover:bg-sky-50">
+              {showItems ? "요약만 보기" : "상세 항목별 결과 보기"}
+            </button>
+          )}
+          <button onClick={onToggleShare} className={`rounded-lg px-2.5 py-1 text-xs font-bold ${d.sharedWithAgency ? "bg-emerald-50 text-emerald-600" : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}>{d.sharedWithAgency ? "위탁기관 전달됨 ✓" : "위탁기관 전달하기"}</button>
+        </div>
       </div>
-      {d.formSnapshot && d.totalScore != null ? (
-        <div className="grid gap-2 lg:grid-cols-2">
-          {d.formSnapshot.categories.map((cat, ci) => {
+      {hasForm ? (
+        <div className={showItems ? "space-y-2" : "grid gap-2 lg:grid-cols-2"}>
+          {d.formSnapshot!.categories.map((cat, ci) => {
             const cs = d.categoryScores?.find(c => c.name === cat.name);
             return (
-              <div key={ci} className="rounded-xl border border-slate-200 bg-white p-3">
-                <div className="mb-1.5 flex items-center justify-between">
-                  <p className="text-sm font-black text-slate-800">{ci + 1}. {cat.name}</p>
-                  <span className="text-sm font-black text-sky-700">{cs ? cs.score : 0}<span className="text-xs font-semibold text-slate-400">/{cat.weight}</span></span>
+              <div key={ci} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
+                  <p className="min-w-0 truncate text-sm font-black text-slate-800">{ci + 1}. {cat.name}</p>
+                  <span className="flex flex-shrink-0 items-center gap-2">
+                    {(() => { const f = Math.max(0, Math.min(5, Math.round((cat.weight ? (cs?.score ?? 0) / cat.weight : 0) * 5))); return (
+                      <span className="whitespace-nowrap text-sm leading-none tracking-[0.05em]"><span className="text-amber-400">{"★".repeat(f)}</span><span className="text-slate-200">{"★".repeat(5 - f)}</span></span>
+                    ); })()}
+                    <span className="w-[58px] text-right text-sm font-black tabular-nums text-sky-700">{cs ? cs.score : 0}<span className="text-xs font-semibold text-slate-400">/{cat.weight}</span></span>
+                  </span>
                 </div>
-                <div className="space-y-1">
-                  {cat.questions.map((q, qi) => (
-                    <div key={qi} className="flex items-center justify-between gap-3 border-t border-slate-50 pt-1 first:border-t-0 first:pt-0">
-                      <span className="text-xs text-slate-600">{q.text}</span>
-                      <span className="flex-shrink-0 text-xs font-black text-amber-500">★ {d.scores?.[`${ci}_${qi}`] ?? "-"}</span>
-                    </div>
-                  ))}
-                </div>
+                {showItems && (
+                  <div className="divide-y divide-slate-50 border-t border-slate-100">
+                    {cat.questions.map((q, qi) => (
+                      <div key={qi} className="flex items-center justify-between gap-3 px-3.5 py-2">
+                        <span className="text-[13px] text-slate-700">{qi + 1}. {q.text}</span>
+                        <span className="flex flex-shrink-0 items-center gap-2.5 text-[13px]">
+                          <span className="text-slate-400">배점 {q.maxScore}</span>
+                          <span className="font-black text-amber-500">평가 ★ {d.scores?.[`${ci}_${qi}`] ?? "-"}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -210,7 +229,7 @@ export default function AdminEvalManagePage() {
   const reload = () => setTick(t => t + 1);
   const [showPicker, setShowPicker] = useState(false);
   const [sendItem, setSendItem] = useState<Item | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [detailItem, setDetailItem] = useState<Item | null>(null);
 
   useEffect(() => { const t = setTimeout(() => setDebouncedQuery(query), 300); return () => clearTimeout(t); }, [query]);
   useEffect(() => { setPage(1); }, [debouncedQuery, stateFilter]);
@@ -266,50 +285,80 @@ export default function AdminEvalManagePage() {
       <ListToolbar query={query} onQueryChange={setQuery} placeholder="직무지도원·현장·위탁기관 검색" filters={filters} selected={stateFilter} onToggleFilter={toggle} />
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[1100px] border-collapse">
+        <table className="w-full min-w-[1180px] table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[140px]" />{/* 위탁기관 */}
+            <col className="w-[110px]" />{/* 직무지도원 */}
+            <col className="w-[150px]" />{/* 현장(사업체) */}
+            <col className="w-[120px]" />{/* 사업체 담당자 성명 */}
+            <col className="w-[130px]" />{/* 전화번호 */}
+            <col className="w-[110px]" />{/* 배정 종료 */}
+            <col className="w-[110px]" />{/* 진행 상태 */}
+            <col className="w-[110px]" />{/* 결과 */}
+            <col className="w-[100px]" />{/* 관리 */}
+          </colgroup>
           <thead><tr>{["위탁기관", "직무지도원", "현장(사업체)", "사업체 담당자 성명", "전화번호", "배정 종료", "진행 상태", "결과", "관리"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr></thead>
           <tbody>
             {loading ? <tr><td colSpan={9} className={T.tdCenter}>로딩 중...</td></tr>
             : items.length === 0 ? <tr><td colSpan={9} className={T.tdCenter}>{total === 0 ? "근무 종료된 직무지도원이 없습니다." : "조건에 맞는 대상이 없습니다."}</td></tr>
             : items.map(it => {
               const act = actionOf(it.requestStatus);
-              const detail = it.surveyId ? details[it.surveyId] : undefined;
-              const open = openId === it.assignmentId;
               return (
-                <Fragment key={it.assignmentId}>
-                  <tr className={`${T.trBase} ${act === "done" ? "cursor-pointer hover:bg-slate-50" : ""}`} onClick={() => act === "done" && setOpenId(open ? null : it.assignmentId)}>
-                    <td className={`${T.td} whitespace-nowrap`}><div className="max-w-[140px] truncate">{it.agencyName}</div></td>
-                    <td className={`${T.td} whitespace-nowrap`}>{it.workerName}</td>
-                    <td className={T.td}><div className="max-w-[140px] truncate">{it.siteName || "-"}</div></td>
-                    <td className={`${T.td} whitespace-nowrap`}>{it.recipientName || "-"}</td>
-                    <td className={`${T.td} whitespace-nowrap`}>{it.recipientPhone || (it.hasContact ? "-" : <span className="text-slate-300">연락처 없음</span>)}</td>
-                    <td className={`${T.td} whitespace-nowrap`}>{it.endDate}</td>
-                    <td className={`${T.td} whitespace-nowrap`}><StatusBadge status={it.requestStatus} map={STATUS_BADGE} /></td>
-                    <td className={`${T.td} whitespace-nowrap`}>{act === "done"
-                      ? <span className="inline-flex items-center gap-1 font-semibold text-sky-700">{it.totalScore != null ? `${it.totalScore}/100` : it.overallScore != null ? `${it.overallScore}/5` : "집계 대기"}<ChevronDown className={`h-3.5 w-3.5 text-slate-300 transition ${open ? "rotate-180" : ""}`} /></span>
-                      : "-"}</td>
-                    <td className={T.td} onClick={e => e.stopPropagation()}>
-                      {act === "needs"
-                        ? <button onClick={() => setSendItem(it)} className="inline-flex h-7 items-center rounded-lg bg-slate-950 px-2.5 text-[13px] font-bold text-white hover:bg-slate-800">{it.requestStatus === "NONE" ? "발송" : "재발송"}</button>
-                        : <span className="text-[13px] text-slate-300">{act === "requested" ? "요청됨" : "완료"}</span>}
-                    </td>
-                  </tr>
-                  {open && act === "done" && (
-                    <tr><td colSpan={9} className="bg-slate-50 px-5 py-4">
-                      {detail ? <ResultDetail d={detail} onToggleShare={() => toggleShare(detail)} /> : <p className="text-sm font-semibold text-slate-400">결과를 불러오는 중...</p>}
-                    </td></tr>
-                  )}
-                </Fragment>
+                <tr key={it.assignmentId} className={`${T.trBase} ${act === "done" ? "cursor-pointer hover:bg-slate-50" : ""}`} onClick={() => act === "done" && setDetailItem(it)}>
+                  <td className={`${T.td} truncate`}>{it.agencyName}</td>
+                  <td className={`${T.td} truncate`}><span className="font-semibold text-slate-800">{it.workerName}</span></td>
+                  <td className={`${T.td} truncate`}>{it.siteName || "-"}</td>
+                  <td className={`${T.td} truncate`}>{it.recipientName || "-"}</td>
+                  <td className={`${T.td} truncate`}>{it.recipientPhone || (it.hasContact ? "-" : <span className="text-slate-300">연락처 없음</span>)}</td>
+                  <td className={`${T.td} truncate`}>{it.endDate}</td>
+                  <td className={T.td}><StatusBadge status={it.requestStatus} map={STATUS_BADGE} /></td>
+                  <td className={`${T.td} truncate`}>{act === "done"
+                    ? <span className="font-semibold text-sky-700">{it.totalScore != null ? `${it.totalScore}/100` : it.overallScore != null ? `${it.overallScore}/5` : "집계 대기"}</span>
+                    : "-"}</td>
+                  <td className={T.td} onClick={e => e.stopPropagation()}>
+                    {act === "needs"
+                      ? <button onClick={() => setSendItem(it)} className="inline-flex h-7 items-center rounded-lg bg-slate-950 px-2.5 text-[13px] font-bold text-white hover:bg-slate-800">{it.requestStatus === "NONE" ? "발송" : "재발송"}</button>
+                      : act === "done"
+                        ? <button onClick={() => setDetailItem(it)} className="inline-flex h-7 items-center rounded-lg border border-slate-200 px-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-50">상세</button>
+                        : <span className="text-[13px] text-slate-300">요청됨</span>}
+                  </td>
+                </tr>
               );
             })}
           </tbody>
         </table>
       </div>
 
-      <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
+      <Pagination className="pt-3" page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
 
       {showPicker && <RequestPickerModal onPick={(it) => { setShowPicker(false); setSendItem(it); }} onClose={() => setShowPicker(false)} />}
       {sendItem && <SendModal item={sendItem} onClose={() => setSendItem(null)} onSent={reload} />}
+
+      {/* 평가 결과 상세 모달 */}
+      {detailItem && (
+        <div className={T.modalOverlay} onClick={() => setDetailItem(null)} style={{ zIndex: 1050 }}>
+          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h2 className="text-base font-black text-slate-900">{detailItem.workerName} <span className="font-semibold text-slate-400">· {detailItem.agencyName}</span></h2>
+                <p className="mt-0.5 text-xs font-semibold text-slate-400">{detailItem.siteName || "현장 미상"} · 배정 종료 {detailItem.endDate}</p>
+              </div>
+              <button onClick={() => setDetailItem(null)} className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-slate-50"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto pr-1">
+              {(() => {
+                const d = detailItem.surveyId ? details[detailItem.surveyId] : undefined;
+                return d
+                  ? <ResultDetail d={d} onToggleShare={() => toggleShare(d)} />
+                  : <p className="py-10 text-center text-sm font-semibold text-slate-400">결과를 불러오는 중...</p>;
+              })()}
+            </div>
+            <div className="mt-4 flex justify-end border-t border-slate-100 pt-3">
+              <button onClick={() => setDetailItem(null)} className={T.btnSecondary}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

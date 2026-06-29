@@ -26,10 +26,10 @@ const groups: NavGroup[] = [
     title: "위탁기관 데이터 관리",
     items: [
       { href: "/admin/workers",     label: "직무지도원 현황 관리" },
-      { href: "/admin/sites",       label: "현장(Site) 현황 관리" },
+      { href: "/admin/sites",       label: "현장(사업체) 현황 관리" },
       { href: "/admin/attendances", label: "근태 현황 관리" },
-      { href: "/admin/review",      label: "월별 진척도 현황" },
-      { href: "/admin/contracts",   label: "근로계약서 현황" },
+      { href: "/admin/review",      label: "월별 진척도 현황 관리" },
+      { href: "/admin/contracts",   label: "근로계약서 현황 관리" },
     ],
   },
   {

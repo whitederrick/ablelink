@@ -1,117 +1,156 @@
 "use client";
 
+// 위탁기관 관리자 관리 — 전체 위탁기관의 관리자(Manager) 계정을 운영자가 관리.
+// (자가가입 폐지로 '가입 신청 검토'는 폐기. 목록 조회 → 행 클릭 상세 모달 → 활성/비활성·비번 초기화·정보 수정, 상단 초대 발급.)
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ChevronDown, ExternalLink, XCircle } from "lucide-react";
+import { Plus, X, Copy } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
-import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
+import StatusBadge from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
 
-const REQ_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
-  PENDING: { label: "검토 중", tone: "amber" },
-  APPROVED: { label: "승인됨", tone: "emerald" },
-  REJECTED: { label: "반려됨", tone: "rose" },
-};
+const ACTIVE_MAP = { ACTIVE: { label: "활성", tone: "sky" as const }, INACTIVE: { label: "비활성", tone: "rose" as const } };
 const PAGE_SIZE = 10;
 
-type Request = {
-  id: string;
-  agencyName: string;
-  businessNumber: string;
-  businessNumberType: string;
-  loginId: string;
-  displayName: string | null;
-  phoneNumber: string | null;
-  documentUrl: string | null;
-  status: "PENDING" | "APPROVED" | "REJECTED";
-  ntsVerified: boolean;
-  ntsBusinessName: string | null;
-  reviewNote: string | null;
-  reviewedAt: string | null;
-  agencyId: string | null;
-  managerId: string | null;
-  createdAt: string;
+type Manager = {
+  id: string; loginId: string; displayName: string | null;
+  isActive: boolean; lastLoginAt: string | null; createdAt: string;
+  agencyId: string | null; agencyName: string;
 };
+type AgencyOpt = { id: string; name: string };
 
-export default function ManagerSignupRequestsPage() {
-  const [items, setItems]       = useState<Request[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [query, setQuery]       = useState("");
+export default function ManagerAccountsPage() {
+  const [items, setItems]   = useState<Manager[]>([]);
+  const [agencies, setAgencies] = useState<AgencyOpt[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery]   = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [page, setPage]         = useState(1);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [actionId, setActionId] = useState<string | null>(null);
-  const [note, setNote]         = useState("");
+  const [page, setPage]     = useState(1);
+  const [toast, setToast]   = useState("");
   const [processing, setProcessing] = useState(false);
-  const [toast, setToast]       = useState("");
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3500); };
+  // 상세 모달
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [newPw, setNewPw]       = useState("");
+
+  // 초대 모달
+  const [inviteOpen, setInviteOpen]   = useState(false);
+  const [inviteAgency, setInviteAgency] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteUrl, setInviteUrl]     = useState("");
+  const [inviteMsg, setInviteMsg]     = useState("");
+  const [inviting, setInviting]       = useState(false);
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch(`/api/admin/system/manager-signup-requests?pageSize=200`)
-      .then(r => r.json())
-      .then(d => { if (d.success) setItems(d.items ?? []); })
+    fetch("/api/admin/system/managers").then(r => r.json())
+      .then(d => { if (d.success) setItems(d.managers ?? []); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
-
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    fetch("/api/admin/system/agencies").then(r => r.json())
+      .then(d => { if (d.success) setAgencies((d.agencies ?? []).map((a: any) => ({ id: a.id, name: a.name }))); })
+      .catch(() => {});
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items
-      .filter(r => statusFilter.length === 0 || statusFilter.includes(r.status))
-      .filter(r => !q || r.agencyName.toLowerCase().includes(q) || (r.businessNumber ?? "").includes(q) || (r.loginId ?? "").toLowerCase().includes(q));
+      .filter(m => statusFilter.length === 0
+        || (statusFilter.includes("ACTIVE") && m.isActive)
+        || (statusFilter.includes("INACTIVE") && !m.isActive))
+      .filter(m => !q || m.agencyName.toLowerCase().includes(q) || m.loginId.toLowerCase().includes(q) || (m.displayName ?? "").toLowerCase().includes(q));
   }, [items, query, statusFilter]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   useEffect(() => { setPage(1); }, [query, statusFilter]);
 
-  async function doAction(id: string, action: "approve" | "reject") {
+  const detail = useMemo(() => items.find(m => m.id === detailId) ?? null, [items, detailId]);
+  function openDetail(m: Manager) { setDetailId(m.id); setEditName(m.displayName ?? ""); setNewPw(""); }
+  function closeDetail() { setDetailId(null); setNewPw(""); }
+
+  async function patch(id: string, body: any) {
     setProcessing(true);
-    const res = await fetch(`/api/admin/system/manager-signup-requests/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, reviewNote: note.trim() || null }),
+    const res = await fetch(`/api/admin/system/managers/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     const data = await res.json();
     setProcessing(false);
-    if (data.success) {
-      showToast(action === "approve" ? "승인 완료 — Manager 계정 생성됨" : "반려 완료");
-      setActionId(null);
-      setNote("");
-      load();
-    } else {
-      showToast(data.message ?? "처리 실패");
-    }
+    return data;
   }
 
-  const pending  = items.filter(r => r.status === "PENDING").length;
-  const approved = items.filter(r => r.status === "APPROVED").length;
-  const rejected = items.filter(r => r.status === "REJECTED").length;
+  async function toggleActive(m: Manager) {
+    const d = await patch(m.id, { action: "toggle-active" });
+    if (d.success) { showToast(d.message); load(); } else showToast(d.message || "실패");
+  }
+  async function saveName() {
+    if (!detail) return;
+    const d = await patch(detail.id, { action: "update", displayName: editName });
+    if (d.success) { showToast(d.message); load(); } else showToast(d.message || "저장 실패");
+  }
+  async function resetPw() {
+    if (!detail) return;
+    if (newPw.length < 8) { showToast("비밀번호는 8자 이상이어야 합니다."); return; }
+    const d = await patch(detail.id, { action: "reset-password", newPassword: newPw });
+    if (d.success) { showToast(d.message); setNewPw(""); } else showToast(d.message || "실패");
+  }
 
+  async function issueInvite() {
+    if (!inviteAgency) { setInviteMsg("위탁기관을 선택해주세요."); return; }
+    setInviting(true); setInviteUrl(""); setInviteMsg("");
+    try {
+      const res = await fetch(`/api/admin/system/agencies/${inviteAgency}/manager-invite`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail.trim() || null }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        setInviteUrl(d.inviteUrl);
+        if (d.emailSent) setInviteMsg(`초대 메일을 ${inviteEmail.trim()} 으로 발송했습니다.`);
+        else if (d.emailError) setInviteMsg(d.emailError);
+        else setInviteMsg("초대 링크를 발급했습니다. 복사해 전달해주세요.");
+      } else setInviteMsg(d.message || "초대 발급 실패");
+    } catch { setInviteMsg("서버 오류"); }
+    finally { setInviting(false); }
+  }
+  function openInvite() { setInviteOpen(true); setInviteAgency(""); setInviteEmail(""); setInviteUrl(""); setInviteMsg(""); }
+
+  const activeCnt = items.filter(m => m.isActive).length;
+  const inactiveCnt = items.length - activeCnt;
   const filters: FilterChip[] = [
-    { value: "PENDING", label: "검토 중", count: pending },
-    { value: "APPROVED", label: "승인됨", count: approved },
-    { value: "REJECTED", label: "반려됨", count: rejected },
+    { value: "ACTIVE", label: "활성", count: activeCnt },
+    { value: "INACTIVE", label: "비활성", count: inactiveCnt },
   ];
   const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
+  const COLS = ["위탁기관", "아이디", "담당자명", "마지막 로그인", "상태"];
+
   return (
     <div>
-      <PageHeader title="위탁기관 관리자 관리" sub="위탁기관 관리자의 가입 신청을 검토하고 승인 또는 반려합니다." />
+      <PageHeader
+        title="위탁기관 관리자 관리"
+        sub="전체 위탁기관의 관리자 계정을 관리합니다. 목록에서 관리자를 선택하면 활성/비활성·비밀번호 초기화·정보 수정을 할 수 있습니다."
+        actions={
+          <button onClick={openInvite} className="flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white active:scale-95">
+            <Plus className="h-4 w-4" />관리자 초대
+          </button>
+        }
+      />
 
       <StatCardRow
         className="mb-5"
-        cols={4}
+        cols={3}
         items={[
-          { label: "전체", value: items.length },
-          { label: "검토 중", value: pending, tone: "amber" },
-          { label: "승인됨", value: approved, tone: "emerald" },
-          { label: "반려됨", value: rejected, tone: "rose" },
+          { label: "전체 관리자", value: items.length },
+          { label: "활성", value: activeCnt, tone: "emerald" },
+          { label: "비활성", value: inactiveCnt, tone: "slate" },
         ]}
       />
 
@@ -119,172 +158,130 @@ export default function ManagerSignupRequestsPage() {
         <ListToolbar
           query={query}
           onQueryChange={setQuery}
-          placeholder="기관명·사업자번호·아이디 검색"
+          placeholder="기관명·아이디·담당자명 검색"
           filters={filters}
           selected={statusFilter}
           onToggleFilter={toggleStatus}
         />
       </div>
 
-      {/* 목록 */}
-      {loading ? (
-        <div className="flex h-40 items-center justify-center">
-          <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-white">
-          <p className="text-sm text-slate-400">{items.length === 0 ? "가입 신청이 없습니다." : "조건에 맞는 신청이 없습니다."}</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {pageItems.map(req => {
-            const isExpanded = expanded === req.id;
-            const isActing   = actionId === req.id;
-            return (
-              <div key={req.id} className="rounded-2xl border border-slate-100 bg-white">
-                {/* 행 헤더 */}
-                <button onClick={() => setExpanded(isExpanded ? null : req.id)}
-                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[15px] font-semibold text-slate-800">{req.agencyName}</span>
-                      <StatusBadge status={req.status} map={REQ_BADGE} />
-                      {req.ntsVerified && (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[13px] font-black text-emerald-600">
-                          국세청 검증 ✓
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-[13px] text-slate-500">
-                      {req.businessNumberType === "BUSINESS" ? "사업자번호" : "고유번호"} {req.businessNumber}
-                      &nbsp;·&nbsp;아이디 {req.loginId}
-                      {req.displayName && ` · ${req.displayName}`}
-                      &nbsp;·&nbsp;{new Date(req.createdAt).toLocaleDateString("ko-KR")}
-                    </p>
-                  </div>
-                  <ChevronDown className={`h-4 w-4 flex-shrink-0 text-slate-400 transition ${isExpanded ? "rotate-180" : ""}`} />
-                </button>
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[760px] table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[200px]" />{/* 위탁기관 */}
+            <col className="w-[150px]" />{/* 아이디 */}
+            <col className="w-[130px]" />{/* 담당자명 */}
+            <col className="w-[130px]" />{/* 마지막 로그인 */}
+            <col className="w-[90px]" />{/* 상태 */}
+          </colgroup>
+          <thead>
+            <tr>{COLS.map(h => <th key={h} className={T.th}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={COLS.length} className={T.tdCenter}>로딩 중...</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={COLS.length} className={T.tdCenter}>{items.length === 0 ? "관리자가 없습니다." : "조건에 맞는 관리자가 없습니다."}</td></tr>
+            ) : pageItems.map(m => (
+              <tr key={m.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50 ${!m.isActive ? "opacity-50" : ""}`} onClick={() => openDetail(m)}>
+                <td className={`${T.td} truncate`}><span className="font-bold text-sky-600">{m.agencyName}</span></td>
+                <td className={T.td}>{m.loginId}</td>
+                <td className={T.td}>{m.displayName || "-"}</td>
+                <td className={T.td}>{m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleDateString("ko-KR").slice(2) : "없음"}</td>
+                <td className={T.td}><StatusBadge status={m.isActive ? "ACTIVE" : "INACTIVE"} map={ACTIVE_MAP} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-                {/* 상세 패널 */}
-                {isExpanded && (
-                  <div className="border-t border-slate-100 px-4 pb-4 pt-3 space-y-4">
-                    {/* 신청 정보 */}
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                      <div>
-                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">기관명</p>
-                        <p className="font-semibold text-slate-800">{req.agencyName}</p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
-                          {req.businessNumberType === "BUSINESS" ? "사업자등록번호" : "고유번호"}
-                        </p>
-                        <p className="font-semibold text-slate-800">
-                          {req.businessNumber}
-                          {req.ntsVerified
-                            ? <span className="ml-2 text-emerald-600 text-xs font-black">✓ 국세청 검증됨</span>
-                            : <span className="ml-2 text-slate-400 text-xs">(미검증)</span>}
-                        </p>
-                      </div>
-                      {req.ntsBusinessName && (
-                        <div>
-                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">국세청 상호명</p>
-                          <p className="font-semibold text-slate-800">{req.ntsBusinessName}</p>
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">아이디</p>
-                        <p className="font-semibold text-slate-800">{req.loginId}</p>
-                      </div>
-                      {req.displayName && (
-                        <div>
-                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">담당자명</p>
-                          <p className="font-semibold text-slate-800">{req.displayName}</p>
-                        </div>
-                      )}
-                      {req.phoneNumber && (
-                        <div>
-                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">전화번호</p>
-                          <p className="font-semibold text-slate-800">{req.phoneNumber}</p>
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">신청일</p>
-                        <p className="font-semibold text-slate-800">
-                          {new Date(req.createdAt).toLocaleString("ko-KR")}
-                        </p>
-                      </div>
-                      {req.reviewedAt && (
-                        <div>
-                          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">처리일</p>
-                          <p className="font-semibold text-slate-800">
-                            {new Date(req.reviewedAt).toLocaleString("ko-KR")}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+      {filtered.length > 0 && (
+        <Pagination className="pt-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+      )}
 
-                    {/* 서류 */}
-                    {req.documentUrl && (
-                      <div>
-                        <p className="mb-1 text-[11px] font-black uppercase tracking-wide text-slate-400">첨부 서류</p>
-                        <a href={req.documentUrl} target="_blank" rel="noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-white transition">
-                          서류 보기 <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
-                        </a>
-                      </div>
-                    )}
+      {/* 상세 모달 */}
+      {detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-5" onClick={closeDetail}>
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="mb-4 flex items-center gap-2">
+              <h2 className="text-lg font-black text-slate-900">{detail.loginId}</h2>
+              <StatusBadge status={detail.isActive ? "ACTIVE" : "INACTIVE"} map={ACTIVE_MAP} />
+            </div>
+            <p className="mb-4 text-[13px] font-semibold text-slate-400">
+              {detail.agencyName} · 가입 {new Date(detail.createdAt).toLocaleDateString("ko-KR")}
+              {detail.lastLoginAt ? ` · 최근 로그인 ${new Date(detail.lastLoginAt).toLocaleDateString("ko-KR")}` : " · 로그인 없음"}
+            </p>
 
-                    {/* 기존 검토 노트 */}
-                    {req.reviewNote && req.status !== "PENDING" && (
-                      <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
-                        <p className="mb-0.5 text-[11px] font-black uppercase tracking-wide text-slate-400">검토 메모</p>
-                        <p className="text-sm text-slate-700">{req.reviewNote}</p>
-                      </div>
-                    )}
-
-                    {/* 승인/반려 액션 (PENDING만) */}
-                    {req.status === "PENDING" && (
-                      isActing ? (
-                        <div className="space-y-2">
-                          <input value={note} onChange={e => setNote(e.target.value)}
-                            placeholder="검토 메모 (선택 — 반려 사유 등)" maxLength={200}
-                            className={T.input + " w-full"} />
-                          <div className="flex gap-2">
-                            <button onClick={() => { setActionId(null); setNote(""); }}
-                              className={T.btnSecondary}>취소</button>
-                            <button onClick={() => doAction(req.id, "reject")} disabled={processing}
-                              className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-black text-rose-600 transition hover:bg-rose-50 active:scale-95 disabled:opacity-60">
-                              <XCircle className="h-4 w-4" />
-                              {processing ? "처리 중..." : "반려"}
-                            </button>
-                            <button onClick={() => doAction(req.id, "approve")} disabled={processing}
-                              className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white transition hover:bg-emerald-700 active:scale-95 disabled:opacity-60">
-                              <CheckCircle2 className="h-4 w-4" />
-                              {processing ? "처리 중..." : "승인"}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button onClick={() => { setActionId(req.id); setNote(""); }}
-                          className={T.btnPrimary}>
-                          검토하기
-                        </button>
-                      )
-                    )}
-
-                    {/* 승인 완료 시 링크 */}
-                    {req.status === "APPROVED" && req.agencyId && (
-                      <a href={`/admin/agencies/${req.agencyId}`}
-                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-sky-600 hover:underline">
-                        위탁기관 상세 보기 <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
-                    )}
-                  </div>
-                )}
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">담당자명</label>
+                <div className="flex gap-2">
+                  <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="담당자명"
+                    className={`${T.input} w-full`} />
+                  <button onClick={saveName} disabled={processing} className={`${T.btnPrimary} shrink-0`}>저장</button>
+                </div>
               </div>
-            );
-          })}
-          <Pagination className="mt-4" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">비밀번호 초기화</label>
+                <div className="flex gap-2">
+                  <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="새 비밀번호 (8자 이상)"
+                    className={`${T.input} w-full`} />
+                  <button onClick={resetPw} disabled={processing} className={`${T.btnSecondary} shrink-0`}>초기화</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-between gap-2 border-t border-slate-100 pt-4">
+              <button onClick={() => toggleActive(detail)} disabled={processing}
+                className={detail.isActive ? T.btnDanger
+                  : "inline-flex items-center justify-center min-h-10 rounded-xl border border-emerald-200 bg-white px-3 py-1.5 text-sm font-semibold text-emerald-600 transition hover:bg-emerald-50 active:scale-95"}>
+                {detail.isActive ? "비활성화" : "활성화"}
+              </button>
+              <button onClick={closeDetail} className={T.btnSecondary}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 관리자 초대 모달 */}
+      {inviteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-5" onClick={() => setInviteOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-base font-black text-slate-900">관리자 초대</p>
+              <button onClick={() => setInviteOpen(false)}><X className="h-5 w-5 text-slate-400" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">위탁기관 *</label>
+                <select value={inviteAgency} onChange={e => setInviteAgency(e.target.value)} className={`${T.select} w-full`}>
+                  <option value="">기관 선택</option>
+                  {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">이메일 (선택)</label>
+                <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="입력 시 초대 메일 자동 발송" className={`${T.input} w-full`} />
+                <p className="mt-1 text-[10px] text-slate-400">비우면 링크만 발급됩니다.</p>
+              </div>
+              {inviteMsg && <p className="text-[12px] font-semibold text-slate-600">{inviteMsg}</p>}
+              {inviteUrl && (
+                <div className="rounded-lg border border-sky-100 bg-sky-50 p-2">
+                  <p className="mb-1 text-[10px] font-black text-sky-700">초대 링크(7일)</p>
+                  <div className="flex items-center gap-1.5">
+                    <input readOnly value={inviteUrl} className="min-w-0 flex-1 rounded border border-sky-200 bg-white px-1.5 py-1 text-[10px] text-slate-700" />
+                    <button onClick={() => navigator.clipboard?.writeText(inviteUrl)}
+                      className="flex shrink-0 items-center gap-1 rounded border border-sky-200 bg-white px-1.5 py-1 text-[10px] font-black text-sky-700"><Copy className="h-3 w-3" /></button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => setInviteOpen(false)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 active:scale-95">닫기</button>
+              <button onClick={issueInvite} disabled={inviting} className="flex-1 rounded-xl bg-slate-950 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">{inviting ? "발급 중..." : "초대 발급"}</button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
 import { Prisma } from "@prisma/client";
 
 function errToStatus(msg: string) {
@@ -111,7 +111,9 @@ function toItem(r: any) {
 
 export async function GET(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
+    // 듀얼: 운영자(admin)는 전체 기관, 매니저는 본인 기관으로 스코프.
+    // (운영자 콘솔은 x-admin-context:1 헤더로 admin 우선)
+    const session = await requireAdminOrManagerSession(req);
 
     const { searchParams } = new URL(req.url);
 
@@ -132,8 +134,8 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(200, Math.max(1, Number(pageSizeStr)));
     const skip = (page - 1) * pageSize;
 
-    // ✅ requireAdminSession이 agencyId를 직접 제공
-    const agencyId: bigint | undefined = scope.agencyId ?? undefined;
+    // 매니저는 본인 agency로 제한, 운영자(admin)는 전체(undefined)
+    const agencyId: bigint | undefined = session.kind === "manager" ? session.agencyId : undefined;
 
     // 기간 형식 검증(실제 필터는 아래 where.workDate에서 from/to 문자열로 적용)
     if (from || to) {
