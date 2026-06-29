@@ -329,11 +329,66 @@ export async function GET(req: NextRequest) {
     }
   } catch (e: any) { errors.push(`급여자동생성: ${e.message}`); }
 
-  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 퇴근미실행:${missedFlagged} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent} 평가만료:${surveysExpired} 급여초안:${payrollDrafted}`, errors);
+  // ── 7. 월별 진척도 자동 독려 ──────────────────────────────────────
+  //   이번 달에 근무(배정)가 종료되는 직무지도원 중 출근부/일지가 미확정인 건이 있는 위탁기관의
+  //   담당자에게 마감 독려 알림(ManagerNotice). 진행 중 직무지도원은 제외.
+  let remindAgencies = 0;
+  try {
+    const todayKst = kstDateStr(0);
+    const ym = todayKst.slice(0, 7);
+    const [yy, mm] = ym.split("-").map(Number);
+    const dateFrom = `${ym}-01`;
+    const dateTo = `${ym}-${String(new Date(yy, mm, 0).getDate()).padStart(2, "0")}`;
+    const dtFrom = new Date(`${dateFrom}T00:00:00`);
+    const dtTo = new Date(`${dateTo}T23:59:59`);
+
+    const ending = await prisma.siteAssignment.findMany({
+      where: { status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] }, endDate: { gte: dtFrom, lte: dtTo } },
+      select: { workerId: true, agencyId: true },
+    });
+    if (ending.length) {
+      const uids = [...new Set(ending.map(e => e.workerId))];
+      const [attRows, logRows] = await Promise.all([
+        prisma.dailyAttendance.findMany({ where: { workerId: { in: uids }, workDate: { gte: dateFrom, lte: dateTo }, startTime: { not: null } }, select: { workerId: true, isFinalClosed: true } }),
+        prisma.traineeLog.findMany({ where: { writerId: { in: uids }, attendance: { workDate: { gte: dateFrom, lte: dateTo } } }, select: { writerId: true, isCompleted: true } }),
+      ]);
+      const att = new Map<string, { t: number; c: number }>(), log = new Map<string, { t: number; c: number }>();
+      for (const r of attRows) { const k = r.workerId.toString(); const m = att.get(k) ?? { t: 0, c: 0 }; m.t++; if (r.isFinalClosed) m.c++; att.set(k, m); }
+      for (const r of logRows) { const k = r.writerId.toString(); const m = log.get(k) ?? { t: 0, c: 0 }; m.t++; if (r.isCompleted) m.c++; log.set(k, m); }
+
+      const urgentByAgency = new Map<string, number>();
+      for (const e of ending) {
+        if (e.agencyId == null) continue;
+        const wk = e.workerId.toString();
+        const a = att.get(wk), l = log.get(wk);
+        const incomplete = (!!a && a.c < a.t) || (!!l && l.c < l.t);
+        if (incomplete) { const k = e.agencyId.toString(); urgentByAgency.set(k, (urgentByAgency.get(k) ?? 0) + 1); }
+      }
+
+      const since = new Date(Date.now() - 20 * 60 * 60 * 1000); // 중복 발송 방지(20h)
+      for (const [agId, cnt] of urgentByAgency) {
+        const mgrs = await prisma.manager.findMany({ where: { agencyId: BigInt(agId), isActive: true }, select: { id: true } });
+        if (!mgrs.length) continue;
+        const title = `[마감 독려] ${ym} 근무 종료 직무지도원 ${cnt}명 서류 미완료`;
+        const dup = await prisma.managerNotice.findFirst({ where: { managerId: { in: mgrs.map(m => m.id) }, title, createdAt: { gte: since } }, select: { id: true } });
+        if (dup) continue;
+        await prisma.managerNotice.createMany({
+          data: mgrs.map(m => ({
+            managerId: m.id, title,
+            body: `근무가 종료되는 직무지도원의 출근부·일지 중 미확정 건이 ${cnt}명 있습니다.\n공단 제출·정산 전에 출근부 확정 및 일지 작성을 마무리해 주세요.`,
+            link: "/manager/documents",
+          })),
+        });
+        remindAgencies++;
+      }
+    }
+  } catch (e: any) { errors.push(`진척독려: ${e.message}`); }
+
+  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 퇴근미실행:${missedFlagged} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent} 평가만료:${surveysExpired} 급여초안:${payrollDrafted} 진척독려:${remindAgencies}`, errors);
 
   return NextResponse.json({
     success: true, yesterday,
-    autoConfirmed, missedFlagged, tokensCleared, expiryNotified, exemptCreated, surveysSent, payrollDrafted,
+    autoConfirmed, missedFlagged, tokensCleared, expiryNotified, exemptCreated, surveysSent, payrollDrafted, remindAgencies,
     errors,
   });
 }
