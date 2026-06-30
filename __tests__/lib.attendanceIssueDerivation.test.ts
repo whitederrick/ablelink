@@ -10,6 +10,7 @@ function base(over: Partial<AttendanceIssueRow> = {}): AttendanceIssueRow {
     startTime: kstWallTimeToInstant(TODAY, "09:00"),
     endTime: kstWallTimeToInstant(TODAY, "18:00"),
     actualStartTime: kstWallTimeToInstant(TODAY, "09:00"),
+    actualEndTime: kstWallTimeToInstant(TODAY, "18:00"),
     startDistanceM: 10,
     rangeM: 100,
     workType: "FULL_DAY",
@@ -59,5 +60,30 @@ describe("deriveAttendanceIssues — 대시보드·인박스 공용 근태 이�
   it("실제 출근시각 없음(과거·일괄생성) → 지각 판정 안 함", () => {
     const r = deriveAttendanceIssues(base({ actualStartTime: null }), OPTS);
     expect(r).not.toContain("TIME_ANOMALY");
+  });
+
+  // ── 출퇴근 시간 이상(TIME_OUTLIER): 지각과 별개 ──
+  it("시각 역전(퇴근 ≤ 출근) → TIME_OUTLIER", () => {
+    // 출근 09:00, 퇴근 08:30 (퇴근이 출근보다 이름) — 지각/이른출근 아님
+    const r = deriveAttendanceIssues(base({ actualEndTime: kstWallTimeToInstant(TODAY, "08:30") }), OPTS);
+    expect(r).toContain("TIME_OUTLIER");
+    expect(r).not.toContain("TIME_ANOMALY");
+  });
+
+  it("표준보다 60분+ 이른 출근 → TIME_OUTLIER (지각 아님)", () => {
+    // FULL_DAY 표준 09:00, 실제 07:30 (90분 이름)
+    const r = deriveAttendanceIssues(base({ actualStartTime: kstWallTimeToInstant(TODAY, "07:30") }), OPTS);
+    expect(r).toContain("TIME_OUTLIER");
+    expect(r).not.toContain("TIME_ANOMALY");
+  });
+
+  it("표준보다 60분+ 늦은 퇴근 → TIME_OUTLIER", () => {
+    // FULL_DAY 표준 퇴근 18:00, 실제 19:30 (90분 늦음)
+    const r = deriveAttendanceIssues(base({ actualEndTime: kstWallTimeToInstant(TODAY, "19:30") }), OPTS);
+    expect(r).toContain("TIME_OUTLIER");
+  });
+
+  it("정상 출퇴근(09:00~18:00) → TIME_OUTLIER 아님", () => {
+    expect(deriveAttendanceIssues(base(), OPTS)).not.toContain("TIME_OUTLIER");
   });
 });

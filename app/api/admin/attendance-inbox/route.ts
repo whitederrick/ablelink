@@ -20,7 +20,7 @@ const EVENT_LABEL: Record<string, string> = {
   MEMO_UPDATED:         "운영 메모 갱신",
 };
 
-type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
+type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "TIME_OUTLIER" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
 type InboxStatus =
   | "ADMIN_UNCONFIRMED"
   | "WORKER_CONFIRM_REQUESTED"
@@ -151,7 +151,8 @@ export async function GET(req: Request) {
       const customWorkStart = r.assignment?.customWorkStart ?? null;
       const customWorkEnd = r.assignment?.customWorkEnd ?? null;
       const derived = deriveAttendanceIssues({
-        startTime: r.startTime, endTime: r.endTime, actualStartTime: r.actualStartTime ?? null,
+        startTime: r.startTime, endTime: r.endTime,
+        actualStartTime: r.actualStartTime ?? null, actualEndTime: r.actualEndTime ?? null,
         startDistanceM: r.startDistanceM ?? null, rangeM: r.rangeM ?? null,
         workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd,
         status: r.status, workDate: r.workDate,

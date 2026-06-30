@@ -12,7 +12,10 @@
 
 import { computeWorkTimes } from "@/lib/workSchedule";
 
-export type AttendanceIssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
+export type AttendanceIssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "TIME_OUTLIER" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
+
+// 출퇴근 시간 이상(TIME_OUTLIER) 판정 기본 마진(분) — 표준 대비 이만큼 이른 출근/늦은 퇴근이면 이상.
+export const TIME_OUTLIER_MARGIN_MIN = 60;
 
 // 대시보드·인박스 공용 기본 조회 기간(일). 두 화면의 '미확인 근태' 모집단을 같게 맞추는 기준.
 export const ATTENDANCE_ISSUE_WINDOW_DAYS = 14;
@@ -21,6 +24,7 @@ export interface AttendanceIssueRow {
   startTime: Date | null;
   endTime: Date | null;
   actualStartTime: Date | null;
+  actualEndTime: Date | null;
   startDistanceM: number | null;
   rangeM: number | null;
   workType: string | null;
@@ -58,7 +62,7 @@ export function expectedStartHHMM(row: Pick<AttendanceIssueRow, "workType" | "co
  */
 export function deriveAttendanceIssues(
   row: AttendanceIssueRow,
-  opts: { lateThresholdMin: number; todayStr: string },
+  opts: { lateThresholdMin: number; todayStr: string; outlierMarginMin?: number },
 ): AttendanceIssueType[] {
   const out: AttendanceIssueType[] = [];
 
@@ -73,6 +77,19 @@ export function deriveAttendanceIssues(
   const actualStartMin = instantToKstMin(row.actualStartTime);
   if (expectedStartMin != null && actualStartMin != null && actualStartMin - expectedStartMin >= opts.lateThresholdMin) {
     out.push("TIME_ANOMALY");
+  }
+
+  // 출퇴근 시간 이상(TIME_OUTLIER) — 지각과 별개. ① 시각 역전(퇴근≤출근) ② 표준 대비 극단 이탈.
+  const margin = opts.outlierMarginMin ?? TIME_OUTLIER_MARGIN_MIN;
+  const expectedEndMin = row.workType
+    ? hhmmToMin(computeWorkTimes(row.workType, row.commuteGuidanceIncluded ?? true, row.customWorkStart, row.customWorkEnd).end)
+    : null;
+  const actualEndMin = instantToKstMin(row.actualEndTime);
+  const inverted = row.actualStartTime != null && row.actualEndTime != null && row.actualEndTime.getTime() <= row.actualStartTime.getTime();
+  const tooEarlyIn = expectedStartMin != null && actualStartMin != null && expectedStartMin - actualStartMin >= margin; // 표준보다 margin 이상 이른 출근
+  const tooLateOut = expectedEndMin != null && actualEndMin != null && actualEndMin - expectedEndMin >= margin;          // 표준보다 margin 이상 늦은 퇴근
+  if (inverted || tooEarlyIn || tooLateOut) {
+    out.push("TIME_OUTLIER");
   }
 
   return out;

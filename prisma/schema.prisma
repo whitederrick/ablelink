@@ -1444,6 +1444,7 @@ enum AttendanceIssueType {
   MISSING_CLOCK_OUT
   OUT_OF_RANGE
   TIME_ANOMALY
+  TIME_OUTLIER
 }
 
 enum AttendanceIssueEventType {

@@ -16,7 +16,7 @@ import PageHeader from "../../_components/PageHeader";
 import Pagination from "../../_components/Pagination";
 import { T } from "../../_styles";
 
-type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
+type IssueType = "OUT_OF_RANGE" | "TIME_ANOMALY" | "TIME_OUTLIER" | "MISSING_CLOCK_IN" | "MISSING_CLOCK_OUT";
 type IssueFilter = IssueType | "ALL";
 
 type InboxStatus =
@@ -85,6 +85,7 @@ type ModalState =
 const ISSUE_LABEL: Record<IssueType, string> = {
   OUT_OF_RANGE: "기준 범위이탈",
   TIME_ANOMALY: "지각",
+  TIME_OUTLIER: "출퇴근 시간 이상",
   MISSING_CLOCK_IN: "출근 기록 누락",
   MISSING_CLOCK_OUT: "퇴근 기록 누락",
 };
@@ -92,7 +93,8 @@ const ISSUE_LABEL: Record<IssueType, string> = {
 // 콘솔 공통 소프트 톤(StatusBadge 팔레트)로 톤다운
 const ISSUE_STYLE: Record<IssueType, { className: string }> = {
   OUT_OF_RANGE: { className: "bg-amber-50 text-amber-600" }, // 기준 범위 이탈
-  TIME_ANOMALY: { className: "bg-amber-50 text-amber-600" }, // 출퇴근 시간이상
+  TIME_ANOMALY: { className: "bg-amber-50 text-amber-600" }, // 지각
+  TIME_OUTLIER: { className: "bg-orange-50 text-orange-600" }, // 출퇴근 시간 이상(역전·극단 이탈)
   MISSING_CLOCK_IN: { className: "bg-rose-50 text-rose-600" }, // 출근 기록 누락
   MISSING_CLOCK_OUT: { className: "bg-rose-50 text-rose-600" }, // 퇴근 기록 누락
 };
@@ -730,6 +732,7 @@ export default function AttendanceInboxClient() {
                   <Chip active={issues.length === 0} onClick={() => setIssues([])}>전체</Chip>
                   <Chip active={issues.includes("OUT_OF_RANGE")} onClick={() => toggleIssue("OUT_OF_RANGE")}>기준 범위 이탈</Chip>
                   <Chip active={issues.includes("TIME_ANOMALY")} onClick={() => toggleIssue("TIME_ANOMALY")}>지각</Chip>
+                  <Chip active={issues.includes("TIME_OUTLIER")} onClick={() => toggleIssue("TIME_OUTLIER")}>출퇴근 시간 이상</Chip>
                   <Chip active={issues.includes("MISSING_CLOCK_IN")} onClick={() => toggleIssue("MISSING_CLOCK_IN")}>출근 기록 누락</Chip>
                   <Chip active={issues.includes("MISSING_CLOCK_OUT")} onClick={() => toggleIssue("MISSING_CLOCK_OUT")}>퇴근 기록 누락</Chip>
                 </div>

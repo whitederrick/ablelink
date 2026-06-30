@@ -59,7 +59,7 @@ export async function GET(req: Request) {
         orderBy: { workDate: "desc" },
         select: {
           id: true, workDate: true, startTime: true, endTime: true, status: true,
-          actualStartTime: true, startDistanceM: true, rangeM: true,
+          actualStartTime: true, actualEndTime: true, startDistanceM: true, rangeM: true,
           user: { select: { workerName: true } },
           site: { select: { companyName: true } },
           assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true } },
@@ -138,7 +138,8 @@ export async function GET(req: Request) {
       .map(r => ({
         r,
         types: deriveAttendanceIssues({
-          startTime: r.startTime, endTime: r.endTime, actualStartTime: r.actualStartTime ?? null,
+          startTime: r.startTime, endTime: r.endTime,
+          actualStartTime: r.actualStartTime ?? null, actualEndTime: r.actualEndTime ?? null,
           startDistanceM: r.startDistanceM ?? null, rangeM: r.rangeM ?? null,
           workType: r.assignment?.workType ?? null,
           commuteGuidanceIncluded: r.assignment?.commuteGuidanceIncluded ?? null,
