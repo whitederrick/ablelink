@@ -31,6 +31,7 @@ const PAGE_SIZE = 10;
 
 export default function WorkersPage() {
   const [workers, setWorkers]   = useState<Worker[]>([]);
+  const [counts, setCounts]     = useState<{ total: number; byStatus: Record<string, number> } | null>(null);
   const [loading, setLoading]   = useState(true);
   const [q, setQ]               = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -76,7 +77,7 @@ export default function WorkersPage() {
   const load = useCallback(()=>{
     setLoading(true);
     fetch(`/api/admin/system/workers`)
-      .then(r=>r.json()).then(d=>{if(d.success)setWorkers(d.workers);}).catch(()=>{}).finally(()=>setLoading(false));
+      .then(r=>r.json()).then(d=>{if(d.success){setWorkers(d.workers);setCounts(d.counts ?? null);}}).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
   useEffect(()=>{load();},[load]);
 
@@ -157,7 +158,9 @@ export default function WorkersPage() {
     else showToast(assignErr(data.message));
   }
 
-  const cnt = (s:string)=>workers.filter(w=>w.status===s).length;
+  // 전체 기준 카운트(서버 groupBy) 우선, 없으면 로드된 배열 폴백
+  const cnt = (s:string)=> counts?.byStatus?.[s] ?? workers.filter(w=>w.status===s).length;
+  const totalCnt = counts?.total ?? workers.length;
   const COLS = ["성명","아이디(전화번호)","소속 위탁기관","현장","구독 유형","상태"];
 
   return (
@@ -172,7 +175,7 @@ export default function WorkersPage() {
         className="mb-5"
         cols={4}
         items={[
-          { label: "전체", value: workers.length },
+          { label: "전체", value: totalCnt },
           { label: "활성", value: cnt("ACTIVE"), tone: "emerald" },
           { label: "일시정지", value: cnt("PAUSED"), tone: "amber" },
           { label: "퇴직", value: cnt("RESIGNED"), tone: "rose" },

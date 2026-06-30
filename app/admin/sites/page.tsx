@@ -38,6 +38,7 @@ type SiteItem = {
 export default function SitesPage() {
   const [sites, setSites]   = useState<SiteItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [counts, setCounts] = useState<{ total: number; linked: number } | null>(null);
   const [q, setQ]           = useState("");
   const [detailId, setDetailId] = useState<string|null>(null);
 
@@ -47,11 +48,13 @@ export default function SitesPage() {
   const load = useCallback(()=>{
     setLoading(true);
     fetch(`/api/admin/system/sites`)
-      .then(r=>r.json()).then(d=>{if(d.success)setSites(d.sites);}).catch(()=>{}).finally(()=>setLoading(false));
+      .then(r=>r.json()).then(d=>{if(d.success){setSites(d.sites);setCounts(d.counts ?? null);}}).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
   useEffect(()=>{load();},[load]);
 
-  const linked = sites.filter(s=>s.agencyId).length;
+  // 전체 기준 count(서버) 우선, 없으면 로드된 배열 폴백
+  const totalCnt = counts?.total ?? sites.length;
+  const linked = counts?.linked ?? sites.filter(s=>s.agencyId).length;
   const filtered = useMemo(()=>{
     const query = q.trim().toLowerCase();
     return sites
@@ -76,9 +79,9 @@ export default function SitesPage() {
         className="mb-5"
         cols={3}
         items={[
-          { label: "전체 현장", value: sites.length },
+          { label: "전체 현장", value: totalCnt },
           { label: "위탁기관 연결", value: linked, tone: "emerald" },
-          { label: "미연결", value: sites.length - linked, tone: "slate" },
+          { label: "미연결", value: totalCnt - linked, tone: "slate" },
         ]}
       />
 
@@ -89,7 +92,7 @@ export default function SitesPage() {
           placeholder="현장명·주소·위탁기관 검색"
           filters={[
             { value: "linked", label: "연결", count: linked },
-            { value: "unlinked", label: "미연결", count: sites.length - linked },
+            { value: "unlinked", label: "미연결", count: totalCnt - linked },
           ] as FilterChip[]}
           selected={linkFilter}
           onToggleFilter={(v)=>setLinkFilter(p=>p.includes(v)?p.filter(x=>x!==v):[...p,v])}

@@ -27,25 +27,35 @@ export async function GET(req: Request) {
     // 직종(카테고리) 필터 — 해당 직종 자격을 보유한 인력만(배정 대상 후보)
     if (profValid) and.push({ professions: { some: { profession } } });
 
-    const users = await prisma.worker.findMany({
-      where: and.length ? { AND: and } : undefined,
-      include: {
-        professions: { select: { profession: true, verifyStatus: true } },
-        assignments: {
-          where: { status: { in: ["ACTIVE", "ASSIGNED", "CONFIRMED"] } },
-          include: {
-            site: { select: { companyName: true, agency: { select: { id: true, name: true } } } },
+    const where = and.length ? { AND: and } : undefined;
+    // 목록은 take 200 제한이지만, 상단 통계 카드/필터칩은 전체 기준이어야 함 → groupBy로 정확한 카운트 별도 산출.
+    const [users, statusGroups] = await Promise.all([
+      prisma.worker.findMany({
+        where,
+        include: {
+          professions: { select: { profession: true, verifyStatus: true } },
+          assignments: {
+            where: { status: { in: ["ACTIVE", "ASSIGNED", "CONFIRMED"] } },
+            include: {
+              site: { select: { companyName: true, agency: { select: { id: true, name: true } } } },
+            },
+            take: 1,
+            orderBy: { startDate: "desc" },
           },
-          take: 1,
-          orderBy: { startDate: "desc" },
         },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    });
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      }),
+      prisma.worker.groupBy({ by: ["status"], where, _count: { _all: true } }),
+    ]);
+    const counts = {
+      total: statusGroups.reduce((s, g) => s + g._count._all, 0),
+      byStatus: Object.fromEntries(statusGroups.map(g => [g.status, g._count._all])) as Record<string, number>,
+    };
 
     return NextResponse.json({
       success: true,
+      counts,
       workers: users.map(u => {
         const asgn = u.assignments[0];
         return {

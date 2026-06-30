@@ -12,8 +12,11 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q")?.trim() ?? "";
 
-    const sites = await prisma.site.findMany({
-      where: q ? { companyName: { contains: q } } : undefined,
+    const where = q ? { companyName: { contains: q } } : undefined;
+    // 목록 take 300 제한과 별개로, 상단 카드/칩은 전체 기준 count 사용.
+    const [sites, total, linked] = await Promise.all([
+     prisma.site.findMany({
+      where,
       include: {
         agency: { select: { id: true, name: true, planType: true } },
         ownerManager: { select: { displayName: true, loginId: true } },
@@ -25,10 +28,15 @@ export async function GET(req: Request) {
       },
       orderBy: { createdAt: "desc" },
       take: 300,
-    });
+     }),
+      prisma.site.count({ where }),
+      prisma.site.count({ where: { ...(where ?? {}), agencyId: { not: null } } }),
+    ]);
+    const counts = { total, linked };
 
     return NextResponse.json({
       success: true,
+      counts,
       sites: sites.map(s => ({
         id:          s.id.toString(),
         companyName: s.companyName,
