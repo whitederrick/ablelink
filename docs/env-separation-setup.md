@@ -49,3 +49,22 @@ npx tsx scripts/seed-all.mts   # DB_ENV=development 이므로 가드 통과, dev
 
 ## 롤백
 - 운영값으로 되돌리려면 `.env.prod.bak`을 `.env`로 복사.
+
+## ⚠️ 마이그레이션 드리프트 (fresh `migrate deploy` 실패 — 조사 결과 2026-06-30)
+**증상**: 빈 DB에 `prisma migrate deploy`로 90개를 순차 적용하면 `20260528_worker_invite_phone_verify`에서
+`relation "admin_users" does not exist` (42P01)로 실패.
+
+**원인(정밀)**:
+- admin 테이블은 `20260113121139_add_admin_user`가 **`AdminUser`**(PascalCase)로 생성하고, 이후 거의 모든 FK도 `"AdminUser"("id")`를 참조.
+- 그런데 **`20260528_worker_invite_phone_verify`·`20260610130000_admin_profile_fields` 2개만 `admin_users`(snake_case)** 를 참조 → 그 시점 실제 테이블명은 `AdminUser`라 실패.
+- 게다가 현재 `schema.prisma`는 `@@map("admins")`인데 **`AdminUser`→`admins` 리네임 마이그레이션이 존재하지 않음**(운영 테이블은 마이그레이션 밖에서 `admins`로 바뀐 상태). = 다지점 드리프트.
+
+**그래서**: 마이그레이션 히스토리는 fresh провиж닝의 신뢰원천이 아님. **스키마(`schema.prisma`)가 진실원천** → 새 환경은 `prisma db push`로 구축(현재 dev가 그렇게 됨).
+
+**고치지 말 것**: 이미 적용된 마이그레이션 SQL을 편집하면 운영 `_prisma_migrations` 체크섬이 깨져 **향후 운영 `migrate deploy`가 차단**됨. 절대 retro-edit 금지.
+
+**권장 워크플로(현재)**:
+- dev/staging 새 DB → `prisma db push` (스키마 직접 동기화).
+- 운영 → 신규 마이그레이션만 증분 `migrate deploy`(기존 히스토리 유지).
+
+**근본 정리(추후 별도 세션, 신중히)**: 베이스라인 스쿼시 — 현재 스키마로 단일 기준 마이그레이션 1개 생성 → 기존 90개 아카이브 → 운영엔 `prisma migrate resolve --applied <baseline>`로 적용표시(데이터 변경 없음). 이후 fresh replay·`migrate dev` 정상화.

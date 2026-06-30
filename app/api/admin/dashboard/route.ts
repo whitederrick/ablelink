@@ -66,9 +66,10 @@ export async function GET(req: Request) {
           attendanceIssue: { select: { status: true } },
         },
       }),
-      // 3. 제출 문서 현황 — 매니저 처리 대기(제출완료/확정/수정요청) 최근 50건
+      // 3. 제출 문서 현황 — 매니저 처리 대기(제출완료/확정/수정요청).
+      //    govStatus NONE/RESUBMIT만 = '일지 관리' 화면과 동일 모집단(공단 제출완료분은 '공단 제출 내역'으로 분리되어 제외).
       prisma.documentRun.findMany({
-        where: { agencyId: scope.agencyId, signStage: { in: ["SUBMITTED", "CONFIRMED", "CHANGES_REQUESTED"] } },
+        where: { agencyId: scope.agencyId, signStage: { in: ["SUBMITTED", "CONFIRMED", "CHANGES_REQUESTED"] }, govStatus: { in: ["NONE", "RESUBMIT"] } },
         take: 200,
         orderBy: { updatedAt: "desc" },
         select: {
