@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
         OR: [{ endDate: null }, { endDate: { gte: today } }],
       },
       include: {
-        site: { include: { trainees: { where: { status: "TRAINING" } } } },
+        site: { include: { trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } } } } },
         agency: true,
       },
       orderBy: { startDate: "desc" },

@@ -84,7 +84,7 @@ type ModalState =
 
 const ISSUE_LABEL: Record<IssueType, string> = {
   OUT_OF_RANGE: "기준 범위이탈",
-  TIME_ANOMALY: "출퇴근 시간 이상",
+  TIME_ANOMALY: "지각",
   MISSING_CLOCK_IN: "출근 기록 누락",
   MISSING_CLOCK_OUT: "퇴근 기록 누락",
 };
@@ -183,7 +183,7 @@ async function fetchInboxItems(filters: {
   customFrom: string;
   customTo: string;
   statuses: InboxStatus[];
-  issue: IssueFilter;
+  issues: IssueType[];
 }): Promise<InboxItem[]> {
   try {
     const { from, to } = resolvePeriod(filters.period, filters.customFrom, filters.customTo);
@@ -192,7 +192,7 @@ async function fetchInboxItems(filters: {
     if (filters.q.trim()) sp.set("q", filters.q.trim());
     if (from) sp.set("from", from);
     if (to) sp.set("to", to);
-    sp.set("issue", filters.issue);
+    if (filters.issues.length > 0) sp.set("issues", filters.issues.join(","));
     if (filters.statuses.length > 0) sp.set("statuses", filters.statuses.join(","));
 
     const res = await fetch(`/api/admin/attendance-inbox?${sp.toString()}`, {
@@ -352,8 +352,12 @@ export default function AttendanceInboxClient() {
   const [period, setPeriod] = useState<PeriodPreset>("LAST_14");
   const [customFrom, setCustomFrom] = useState(addDays(base, -13));
   const [customTo, setCustomTo] = useState(base);
-  const [issue, setIssue] = useState<IssueFilter>("ALL");
+  const [issues, setIssues] = useState<IssueType[]>([]); // 복수 선택(빈 배열 = 전체)
   const [onlyPayrollPending, setOnlyPayrollPending] = useState(false);
+
+  function toggleIssue(t: IssueType) {
+    setIssues((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  }
 
   // 기본: 처리완료는 숨김(필요 시 포함)
   const [statuses, setStatuses] = useState<InboxStatus[]>([
@@ -418,7 +422,7 @@ export default function AttendanceInboxClient() {
     (async () => {
       setLoading(true);
       try {
-        const data = await fetchInboxItems({ q, period, customFrom, customTo, statuses, issue });
+        const data = await fetchInboxItems({ q, period, customFrom, customTo, statuses, issues });
         if (!alive) return;
 
         setItems(data);
@@ -433,7 +437,7 @@ export default function AttendanceInboxClient() {
     return () => {
       alive = false;
     };
-  }, [q, period, customFrom, customTo, statuses, issue]);
+  }, [q, period, customFrom, customTo, statuses, issues]);
 
   useEffect(() => {
     setPage((p) => Math.min(Math.max(1, p), totalPages));
@@ -460,7 +464,7 @@ export default function AttendanceInboxClient() {
 
   // 서버에서 항목 다시 불러와 갱신(선택/페이지 유지) — 타임라인 등 반영.
   async function reloadItems() {
-    const data = await fetchInboxItems({ q, period, customFrom, customTo, statuses, issue });
+    const data = await fetchInboxItems({ q, period, customFrom, customTo, statuses, issues });
     setItems(data);
   }
 
@@ -582,9 +586,8 @@ export default function AttendanceInboxClient() {
   /** derived (detail) */
   const detailBadges = useMemo(() => {
     if (!selected) return [];
-    // ✅ 목록과 동일한 규칙/순서로 이슈 도출
-    const derived = deriveIssueTypes(selected);
-    return derived.map((t) => ({ key: t, type: t }));
+    // 서버(공용 도출 lib)가 내려준 issueTypes를 그대로 사용 — 목록/카운트/필터와 100% 일치
+    return selected.issueTypes.map((t) => ({ key: t, type: t }));
   }, [selected]);
 
   const periodLabel = useMemo(() => {
@@ -597,37 +600,8 @@ export default function AttendanceInboxClient() {
 
   const actions = useMemo(() => (selected ? getAvailableActions(selected) : null), [selected]);
 
-  function deriveIssueTypes(it: InboxItem): IssueType[] {
-    const set = new Set<IssueType>();
-
-    // 1) 출근 기록 누락
-    if (!it.clockInAt) set.add("MISSING_CLOCK_IN");
-
-    // 2) 퇴근 기록 누락
-    if (!it.clockOutAt) set.add("MISSING_CLOCK_OUT");
-
-    // 4) 기준 범위 이탈: 거리 > rangeM 이면
-    const rangeM = it.rangeM ?? null;
-    if (rangeM != null) {
-      const startBad = it.startDistanceM != null && it.startDistanceM > rangeM;
-      const endBad = it.endDistanceM != null && it.endDistanceM > rangeM;
-      if (startBad || endBad) set.add("OUT_OF_RANGE");
-    }
-
-    // ✅ Step 3) 지각(TIME_ANOMALY) — 실제 출근 버튼 시각 기준(고정시각 아님).
-    //    실제 시각 없으면(과거 기록·일괄생성) 판정 안 함. 지각 기준=현장/기관 설정값(seriousLateMin, 기본 30).
-    const expectedStartMin = getExpectedStartMin(it);
-    const actualInMin = isoToLocalMin(it.actualClockInAt);
-    const lateThreshold = Math.max(it.seriousLateMin ?? 30, 1); // 0(무관용)도 1분 이상 지각부터
-    if (expectedStartMin != null && actualInMin != null && actualInMin - expectedStartMin >= lateThreshold) {
-      set.add("TIME_ANOMALY");
-    }
-
-    return Array.from(set);
-  }
-
   function getListIssueBadges(it: InboxItem) {
-    const derived = deriveIssueTypes(it);
+    const derived = it.issueTypes; // 서버 공용 도출 결과 사용(클라 재도출 제거)
     const shown = derived.slice(0, 3);
     const rest = Math.max(0, derived.length - shown.length);
     const hasAny = derived.length > 0;
@@ -749,15 +723,15 @@ export default function AttendanceInboxClient() {
                 </button>
               </div>
 
-              {/* 이슈 필터(단일 선택) */}
+              {/* 이슈 필터(복수 선택) */}
               <div className="min-w-0 flex-1">
-                <label className="mb-1 block text-sm font-semibold text-slate-700">이슈 필터(단일 선택)</label>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">이슈 필터(복수 선택)</label>
                 <div className="flex flex-wrap gap-2">
-                  <Chip active={issue === "ALL"} onClick={() => setIssue("ALL")}>전체</Chip>
-                  <Chip active={issue === "OUT_OF_RANGE"} onClick={() => setIssue("OUT_OF_RANGE")}>기준 범위 이탈</Chip>
-                  <Chip active={issue === "TIME_ANOMALY"} onClick={() => setIssue("TIME_ANOMALY")}>출퇴근 시간 이상</Chip>
-                  <Chip active={issue === "MISSING_CLOCK_IN"} onClick={() => setIssue("MISSING_CLOCK_IN")}>출근 기록 누락</Chip>
-                  <Chip active={issue === "MISSING_CLOCK_OUT"} onClick={() => setIssue("MISSING_CLOCK_OUT")}>퇴근 기록 누락</Chip>
+                  <Chip active={issues.length === 0} onClick={() => setIssues([])}>전체</Chip>
+                  <Chip active={issues.includes("OUT_OF_RANGE")} onClick={() => toggleIssue("OUT_OF_RANGE")}>기준 범위 이탈</Chip>
+                  <Chip active={issues.includes("TIME_ANOMALY")} onClick={() => toggleIssue("TIME_ANOMALY")}>지각</Chip>
+                  <Chip active={issues.includes("MISSING_CLOCK_IN")} onClick={() => toggleIssue("MISSING_CLOCK_IN")}>출근 기록 누락</Chip>
+                  <Chip active={issues.includes("MISSING_CLOCK_OUT")} onClick={() => toggleIssue("MISSING_CLOCK_OUT")}>퇴근 기록 누락</Chip>
                 </div>
               </div>
             </div>

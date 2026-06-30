@@ -1,10 +1,11 @@
 "use client";
 
+// 훈련생 현황 (운영자) — 평면 목록(테이블) 조회. 등록·수정은 공단 관리, 운영자는 조회만.
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, MapPin } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
+import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
 
@@ -15,6 +16,7 @@ interface TraineeSummary {
     severity: string; status: string; logCount: number; lastLogDate: string | null;
   }>;
 }
+type Row = TraineeSummary["trainees"][number] & { siteId: string; siteName: string; workerName: string };
 
 const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   TRAINING:  { label: "훈련중",    tone: "sky" },
@@ -22,34 +24,32 @@ const STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   DROPOUT:   { label: "중도포기",  tone: "rose" },
   GRADUATED: { label: "수료",      tone: "slate" },
 };
+const PAGE_SIZE = 10;
 
 export default function TraineesPage() {
   const [sites, setSites] = useState<TraineeSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
-    fetch("/api/admin/trainees/summary")
+    // 운영자 콘솔 화면 — 듀얼 세션에서도 전체 기관 조회되도록 x-admin-context 부착(다른 admin 화면과 동일)
+    fetch("/api/admin/trainees/summary", { headers: { "x-admin-context": "1" }, cache: "no-store" })
       .then(r => r.json())
-      .then(d => {
-        if (d.success && Array.isArray(d.data)) {
-          setSites(d.data);
-          const init: Record<string, boolean> = {};
-          d.data.forEach((s: TraineeSummary) => { init[s.siteId] = true; });
-          setExpanded(init);
-        }
-      })
+      .then(d => { if (d.success && Array.isArray(d.data)) setSites(d.data); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  const totalTrainees = sites.reduce((s, site) => s + site.trainees.length, 0);
-  const trainingCount = sites.reduce((s, site) => s + site.trainees.filter(t => t.status === "TRAINING").length, 0);
-  const employedCount = sites.reduce((s, site) => s + site.trainees.filter(t => t.status === "EMPLOYED").length, 0);
+  // 전체 행(현장×훈련생) 평탄화
+  const allRows: Row[] = useMemo(
+    () => sites.flatMap(s => s.trainees.map(t => ({ ...t, siteId: s.siteId, siteName: s.siteName, workerName: s.workerName }))),
+    [sites],
+  );
 
-  const statusCount = (st: string) => sites.reduce((s, site) => s + site.trainees.filter(t => t.status === st).length, 0);
+  const totalTrainees = allRows.length;
+  const statusCount = (st: string) => allRows.filter(r => r.status === st).length;
   const filters: FilterChip[] = [
     { value: "TRAINING",  label: "훈련중",   count: statusCount("TRAINING") },
     { value: "EMPLOYED",  label: "취업",     count: statusCount("EMPLOYED") },
@@ -58,20 +58,18 @@ export default function TraineesPage() {
   ];
   const toggleStatus = (v: string) => setStatusFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
-  // 검색(현장/직무지도원/훈련생명) + 상태칩으로 훈련생 필터링, 매칭 0인 현장은 숨김
-  const filteredSites = useMemo(() => {
-    return sites
-      .map(site => {
-        const trainees = site.trainees.filter(t => statusFilter.length === 0 || statusFilter.includes(t.status));
-        return { ...site, trainees };
-      })
-      .filter(site => {
-        if (site.trainees.length === 0) return false;
-        if (!search) return true;
-        return site.siteName.includes(search) || site.workerName.includes(search) ||
-          site.trainees.some(t => t.name.includes(search));
-      });
-  }, [sites, search, statusFilter]);
+  const filtered = useMemo(() => {
+    const q = search.trim();
+    return allRows.filter(r => {
+      if (statusFilter.length > 0 && !statusFilter.includes(r.status)) return false;
+      if (!q) return true;
+      return r.name.includes(q) || r.siteName.includes(q) || r.workerName.includes(q);
+    });
+  }, [allRows, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
 
   return (
     <div className="space-y-5">
@@ -84,8 +82,8 @@ export default function TraineesPage() {
         cols={4}
         items={[
           { label: "전체 훈련생", value: totalTrainees },
-          { label: "훈련중", value: trainingCount, tone: "sky" },
-          { label: "취업", value: employedCount, tone: "emerald" },
+          { label: "훈련중", value: statusCount("TRAINING"), tone: "sky" },
+          { label: "취업", value: statusCount("EMPLOYED"), tone: "emerald" },
           { label: "담당 현장", value: sites.length, tone: "slate" },
         ]}
       />
@@ -93,71 +91,56 @@ export default function TraineesPage() {
       <ListToolbar
         query={search}
         onQueryChange={setSearch}
-        placeholder="현장명 / 직무지도원 / 훈련생 이름 검색"
+        placeholder="훈련생 이름 / 현장명 / 직무지도원 검색"
         filters={filters}
         selected={statusFilter}
         onToggleFilter={toggleStatus}
       />
 
-      {loading ? (
-        <p className={T.empty}>로딩 중...</p>
-      ) : filteredSites.length === 0 ? (
-        <p className={T.empty}>훈련생 정보가 없습니다.</p>
-      ) : (
-        <div className="space-y-3">
-          {filteredSites.map(site => (
-            <div key={site.siteId} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <button
-                onClick={() => setExpanded(prev => ({ ...prev, [site.siteId]: !prev[site.siteId] }))}
-                className="flex w-full items-center justify-between bg-slate-50 px-5 py-4 text-left transition hover:bg-slate-100"
-              >
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-slate-400" aria-hidden="true" />
-                    <span className="font-black text-slate-900">{site.siteName}</span>
-                  </div>
-                  <p className="pl-6 text-xs font-semibold text-slate-400">직무지도원: {site.workerName}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="rounded-full bg-sky-50 px-3 py-1 text-sm font-black text-sky-600">{site.trainees.length}명</span>
-                  {expanded[site.siteId]
-                    ? <ChevronUp className="h-4 w-4 text-slate-400" aria-hidden="true" />
-                    : <ChevronDown className="h-4 w-4 text-slate-400" aria-hidden="true" />}
-                </div>
-              </button>
-
-              {expanded[site.siteId] && (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr>
-                        {["이름", "성별", "장애유형", "중증도", "일지 수", "최근 일지", "상태"].map(h => (
-                          <th key={h} className={T.th}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {site.trainees.map(t => (
-                        <tr key={t.id} className={T.trBase}>
-                          <td className={`${T.td}`}>{t.name}</td>
-                          <td className={`${T.td}`}>{t.gender === "M" ? "남" : "여"}</td>
-                          <td className={`${T.td}`}>{t.disabilityType || "-"}</td>
-                          <td className={`${T.td}`}>{t.severity || "-"}</td>
-                          <td className={`${T.td} text-sky-600`}>{t.logCount}건</td>
-                          <td className={`${T.td}`}>{t.lastLogDate || "-"}</td>
-                          <td className={T.td}>
-                            <StatusBadge status={t.status} map={STATUS_BADGE} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <div className={T.tableWrap}>
+        <table className="w-full table-fixed">
+          <colgroup>
+            <col className="w-[14%]" /><col className="w-[20%]" /><col className="w-[12%]" />
+            <col className="w-[6%]" /><col className="w-[14%]" /><col className="w-[9%]" />
+            <col className="w-[8%]" /><col className="w-[10%]" /><col className="w-[9%]" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className={T.th}>훈련생</th>
+              <th className={T.th}>현장(사업체)</th>
+              <th className={T.th}>직무지도원</th>
+              <th className={T.th}>성별</th>
+              <th className={T.th}>장애유형</th>
+              <th className={T.th}>중증도</th>
+              <th className={T.th}>일지 수</th>
+              <th className={T.th}>최근 일지</th>
+              <th className={T.th}>상태</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={9} className={T.empty}>로딩 중...</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={9} className={T.empty}>{sites.length === 0 ? "훈련생 정보가 없습니다." : "조건에 맞는 훈련생이 없습니다."}</td></tr>
+            ) : (
+              pageRows.map(r => (
+                <tr key={r.id} className={T.trBase}>
+                  <td className={`${T.td} font-bold text-slate-900`}><div className="truncate">{r.name}</div></td>
+                  <td className={T.td}><div className="truncate">{r.siteName}</div></td>
+                  <td className={T.td}><div className="truncate">{r.workerName}</div></td>
+                  <td className={T.td}>{r.gender === "M" ? "남" : "여"}</td>
+                  <td className={T.td}><div className="truncate">{r.disabilityType || "-"}</div></td>
+                  <td className={T.td}><div className="truncate">{r.severity || "-"}</div></td>
+                  <td className={`${T.td} text-sky-600`}>{r.logCount}건</td>
+                  <td className={T.td}>{r.lastLogDate || "-"}</td>
+                  <td className={T.td}><StatusBadge status={r.status} map={STATUS_BADGE} /></td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+        <Pagination className="border-t border-slate-100 px-4 py-3" page={page} totalPages={totalPages} total={filtered.length} onPageChange={setPage} />
+      </div>
     </div>
   );
 }

@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
     // 훈련생 수
     const traineeCount = assignment
       ? await prisma.trainee.count({
-          where: { currentSiteId: assignment.siteId, status: "TRAINING" },
+          where: { currentSiteId: assignment.siteId, status: { in: ["TRAINING", "EMPLOYED"] } },
         })
       : 0;
 

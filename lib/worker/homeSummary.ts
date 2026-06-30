@@ -99,7 +99,7 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     include: {
       assignments: {
         where: { status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
-        include: { site: { include: { trainees: true, agency: true } } },
+        include: { site: { include: { trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } } }, agency: true } } },
       },
       attendances: { where: { workDate: today } },
     },
@@ -142,7 +142,7 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
   const missingAttendances = await prisma.dailyAttendance.findMany({
     where: { workerId, workDate: { gte: from }, logs: { none: { writerId: workerId } } },
     include: {
-      site: { select: { companyName: true, trainees: { where: { status: "TRAINING" }, select: { id: true, name: true, gender: true } } } },
+      site: { select: { companyName: true, trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true, name: true, gender: true } } } },
       assignment: { select: { serviceStep: true, adaptationStartDate: true } },
     },
     orderBy: { workDate: "desc" },

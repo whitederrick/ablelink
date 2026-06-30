@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
         select: {
           companyName: true,
           businessContactName: true,
-          trainees: { where: { status: "TRAINING" }, select: { id: true, name: true, gender: true } },
+          trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true, name: true, gender: true } },
         },
       },
     },

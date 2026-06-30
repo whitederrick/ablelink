@@ -9,11 +9,17 @@ export async function GET(req: Request) {
   try {
     await requireAdminSession(req);
 
+    // 훈련생 카드 숫자는 훈련생 현황 화면(/admin/trainees, ACTIVE 배정 현장의 TRAINING)과 동일 모집단으로 맞춤.
+    // (이전엔 전체 TRAINING count라 화면과 어긋났고 카드 링크도 현장 화면을 가리켰음)
+    const activeSiteIds = (
+      await prisma.siteAssignment.findMany({ where: { status: "ACTIVE" }, select: { siteId: true }, distinct: ["siteId"] })
+    ).map(a => a.siteId);
+
     const [agencyCount, workerCount, siteCount, traineeCount, subCount] = await Promise.all([
       prisma.agency.count(),
       prisma.worker.count(),
       prisma.site.count(),
-      prisma.trainee.count({ where: { status: "TRAINING" } }),
+      prisma.trainee.count({ where: { status: "TRAINING", currentSiteId: { in: activeSiteIds } } }),
       prisma.agency.count({ where: { planType: { in: ["STARTER", "STANDARD", "PRO"] } } }),
     ]);
 

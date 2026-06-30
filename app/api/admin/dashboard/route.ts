@@ -6,6 +6,9 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { getKstDateString } from "@/lib/time";
+import { getConfigNumber } from "@/lib/systemConfig";
+import { deriveAttendanceIssues, ATTENDANCE_ISSUE_WINDOW_DAYS } from "@/lib/attendance/issueDerivation";
 
 export async function GET(req: Request) {
   try {
@@ -13,7 +16,9 @@ export async function GET(req: Request) {
     const agencyFilter = { agencyId: scope.agencyId };
 
     const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10);
+    // 저장 workDate는 KST 기준 문자열(lib/time)이므로 오늘도 KST로 산출.
+    // (UTC toISOString 사용 시 KST 자정~오전9시에 '어제'를 오늘로 집계하는 버그)
+    const todayStr = getKstDateString();
     const now = new Date();
 
     const in5Days = new Date(today); in5Days.setDate(in5Days.getDate() + 5);
@@ -22,6 +27,9 @@ export async function GET(req: Request) {
     const issueFloorStr = issueFloor.toISOString().slice(0, 10);
     // 근무 종료(배정 종료일 경과) 후 만족도 평가 미요청 — 최근 60일 이내 종료분만 환기(스테일 누적 방지)
     const endedFloor = new Date(today); endedFloor.setDate(endedFloor.getDate() - 60);
+
+    // 지각(TIME_ANOMALY) 판정 임계(분) — 인박스와 동일 운영설정값 사용
+    const lateThresholdMin = await getConfigNumber("LATE_THRESHOLD_MIN");
 
     // ── 6개 쿼리 병렬 실행 ────────────────────────────────────────
     const [
@@ -51,10 +59,10 @@ export async function GET(req: Request) {
         orderBy: { workDate: "desc" },
         select: {
           id: true, workDate: true, startTime: true, endTime: true, status: true,
-          startDistanceM: true, rangeM: true,
+          actualStartTime: true, startDistanceM: true, rangeM: true,
           user: { select: { workerName: true } },
           site: { select: { companyName: true } },
-          assignment: { select: { workType: true } },
+          assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true } },
           attendanceIssue: { select: { status: true } },
         },
       }),
@@ -84,7 +92,9 @@ export async function GET(req: Request) {
         where: { isActive: true, agencyId: scope.agencyId },
         select: {
           id: true, companyName: true,
-          assignments: { where: { status: "ACTIVE" }, select: { id: true } },
+          // 미배정 판정 = ACTIVE뿐 아니라 ASSIGNED(계약 대기)·CONFIRMED(연결 대기)도 '배정 있음'으로 간주
+          // (시스템 충원 판정 assignedCount와 동일 기준). 0건일 때만 미배정.
+          assignments: { where: { status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } }, select: { id: true } },
         },
       }),
       // 6. 근무 종료(배정 종료일 경과) — 만족도 평가 미요청 환기 후보(최근 60일)
@@ -121,8 +131,21 @@ export async function GET(req: Request) {
     });
 
     // 최근 출근기록 → 근태 이슈 직접 도출(RESOLVED 제외). 인박스 열람 여부와 무관하게 정확.
+    // 도출 규칙은 인박스와 공용 함수(lib/attendance/issueDerivation)로 통일. 면제 배정은 인박스와 동일하게 제외.
     const derivedIssues = recentAttendances
-      .map(r => ({ r, types: deriveDashboardIssueTypes(r, todayStr) }))
+      .filter(r => !r.assignment?.attendanceButtonExempt)
+      .map(r => ({
+        r,
+        types: deriveAttendanceIssues({
+          startTime: r.startTime, endTime: r.endTime, actualStartTime: r.actualStartTime ?? null,
+          startDistanceM: r.startDistanceM ?? null, rangeM: r.rangeM ?? null,
+          workType: r.assignment?.workType ?? null,
+          commuteGuidanceIncluded: r.assignment?.commuteGuidanceIncluded ?? null,
+          customWorkStart: r.assignment?.customWorkStart ?? null,
+          customWorkEnd: r.assignment?.customWorkEnd ?? null,
+          status: r.status, workDate: r.workDate,
+        }, { lateThresholdMin, todayStr }),
+      }))
       .filter(x => x.types.length > 0 && x.r.attendanceIssue?.status !== "RESOLVED")
       .map(x => ({
         id: x.r.id.toString(),
@@ -132,6 +155,12 @@ export async function GET(req: Request) {
         issueTypes: x.types,
         createdAt: x.r.startTime ? x.r.startTime.toISOString() : new Date(`${x.r.workDate}T00:00:00Z`).toISOString(),
       }));
+
+    // '미확인 근태' 헤드라인/분해 카운트는 인박스 기본 조회기간(최근 14일, t-13~t)과 동일 모집단으로 한정 →
+    // '더 보기'(인박스 기본 LAST_14)와 숫자가 일치. (45일 전체 derivedIssues는 아래 운영 리스크 알림에만 사용)
+    const windowFloor = new Date(today); windowFloor.setDate(windowFloor.getDate() - (ATTENDANCE_ISSUE_WINDOW_DAYS - 1));
+    const windowFloorStr = getKstDateString(windowFloor);
+    const recentIssues = derivedIssues.filter(i => i.workDate >= windowFloorStr);
 
     const todayWorking = todayAttendances.filter(a => a.startTime && !a.isFinalClosed).length;
     const todayDone = todayAttendances.filter(a => a.isFinalClosed).length;
@@ -215,16 +244,18 @@ export async function GET(req: Request) {
           todayDone,
           logDoneCount,
           logPendingCount,
-          unconfirmedCount: derivedIssues.length,
+          unconfirmedCount: recentIssues.length,
           docPendingSubmit,
           docOverdue,
           endingIn5,
           endingIn10: endingSoonAssignments.length,
           unassignedSiteCount: unassignedSites.length,
-          unassignedSiteList: unassignedSites.slice(0, 10).map(s => ({ id: s.id.toString(), companyName: s.companyName })),
+          unassignedSiteList: unassignedSites.map(s => ({ id: s.id.toString(), companyName: s.companyName })),
         },
-        attendanceIssueList: derivedIssues.slice(0, 10),
-        docList: docRunsOpen.slice(0, 8).map(r => ({
+        // 헤드라인(unconfirmedCount)과 동일한 14일 모집단 전체를 반환(슬라이스 금지) — 클라가 유형별
+        // (출퇴근누락·지각/범위이탈)로 분해 카운트하므로 일부만 주면 분해 합계가 헤드라인과 어긋남.
+        attendanceIssueList: recentIssues,
+        docList: docRunsOpen.map(r => ({
           id: r.id.toString(),
           docType: r.docType,
           docTypeLabel: docTypeLabel(r.docType),
@@ -235,7 +266,7 @@ export async function GET(req: Request) {
           hasVersion: !!r.currentVersionId,
           signStage: r.signStage,
         })),
-        assignmentAlerts: endingSoonAssignments.slice(0, 8).map(a => ({
+        assignmentAlerts: endingSoonAssignments.map(a => ({
           id: a.id.toString(),
           workerName: a.user?.workerName || "-",
           siteName: a.site?.companyName || "-",
@@ -265,33 +296,6 @@ export async function GET(req: Request) {
     console.error("[admin/dashboard]", error);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
-}
-
-// 인박스와 동일 기준으로 출근기록에서 이슈 도출(범위이탈/누락/시간이상).
-// 진행 중(오늘 WORKING·미퇴근)은 '퇴근 누락'으로 보지 않음.
-function deriveDashboardIssueTypes(
-  r: {
-    workDate: string; status: string;
-    startTime: Date | null; endTime: Date | null;
-    startDistanceM: number | null; rangeM: number | null;
-    assignment: { workType: string | null } | null;
-  },
-  todayStr: string,
-): string[] {
-  const out: string[] = [];
-  if (!r.startTime) out.push("MISSING_CLOCK_IN");
-  if (!r.endTime && !(r.workDate === todayStr && r.status === "WORKING")) out.push("MISSING_CLOCK_OUT");
-  if (r.startDistanceM != null && r.rangeM != null && r.startDistanceM > r.rangeM) out.push("OUT_OF_RANGE");
-
-  const wt = r.assignment?.workType ?? null;
-  const exp = wt === "PM" ? 13 * 60 : (wt === "AM" || wt === "FULL_DAY") ? 9 * 60 : null;
-  if (exp != null && r.startTime) {
-    const kst = new Date(r.startTime.getTime() + 9 * 3600000);
-    const actual = kst.getUTCHours() * 60 + kst.getUTCMinutes();
-    const diff = actual - exp;
-    if (diff >= 1 || diff <= -60) out.push("TIME_ANOMALY");
-  }
-  return out;
 }
 
 function formatHHMM(d: Date) {

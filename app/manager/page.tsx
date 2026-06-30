@@ -294,7 +294,7 @@ export default function AdminDashboardPage() {
           {/* 근태 현황 */}
           <Section title="근태 현황" sub="근무 중 직무지도원 근태 현황" count={s?.unconfirmedCount} onMore={() => router.push("/manager/inbox/attendance")}>
             <ActionRow
-              label="출퇴근 기록 누락"
+              label="출퇴근 누락·지각"
               count={timeIssues.length} urgent={timeIssues.length > 0}
               onCountClick={() => setPopup(p => p === "attendance_time" ? null : "attendance_time")}
               showPopup={popup === "attendance_time"}

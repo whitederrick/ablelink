@@ -4,10 +4,11 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
-import { computeWorkTimes } from "@/lib/workSchedule";
 import { getKstDateString } from "@/lib/time";
 import { getConfigNumber } from "@/lib/systemConfig";
 import { isPayrollPending, lateMinutes, earlyLeaveMinutes, SERIOUS_LATE_MIN } from "@/lib/attendance/payrollGate";
+// 근태 이슈 도출은 대시보드와 공용(lib/attendance/issueDerivation)으로 통일
+import { deriveAttendanceIssues, expectedStartHHMM } from "@/lib/attendance/issueDerivation";
 
 // 타임라인 이벤트(AttendanceIssueEvent.type) → 한글 라벨
 const EVENT_LABEL: Record<string, string> = {
@@ -26,68 +27,6 @@ type InboxStatus =
   | "WORKER_REASON_MISSING"
   | "WORKER_REPLIED"
   | "ADMIN_RESOLVED";
-
-function hhmmToMin(hhmm: string | null | undefined): number | null {
-  if (!hhmm) return null;
-  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
-  if (!m) return null;
-  return Number(m[1]) * 60 + Number(m[2]);
-}
-
-// 근무형태별 표준 출근시각(HH:MM) — 단일 출처(lib/workSchedule)에서 계산
-function getExpectedStartHHMM(row: {
-  workType: string | null;
-  commuteGuidanceIncluded: boolean | null;
-  customWorkStart: string | null;
-  customWorkEnd: string | null;
-}): string | null {
-  if (!row.workType) return null;
-  return computeWorkTimes(
-    row.workType,
-    row.commuteGuidanceIncluded ?? true,
-    row.customWorkStart,
-    row.customWorkEnd,
-  ).start;
-}
-
-// 저장된 instant(UTC) → KST 벽시계 분(0~1439). 서버가 UTC 이므로 +9h 후 UTC 필드로 환산.
-function instantToKstMin(d: Date | null | undefined): number | null {
-  if (!d || Number.isNaN(d.getTime())) return null;
-  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
-  return kst.getUTCHours() * 60 + kst.getUTCMinutes();
-}
-
-// 지각 판정 임계(분): 실제 출근이 표준보다 이만큼 이상 늦으면 이상 표시(운영자 설정값, 기본 15)
-function deriveIssueTypes(row: {
-  startTime: Date | null;
-  endTime: Date | null;
-  actualStartTime: Date | null;
-  startDistanceM: number | null;
-  rangeM: number | null;
-  workType: string | null;
-  commuteGuidanceIncluded: boolean | null;
-  customWorkStart: string | null;
-  customWorkEnd: string | null;
-}, lateThresholdMin: number): IssueType[] {
-  const out: IssueType[] = [];
-
-  if (!row.startTime) out.push("MISSING_CLOCK_IN");
-  if (!row.endTime) out.push("MISSING_CLOCK_OUT");
-
-  if (row.startDistanceM != null && row.rangeM != null && row.startDistanceM > row.rangeM) {
-    out.push("OUT_OF_RANGE");
-  }
-
-  // ✅ 지각 판정은 출근부 고정시각이 아니라 "실제 출근 버튼 시각" 기준.
-  //    실제 시각이 없으면(과거 기록·기간 일괄생성 등) 판정하지 않음 → 오탐 방지.
-  const expectedStartMin = hhmmToMin(getExpectedStartHHMM(row));
-  const actualStartMin = instantToKstMin(row.actualStartTime);
-  if (expectedStartMin != null && actualStartMin != null && actualStartMin - expectedStartMin >= lateThresholdMin) {
-    out.push("TIME_ANOMALY");
-  }
-
-  return out;
-}
 
 function mapIssueStatusToInboxStatus(issue: {
   status: "OPEN" | "REQUESTED" | "REPLIED" | "RESOLVED";
@@ -117,7 +56,12 @@ export async function GET(req: Request) {
     const q = (searchParams.get("q") ?? "").trim();
     const from = searchParams.get("from");
     const to = searchParams.get("to");
-    const issue = (searchParams.get("issue") ?? "ALL").toUpperCase();
+    // 이슈 필터 — 복수 선택(issues=A,B,C). 구버전 단일 param(issue=) 하위호환.
+    const issuesParam = (searchParams.get("issues") ?? "").trim();
+    const legacyIssue = (searchParams.get("issue") ?? "").trim().toUpperCase();
+    const issueFilter: string[] = issuesParam
+      ? issuesParam.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean)
+      : (legacyIssue && legacyIssue !== "ALL" ? [legacyIssue] : []);
     const statusesParam = (searchParams.get("statuses") ?? "").trim();
 
     const statuses: InboxStatus[] = statusesParam
@@ -206,13 +150,14 @@ export async function GET(req: Request) {
       const commuteGuidanceIncluded = r.assignment?.commuteGuidanceIncluded ?? true;
       const customWorkStart = r.assignment?.customWorkStart ?? null;
       const customWorkEnd = r.assignment?.customWorkEnd ?? null;
-      const derived = deriveIssueTypes({
+      const derived = deriveAttendanceIssues({
         startTime: r.startTime, endTime: r.endTime, actualStartTime: r.actualStartTime ?? null,
         startDistanceM: r.startDistanceM ?? null, rangeM: r.rangeM ?? null,
         workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd,
-      }, lateThresholdMin);
+        status: r.status, workDate: r.workDate,
+      }, { lateThresholdMin, todayStr: today });
       if (derived.length === 0) continue;
-      const expectedStartAt = getExpectedStartHHMM({ workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd });
+      const expectedStartAt = expectedStartHHMM({ workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd });
       candidates.push({ r, derived, workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd, expectedStartAt });
     }
 
@@ -263,7 +208,8 @@ export async function GET(req: Request) {
       });
 
       if (statuses.length > 0 && !statuses.includes(inboxStatus)) continue;
-      if (issue !== "ALL" && !upserted.issueTypes.includes(issue as any)) continue;
+      // 복수 이슈 필터 — 선택한 유형 중 하나라도 포함하면 통과(OR)
+      if (issueFilter.length > 0 && !issueFilter.some((t) => (upserted.issueTypes as any[]).includes(t))) continue;
 
       // 급여 보호 게이트: 심한지각(30분+) 미컨펌일 = 출근부 '보정대기'(급여 산정 보류)
       const gateInput = {

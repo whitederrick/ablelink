@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
           select: {
             companyName: true,
             trainees: {
-              where: { status: "TRAINING" },
+              where: { status: { in: ["TRAINING", "EMPLOYED"] } },
               select: { id: true, name: true, gender: true },
             },
           },

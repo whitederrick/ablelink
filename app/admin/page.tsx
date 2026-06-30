@@ -18,7 +18,7 @@ const STAT_CARDS = [
   { key: "agencyCount",          icon: Building2,  label: "위탁기관",   href: "/admin/agencies", color: "text-violet-600 bg-violet-50" },
   { key: "workerCount",          icon: Users,      label: "직무지도원", href: "/admin/workers",  color: "text-sky-600 bg-sky-50" },
   { key: "siteCount",            icon: MapPin,     label: "현장(사업체)", href: "/admin/sites",    color: "text-emerald-600 bg-emerald-50" },
-  { key: "traineeCount",         icon: Users,      label: "훈련생",     href: "/admin/sites",    color: "text-amber-600 bg-amber-50" },
+  { key: "traineeCount",         icon: Users,      label: "훈련생",     href: "/admin/trainees", color: "text-amber-600 bg-amber-50" },
   { key: "activeSubscriptions",  icon: CreditCard, label: "유료 구독",  href: "/admin/billing",  color: "text-rose-600 bg-rose-50" },
 ] as const;
 
