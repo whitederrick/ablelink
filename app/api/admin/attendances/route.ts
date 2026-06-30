@@ -78,6 +78,14 @@ function toItem(r: any) {
     isFinalClosed: Boolean(r.isFinalClosed),
     finalizedAt: asIso(r.finalizedAt),
 
+    // 일지 상태(대시보드 '일지 미완료'와 동일 기준): 미작성(none)·임시저장(draft)·완료(done)
+    // none/draft = 일지 미완료(대시보드 logPendingCount), done = 완료(logDoneCount)
+    logStatus: (() => {
+      const ls = Array.isArray(r.logs) ? r.logs : [];
+      if (ls.length === 0) return "none";
+      return ls.every((l: any) => l.isCompleted) ? "done" : "draft";
+    })(),
+
     site: r.site
       ? {
           id: String(r.site.id),
@@ -207,6 +215,7 @@ export async function GET(req: NextRequest) {
           status: true,
           isFinalClosed: true,
           finalizedAt: true,
+          logs: { select: { isCompleted: true } },
 
           site: { select: { id: true, companyName: true, address: true, agencyId: true } },
           user: { select: { id: true, workerName: true, loginId: true, phoneNumber: true, role: true, status: true } },

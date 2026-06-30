@@ -232,10 +232,10 @@ export default function AdminDashboardPage() {
   // 정렬: daily(매일 챙겨야 하는 것)를 앞, 기간·마감성(보고서·배정 종료)을 뒤로.
   const SUMMARY_CARDS = [
     // ── daily ──
-    { label: "오늘 근무",       value: s?.todayWorking ?? 0,        unit: "명", urgent: false, onClick: () => router.push("/manager/attendances") },
+    { label: "오늘 근무",       value: s?.todayWorking ?? 0,        unit: "명", urgent: false, onClick: () => router.push("/manager/attendances?day=today&status=working") },
     { label: "미확인 근태",     value: s?.unconfirmedCount ?? 0,    unit: "건", urgent: (s?.unconfirmedCount ?? 0) > 0, onClick: () => router.push("/manager/inbox/attendance") },
     { label: "출근부 수정 요청", value: pendingEditReqs,             unit: "건", urgent: pendingEditReqs > 0, onClick: () => router.push("/manager/attendance-edit-requests") },
-    { label: "일지 미완료",     value: s?.logPendingCount ?? 0,     unit: "건", urgent: (s?.logPendingCount ?? 0) > 0, onClick: () => router.push("/manager/logs"), sub: `완료: ${s?.logDoneCount ?? 0}건` },
+    { label: "일지 미완료",     value: s?.logPendingCount ?? 0,     unit: "건", urgent: (s?.logPendingCount ?? 0) > 0, onClick: () => router.push("/manager/attendances?day=today&log=pending"), sub: `완료: ${s?.logDoneCount ?? 0}건` },
     // ── 기간·마감성 ──
     { label: "문서 확정 대기", value: s?.docPendingSubmit ?? 0,    unit: "건", urgent: (s?.docPendingSubmit ?? 0) > 0, onClick: () => router.push("/manager/documents") },
     { label: "문서 서명 대기", value: s?.docOverdue ?? 0,          unit: "건", urgent: false, onClick: () => router.push("/manager/documents") },

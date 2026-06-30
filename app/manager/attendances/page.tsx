@@ -20,6 +20,12 @@ const ATT_BADGE = {
   gps: { label: "이탈", tone: "amber" as const },
   normal: { label: "정상", tone: "emerald" as const },
 };
+// 일지 상태 뱃지(대시보드 '일지 미완료'와 동일 기준): 완료/임시저장/미작성
+const LOG_BADGE = {
+  done: { label: "완료", tone: "emerald" as const },
+  draft: { label: "임시저장", tone: "amber" as const },
+  none: { label: "미작성", tone: "rose" as const },
+};
 
 const AttendanceMap = dynamic(() => import("./AttendanceMap"), { ssr: false });
 
@@ -29,6 +35,7 @@ type AttendanceItem = {
   actualStartTime: string | null; actualEndTime: string | null;
   isFinalClosed: boolean; isGpsModified: boolean;
   status: string;
+  logStatus: "done" | "draft" | "none";
   startLocLat: string | null; startLocLon: string | null;
   endLocLat: string | null;   endLocLon: string | null;
   startDistanceM: number | null; endDistanceM: number | null;
@@ -43,6 +50,10 @@ function pad2(n: number) { return String(n).padStart(2, "0"); }
 function getDefaultYearMonth() {
   const d = new Date();
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+}
+function getTodayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 function formatTime(iso: string | null) {
   if (!iso) return "-";
@@ -160,6 +171,21 @@ export default function AttendancesPage() {
   const [csvLoading, setCsvLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [logFilter, setLogFilter] = useState<string[]>([]);   // 일지상태 필터(done/draft/none)
+  const [todayOnly, setTodayOnly] = useState(false);           // '오늘만' 필터(대시보드 오늘 카드 딥링크)
+
+  // 딥링크: ?day=today(오늘만) / ?status=working(근태상태) / ?log=pending|draft|none(일지상태)
+  //  - 대시보드 '오늘 근무' → ?day=today&status=working
+  //  - 대시보드 '일지 미완료' → ?day=today&log=pending (=미작성+임시저장)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("day") === "today") setTodayOnly(true);
+    const st = params.get("status");
+    if (st) setStatusFilter(st.split(",").filter(Boolean));
+    const lg = params.get("log");
+    if (lg) setLogFilter(lg === "pending" ? ["draft", "none"] : lg.split(",").filter(Boolean));
+    if (params.toString()) window.history.replaceState(null, "", "/manager/attendances");
+  }, []);
 
   async function downloadCsv(type: "attendance" | "logs") {
     setCsvLoading(true);
@@ -219,12 +245,17 @@ export default function AttendancesPage() {
       k === "before" ? !i.startTime :
       k === "gps" ? i.isGpsModified : false);
   }
+  const today = getTodayStr();
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    // '오늘만'·일지상태 필터는 목록 모드 전용(월별/지도는 월 전체 유지 — 숨은 필터 혼란 방지)
+    const listOnly = viewMode === "list";
     return items.filter(i =>
       (!q || (i.user?.workerName ?? "").toLowerCase().includes(q) || (i.site?.companyName ?? "").toLowerCase().includes(q))
-      && matchStatus(i, statusFilter));
-  }, [items, search, statusFilter]);
+      && matchStatus(i, statusFilter)
+      && (!listOnly || !todayOnly || i.workDate === today)
+      && (!listOnly || logFilter.length === 0 || logFilter.includes(i.logStatus)));
+  }, [items, search, statusFilter, todayOnly, logFilter, today, viewMode]);
 
   const clockedIn = filtered.filter(i => i.startTime).length;
   const finalized = filtered.filter(i => i.isFinalClosed).length;
@@ -233,7 +264,16 @@ export default function AttendancesPage() {
   // 목록 페이징(월 데이터 클라 분할). 지도·월별현황은 전체 사용.
   const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE));
   const pageItems = filtered.slice((page - 1) * LIST_PAGE_SIZE, page * LIST_PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [yearMonth, search, viewMode, statusFilter]);
+  useEffect(() => { setPage(1); }, [yearMonth, search, viewMode, statusFilter, todayOnly, logFilter]);
+
+  // 일지상태 필터칩 카운트 — '오늘만' 적용 시 오늘 모집단 기준(대시보드 카드와 일치)
+  const logBase = todayOnly ? items.filter(i => i.workDate === today) : items;
+  const logFilters: FilterChip[] = [
+    { value: "done",  label: "일지완료",   count: logBase.filter(i => i.logStatus === "done").length },
+    { value: "draft", label: "임시저장",   count: logBase.filter(i => i.logStatus === "draft").length },
+    { value: "none",  label: "일지미작성", count: logBase.filter(i => i.logStatus === "none").length },
+  ];
+  const toggleLog = (v: string) => setLogFilter(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
 
   const statusFilters: FilterChip[] = [
     { value: "working", label: "근무중", count: items.filter(i => i.startTime && !i.isFinalClosed).length },
@@ -301,6 +341,34 @@ export default function AttendancesPage() {
         }
       />
 
+      {viewMode === "list" && (
+        <div className="-mt-2 flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setTodayOnly(v => !v)}
+            className={`inline-flex min-h-10 items-center rounded-full border px-3.5 text-[13px] font-bold transition ${
+              todayOnly ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            오늘만
+          </button>
+          <span className="ml-1 text-[13px] font-bold text-slate-400">일지</span>
+          {logFilters.map(f => {
+            const active = logFilter.includes(f.value);
+            return (
+              <button
+                key={f.value}
+                onClick={() => toggleLog(f.value)}
+                className={`inline-flex min-h-10 items-center rounded-full border px-3.5 text-[13px] font-bold transition ${
+                  active ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                {f.label} {f.count}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex flex-col items-center gap-3 py-10">
           <div className="h-7 w-7 animate-spin rounded-full border-[2.5px] border-slate-200 border-t-slate-950" />
@@ -318,7 +386,7 @@ export default function AttendancesPage() {
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                {["날짜", "직무지도원 성명(아이디)", "전화번호", "현장(사업체)", "출근", "퇴근", "상태", "GPS", "출근 거리"].map(h => (
+                {["날짜", "직무지도원 성명(아이디)", "전화번호", "현장(사업체)", "출근", "퇴근", "상태", "일지", "GPS", "출근 거리"].map(h => (
                   <th key={h} className={T.th}>{h}</th>
                 ))}
               </tr>
@@ -352,6 +420,9 @@ export default function AttendancesPage() {
                   </td>
                   <td className={`${T.td} text-left`}>
                     <StatusBadge status={row.isFinalClosed ? "done" : row.startTime ? "working" : "before"} map={ATT_BADGE} />
+                  </td>
+                  <td className={`${T.td} text-left`}>
+                    <StatusBadge status={row.logStatus} map={LOG_BADGE} />
                   </td>
                   <td className={`${T.td} text-left`}>
                     {row.isGpsModified
