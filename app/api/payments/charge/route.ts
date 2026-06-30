@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel } from "@/lib/billing";
+import { outboundAllowed } from "@/lib/outboundGuard";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const CRON_SECRET = process.env.CRON_SECRET || "";
@@ -28,6 +29,12 @@ export async function POST(request: NextRequest) {
     new URL(request.url).searchParams.get("secret");
   if (!CRON_SECRET || secret !== CRON_SECRET) {
     return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+  }
+
+  // dev 안전모드: 로컬에서 실제 토스 결제가 나가지 않도록 차단(OUTBOUND_LIVE=1로 강제 가능)
+  if (!outboundAllowed()) {
+    console.log("[charge] dev 안전모드 — 실제 결제 건너뜀");
+    return NextResponse.json({ success: true, skipped: true, reason: "dev 안전모드(OUTBOUND_LIVE=1로 강제)" });
   }
 
   const today = new Date();

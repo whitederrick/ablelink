@@ -16,6 +16,8 @@
 //   KAKAO_CONTRACT_SIGNED_TEMPLATE_CODE  서명 완료 안내   → worker/contracts: 기존회원 앱 내 알림
 //   KAKAO_CONTRACT_EXPIRY_TEMPLATE_CODE  계약 만료 D-30/7/1 → cron/daily: 앱 내 알림
 
+import { outboundAllowed, logOutboundSkip } from "./outboundGuard";
+
 export interface AlimtalkButton {
   name: string;
   linkType: "WL" | "AL" | "BK" | "MD";
@@ -34,6 +36,7 @@ export interface AlimtalkParams {
 
 /** 단건 알림톡 발송. 템플릿 미등록 또는 자격증명 없으면 throw. */
 export async function sendAlimtalk(params: AlimtalkParams): Promise<void> {
+  if (!outboundAllowed()) { logOutboundSkip("alimtalk", `to=${params.phone} tpl=${params.templateCode}`); return; }
   const apiKey    = process.env.KAKAO_ALIMTALK_API_KEY;
   const userid    = process.env.KAKAO_ALIMTALK_USERID;
   const senderKey = process.env.KAKAO_ALIMTALK_SENDER_KEY;

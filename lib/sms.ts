@@ -1,9 +1,11 @@
 // lib/sms.ts — 알리고 SMS 발송 유틸
+import { outboundAllowed, logOutboundSkip } from "./outboundGuard";
 
 export async function sendSms(params: {
   phone: string;
   message: string;
 }): Promise<void> {
+  if (!outboundAllowed()) { logOutboundSkip("sms", `to=${params.phone}`); return; }
   const apiKey  = process.env.KAKAO_ALIMTALK_API_KEY;
   const userid  = process.env.KAKAO_ALIMTALK_USERID;
   const sender  = process.env.KAKAO_ALIMTALK_SENDER_PHONE;

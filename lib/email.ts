@@ -6,6 +6,7 @@
 //   RESEND_FROM_EMAIL — 기본 발신자, 예: "Able-Link <noreply@able-link.co.kr>"
 //                       (Resend에서 도메인 인증 완료 후 사용 가능)
 import { Resend } from "resend";
+import { outboundAllowed, logOutboundSkip } from "./outboundGuard";
 
 // ⚠️ Resend는 API 키 없이 생성자를 호출하면 throw → 모듈 로드(빌드 시점)에 만들지 않고
 //    실제 발송 시점에 지연 생성한다. (빌드의 page data 수집 단계에서 키 미주입으로 실패 방지)
@@ -33,6 +34,7 @@ export async function sendEmailWithPdf(opts: {
   pdfBuffer: Buffer;
   fileName: string;
 }) {
+  if (!outboundAllowed()) { logOutboundSkip("email", `to=${opts.to} · ${opts.subject}`); return; }
   const { error } = await getResend().emails.send({
     from: opts.from || DEFAULT_FROM,
     to: [opts.to],
@@ -53,6 +55,7 @@ export async function sendEmailWithAttachments(opts: {
   attachments: { filename: string; content: Buffer }[];
   from?: string;
 }) {
+  if (!outboundAllowed()) { logOutboundSkip("email", `to=${Array.isArray(opts.to) ? opts.to.join(",") : opts.to} · ${opts.subject}`); return; }
   const { error } = await getResend().emails.send({
     from: opts.from || DEFAULT_FROM,
     to: Array.isArray(opts.to) ? opts.to : [opts.to],
@@ -70,6 +73,7 @@ export async function sendSimpleEmail(opts: {
   subject: string;
   text: string;
 }) {
+  if (!outboundAllowed()) { logOutboundSkip("email", `to=${opts.to} · ${opts.subject}`); return; }
   const { error } = await getResend().emails.send({
     from: DEFAULT_FROM,
     to: [opts.to],

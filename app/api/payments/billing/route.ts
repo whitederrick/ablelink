@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
 import { requireManagerSession } from "@/lib/managerScope";
 import { PLAN_PRICES, PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel } from "@/lib/billing";
+import { outboundAllowed } from "@/lib/outboundGuard";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const TOSS_API = "https://api.tosspayments.com/v1";
@@ -20,6 +21,14 @@ function tossAuth() {
 export async function POST(request: NextRequest) {
   try {
     const scope = await requireManagerSession(request);
+
+    // dev 안전모드: 로컬에서 실제 토스 빌링키 발급·결제가 나가지 않도록 차단
+    if (!outboundAllowed()) {
+      return NextResponse.json(
+        { success: false, message: "[dev 안전모드] 실제 결제가 차단되었습니다. (운영에서만 실행 · OUTBOUND_LIVE=1로 강제 가능)" },
+        { status: 503 },
+      );
+    }
 
     const body = await request.json();
     const { agencyId, planType, authKey, customerKey } = body;
