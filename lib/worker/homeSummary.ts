@@ -128,7 +128,8 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     id: n.id.toString(), title: n.title, body: n.body, type: n.type, kind: n.kind ?? "NOTICE_INDIVIDUAL",
     yearMonth: n.yearMonth, link: n.link ?? null, read: n.readAt !== null, createdAt: n.createdAt.toISOString(),
   }));
-  const unreadCount = rawNotices.filter((n: any) => !n.readAt).length;
+  // 벨 미확인 수는 take 20 목록이 아니라 전체 기준으로 정확히 산출(>20건일 때 과소표기 방지)
+  const unreadCount: number = await (prisma as any).workerNotice.count({ where: { workerId, readAt: null } });
 
   const setting = await prisma.workerNotificationSetting.findUnique({
     where: { workerId },
