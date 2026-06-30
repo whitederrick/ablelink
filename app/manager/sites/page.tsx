@@ -42,10 +42,19 @@ export default function AdminSitesPage() {
   const [creating, setCreating] = useState(false);
   // 활성/비활성 필터(복수 선택). 미선택 또는 둘 다 = 전체.
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  // 대시보드 '전체 목록 보기'(미배정 Site) → ?filter=unassigned 진입 시 미배정 필터 적용
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("filter") === "unassigned") {
+      setStatusFilter(p => (p.includes("unassigned") ? p : [...p, "unassigned"]));
+    }
+  }, []);
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
 
   const isActiveParam =
-    statusFilter.length === 1 ? (statusFilter[0] === "active" ? "true" : "false") : "all";
+    statusFilter.includes("active") && !statusFilter.includes("inactive") ? "true"
+    : statusFilter.includes("inactive") && !statusFilter.includes("active") ? "false"
+    : "all";
+  const unassignedOnly = statusFilter.includes("unassigned"); // 미배정(활성 배정 0)
 
   async function fetchList(targetPage: number) {
     setLoading(true);
@@ -55,6 +64,7 @@ export default function AdminSitesPage() {
       sp.set("page", String(targetPage));
       sp.set("pageSize", String(pageSize));
       sp.set("isActive", isActiveParam);
+      if (unassignedOnly) sp.set("unassigned", "1");
       const res = await fetch(`/api/admin/sites?${sp.toString()}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok || !data?.success) throw new Error(data?.message || "FAILED");
@@ -94,7 +104,7 @@ export default function AdminSitesPage() {
 
       <ListToolbar query={q} onQueryChange={setQ} onSearch={onSearch}
         placeholder="현장(사업체)/주소/담당자명/메일/전화/기관 검색"
-        filters={[{ value: "active", label: "활성 현장" }, { value: "inactive", label: "비활성 현장" }]}
+        filters={[{ value: "active", label: "활성 현장" }, { value: "inactive", label: "비활성 현장" }, { value: "unassigned", label: "미배정" }]}
         selected={statusFilter}
         onToggleFilter={toggleStatus} />
 

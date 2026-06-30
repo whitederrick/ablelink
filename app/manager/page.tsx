@@ -53,11 +53,12 @@ const RISK_ROUTE: Record<string, string> = {
   survey_due: "/manager/workers",
 };
 
-function ActionRow({ label, count, urgent, onCountClick, showPopup, popupItems, onPopupItemClick, onPopupClose, renderPopupItem }: {
+function ActionRow({ label, count, urgent, onCountClick, showPopup, popupItems, onPopupItemClick, onPopupClose, renderPopupItem, onViewAll }: {
   label: string; count: number; urgent?: boolean;
   onCountClick: () => void; showPopup: boolean;
   popupItems: any[]; onPopupItemClick: (item: any) => void;
   onPopupClose: () => void; renderPopupItem: (item: any) => React.ReactNode;
+  onViewAll?: () => void; // 있으면 팝업 하단에 '전체 목록 보기' → 해당 화면(필터 적용)으로
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -71,7 +72,7 @@ function ActionRow({ label, count, urgent, onCountClick, showPopup, popupItems, 
   }, [showPopup, onPopupClose]);
 
   return (
-    <div className="flex items-center justify-between border-b border-slate-50 py-2.5 last:border-b-0">
+    <div className="flex items-center justify-between border-b border-slate-50 py-[7px] last:border-b-0">
       <div className="flex items-center gap-2">
         <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${urgent ? "bg-rose-500" : "bg-slate-300"}`} />
         <span className="text-sm font-semibold text-slate-700">{label}</span>
@@ -104,6 +105,14 @@ function ActionRow({ label, count, urgent, onCountClick, showPopup, popupItems, 
                 {renderPopupItem(item)}
               </button>
             ))}
+            {onViewAll && (
+              <button
+                onClick={() => { onViewAll(); onPopupClose(); }}
+                className="sticky bottom-0 block w-full border-t border-slate-100 bg-slate-50 px-4 py-2.5 text-center text-xs font-black text-sky-600 transition hover:bg-sky-50"
+              >
+                전체 목록 보기 →
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -116,7 +125,7 @@ function Section({ title, sub, titleRight, count, onMore, children }: {
   onMore?: () => void; children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 pb-2.5">
       <div className="mb-3 flex items-start justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -148,7 +157,7 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
-  const [popup, setPopup] = useState<null | "attendance_gps" | "attendance_time" | "doc_pending" | "doc_overdue" | "assign_ending" | "unassigned_site">(null);
+  const [popup, setPopup] = useState<null | "attendance_gps" | "attendance_time" | "attendance_outlier" | "doc_pending" | "doc_overdue" | "assign_ending" | "unassigned_site">(null);
   // 하단 3개 목록 페이지네이션(5개씩)
   const [riskPage, setRiskPage]     = useState(1);
   const [todayPage, setTodayPage]   = useState(1);
@@ -216,6 +225,7 @@ export default function AdminDashboardPage() {
 
   const gpsIssues = d?.attendanceIssueList.filter(i => i.issueTypes.includes("OUT_OF_RANGE")) ?? [];
   const timeIssues = d?.attendanceIssueList.filter(i => i.issueTypes.includes("MISSING_CLOCK_IN") || i.issueTypes.includes("MISSING_CLOCK_OUT") || i.issueTypes.includes("TIME_ANOMALY")) ?? [];
+  const outlierIssues = d?.attendanceIssueList.filter(i => i.issueTypes.includes("TIME_OUTLIER")) ?? [];
   const docPendingList = d?.docList.filter(r => r.signStage === "SUBMITTED") ?? [];   // 확정 대기
   const docOverdueList = d?.docList.filter(r => r.signStage === "CONFIRMED") ?? [];   // 서명 대기
 
@@ -237,7 +247,13 @@ export default function AdminDashboardPage() {
 
   // 하단 3개 목록 페이지네이션(5개씩)
   const PAGE = 5;
-  const todayAll  = d?.todayList ?? [];
+  // 오늘 출근 현황: 출근시각 오름차순(미출근=뒤로) 정렬 — 이슈 뱃지 유무와 무관하게 일관 표시
+  const todayAll  = [...(d?.todayList ?? [])].sort((a, b) => {
+    if (!a.clockIn && !b.clockIn) return 0;
+    if (!a.clockIn) return 1;
+    if (!b.clockIn) return -1;
+    return a.clockIn.localeCompare(b.clockIn);
+  });
   const riskAll   = d?.riskAlerts ?? [];
   const todayPages  = Math.max(1, Math.ceil(todayAll.length / PAGE));
   const riskPages   = Math.max(1, Math.ceil(riskAll.length / PAGE));
@@ -301,6 +317,23 @@ export default function AdminDashboardPage() {
               popupItems={timeIssues}
               onPopupItemClick={(item: any) => router.push(`/manager/inbox/attendance?q=${encodeURIComponent(item.workerName)}&focus=${item.id}`)}
               onPopupClose={() => setPopup(null)}
+              onViewAll={() => router.push("/manager/inbox/attendance?issues=MISSING_CLOCK_IN,MISSING_CLOCK_OUT,TIME_ANOMALY")}
+              renderPopupItem={(item: any) => (
+                <div className="flex justify-between">
+                  <span><span className="font-black">{item.workerName}</span> · {item.siteName}</span>
+                  <span className="text-slate-400">{item.workDate}</span>
+                </div>
+              )}
+            />
+            <ActionRow
+              label="출퇴근 시간 이상"
+              count={outlierIssues.length} urgent={false}
+              onCountClick={() => setPopup(p => p === "attendance_outlier" ? null : "attendance_outlier")}
+              showPopup={popup === "attendance_outlier"}
+              popupItems={outlierIssues}
+              onPopupItemClick={(item: any) => router.push(`/manager/inbox/attendance?q=${encodeURIComponent(item.workerName)}&focus=${item.id}`)}
+              onPopupClose={() => setPopup(null)}
+              onViewAll={() => router.push("/manager/inbox/attendance?issues=TIME_OUTLIER")}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
                   <span><span className="font-black">{item.workerName}</span> · {item.siteName}</span>
@@ -316,6 +349,7 @@ export default function AdminDashboardPage() {
               popupItems={gpsIssues}
               onPopupItemClick={(item: any) => router.push(`/manager/inbox/attendance?q=${encodeURIComponent(item.workerName)}&focus=${item.id}`)}
               onPopupClose={() => setPopup(null)}
+              onViewAll={() => router.push("/manager/inbox/attendance?issues=OUT_OF_RANGE")}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
                   <span><span className="font-black">{item.workerName}</span> · {item.siteName}</span>
@@ -335,6 +369,7 @@ export default function AdminDashboardPage() {
               popupItems={docPendingList}
               onPopupItemClick={(item: any) => router.push(`/manager/documents?q=${encodeURIComponent(item.workerName)}&focus=${item.id}`)}
               onPopupClose={() => setPopup(null)}
+              onViewAll={() => router.push("/manager/documents?stage=SUBMITTED")}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
                   <span><span className="font-black">{item.siteName}</span> · {item.workerName}</span>
@@ -350,6 +385,7 @@ export default function AdminDashboardPage() {
               popupItems={docOverdueList}
               onPopupItemClick={(item: any) => router.push(`/manager/documents?q=${encodeURIComponent(item.workerName)}&focus=${item.id}`)}
               onPopupClose={() => setPopup(null)}
+              onViewAll={() => router.push("/manager/documents?stage=CONFIRMED")}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
                   <span><span className="font-black">{item.siteName}</span> · {item.workerName}</span>
@@ -369,6 +405,7 @@ export default function AdminDashboardPage() {
               popupItems={d?.assignmentAlerts ?? []}
               onPopupItemClick={(item: any) => router.push(`/manager/workers?q=${encodeURIComponent(item.workerName)}`)}
               onPopupClose={() => setPopup(null)}
+              onViewAll={() => router.push("/manager/workers?assignState=ending")}
               renderPopupItem={(item: any) => (
                 <div className="flex justify-between">
                   <span><span className="font-black">{item.workerName}</span> · {item.siteName}</span>
@@ -386,6 +423,7 @@ export default function AdminDashboardPage() {
               popupItems={d?.summary?.unassignedSiteList ?? []}
               onPopupItemClick={(item: any) => router.push(`/manager/sites?q=${encodeURIComponent(item.companyName)}&focus=${item.id}`)}
               onPopupClose={() => setPopup(null)}
+              onViewAll={() => router.push("/manager/sites?filter=unassigned")}
               renderPopupItem={(item: any) => (
                 <div className="flex items-center gap-2">
                   <span className="font-black">{item.companyName}</span>
@@ -413,15 +451,15 @@ export default function AdminDashboardPage() {
               <>
                 <div>
                   {todaySlice.map(row => (
-                    <div key={row.id} className="flex items-center justify-between border-b border-slate-50 py-2 last:border-b-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-black text-slate-900">{row.workerName}</span>
+                    <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_104px_52px] items-center gap-2 border-b border-slate-50 py-2 last:border-b-0">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-sm font-black text-slate-900">{row.workerName}</span>
                         {row.hasIssue && (
-                          <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-black text-rose-600">이슈</span>
+                          <span className="shrink-0 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-black text-rose-600">이슈</span>
                         )}
                       </div>
-                      <span className="text-xs font-semibold text-slate-400">{row.clockIn || "-"} ~ {row.clockOut || "-"}</span>
-                      <span className={`text-xs font-black ${LOG_CLS[row.logStatus] || "text-slate-400"}`}>
+                      <span className="whitespace-nowrap text-left text-xs font-semibold tabular-nums text-slate-400">{row.clockIn || "-"} ~ {row.clockOut || "-"}</span>
+                      <span className={`text-right text-xs font-black ${LOG_CLS[row.logStatus] || "text-slate-400"}`}>
                         {row.logStatus}
                       </span>
                     </div>

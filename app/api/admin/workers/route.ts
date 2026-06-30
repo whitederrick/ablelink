@@ -108,6 +108,11 @@ export async function GET(req: NextRequest) {
     if (stateSel.includes("ended")) {
       stateOr.push({ assignments: { some: { ...agencyScope, status: { in: [AssignStatus.ACTIVE, AssignStatus.CONFIRMED] }, endDate: { lt: todayStart } } } });
     }
+    if (stateSel.includes("ending")) {
+      // 배정 종료 임박 — 대시보드와 동일: ACTIVE & 종료일 오늘~+10일
+      const in10 = new Date(todayStart); in10.setUTCDate(in10.getUTCDate() + 10);
+      stateOr.push({ assignments: { some: { ...agencyScope, status: AssignStatus.ACTIVE, endDate: { gte: todayStart, lte: in10 } } } });
+    }
     if (stateOr.length) {
       listWhere.AND = [...(Array.isArray(listWhere.AND) ? listWhere.AND : listWhere.AND ? [listWhere.AND] : []), { OR: stateOr }];
     }

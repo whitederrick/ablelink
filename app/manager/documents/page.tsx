@@ -49,6 +49,11 @@ export default function ManagerDocumentsHub() {
     if (sf) setFocusId(sf);
   }, []);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  // 대시보드 '전체 목록 보기' → ?stage=SUBMITTED|CONFIRMED 로 진입 시 해당 상태 필터 적용
+  useEffect(() => {
+    const st = new URLSearchParams(window.location.search).get("stage");
+    if (st) setStatusFilter(st.split(",").map(s => s.trim()).filter(Boolean));
+  }, []);
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState("");

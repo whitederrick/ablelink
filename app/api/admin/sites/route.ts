@@ -89,6 +89,10 @@ export async function GET(req: NextRequest) {
     const and: Prisma.SiteWhereInput[] = [];
     if (typeof isActive === "boolean") and.push({ isActive });
     if (agencyId) and.push({ agencyId });
+    // 미배정(활성 배정 0) 필터 — 대시보드 '직무지도원 미배정 Site' 전체 보기. assignedCount(ASSIGNED/CONFIRMED/ACTIVE)와 동일 기준.
+    if (searchParams.get("unassigned") === "1") {
+      and.push({ assignments: { none: { status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } } } });
+    }
 
     // ✅ 같은 위탁기관 관리자는 기관의 모든 현장을 공유한다(agency 단위 스코프).
     //    ownerManagerId는 가시성 게이트가 아니라 '담당자 표시'용으로만 사용. (운영자(admin)는 전체)

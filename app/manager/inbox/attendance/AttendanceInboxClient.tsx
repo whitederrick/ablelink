@@ -384,8 +384,13 @@ export default function AttendanceInboxClient() {
     const sp = new URLSearchParams(window.location.search);
     const sq = sp.get("q");
     const sf = sp.get("focus");
+    const si = sp.get("issues"); // 대시보드 '전체 목록 보기' → 해당 이슈 필터 사전 적용(기간은 기본 14일=대시보드 카운트와 동일)
     if (sq) { setQ(sq); setPeriod("LAST_30"); }  // 과거 건도 보이도록 기간 확장
     if (sf) setFocusId(sf);
+    if (si) {
+      const valid = ["OUT_OF_RANGE", "TIME_ANOMALY", "TIME_OUTLIER", "MISSING_CLOCK_IN", "MISSING_CLOCK_OUT"];
+      setIssues(si.split(",").map((s) => s.trim().toUpperCase()).filter((v) => valid.includes(v)) as IssueType[]);
+    }
   }, []);
 
   const selected = useMemo(() => items.find((x) => x.id === selectedId) ?? null, [items, selectedId]);

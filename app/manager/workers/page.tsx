@@ -1090,6 +1090,7 @@ export default function WorkersPage() {
         filters={[
           { value: "working", label: "근무중" },
           { value: "pending_contract", label: "계약 대기" },
+          { value: "ending", label: "배정 종료 임박" },
           { value: "ended", label: "근무 종료" },
         ]}
         selected={assignState}
