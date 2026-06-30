@@ -14,8 +14,10 @@ try {
 } catch {}
 
 import { PrismaClient } from "@prisma/client";
+import { assertWritableDb } from "./_dbGuard.mts";
 
 const prisma = new PrismaClient();
+assertWritableDb("전체 데이터 초기화(admins 외 TRUNCATE)");
 
 // 보존할 테이블: 운영자 계정 + 마이그레이션 이력
 const KEEP = new Set(["admins", "_prisma_migrations"]);

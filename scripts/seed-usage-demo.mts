@@ -1,11 +1,13 @@
 // AI 사용량 데모 — 이번 달 기관별 ApiCallLog(직무지도원 포함) 재생성.
 import { prisma } from "../lib/prisma";
+import { assertWritableDb } from "./_dbGuard.mts";
 
 const SERVICES = ["GROQ_STT", "GEMINI_LOG", "GEMINI_BATCH"];
 function rnd(min: number, max: number) { return min + Math.floor(Math.random() * (max - min + 1)); }
 function pick<T>(a: T[]): T | null { return a.length ? a[Math.floor(Math.random() * a.length)] : null; }
 
 async function main() {
+  assertWritableDb("AI 사용량 데모(apiCallLog 전체 deleteMany)");
   const now = new Date();
   const year = now.getFullYear(), month = now.getMonth();
   const maxDay = Math.min(28, now.getDate());

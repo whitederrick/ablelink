@@ -26,7 +26,9 @@ try {
 } catch {}
 
 import { PrismaClient } from "@prisma/client";
+import { assertWritableDb } from "./_dbGuard.mts";
 const prisma = new PrismaClient();
+assertWritableDb("종합 시드(admins 외 전체 wipe)");
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const KEEP = new Set(["admins", "_prisma_migrations"]);

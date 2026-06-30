@@ -14,7 +14,9 @@ try {
 } catch {}
 
 import { PrismaClient } from "@prisma/client";
+import { assertWritableDb } from "./_dbGuard.mts";
 const prisma = new PrismaClient();
+assertWritableDb("백업 복원(대량 write)");
 
 const KEEP = new Set(["admins", "_prisma_migrations"]);
 

@@ -1,7 +1,9 @@
 // scripts/cleanup-hanseoyeon.mts — 한서연(인재풀)의 데모현장 잘못된 배정 정리
 import { prisma } from "../lib/prisma";
+import { assertWritableDb } from "./_dbGuard.mts";
 
 async function main() {
+  assertWritableDb("한서연 데모 배정 정리(deleteMany)");
   const workers = await prisma.worker.findMany({ where: { workerName: "한서연" }, select: { id: true, loginId: true } });
   if (workers.length === 0) { console.log("한서연 없음"); return; }
 
