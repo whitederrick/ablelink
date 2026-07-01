@@ -54,3 +54,6 @@ test-pdf.ps1
 .claude/
 
 .vercel
+
+# 스쿼시 아카이브(로컬 참조용, 옛 마이그레이션은 git 히스토리에 있음)
+prisma/migrations_archive/
