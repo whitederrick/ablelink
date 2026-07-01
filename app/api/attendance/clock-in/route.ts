@@ -71,25 +71,9 @@ export async function POST(request: NextRequest) {
       `[출근 요청] workerId=${userIdStr}, assignmentId=${assignmentIdBig ?? "auto"}, basePointId=${basePointIdBig ?? "auto"}, confirmOutOfRange=${confirmOutOfRange}`
     );
 
-    // [STEP 1] 오늘 중복 출근 체크
     const todayString = getKstDateString();
-    const existingRecord = await prisma.dailyAttendance.findFirst({
-      where: {
-        workerId: userIdBig,
-        workDate: todayString,
-      },
-      select: { id: true },
-    });
 
-    if (existingRecord) {
-      // 안정성: 클라이언트가 "이미 처리됨"으로 자가치유하도록 식별 코드 부여(중복요청/유실응답 대비).
-      return NextResponse.json(
-        { success: false, code: "ALREADY_CLOCKED_IN", message: "이미 오늘 출근 기록이 있습니다." },
-        { status: 400 }
-      );
-    }
-
-    // [STEP 2] 유효 배정 조회
+    // [STEP 1] 유효 배정 조회 (중복 체크보다 먼저 — 멀티 배정에선 "오늘 이 배정" 기준으로 중복 판정해야 함)
     // - 클라이언트가 assignmentId를 주면 그 배정이 "내 것"인지 + (옵션) siteId 일치 검증
     // - 없으면 최신 유효 배정(ASSIGNED/CONFIRMED/ACTIVE) 1건을 선택
     const validStatuses = ["ASSIGNED", "CONFIRMED", "ACTIVE"] as const;
@@ -119,6 +103,21 @@ export async function POST(request: NextRequest) {
     // (옵션) client가 siteId를 보냈으면 일치 검증
     if (siteIdBig && assignment.siteId !== siteIdBig) {
       return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
+    }
+
+    // [STEP 1-2] 오늘 이 배정에 이미 출근 기록이 있는지 — **배정별** 판정.
+    //   (DB 유니크가 assignmentId+workDate이므로, 멀티 현장이면 오전 A현장/오후 B현장을 같은 날 각각 기록 가능.
+    //    단일 배정이면 그 배정 하나로 하루 1건 — 기존 동작과 동일.)
+    const existingRecord = await prisma.dailyAttendance.findFirst({
+      where: { assignmentId: assignment.id, workDate: todayString },
+      select: { id: true },
+    });
+    if (existingRecord) {
+      // 안정성: 클라이언트가 "이미 처리됨"으로 자가치유하도록 식별 코드 부여(중복요청/유실응답 대비).
+      return NextResponse.json(
+        { success: false, code: "ALREADY_CLOCKED_IN", message: "이미 오늘 이 현장 출근 기록이 있습니다." },
+        { status: 400 }
+      );
     }
 
     // 🔑 연결 게이트(assignment-pipeline-design.md §7): 기존 유저는 인증코드로 배정을 연결해야 출근 가능.
