@@ -8,6 +8,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel } from "@/lib/billing";
 import { outboundAllowed } from "@/lib/outboundGuard";
+import { PAID_AGENCY_PLANS } from "@/lib/plans";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const CRON_SECRET = process.env.CRON_SECRET || "";
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
   // 결제일이 도래했거나(오늘) 일시 오류로 밀린(연체) 위탁기관 조회 — 유예 재시도 포함
   const agencies = await prisma.agency.findMany({
     where: {
-      planType: { in: ["STARTER", "STANDARD", "PRO"] },
+      planType: { in: PAID_AGENCY_PLANS },
       tossBillingKey: { not: null },
       tossCustomerKey: { not: null },
       nextBillingAt: { lt: tomorrow },

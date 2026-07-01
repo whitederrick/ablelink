@@ -10,6 +10,7 @@ import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
 import { computePayrollItems } from "@/lib/payroll/computeRun";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { randomUUID } from "crypto";
+import { PREMIUM_FEATURE_PLANS } from "@/lib/plans";
 
 export const runtime = "nodejs";
 
@@ -103,7 +104,7 @@ export async function GET(req: NextRequest) {
         where: {
           status:      { in: ["COMPLETED", "SIGNED"] },
           contractEnd: { gte: targetStart, lte: targetEnd },
-          agency:      { planType: { in: ["STARTER", "STANDARD", "PRO", "TRIAL"] } },
+          agency:      { planType: { in: PREMIUM_FEATURE_PLANS } },
         },
         include: { agency: { select: { planType: true, trialEndsAt: true } } },
       });

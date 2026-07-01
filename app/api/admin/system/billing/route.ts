@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
+import { isPaidAgencyPlan } from "@/lib/plans";
 
 export async function GET(req: Request) {
   try {
@@ -27,7 +28,7 @@ export async function GET(req: Request) {
         const nextBillingAt = a.nextBillingAt ? new Date(a.nextBillingAt) : null;
         const subscribedAt  = a.subscribedAt  ? new Date(a.subscribedAt)  : null;
         const isTrialExpired = trialEndsAt && trialEndsAt < now;
-        const isBillingOverdue = nextBillingAt && nextBillingAt < now && a.planType !== "FREE" && a.planType !== "TRIAL";
+        const isBillingOverdue = nextBillingAt && nextBillingAt < now && isPaidAgencyPlan(a.planType);
 
         return {
           id:              a.id.toString(),

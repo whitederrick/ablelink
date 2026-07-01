@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
+import { PAID_AGENCY_PLANS } from "@/lib/plans";
 
 export async function GET(req: Request) {
   try {
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
       prisma.worker.count(),
       prisma.site.count(),
       prisma.trainee.count({ where: { status: "TRAINING", currentSiteId: { in: activeSiteIds } } }),
-      prisma.agency.count({ where: { planType: { in: ["STARTER", "STANDARD", "PRO"] } } }),
+      prisma.agency.count({ where: { planType: { in: PAID_AGENCY_PLANS } } }),
     ]);
 
     return NextResponse.json({

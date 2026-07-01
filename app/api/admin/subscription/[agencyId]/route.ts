@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
 import { requireManagerSession } from "@/lib/managerScope";
 import { getConfigNumber } from "@/lib/systemConfig";
+import { isPaidAgencyPlan } from "@/lib/plans";
 
 export async function PATCH(
   request: NextRequest,
@@ -46,7 +47,7 @@ export async function PATCH(
     }
 
     // 유료 구독 전환
-    if (["STARTER", "STANDARD", "PRO"].includes(planType)) {
+    if (isPaidAgencyPlan(planType)) {
       updateData.subscribedAt = updateData.subscribedAt || now;
     }
 
