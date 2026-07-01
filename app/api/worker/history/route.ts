@@ -7,6 +7,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { effectiveServiceStep } from "@/lib/serviceStep";
+import { logCompletionStatus } from "@/lib/docs/logCompletion";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
@@ -35,9 +36,9 @@ export async function GET(req: NextRequest) {
         ...(dateFilter ? { workDate: dateFilter } : {}),
       },
       include: {
-        site: { select: { companyName: true } },
+        site: { select: { companyName: true, trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true } } } },
         assignment: { select: { serviceStep: true, adaptationStartDate: true, agencyId: true } },
-        logs: { select: { isCompleted: true, totalRecognizedTime: true } },
+        logs: { select: { isCompleted: true, totalRecognizedTime: true, traineeId: true } },
         attendanceIssue: { select: { status: true, issueTypes: true } },
       },
       orderBy: { workDate: "desc" },
@@ -63,8 +64,7 @@ export async function GET(req: NextRequest) {
         workedMinutes,
         isFinalClosed: a.isFinalClosed,
         isGpsModified: a.isGpsModified,
-        logStatus: a.logs.length === 0 ? "NONE"
-          : a.logs.every(l => l.isCompleted) ? "DONE" : "DRAFT",
+        logStatus: logCompletionStatus(a.logs, a.site?.trainees?.length ?? 0).toUpperCase() as "NONE" | "DRAFT" | "DONE",
         hasIssue: !!a.attendanceIssue && a.attendanceIssue.status !== "RESOLVED",
         issueTypes: a.attendanceIssue?.issueTypes ?? [],
       };

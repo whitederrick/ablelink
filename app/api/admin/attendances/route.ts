@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
 import { Prisma } from "@prisma/client";
+import { logCompletionStatus } from "@/lib/docs/logCompletion";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -79,12 +80,8 @@ function toItem(r: any) {
     finalizedAt: asIso(r.finalizedAt),
 
     // 일지 상태(대시보드 '일지 미완료'와 동일 기준): 미작성(none)·임시저장(draft)·완료(done)
-    // none/draft = 일지 미완료(대시보드 logPendingCount), done = 완료(logDoneCount)
-    logStatus: (() => {
-      const ls = Array.isArray(r.logs) ? r.logs : [];
-      if (ls.length === 0) return "none";
-      return ls.every((l: any) => l.isCompleted) ? "done" : "draft";
-    })(),
+    // 완료 = 그 현장 배정 훈련생 전원 완료(공용 lib/docs/logCompletion). none/draft = 미완료.
+    logStatus: logCompletionStatus(Array.isArray(r.logs) ? r.logs : [], r.site?.trainees?.length ?? 0),
 
     site: r.site
       ? {
@@ -215,9 +212,9 @@ export async function GET(req: NextRequest) {
           status: true,
           isFinalClosed: true,
           finalizedAt: true,
-          logs: { select: { isCompleted: true } },
+          logs: { select: { isCompleted: true, traineeId: true } },
 
-          site: { select: { id: true, companyName: true, address: true, agencyId: true } },
+          site: { select: { id: true, companyName: true, address: true, agencyId: true, trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true } } } },
           user: { select: { id: true, workerName: true, loginId: true, phoneNumber: true, role: true, status: true } },
           assignment: { select: { id: true, status: true, startDate: true, endDate: true } },
         },

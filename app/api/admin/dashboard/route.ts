@@ -9,6 +9,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { getKstDateString } from "@/lib/time";
 import { getConfigNumber } from "@/lib/systemConfig";
 import { deriveAttendanceIssues, ATTENDANCE_ISSUE_WINDOW_DAYS } from "@/lib/attendance/issueDerivation";
+import { isDailyLogComplete, logCompletionStatus } from "@/lib/docs/logCompletion";
 
 export async function GET(req: Request) {
   try {
@@ -46,8 +47,8 @@ export async function GET(req: Request) {
         select: {
           id: true, startTime: true, endTime: true, isFinalClosed: true, isGpsModified: true,
           user: { select: { workerName: true } },
-          site: { select: { companyName: true } },
-          logs: { select: { isCompleted: true } },
+          site: { select: { companyName: true, trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true } } } },
+          logs: { select: { isCompleted: true, traineeId: true } },
           attendanceIssue: { select: { id: true, status: true, issueTypes: true } },
         },
       }),
@@ -166,8 +167,9 @@ export async function GET(req: Request) {
 
     const todayWorking = todayAttendances.filter(a => a.startTime && !a.isFinalClosed).length;
     const todayDone = todayAttendances.filter(a => a.isFinalClosed).length;
-    const logDoneCount = todayAttendances.filter(a => a.logs.length > 0 && a.logs.every(l => l.isCompleted)).length;
-    const logPendingCount = todayAttendances.filter(a => !a.logs.every(l => l.isCompleted) || a.logs.length === 0).length;
+    // 일지 완료 = 그 현장 배정 훈련생 전원 완료(공용 lib/docs/logCompletion). 2명 담당 중 1명만 완료 시 '완료' 오판 방지.
+    const logDoneCount = todayAttendances.filter(a => isDailyLogComplete(a.logs, a.site?.trainees?.length ?? 0)).length;
+    const logPendingCount = todayAttendances.filter(a => !isDailyLogComplete(a.logs, a.site?.trainees?.length ?? 0)).length;
     const docPendingSubmit = docRunsOpen.filter(r => r.signStage === "SUBMITTED").length;     // 확정 대기
     const docOverdue = docRunsOpen.filter(r => r.signStage === "CONFIRMED").length;           // 서명 대기
     const endingIn5 = endingSoonAssignments.filter(a => a.endDate && a.endDate <= in5Days).length;
@@ -288,8 +290,10 @@ export async function GET(req: Request) {
           isFinalClosed: a.isFinalClosed,
           isGpsModified: a.isGpsModified,
           hasIssue: !!a.attendanceIssue && a.attendanceIssue.status === "OPEN",
-          logStatus: a.logs.length === 0 ? "미작성"
-            : a.logs.every(l => l.isCompleted) ? "완료" : "임시저장",
+          logStatus: (() => {
+            const st = logCompletionStatus(a.logs, a.site?.trainees?.length ?? 0);
+            return st === "none" ? "미작성" : st === "done" ? "완료" : "임시저장";
+          })(),
         })),
       },
     });
