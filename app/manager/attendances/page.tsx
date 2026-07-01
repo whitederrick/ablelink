@@ -42,6 +42,7 @@ type AttendanceItem = {
   withinRange: boolean | null; rangeM: number | null;
   site: { companyName: string } | null;
   user: { workerName: string; loginId: string; phoneNumber: string } | null;
+  synthetic?: boolean; // 결근 합성 항목(월별현황 전용, 목록/지도 제외)
 };
 
 type ViewMode = "list" | "map" | "monthly";
@@ -251,7 +252,9 @@ export default function AttendancesPage() {
     // '오늘만'·일지상태 필터는 목록 모드 전용(월별/지도는 월 전체 유지 — 숨은 필터 혼란 방지)
     const listOnly = viewMode === "list";
     return items.filter(i =>
-      (!q || (i.user?.workerName ?? "").toLowerCase().includes(q) || (i.site?.companyName ?? "").toLowerCase().includes(q))
+      // 결근 합성 항목은 월별현황에서만 사용(목록·지도 제외)
+      (viewMode === "monthly" || !i.synthetic)
+      && (!q || (i.user?.workerName ?? "").toLowerCase().includes(q) || (i.site?.companyName ?? "").toLowerCase().includes(q))
       && matchStatus(i, statusFilter)
       && (!listOnly || !todayOnly || i.workDate === today)
       && (!listOnly || logFilter.length === 0 || logFilter.includes(i.logStatus)));

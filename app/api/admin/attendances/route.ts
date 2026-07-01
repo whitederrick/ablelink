@@ -18,6 +18,8 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
 import { Prisma } from "@prisma/client";
 import { logCompletionStatus } from "@/lib/docs/logCompletion";
+import { computeAbsentDates } from "@/lib/attendance/absentDays";
+import { getKstDateString } from "@/lib/time";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -221,12 +223,83 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
+    // ── 결근(미출근) 합성 ──────────────────────────────────────────
+    // 배정 근무일 중 출근기록 없는 평일을 ABSENT 항목으로 추가(워커 캘린더와 동일 규칙, lib/attendance/absentDays).
+    // 월별현황 그리드에서 결근을 '미출근'(rose)으로 표시하기 위함. 목록/지도 뷰는 클라에서 synthetic 제외.
+    const period = (from && to) ? { from, to }
+      : yearMonth ? { from: `${yearMonth}-01`, to: `${yearMonth}-31` } : null;
+    const absentItems: any[] = [];
+    if (period) {
+      const todayStr = getKstDateString();
+      const activeAssigns = await prisma.siteAssignment.findMany({
+        where: {
+          status: "ACTIVE",
+          ...(agencyId ? { agencyId } : {}),
+          ...(userIdStr ? { workerId: BigInt(userIdStr) } : {}),
+          ...(siteIdStr ? { siteId: BigInt(siteIdStr) } : {}),
+          startDate: { lte: new Date(period.to + "T23:59:59+09:00") },
+          OR: [{ endDate: null }, { endDate: { gte: new Date(period.from + "T00:00:00+09:00") } }],
+        },
+        select: {
+          id: true, workerId: true, siteId: true, startDate: true, endDate: true,
+          user: { select: { workerName: true } }, site: { select: { companyName: true } },
+        },
+      });
+      if (activeAssigns.length > 0) {
+        // 기간 내 실제 출근기록 전체(페이지 무관) — 결근 오탐 방지용 existing 집합.
+        const existRows = await prisma.dailyAttendance.findMany({ where, select: { workerId: true, workDate: true } });
+        const existByWorker = new Map<string, Set<string>>();
+        for (const e of existRows) {
+          const k = String(e.workerId);
+          (existByWorker.get(k) ?? existByWorker.set(k, new Set()).get(k)!).add(e.workDate);
+        }
+        const custRows = await prisma.siteHoliday.findMany({
+          where: { assignmentId: { in: activeAssigns.map(a => a.id) }, date: { gte: period.from, lte: period.to } },
+          select: { assignmentId: true, date: true },
+        });
+        const custByAssign = new Map<string, Set<string>>();
+        for (const c of custRows) {
+          const k = String(c.assignmentId);
+          (custByAssign.get(k) ?? custByAssign.set(k, new Set()).get(k)!).add(c.date);
+        }
+        const kstDateStr = (d: Date) => new Date(d).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
+        const seen = new Set<string>(); // workerId|date 중복 방지(다현장)
+        for (const a of activeAssigns) {
+          const absents = computeAbsentDates({
+            from: period.from, to: period.to,
+            assignStart: kstDateStr(a.startDate),
+            assignEnd: a.endDate ? kstDateStr(a.endDate) : null,
+            todayStr,
+            existingDates: existByWorker.get(String(a.workerId)) ?? new Set(),
+            customHolidays: custByAssign.get(String(a.id)),
+          });
+          for (const d of absents) {
+            const dedup = `${a.workerId}|${d}`;
+            if (seen.has(dedup)) continue;
+            seen.add(dedup);
+            absentItems.push({
+              id: `absent-${a.id}-${d}`,
+              workerId: String(a.workerId), siteId: String(a.siteId), assignmentId: String(a.id),
+              workDate: d,
+              startTime: null, actualStartTime: null, startLocLat: null, startLocLon: null,
+              endTime: null, actualEndTime: null, endLocLat: null, endLocLon: null,
+              startDistanceM: null, endDistanceM: null, withinRange: null, rangeM: null,
+              isGpsModified: false, status: "ABSENT", isFinalClosed: false, finalizedAt: null,
+              logStatus: "none", synthetic: true,
+              site: { id: String(a.siteId), companyName: a.site?.companyName ?? "-", address: null, agencyId: null },
+              user: { id: String(a.workerId), workerName: a.user?.workerName ?? "-", loginId: "", phoneNumber: "", role: "WORKER", status: "ACTIVE" },
+            });
+          }
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       page,
       pageSize,
       total,
-      items: rows.map(toItem),
+      items: [...rows.map(toItem), ...absentItems],
     });
   } catch (e: any) {
     if (e instanceof Response || (e && typeof e.status === "number")) return e as any;
