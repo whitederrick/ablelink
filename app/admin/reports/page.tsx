@@ -76,7 +76,7 @@ export default function TraineeReportPage() {
   async function load(y: number, m: number) {
     setLoading(true); setError(null);
     try {
-      const r = await fetch(`/api/admin/trainee-report?year=${y}&month=${m}`);
+      const r = await fetch(`/api/admin/trainee-report?year=${y}&month=${m}`, { headers: { "x-admin-context": "1" } });
       const d = await r.json();
       if (!d.success) { setError(d.message || "오류"); setData([]); return; }
       setData(d.data);
@@ -141,7 +141,7 @@ export default function TraineeReportPage() {
       <ListToolbar
         query={search}
         onQueryChange={setSearch}
-        placeholder="훈련생·직무지도원·사업장 검색"
+        placeholder="훈련생·직무지도원·현장(사업체) 검색"
         filters={filters}
         selected={statusFilter}
         onToggleFilter={toggleStatus}
@@ -168,44 +168,47 @@ export default function TraineeReportPage() {
         </div>
       )}
 
-      {/* 테이블 */}
+      {/* 테이블 — 셀 1줄·고정폭(table-fixed+colgroup), 성명/성별·현장/직무지도원 별도 셀 */}
       {!error && (
-        <div className={T.tableWrap}>
-          <table className="w-full border-collapse">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+          <table className="w-full min-w-[1080px] table-fixed border-collapse">
+            <colgroup>
+              <col className="w-[110px]" />{/* 훈련생 성명 */}
+              <col className="w-[60px]" />{/* 성별 */}
+              <col className="w-[100px]" />{/* 장애유형 */}
+              <col className="w-[84px]" />{/* 상태 */}
+              <col className="w-[150px]" />{/* 현장(사업체) */}
+              <col className="w-[110px]" />{/* 직무지도원 */}
+              <col className="w-[76px]" />{/* 출근일 */}
+              <col className="w-[80px]" />{/* 일지작성 */}
+              <col className="w-[130px]" />{/* 작성률 */}
+              <col className="w-[120px]" />{/* 수행점수 */}
+              <col className="w-[140px]" />{/* 종합평가 */}
+            </colgroup>
             <thead>
               <tr>
-                {["훈련생", "장애유형", "상태", "사업장 / 직무지도원", "출근일", "일지작성", "작성률", "수행점수 (평균)", "종합평가"].map(h => (
+                {["훈련생 성명", "성별", "장애유형", "상태", "현장(사업체)", "직무지도원", "출근일", "일지작성", "작성률", "수행점수(평균)", "종합평가"].map(h => (
                   <th key={h} className={T.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className={T.tdCenter}>조회 중...</td></tr>
+                <tr><td colSpan={11} className={T.tdCenter}>조회 중...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className={T.tdCenter}>데이터가 없습니다.</td></tr>
+                <tr><td colSpan={11} className={T.tdCenter}>데이터가 없습니다.</td></tr>
               ) : pageItems.map(row => (
                 <tr key={row.traineeId} className={T.trBase}>
-                  <td className={T.td}>
-                    <p className="font-black text-slate-900">{row.traineeName}</p>
-                    <p className="text-xs font-semibold text-slate-400">{row.gender === "M" ? "남" : "여"}</p>
-                  </td>
-                  <td className={T.td}>
-                    <span className="text-xs font-semibold text-slate-600">{row.disabilityType}</span>
-                  </td>
+                  <td className={`${T.td} truncate font-black text-slate-900`}>{row.traineeName}</td>
+                  <td className={T.td}>{row.gender === "M" ? "남" : "여"}</td>
+                  <td className={`${T.td} truncate text-slate-600`}>{row.disabilityType}</td>
                   <td className={T.td}>
                     <StatusBadge status={row.status} map={STATUS_BADGE} />
                   </td>
-                  <td className={T.td}>
-                    <p className="font-semibold text-slate-800">{row.siteName}</p>
-                    <p className="text-xs font-semibold text-slate-400">{row.workerName}</p>
-                  </td>
-                  <td className={`${T.td} text-center`}>
-                    {row.totalWorkDays}일
-                  </td>
-                  <td className={`${T.td} text-center`}>
-                    {row.daysWithLog}일
-                  </td>
+                  <td className={`${T.td} truncate font-semibold text-slate-800`}>{row.siteName}</td>
+                  <td className={`${T.td} truncate text-slate-600`}>{row.workerName}</td>
+                  <td className={`${T.td} text-center`}>{row.totalWorkDays}일</td>
+                  <td className={`${T.td} text-center`}>{row.daysWithLog}일</td>
                   <td className={T.td}>
                     <RateBar value={row.logRate} />
                   </td>
@@ -214,11 +217,9 @@ export default function TraineeReportPage() {
                   </td>
                   <td className={T.td}>
                     {row.evalAvg !== null ? (
-                      <div>
+                      <div className="flex items-center gap-1.5">
                         <ScoreBar value={row.evalAvg} />
-                        <p className="mt-1 text-[10px] font-semibold text-slate-400">
-                          {row.evalType === "TRAINING" ? "훈련" : "적응"} · {row.evalPeriod}
-                        </p>
+                        <span className="text-[10px] font-semibold text-slate-400">{row.evalType === "TRAINING" ? "훈련" : "적응"}</span>
                       </div>
                     ) : (
                       <span className="text-xs font-semibold text-slate-300">미작성</span>

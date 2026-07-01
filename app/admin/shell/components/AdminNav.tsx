@@ -29,6 +29,7 @@ const groups: NavGroup[] = [
       { href: "/admin/sites",       label: "현장(사업체) 현황 관리" },
       { href: "/admin/attendances", label: "근태 현황 관리" },
       { href: "/admin/review",      label: "월별 진척도 현황 관리" },
+      { href: "/admin/reports",     label: "훈련생 진척도 리포트" },
       { href: "/admin/contracts",   label: "근로계약서 현황 관리" },
     ],
   },
