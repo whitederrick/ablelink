@@ -6,6 +6,7 @@ import {
   CalendarDays, CheckCircle2, ChevronLeft, Home,
   Info, Loader2, Mic, Square, Trash2,
 } from "lucide-react";
+import { getActiveAssignmentCookie } from "../_lib/activeAssignmentCookie";
 
 // ─── 타입 ──────────────────────────────────────────────────────────
 type Attendance = "출석" | "결석" | "지각" | "조퇴";
@@ -148,7 +149,8 @@ function WorklogForm() {
 
   // 사이트 정보 로드
   useEffect(() => {
-    fetch("/api/worker/site/current").then(r => r.json()).then(d => {
+    const _sel = getActiveAssignmentCookie();
+    fetch(`/api/worker/site/current${_sel ? `?assignmentId=${_sel}` : ""}`).then(r => r.json()).then(d => {
       if (d.success && d.data) {
         setSiteInfo(d.data);
         if (Array.isArray(d.data.trainees))

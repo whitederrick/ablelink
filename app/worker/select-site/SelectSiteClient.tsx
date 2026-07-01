@@ -18,6 +18,11 @@ export default function SelectSiteClient({ items }: { items: ActiveAssignmentIte
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
 
+  // 스마트 기본값: 현재 시각(브라우저=KST) 기준 12:30 이전=오전, 이후=오후 추천. 추천 배정을 앞으로 정렬.
+  const nowMin = (() => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); })();
+  const recWt = nowMin < 12 * 60 + 30 ? "AM" : "PM";
+  const sorted = [...items].sort((a, b) => (a.workType === recWt ? 0 : 1) - (b.workType === recWt ? 0 : 1));
+
   function pick(id: string) {
     if (busy) return;
     setBusy(id);
@@ -37,13 +42,15 @@ export default function SelectSiteClient({ items }: { items: ActiveAssignmentIte
         </div>
 
         <div className="space-y-3">
-          {items.map((a) => (
+          {sorted.map((a) => {
+            const isRec = a.workType === recWt;
+            return (
             <button
               key={a.assignmentId}
               type="button"
               onClick={() => pick(a.assignmentId)}
               disabled={!!busy}
-              className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition active:scale-[0.98] disabled:opacity-60"
+              className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-4 text-left shadow-sm transition active:scale-[0.98] disabled:opacity-60 ${isRec ? "border-sky-400 ring-2 ring-sky-100" : "border-slate-200"} bg-white`}
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -51,6 +58,7 @@ export default function SelectSiteClient({ items }: { items: ActiveAssignmentIte
                     {WORKTYPE_LABEL[a.workType] ?? a.workType}
                   </span>
                   <span className="truncate text-base font-black text-slate-900">{a.siteName}</span>
+                  {isRec && <span className="shrink-0 rounded-full bg-sky-500 px-2 py-0.5 text-[11px] font-black text-white">지금 추천</span>}
                 </div>
                 <div className="mt-1.5 flex items-center gap-3 text-xs font-semibold text-slate-500">
                   {a.agencyName && (
@@ -67,7 +75,8 @@ export default function SelectSiteClient({ items }: { items: ActiveAssignmentIte
               </div>
               <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" aria-hidden="true" />
             </button>
-          ))}
+            );
+          })}
         </div>
       </section>
     </main>

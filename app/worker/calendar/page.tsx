@@ -15,6 +15,7 @@ import {
   X,
   Search,
 } from "lucide-react";
+import { getActiveAssignmentCookie } from "../_lib/activeAssignmentCookie";
 
 // ─── 타입 ──────────────────────────────────────────────
 type DayStatus = "GREEN" | "ORANGE" | "RED" | "NONE" | "HOLIDAY";
@@ -219,10 +220,12 @@ export default function CalendarPage() {
     setBulkLoading(true);
     setBulkResult(null);
     try {
+      const _sel = getActiveAssignmentCookie();
       const res = await fetch("/api/worker/attendance/bulk-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: bulkFrom, to: bulkTo }),
+        // 멀티 현장: 선택 배정으로 일괄 생성(미선택/단일이면 서버 자동 선택 — 기존 동작).
+        body: JSON.stringify({ from: bulkFrom, to: bulkTo, ...(_sel ? { assignmentId: _sel } : {}) }),
       });
       const d = await res.json();
       if (d.success) {

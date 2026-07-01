@@ -6,6 +6,7 @@ import {
   ArrowLeft, CheckCircle2, ChevronDown, ChevronUp,
   Loader2, Mic, Square, Users,
 } from "lucide-react";
+import { getActiveAssignmentCookie } from "../../_lib/activeAssignmentCookie";
 
 // ─── 타입 ───────────────────────────────────────────────────
 interface Trainee { id: string; name: string; gender?: string; }
@@ -70,7 +71,8 @@ export default function BatchWorklogPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/worker/site/current");
+        const _sel = getActiveAssignmentCookie();
+        const res = await fetch(`/api/worker/site/current${_sel ? `?assignmentId=${_sel}` : ""}`);
         const data = await res.json();
         if (!data.success || !data.data) { router.push("/worker/home"); return; }
         const d = data.data;

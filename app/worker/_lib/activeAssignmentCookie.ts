@@ -9,3 +9,10 @@ export function setActiveAssignmentCookie(assignmentId: string) {
   const maxAge = 60 * 60 * 24 * 90;
   document.cookie = `${WK_ACTIVE_ASSIGNMENT_COOKIE}=${assignmentId}; path=/; max-age=${maxAge}; samesite=lax`;
 }
+
+/** 현재 선택 배정 쿠키 읽기(없으면 null). 일지·일괄생성이 선택 현장으로 조회할 때 사용. */
+export function getActiveAssignmentCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(new RegExp(`(?:^|; )${WK_ACTIVE_ASSIGNMENT_COOKIE}=([^;]+)`));
+  return m ? decodeURIComponent(m[1]) : null;
+}

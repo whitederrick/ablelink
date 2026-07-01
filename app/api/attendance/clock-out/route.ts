@@ -88,6 +88,8 @@ export async function POST(request: NextRequest) {
     }
 
     const userIdBig = BigInt(session.workerId);
+    // 멀티 현장: 클라가 선택 배정(assignmentId)을 주면 그 배정의 당일 기록으로 스코프(오전/오후 각각 퇴근).
+    const outAssignmentId = toBigIntOrNull(inputAssignmentId);
 
     // [STEP 1] 오늘 날짜의 출근 기록 찾기
     // - 최초 퇴근(CLOCK_OUT): WORKING 상태만 허용
@@ -99,6 +101,7 @@ export async function POST(request: NextRequest) {
         workerId: userIdBig,
         workDate: todayString,
         status: action === "CLOCK_OUT" ? "WORKING" : "DONE",
+        ...(outAssignmentId != null ? { assignmentId: outAssignmentId } : {}),
       },
       include: {
         site: true,
