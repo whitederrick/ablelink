@@ -2,19 +2,43 @@
 
 // app/admin/promos/page.tsx
 // 운영자: 대시보드 소식 티커·광고 관리(생성/수정/활성토글/게시기간/삭제) + 티커 속도 조절.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
+import AdSlot from "@/components/AdSlot";
+
+// 입력 필드 — 라벨(굵게) + 설명(회색) + 입력을 세로 정렬로 통일.
+function Field({ label, desc, children, className = "" }: { label: string; desc?: string; children: ReactNode; className?: string }) {
+  return (
+    <div className={className}>
+      <div className="mb-1 flex items-baseline gap-1.5">
+        <label className="whitespace-nowrap text-sm font-bold text-slate-700">{label}</label>
+        {desc && <span className="truncate text-[11px] font-medium text-slate-400">{desc}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 type Kind = "TICKER" | "AD";
+type AdLayout = "TEXT" | "IMAGE" | "OVERLAY" | "TITLE";
 type Promo = {
   id: string; kind: Kind; badge: string | null; title: string; body: string | null;
-  imageUrl: string | null; href: string | null; isActive: boolean;
+  imageUrl: string | null; layout: AdLayout; textColor: "LIGHT" | "DARK"; href: string | null; isActive: boolean;
   startAt: string | null; endAt: string | null; note: string | null; sortOrder: number;
 };
+// 대시보드 광고 카드 폭(~336px) 기준 글자수 제한 — 넘치면 잘려 어색해지므로 입력에서 제한.
+const TITLE_MAX = 28;
+const DESC_MAX = 60;
+const LAYOUTS: { v: AdLayout; label: string; desc: string }[] = [
+  { v: "TEXT", label: "텍스트형", desc: "이미지 없이 배지·제목·설명" },
+  { v: "IMAGE", label: "이미지만", desc: "이미지 전체(텍스트 없음)" },
+  { v: "OVERLAY", label: "이미지+제목·설명", desc: "이미지 배경 위 텍스트" },
+  { v: "TITLE", label: "이미지+제목만", desc: "이미지 배경 위 제목만" },
+];
 
 const KIND_LABEL: Record<Kind, string> = { TICKER: "소식 티커", AD: "광고" };
-const emptyDraft = (kind: Kind): Partial<Promo> => ({ kind, badge: "", title: "", body: "", imageUrl: "", href: "", isActive: true, startAt: null, endAt: null, note: "", sortOrder: 0 });
+const emptyDraft = (kind: Kind): Partial<Promo> => ({ kind, badge: "", title: "", body: "", imageUrl: "", layout: "OVERLAY", textColor: "LIGHT", href: "", isActive: true, startAt: null, endAt: null, note: "", sortOrder: 0 });
 
 function toDateInput(iso: string | null): string { return iso ? iso.slice(0, 10) : ""; }
 function fmtPeriod(s: string | null, e: string | null): string {
@@ -30,6 +54,21 @@ export default function AdminPromosPage() {
   const [toast, setToast] = useState("");
   const [speed, setSpeed] = useState("32");
   const [speedSaving, setSpeedSaving] = useState(false);
+  const [imgMode, setImgMode] = useState<"file" | "url">("file");
+  const [uploading, setUploading] = useState(false);
+
+  // 모달 열릴 때 이미지 입력 방식 초기화(기존 URL 있으면 URL, 없으면 파일)
+  useEffect(() => { if (modal) setImgMode(modal.draft.imageUrl ? "url" : "file"); }, [modal?.mode, modal?.draft.id]);
+
+  async function uploadImage(file: File) {
+    setUploading(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const d = await fetch("/api/admin/system/promos/upload", { method: "POST", body: fd }).then(r => r.json());
+      if (d.success) { setModal(m => m ? { ...m, draft: { ...m.draft, imageUrl: d.url } } : m); showToast("이미지 업로드 완료"); }
+      else showToast(d.message ?? "업로드 실패");
+    } catch { showToast("업로드 오류"); } finally { setUploading(false); }
+  }
 
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2600); };
 
@@ -130,52 +169,129 @@ export default function AdminPromosPage() {
       {/* 생성/수정 모달 */}
       {modal && (
         <div className={T.modalOverlay} onClick={() => setModal(null)}>
-          <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h2 className="mb-4 text-lg font-black text-slate-900">{modal.mode === "create" ? "새 광고" : "광고 수정"}</h2>
-            <div className="space-y-3">
-              <label className="block text-sm font-semibold text-slate-600">배지
-                <input value={modal.draft.badge ?? ""} onChange={e => setField("badge", e.target.value)} placeholder="광고" className={`mt-1 ${T.input}`} />
-              </label>
-              <label className="block text-sm font-semibold text-slate-600">제목
-                <input value={modal.draft.title ?? ""} onChange={e => setField("title", e.target.value)} className={`mt-1 ${T.input}`} />
-              </label>
-              <label className="block text-sm font-semibold text-slate-600">설명
-                <input value={modal.draft.body ?? ""} onChange={e => setField("body", e.target.value)} className={`mt-1 ${T.input}`} />
-              </label>
-              <label className="block text-sm font-semibold text-slate-600">이미지 URL
-                <input value={modal.draft.imageUrl ?? ""} onChange={e => setField("imageUrl", e.target.value)} placeholder="https://..." className={`mt-1 ${T.input}`} />
-              </label>
-              <label className="block text-sm font-semibold text-slate-600">링크(클릭 이동)
-                <input value={modal.draft.href ?? ""} onChange={e => setField("href", e.target.value)} placeholder="/manager/... 또는 https://..." className={`mt-1 ${T.input}`} />
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="text-sm font-semibold text-slate-600">게시 시작
-                  <input type="date" value={(modal.draft.startAt ?? "").slice(0, 10)} onChange={e => setField("startAt", e.target.value)} className={`mt-1 ${T.input}`} />
-                </label>
-                <label className="text-sm font-semibold text-slate-600">게시 종료
-                  <input type="date" value={(modal.draft.endAt ?? "").slice(0, 10)} onChange={e => setField("endAt", e.target.value)} className={`mt-1 ${T.input}`} />
-                </label>
+          <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h2 className="mb-1 text-lg font-black text-slate-900">{modal.mode === "create" ? "새 광고 등록" : "광고 수정"}</h2>
+            <p className="mb-4 text-[13px] font-semibold text-slate-400">위탁기관 대시보드 하단 우측에 노출되는 광고입니다. 아래 미리보기가 실제 노출 모습입니다.</p>
+
+            <div className="space-y-3.5">
+              {/* 순서 · 배지 · 제목 · 게시 시작 · 종료 · 활성 (한 줄) */}
+              <div className="flex items-start gap-3">
+                <Field label="순서" className="w-[56px] shrink-0">
+                  <input type="number" value={modal.draft.sortOrder ?? 0} onChange={e => setField("sortOrder", Number(e.target.value))} className={`w-full ${T.input}`} />
+                </Field>
+                <Field label="배지" className="w-[92px] shrink-0">
+                  <input value={modal.draft.badge ?? ""} onChange={e => setField("badge", e.target.value)} placeholder="광고" className={`w-full ${T.input}`} />
+                </Field>
+                <Field label="제목" desc={`필수 · ${(modal.draft.title ?? "").length}/${TITLE_MAX}`} className="min-w-0 flex-1">
+                  <input value={modal.draft.title ?? ""} maxLength={TITLE_MAX} onChange={e => setField("title", e.target.value)} placeholder="예: 신규 직무교육 세미나 안내" className={`w-full ${T.input}`} />
+                </Field>
+                <Field label="게시 시작" className="w-[132px] shrink-0">
+                  <input type="date" value={(modal.draft.startAt ?? "").slice(0, 10)} onChange={e => setField("startAt", e.target.value)} className={`w-full ${T.input}`} />
+                </Field>
+                <Field label="게시 종료" className="w-[132px] shrink-0">
+                  <input type="date" value={(modal.draft.endAt ?? "").slice(0, 10)} onChange={e => setField("endAt", e.target.value)} className={`w-full ${T.input}`} />
+                </Field>
+                <div className="shrink-0 self-start pt-[26px]">
+                  <label className="flex h-10 items-center gap-1.5 whitespace-nowrap text-sm font-bold text-slate-700">
+                    <input type="checkbox" checked={!!modal.draft.isActive} onChange={e => setField("isActive", e.target.checked)} className="h-4 w-4" />
+                    게시
+                  </label>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="text-sm font-semibold text-slate-600">정렬 순서
-                  <input type="number" value={modal.draft.sortOrder ?? 0} onChange={e => setField("sortOrder", Number(e.target.value))} className={`mt-1 ${T.input}`} />
-                </label>
-                <label className="flex items-end gap-2 text-sm font-semibold text-slate-600">
-                  <input type="checkbox" checked={!!modal.draft.isActive} onChange={e => setField("isActive", e.target.checked)} className="mb-2.5 h-4 w-4" />
-                  게시중(활성)
-                </label>
+
+              {/* 설명 */}
+              <Field label="설명" desc={`제목 아래 부가 설명 · ${(modal.draft.body ?? "").length}/${DESC_MAX}`}>
+                <input value={modal.draft.body ?? ""} maxLength={DESC_MAX} onChange={e => setField("body", e.target.value)} placeholder="예: 8월 15일 온라인 개최 · 무료 참가" className={`w-full ${T.input}`} />
+              </Field>
+
+              {/* 카드 레이아웃 */}
+              <div>
+                <div className="mb-1.5 flex items-baseline gap-1.5">
+                  <label className="whitespace-nowrap text-sm font-bold text-slate-700">카드 레이아웃</label>
+                  <span className="text-[11px] font-medium text-slate-400">이미지가 없으면 자동으로 텍스트형으로 표시됩니다.</span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {LAYOUTS.map(l => (
+                    <button key={l.v} type="button" onClick={() => setField("layout", l.v)}
+                      className={`rounded-xl border px-2 py-2 text-left transition ${modal.draft.layout === l.v ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
+                      <span className="block text-[13px] font-bold">{l.label}</span>
+                      <span className={`mt-0.5 block text-[10px] leading-tight ${modal.draft.layout === l.v ? "text-white/70" : "text-slate-400"}`}>{l.desc}</span>
+                    </button>
+                  ))}
+                </div>
+                {/* 글자색 — 오버레이/제목만(이미지 위 텍스트)일 때 */}
+                {(modal.draft.layout === "OVERLAY" || modal.draft.layout === "TITLE") && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-[12px] font-bold text-slate-600">글자색</span>
+                    {([["LIGHT", "밝게(흰 글자)"], ["DARK", "어둡게(검정 글자)"]] as const).map(([v, lbl]) => (
+                      <button key={v} type="button" onClick={() => setField("textColor", v)}
+                        className={`rounded-full border px-3 py-1 text-[12px] font-bold transition ${modal.draft.textColor === v ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}>
+                        {lbl}
+                      </button>
+                    ))}
+                    <span className="text-[11px] text-slate-400">이미지 밝기에 맞춰 선택</span>
+                  </div>
+                )}
               </div>
-              <label className="block text-sm font-semibold text-slate-600">운영 메모(내부)
-                <input value={modal.draft.note ?? ""} onChange={e => setField("note", e.target.value)} placeholder="광고주·계약 등" className={`mt-1 ${T.input}`} />
-              </label>
+
+              {/* 운영 메모 */}
+              <Field label="운영 메모(내부용)" desc="광고주·계약 등 내부 기록. 대시보드에는 표시되지 않습니다.">
+                <input value={modal.draft.note ?? ""} onChange={e => setField("note", e.target.value)} placeholder="예: ○○기업 · 8월 계약" className={`w-full ${T.input}`} />
+              </Field>
+
+              {/* 링크 · 이미지(파일/URL) 한 줄 */}
+              <div className="grid grid-cols-2 gap-3 items-start">
+                <Field label="링크(클릭 시 이동)" desc="내부 /... 또는 https:// (새 탭).">
+                  <input value={modal.draft.href ?? ""} onChange={e => setField("href", e.target.value)} placeholder="/manager/... 또는 https://" className={`w-full ${T.input}`} />
+                </Field>
+                <div>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-baseline gap-1.5">
+                      <label className="whitespace-nowrap text-sm font-bold text-slate-700">이미지</label>
+                      <span className="truncate text-[11px] font-medium text-slate-400">비우면 텍스트만 · JPG·PNG·WEBP·GIF 5MB↓</span>
+                    </div>
+                    <div className="flex shrink-0 overflow-hidden rounded-lg border border-slate-200">
+                      {(["file", "url"] as const).map(m => (
+                        <button key={m} type="button" onClick={() => setImgMode(m)}
+                          className={`px-2 py-0.5 text-[11px] font-bold transition ${imgMode === m ? "bg-slate-900 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                          {m === "file" ? "파일" : "URL"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {imgMode === "file" ? (
+                    <div className="flex items-center gap-2">
+                      <label className={`${T.btnSecondary} cursor-pointer whitespace-nowrap`}>
+                        {uploading ? "업로드 중..." : "이미지 파일 선택"}
+                        <input type="file" accept="image/*" className="hidden" disabled={uploading}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f); e.target.value = ""; }} />
+                      </label>
+                      {modal.draft.imageUrl && <span className="truncate text-[11px] text-emerald-600">✓ 업로드됨</span>}
+                    </div>
+                  ) : (
+                    <input value={modal.draft.imageUrl ?? ""} onChange={e => setField("imageUrl", e.target.value)} placeholder="https://.../banner.png" className={`w-full ${T.input}`} />
+                  )}
+                </div>
+              </div>
+
+              {/* 미리보기 — 실제 대시보드 슬롯과 동일 너비·높이 */}
+              <div className="border-t border-slate-100 pt-4">
+                <p className="mb-1.5 text-xs font-bold text-slate-500">실제 노출 미리보기 (대시보드 실제 크기)</p>
+                <div className="inline-block rounded-2xl bg-slate-100 p-3">
+                  <div className="h-[110px] w-[340px]">
+                    <AdSlot contents={[{ badge: modal.draft.badge?.trim() || undefined, title: modal.draft.title?.trim() || "(제목을 입력하세요)", description: modal.draft.body?.trim() || undefined, imageUrl: modal.draft.imageUrl?.trim() || undefined, layout: modal.draft.layout as any, textColor: modal.draft.textColor as any, href: modal.draft.href?.trim() || undefined }]} />
+                  </div>
+                </div>
+              </div>
             </div>
+
             <div className="mt-5 flex items-center justify-between gap-2 border-t border-slate-100 pt-4">
               {modal.mode === "edit"
                 ? <button onClick={remove} className="text-sm font-bold text-rose-500 hover:text-rose-700">삭제</button>
                 : <span />}
               <div className="flex gap-2">
                 <button onClick={() => setModal(null)} className={T.btnSecondary}>취소</button>
-                <button onClick={submit} disabled={saving} className={T.btnPrimary}>{saving ? "저장 중..." : "저장"}</button>
+                <button onClick={submit} disabled={saving} className={T.btnPrimary}>{saving ? "저장 중..." : modal.mode === "create" ? "등록" : "저장"}</button>
               </div>
             </div>
           </div>

@@ -24,6 +24,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (b.title !== undefined)     data.title     = String(b.title).trim();
     if (b.body !== undefined)      data.body      = b.body?.trim() || null;
     if (b.imageUrl !== undefined)  data.imageUrl  = b.imageUrl?.trim() || null;
+    if (b.layout !== undefined && ["TEXT", "IMAGE", "OVERLAY", "TITLE"].includes(b.layout)) data.layout = b.layout;
+    if (b.textColor !== undefined) data.textColor = b.textColor === "DARK" ? "DARK" : "LIGHT";
     if (b.href !== undefined)      data.href      = b.href?.trim() || null;
     if (b.isActive !== undefined)  data.isActive  = !!b.isActive;
     if (b.startAt !== undefined)   data.startAt   = parseDate(b.startAt);

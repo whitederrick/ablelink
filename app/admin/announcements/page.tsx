@@ -234,13 +234,13 @@ export default function AnnouncementsPage() {
                   <span className="shrink-0"><StatusBadge status={a.type} map={SYS_BADGE} /></span>
                   <span className="shrink-0"><StatusBadge status={a.audience ?? "MANAGERS"} map={AUDIENCE_BADGE} /></span>
                   <span className="flex-1 truncate text-[15px] font-black text-slate-900">{a.title}</span>
-                  <span role="button" tabIndex={0} onClick={e => toggleTicker(a, e)}
-                    title="위탁기관 대시보드 티커 노출 토글"
-                    className={`shrink-0 cursor-pointer rounded-full px-2 py-0.5 text-[11px] font-bold transition ${a.showInTicker ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400 hover:bg-slate-200"}`}>
-                    티커{a.showInTicker ? " ✓" : ""}
-                  </span>
                   <span className="shrink-0 text-[13px] font-semibold text-slate-500">{(a.audience ?? "MANAGERS") === "ALL" ? `직무지도원 ${a.sentCount}명` : "관리자 전용"}</span>
                   <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{a.createdAt.slice(2, 10)}</span>
+                  <span role="button" tabIndex={0} onClick={e => toggleTicker(a, e)}
+                    title="위탁기관 대시보드 티커 노출 토글"
+                    className={`shrink-0 w-[52px] cursor-pointer rounded-full px-2 py-0.5 text-center text-[11px] font-bold transition ${a.showInTicker ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400 hover:bg-slate-200"}`}>
+                    티커{a.showInTicker ? " ✓" : ""}
+                  </span>
                 </button>
               ))
             )}
@@ -257,6 +257,9 @@ export default function AnnouncementsPage() {
               <div className="mb-2 flex items-center gap-1.5">
                 <StatusBadge status={selected.type} map={SYS_BADGE} />
                 <StatusBadge status={selected.audience ?? "MANAGERS"} map={AUDIENCE_BADGE} />
+                {selected.showInTicker && (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">티커 노출 중</span>
+                )}
                 <span className="ml-auto text-[11px] font-semibold text-slate-300">{new Date(selected.createdAt).toLocaleString("ko-KR")}</span>
               </div>
               <p className="text-base font-black text-slate-900">{selected.title}</p>

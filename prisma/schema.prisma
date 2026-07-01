@@ -2066,6 +2066,10 @@ model DashboardPromo {
   title     String // 티커=흐르는 문구, 광고=제목
   body      String? // 광고 설명(티커 미사용)
   imageUrl  String?            @map("image_url") // 광고 이미지(선택)
+  // 카드 레이아웃: TEXT(이미지상단+텍스트) | IMAGE(이미지만) | OVERLAY(이미지배경+제목·설명) | TITLE(이미지배경+제목만)
+  layout    String             @default("TEXT")
+  // 오버레이 글자색(이미지 밝기에 맞춰): LIGHT(흰 글자·어두운 그라데이션) | DARK(어두운 글자·밝은 그라데이션)
+  textColor String             @default("LIGHT") @map("text_color")
   href      String? // 클릭 이동 링크(선택)
   isActive  Boolean            @default(true) @map("is_active")
   startAt   DateTime?          @map("start_at") // 게시 시작(비면 즉시부터)

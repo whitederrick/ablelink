@@ -35,13 +35,13 @@ export async function GET(req: Request) {
           ],
         },
         orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-        select: { badge: true, title: true, body: true, imageUrl: true, href: true },
+        select: { badge: true, title: true, body: true, imageUrl: true, href: true, layout: true, textColor: true },
       }),
       getConfigNumber("DASHBOARD_TICKER_DURATION_SEC"),
     ]);
 
     const ticker = tickerRows.map(a => ({ badge: TICKER_BADGE[a.type] ?? "소식", text: a.title, href: "/manager/system-notices" }));
-    const ads = adRows.map(r => ({ badge: r.badge ?? undefined, title: r.title, description: r.body ?? undefined, imageUrl: r.imageUrl ?? undefined, href: r.href ?? undefined, external: !!r.href && /^https?:\/\//.test(r.href) }));
+    const ads = adRows.map(r => ({ badge: r.badge ?? undefined, title: r.title, description: r.body ?? undefined, imageUrl: r.imageUrl ?? undefined, href: r.href ?? undefined, layout: (r.layout as any) ?? "TEXT", textColor: (r.textColor as any) ?? "LIGHT", external: !!r.href && /^https?:\/\//.test(r.href) }));
 
     return NextResponse.json({ success: true, data: { ticker, ads, tickerDurationSec } });
   } catch (e: any) {
