@@ -187,6 +187,23 @@ export async function computePayrollItems(
     const contractDailySojeMin = (_cs != null && _ce != null && _ce > _cs)
       ? Math.max(0, (_ce - _cs) - (_cbs != null && _cbe != null && _cbe > _cbs ? _cbe - _cbs : 0))
       : null;
+    // 소정근로 요일 집합 + 그 달 소정근로일수(공휴일·커스텀휴무 제외). 월급 일할계산·주휴 개근 판정 공용.
+    //  · 소정근로 요일 = 월~ 순으로 주휴일(weeklyHoliday) 제외하고 workDaysPerWeek개(5일=월~금, 6일=월~토).
+    const DOW_LABEL: Record<string, number> = { "일": 0, "월": 1, "화": 2, "수": 3, "목": 4, "금": 5, "토": 6 };
+    const wpw = empContract?.workDaysPerWeek ?? 5;
+    const restDow = empContract?.weeklyHoliday ? (DOW_LABEL[empContract.weeklyHoliday] ?? 0) : 0;
+    const workingWeekdays = new Set<number>();
+    for (const d of [1, 2, 3, 4, 5, 6, 0]) { if (d === restDow) continue; workingWeekdays.add(d); if (workingWeekdays.size >= wpw) break; }
+    // 공휴일(법정)+커스텀휴무 → 소정근로일에서 제외. 둘 다 KST "YYYY-MM-DD".
+    const monthHolidaySet = new Set<string>([...Object.keys(getKrHolidays(y, m)), ...customHolidays.map((h) => h.date)]);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    let scheduledWorkdaysInMonth = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+      if (!workingWeekdays.has(dow)) continue;
+      if (monthHolidaySet.has(`${yearMonth}-${String(d).padStart(2, "0")}`)) continue;
+      scheduledWorkdaysInMonth++;
+    }
     // 연장근로 = 일반 배정은 퇴근시각(actualEndTime) 자동 산정(전일은 저녁식사 1h 무급 제외),
     //            출퇴근버튼 면제 배정은 일지 수동입력(extTime). 분 단위.
     const overtimeMinutes = confirmedAtt.reduce(
@@ -241,10 +258,17 @@ export async function computePayrollItems(
         breakdown = { payType: "DAILY", dailyRate: rate, workedDays, workedMinutes, pendingDays };
       } else {
         const rate = (maxSiteCount >= 2 && rate2 != null) ? rate2 : baseRate;
-        grossPay = rate;
+        // 월급 일할계산: 중도입사·중도퇴사·결근으로 실근로일(workedDays)이 그 달 소정근로일보다 적으면 비례 지급.
+        //  · 완전월·개근이면 workedDays == 소정근로일 → 월정액 전액. (유급휴일 몫은 월급에 포함돼 비례로 함께 반영)
+        //  · 통상시급(연장·야간·휴일 가산 기준)은 비례하지 않는다(209h 기준 그대로).
+        const schedDays = scheduledWorkdaysInMonth;
+        const prorate = schedDays > 0 && workedDays < schedDays;
+        grossPay = prorate ? Math.round((rate * workedDays) / schedDays) : rate;
         ordinaryWage = Math.round(rate / 209); // 월 소정근로시간 209h 기준
-        calcMethods["기본급"] = `월 ${rate.toLocaleString()}원`;
-        breakdown = { payType: "MONTHLY", monthlyRate: rate, workedDays, workedMinutes, pendingDays };
+        calcMethods["기본급"] = prorate
+          ? `월 ${rate.toLocaleString()}원 × ${workedDays}/${schedDays}일 (일할)`
+          : `월 ${rate.toLocaleString()}원`;
+        breakdown = { payType: "MONTHLY", monthlyRate: rate, scheduledWorkdays: schedDays, workedDays, prorated: prorate, workedMinutes, pendingDays };
       }
 
       if (overtimeHours > 0 && ordinaryWage > 0) {
@@ -264,7 +288,7 @@ export async function computePayrollItems(
         const DOW: Record<string, number> = { "일": 0, "월": 1, "화": 2, "수": 3, "목": 4, "금": 5, "토": 6 };
         const whDow = empContract?.weeklyHoliday ? (DOW[empContract.weeklyHoliday] ?? 0) : 0; // 주휴일 요일(기본 일)
         const holidaySet = new Set(Object.keys(getKrHolidays(y, m)));
-        let nightMin = 0, holidayMin = 0;
+        let nightMin = 0, holidayLe8Min = 0, holidayGt8Min = 0;
         for (const a of confirmedAtt) {
           if (!a.startTime || !a.endTime) continue;
           const s = kstMin(a.startTime), e = kstMin(a.endTime);
@@ -280,7 +304,14 @@ export async function computePayrollItems(
           if (eNight > s) nightMin += ovl(s, eNight, 0, 360) + ovl(s, eNight, 1320, 1440); // 자정 안 넘는 경우만
           const [yy, mm2, dd] = a.workDate.split("-").map(Number);
           const dow = new Date(Date.UTC(yy, mm2 - 1, dd)).getUTCDay();
-          if (holidaySet.has(a.workDate) || dow === whDow) holidayMin += Math.max(0, e - s);
+          // 휴일근로(공휴일·주휴일) 실근로시간(무급휴게 제외). 커스텀휴무는 여기 미포함=일반급여(가산 없음).
+          //  · 1일 8h 이내는 0.5배 가산, 8h 초과분은 1.0배 가산(총 2.0배). 일별로 8h 경계 판정.
+          if (holidaySet.has(a.workDate) || dow === whDow) {
+            const span = Math.max(0, e - s);
+            const workedMin = Math.max(0, span - unpaidBreakMin(a.assignment?.workType, span));
+            holidayLe8Min += Math.min(workedMin, 480);
+            holidayGt8Min += Math.max(0, workedMin - 480);
+          }
         }
         if (nightMin > 0) {
           const nightHours = +(nightMin / 60).toFixed(2);
@@ -289,17 +320,23 @@ export async function computePayrollItems(
           (breakdown as any).nightHours = nightHours; (breakdown as any).nightPay = pay;
           calcMethods["야간근로수당"] = `${nightHours}시간 × ${ordinaryWage.toLocaleString()}원 × 0.5`;
         }
-        if (holidayMin > 0) {
-          const holidayHours = +(holidayMin / 60).toFixed(2);
-          const pay = Math.round(holidayHours * ordinaryWage * 0.5);
+        if (holidayLe8Min > 0 || holidayGt8Min > 0) {
+          const h8 = +(holidayLe8Min / 60).toFixed(2);
+          const hOver = +(holidayGt8Min / 60).toFixed(2);
+          const pay = Math.round(h8 * ordinaryWage * 0.5 + hOver * ordinaryWage * 1.0);
           grossPay += pay;
-          (breakdown as any).holidayHours = holidayHours; (breakdown as any).holidayPay = pay;
-          calcMethods["휴일근로수당"] = `${holidayHours}시간 × ${ordinaryWage.toLocaleString()}원 × 0.5`;
+          (breakdown as any).holidayHours = +(h8 + hOver).toFixed(2);
+          (breakdown as any).holidayPay = pay;
+          if (hOver > 0) { (breakdown as any).holidayHours8 = h8; (breakdown as any).holidayHoursOver8 = hOver; }
+          calcMethods["휴일근로수당"] = hOver > 0
+            ? `8h이내 ${h8}h × 0.5 + 초과 ${hOver}h × 1.0 (× ${ordinaryWage.toLocaleString()}원)`
+            : `${h8}시간 × ${ordinaryWage.toLocaleString()}원 × 0.5`;
         }
       }
 
       // 주휴수당: 근로소득(EMPLOYMENT) 단시간 — 2조건 자동 산식. PayContract.weeklyHolidayPay 고정 오버라이드.
-      if (contract.incomeType === "EMPLOYMENT" && ordinaryWage > 0) {
+      //  ※ MONTHLY(월급)는 월정액 209h에 주휴가 이미 포함 → 별도 가산 안 함(이중지급 방지).
+      if (contract.incomeType === "EMPLOYMENT" && contract.payType !== "MONTHLY" && ordinaryWage > 0) {
         // 소정근로시간 = 실질 약정 근로시간(출퇴근·휴게지도 포함, 무급휴게만 제외) = 지급시간과 동일.
         //  오전/오후 5.5h · 전일 8h. (주휴 = (1주 소정÷40)×8×시급)
         const days = confirmedAtt.map((a) => {
@@ -307,18 +344,11 @@ export async function computePayrollItems(
           const fallback = Math.max(0, span - unpaidBreakMin(a.assignment?.workType, span));
           return { dateISO: a.workDate, scheduledMinutes: contractDailySojeMin ?? fallback };
         });
-        // 소정근로 요일 = 월~ 순으로 주휴일(weeklyHoliday) 제외하고 workDaysPerWeek개. (5일=월~금, 6일=월~토)
-        const DOW_LABEL: Record<string, number> = { "일": 0, "월": 1, "화": 2, "수": 3, "목": 4, "금": 5, "토": 6 };
-        const wpw = empContract?.workDaysPerWeek ?? 5;
-        const restDow = empContract?.weeklyHoliday ? (DOW_LABEL[empContract.weeklyHoliday] ?? 0) : 0;
-        const workingWeekdays = new Set<number>();
-        for (const d of [1, 2, 3, 4, 5, 6, 0]) { if (d === restDow) continue; workingWeekdays.add(d); if (workingWeekdays.size >= wpw) break; }
-        // 공휴일(법정)+커스텀휴무 → 소정근로일에서 제외(개근 판정). 둘 다 KST "YYYY-MM-DD".
-        const holidaySet = new Set<string>([...Object.keys(getKrHolidays(y, m)), ...customHolidays.map((h) => h.date)]);
+        // 소정근로 요일·공휴일/커스텀휴무 집합은 위(payType 분기 전)에서 계산한 공용값 재사용.
         const wh = computeWeeklyHoliday({
           days, workDaysPerWeek: wpw, ordinaryWage,
           flatWeeklyHolidayPay: contract.weeklyHolidayPay ? Number(contract.weeklyHolidayPay) : null,
-          workingWeekdays, holidaySet,
+          workingWeekdays, holidaySet: monthHolidaySet,
         });
         if (wh.totalHolidayPay > 0) {
           grossPay += wh.totalHolidayPay;
@@ -409,6 +439,11 @@ export async function computePayrollItems(
     if (contract?.incomeType && isIllegalBusinessIncome(!!empContract, contract.incomeType as IncomeType)) {
       (breakdown as any).incomeWarn = "근로계약 존재 — 사업소득(3.3%) 설정은 위법 소지(근로소득으로 자동 계산됨)";
     }
+    // 국민연금 가입 검토 대상(계약 1개월 미만이나 월 8일↑/60h↑) — 자동 공제하지 않고 경고만. 노무사·공단 확인 필요.
+    if (elig.needsPensionReview) {
+      (breakdown as any).insuranceReview =
+        "국민연금 가입 검토 필요 — 계약 1개월 미만이나 해당 월 근로일수 8일 이상 또는 60시간 이상. 국민연금공단 안내상 사업장가입 대상이 될 수 있어 공제·신고 전 노무사 또는 공단 확인 필요(현재 자동 공제 안 함).";
+    }
     const pushDed = (key: string, name: string, amount: number) => {
       deductionBreakdown[name] = amount;
       deductLines.push({ key, name, amount });
@@ -442,6 +477,7 @@ export async function computePayrollItems(
     const employerIndustrial = elig.insurances.includes("industrial") ? Math.round(grossPay * industrialRate) : 0;
     const insurance = {
       incomeType, tier: elig.tier, insurances: elig.insurances, workerDeductible: elig.workerDeductible,
+      needsPensionReview: !!elig.needsPensionReview,
       employerIndustrial,
       employmentMonths: Number.isFinite(employmentMonths) ? +employmentMonths.toFixed(1) : null,
       monthlyHours, monthlyDays: workedDays, continuousMonths: +continuousMonths.toFixed(1),

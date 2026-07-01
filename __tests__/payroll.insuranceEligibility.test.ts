@@ -86,6 +86,26 @@ describe("determineInsurances (4대보험 차등)", () => {
   });
 });
 
+describe("국민연금 검토대상(needsPensionReview) — <1개월이나 월 8일↑/60h↑", () => {
+  it("<1개월 & 월 8일↑ → 검토대상 플래그 O, 단 국민연금 자동공제는 안 함", () => {
+    const r = determineInsurances("EMPLOYMENT", { employmentMonths: 0.7, monthlyHours: 30, monthlyDays: 10, continuousMonths: 1 });
+    expect(r.tier).toBe("DAILY_WORKER");
+    expect(r.needsPensionReview).toBe(true);
+    expect(r.workerDeductible).toEqual(["employment"]); // pension 미포함 = 자동공제 없음
+    expect(r.insurances).not.toContain("pension");
+  });
+  it("<1개월 & 월 60h↑(일수는 8 미만) → 검토대상", () => {
+    const r = determineInsurances("EMPLOYMENT", { employmentMonths: 0.7, monthlyHours: 65, monthlyDays: 5, continuousMonths: 1 });
+    expect(r.tier).toBe("DAILY_WORKER");
+    expect(r.needsPensionReview).toBe(true);
+  });
+  it("<1개월 & 8일 미만 & 60h 미만 → 검토대상 아님", () => {
+    const r = determineInsurances("EMPLOYMENT", { employmentMonths: 0.7, monthlyHours: 30, monthlyDays: 5, continuousMonths: 1 });
+    expect(r.tier).toBe("DAILY_WORKER");
+    expect(r.needsPensionReview).toBe(false);
+  });
+});
+
 describe("determineEligibility (통합)", () => {
   it("직무지도원 표준 케이스: 근로계약+근태, 정규 근로 → 근로소득·4대보험 전부", () => {
     const r = determineEligibility(

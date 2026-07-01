@@ -52,6 +52,11 @@ export interface InsuranceResult {
   tier: WorkerTier;
   insurances: InsuranceKind[];       // 가입 보험 전체(산재 포함)
   workerDeductible: InsuranceKind[]; // 워커 공제 대상(= 가입 − 산재)
+  // 국민연금 가입 "검토 대상": 계약 1개월 미만이나 월 8일 이상/60시간 이상 근무 → 국민연금공단 안내상
+  // 사업장가입 대상이 될 여지가 있음(2022~ 개정·시행령 제2조). 단, "1개월 이상 계속근로" 전제로 실무가
+  // 갈릴 수 있어 **자동 공제하지 않고 플래그만** 세운다(노무사·공단 확인 후 가입·공제 여부 확정).
+  //  ※ 건강보험은 1개월 미만이면 명확히 제외이므로 검토 대상 아님(국민연금만).
+  needsPensionReview?: boolean;
 }
 
 // 일반 단시간/상용: 워커가 부담하는 4대보험(산재 제외)
@@ -70,9 +75,13 @@ export function determineInsurances(incomeType: IncomeType, x: InsuranceInput): 
     return { tier: "NONE", insurances: [], workerDeductible: [] };
   }
   // 일용근로자: 1개월 미만 고용(달력 기준 우선, 없으면 employmentMonths < 1 폴백)
+  //  · 고용 + 산재만 자동. 건강보험·국민연금은 1개월 미만이면 원칙 제외.
+  //  · 단 국민연금은 <1개월이라도 월 8일 이상 또는 60시간 이상이면 사업장가입 대상이 될 여지 →
+  //    자동 공제는 하지 않고 needsPensionReview 플래그만(노무사·공단 확인 후 확정).
   const underOneMonth = x.employmentUnderOneMonth ?? (x.employmentMonths < 1);
   if (underOneMonth) {
-    return { tier: "DAILY_WORKER", insurances: ["employment", "industrial"], workerDeductible: ["employment"] };
+    const needsPensionReview = x.monthlyDays >= 8 || x.monthlyHours >= 60;
+    return { tier: "DAILY_WORKER", insurances: ["employment", "industrial"], workerDeductible: ["employment"], needsPensionReview };
   }
   // 일반 단시간/상용: 월 소정근로 60시간 이상 또는 월 8일 이상
   if (x.monthlyHours >= 60 || x.monthlyDays >= 8) {
