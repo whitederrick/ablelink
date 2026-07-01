@@ -128,9 +128,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 등록된 커스텀 휴무일(SiteHoliday) 집합
+    // 등록된 커스텀 휴무일(SiteHoliday) 집합 — countAsWorkday=false(실제 휴무)만 스킵.
+    // (countAsWorkday=true는 근무 인정일이므로 출근부 생성 대상 — cron/daily와 동일 기준)
     const customHolidayRows = await prisma.siteHoliday.findMany({
-      where: { assignmentId: assignment.id, date: { gte: from, lte: effectiveTo } },
+      where: { assignmentId: assignment.id, date: { gte: from, lte: effectiveTo }, countAsWorkday: false },
       select: { date: true },
     });
     const customHolidaySet = new Set(customHolidayRows.map((r) => r.date));
