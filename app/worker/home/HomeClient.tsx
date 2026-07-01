@@ -7,6 +7,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
+  ChevronsUpDown,
   CircleDollarSign,
   ClipboardList,
   FileText,
@@ -29,7 +30,10 @@ import type { HomeSummary } from "@/lib/worker/homeSummary";
 
 // 배정 요청 근무형태 라벨
 const REQ_WT_LABEL: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "전일", CUSTOM: "직접" };
+// 멀티 현장 전환 스위처 근무형태 짧은 라벨
+const WORKTYPE_SHORT: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "종일", CUSTOM: "맞춤" };
 import { LATE_CLOCK_OUT_REASONS } from "@/lib/attendance/lateClockOut";
+import { setActiveAssignmentCookie } from "../_lib/activeAssignmentCookie";
 
 type MissedClockOut = { attendanceId: string; workDate: string; siteName: string };
 
@@ -293,6 +297,10 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
   const [pendingRequests, setPendingRequests] = useState<HomeSummary["pendingRequests"]>(initialData?.pendingRequests ?? []);
   const [reqWtChoice, setReqWtChoice] = useState<Record<string, string>>({});
   const [missedClockOuts, setMissedClockOuts] = useState<MissedClockOut[]>(initialData?.missedClockOuts ?? []);
+  // 멀티 현장: 오늘 활성 배정 목록 + 현재 선택 배정 + 전환 시트 열림
+  const [activeAssignments, setActiveAssignments] = useState<HomeSummary["activeAssignments"]>(initialData?.activeAssignments ?? []);
+  const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(initialData?.activeAssignmentId ?? null);
+  const [switchOpen, setSwitchOpen] = useState(false);
   const [missedTarget,    setMissedTarget]    = useState<MissedClockOut | null>(null);
   const [missedReason,    setMissedReason]    = useState<string>("");
   const [missedReasonText, setMissedReasonText] = useState<string>("");
@@ -315,6 +323,8 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
       setTodayMissing(d.today.missingTraineeCount);
       setMissedClockOuts(d.missedClockOuts ?? []);
       setPendingRequests(d.pendingRequests ?? []);
+      setActiveAssignments(d.activeAssignments ?? []);
+      setActiveAssignmentId(d.activeAssignmentId ?? null);
       if (d.homeMessages) setHomeMessages(d.homeMessages);
     } catch (e: any) {
       showToast(e.message || "데이터를 불러올 수 없습니다.", "error");
@@ -322,6 +332,15 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
       setLoading(false);
     }
   }, []);
+
+  // 멀티 현장 전환: 쿠키 세팅 후 home-summary 재조회(쿠키 기반으로 선택 배정 반영).
+  const switchAssignment = useCallback(async (id: string) => {
+    setActiveAssignmentCookie(id);
+    setActiveAssignmentId(id);
+    setSwitchOpen(false);
+    setLoading(true);
+    await refresh();
+  }, [refresh]);
 
   // initialData가 없을 때(서버 프리페치 실패)만 클라이언트 폴백 조회
   useEffect(() => {
@@ -464,6 +483,8 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workerId: session.workerId,
+          // 멀티 현장: 선택된 배정을 명시해 서버가 그 현장 기준으로 출근 기록(없으면 서버가 자동 선택 — 단일현장 호환).
+          ...(homeData?.assignmentId ? { assignmentId: homeData.assignmentId, siteId: homeData.siteId ?? undefined } : {}),
           latitude,
           longitude,
           isGpsModified,
@@ -809,13 +830,28 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
               <span className="shrink-0 text-base font-bold text-slate-300">{nowDateStr()}</span>
               {homeData?.siteName && (
                 <>
-                  <button
-                    onClick={() => router.push("/worker/site")}
-                    className="inline-flex min-w-0 max-w-[45vw] items-center gap-1 rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-300"
-                  >
-                    <MapPin className="h-3 w-3 shrink-0 text-sky-400" aria-hidden="true" />
-                    <span className="truncate">{homeData.siteName}</span>
-                  </button>
+                  {activeAssignments.length >= 2 ? (
+                    // 멀티 현장: 배지를 전환 스위처로(오전/오후 전환)
+                    <button
+                      onClick={() => setSwitchOpen(true)}
+                      className="inline-flex min-w-0 max-w-[52vw] items-center gap-1 rounded-full border border-sky-500/60 bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-200"
+                    >
+                      {(() => {
+                        const wt = activeAssignments.find(a => a.assignmentId === activeAssignmentId)?.workType;
+                        return wt ? <span className="shrink-0 rounded-full bg-sky-500/25 px-1.5 text-[11px] font-black text-sky-200">{WORKTYPE_SHORT[wt] ?? wt}</span> : null;
+                      })()}
+                      <span className="truncate">{homeData.siteName}</span>
+                      <ChevronsUpDown className="h-3 w-3 shrink-0 text-sky-400" aria-hidden="true" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => router.push("/worker/site")}
+                      className="inline-flex min-w-0 max-w-[45vw] items-center gap-1 rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-300"
+                    >
+                      <MapPin className="h-3 w-3 shrink-0 text-sky-400" aria-hidden="true" />
+                      <span className="truncate">{homeData.siteName}</span>
+                    </button>
+                  )}
                   {/* 서비스 단계 뱃지 (지원고용 훈련 / 취업 후 적응지도) */}
                   <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-black ${
                     homeData.trainingType === "ADAPTATION" ? "bg-amber-400 text-slate-950" : "bg-sky-400 text-slate-950"
@@ -1270,6 +1306,34 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
       )}
 
       {/* ── 다이얼로그 ── */}
+      {/* ── 멀티 현장 전환(오전/오후) 시트 ── */}
+      {switchOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50" onClick={e => { if (e.target === e.currentTarget) setSwitchOpen(false); }}>
+          <div className="w-full max-w-sm rounded-t-3xl bg-white p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-lg font-black text-slate-900">근무 현장 전환</h3>
+              <button onClick={() => setSwitchOpen(false)} aria-label="닫기"><X className="h-5 w-5 text-slate-400" /></button>
+            </div>
+            <div className="space-y-2">
+              {activeAssignments.map(a => {
+                const cur = a.assignmentId === activeAssignmentId;
+                return (
+                  <button
+                    key={a.assignmentId}
+                    onClick={() => switchAssignment(a.assignmentId)}
+                    className={`flex w-full items-center gap-2 rounded-2xl border px-4 py-3 text-left transition active:scale-[0.98] ${cur ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-white"}`}
+                  >
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-black text-slate-700">{WORKTYPE_SHORT[a.workType] ?? a.workType}</span>
+                    <span className="min-w-0 flex-1 truncate text-base font-black text-slate-900">{a.siteName}</span>
+                    <span className="shrink-0 text-xs font-semibold text-slate-500">훈련생 {a.traineeCount}</span>
+                    {cur && <CheckCircle2 className="h-4 w-4 shrink-0 text-sky-500" aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       {/* ── 퇴근 미실행: 사유 선택 + 늦은 퇴근 처리 모달 ── */}
       {missedTarget && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 sm:items-center">

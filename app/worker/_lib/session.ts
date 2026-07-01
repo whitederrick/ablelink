@@ -5,6 +5,9 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export const WORKER_COOKIE = "ablelink_worker_session";
+// 멀티 현장 워커가 "오늘 근무 중인 현장(배정)"을 선택한 값(assignmentId). 클라가 세팅, 서버가 소유·활성 검증.
+// UI 선호값이라 httpOnly 아님(스위처가 읽음). 서버는 이 값을 신뢰하지 않고 활성 배정 목록 내에서만 적용.
+export const WK_ACTIVE_ASSIGNMENT_COOKIE = "wk_active_assignment";
 // 현장을 다니는 직무지도원의 재로그인 부담을 줄이기 위해 90일. 앱을 열 때마다 갱신(롤링)됨.
 export const WORKER_SESSION_MAX_AGE = 60 * 60 * 24 * 90;
 const MAX_AGE = WORKER_SESSION_MAX_AGE;

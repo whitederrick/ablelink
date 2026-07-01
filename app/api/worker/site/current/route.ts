@@ -23,12 +23,18 @@ export async function GET(request: NextRequest) {
     const todayStr = getKstDateString();
     const today = new Date(`${todayStr}T00:00:00.000Z`);
 
+    // 멀티 현장: 클라가 선택 배정(assignmentId)을 주면 그걸 우선(소유·활성·기간 검증). 없으면 최신 1건.
+    const reqAssignmentId = request.nextUrl.searchParams.get("assignmentId");
+    let selAssignmentId: bigint | null = null;
+    try { selAssignmentId = reqAssignmentId ? BigInt(reqAssignmentId) : null; } catch { selAssignmentId = null; }
+
     const assignment = await prisma.siteAssignment.findFirst({
       where: {
         workerId,
         status: "ACTIVE",
         startDate: { lte: today },
         OR: [{ endDate: null }, { endDate: { gte: today } }],
+        ...(selAssignmentId != null ? { id: selAssignmentId } : {}),
       },
       include: {
         site: { include: { trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } } } } },

@@ -61,9 +61,12 @@ export interface HomeSummary {
   missedClockOuts: { attendanceId: string; workDate: string; siteName: string }[];
   // 배정 요청(REQUESTED) — 매니저가 보낸 요청, 워커가 수락(희망 근무형태 선택)/거절
   pendingRequests: { assignmentId: string; siteName: string; agencyName: string; requestedWorkTypes: string[]; replyDeadline: string | null }[];
+  // 현재 선택된 배정(멀티 현장 스위처용) + 오늘 활성 배정 목록(2개 이상이면 로그인 선택·헤더 전환 노출)
+  activeAssignmentId: string | null;
+  activeAssignments: { assignmentId: string; siteId: string | null; siteName: string; agencyName: string; workType: string; traineeCount: number }[];
 }
 
-export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
+export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: bigint | null): Promise<HomeSummary> {
   const today = getKstDateString();
   const kstNow = getKstNowDate();
 
@@ -105,10 +108,26 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     },
   });
 
-  const activeAssignment = userWithData?.assignments[0];
+  const allAssignments = userWithData?.assignments ?? [];
+  // 오늘 활성(근무 가능) 배정 — 멀티 현장 선택/스위처 대상. status ACTIVE + 오늘 기간겹침(KST).
+  const kstDateStr = (d: Date) => new Date(d).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
+  const todayActive = allAssignments.filter((a) =>
+    (a as any).status === "ACTIVE" &&
+    (!a.startDate || kstDateStr(a.startDate) <= today) &&
+    (!a.endDate || kstDateStr(a.endDate) >= today)
+  );
+  // 선택 배정 = 쿠키 지정(오늘 활성 목록 내에서만 유효) → 없으면 오늘 활성 첫째 → 없으면 기존 폴백(assignments[0]).
+  const selectedFromCookie = selectedAssignmentId != null
+    ? todayActive.find((a) => a.id === selectedAssignmentId)
+    : undefined;
+  const activeAssignment = selectedFromCookie ?? todayActive[0] ?? allAssignments[0];
   const site = activeAssignment?.site;
   const trainees = site?.trainees ?? [];
-  const todayAttendance = userWithData?.attendances[0];
+  // 선택 배정의 오늘 출근 기록(멀티면 배정별로 여러 건 → 선택 배정 것만).
+  const todayAttendances = userWithData?.attendances ?? [];
+  const todayAttendance = activeAssignment
+    ? todayAttendances.find((t) => t.assignmentId === activeAssignment.id)
+    : todayAttendances[0];
 
   const [premiumStatus, docAccessStatus] = await Promise.all([
     getWorkerPremiumStatus(workerId),
@@ -255,5 +274,14 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     today: { loggedTraineeIds, missingTraineeCount },
     missedClockOuts,
     pendingRequests,
+    activeAssignmentId: activeAssignment?.id ? String(activeAssignment.id) : null,
+    activeAssignments: todayActive.map((a) => ({
+      assignmentId: String(a.id),
+      siteId: a.site?.id ? String(a.site.id) : null,
+      siteName: a.site?.companyName ?? "현장",
+      agencyName: (a.site as any)?.agency?.name ?? "",
+      workType: a.workType ?? "FULL_DAY",
+      traineeCount: a.site?.trainees?.length ?? 0,
+    })),
   };
 }

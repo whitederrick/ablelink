@@ -3,15 +3,21 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { getWorkerSessionFromReq, WK_ACTIVE_ASSIGNMENT_COOKIE } from "@/app/worker/_lib/session";
 import { buildHomeSummary } from "@/lib/worker/homeSummary";
+
+function parseBigIntOrNull(v: string | undefined): bigint | null {
+  if (!v) return null;
+  try { return BigInt(v); } catch { return null; }
+}
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getWorkerSessionFromReq(request);
     if (!session) return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
 
-    const summary = await buildHomeSummary(BigInt(session.workerId));
+    const selected = parseBigIntOrNull(request.cookies.get(WK_ACTIVE_ASSIGNMENT_COOKIE)?.value);
+    const summary = await buildHomeSummary(BigInt(session.workerId), selected);
     return NextResponse.json({ success: true, data: summary }, { headers: { "Cache-Control": "no-store" } });
   } catch (e: any) {
     console.error("[worker/home-summary]", e);
