@@ -5,7 +5,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { getKstDateString } from "@/lib/time";
-import { getConfigNumber } from "@/lib/systemConfig";
 import { isPayrollPending, lateMinutes, earlyLeaveMinutes, SERIOUS_LATE_MIN } from "@/lib/attendance/payrollGate";
 // 근태 이슈 도출은 대시보드와 공용(lib/attendance/issueDerivation)으로 통일
 import { deriveAttendanceIssues, expectedStartHHMM } from "@/lib/attendance/issueDerivation";
@@ -43,7 +42,6 @@ function mapIssueStatusToInboxStatus(issue: {
 export async function GET(req: Request) {
   try {
     const scope = await requireManagerSession(req);
-    const lateThresholdMin = await getConfigNumber("LATE_THRESHOLD_MIN");
     const today = getKstDateString();
 
     // 소속 기관만 조회
@@ -156,7 +154,8 @@ export async function GET(req: Request) {
         startDistanceM: r.startDistanceM ?? null, rangeM: r.rangeM ?? null,
         workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd,
         status: r.status, workDate: r.workDate,
-      }, { lateThresholdMin, todayStr: today });
+        // 지각 판정 임계 = 위탁기관(현장/기관)이 설정한 '지각 인정 기준'(급여 보정대기와 동일 기준). 전역 고정값 아님.
+      }, { lateThresholdMin: (r.site as any)?.lateThresholdMin ?? agencyLateThreshold, todayStr: today });
       if (derived.length === 0) continue;
       const expectedStartAt = expectedStartHHMM({ workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd });
       candidates.push({ r, derived, workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd, expectedStartAt });

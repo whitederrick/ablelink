@@ -7,7 +7,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { getKstDateString } from "@/lib/time";
-import { getConfigNumber } from "@/lib/systemConfig";
 import { deriveAttendanceIssues, ATTENDANCE_ISSUE_WINDOW_DAYS } from "@/lib/attendance/issueDerivation";
 import { isDailyLogComplete, logCompletionStatus } from "@/lib/docs/logCompletion";
 
@@ -30,7 +29,6 @@ export async function GET(req: Request) {
     const endedFloor = new Date(today); endedFloor.setDate(endedFloor.getDate() - 60);
 
     // 지각(TIME_ANOMALY) 판정 임계(분) — 인박스와 동일 운영설정값 사용
-    const lateThresholdMin = await getConfigNumber("LATE_THRESHOLD_MIN");
 
     // ── 6개 쿼리 병렬 실행 ────────────────────────────────────────
     const [
@@ -62,8 +60,8 @@ export async function GET(req: Request) {
           id: true, workDate: true, startTime: true, endTime: true, status: true,
           actualStartTime: true, actualEndTime: true, startDistanceM: true, rangeM: true,
           user: { select: { workerName: true } },
-          site: { select: { companyName: true } },
-          assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true } },
+          site: { select: { companyName: true, lateThresholdMin: true } },
+          assignment: { select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true, agency: { select: { lateThresholdMin: true } } } },
           attendanceIssue: { select: { status: true } },
         },
       }),
@@ -147,7 +145,8 @@ export async function GET(req: Request) {
           customWorkStart: r.assignment?.customWorkStart ?? null,
           customWorkEnd: r.assignment?.customWorkEnd ?? null,
           status: r.status, workDate: r.workDate,
-        }, { lateThresholdMin, todayStr }),
+          // 지각 판정 임계 = 위탁기관(현장 ?? 기관)이 설정한 '지각 인정 기준'. 전역 고정값 아님.
+        }, { lateThresholdMin: (r.site as any)?.lateThresholdMin ?? (r.assignment as any)?.agency?.lateThresholdMin ?? 30, todayStr }),
       }))
       .filter(x => x.types.length > 0 && x.r.attendanceIssue?.status !== "RESOLVED")
       .map(x => ({
