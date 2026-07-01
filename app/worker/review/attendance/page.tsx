@@ -14,6 +14,7 @@ type AttRec = {
   startTime: string;
   endTime: string;
   isFinalClosed: boolean;
+  isManagerFinalClosed: boolean; // 매니저 최종확정(잠금) — 워커는 확정/수정 불가
   isGpsModified: boolean;
   status: string;
   correctionRequested?: boolean; // 관리자가 이 날 시각 보정을 요청함
@@ -125,7 +126,7 @@ export default function AttendanceReviewPage() {
   }
 
   async function confirmMonth() {
-    const unconfirmed = records.filter(r => !r.isFinalClosed && r.startTime);
+    const unconfirmed = records.filter(r => !r.isFinalClosed && !r.isManagerFinalClosed && r.startTime);
     if (unconfirmed.length === 0) { showToast("확정할 기록이 없습니다."); return; }
     if (!confirm(`미확정 ${unconfirmed.length}건을 일괄 확정하시겠습니까?`)) return;
     setBatchSaving(true);
@@ -192,8 +193,10 @@ export default function AttendanceReviewPage() {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   }
 
-  const confirmed   = records.filter(r => r.isFinalClosed).length;
-  const unconfirmed = records.filter(r => !r.isFinalClosed && r.startTime).length;
+  // 매니저 최종확정(잠금)도 '확정'으로 취급 — 미확정 오표기·확정불가 방지
+  const isConfirmed = (r: AttRec) => r.isFinalClosed || r.isManagerFinalClosed;
+  const confirmed   = records.filter(r => isConfirmed(r)).length;
+  const unconfirmed = records.filter(r => !isConfirmed(r) && r.startTime).length;
   const absent      = records.filter(r => !r.startTime).length;
   const pendingReqs = editReqs.filter(r => r.status === "PENDING").length;
 
@@ -304,7 +307,7 @@ export default function AttendanceReviewPage() {
                   className={`rounded-2xl border bg-white px-4 py-3 transition ${
                     rec.workDate === highlightDate ? "border-amber-400 ring-2 ring-amber-200" :
                     needsCorrection ? "border-amber-300" :
-                    rec.isFinalClosed ? "border-emerald-100" : "border-slate-100"
+                    isConfirmed(rec) ? "border-emerald-100" : "border-slate-100"
                   }`}>
                   {needsCorrection && (
                     <div className="mb-2 flex items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-1.5">
@@ -361,13 +364,15 @@ export default function AttendanceReviewPage() {
 
                     {/* 버튼 */}
                     <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
-                      {rec.isFinalClosed ? (
+                      {isConfirmed(rec) ? (
                         <>
                           <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-600">
-                            <CheckCircle2 className="h-3 w-3" />확정
+                            <CheckCircle2 className="h-3 w-3" />{rec.isManagerFinalClosed && !rec.isFinalClosed ? "최종확정" : "확정"}
                           </span>
-                          {/* 확정 후에도 수정 요청 가능. PENDING이면 '요청 변경'(기존 요청 갱신) */}
-                          {(!req || req.status === "REJECTED" || req.status === "PENDING") && (
+                          {/* 매니저 최종확정(잠금)은 수정 불가. 그 외 확정 건은 수정 요청 가능(PENDING이면 '요청 변경') */}
+                          {rec.isManagerFinalClosed ? (
+                            <span className="text-[10px] font-semibold text-slate-400">관리자 잠금</span>
+                          ) : (!req || req.status === "REJECTED" || req.status === "PENDING") && (
                             <button
                               onClick={() => openEditModal(rec, req?.status === "PENDING" ? req : undefined)}
                               className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500 active:scale-95"

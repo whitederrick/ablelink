@@ -141,7 +141,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 배정 기간 내 + 오늘 이전 날짜 중 출근 기록 없는 날 → RED
+    // 주말(토·일)은 휴무 — 결근(RED) 아님. 출근부 일괄생성도 주말을 제외하므로 주말은 근무일이 아니며,
+    // 급여 소정근로일 산정 시 제외 대상. (출근 기록이 있는 주말은 위에서 이미 근무로 처리됨)
+    for (let d = 1; d <= endDay; d++) {
+      const key = `${year}-${pad2(month)}-${pad2(d)}`;
+      const dow = new Date(year, month - 1, d).getDay();
+      if ((dow === 0 || dow === 6) && !dayMap[key] && !allHolidays[key]) {
+        dayMap[key] = {
+          status: "HOLIDAY", attendanceId: "", startTime: null, endTime: null,
+          isFinalClosed: false, logCount: 0, traineeCount, holidayName: "주말",
+        };
+      }
+    }
+
+    // 배정 기간 내 + 오늘 이전 날짜 중 출근 기록 없는 날 → RED (주말·휴무는 위에서 dayMap에 있어 제외됨)
     if (assignment) {
       const assignStart = assignment.startDate.toISOString().slice(0, 10);
       const assignEnd   = assignment.endDate

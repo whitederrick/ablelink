@@ -136,12 +136,13 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     select: { clockInAlertMinutes: true, clockOutAlertMinutes: true },
   });
 
-  // ── 미작성 일지 (최근 3개월 출근기록 중 본인 일지 0건) ──
+  // ── 미완료 일지 (최근 3개월 출근기록 중 '완료된' 본인 일지 0건) ──
+  // 캘린더(isCompleted 기준)·매니저 대시보드와 일치: 임시저장(draft)만 있는 날도 '놓친 업무'로 노출.
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
   const from = threeMonthsAgo.toISOString().slice(0, 10);
   const missingAttendances = await prisma.dailyAttendance.findMany({
-    where: { workerId, workDate: { gte: from }, logs: { none: { writerId: workerId } } },
+    where: { workerId, workDate: { gte: from }, logs: { none: { writerId: workerId, isCompleted: true } } },
     include: {
       site: { select: { companyName: true, trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true, name: true, gender: true } } } },
       assignment: { select: { serviceStep: true, adaptationStartDate: true } },
@@ -158,11 +159,12 @@ export async function buildHomeSummary(workerId: bigint): Promise<HomeSummary> {
     trainees: a.site.trainees.map(t => ({ id: t.id.toString(), name: t.name, gender: t.gender })),
   }));
 
-  // ── 오늘 일지 상태 (오늘 출근기록에 작성된 훈련생) ──
+  // ── 오늘 일지 상태 (오늘 출근기록에 '완료된' 일지가 있는 훈련생) ──
+  // 임시저장(draft)은 미완료로 취급 → 캘린더(isCompleted)와 일치.
   let loggedTraineeIds: string[] = [];
   if (todayAttendance) {
     const todayLogs = await prisma.traineeLog.findMany({
-      where: { writerId: workerId, attendanceId: todayAttendance.id },
+      where: { writerId: workerId, attendanceId: todayAttendance.id, isCompleted: true },
       select: { traineeId: true },
     });
     loggedTraineeIds = todayLogs.map(l => l.traineeId.toString());
