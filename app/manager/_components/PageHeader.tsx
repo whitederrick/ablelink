@@ -8,19 +8,23 @@ export default function PageHeader({
   title,
   sub,
   actions,
+  center,
 }: {
   title: ReactNode;
   sub?: ReactNode;
   actions?: ReactNode;
+  /** 타이틀과 액션 사이 가운데 여백에 채우는 영역(예: 소식 티커). md 이상에서만 노출. */
+  center?: ReactNode;
 }) {
   return (
     <div className="mb-6 flex items-start justify-between gap-3">
-      <div className="min-w-0">
+      <div className="min-w-0 flex-shrink-0">
         <h1 className="text-lg font-black text-slate-900">{title}</h1>
         {sub != null && sub !== "" && (
           <p className="mt-0.5 text-sm font-semibold text-slate-400">{sub}</p>
         )}
       </div>
+      {center && <div className="hidden min-w-0 flex-1 self-start md:block">{center}</div>}
       {actions && <div className="flex flex-shrink-0 items-center gap-2">{actions}</div>}
     </div>
   );

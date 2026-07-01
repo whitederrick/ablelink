@@ -4,6 +4,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Lock, ChevronRight } from "lucide-react";
 import PageHeader from "./_components/PageHeader";
+import AdSlot, { type AdContent } from "@/components/AdSlot";
+import Ticker, { type TickerItem } from "@/components/Ticker";
+
+// 상단 헤더 티커 — 소식·안내가 흘러감(증권 시세판식). 추후 운영설정/공지 연동 가능.
+const TICKER_ITEMS: TickerItem[] = [
+  { badge: "소식", text: "구독 업그레이드하면 훈련생 진척도·AI 일지·PDF 출력을 사용할 수 있어요.", href: "/manager/subscription" },
+  { badge: "안내", text: "인재풀에서 조건에 맞는 직무지도원을 찾아 배정 요청을 보내보세요.", href: "/manager/workers" },
+  { badge: "안내", text: "출퇴근 기록과 훈련 일지를 앱에서 간편하게 관리하세요." },
+  { badge: "소식", text: "월별 진척도·마감 현황을 대시보드에서 한눈에 확인하세요." },
+];
+
+// 하단 우측 광고 슬롯 — 광고 전용(자동 로테이션). 실제 광고 인벤토리 연동 전 하우스 광고.
+const AD_CONTENTS: AdContent[] = [
+  { badge: "광고", title: "이 자리에 광고를 노출하세요", description: "제휴·광고 문의는 운영팀에 연락 주세요." },
+];
 import Pagination from "./_components/Pagination";
 
 interface DashboardData {
@@ -268,6 +283,7 @@ export default function AdminDashboardPage() {
       <PageHeader
         title="통합 운영 대시보드"
         sub={todayFmt}
+        center={<Ticker items={TICKER_ITEMS} className="mx-auto w-[88%]" />}
         actions={
           <button
             onClick={fetchDashboard}
@@ -286,20 +302,24 @@ export default function AdminDashboardPage() {
             key={i}
             onClick={card.onClick}
             disabled={!card.onClick}
-            className={`rounded-2xl border p-3 text-center transition disabled:cursor-default ${
+            className={`flex flex-col items-center rounded-2xl border px-3 py-3 text-center transition disabled:cursor-default ${
               card.urgent
                 ? "border-rose-200 bg-rose-50 hover:bg-rose-100"
                 : "border-slate-100 bg-white hover:bg-slate-50"
             }`}
           >
-            <p className="mb-1.5 text-[11px] font-semibold leading-tight text-slate-500">{card.label}</p>
-            <p className={`text-2xl font-black leading-none ${card.urgent ? "text-rose-600" : "text-slate-900"}`}>
+            {/* 타이틀(크게·진하게) + sub(괄호, 타이틀 옆) */}
+            <div className="flex flex-wrap items-baseline justify-center gap-x-1 leading-tight">
+              <span className="text-[12px] font-bold text-slate-700">{card.label}</span>
+              {"sub" in card && card.sub && (
+                <span className="text-[10px] font-semibold text-slate-400">({card.sub})</span>
+              )}
+            </div>
+            {/* 숫자 — 하단 정렬(mt-auto)로 카드마다 높이 통일 */}
+            <p className={`mt-auto pt-1 text-2xl font-black leading-none ${card.urgent ? "text-rose-600" : "text-slate-900"}`}>
               {card.value}
               <span className="ml-0.5 text-xs font-semibold text-slate-400">{card.unit}</span>
             </p>
-            {"sub" in card && card.sub && (
-              <p className="mt-1 text-[10px] font-semibold text-slate-400">{card.sub}</p>
-            )}
           </button>
         ))}
       </div>
@@ -538,7 +558,7 @@ export default function AdminDashboardPage() {
           </Section>
       </div>
 
-      {/* 하단: 훈련생 진척도 리포트 — 2/3 폭. 제목/카드/더보기 위쪽 정렬, 카드가 가운데 남은 폭을 채움. 우측 1/3은 비움 */}
+      {/* 하단: 훈련생 진척도 리포트 2/3 + 광고/소식 슬롯 1/3 */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-start justify-between gap-4">
@@ -555,9 +575,9 @@ export default function AdminDashboardPage() {
                   { label: "평균 일지 작성률", value: report.avgLogRate.toFixed(1), unit: "%", cls: report.avgLogRate >= 80 ? "text-emerald-600" : report.avgLogRate >= 60 ? "text-amber-500" : "text-rose-500" },
                   { label: "평균 수행 점수", value: report.avgScore != null ? report.avgScore.toFixed(1) : "-", unit: "/5.0", cls: report.avgScore === null ? "text-slate-300" : report.avgScore >= 4 ? "text-emerald-600" : report.avgScore >= 3 ? "text-sky-600" : "text-amber-500" },
                 ].map((c, i) => (
-                  <div key={i} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-center">
+                  <div key={i} className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-slate-50 px-3 py-3 text-center">
                     <p className="mb-1 text-[11px] font-semibold leading-tight text-slate-500">{c.label}</p>
-                    <p className={`text-2xl font-black leading-none ${c.cls}`}>{c.value}<span className="ml-0.5 text-xs font-semibold text-slate-400">{c.unit}</span></p>
+                    <p className={`text-xl font-black leading-none ${c.cls}`}>{c.value}<span className="ml-0.5 text-xs font-semibold text-slate-400">{c.unit}</span></p>
                   </div>
                 ))}
               </div>
@@ -577,6 +597,9 @@ export default function AdminDashboardPage() {
             <EmptyRow text="불러오는 중..." />
           ) : null}
         </div>
+
+        {/* 우측 1/3 — 광고/소식 슬롯(재사용 컴포넌트, 여러 광고 자동 로테이션) */}
+        <AdSlot className="lg:col-span-1" contents={AD_CONTENTS} />
       </div>
     </div>
   );
