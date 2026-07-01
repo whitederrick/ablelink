@@ -87,3 +87,40 @@ describe("computeWeeklyHoliday — 2조건 판정", () => {
     expect(r.weeks[0].holidayPay).toBe(30000);
   });
 });
+
+describe("computeWeeklyHoliday — 공휴일 낀 주 개근 인정", () => {
+  it("공휴일(6/10 수)에 안 나왔어도 나머지 소정근로일(4일) 개근이면 주휴 지급", () => {
+    // W24: 월~금 중 6/10(수)이 공휴일 → 소정근로일 4일. 6/8,9,11,12 출근(4일) = 개근.
+    const days = fullWeek([8, 9, 11, 12]); // 4일 (6/10 제외)
+    const r = computeWeeklyHoliday({
+      days, workDaysPerWeek: 5, ordinaryWage: 12000,
+      holidaySet: new Set(["2026-06-10"]),
+    });
+    const w24 = r.weeks.find(w => w.weekKey === "2026-W24")!;
+    expect(w24.fullAttendance).toBe(true);
+    expect(w24.eligible).toBe(true);
+    // 주휴액은 통상 1주(평균 1일 소정 240 × 5일 = 1200분=20h) 기준 → 48,000원(공휴일로 줄지 않음)
+    expect(w24.holidayPay).toBe(48000);
+  });
+
+  it("주말 공휴일은 소정근로일에 무영향(개근 기준 그대로 5일)", () => {
+    const days = fullWeek([8, 9, 10, 11]); // 4일만
+    const r = computeWeeklyHoliday({
+      days, workDaysPerWeek: 5, ordinaryWage: 12000,
+      holidaySet: new Set(["2026-06-13"]), // 토요일 → 소정근로일 아님
+    });
+    const w24 = r.weeks.find(w => w.weekKey === "2026-W24")!;
+    expect(w24.fullAttendance).toBe(false); // 4일 < 소정 5일
+    expect(w24.eligible).toBe(false);
+  });
+
+  it("커스텀휴무도 공휴일과 동일하게 소정근로일에서 제외", () => {
+    const days = fullWeek([8, 9, 10, 12]); // 6/11(목) 커스텀휴무로 안 나옴, 4일 출근
+    const r = computeWeeklyHoliday({
+      days, workDaysPerWeek: 5, ordinaryWage: 12000,
+      holidaySet: new Set(["2026-06-11"]),
+    });
+    const w24 = r.weeks.find(w => w.weekKey === "2026-W24")!;
+    expect(w24.eligible).toBe(true);
+  });
+});

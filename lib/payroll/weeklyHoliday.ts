@@ -26,6 +26,13 @@ export interface WeeklyHolidayInput {
   ordinaryWage: number;
   /** 주당 고정 주휴수당(수동 오버라이드). null/undefined면 자동 산식 */
   flatWeeklyHolidayPay?: number | null;
+  /** 소정근로 요일 집합(0=일..6=토). 공휴일이 소정근로일에 걸렸는지 판정용. 없으면 월~금 가정. */
+  workingWeekdays?: Set<number>;
+  /**
+   * 공휴일+커스텀휴무 "YYYY-MM-DD" 집합. 공휴일은 소정근로일이 아니므로(법정 유급휴일)
+   * 그 주 소정근로일수에서 제외한다 → 공휴일 낀 주도 나머지 소정근로일만 개근하면 주휴 지급.
+   */
+  holidaySet?: Set<string>;
 }
 
 export interface WeekResult {
@@ -68,8 +75,10 @@ function hStr(min: number): string {
 
 export function computeWeeklyHoliday(input: WeeklyHolidayInput): WeeklyHolidayResult {
   const { days, workDaysPerWeek, ordinaryWage, flatWeeklyHolidayPay } = input;
+  const workingWeekdays = input.workingWeekdays ?? new Set([1, 2, 3, 4, 5]); // 기본 월~금
+  const holidaySet = input.holidaySet ?? new Set<string>();
 
-  // 주차별 집계
+  // 주차별 출근 집계
   const byWeek = new Map<string, { workedDays: Set<string>; minutes: number }>();
   for (const dw of days) {
     const key = isoWeekKey(dw.dateISO);
@@ -79,26 +88,42 @@ export function computeWeeklyHoliday(input: WeeklyHolidayInput): WeeklyHolidayRe
     w.minutes += dw.scheduledMinutes;
   }
 
+  // 주차별 "소정근로일에 걸린 공휴일수" — 그 주 소정근로일수를 그만큼 줄인다.
+  // (공휴일은 소정근로일이 아니므로, 공휴일에 쉬어도 결근 아님 → 개근 판정에서 제외)
+  const holidayWorkdayByWeek = new Map<string, number>();
+  for (const h of holidaySet) {
+    const [hy, hm, hd] = h.split("-").map(Number);
+    if (!hy || !hm || !hd) continue;
+    const dow = new Date(Date.UTC(hy, hm - 1, hd)).getUTCDay();
+    if (!workingWeekdays.has(dow)) continue; // 주말 등 애초에 소정근로일 아닌 공휴일은 무영향
+    const key = isoWeekKey(h);
+    holidayWorkdayByWeek.set(key, (holidayWorkdayByWeek.get(key) ?? 0) + 1);
+  }
+
   const weekKeys = [...byWeek.keys()].sort();
   const weekCount = weekKeys.length;
-  const totalMinutes = weekKeys.reduce((s, k) => s + byWeek.get(k)!.minutes, 0);
-  const avgWeeklyMinutes = weekCount > 0 ? Math.round(totalMinutes / weekCount) : 0;
-  const meets15h = weekCount > 0 && avgWeeklyMinutes >= WEEKLY_THRESHOLD_MIN;
 
-  const minDays = Math.max(1, workDaysPerWeek || 5);
+  // 1주 소정근로시간(초단시간 15h 판정·주휴수당액) = 평균 1일 소정 × 주 소정근로일수.
+  // 통상적인 1주 기준이며 공휴일·부분주로 줄지 않는다(주휴는 공휴일 있는 주에도 1일분 지급).
+  const dailyMinsList = days.map(d => d.scheduledMinutes).filter(m => m > 0);
+  const avgDailyMin = dailyMinsList.length ? Math.round(dailyMinsList.reduce((s, m) => s + m, 0) / dailyMinsList.length) : 0;
+  const wpw = Math.max(1, workDaysPerWeek || 5);
+  const typicalWeeklyMinutes = avgDailyMin * wpw;
+  const meets15h = weekCount > 0 && typicalWeeklyMinutes >= WEEKLY_THRESHOLD_MIN;
+
+  const autoWeeklyPay = Math.round((typicalWeeklyMinutes / 60 / 40) * 8 * ordinaryWage);
+  const perWeekPay = flatWeeklyHolidayPay != null && flatWeeklyHolidayPay > 0
+    ? Math.round(flatWeeklyHolidayPay)
+    : autoWeeklyPay;
 
   const weeks: WeekResult[] = weekKeys.map((key) => {
     const w = byWeek.get(key)!;
     const workedDays = w.workedDays.size;
-    const fullAttendance = workedDays >= minDays;
-    const eligible = fullAttendance && meets15h;
-    let holidayPay = 0;
-    if (eligible) {
-      holidayPay = flatWeeklyHolidayPay != null && flatWeeklyHolidayPay > 0
-        ? Math.round(flatWeeklyHolidayPay)
-        : Math.round((w.minutes / 60 / 40) * 8 * ordinaryWage);
-    }
-    return { weekKey: key, workedDays, scheduledMinutes: w.minutes, fullAttendance, eligible, holidayPay };
+    // 그 주 소정근로일 = 주 소정근로일수 − 그 주 (소정근로 요일에 걸린) 공휴일수.
+    const requiredDays = Math.max(0, wpw - (holidayWorkdayByWeek.get(key) ?? 0));
+    const fullAttendance = requiredDays > 0 ? workedDays >= requiredDays : workedDays > 0;
+    const eligible = fullAttendance && meets15h && workedDays > 0;
+    return { weekKey: key, workedDays, scheduledMinutes: w.minutes, fullAttendance, eligible, holidayPay: eligible ? perWeekPay : 0 };
   });
 
   const eligibleWeeks = weeks.filter(w => w.eligible).length;
@@ -106,15 +131,12 @@ export function computeWeeklyHoliday(input: WeeklyHolidayInput): WeeklyHolidayRe
 
   let calcMethod = "";
   if (eligibleWeeks > 0) {
-    if (flatWeeklyHolidayPay != null && flatWeeklyHolidayPay > 0) {
-      calcMethod = `${eligibleWeeks}주 적격 × ${won(flatWeeklyHolidayPay)}`;
-    } else {
-      const sample = weeks.find(w => w.eligible)!;
-      calcMethod = `${eligibleWeeks}주 적격 · 주 소정 ${hStr(sample.scheduledMinutes)}: (소정÷40×8×${won(ordinaryWage)})`;
-    }
+    calcMethod = flatWeeklyHolidayPay != null && flatWeeklyHolidayPay > 0
+      ? `${eligibleWeeks}주 적격 × ${won(flatWeeklyHolidayPay)}`
+      : `${eligibleWeeks}주 적격 · 주 소정 ${hStr(typicalWeeklyMinutes)}: (소정÷40×8×${won(ordinaryWage)})`;
   }
 
-  return { weeks, avgWeeklyMinutes, meets15h, eligibleWeeks, totalHolidayPay, calcMethod };
+  return { weeks, avgWeeklyMinutes: typicalWeeklyMinutes, meets15h, eligibleWeeks, totalHolidayPay, calcMethod };
 }
 
 /** 근무형태 → 1일 소정근로시간(분). 휴게·출퇴근지도 제외(실근로). */

@@ -84,9 +84,11 @@ export async function buildAttendanceSheetPayload(
   // 1:1 vs 1:多 = "이 현장(site)에 배정된 훈련생 수"로 결정(워커 입력 아님).
   //  · 1명  → 일반(1:1) 칸에 인정 지도시간, 1:多 = 공란
   //  · 2명+ → 1:多 칸에 인정 지도시간, 일반(1:1) = 공란
+  // status 필터 없이 기간겹침으로만 집계 — 이탈 훈련생은 endDate로 표현되므로 과거기간 출근부
+  // 재생성 시에도 그때 재적이던 인원이 정확히 잡힌다(status:"ACTIVE"는 endDate=null만이라 과거 인원 누락).
   const traineeCount = await prisma.traineePlacement.count({
     where: {
-      siteId, status: "ACTIVE",
+      siteId,
       startDate: { lte: new Date(end + "T23:59:59+09:00") },
       OR: [{ endDate: null }, { endDate: { gte: new Date(start + "T00:00:00+09:00") } }],
     },
