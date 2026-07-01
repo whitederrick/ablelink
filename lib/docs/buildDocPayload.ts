@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { buildDocFileName } from "@/lib/pdf/filename";
 import { getKrHolidayDates } from "@/lib/krHolidays";
+import { getKstDateString } from "@/lib/time";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
@@ -107,8 +108,8 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
   if (!assignment?.site) throw new DocPayloadError("배정된 현장이 없습니다.");
 
   const site = assignment.site;
-  const start = periodStart || new Date().toISOString().slice(0, 10);
-  const end   = periodEnd   || new Date().toISOString().slice(0, 10);
+  const start = periodStart || getKstDateString();
+  const end   = periodEnd   || getKstDateString();
 
   // 일지 PDF용 근무형태 고정 시간값 — 단일 출처
   const docTimes = dailyDocTimes(

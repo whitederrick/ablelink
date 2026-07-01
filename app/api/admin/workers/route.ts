@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { getKstDateString } from "@/lib/time";
 import { AssignStatus, WorkerRole, Prisma } from "@prisma/client";
 
 function parseIntSafe(v: string | null, fallback: number) {
@@ -95,7 +96,7 @@ export async function GET(req: NextRequest) {
     const listWhere: Prisma.WorkerWhereInput = statuses.length ? { ...where, status: { in: statuses as any } } : where;
 
     // 배정 현황 필터(근무중/계약대기/근무종료). '근무 종료'=배정 종료일 경과(ENDED 상태 미사용).
-    const todayStart = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+    const todayStart = new Date(getKstDateString() + "T00:00:00.000Z"); // KST 오늘 경계
     const agencyScope = { site: { is: { agencyId: scope.agencyId } } } as const;
     const stateSel = (searchParams.get("assignState") || "").split(",").map(s => s.trim()).filter(Boolean);
     const stateOr: Prisma.WorkerWhereInput[] = [];

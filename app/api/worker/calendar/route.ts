@@ -8,6 +8,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { effectiveTrainingType } from "@/lib/serviceStep";
+import { getKstDateString } from "@/lib/time";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
@@ -42,8 +43,10 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const year  = Number(searchParams.get("year")  ?? new Date().getFullYear());
-    const month = Number(searchParams.get("month") ?? new Date().getMonth() + 1);
+    // 기본 연/월 = KST 기준(서버 UTC라 월경계 자정~09시에 전월로 잡히던 문제 방지)
+    const [kstY, kstM] = getKstDateString().split("-").map(Number);
+    const year  = Number(searchParams.get("year")  ?? kstY);
+    const month = Number(searchParams.get("month") ?? kstM);
 
     const workerId = BigInt(session.workerId);
 

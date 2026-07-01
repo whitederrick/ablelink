@@ -12,6 +12,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import { getKstDateString } from "@/lib/time";
 
 function formatKST(d: Date): string {
   const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
@@ -19,10 +20,10 @@ function formatKST(d: Date): string {
 }
 
 function defaultPeriod() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const last = new Date(y, now.getMonth() + 1, 0).getDate();
+  // KST 기준 이번 달(서버 UTC라 매월 1일 자정~09시에 전월로 잡히던 문제 방지)
+  const [y, mNum] = getKstDateString().split("-").map(Number);
+  const m = String(mNum).padStart(2, "0");
+  const last = new Date(y, mNum, 0).getDate();
   return { start: `${y}-${m}-01`, end: `${y}-${m}-${String(last).padStart(2, "0")}` };
 }
 

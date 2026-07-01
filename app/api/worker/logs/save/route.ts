@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import { getKstDateString } from "@/lib/time";
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     // - 수정 모드(logId): logDate 기준으로 결정 → 날짜를 바꾸면 그 날짜 출근기록으로 이동
     // - 신규(출근에서 진입): attendanceId 직접 사용 / 자유작성: logDate 기준
     let resolvedAttendanceId: bigint;
-    const workDate = logDate || new Date().toISOString().slice(0, 10);
+    const workDate = logDate || getKstDateString(); // KST 기준(서버 UTC라 자정~09시 전날로 잡히던 문제 방지)
     try {
       if (logId) {
         resolvedAttendanceId = await findOrCreateAttendance(workDate);
