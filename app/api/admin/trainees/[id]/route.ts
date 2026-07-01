@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { syncPlacementForStatus } from "@/lib/traineePlacement";
 
 export async function PATCH(
   req: NextRequest,
@@ -35,12 +36,20 @@ export async function PATCH(
     if (disabilityType !== undefined)      updateData.disabilityType      = disabilityType;
     if (severity !== undefined)            updateData.severity            = severity;
     if (note !== undefined)                updateData.note                = note?.trim() || null;
+    const now = new Date();
     if (status !== undefined) {
       updateData.status = status;
-      if (status !== "TRAINING") updateData.leftAt = new Date();
+      // 재적(TRAINING/EMPLOYED)이 아니면 이탈 시각 기록
+      if (status !== "TRAINING" && status !== "EMPLOYED") updateData.leftAt = now;
     }
 
-    await prisma.trainee.update({ where: { id: trainee.id }, data: updateData });
+    // 훈련생 수정 + (상태 변경 시) 현장배치 이력 동기화 — 급여/출근부/목록/캘린더 근거 유지
+    await prisma.$transaction(async (tx) => {
+      await tx.trainee.update({ where: { id: trainee.id }, data: updateData });
+      if (status !== undefined) {
+        await syncPlacementForStatus(tx, trainee.id, status, trainee.currentSiteId, now);
+      }
+    });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     if (e instanceof Response) return e;

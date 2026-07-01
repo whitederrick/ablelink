@@ -76,12 +76,25 @@ export async function GET(request: NextRequest) {
     const customHolidays: Record<string, string> = {};
     for (const r of customHolidayRows) customHolidays[r.date] = r.reason ?? "휴무";
 
-    // 훈련생 수
-    const traineeCount = assignment
-      ? await prisma.trainee.count({
-          where: { currentSiteId: assignment.siteId, status: { in: ["TRAINING", "EMPLOYED"] } },
+    // 훈련생 수 — 날짜별로 '그 시점 현장 배치 인원'을 계산(TraineePlacement 이력 기반).
+    // 과거일에 현재 인원을 적용하던 문제(#6.2) 해결: 명부가 바뀌어도 각 날의 실제 인원으로 판정.
+    // 배치 [startDate, endDate] 가 그날을 덮으면 그날 재적(현재 상태 무관 — endDate가 이탈 시점을 이미 표현).
+    const kstDate = (d: Date) => new Date(d.getTime() + 9 * 3600000).toISOString().slice(0, 10);
+    const placements = assignment
+      ? await prisma.traineePlacement.findMany({
+          where: {
+            siteId: assignment.siteId,
+            startDate: { lte: new Date(endDate + "T23:59:59+09:00") },
+            OR: [{ endDate: null }, { endDate: { gte: new Date(startDate + "T00:00:00+09:00") } }],
+          },
+          select: { startDate: true, endDate: true },
         })
-      : 0;
+      : [];
+    const placementRanges = placements.map(p => ({ s: kstDate(p.startDate), e: p.endDate ? kstDate(p.endDate) : null }));
+    const traineeCountOn = (dateStr: string): number =>
+      placementRanges.filter(p => p.s <= dateStr && (p.e === null || p.e >= dateStr)).length;
+    // 조회 월 말일 기준 인원(요약/응답 표시용 대표값)
+    const traineeCount = traineeCountOn(endDate);
 
     // 오늘 날짜 문자열 (KST)
     const nowKst   = new Date(Date.now() + 9 * 3600000);
@@ -100,16 +113,17 @@ export async function GET(request: NextRequest) {
     };
     const dayMap: Record<string, DayEntry> = {};
 
-    // 출근 기록이 있는 날 처리
+    // 출근 기록이 있는 날 처리 — 그날 기준 인원으로 판정
     for (const att of attendances) {
       const completedLogs = att.logs.filter(l => l.isCompleted).length;
+      const dayTraineeCount = traineeCountOn(att.workDate);
       dayMap[att.workDate] = {
         status: calcStatus({
           hasStart:       !!att.startTime,
           hasEnd:         !!att.endTime,
           isFinalClosed:  att.isFinalClosed,
           completedLogs,
-          traineeCount,
+          traineeCount:   dayTraineeCount,
           isGpsModified:  att.isGpsModified,
         }),
         attendanceId: att.id.toString(),
@@ -117,7 +131,7 @@ export async function GET(request: NextRequest) {
         endTime:      att.endTime?.toISOString()   ?? null,
         isFinalClosed: att.isFinalClosed,
         logCount:     completedLogs,
-        traineeCount,
+        traineeCount: dayTraineeCount,
       };
     }
 

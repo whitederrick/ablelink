@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { MAX_TRAINEES_PER_WORKER } from "@/lib/rules";
+import { openTraineePlacement } from "@/lib/traineePlacement";
 
 export async function GET(req: NextRequest) {
   try {
@@ -76,20 +77,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const trainee = await prisma.trainee.create({
-      data: {
-        currentSiteId:       BigInt(siteId),
-        name:                name.trim(),
-        gender,
-        birthDate:           birthDate || null,
-        phoneNumber:          phoneNumber || null,
-        guardianPhoneNumber:  guardianPhoneNumber || null,
-        guardianPhoneNumber2: guardianPhoneNumber2 || null,
-        disabilityType,
-        severity,
-        note:                note?.trim() || null,
-        status:              "TRAINING",
-      },
+    // 훈련생 생성 + 현장배치 이력(ACTIVE) 동시 생성(급여 1:多·출근부 표기·목록·캘린더 근거)
+    const trainee = await prisma.$transaction(async (tx) => {
+      const t = await tx.trainee.create({
+        data: {
+          currentSiteId:       BigInt(siteId),
+          name:                name.trim(),
+          gender,
+          birthDate:           birthDate || null,
+          phoneNumber:          phoneNumber || null,
+          guardianPhoneNumber:  guardianPhoneNumber || null,
+          guardianPhoneNumber2: guardianPhoneNumber2 || null,
+          disabilityType,
+          severity,
+          note:                note?.trim() || null,
+          status:              "TRAINING",
+        },
+      });
+      await openTraineePlacement(tx, t.id, BigInt(siteId), new Date());
+      return t;
     });
 
     return NextResponse.json({ success: true, id: trainee.id.toString() });

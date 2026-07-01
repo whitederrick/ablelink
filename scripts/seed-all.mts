@@ -197,8 +197,12 @@ async function main() {
       const trCount = 1 + (w % 2);
       for (let t = 0; t < trCount; t++) {
         const tName = TRAINEE_NAMES[trIdx % TRAINEE_NAMES.length]; trIdx++;
-        await prisma.trainee.create({
+        const tr = await prisma.trainee.create({
           data: { name: tName, gender: t % 2 === 0 ? "M" : "F", disabilityType: DTYPES[trIdx % DTYPES.length], severity: t % 2 === 0 ? "심한" : "심하지않은", currentSiteId: site.id, status: "TRAINING" },
+        });
+        // 현장배치 이력(ACTIVE) — 급여 1:多·출근부 표기·목록·캘린더 근거. 배정 시작일과 동일.
+        await prisma.traineePlacement.create({
+          data: { traineeId: tr.id, siteId: site.id, startDate: dayFromNow(-90), status: "ACTIVE" },
         });
       }
     }

@@ -62,7 +62,7 @@ function dateKey(year: number, month: number, day: number): string {
 
 const STATUS_STYLE: Record<DayStatus | "NONE", { bg: string; color: string; label: string }> = {
   GREEN:   { bg: "#f0fdf4", color: "#16a34a", label: "완료" },
-  ORANGE:  { bg: "#fffbeb", color: "#d97706", label: "일지미작성" },
+  ORANGE:  { bg: "#fffbeb", color: "#d97706", label: "미완료" },
   RED:     { bg: "#fff1f2", color: "#e11d48", label: "미출근" },
   HOLIDAY: { bg: "#f1f5f9", color: "#64748b", label: "휴무" },
   NONE:    { bg: "transparent", color: "#9ca3af", label: "" },
@@ -369,7 +369,7 @@ export default function CalendarPage() {
             {[
               { num: data.totalWorkDays,    label: "출근일",     color: "text-slate-900" },
               { num: data.totalGreenDays,   label: "완료",       color: "text-emerald-600" },
-              { num: data.totalOrangeDays,  label: "일지미작성", color: data.totalOrangeDays > 0 ? "text-amber-500" : "text-slate-300" },
+              { num: data.totalOrangeDays,  label: "미완료", color: data.totalOrangeDays > 0 ? "text-amber-500" : "text-slate-300" },
               { num: data.totalRedDays ?? 0, label: "미출근",    color: (data.totalRedDays ?? 0) > 0 ? "text-rose-500" : "text-slate-300" },
               { num: data.totalHolidayDays ?? 0, label: "휴무",  color: "text-slate-400" },
             ].map(({ num, label, color }, i, arr) => (
@@ -470,8 +470,8 @@ export default function CalendarPage() {
           <div className="mx-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500" aria-hidden="true" />
             <div>
-              <p className="text-sm font-black text-amber-700">일지 미작성 {data.totalOrangeDays}일이 있어요</p>
-              <p className="mt-0.5 text-xs font-semibold text-amber-600">주황색 날짜를 눌러 일지를 작성해주세요.</p>
+              <p className="text-sm font-black text-amber-700">미완료 {data.totalOrangeDays}일이 있어요</p>
+              <p className="mt-0.5 text-xs font-semibold text-amber-600">주황색 날짜를 눌러 일지 작성·퇴근 확정을 완료해주세요.</p>
             </div>
           </div>
         )}
@@ -557,7 +557,7 @@ export default function CalendarPage() {
                     }}
                   >
                     {selectedDay.data.status === "GREEN" ? "✓ 일지 완료"
-                      : selectedDay.data.status === "ORANGE" ? "⚠ 일지 미작성"
+                      : selectedDay.data.status === "ORANGE" ? "⚠ 미완료"
                       : "✗ 미출근"}
                   </div>
 
