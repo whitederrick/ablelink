@@ -50,7 +50,15 @@ npx tsx scripts/seed-all.mts   # DB_ENV=development 이므로 가드 통과, dev
 ## 롤백
 - 운영값으로 되돌리려면 `.env.prod.bak`을 `.env`로 복사.
 
-## ⚠️ 마이그레이션 드리프트 (fresh `migrate deploy` 실패 — 조사 결과 2026-06-30)
+## ✅ 마이그레이션 드리프트 — 해결됨 (베이스라인 스쿼시, 2026-07-01, 커밋 6f08cf1)
+**조치**: 90개를 단일 베이스라인 `00000000000000_init`(schema.prisma 기반, `admins` 직접 생성)으로 스쿼시.
+- dev(bluederrick): `migrate resolve --applied 00000000000000_init`.
+- prod(whitederrick, neverwhere admin만 남은 near-empty): `db push`로 User→Worker 리네임 잔재(FK/인덱스/제약 이름·2컬럼타입) 정렬(데이터 무손실) → `_prisma_migrations` TRUNCATE → `migrate resolve --applied`.
+- 결과: 양쪽 `migrate status` "up to date", fresh replay·`migrate dev`·증분 `migrate deploy` 정상화. 옛 90개는 git 히스토리 보존(로컬 `prisma/migrations_archive/`는 gitignore).
+
+아래는 당시 드리프트 조사 기록(히스토리 참고용).
+
+### (해결 전 기록) fresh `migrate deploy` 실패 — 조사 결과 2026-06-30
 **증상**: 빈 DB에 `prisma migrate deploy`로 90개를 순차 적용하면 `20260528_worker_invite_phone_verify`에서
 `relation "admin_users" does not exist` (42P01)로 실패.
 
