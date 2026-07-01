@@ -59,6 +59,7 @@ const groups: NavGroup[] = [
     title: "소통·지원",
     items: [
       { href: "/admin/announcements", label: "시스템 공지" },
+      { href: "/admin/promos",        label: "대시보드 광고" },
       { href: "/admin/support",       label: "지원 요청" },
     ],
   },

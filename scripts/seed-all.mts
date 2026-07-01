@@ -458,12 +458,12 @@ async function main() {
   }
   // 시스템 공지(운영자 → 매니저/전체)
   const SYS = [
-    { title: "정기 시스템 점검 안내", type: "MAINTENANCE", audience: "MANAGERS" },
-    { title: "긴급 — 출근 기록 확인 요청", type: "URGENT", audience: "ALL" },
-    { title: "신규 기능 안내: 근태 인박스 개선", type: "INFO", audience: "MANAGERS" },
-    { title: "공단 제출 서식 업데이트", type: "INFO", audience: "MANAGERS" },
+    { title: "정기 시스템 점검 안내", type: "MAINTENANCE", audience: "MANAGERS", showInTicker: false },
+    { title: "긴급 — 출근 기록 확인 요청", type: "URGENT", audience: "ALL", showInTicker: true },
+    { title: "신규 기능 안내: 근태 인박스 개선", type: "INFO", audience: "MANAGERS", showInTicker: true },
+    { title: "공단 제출 서식 업데이트", type: "INFO", audience: "MANAGERS", showInTicker: true },
   ];
-  for (const s of SYS) await prisma.systemAnnouncement.create({ data: { title: s.title, body: `${s.title} 관련 안내입니다.`, type: s.type, audience: s.audience as any, adminId, sentCount: s.audience === "ALL" ? 19 : 0 } });
+  for (const s of SYS) await prisma.systemAnnouncement.create({ data: { title: s.title, body: `${s.title} 관련 안내입니다.`, type: s.type, audience: s.audience as any, showInTicker: s.showInTicker, adminId, sentCount: s.audience === "ALL" ? 19 : 0 } });
 
   // 지원 요청(매니저 → 운영자)
   const TICKETS = [
@@ -488,6 +488,11 @@ async function main() {
     await prisma.workerNotice.create({ data: { workerId: a1[i].workerId, agencyId: A1.id, title: "근태 확인 요청", body: "출근 기록을 확인해 주세요.", type: "INFO", kind: "NOTICE_INDIVIDUAL", link: "/worker/review/attendance" } });
   }
   console.log(`📢 위탁기관공지 6 · 시스템공지 ${SYS.length} · 지원요청 ${nTicket} · 알림 생성`);
+
+  // ── 대시보드 광고(운영자 관리). 티커는 시스템 공지(showInTicker)에서 관리. ──
+  await prisma.dashboardPromo.createMany({ data: [
+    { kind: "AD", badge: "광고", title: "이 자리에 광고를 노출하세요", body: "제휴·광고 문의는 운영팀에 연락 주세요.", sortOrder: 1 },
+  ]});
 
   // ── 요약 ────────────────────────────────────────────────────────────────────
   console.log("\n========== 시드 완료 — 테스트 계정 ==========");

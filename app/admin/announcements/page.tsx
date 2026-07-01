@@ -11,7 +11,7 @@ import { StatCardRow } from "../_components/StatCard";
 
 type Announcement = {
   id: string; title: string; body: string; type: string;
-  audience?: string;
+  audience?: string; showInTicker?: boolean;
   sentCount: number; adminLogin: string | null; createdAt: string;
 };
 
@@ -30,7 +30,7 @@ export default function AnnouncementsPage() {
   const [list, setList]       = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: "", body: "", type: "INFO", audience: "MANAGERS" });
+  const [form, setForm] = useState({ title: "", body: "", type: "INFO", audience: "MANAGERS", showInTicker: false });
   const [sending, setSending] = useState(false);
   const [toast, setToast]     = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -92,11 +92,20 @@ export default function AnnouncementsPage() {
         ? `전체 발송 완료 — 직무지도원 ${data.sentCount}명 + 전체 위탁기관 관리자에게 전달됐습니다.`
         : `발송 완료 — 위탁기관 관리자에게 전달됐습니다.`);
       setShowForm(false);
-      setForm({ title: "", body: "", type: "INFO", audience: "MANAGERS" });
+      setForm({ title: "", body: "", type: "INFO", audience: "MANAGERS", showInTicker: false });
       load();
     } else {
       showToast(data.message ?? "발송 실패");
     }
+  }
+
+  async function toggleTicker(a: Announcement, e: React.MouseEvent) {
+    e.stopPropagation();
+    const d = await fetch(`/api/admin/system/announcements/${a.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ showInTicker: !a.showInTicker }),
+    }).then(r => r.json());
+    if (d.success) { showToast(a.showInTicker ? "티커에서 내렸습니다." : "티커에 노출합니다."); load(); }
+    else showToast(d.message ?? "실패");
   }
 
   return (
@@ -175,6 +184,13 @@ export default function AnnouncementsPage() {
                 </select>
               </div>
               <div>
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input type="checkbox" checked={form.showInTicker} onChange={e => setForm(f => ({ ...f, showInTicker: e.target.checked }))} className="h-4 w-4" />
+                  위탁기관 대시보드 티커에 노출
+                </label>
+                <p className="mt-1 text-[12px] font-semibold text-slate-400">체크한 공지만 위탁기관 대시보드 상단에 흐르는 소식으로 표시됩니다.</p>
+              </div>
+              <div>
                 <label className={T.label}>제목</label>
                 <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                   placeholder="공지 제목" className={T.input + " w-full"} />
@@ -218,6 +234,11 @@ export default function AnnouncementsPage() {
                   <span className="shrink-0"><StatusBadge status={a.type} map={SYS_BADGE} /></span>
                   <span className="shrink-0"><StatusBadge status={a.audience ?? "MANAGERS"} map={AUDIENCE_BADGE} /></span>
                   <span className="flex-1 truncate text-[15px] font-black text-slate-900">{a.title}</span>
+                  <span role="button" tabIndex={0} onClick={e => toggleTicker(a, e)}
+                    title="위탁기관 대시보드 티커 노출 토글"
+                    className={`shrink-0 cursor-pointer rounded-full px-2 py-0.5 text-[11px] font-bold transition ${a.showInTicker ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400 hover:bg-slate-200"}`}>
+                    티커{a.showInTicker ? " ✓" : ""}
+                  </span>
                   <span className="shrink-0 text-[13px] font-semibold text-slate-500">{(a.audience ?? "MANAGERS") === "ALL" ? `직무지도원 ${a.sentCount}명` : "관리자 전용"}</span>
                   <span className="shrink-0 w-[72px] text-right text-xs font-semibold text-slate-400">{a.createdAt.slice(2, 10)}</span>
                 </button>

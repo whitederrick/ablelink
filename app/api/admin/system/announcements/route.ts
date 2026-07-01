@@ -22,6 +22,7 @@ export async function GET(req: Request) {
         body:      a.body,
         type:      a.type,
         audience:  a.audience ?? "MANAGERS",
+        showInTicker: a.showInTicker,
         sentCount: a.sentCount,
         adminLogin: a.admin?.loginId ?? null,
         createdAt: a.createdAt.toISOString(),
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
   try {
     const scope = await requireAdminSession(req);
 
-    const { title, body, type = "INFO", audience = "MANAGERS" } = await req.json();
+    const { title, body, type = "INFO", audience = "MANAGERS", showInTicker = false } = await req.json();
     if (!title?.trim() || !body?.trim())
       return NextResponse.json({ success: false, message: "제목과 내용은 필수입니다." }, { status: 400 });
 
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
         adminId: scope.adminId,
         sentCount: targets.length, // 직무지도원 알림 발송 수(관리자만 발송 시 0)
         audience: toAll ? "ALL" : "MANAGERS",
+        showInTicker: !!showInTicker,
       },
     });
 

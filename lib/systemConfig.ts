@@ -18,6 +18,12 @@ export interface ConfigSpec {
 
 export const CONFIG_REGISTRY: ConfigSpec[] = [
   {
+    key: "DASHBOARD_TICKER_DURATION_SEC",
+    label: "대시보드 티커 속도(초/바퀴)",
+    description: "위탁기관 대시보드 상단 소식 티커가 한 바퀴 흐르는 시간(초). 작을수록 빠름.",
+    type: "number", default: "32", min: 8, max: 120,
+  },
+  {
     key: "AI_BATCH_MONTHLY_LIMIT",
     label: "AI 음성 일괄 등록 월 횟수",
     description: "직무지도원 1인당 월 AI 일괄 일지 생성 허용 횟수.",

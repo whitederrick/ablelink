@@ -6,19 +6,6 @@ import { RefreshCw, Lock, ChevronRight } from "lucide-react";
 import PageHeader from "./_components/PageHeader";
 import AdSlot, { type AdContent } from "@/components/AdSlot";
 import Ticker, { type TickerItem } from "@/components/Ticker";
-
-// 상단 헤더 티커 — 소식·안내가 흘러감(증권 시세판식). 추후 운영설정/공지 연동 가능.
-const TICKER_ITEMS: TickerItem[] = [
-  { badge: "소식", text: "구독 업그레이드하면 훈련생 진척도·AI 일지·PDF 출력을 사용할 수 있어요.", href: "/manager/subscription" },
-  { badge: "안내", text: "인재풀에서 조건에 맞는 직무지도원을 찾아 배정 요청을 보내보세요.", href: "/manager/workers" },
-  { badge: "안내", text: "출퇴근 기록과 훈련 일지를 앱에서 간편하게 관리하세요." },
-  { badge: "소식", text: "월별 진척도·마감 현황을 대시보드에서 한눈에 확인하세요." },
-];
-
-// 하단 우측 광고 슬롯 — 광고 전용(자동 로테이션). 실제 광고 인벤토리 연동 전 하우스 광고.
-const AD_CONTENTS: AdContent[] = [
-  { badge: "광고", title: "이 자리에 광고를 노출하세요", description: "제휴·광고 문의는 운영팀에 연락 주세요." },
-];
 import Pagination from "./_components/Pagination";
 
 interface DashboardData {
@@ -182,6 +169,8 @@ export default function AdminDashboardPage() {
   // 훈련생 진척도 요약(기존 리포트 API 재사용, 클라 집계). 플랜 잠금 시 reportLocked.
   const [report, setReport] = useState<{ total: number; training: number; avgLogRate: number; avgScore: number | null } | null>(null);
   const [reportLocked, setReportLocked] = useState(false);
+  // 대시보드 소식 티커·광고(운영자 관리)
+  const [promos, setPromos] = useState<{ ticker: TickerItem[]; ads: AdContent[]; tickerDurationSec: number }>({ ticker: [], ads: [], tickerDurationSec: 32 });
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -198,6 +187,10 @@ export default function AdminDashboardPage() {
   }, [fetchDashboard]);
 
   useEffect(() => {
+    fetch("/api/admin/dashboard-promos")
+      .then(r => r.json())
+      .then(d => { if (d.success) setPromos({ ticker: d.data.ticker ?? [], ads: d.data.ads ?? [], tickerDurationSec: d.data.tickerDurationSec ?? 32 }); })
+      .catch(() => {});
     fetch("/api/admin/attendance-edit-requests")
       .then(r => r.json())
       .then(d => { if (d.success) setPendingEditReqs(d.requests.filter((r: any) => r.status === "PENDING").length); })
@@ -283,7 +276,7 @@ export default function AdminDashboardPage() {
       <PageHeader
         title="통합 운영 대시보드"
         sub={todayFmt}
-        center={<Ticker items={TICKER_ITEMS} className="mx-auto w-[88%]" />}
+        center={<Ticker items={promos.ticker} durationSec={promos.tickerDurationSec} className="mx-auto w-[88%]" />}
         actions={
           <button
             onClick={fetchDashboard}
@@ -599,7 +592,7 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* 우측 1/3 — 광고/소식 슬롯(재사용 컴포넌트, 여러 광고 자동 로테이션) */}
-        <AdSlot className="lg:col-span-1" contents={AD_CONTENTS} />
+        <AdSlot className="lg:col-span-1" contents={promos.ads} />
       </div>
     </div>
   );

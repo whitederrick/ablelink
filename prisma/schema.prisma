@@ -1214,6 +1214,8 @@ model SystemAnnouncement {
   type      String   @default("INFO") // INFO | MAINTENANCE | URGENT
   // 발송 대상: MANAGERS=에이전시 관리자만(기본) | ALL=관리자+전체 직무지도원
   audience  String   @default("MANAGERS")
+  // 위탁기관 대시보드 상단 소식 티커에 노출할지(필요한 공지만 선택 노출)
+  showInTicker Boolean @default(false) @map("show_in_ticker")
   adminId   BigInt?  @map("admin_id")
   sentCount Int      @default(0) @map("sent_count")
   createdAt DateTime @default(now()) @map("created_at")
@@ -2049,4 +2051,30 @@ model JobCoachEvalQuestion {
 
   @@index([categoryId, sortOrder])
   @@map("jobcoach_eval_questions")
+}
+
+// 대시보드 소식 티커·광고 콘텐츠(운영자 관리) — 위탁기관 매니저 대시보드에 노출.
+enum DashboardPromoKind {
+  TICKER // 상단 헤더 흐르는 소식/안내
+  AD     // 하단 우측 광고 카드
+}
+
+model DashboardPromo {
+  id        BigInt             @id @default(autoincrement())
+  kind      DashboardPromoKind
+  badge     String? // 배지 문구(소식/안내/광고 등)
+  title     String // 티커=흐르는 문구, 광고=제목
+  body      String? // 광고 설명(티커 미사용)
+  imageUrl  String?            @map("image_url") // 광고 이미지(선택)
+  href      String? // 클릭 이동 링크(선택)
+  isActive  Boolean            @default(true) @map("is_active")
+  startAt   DateTime?          @map("start_at") // 게시 시작(비면 즉시부터)
+  endAt     DateTime?          @map("end_at") // 게시 종료(비면 무기한)
+  note      String? // 운영 메모(광고주·계약 등, 내부용)
+  sortOrder Int                @default(0) @map("sort_order")
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  @@index([kind, isActive, sortOrder])
+  @@map("dashboard_promos")
 }
