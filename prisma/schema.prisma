@@ -84,7 +84,6 @@ model Worker {
 
   payContracts PayContract[]
   payrollItems PayrollItem[]
-  submissions  Submission[]
 
   confirmedSiteBasePoints SiteBasePoint[]         @relation("WorkerConfirmedBasePoints")
   DocumentRun             DocumentRun[]
@@ -305,7 +304,6 @@ model SiteAssignment {
   user Worker @relation(fields: [workerId], references: [id])
 
   attendances        DailyAttendance[]
-  submissionRequests SubmissionRequest[]
   DocumentRun        DocumentRun[]
   signTokens         SiteSignToken[]
   holidays           SiteHoliday[]
@@ -596,7 +594,6 @@ model Manager {
 
   assignedSiteAssignments SiteAssignment[]
   ownedSites              Site[]                  @relation("SiteOwnerManager")
-  submissionRequests      SubmissionRequest[]
   confirmedSiteBasePoints SiteBasePoint[]         @relation("ManagerConfirmedBasePoints")
   documentVersions        DocumentVersion[]
   documentSubmissionLogs  DocumentSubmissionLog[]
@@ -762,41 +759,6 @@ model SiteBasePoint {
   @@index([confirmedByWorkerId])
   @@index([confirmedByManagerId])
   @@map("site_base_points")
-}
-
-model SubmissionRequest {
-  id                   BigInt                  @id @default(autoincrement())
-  agencyId             BigInt?                 @map("agency_id")
-  assignmentId         BigInt                  @map("assignment_id")
-  requestedByManagerId BigInt?                 @map("requested_by_manager_id")
-  requestedAt          DateTime                @default(now()) @map("requested_at")
-  dueDate              DateTime?               @map("due_date")
-  status               SubmissionRequestStatus @default(REQUESTED) @map("status")
-  memo                 String?                 @map("memo")
-
-  assignment  SiteAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  requestedBy Manager?       @relation(fields: [requestedByManagerId], references: [id])
-  submissions Submission[]
-
-  @@index([assignmentId, status])
-  @@index([agencyId, status])
-  @@map("submission_requests")
-}
-
-model Submission {
-  id                BigInt   @id @default(autoincrement())
-  requestId         BigInt   @map("request_id")
-  submittedByWorkerId BigInt   @map("submitted_by_worker_id")
-  submittedAt       DateTime @default(now()) @map("submitted_at")
-  fileUrl           String?  @map("file_url")
-  fileName          String?  @map("file_name")
-
-  request SubmissionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  user    Worker            @relation(fields: [submittedByWorkerId], references: [id])
-
-  @@index([requestId, submittedAt])
-  @@index([submittedByWorkerId, submittedAt])
-  @@map("submissions")
 }
 
 // 사이트별 휴무일 (직무지도원이 등록)
@@ -1554,13 +1516,6 @@ enum DocumentStage {
 
 enum DocumentRunStatus {
   OPEN
-  CLOSED
-}
-
-enum SubmissionRequestStatus {
-  REQUESTED
-  SUBMITTED
-  REVIEWED
   CLOSED
 }
 
