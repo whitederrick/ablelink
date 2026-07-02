@@ -337,16 +337,12 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                     ) : (
                       <div className="space-y-2">
                         {additionalContacts.map((c, i) => (
-                          <div key={i} className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50/50 p-2">
-                            <div className="flex items-center gap-1.5">
-                              <input value={c.name} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="성명 *" className={`w-[88px] shrink-0 ${T.input}`} />
-                              <input value={c.phone} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))} placeholder="연락처" className={`min-w-0 flex-1 ${T.input}`} />
-                              <button type="button" onClick={() => setAdditionalContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <input value={c.email} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="이메일" className={`min-w-0 flex-1 ${T.input}`} />
-                              <input value={c.role} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, role: e.target.value } : x))} placeholder="역할" className={`w-[76px] shrink-0 ${T.input}`} />
-                            </div>
+                          <div key={i} className="flex items-center gap-1.5">
+                            <input value={c.name} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="성명 *" className={`w-[72px] shrink-0 ${T.input}`} />
+                            <input value={c.phone} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))} placeholder="연락처" className={`min-w-0 flex-[1.1] ${T.input}`} />
+                            <input value={c.email} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="이메일" className={`min-w-0 flex-[1.4] ${T.input}`} />
+                            <input value={c.role} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, role: e.target.value } : x))} placeholder="역할" className={`w-[52px] shrink-0 ${T.input}`} />
+                            <button type="button" onClick={() => setAdditionalContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
                           </div>
                         ))}
                       </div>
