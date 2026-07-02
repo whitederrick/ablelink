@@ -205,6 +205,18 @@ export async function POST(req: NextRequest) {
     const businessContactPhone = String(body.businessContactPhone ?? "").trim();
     const businessContactEmail = String(body.businessContactEmail ?? "").trim() || null;
 
+    // ✅ 추가 사업체 담당자(SiteContact[]) — 대표 외 추가 연락 담당자. 이름 있는 항목만 저장.
+    const additionalContacts = Array.isArray(body.additionalContacts)
+      ? body.additionalContacts
+          .map((c: any) => ({
+            name: String(c?.name ?? "").trim(),
+            phoneNumber: String(c?.phone ?? c?.phoneNumber ?? "").trim() || null,
+            email: String(c?.email ?? "").trim() || null,
+            role: String(c?.role ?? "").trim() || null,
+          }))
+          .filter((c: { name: string }) => c.name)
+      : [];
+
     if (!companyName) throw new Error("VALIDATION:companyName");
     if (!address) throw new Error("VALIDATION:address");
     if (!businessContactName) throw new Error("VALIDATION:businessContactName");
@@ -273,6 +285,7 @@ export async function POST(req: NextRequest) {
         fullDayCapacity,
         ...(allowanceRange !== undefined ? { allowanceRange } : {}),
         ...(lateThresholdMin !== null ? { lateThresholdMin } : {}),
+        ...(additionalContacts.length ? { contacts: { create: additionalContacts } } : {}),
       },
       select: {
         id: true,

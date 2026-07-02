@@ -36,10 +36,13 @@ function toRow(r: any) {
     ownerManagerId: r.ownerManagerId != null ? String(r.ownerManagerId) : null,
     ownerManagerName: r.ownerManager?.displayName ?? r.ownerManager?.loginId ?? null,
 
-    // ✅ 사업체 담당자(현장 연락 담당자)
+    // ✅ 사업체 담당자(현장 연락 담당자) — 대표(businessContact*) + 추가 담당자(SiteContact[])
     businessContactName: r.businessContactName ?? null,
     businessContactPhone: r.businessContactPhone ?? null,
     businessContactEmail: r.businessContactEmail ?? null,
+    additionalContacts: Array.isArray(r.contacts)
+      ? r.contacts.map((c: any) => ({ id: String(c.id), name: c.name, phone: c.phoneNumber ?? null, email: c.email ?? null, role: c.role ?? null }))
+      : [],
     govContacts: Array.isArray(r.govContacts) ? r.govContacts : [],
 
     requiredProfession: r.requiredProfession ?? null,
@@ -105,6 +108,7 @@ export async function GET(
         createdAt: true,
         agency: { select: { id: true, name: true } },
         ownerManager: { select: { id: true, displayName: true, loginId: true } },
+        contacts: { where: { isActive: true }, select: { id: true, name: true, phoneNumber: true, email: true, role: true }, orderBy: { id: "asc" } },
       },
     });
     if (!site) throw new Error("NOT_FOUND");
@@ -187,6 +191,20 @@ export async function PATCH(
         .map((c: any) => ({ name: String(c?.name ?? "").trim(), email: String(c?.email ?? "").trim() }))
         .filter((c: { email: string }) => c.email);
       (data as any).govContacts = clean.length ? clean : null;
+    }
+
+    // ✅ 추가 사업체 담당자(SiteContact[]) — 대표(businessContact*) 외 추가 연락 담당자. 전체 교체(이름 있는 항목만).
+    if (body.additionalContacts !== undefined) {
+      const arr = Array.isArray(body.additionalContacts) ? body.additionalContacts : [];
+      const clean = arr
+        .map((c: any) => ({
+          name: String(c?.name ?? "").trim(),
+          phoneNumber: String(c?.phone ?? c?.phoneNumber ?? "").trim() || null,
+          email: String(c?.email ?? "").trim() || null,
+          role: String(c?.role ?? "").trim() || null,
+        }))
+        .filter((c: { name: string }) => c.name);
+      (data as any).contacts = { deleteMany: {}, create: clean };
     }
 
     if (companyName !== undefined) {
@@ -282,6 +300,7 @@ export async function PATCH(
         createdAt: true,
         agency: { select: { id: true, name: true } },
         ownerManager: { select: { id: true, displayName: true, loginId: true } },
+        contacts: { where: { isActive: true }, select: { id: true, name: true, phoneNumber: true, email: true, role: true }, orderBy: { id: "asc" } },
       },
     });
 

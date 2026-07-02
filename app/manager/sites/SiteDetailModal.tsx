@@ -12,6 +12,7 @@ type SiteDetail = {
   amCapacity?: number; pmCapacity?: number; fullDayCapacity?: number;
   businessContactName: string | null; businessContactPhone: string | null; businessContactEmail: string | null;
   govContacts?: { name: string; email: string }[];
+  additionalContacts?: { id?: string; name: string; phone: string | null; email: string | null; role: string | null }[];
   ownerManagerId: string | null; ownerManagerName: string | null;
   basePointConfirmed: boolean; basePointApprovalStatus: string; isActive: boolean;
 };
@@ -53,6 +54,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
   const [businessContactPhone, setBusinessContactPhone] = useState("");
   const [businessContactEmail, setBusinessContactEmail] = useState("");
   const [govContacts, setGovContacts] = useState<{ name: string; email: string }[]>([]);
+  const [additionalContacts, setAdditionalContacts] = useState<{ name: string; phone: string; email: string; role: string }[]>([]);
 
   const [ownerManagerId, setOwnerManagerId] = useState("");
   const [ownerManagers, setOwnerManagers] = useState<{ id: string; name: string }[]>([]);
@@ -120,6 +122,9 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
         setBusinessContactPhone(it.businessContactPhone || "");
         setBusinessContactEmail(it.businessContactEmail || "");
         setGovContacts(Array.isArray(it.govContacts) ? it.govContacts : []);
+        setAdditionalContacts(Array.isArray(it.additionalContacts)
+          ? it.additionalContacts.map((c: any) => ({ name: c.name ?? "", phone: c.phone ?? "", email: c.email ?? "", role: c.role ?? "" }))
+          : []);
         setOwnerManagerId(it.ownerManagerId || "");
       } catch {
         if (alive) { alert("상세 조회에 실패했습니다."); onClose(); }
@@ -184,6 +189,9 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
         businessContactPhone: businessContactPhone.trim(),
         businessContactEmail: businessContactEmail.trim() || null,
         govContacts: govContacts.map(c => ({ name: c.name.trim(), email: c.email.trim() })).filter(c => c.email),
+        additionalContacts: additionalContacts
+          .map(c => ({ name: c.name.trim(), phone: c.phone.trim(), email: c.email.trim(), role: c.role.trim() }))
+          .filter(c => c.name),
         ownerManagerId: ownerManagerId || "",
       };
       if (isCreate && isAdmin) payload.agencyId = agencyId;
@@ -309,13 +317,36 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                 {/* 사업체 담당자 + 업무 이관 담당자 */}
                 <div className="space-y-5">
                   <div className={CARD}>
-                    <h3 className="mb-1 text-sm font-black text-slate-900">사업체 담당자</h3>
-                    <p className="mb-3 text-xs font-semibold text-slate-400">현장 측 담당자. 출근부 ‘사업체담당자’ 서명 요청에 자동 채워집니다.</p>
+                    <h3 className="mb-1 text-sm font-black text-slate-900">사업체 담당자 (대표)</h3>
+                    <p className="mb-3 text-xs font-semibold text-slate-400">현장 측 <b>대표</b> 담당자. 출근부 ‘사업체담당자’ 서명 요청·워커앱 표시에 자동 채워집니다.</p>
                     <div className="space-y-3">
                       <div><label className={T.label}>담당자 성명 *</label><input value={businessContactName} onChange={e => setBusinessContactName(e.target.value)} className={`w-full ${T.input}`} /></div>
                       <div><label className={T.label}>담당자 연락처 *</label><input value={businessContactPhone} onChange={e => setBusinessContactPhone(e.target.value)} className={`w-full ${T.input}`} placeholder="010-0000-0000" /></div>
                       <div><label className={T.label}>담당자 이메일 (선택)</label><input value={businessContactEmail} onChange={e => setBusinessContactEmail(e.target.value)} className={`w-full ${T.input}`} /></div>
                     </div>
+                  </div>
+
+                  <div className={CARD}>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-black text-slate-900">추가 사업체 담당자</h3>
+                      <button type="button" onClick={() => setAdditionalContacts(p => [...p, { name: "", phone: "", email: "", role: "" }])} className={`${T.btnSecondary} py-1.5`}>+ 추가</button>
+                    </div>
+                    <p className="mb-3 text-xs font-semibold text-slate-400">대표 외 추가 연락 담당자를 여러 명 등록할 수 있습니다. (서명·워커앱 표시는 대표 담당자 기준)</p>
+                    {additionalContacts.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-[13px] font-semibold text-slate-400">추가 담당자가 없습니다.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {additionalContacts.map((c, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <input value={c.name} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="성명 *" className={`w-[110px] ${T.input}`} />
+                            <input value={c.phone} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))} placeholder="연락처" className={`w-[130px] ${T.input}`} />
+                            <input value={c.email} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="이메일" className={`flex-1 ${T.input}`} />
+                            <input value={c.role} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, role: e.target.value } : x))} placeholder="역할" className={`w-[90px] ${T.input}`} />
+                            <button type="button" onClick={() => setAdditionalContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className={CARD}>

@@ -34,6 +34,7 @@ export default function AdminSiteNewPage() {
   });
   const [allowanceRange, setAllowanceRange] = useState(100);
   const [requiredProfession, setRequiredProfession] = useState<string>("JOB_COACH");
+  const [additionalContacts, setAdditionalContacts] = useState<{ name: string; phone: string; email: string; role: string }[]>([]);
 
   const [addrQ, setAddrQ] = useState("");
   const [addrLoading, setAddrLoading] = useState(false);
@@ -113,6 +114,9 @@ export default function AdminSiteNewPage() {
         businessContactName: form.businessContactName.trim(),
         businessContactPhone: form.businessContactPhone.trim(),
         businessContactEmail: form.businessContactEmail.trim() || null,
+        additionalContacts: additionalContacts
+          .map((c) => ({ name: c.name.trim(), phone: c.phone.trim(), email: c.email.trim(), role: c.role.trim() }))
+          .filter((c) => c.name),
         requiredProfession,
       };
       if (isAdmin) payload.agencyId = agencyId;
@@ -262,11 +266,11 @@ export default function AdminSiteNewPage() {
           </p>
         </div>
 
-        {/* 사업체 담당자(현장 회사의 연락 담당자) — 출근부 '사업체담당자' 서명요청에 자동 채움 */}
+        {/* 사업체 담당자(현장 회사의 대표 연락 담당자) — 출근부 '사업체담당자' 서명요청에 자동 채움 */}
         <div className={T.card}>
-          <p className="mb-1 text-sm font-black text-slate-900">사업체 담당자 *</p>
+          <p className="mb-1 text-sm font-black text-slate-900">사업체 담당자 (대표) *</p>
           <p className="mb-3 text-xs font-semibold text-slate-400">
-            현장(사업체) 측 담당자입니다. 출근부 ‘사업체담당자’ 서명 요청 시 이 정보가 자동으로 채워집니다.
+            현장(사업체) 측 <b>대표</b> 담당자입니다. 출근부 ‘사업체담당자’ 서명 요청·워커앱 표시에 이 정보가 자동으로 채워집니다.
           </p>
           <div className="space-y-3">
             <div>
@@ -297,6 +301,42 @@ export default function AdminSiteNewPage() {
               />
             </div>
           </div>
+        </div>
+
+        {/* 추가 사업체 담당자 — 대표 외 여러 명 등록(이름 있는 행만 저장) */}
+        <div className={T.card}>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <p className="text-sm font-black text-slate-900">추가 사업체 담당자</p>
+            <button
+              type="button"
+              onClick={() => setAdditionalContacts((p) => [...p, { name: "", phone: "", email: "", role: "" }])}
+              className={`${T.btnSecondary} py-1.5`}
+            >
+              + 추가
+            </button>
+          </div>
+          <p className="mb-3 text-xs font-semibold text-slate-400">
+            대표 외 추가 연락 담당자를 여러 명 등록할 수 있습니다. (서명·워커앱 표시는 대표 담당자 기준)
+          </p>
+          {additionalContacts.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-[13px] font-semibold text-slate-400">추가 담당자가 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
+              {additionalContacts.map((c, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input value={c.name} onChange={(e) => setAdditionalContacts((p) => p.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+                    placeholder="성명 *" className={`w-[110px] ${T.input}`} />
+                  <input value={c.phone} onChange={(e) => setAdditionalContacts((p) => p.map((x, j) => (j === i ? { ...x, phone: e.target.value } : x)))}
+                    placeholder="연락처" className={`w-[130px] ${T.input}`} />
+                  <input value={c.email} onChange={(e) => setAdditionalContacts((p) => p.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))}
+                    placeholder="이메일" className={`flex-1 ${T.input}`} />
+                  <input value={c.role} onChange={(e) => setAdditionalContacts((p) => p.map((x, j) => (j === i ? { ...x, role: e.target.value } : x)))}
+                    placeholder="역할" className={`w-[90px] ${T.input}`} />
+                  <button type="button" onClick={() => setAdditionalContacts((p) => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <button onClick={saveSite} disabled={saving} className={`w-full py-4 text-base ${T.btnPrimary}`}>
