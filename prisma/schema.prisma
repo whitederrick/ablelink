@@ -959,18 +959,21 @@ enum ContractStatus {
 }
 
 model AuditEvent {
-  id         BigInt     @id @default(autoincrement())
-  agencyId   BigInt?    @map("agency_id")
-  actorType  ActorType  @map("actor_type")
-  actorId    BigInt?    @map("actor_id")
-  entityType EntityType @map("entity_type")
-  entityId   BigInt?    @map("entity_id")
-  action     String     @map("action")
-  payload    Json?      @map("payload")
-  createdAt  DateTime   @default(now()) @map("created_at")
+  id         BigInt    @id @default(autoincrement())
+  agencyId   BigInt?   @map("agency_id")
+  actorType  ActorType @map("actor_type")
+  actorId    BigInt?   @map("actor_id")
+  actorLabel String?   @map("actor_label") // 로그인ID/이름 스냅샷(표시용)
+  entityType String    @map("entity_type") // 모델명(Site, PayrollRun 등)
+  entityId   String?   @map("entity_id")   // 레코드 id(문자열)
+  action     String    @map("action")      // create/update/delete/upsert/updateMany/deleteMany
+  summary    String?   @map("summary")     // 사람이 읽을 요약(선택)
+  payload    Json?     @map("payload")      // 변경 args/diff
+  createdAt  DateTime  @default(now()) @map("created_at")
 
-  @@index([agencyId, entityType, entityId])
+  @@index([agencyId, entityType, createdAt])
   @@index([actorType, actorId])
+  @@index([createdAt])
   @@map("audit_events")
 }
 
@@ -1521,18 +1524,9 @@ enum DocumentRunStatus {
 
 enum ActorType {
   ADMIN
-  USER
-  SITE_CONTACT
-}
-
-enum EntityType {
-  SITE
-  ASSIGNMENT
-  ATTENDANCE
-  TRAINEE
-  SUBMISSION
-  BASEPOINT
-  PAYROLL
+  MANAGER
+  WORKER
+  SYSTEM
 }
 
 enum PayType {

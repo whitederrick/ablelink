@@ -72,6 +72,7 @@ const groups: NavGroup[] = [
       { href: "/admin/settings/categories",         label: "공지 카테고리 관리" },
       { href: "/admin/backup",                      label: "데이터 백업" },
       { href: "/admin/logs",                        label: "감사 로그" },
+      { href: "/admin/audit",                       label: "데이터 변경 이력" },
     ],
   },
 ];

@@ -7,6 +7,7 @@ import { readManagerSessionFromRequest } from "@/lib/managerCookies";
 import { readAdminSessionFromRequest } from "@/lib/adminCookies";
 import { parseBigInt } from "@/lib/adminScope";
 import { prisma } from "@/lib/prisma";
+import { setAuditActor } from "@/lib/audit";
 
 export type ManagerScope = {
   managerId: bigint;  // Manager.id
@@ -35,6 +36,7 @@ export async function requireManagerSession(req: Request): Promise<ManagerScope>
   if (!manager || !manager.isActive) throw jsonError(401, "ACCOUNT_DISABLED");
   if (manager.agencyId !== agencyId) throw jsonError(401, "UNAUTHORIZED");
 
+  setAuditActor({ actorType: "MANAGER", actorId: managerId, agencyId, actorLabel: session.loginId });
   return { managerId, agencyId, loginId: session.loginId };
 }
 
@@ -58,6 +60,7 @@ export async function requireAdminOrManagerSession(req: Request): Promise<DualSe
     if (adminId) {
       const admin = await prisma.admin.findUnique({ where: { id: adminId }, select: { isActive: true } });
       if (admin && admin.isActive)
+        setAuditActor({ actorType: "ADMIN", actorId: adminId, actorLabel: String(adm.loginId) });
         return { kind: "admin", adminId, loginId: String(adm.loginId) };
     }
   }
@@ -71,6 +74,7 @@ export async function requireAdminOrManagerSession(req: Request): Promise<DualSe
         select: { isActive: true, agencyId: true },
       });
       if (manager && manager.isActive && manager.agencyId === agencyId)
+        setAuditActor({ actorType: "MANAGER", actorId: managerId, agencyId, actorLabel: mgr.loginId });
         return { kind: "manager", managerId, agencyId, loginId: mgr.loginId };
     }
   }
@@ -80,6 +84,7 @@ export async function requireAdminOrManagerSession(req: Request): Promise<DualSe
     if (adminId) {
       const admin = await prisma.admin.findUnique({ where: { id: adminId }, select: { isActive: true } });
       if (admin && admin.isActive)
+        setAuditActor({ actorType: "ADMIN", actorId: adminId, actorLabel: String(adm.loginId) });
         return { kind: "admin", adminId, loginId: String(adm.loginId) };
     }
   }

@@ -5,6 +5,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { readAdminSessionFromRequest } from "@/lib/adminCookies";
 import { prisma } from "@/lib/prisma";
+import { setAuditActor } from "@/lib/audit";
 
 /** URL 파라미터나 body의 id 문자열을 BigInt로 안전하게 변환. 실패 시 null 반환 */
 export function parseBigInt(value: unknown): bigint | null {
@@ -35,5 +36,6 @@ export async function requireAdminSession(req: Request): Promise<AdminScope> {
   });
   if (!admin || !admin.isActive) throw jsonError(401, "ACCOUNT_DISABLED");
 
+  setAuditActor({ actorType: "ADMIN", actorId: adminId, actorLabel: String(s.loginId ?? "") });
   return { adminId, loginId: String(s.loginId ?? "") };
 }
