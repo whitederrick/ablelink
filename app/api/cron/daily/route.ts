@@ -11,6 +11,7 @@ import { computePayrollItems } from "@/lib/payroll/computeRun";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { randomUUID } from "crypto";
 import { PREMIUM_FEATURE_PLANS } from "@/lib/plans";
+import { audit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -37,6 +38,11 @@ export async function GET(req: NextRequest) {
   let surveysSent    = 0;
   let payrollDrafted = 0;
   const errors: string[] = [];
+
+  // 감사 상세: 요약 1줄 + 상세 모달에서 처리 건별 내역 조회용(변경주체=시스템)
+  const detail: {
+    autoConfirmed: any[]; missedFlagged: any[]; exemptCreated: any[]; payrollDrafted: any[];
+  } = { autoConfirmed: [], missedFlagged: [], exemptCreated: [], payrollDrafted: [] };
 
   // ── 1. 전일 미확정 출근 처리 ───────────────────────────────────
   // - status=DONE(퇴근은 눌렀으나 미확정): 기존대로 자동 확정(endTime 이미 표준시각으로 채워짐)
@@ -76,6 +82,7 @@ export async function GET(req: NextRequest) {
           } catch (e: any) { errors.push(`미실행알림[${att.id}]: ${e.message}`); }
         }
         missedFlagged++;
+        detail.missedFlagged.push({ attId: String(att.id), workerId: String(att.workerId), site: att.site?.companyName ?? null, date: yesterday });
       } else {
         // status=DONE: endTime 있음 → 자동 확정
         await prisma.dailyAttendance.update({
@@ -83,6 +90,7 @@ export async function GET(req: NextRequest) {
           data: { isFinalClosed: true, finalizedAt: now, status: "DONE" },
         });
         autoConfirmed++;
+        detail.autoConfirmed.push({ attId: String(att.id), workerId: String(att.workerId), site: att.site?.companyName ?? null, date: yesterday });
       }
     }
   } catch (e: any) { errors.push(`자동확정: ${e.message}`); }
@@ -185,6 +193,7 @@ export async function GET(req: NextRequest) {
             },
           });
           exemptCreated++;
+          detail.exemptCreated.push({ assignmentId: String(a.id), workerId: String(a.workerId), siteId: String(a.siteId), date: yesterday });
         } catch (e: any) { errors.push(`면제생성[${a.id}]: ${e.message}`); }
       }
     }
@@ -313,6 +322,7 @@ export async function GET(req: NextRequest) {
         if (userCount === 0 || items.length === 0) continue;
         await prisma.payrollRun.create({ data: { agencyId: ag.id, yearMonth: prevYm, status: "DRAFT", items: { create: items } } });
         payrollDrafted++;
+        detail.payrollDrafted.push({ agencyId: String(ag.id), yearMonth: prevYm, userCount });
         // 담당자 알림(앱 내 무료) — 활성 매니저에게 초안 생성 알림
         try {
           const mgrs = await prisma.manager.findMany({ where: { agencyId: ag.id, isActive: true }, select: { id: true } });
@@ -384,6 +394,36 @@ export async function GET(req: NextRequest) {
       }
     }
   } catch (e: any) { errors.push(`진척독려: ${e.message}`); }
+
+  // ── 감사로그(변경주체=시스템): 데이터 변경이 있었던 배치만 요약 1건 기록. 상세는 payload에 처리 내역 전량. ──
+  try {
+    const changed = autoConfirmed + missedFlagged + exemptCreated + payrollDrafted + surveysExpired + expiryNotified + surveysSent + remindAgencies + tokensCleared;
+    if (changed > 0) {
+      const parts: string[] = [];
+      if (autoConfirmed) parts.push(`출근 자동확정 ${autoConfirmed}`);
+      if (missedFlagged) parts.push(`퇴근 미실행 ${missedFlagged}`);
+      if (exemptCreated) parts.push(`면제 출근부 생성 ${exemptCreated}`);
+      if (payrollDrafted) parts.push(`급여 초안 ${payrollDrafted}`);
+      if (surveysExpired) parts.push(`평가 만료 ${surveysExpired}`);
+      if (surveysSent) parts.push(`만족도 발송 ${surveysSent}`);
+      if (expiryNotified) parts.push(`계약만료 알림 ${expiryNotified}`);
+      if (remindAgencies) parts.push(`마감 독려 ${remindAgencies}`);
+      if (tokensCleared) parts.push(`만료 토큰 삭제 ${tokensCleared}`);
+      const payload: Record<string, unknown> = {
+        date: yesterday,
+        counts: { autoConfirmed, missedFlagged, exemptCreated, payrollDrafted, surveysExpired, surveysSent, expiryNotified, remindAgencies, tokensCleared },
+        details: detail,
+      };
+      if (errors.length) payload.errors = errors;
+      await audit(null, {
+        entityType: "cron.daily",
+        entityId: yesterday,
+        action: "batch",
+        summary: `일일 배치(${yesterday}) — ${parts.join(", ")}`,
+        payload: payload as any,
+      });
+    }
+  } catch { /* 감사 실패는 배치에 영향 없음 */ }
 
   console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 퇴근미실행:${missedFlagged} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent} 평가만료:${surveysExpired} 급여초안:${payrollDrafted} 진척독려:${remindAgencies}`, errors);
 

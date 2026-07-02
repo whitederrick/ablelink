@@ -36,6 +36,15 @@ const ACTION_MAP: Record<string, { label: string; cls: string }> = {
   upsert:     { label: "upsert",   cls: "bg-violet-50 text-violet-600" },
   updateMany: { label: "일괄수정", cls: "bg-sky-50 text-sky-600" },
   deleteMany: { label: "일괄삭제", cls: "bg-rose-50 text-rose-600" },
+  batch:      { label: "일괄 배치", cls: "bg-slate-100 text-slate-500" },
+};
+
+// 크론 배치 상세(payload.details) 사람이 읽기 쉬운 라벨
+const CRON_DETAIL_LABELS: Record<string, string> = {
+  autoConfirmed: "출근 자동확정",
+  missedFlagged: "퇴근 미실행 표시",
+  exemptCreated: "면제 출근부 생성",
+  payrollDrafted: "급여 초안 생성",
 };
 
 function actionBadge(action: string) {
@@ -252,9 +261,38 @@ export default function AuditPage() {
                 <span className="font-semibold text-slate-800">{detail.summary}</span>
               </>}
             </div>
+            {(() => {
+              // 크론 배치: 처리 건별 내역을 표로 보기 좋게
+              const p: any = detail.payload && typeof detail.payload === "object" ? detail.payload : null;
+              const details = p?.details;
+              if (!details || typeof details !== "object") return null;
+              const groups = Object.entries(details).filter(([, arr]) => Array.isArray(arr) && (arr as any[]).length > 0);
+              if (groups.length === 0) return null;
+              return (
+                <div className="mt-4 space-y-3">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">처리 내역</p>
+                  {groups.map(([key, arr]) => (
+                    <div key={key} className="rounded-xl border border-slate-100">
+                      <div className="border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-[13px] font-bold text-slate-700">
+                        {CRON_DETAIL_LABELS[key] ?? key} <span className="text-slate-400">({(arr as any[]).length}건)</span>
+                      </div>
+                      <div className="max-h-[30vh] overflow-auto">
+                        {(arr as any[]).map((row, i) => (
+                          <div key={i} className="flex flex-wrap gap-x-3 gap-y-0.5 border-b border-slate-50 px-3 py-1.5 text-[13px] text-slate-600 last:border-0">
+                            {Object.entries(row).map(([k, v]) => (
+                              <span key={k}><span className="text-slate-400">{k}:</span> <b className="font-semibold text-slate-700">{v == null ? "-" : String(v)}</b></span>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             {detail.payload != null && (
               <div className="mt-4">
-                <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-400">Payload</p>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-400">Payload (원본)</p>
                 <pre className="max-h-[45vh] overflow-auto rounded-lg bg-slate-50 p-3 text-xs font-mono text-slate-700 whitespace-pre-wrap break-all">{prettyJson(detail.payload)}</pre>
               </div>
             )}
