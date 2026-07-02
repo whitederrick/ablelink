@@ -1,6 +1,6 @@
 "use client";
 
-// 훈련생 현황 (운영자) — 평면 목록(테이블) 조회. 등록·수정은 공단 관리, 운영자는 조회만.
+// 훈련생 현황 (시스템 관리자) — 평면 목록(테이블) 조회. 등록·수정은 공단 관리, 시스템 관리자는 조회만.
 import { useEffect, useMemo, useState } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
@@ -34,7 +34,7 @@ export default function TraineesPage() {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    // 운영자 콘솔 화면 — 듀얼 세션에서도 전체 기관 조회되도록 x-admin-context 부착(다른 admin 화면과 동일)
+    // 시스템 관리자 콘솔 화면 — 듀얼 세션에서도 전체 기관 조회되도록 x-admin-context 부착(다른 admin 화면과 동일)
     fetch("/api/admin/trainees/summary", { headers: { "x-admin-context": "1" }, cache: "no-store" })
       .then(r => r.json())
       .then(d => { if (d.success && Array.isArray(d.data)) setSites(d.data); })

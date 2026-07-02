@@ -1,5 +1,5 @@
 // app/admin/_components/PageHeader.tsx
-// 운영자(admin) 콘솔 전 화면 공통 페이지 헤더 — 타이틀·부제·액션 버튼을 단일 기준으로 통일.
+// 시스템 관리자(admin) 콘솔 전 화면 공통 페이지 헤더 — 타이틀·부제·액션 버튼을 단일 기준으로 통일.
 // 매니저 콘솔의 PageHeader와 동일 규격.
 
 import type { ReactNode } from "react";

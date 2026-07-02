@@ -1,6 +1,6 @@
 "use client";
 
-// 시스템 운영자 — 직종 자격 증빙 검증 (승인/반려)
+// 시스템 관리자 — 직종 자격 증빙 검증 (승인/반려)
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "../_styles";

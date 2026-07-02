@@ -1,7 +1,7 @@
 "use client";
 
 // app/admin/promos/page.tsx
-// 운영자: 대시보드 소식 티커·광고 관리(생성/수정/활성토글/게시기간/삭제) + 티커 속도 조절.
+// 시스템 관리자: 대시보드 소식 티커·광고 관리(생성/수정/활성토글/게시기간/삭제) + 티커 속도 조절.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";

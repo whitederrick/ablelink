@@ -431,7 +431,7 @@ export default function AdminContractsPage() {
   );
 }
 
-// 운영자 전용 — 근로계약서 읽기 상세(PDF + 정보). 작성·취소·서명 등 액션은 위탁기관 담당자(/manager) 몫.
+// 시스템 관리자 전용 — 근로계약서 읽기 상세(PDF + 정보). 작성·취소·서명 등 액션은 위탁기관 담당자(/manager) 몫.
 function AdminContractDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);

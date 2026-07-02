@@ -1,6 +1,6 @@
 "use client";
 
-// 위탁기관 관리자 관리 — 전체 위탁기관의 관리자(Manager) 계정을 운영자가 관리.
+// 위탁기관 관리자 관리 — 전체 위탁기관의 관리자(Manager) 계정을 시스템 관리자가 관리.
 // (자가가입 폐지로 '가입 신청 검토'는 폐기. 목록 조회 → 행 클릭 상세 모달 → 활성/비활성·비번 초기화·정보 수정, 상단 초대 발급.)
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, X, Copy } from "lucide-react";

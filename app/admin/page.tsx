@@ -26,7 +26,7 @@ const STAT_CARDS = [
 const QUICK_LINKS = [
   { href: "/admin/agencies",                label: "위탁기관 관리",      desc: "위탁기관 생성·플랜·한도",        icon: Building2 },
   { href: "/admin/manager-signup-requests", label: "위탁기관 관리자 관리", desc: "가입 신청 검토·승인",            icon: UserPlus },
-  { href: "/admin/admins",                  label: "시스템 운영자 관리",  desc: "운영자·관리자 계정",             icon: UserCog },
+  { href: "/admin/admins",                  label: "시스템 관리자 관리",  desc: "시스템 관리자·위탁기관 관리자 계정",             icon: UserCog },
   { href: "/admin/talent",                  label: "인재풀 관리",        desc: "구직 직무지도원·공고·자격검증",   icon: Sparkles },
   { href: "/admin/billing",                 label: "구독/사용량 현황",    desc: "결제·구독·AI 사용량",            icon: CreditCard },
   { href: "/admin/announcements",           label: "시스템 공지",        desc: "관리자·전체 사용자 공지 발송",    icon: Bell },

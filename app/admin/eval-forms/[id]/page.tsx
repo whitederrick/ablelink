@@ -1,6 +1,6 @@
 "use client";
 
-// 직무지도원 평가 질문지 편집 (시스템 운영자) — 카테고리·문항·배점(100점) + 주관식 의견란.
+// 직무지도원 평가 질문지 편집 (시스템 관리자) — 카테고리·문항·배점(100점) + 주관식 의견란.
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Plus, Trash2, GripVertical, Wand2 } from "lucide-react";

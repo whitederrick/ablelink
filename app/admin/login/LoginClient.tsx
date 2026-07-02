@@ -47,7 +47,7 @@ export default function LoginClient() {
             <Settings className="h-8 w-8 text-white" aria-hidden="true" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-white">Able-Link</h1>
-          <p className="mt-1 text-sm font-semibold text-slate-400">시스템 운영자 로그인</p>
+          <p className="mt-1 text-sm font-semibold text-slate-400">시스템 관리자 로그인</p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">

@@ -79,7 +79,7 @@ export default function AdminsPage() {
     });
     const data = await res.json();
     setProcessing(false);
-    if (data.success) { showToast("운영자 계정이 생성되었습니다."); setShowCreate(false); setForm({ ...EMPTY_FORM }); load(); }
+    if (data.success) { showToast("시스템 관리자 계정이 생성되었습니다."); setShowCreate(false); setForm({ ...EMPTY_FORM }); load(); }
     else showToast(data.message || "생성 실패");
   }
 
@@ -129,19 +129,19 @@ export default function AdminsPage() {
     });
     const data = await res.json();
     setProcessing(false);
-    if (data.success) { showToast("운영자 정보가 저장되었습니다."); setDetailTarget(null); load(); }
+    if (data.success) { showToast("시스템 관리자 정보가 저장되었습니다."); setDetailTarget(null); load(); }
     else showToast(data.message || "저장 실패");
   }
 
   return (
     <div>
       <PageHeader
-        title="시스템 운영자 관리"
-        sub="플랫폼 시스템 운영자 계정을 관리합니다."
+        title="시스템 관리자 관리"
+        sub="플랫폼 시스템 관리자 계정을 관리합니다."
         actions={
           <button onClick={() => setShowCreate(true)}
             className="flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white active:scale-95">
-            <Plus className="h-4 w-4" />운영자 등록
+            <Plus className="h-4 w-4" />시스템 관리자 등록
           </button>
         }
       />
@@ -150,7 +150,7 @@ export default function AdminsPage() {
         className="mb-5"
         cols={3}
         items={[
-          { label: "전체 운영자", value: admins.length },
+          { label: "전체 시스템 관리자", value: admins.length },
           { label: "활성", value: admins.filter(a=>a.isActive).length, tone: "emerald" },
           { label: "비활성", value: admins.filter(a=>!a.isActive).length, tone: "slate" },
         ]}
@@ -173,7 +173,7 @@ export default function AdminsPage() {
       {/* 계정 생성 폼 */}
       {showCreate && (
         <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 p-5 space-y-4">
-          <p className="text-base font-black text-slate-900">운영자 등록</p>
+          <p className="text-base font-black text-slate-900">시스템 관리자 등록</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-600">아이디 *</label>
@@ -219,7 +219,7 @@ export default function AdminsPage() {
             </button>
             <button onClick={createAdmin} disabled={processing}
               className="flex-1 rounded-xl bg-slate-950 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">
-              {processing ? "등록 중..." : "운영자 등록"}
+              {processing ? "등록 중..." : "시스템 관리자 등록"}
             </button>
           </div>
         </div>
@@ -320,7 +320,7 @@ export default function AdminsPage() {
             {loading ? (
               <tr><td colSpan={6} className={T.tdCenter}>로딩 중...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className={T.tdCenter}>{admins.length === 0 ? "운영자가 없습니다." : "조건에 맞는 운영자가 없습니다."}</td></tr>
+              <tr><td colSpan={6} className={T.tdCenter}>{admins.length === 0 ? "시스템 관리자가 없습니다." : "조건에 맞는 시스템 관리자가 없습니다."}</td></tr>
             ) : pageItems.map(a => (
               <tr key={a.id} className={`${T.trBase} cursor-pointer hover:bg-slate-50 ${!a.isActive ? "opacity-50" : ""}`} onClick={() => openDetail(a)}>
                 <td className={`${T.td} truncate`}><span className="font-bold text-sky-600">{a.loginId}</span></td>

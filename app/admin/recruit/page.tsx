@@ -113,7 +113,7 @@ export default function ManagerRecruitPage() {
                 <td className={`${T.td} truncate`}>
                   {p.agencyName
                     ? p.agencyName
-                    : <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[13px] font-black text-emerald-600">Able-Link(운영자)</span>}
+                    : <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[13px] font-black text-emerald-600">Able-Link(시스템 관리자)</span>}
                 </td>
                 <td className={T.td}>{PROF_LABEL[p.profession] ?? p.profession}</td>
                 <td className={`${T.td} truncate`}>{p.region ?? "-"}</td>

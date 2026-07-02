@@ -1,6 +1,6 @@
 "use client";
 
-// 직무지도원 평가 질문지 관리 (시스템 운영자) — 목록 + 생성/활성/삭제. 편집은 상세 페이지.
+// 직무지도원 평가 질문지 관리 (시스템 관리자) — 목록 + 생성/활성/삭제. 편집은 상세 페이지.
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, CheckCircle2 } from "lucide-react";

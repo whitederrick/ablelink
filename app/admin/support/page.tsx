@@ -241,7 +241,7 @@ export default function AdminSupportPage() {
               {selected.reply && replyId !== selected.id && (
                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                   <p className="mb-1 text-[11px] font-black uppercase tracking-wide text-slate-400">
-                    회신 ({selected.replierLogin ?? "운영자"}{selected.repliedAt ? ` · ${new Date(selected.repliedAt).toLocaleDateString("ko-KR")}` : ""})
+                    회신 ({selected.replierLogin ?? "시스템 관리자"}{selected.repliedAt ? ` · ${new Date(selected.repliedAt).toLocaleDateString("ko-KR")}` : ""})
                   </p>
                   <p className="whitespace-pre-wrap text-sm text-slate-700">{selected.reply}</p>
                   {selected.replyAttachments && selected.replyAttachments.length > 0 && (

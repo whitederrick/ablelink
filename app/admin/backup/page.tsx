@@ -1,7 +1,7 @@
 "use client";
 
-// 시스템 운영자 전체 데이터 백업 — 보관 1년 경과분 안전망.
-// 고객 화면 export는 1년 제한이지만, 운영자 백업은 전 기간·전 위탁기관(제한 없음).
+// 시스템 관리자 전체 데이터 백업 — 보관 1년 경과분 안전망.
+// 고객 화면 export는 1년 제한이지만, 시스템 관리자 백업은 전 기간·전 위탁기관(제한 없음).
 
 import { useState } from "react";
 import { Download, FileSpreadsheet, Database } from "lucide-react";
@@ -41,7 +41,7 @@ export default function AdminBackupPage() {
       <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
         <Database className="mt-0.5 h-4 w-4 flex-shrink-0" />
         <p className="font-semibold leading-relaxed">
-          고객 화면의 내보내기는 보관 1년으로 제한됩니다. 1년 경과분이 사라지지 않도록 운영자가 주기적으로 전체 백업을 받아 보관하세요(고객 비노출).
+          고객 화면의 내보내기는 보관 1년으로 제한됩니다. 1년 경과분이 사라지지 않도록 시스템 관리자가 주기적으로 전체 백업을 받아 보관하세요(고객 비노출).
         </p>
       </div>
 

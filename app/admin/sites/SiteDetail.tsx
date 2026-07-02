@@ -1,7 +1,7 @@
 "use client";
 // 현장(Site) 상세 본문 — 목록의 모달 팝업과 /admin/sites/[id] 페이지가 공유.
 // onClose 제공 시 모달 모드(닫기 버튼), 미제공 시 페이지 모드(router.back).
-// 운영자 콘솔이므로 dual 엔드포인트 호출에 x-admin-context:1 (매니저 동시 로그인 시 admin으로 동작).
+// 시스템 관리자 콘솔이므로 dual 엔드포인트 호출에 x-admin-context:1 (매니저 동시 로그인 시 admin으로 동작).
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";

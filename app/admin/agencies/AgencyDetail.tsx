@@ -387,7 +387,7 @@ export default function AgencyDetail({ id, onClose, onChanged }: { id: string; o
         </div>
       </div>
 
-      {/* 계약서 전용 양식 부여 — 운영자가 제작·등록한 기관 전용 양식을 이 기관에 부여 */}
+      {/* 계약서 전용 양식 부여 — 시스템 관리자가 제작·등록한 기관 전용 양식을 이 기관에 부여 */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="mb-2.5 flex items-start justify-between gap-2">
           <div className="min-w-0">
