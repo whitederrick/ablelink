@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   try {
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
       data: { agencyId, name, type, amount },
     });
 
+    await audit(scope, { entityType: "AgencyDeduction", entityId: deduction.id, action: "create", after: { name, type, amount: Number(amount) } });
     return NextResponse.json({ success: true, id: deduction.id.toString() });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;

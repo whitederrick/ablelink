@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   try {
@@ -104,6 +105,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await audit(scope, { entityType: "PayContract", entityId: contract.id, action: "create", after: { workerId: String(workerId), workerType: resolvedWorkerType, payType: resolvedPayType, baseAmount: Number(baseAmount), incomeType: resolvedIncomeType } });
     return NextResponse.json({ success: true, id: contract.id.toString() });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
 import { VALID_WORK_TYPES, type WorkType, computeWorkTimes } from "@/lib/workSchedule";
+import { audit, auditSnapshot } from "@/lib/audit";
 
 // 배정 취소(종료) — 위탁기관 담당자(매니저)·시스템 운영자 공통.
 // 진행 중(REQUESTED/ACCEPTED/ASSIGNED/CONFIRMED/ACTIVE) 배정을 ENDED로 종료 → 재배정 가능.
@@ -36,6 +37,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       where: { id: assignmentId },
       data: { status: "ENDED", endedAt: new Date(), statusReason: reason },
     });
+    await audit(session, { entityType: "SiteAssignment", entityId: assignmentId, action: "delete", summary: `배정 취소(종료): ${reason}` });
     return NextResponse.json({ success: true, message: "배정이 취소(종료)되었습니다." });
   } catch (e: any) {
     if (e instanceof Response) return e;
@@ -101,6 +103,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updateData.adaptationStartDate = body.adaptationStartDate ? new Date(body.adaptationStartDate) : null;
     }
 
+    const auditBefore = await auditSnapshot("SiteAssignment", { id: assignmentId }, updateData);
     const updated = await prisma.siteAssignment.update({
       where: { id: assignmentId },
       data: updateData,
@@ -113,6 +116,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         serviceStep: true,
       },
     });
+
+    await audit(session, { entityType: "SiteAssignment", entityId: assignmentId, action: "update", before: auditBefore, after: updateData as any });
 
     const times = computeWorkTimes(workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd);
 

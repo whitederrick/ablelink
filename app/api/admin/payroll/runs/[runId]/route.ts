@@ -7,6 +7,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { Decimal } from "@prisma/client/runtime/library";
+import { audit } from "@/lib/audit";
 
 function itemDto(i: any) {
   return {
@@ -176,6 +177,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ run
       console.error("[payroll finalize notice]", e);
     }
 
+    await audit(scope, { entityType: "PayrollRun", entityId: run.id, action: "update", summary: "급여 확정", after: { status: "FINALIZED", yearMonth: run.yearMonth } });
     return NextResponse.json({
       success: true,
       status: finalized.status,

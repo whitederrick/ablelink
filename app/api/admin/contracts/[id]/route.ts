@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
 import { renderContractPdf } from "@/lib/contractPdf";
+import { audit } from "@/lib/audit";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -106,6 +107,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     await prisma.employmentContract.update({ where: { id: cid }, data: { status: "CANCELLED" } });
+    await audit(scope, { entityType: "EmploymentContract", entityId: cid, action: "update", summary: "계약 취소", payload: { changed: [{ field: "status", from: "PENDING", to: "CANCELLED" }] } });
     // 직무지도원에게 서명 링크를 이미 보냈을 수 있으므로 취소 안내(실패 무시)
     try {
       await prisma.workerNotice.create({

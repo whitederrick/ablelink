@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit, auditSnapshot } from "@/lib/audit";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -29,16 +30,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ success: false, message: "type 오류" }, { status: 400 });
     }
 
+    const updateData: any = {
+      ...(name != null && { name }),
+      ...(type != null && { type }),
+      ...(amount != null && { amount }),
+      ...(isActive != null && { isActive }),
+    };
+    const auditBefore = await auditSnapshot("AgencyDeduction", { id }, updateData);
     const updated = await prisma.agencyDeduction.update({
       where: { id },
-      data: {
-        ...(name != null && { name }),
-        ...(type != null && { type }),
-        ...(amount != null && { amount }),
-        ...(isActive != null && { isActive }),
-      },
+      data: updateData,
     });
 
+    await audit(scope, { entityType: "AgencyDeduction", entityId: id, action: "update", before: auditBefore, after: updateData });
     return NextResponse.json({ success: true, id: updated.id.toString() });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;
@@ -62,6 +66,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
 
     await prisma.agencyDeduction.delete({ where: { id } });
+    await audit(scope, { entityType: "AgencyDeduction", entityId: id, action: "delete", summary: `공제 항목 삭제: ${existing.name}` });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;

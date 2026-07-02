@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { computePayrollItems } from "@/lib/payroll/computeRun";
+import { audit } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   try {
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest) {
       });
     });
 
+    await audit(scope, { entityType: "PayrollRun", entityId: run.id, action: "create", after: { yearMonth, status: "DRAFT", itemCount: run.items.length } });
     return NextResponse.json({
       success: true,
       id: run.id.toString(),

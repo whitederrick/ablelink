@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { getKstDateString } from "@/lib/time";
+import { audit } from "@/lib/audit";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -306,6 +307,8 @@ export async function POST(req: NextRequest) {
     const created = reuseId
       ? await prisma.siteAssignment.update({ where: { id: reuseId }, data: dataObj, select: selectObj })
       : await prisma.siteAssignment.create({ data: dataObj, select: selectObj });
+
+    await audit(session, { entityType: "SiteAssignment", entityId: created.id, action: "create", after: { siteId: String(siteId), workerId: String(workerId), status: created.status, workType: isRequest ? null : workType } });
 
     // 배정 요청은 워커에게 앱 내 알림(무료) — 홈에서 수락/거절.
     if (isRequest) {

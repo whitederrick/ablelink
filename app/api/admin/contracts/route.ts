@@ -11,6 +11,7 @@ import { isValidTemplateKey, DEFAULT_TEMPLATE_KEY, canUseTemplate, canUseTemplat
 import { sendAlimtalk } from "@/lib/kakao";
 import { randomUUID } from "crypto";
 import { hash } from "bcryptjs";
+import { audit } from "@/lib/audit";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -321,6 +322,8 @@ export async function POST(req: NextRequest) {
         templateData: resolvedTemplateData,
       } as any,
     });
+
+    await audit(scope, { entityType: "EmploymentContract", entityId: contract.id, action: "create", after: { workerId: String(userIdBig), siteName: siteName || null, wageType: str(wageType), wageAmount: toInt(wageAmount), status: "PENDING" } });
 
     // ─── 카카오 알림톡 발송 ─────────────────────────────────────
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";
