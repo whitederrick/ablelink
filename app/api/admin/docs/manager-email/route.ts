@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       include: {
         site: {
           include: {
-            contacts: { where:{ isActive:true }, select:{ email:true, name:true }, take:1 },
+            contacts: { where:{ isActive:true }, select:{ email:true, name:true }, orderBy:{ id:"asc" } },
           },
         },
       },
@@ -37,7 +37,17 @@ export async function GET(request: NextRequest) {
       assignment?.site?.contacts?.[0]?.name ||
       null;
 
-    return NextResponse.json({ success:true, email, name });
+    // 전체 담당자 이메일(대표 먼저, 이어서 추가담당자) — 비어있지 않은 값만, 중복 제거
+    const emails = Array.from(
+      new Set(
+        [
+          assignment?.site?.businessContactEmail,
+          ...((assignment?.site?.contacts ?? []).map((c) => c.email)),
+        ].filter((e): e is string => !!e && e.trim().length > 0),
+      ),
+    );
+
+    return NextResponse.json({ success:true, email, name, emails });
   } catch (e: any) {
     if (e instanceof Response) return e;
     return NextResponse.json({ success:false, message: "서버 오류" }, { status:500 });

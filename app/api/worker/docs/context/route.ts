@@ -32,6 +32,9 @@ export async function GET(req: NextRequest) {
         select: {
           companyName: true,
           businessContactName: true,
+          businessContactPhone: true,
+          businessContactEmail: true,
+          contacts: { where: { isActive: true }, select: { name: true, phoneNumber: true, email: true, role: true }, orderBy: { id: "asc" } },
           trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true, name: true, gender: true } },
         },
       },
@@ -45,11 +48,32 @@ export async function GET(req: NextRequest) {
   // 오늘 기준 단계(전환일 지나면 적응지도)
   const trainingType = effectiveTrainingType(assignment.serviceStep, (assignment as any).adaptationStartDate, todayStr);
 
+  // 현장 담당자 전체(대표 사업체담당자 먼저, 이어서 활성 추가담당자) — 워커 표시용(읽기전용)
+  const siteContacts = [
+    ...(assignment.site.businessContactName
+      ? [{
+          name: assignment.site.businessContactName,
+          phone: assignment.site.businessContactPhone ?? null,
+          email: assignment.site.businessContactEmail ?? null,
+          role: "대표",
+          isPrimary: true,
+        }]
+      : []),
+    ...(((assignment.site as any).contacts ?? []).map((c: any) => ({
+      name: c.name,
+      phone: c.phoneNumber ?? null,
+      email: c.email ?? null,
+      role: c.role ?? null,
+      isPrimary: false,
+    }))),
+  ];
+
   return NextResponse.json({
     success: true,
     data: {
       companyName: assignment.site.companyName,
       businessContactName: assignment.site.businessContactName ?? "",
+      siteContacts,
       trainingType,
       trainees: assignment.site.trainees.map((t) => ({ id: t.id.toString(), name: t.name, gender: t.gender })),
     },

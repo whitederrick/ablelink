@@ -16,11 +16,20 @@ import {
   Mail,
   MapPin,
   PenLine,
+  Phone,
   Smartphone,
   TrendingUp,
   User,
   Search,
 } from "lucide-react";
+
+interface SiteContact {
+  name: string;
+  phone: string | null;
+  email: string | null;
+  role: string | null;
+  isPrimary: boolean;
+}
 
 interface SiteInfo {
   companyName: string;
@@ -28,6 +37,7 @@ interface SiteInfo {
   managerName: string;
   businessContactName: string;
   workerName: string;
+  siteContacts: SiteContact[];
   trainees: { id: string; name: string; gender: string }[];
   trainingType: "PRE" | "FIELD" | "ADAPTATION";
 }
@@ -103,6 +113,7 @@ function DocsContent() {
           managerName:  d.data.managerName  || "담당자",
           businessContactName: d.data.businessContactName || "",
           workerName:    d.data.workerName    || "",
+          siteContacts: Array.isArray(d.data.siteContacts) ? d.data.siteContacts : [],
           trainees: (d.data.trainees || []).map((t: any) => ({
             id: String(t.id), name: t.name, gender: t.gender,
           })),
@@ -267,13 +278,43 @@ function DocsContent() {
               </span>
             </div>
             <div className="my-2 h-px bg-slate-50" />
-            <div className="flex items-center justify-between py-1">
-              <span className="flex-shrink-0 text-xs font-semibold text-slate-400">수신자</span>
-              <span className="flex items-center gap-1 text-right text-sm font-semibold text-slate-800">
-                <Mail className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
-                {siteInfo.managerName} ({siteInfo.managerEmail || "이메일 미등록"})
-              </span>
-            </div>
+            {siteInfo.siteContacts.length > 0 ? (
+              <div className="py-1">
+                <span className="text-xs font-semibold text-slate-400">현장 담당자</span>
+                <div className="mt-2 flex flex-col gap-2">
+                  {siteInfo.siteContacts.map((c, i) => (
+                    <div key={i} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-black text-slate-800">{c.name}</span>
+                        {(c.isPrimary || c.role) && (
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${c.isPrimary ? "bg-slate-900 text-white" : "bg-slate-200 text-slate-600"}`}>
+                            {c.isPrimary ? "대표" : c.role}
+                          </span>
+                        )}
+                      </div>
+                      {c.phone && (
+                        <div className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
+                          <Phone className="h-3 w-3 flex-shrink-0 text-slate-400" aria-hidden="true" />
+                          {c.phone}
+                        </div>
+                      )}
+                      <div className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-slate-500">
+                        <Mail className="h-3 w-3 flex-shrink-0 text-slate-400" aria-hidden="true" />
+                        {c.email || "이메일 미등록"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between py-1">
+                <span className="flex-shrink-0 text-xs font-semibold text-slate-400">수신자</span>
+                <span className="flex items-center gap-1 text-right text-sm font-semibold text-slate-800">
+                  <Mail className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
+                  {siteInfo.managerName} ({siteInfo.managerEmail || "이메일 미등록"})
+                </span>
+              </div>
+            )}
           </div>
         )}
 

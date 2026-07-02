@@ -96,7 +96,13 @@ export async function GET(
         assignments: {
           where: { status: { in: ['ASSIGNED', 'CONFIRMED', 'ACTIVE'] } },
           include: {
-            site: { include: { trainees: true, agency: true } }
+            site: {
+              include: {
+                trainees: true,
+                agency: true,
+                contacts: { where: { isActive: true }, select: { name: true, phoneNumber: true, email: true, role: true }, orderBy: { id: "asc" } },
+              },
+            },
           }
         },
         // 오늘의 출근 기록 확인
@@ -111,6 +117,26 @@ export async function GET(
     const activeAssignment = userWithData.assignments[0];
     const site = activeAssignment?.site;
     const trainees = site?.trainees || [];
+
+    // 현장 담당자 전체(대표 사업체담당자 먼저, 이어서 활성 추가담당자) — 워커 표시용(읽기전용)
+    const siteContacts = [
+      ...(site?.businessContactName
+        ? [{
+            name: site.businessContactName,
+            phone: site.businessContactPhone ?? null,
+            email: site.businessContactEmail ?? null,
+            role: "대표",
+            isPrimary: true,
+          }]
+        : []),
+      ...((site?.contacts ?? []).map((c: any) => ({
+        name: c.name,
+        phone: c.phoneNumber ?? null,
+        email: c.email ?? null,
+        role: c.role ?? null,
+        isPrimary: false,
+      }))),
+    ];
 
     const workType = activeAssignment?.workType || "";
     const commuteGuidanceIncluded: boolean = (activeAssignment as any)?.commuteGuidanceIncluded ?? true;
@@ -152,6 +178,7 @@ export async function GET(
         managerName: site?.businessContactName ?? "",
         managerEmail: site?.businessContactEmail ?? "",
         managerPhone: site?.businessContactPhone ?? "",
+        siteContacts,
 
         // ✅ 훈련기간은 SiteAssignment.stepStart/stepEnd 기준
         preTrainingStart: (activeAssignment as any)?.stepStart ?? null,

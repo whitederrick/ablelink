@@ -37,7 +37,12 @@ export async function GET(request: NextRequest) {
         ...(selAssignmentId != null ? { id: selAssignmentId } : {}),
       },
       include: {
-        site: { include: { trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } } } } },
+        site: {
+          include: {
+            trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } } },
+            contacts: { where: { isActive: true }, select: { name: true, phoneNumber: true, email: true, role: true }, orderBy: { id: "asc" } },
+          },
+        },
         agency: true,
       },
       orderBy: { startDate: "desc" },
@@ -49,6 +54,26 @@ export async function GET(request: NextRequest) {
 
     const site = assignment.site;
     const agency = assignment.agency;
+
+    // 현장 담당자 전체(대표 사업체담당자 먼저, 이어서 활성 추가담당자) — 워커 표시용(읽기전용)
+    const siteContacts = [
+      ...(site.businessContactName
+        ? [{
+            name: site.businessContactName,
+            phone: site.businessContactPhone ?? null,
+            email: site.businessContactEmail ?? null,
+            role: "대표",
+            isPrimary: true,
+          }]
+        : []),
+      ...(((site as any).contacts ?? []).map((c: any) => ({
+        name: c.name,
+        phone: c.phoneNumber ?? null,
+        email: c.email ?? null,
+        role: c.role ?? null,
+        isPrimary: false,
+      }))),
+    ];
 
     // 배정 이후 독립적인 4개 조회는 병렬로(순차 round-trip 줄여 로딩 단축)
     const [todayAttendance, user, premiumStatus, docAccessStatus] = await Promise.all([
@@ -103,6 +128,8 @@ export async function GET(request: NextRequest) {
         // 사업체 담당자(현장 연락 담당자) — 출근부 '사업체담당자' 서명 프리필용
         businessContactName: site.businessContactName ?? "",
         businessContactPhone: site.businessContactPhone ?? "",
+        // 현장 담당자 전체(대표+추가) — 워커 표시용
+        siteContacts,
         fieldTrainingStart: assignment.startDate?.toISOString() ?? null,
         fieldTrainingEnd: assignment.endDate?.toISOString() ?? null,
         attendanceId: todayAttendance?.id?.toString() ?? null,
