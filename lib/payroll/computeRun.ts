@@ -479,6 +479,9 @@ export async function computePayrollItems(
       incomeType, tier: elig.tier, insurances: elig.insurances, workerDeductible: elig.workerDeductible,
       needsPensionReview: !!elig.needsPensionReview,
       employerIndustrial,
+      // 실제 적용된 요율/세액표 연도(year ≤ 급여연도 중 최신). null = 미설정 → 해당 공제 0원.
+      rateYear: insuranceRates?.year ?? null,
+      taxYear: incomeTaxRow?.year ?? null,
       employmentMonths: Number.isFinite(employmentMonths) ? +employmentMonths.toFixed(1) : null,
       monthlyHours, monthlyDays: workedDays, continuousMonths: +continuousMonths.toFixed(1),
     };

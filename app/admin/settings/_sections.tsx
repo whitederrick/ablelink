@@ -3,6 +3,8 @@
 // 시스템 설정 세부 섹션 컴포넌트 — 설정 메뉴를 세부 페이지로 분리하기 위해 추출.
 import { useEffect, useState } from "react";
 import { Plus, Trash2, GripVertical } from "lucide-react";
+import { INSURANCE_RATE_DEFAULTS, insuranceRateDefaultForYear } from "@/lib/payroll/insuranceRateDefaults";
+import Pagination from "../_components/Pagination";
 
 const CAT_TONES = ["sky", "amber", "rose", "emerald", "violet", "slate"] as const;
 const TONE_SWATCH: Record<string, string> = {
@@ -221,23 +223,43 @@ export function InsuranceRatesManager({ onToast }: { onToast: (m: string) => voi
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [f, setF] = useState<Record<FKey, string>>({ ...EMPTY });
   const [busy, setBusy] = useState(false);
+  const [prefillNote, setPrefillNote] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   const load = () => fetch("/api/admin/payroll/insurance-rates").then(r => r.json())
     .then(d => { if (d.success) setRows(d.data); }).catch(() => {});
   useEffect(() => { load(); }, []);
 
-  // 연도 변경 시 기존 요율 프리필(분수→%)
+  // 연도 변경 시: 저장된 요율이 있으면 그걸(분수→%) 프리필, 없으면 공식 참고 기본값을 프리필(저장 전 확인).
   function pickYear(y: string) {
     setYear(y);
     const r = rows.find(x => String(x.year) === y);
-    if (!r) { setF({ ...EMPTY }); return; }
-    setF({
-      nationalPension: String(+(r.nationalPension * 100).toFixed(4)),
-      healthInsurance: String(+(r.healthInsurance * 100).toFixed(4)),
-      longTermCare: String(+(r.longTermCare * 100).toFixed(4)),
-      employmentInsurance: String(+(r.employmentInsurance * 100).toFixed(4)),
-      industrialAccident: String(+(r.industrialAccident * 100).toFixed(4)),
-    });
+    if (r) {
+      setPrefillNote("");
+      setF({
+        nationalPension: String(+(r.nationalPension * 100).toFixed(4)),
+        healthInsurance: String(+(r.healthInsurance * 100).toFixed(4)),
+        longTermCare: String(+(r.longTermCare * 100).toFixed(4)),
+        employmentInsurance: String(+(r.employmentInsurance * 100).toFixed(4)),
+        industrialAccident: String(+(r.industrialAccident * 100).toFixed(4)),
+      });
+      return;
+    }
+    const def = insuranceRateDefaultForYear(Number(y));
+    if (def) {
+      setF({
+        nationalPension: String(def.nationalPension),
+        healthInsurance: String(def.healthInsurance),
+        longTermCare: String(def.longTermCare),
+        employmentInsurance: String(def.employmentInsurance),
+        industrialAccident: "",
+      });
+      setPrefillNote(`${y}년 공식 참고 기본값을 자동으로 채웠습니다 — 저장 전 확인하세요${def.note ? ` · ${def.note}` : ""}`);
+    } else {
+      setF({ ...EMPTY });
+      setPrefillNote("");
+    }
   }
 
   async function save() {
@@ -266,13 +288,49 @@ export function InsuranceRatesManager({ onToast }: { onToast: (m: string) => voi
     finally { setBusy(false); }
   }
 
+  // 목록의 특정 연도 행을 그 값 그대로 저장·적용(참고값이면 그 값으로 등록). 폼에도 반영.
+  async function applyYear(y: number, np: number, hi: number, ltc: number, ei: number, ia: number | null) {
+    if (!confirm(`${y}년 요율을 저장·적용합니다.`)) return;
+    setBusy(true);
+    try {
+      const d = await fetch("/api/admin/payroll/insurance-rates", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ year: y, nationalPension: np / 100, healthInsurance: hi / 100, longTermCare: ltc / 100, employmentInsurance: ei / 100, industrialAccident: (ia ?? 0) / 100 }),
+      }).then(r => r.json());
+      if (d.success) { onToast(`${y}년 요율 저장·적용`); pickYear(String(y)); load(); }
+      else onToast(d.message || "저장 실패");
+    } catch { onToast("저장 실패"); }
+    finally { setBusy(false); }
+  }
+
+  // 목록 = DB에 저장된 연도만(최신이 위). 기본값 테이블은 폼 프리필·seed 전용(목록에 섞지 않음).
+  // 지금 급여계산에 실제 적용되는 연도 = 저장된 연도 중 올해 이하 최신(computeRun의 year≤급여연도 최신 선택과 동일).
+  const nowYear = new Date().getFullYear();
+  const appliedCandidates = rows.map(r => r.year).filter(y => y <= nowYear);
+  const appliedYear = appliedCandidates.length ? Math.max(...appliedCandidates) : null;
+  type Row2 = { year: number; np: number; hi: number; ltc: number; ei: number; ia: number; total: number; note?: string };
+  const listRows: Row2[] = rows
+    .map(r => ({ year: r.year, np: r.nationalPension * 100, hi: r.healthInsurance * 100, ltc: r.longTermCare * 100, ei: r.employmentInsurance * 100, ia: r.industrialAccident * 100, total: r.total * 100, note: INSURANCE_RATE_DEFAULTS[r.year]?.note }))
+    .sort((a, b) => b.year - a.year);
+  const totalPages = Math.max(1, Math.ceil(listRows.length / PAGE_SIZE));
+  const curPage = Math.min(page, totalPages);
+  const pageRows = listRows.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+  const fmt = (n: number) => +n.toFixed(4); // 자연 자릿수 표기(뒤 0 제거, 장기요양 4자리·연금 2자리 등 그대로)
+
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-6">
       <h2 className="mb-1 text-base font-black text-slate-900">4대보험 요율</h2>
       <p className="mb-4 text-xs text-slate-500">
         연도별 근로자 부담 요율(국민연금·건강·장기요양·고용)과 <b>산재(전액 사업주 부담)</b>를 입력합니다. 단위는 <b>%</b>(예: 4.5).
         급여 계산 시 가입 유형(일용/초단시간/일반)에 따라 해당 보험만 자동 공제됩니다. 산재는 워커 공제에서 제외(표기용).
+        <br />연도를 입력하면 <b>공식 참고 기본값</b>이 자동으로 채워집니다(저장 전 확인). <b>장기요양</b>은 과세급여 기준 실효율(예: 0.4591)로 넣습니다.
       </p>
+
+      {rows.length === 0 && (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+          ⚠ 저장된 요율이 없습니다 — <u>현재 4대보험이 0원으로 계산됩니다.</u> 아래 표에서 <b>최신 연도를 선택해 반드시 저장</b>하세요.
+        </div>
+      )}
 
       <div className="mb-3 flex flex-wrap items-end gap-2">
         <div>
@@ -297,32 +355,57 @@ export function InsuranceRatesManager({ onToast }: { onToast: (m: string) => voi
         </button>
       </div>
 
-      {rows.length > 0 && (
-        <div className="mt-3 overflow-x-auto rounded-xl border border-slate-100">
-          <table className="w-full min-w-[560px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-slate-50 text-[12px] font-black text-slate-500">
-                {["연도", "국민연금", "건강", "장기요양", "고용", "산재", "근로자합"].map(h => (
-                  <th key={h} className="border-b border-slate-100 px-3 py-2 text-right first:text-left">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(r => (
-                <tr key={r.id} className="cursor-pointer border-b border-slate-50 last:border-b-0 hover:bg-slate-50" onClick={() => pickYear(String(r.year))}>
-                  <td className="px-3 py-2 text-left font-black text-slate-900">{r.year}</td>
-                  <td className="px-3 py-2 text-right text-slate-700">{+(r.nationalPension * 100).toFixed(3)}%</td>
-                  <td className="px-3 py-2 text-right text-slate-700">{+(r.healthInsurance * 100).toFixed(3)}%</td>
-                  <td className="px-3 py-2 text-right text-slate-700">{+(r.longTermCare * 100).toFixed(3)}%</td>
-                  <td className="px-3 py-2 text-right text-slate-700">{+(r.employmentInsurance * 100).toFixed(3)}%</td>
-                  <td className="px-3 py-2 text-right text-slate-500">{+(r.industrialAccident * 100).toFixed(3)}%</td>
-                  <td className="px-3 py-2 text-right font-black text-sky-600">{+(r.total * 100).toFixed(3)}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {prefillNote && (
+        <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
+          ⚠ {prefillNote}
         </div>
       )}
+
+      <p className="mb-2 mt-3 text-[12px] font-semibold text-slate-500">
+        연도별 요율(최신이 위, DB 저장분). <span className="font-black text-emerald-700">저장됨</span>=DB에 저장된 값,
+        <span className="font-black text-rose-600"> 적용됨</span>=<b className="text-rose-600">{nowYear}년 급여계산에 실제 적용되는 연도</b>.
+        각 행 <b>‘선택 및 적용’</b>으로 그 연도 값으로 저장·적용합니다.
+      </p>
+      <div className="overflow-x-auto rounded-xl border border-slate-100">
+        <table className="w-full min-w-[880px] border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-50 text-[12px] font-black text-slate-500">
+              {["연도", "주요 변경 사항", "구분", "국민연금", "건강", "장기요양", "고용", "산재", "근로자합", "관리"].map(h => (
+                <th key={h} className="border-b border-slate-100 px-3 py-2 text-left">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {pageRows.map(r => (
+              <tr key={r.year} className="cursor-pointer border-b border-slate-50 last:border-b-0 hover:bg-slate-50" onClick={() => pickYear(String(r.year))}>
+                <td className="whitespace-nowrap px-3 py-1.5 text-left font-black text-slate-900">{r.year}</td>
+                <td className="px-3 py-1.5 text-left font-bold text-rose-600">{r.note ?? ""}</td>
+                <td className="whitespace-nowrap px-3 py-1.5 text-left">
+                  <div className="flex flex-nowrap items-center justify-start gap-1">
+                    <span className="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-black text-emerald-700">저장됨</span>
+                    {r.year === appliedYear && (
+                      <span className="whitespace-nowrap rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-black text-white">적용됨</span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-3 py-1.5 text-left text-slate-700">{fmt(r.np)}%</td>
+                <td className="px-3 py-1.5 text-left text-slate-700">{fmt(r.hi)}%</td>
+                <td className="px-3 py-1.5 text-left text-slate-700">{fmt(r.ltc)}%</td>
+                <td className="px-3 py-1.5 text-left text-slate-700">{fmt(r.ei)}%</td>
+                <td className="px-3 py-1.5 text-left text-slate-500">{fmt(r.ia)}%</td>
+                <td className="px-3 py-1.5 text-left font-black text-sky-600">{fmt(r.total)}%</td>
+                <td className="px-3 py-1.5 text-left">
+                  <button onClick={(e) => { e.stopPropagation(); applyYear(r.year, r.np, r.hi, r.ltc, r.ei, r.ia); }} disabled={busy}
+                    className={`inline-flex h-6 items-center whitespace-nowrap rounded-lg border px-2.5 text-[12px] font-bold disabled:opacity-40 ${r.year === appliedYear ? "border-slate-950 bg-slate-950 text-white hover:bg-slate-800" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}>
+                    선택 및 적용
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pagination className="mt-3" page={curPage} totalPages={totalPages} total={listRows.length} onPageChange={setPage} />
     </div>
   );
 }
