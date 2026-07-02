@@ -30,7 +30,7 @@ async function main() {
     create: {
       loginId: "admin",
       passwordHash: await hash("admin1234!"),
-      displayName: "시스템 운영자",
+      displayName: "시스템 관리자",
       isActive: true,
     },
   });

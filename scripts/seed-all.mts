@@ -90,7 +90,7 @@ async function main() {
   let admin = await prisma.admin.findFirst({ where: { loginId: "admin" }, select: { id: true } });
   if (!admin) {
     admin = await prisma.admin.create({
-      data: { loginId: "admin", passwordHash: await bcrypt.hash("admin1234!", 12), displayName: "시스템 운영자", isActive: true },
+      data: { loginId: "admin", passwordHash: await bcrypt.hash("admin1234!", 12), displayName: "시스템 관리자", isActive: true },
       select: { id: true },
     });
     console.log("👤 운영자 admin 신규 생성(admin1234!)");
