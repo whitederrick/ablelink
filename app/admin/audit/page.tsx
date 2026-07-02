@@ -126,6 +126,17 @@ export default function AuditPage() {
     setPage(1);
     setApplied({ actorType: "", entityType: "", action: "", from: "", to: "", q: "" });
   }
+  function downloadCsv() {
+    const p = new URLSearchParams();
+    if (applied.actorType) p.set("actorType", applied.actorType);
+    if (applied.entityType) p.set("entityType", applied.entityType);
+    if (applied.action) p.set("action", applied.action);
+    if (applied.from) p.set("from", applied.from);
+    if (applied.to) p.set("to", applied.to);
+    if (applied.q) p.set("q", applied.q);
+    p.set("format", "csv");
+    window.open(`/api/admin/audit?${p.toString()}`, "_blank");
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -160,6 +171,7 @@ export default function AuditPage() {
             placeholder="행위자·대상·대상ID 검색" className={`${T.input} w-56`} />
           <button onClick={apply} className={T.btnPrimary}>조회</button>
           <button onClick={reset} className={T.btnSecondary}>초기화</button>
+          <button onClick={downloadCsv} className={`${T.btnSecondary} ml-auto`}>CSV 다운로드</button>
         </div>
       </div>
 

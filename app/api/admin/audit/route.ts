@@ -61,6 +61,34 @@ export async function GET(req: Request) {
       where.createdAt = createdAt;
     }
 
+    // CSV 다운로드(현재 필터 기준, 최대 10000건)
+    if (searchParams.get("format") === "csv") {
+      const rows = await prisma.auditEvent.findMany({ where, orderBy: { createdAt: "desc" }, take: 10000 });
+      const esc = (v: unknown) => { const s = v == null ? "" : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+      const header = ["시각", "행위자유형", "행위자", "위탁기관ID", "대상", "대상ID", "액션", "요약", "변경(JSON)"];
+      const lines = [header.join(",")];
+      for (const e of rows) {
+        lines.push([
+          new Date(e.createdAt).toISOString(),
+          e.actorType,
+          e.actorLabel ?? "",
+          e.agencyId?.toString() ?? "",
+          e.entityType,
+          e.entityId ?? "",
+          e.action,
+          e.summary ?? "",
+          e.payload != null ? JSON.stringify(e.payload) : "",
+        ].map(esc).join(","));
+      }
+      const csv = "﻿" + lines.join("\r\n"); // BOM: Excel 한글 깨짐 방지
+      return new NextResponse(csv, {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="audit_${new Date().toISOString().slice(0, 10)}.csv"`,
+        },
+      });
+    }
+
     const [items, total, entityTypesRaw, actionsRaw] = await Promise.all([
       prisma.auditEvent.findMany({
         where,
