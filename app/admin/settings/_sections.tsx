@@ -59,6 +59,9 @@ export function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => voi
     finally { setBusy(false); }
   }
 
+  const nowY = new Date().getFullYear();
+  const appliedTax = years.filter(y => y.year <= nowY).sort((a, b) => b.year - a.year)[0] ?? null;
+
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-6">
       <h2 className="mb-1 text-base font-black text-slate-900">근로소득 간이세액표</h2>
@@ -66,6 +69,18 @@ export function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => voi
         매년 홈택스에서 받은 <b>엑셀(.xlsx) 원본을 그대로 업로드</b>하면 됩니다. ‘소득령 별표2’ + ‘간이세액표’가 한 파일에 여러 시트로 있어도
         자동으로 세액표 시트를 찾고 자녀공제(별표2)를 추출합니다. 급여계산 시 소득세 자동 조회(주민세=소득세 10%)에 사용됩니다.
       </p>
+
+      {years.length === 0 ? (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+          ⚠ 등록된 간이세액표가 없습니다 — <u>소득세·주민세가 0원으로 계산됩니다.</u> 아래에서 홈택스 엑셀을 업로드하세요.
+        </div>
+      ) : (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+          ✓ 간이세액표 반영 완료 — {appliedTax
+            ? <>올해({nowY}년) 급여에 <span className="font-black text-emerald-800">{appliedTax.year}년 · {appliedTax.rowCount.toLocaleString()}구간</span> 적용 중</>
+            : <>등록됨(단, 올해 이하 적용 연도 없음)</>}
+        </div>
+      )}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input type="number" value={year} onChange={e => setYear(e.target.value)} placeholder="연도"

@@ -5,11 +5,11 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManagerSession } from "@/lib/managerScope";
+import { requireAdminSession } from "@/lib/adminScope";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireManagerSession(req);
+    await requireAdminSession(req);
 
     const rates = await prisma.insuranceRates.findMany({
       orderBy: { year: "desc" },
@@ -41,9 +41,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const scope = await requireManagerSession(req);
-    // 보험료율 수정은 시스템 운영자만 가능 — 현재 ManagerScope로 접근 제한
-    void scope;
+    // 4대보험 요율은 시스템 운영자(Admin) 전용 설정 — 간이세액표와 동일하게 AdminSession으로 제한.
+    await requireAdminSession(req);
 
     const body = await req.json();
     const { year, nationalPension, healthInsurance, longTermCare, employmentInsurance, industrialAccident } = body;
