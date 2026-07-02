@@ -334,7 +334,7 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
   const [templateKey, setTemplateKey] = useState<string>(DEFAULT_TEMPLATE_KEY);
   const [templateData, setTemplateData] = useState<Record<string, any>>({});
   const [showPreview, setShowPreview] = useState(false);
-  // 본 기관에 노출 가능한 양식 = 공용 + 운영자가 부여한 전용 양식
+  // 본 기관에 노출 가능한 양식 = 공용 + 시스템 관리자가 부여한 전용 양식
   const [allowedTemplates, setAllowedTemplates] = useState<string[]>([]);
 
   const [selectedUserId, setSelectedUserId] = useState(prefill?.workerId ?? "");
@@ -533,7 +533,7 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
                 {templateOptions.map(t => <option key={t.key} value={t.key}>{t.label}{t.sub ? ` — ${t.sub}` : ""}</option>)}
               </select>
               <p className="text-[11px] font-semibold text-slate-400">
-                기관 전용 계약서 양식이 필요하면 <a href="/manager/support" target="_blank" className="font-bold text-sky-600 underline">운영자에게 양식 등록 요청</a>하세요. 운영자가 양식을 제작·부여하면 여기 목록에 표시됩니다.
+                기관 전용 계약서 양식이 필요하면 <a href="/manager/support" target="_blank" className="font-bold text-sky-600 underline">시스템 관리자에게 양식 등록 요청</a>하세요. 시스템 관리자가 양식을 제작·부여하면 여기 목록에 표시됩니다.
               </p>
               {getTemplate(templateKey).extraFields.length > 0 && (
                 <div className="space-y-2 pt-1">

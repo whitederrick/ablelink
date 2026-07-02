@@ -96,7 +96,7 @@ export default function RecruitSignupPage() {
         <div className="space-y-3 px-4 pt-3">
           <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-xs font-semibold leading-relaxed text-sky-700">
             <ShieldCheck className="mb-1 h-4 w-4" />
-            직무지도원 자격을 등록하고 직무지도 공고에 지원하거나, 위탁기관의 제안을 받을 수 있어요. 자격은 운영자 검증 후 활성화됩니다.
+            직무지도원 자격을 등록하고 직무지도 공고에 지원하거나, 위탁기관의 제안을 받을 수 있어요. 자격은 시스템 관리자 검증 후 활성화됩니다.
           </div>
 
           {/* 1. 휴대폰 인증 */}
@@ -129,7 +129,7 @@ export default function RecruitSignupPage() {
             <p className="mb-1 text-xs font-black uppercase tracking-wide text-slate-500">3. 직종 &amp; 자격 증명 <span className="font-bold text-slate-300">(선택)</span></p>
             <p className="mb-3 rounded-lg bg-slate-50 px-2.5 py-2 text-[11px] font-semibold leading-relaxed text-slate-500">
               💡 지금 자격을 등록해두면 공고 신청 시 <b className="text-sky-600">추가 입력 없이 바로 지원</b>할 수 있어요.<br />
-              건너뛰어도 괜찮아요 — 나중에 공고에 신청할 때 해당 직종 자격 입력을 요청할 수 있어요. (운영자 검증 후 활성화)
+              건너뛰어도 괜찮아요 — 나중에 공고에 신청할 때 해당 직종 자격 입력을 요청할 수 있어요. (시스템 관리자 검증 후 활성화)
             </p>
             <div className="space-y-2.5">
               {PROFS.map((p) => {

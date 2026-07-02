@@ -32,7 +32,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
   const [saving, setSaving] = useState(false);
   const [item, setItem] = useState<SiteDetail | null>(null);
 
-  // 신규 등록 시 운영자(ADMIN)는 기관 선택 필요 (매니저는 본인 기관 자동)
+  // 신규 등록 시 시스템 관리자(ADMIN)는 기관 선택 필요 (매니저는 본인 기관 자동)
   const [isAdmin, setIsAdmin] = useState(false);
   const [agencies, setAgencies] = useState<{ id: string; name: string }[]>([]);
   const [agencyId, setAgencyId] = useState("");
@@ -71,7 +71,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
       .catch(() => {});
   }, []);
 
-  // 신규 등록: 세션 확인 → 운영자면 기관 목록 로드
+  // 신규 등록: 세션 확인 → 시스템 관리자면 기관 목록 로드
   useEffect(() => {
     if (!isCreate) return;
     (async () => {

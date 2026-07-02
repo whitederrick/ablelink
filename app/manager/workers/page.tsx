@@ -638,7 +638,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved, on
   const [wantAdapt, setWantAdapt] = useState(initDual || initial.serviceStep === "ADAPTATION");
   const [splitDate, setSplitDate] = useState(initial.adaptationStartDate ? initial.adaptationStartDate.slice(0, 10) : "");
   const [commuteGuidanceIncluded, setCommuteGuidanceIncluded] = useState(initial.commuteGuidanceIncluded ?? true);
-  // 면제는 운영자 전용 — 매니저 화면에선 읽기 전용으로 표시하고 값은 그대로 보존
+  // 면제는 시스템 관리자 전용 — 매니저 화면에선 읽기 전용으로 표시하고 값은 그대로 보존
   const [attendanceButtonExempt] = useState(initial.attendanceButtonExempt ?? false);
   // 관리자가 설정한 실제 시간 (미설정 시 기본값)
   const [workStart, setWorkStart] = useState(
@@ -896,7 +896,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved, on
           </div>
         </div>
 
-        {/* 출퇴근 관리 면제(시프티 병행) — 운영자 전용. 매니저는 현재 상태만 확인 */}
+        {/* 출퇴근 관리 면제(시프티 병행) — 시스템 관리자 전용. 매니저는 현재 상태만 확인 */}
         <div>
           <label className={T.label}>출퇴근 관리 면제 여부</label>
           <div className={`flex items-center gap-3 rounded-xl border p-3 ${
@@ -910,7 +910,7 @@ function WorkScheduleModal({ worker, assignmentId, initial, onClose, onSaved, on
             <div>
               <span className="text-sm font-black text-slate-900">출퇴근 버튼 없이 자동 출근부 작성</span>
               <p className="mt-0.5 text-xs font-semibold text-slate-400">
-                면제 시 직무지도원이 출퇴근 버튼을 누르지 않아도 근무형태 기준으로 출근부가 자동 작성됩니다. 면제 여부 변경은 시스템 운영자만 가능합니다.
+                면제 시 직무지도원이 출퇴근 버튼을 누르지 않아도 근무형태 기준으로 출근부가 자동 작성됩니다. 면제 여부 변경은 시스템 관리자만 가능합니다.
               </p>
             </div>
           </div>

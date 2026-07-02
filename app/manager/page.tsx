@@ -169,7 +169,7 @@ export default function AdminDashboardPage() {
   // 훈련생 진척도 요약(기존 리포트 API 재사용, 클라 집계). 플랜 잠금 시 reportLocked.
   const [report, setReport] = useState<{ total: number; training: number; avgLogRate: number; avgScore: number | null } | null>(null);
   const [reportLocked, setReportLocked] = useState(false);
-  // 대시보드 소식 티커·광고(운영자 관리)
+  // 대시보드 소식 티커·광고(시스템 관리자 관리)
   const [promos, setPromos] = useState<{ ticker: TickerItem[]; ads: AdContent[]; tickerDurationSec: number }>({ ticker: [], ads: [], tickerDurationSec: 32 });
 
   const fetchDashboard = useCallback(async () => {
@@ -518,7 +518,7 @@ export default function AdminDashboardPage() {
             )}
           </Section>
 
-          {/* 시스템 공지사항 — 운영자 시스템 공지(미확인 우선) */}
+          {/* 시스템 공지사항 — 시스템 관리자 시스템 공지(미확인 우선) */}
           <Section
             title="시스템 공지사항"
             count={announcements.filter(a => a.read === false).length}

@@ -165,7 +165,7 @@ export default function SubscriptionPage() {
                 <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-50 p-3">
                   <Check className="h-4 w-4 flex-shrink-0 text-emerald-600" />
                   <p className="text-xs font-bold text-emerald-700">
-                    운영자 협상가 적용: {agency.billingCycle === "ANNUAL" ? "연" : "월"} {agency.customAmount.toLocaleString()}원 (VAT 포함)
+                    시스템 관리자 협상가 적용: {agency.billingCycle === "ANNUAL" ? "연" : "월"} {agency.customAmount.toLocaleString()}원 (VAT 포함)
                     <span className="ml-1 font-semibold text-emerald-600">(표준가 대신 이 금액으로 결제됩니다)</span>
                   </p>
                 </div>

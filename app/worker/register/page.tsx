@@ -1,6 +1,6 @@
 "use client";
 
-// 직무지도원 셀프 현장등록 종료(2026-06-06). 현장 배정은 위탁기관/운영자가 입력.
+// 직무지도원 셀프 현장등록 종료(2026-06-06). 현장 배정은 위탁기관/시스템 관리자가 입력.
 
 import Link from "next/link";
 
@@ -12,7 +12,7 @@ export default function WorkerSiteRegisterClosedPage() {
         <h1 className="text-lg font-black text-slate-900">현장 직접 등록은 운영되지 않습니다</h1>
         <p className="text-sm font-semibold leading-relaxed text-slate-500">
           현장 배정은 <span className="font-black text-slate-700">소속 위탁기관</span> 또는
-          <span className="font-black text-slate-700"> 시스템 운영자</span>가 처리합니다.
+          <span className="font-black text-slate-700"> 시스템 관리자</span>가 처리합니다.
           <br />직무지도 일자리를 찾으시면 매칭을 이용해보세요.
         </p>
       </div>

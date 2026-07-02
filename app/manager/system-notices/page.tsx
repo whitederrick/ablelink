@@ -1,6 +1,6 @@
 "use client";
 
-// 시스템 공지사항 — 운영자가 발송한 시스템 공지를 매니저가 열람(목록→상세→확인/미확인).
+// 시스템 공지사항 — 시스템 관리자가 발송한 시스템 공지를 매니저가 열람(목록→상세→확인/미확인).
 // (매니저가 직무지도원에게 보내는 공지는 '위탁기관 공지사항' 별개)
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { T } from "../_styles";
@@ -79,7 +79,7 @@ export default function SystemNoticesPage() {
     <div>
       <PageHeader
         title="시스템 공지사항"
-        sub="시스템 운영자가 발송한 공지입니다. 목록에서 선택하면 상세가 표시되고 확인 처리됩니다."
+        sub="시스템 관리자가 발송한 공지입니다. 목록에서 선택하면 상세가 표시되고 확인 처리됩니다."
         actions={unread > 0 && <button onClick={markAll} className={T.btnSecondary}>모두 확인</button>}
       />
 

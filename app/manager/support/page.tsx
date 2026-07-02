@@ -222,7 +222,7 @@ export default function ManagerSupportPage() {
   return (
     <div>
       <PageHeader
-        title="운영자 문의"
+        title="시스템 관리자 문의"
         sub="데이터 수정 요청, 결제 문의 등을 Ablelink 운영팀에 보냅니다"
         actions={
           <button onClick={openForm} className={T.btnPrimary}>

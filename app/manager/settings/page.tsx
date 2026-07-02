@@ -293,7 +293,7 @@ export default function AgencySettingsPage() {
             <div>
               <label className={T.label}>사업체명</label>
               <input value={name} disabled className={`w-full ${T.input} bg-slate-50 text-slate-400`} />
-              <p className="mt-1 text-[11px] font-semibold text-slate-400">변경은 운영자에게 문의해주세요.</p>
+              <p className="mt-1 text-[11px] font-semibold text-slate-400">변경은 시스템 관리자에게 문의해주세요.</p>
             </div>
             <div>
               <label className={T.label}>대표자명</label>
@@ -412,7 +412,7 @@ export default function AgencySettingsPage() {
             <div>
             <label className={T.label}>기본 근로계약서 양식</label>
             <p className="mb-1 text-[11px] font-semibold text-slate-400">근로계약서 작성 시 선택된 양식으로 기본 적용됩니다.</p>
-            <p className="mb-2 text-[11px] font-semibold text-rose-500">근로계약서 양식을 등록은 운영자 문의를 통해 가능합니다.(계약서 양식 등록 요청)</p>
+            <p className="mb-2 text-[11px] font-semibold text-rose-500">근로계약서 양식을 등록은 시스템 관리자 문의를 통해 가능합니다.(계약서 양식 등록 요청)</p>
             <select value={defaultContractTemplate} onChange={e => setDefaultContractTemplate(e.target.value)} className={`w-full max-w-md ${T.input}`}>
               <option value="">표준 근로계약서 (기본)</option>
               {visibleTemplates(allowedTemplates).filter(t => t.key !== "STANDARD").map(t => <option key={t.key} value={t.key}>{t.label}</option>)}

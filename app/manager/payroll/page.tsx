@@ -1081,7 +1081,7 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
         const rateNote = d.rate !== 100 ? ` × ${d.rate}%` : "";
         setTaxNote(`${d.year}년 간이세액표 (과세급여 ${comma(gross)}원·가족 ${basic.dependents}명): 표 ${comma(d.base)}${creditNote}${rateNote} → 소득세 ${comma(d.incomeTax)}원 / 주민세 ${comma(d.localTax)}원`);
       } else {
-        setTaxNote("등록된 간이세액표가 없습니다. 운영자가 [시스템 설정 > 근로소득 간이세액표]에 등록해야 자동 조회됩니다. (소득세 수동 입력 가능)");
+        setTaxNote("등록된 간이세액표가 없습니다. 시스템 관리자가 [시스템 설정 > 근로소득 간이세액표]에 등록해야 자동 조회됩니다. (소득세 수동 입력 가능)");
       }
     } catch { setTaxNote("조회 실패"); }
   }
@@ -1091,7 +1091,7 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
     try {
       const qs = `bonus=${bonusAmount}&monthlyPay=${regularGross}&months=${bonusMonths}&dependents=${basic.dependents}&childUnder20=${basic.childUnder20}&rate=${basic.withholdingRate}&year=${year}`;
       const d = await fetch(`/api/admin/payroll/income-tax/bonus?${qs}`).then(r => r.json());
-      if (!d.success || !d.hasTable) { setBonusNote("등록된 간이세액표가 없어 상여 세액을 계산할 수 없습니다. (운영자 등록 필요)"); return; }
+      if (!d.success || !d.hasTable) { setBonusNote("등록된 간이세액표가 없어 상여 세액을 계산할 수 없습니다. (시스템 관리자 등록 필요)"); return; }
       // 지급내역에 상여 라인 추가/갱신
       setPayLines(prev => [...prev.filter(l => l.key !== "bonus"), { key: "bonus", name: "상여", hours: 0, amount: bonusAmount, method: `지급대상기간 ${d.months}개월` }]);
       // 공제내역에 상여소득세·상여주민세 추가/갱신

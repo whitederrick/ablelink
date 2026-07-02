@@ -1,4 +1,4 @@
-// 위탁기관 자가가입 종료(2026-06-07). 위탁기관·관리자 계정은 시스템 운영자가 개설(생성+초대).
+// 위탁기관 자가가입 종료(2026-06-07). 위탁기관·관리자 계정은 시스템 관리자가 개설(생성+초대).
 import Link from "next/link";
 
 export default function SignupClosedPage() {
@@ -8,7 +8,7 @@ export default function SignupClosedPage() {
       <div className="space-y-2">
         <h1 className="text-lg font-black text-slate-900">위탁기관 가입은 운영팀을 통해 진행됩니다</h1>
         <p className="text-sm font-semibold leading-relaxed text-slate-500">
-          위탁기관·관리자 계정은 <span className="font-black text-slate-700">시스템 운영자</span>가 개설하고 초대합니다.
+          위탁기관·관리자 계정은 <span className="font-black text-slate-700">시스템 관리자</span>가 개설하고 초대합니다.
           <br />도입을 원하시면 운영팀에 문의해주세요.
         </p>
       </div>

@@ -75,7 +75,7 @@ export default function ProfessionsPage() {
 
         <div className="space-y-3 px-4 pt-4">
           <p className="text-xs font-semibold leading-relaxed text-slate-400">
-            보유한 직종 자격을 등록·관리합니다. 추가하거나 수정하면 운영자 검증 후 활성화됩니다.
+            보유한 직종 자격을 등록·관리합니다. 추가하거나 수정하면 시스템 관리자 검증 후 활성화됩니다.
           </p>
 
           {loading ? (

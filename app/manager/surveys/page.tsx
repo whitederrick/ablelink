@@ -41,7 +41,7 @@ function actionOf(s: ReqStatus): "needs" | "requested" | "done" {
 const PAGE_SIZE = 10;
 
 // 평가 요청 발송 모달 — 워크리스트 항목(종료 배정) 기준. 사업체 담당자 자동입력.
-// 평가표는 운영자 소유 — 매니저에겐 노출하지 않고, 발송 시 자동으로 활성 평가표 사용.
+// 평가표는 시스템 관리자 소유 — 매니저에겐 노출하지 않고, 발송 시 자동으로 활성 평가표 사용.
 function SendModal({ item, onClose, onSent }: { item: Item; onClose: () => void; onSent: () => void }) {
   const [recipientName, setRecipientName] = useState(item.recipientName ?? "");
   const [recipientPhone, setRecipientPhone] = useState(item.recipientPhone ?? "");
@@ -179,10 +179,10 @@ function ResultDetailModal({ item, onSend, onClose }: { item: Item; onSend: () =
                     ))}
                   </div>
                 )}
-                <p className="text-xs font-semibold text-slate-400">문항별 점수·작성 의견은 비공개입니다(시스템 운영자 보관).</p>
+                <p className="text-xs font-semibold text-slate-400">문항별 점수·작성 의견은 비공개입니다(시스템 관리자 보관).</p>
               </>
             ) : (
-              <p className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-6 text-center text-sm font-semibold text-slate-400">평가는 완료됐습니다. 운영자 전달(공유) 후 총점·카테고리 점수가 표시됩니다.</p>
+              <p className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-6 text-center text-sm font-semibold text-slate-400">평가는 완료됐습니다. 시스템 관리자 전달(공유) 후 총점·카테고리 점수가 표시됩니다.</p>
             )
           ) : act === "requested" ? (
             <p className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-6 text-center text-sm font-semibold text-slate-400">사업체 담당자 응답 대기 중입니다.</p>
@@ -236,7 +236,7 @@ export default function ManagerSurveysPage() {
     <div className="space-y-5">
       <PageHeader
         title="직무지도원 만족도 평가 (Pro+)"
-        sub="근무(배정)가 종료된 직무지도원을 대상으로 사업체 담당자에게 만족도 평가를 요청합니다. 배정 관리에서 요청한 건도 여기에 함께 표시됩니다. 결과는 운영자가 관리하며 공유 시 점수가 표시됩니다."
+        sub="근무(배정)가 종료된 직무지도원을 대상으로 사업체 담당자에게 만족도 평가를 요청합니다. 배정 관리에서 요청한 건도 여기에 함께 표시됩니다. 결과는 시스템 관리자가 관리하며 공유 시 점수가 표시됩니다."
         actions={<button onClick={() => setShowPicker(true)} className={T.btnPrimary}>+ 평가 요청</button>}
       />
 
@@ -277,7 +277,7 @@ export default function ManagerSurveysPage() {
                   <td className={`${T.td} whitespace-nowrap`}>{act === "done"
                     ? (it.sharedWithAgency && it.totalScore != null ? <span className="font-semibold text-sky-700">종합 {it.totalScore}/100</span>
                        : it.sharedWithAgency && it.overallScore != null ? <span className="font-semibold text-slate-800">종합 {it.overallScore}/5</span>
-                       : <span className="text-slate-500">운영자 확인</span>)
+                       : <span className="text-slate-500">시스템 관리자 확인</span>)
                     : "-"}</td>
                   <td className={T.td} onClick={e => e.stopPropagation()}>
                     {act === "needs"

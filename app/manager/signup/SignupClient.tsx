@@ -104,7 +104,7 @@ export default function SignupClient() {
           </div>
           <h1 className="text-2xl font-black text-slate-950">신청 완료</h1>
           <p className="mt-2 text-sm font-semibold text-slate-500">
-            가입 신청이 접수되었습니다.<br />운영자 검토 후 연락드립니다.
+            가입 신청이 접수되었습니다.<br />시스템 관리자 검토 후 연락드립니다.
           </p>
           <button
             onClick={() => router.push(`/manager/signup/status?loginId=${encodeURIComponent(submittedLoginId)}`)}

@@ -112,7 +112,7 @@ export default function WorkerLoginPage() {
           </button>
 
           <p className="text-center text-xs font-semibold text-slate-400">
-            계정은 위탁기관 초대 또는 운영자를 통해 발급됩니다.
+            계정은 위탁기관 초대 또는 시스템 관리자를 통해 발급됩니다.
           </p>
 
           <div className="space-y-1.5 text-center text-sm">

@@ -92,7 +92,7 @@ const groups: NavGroup[] = [
       { href: "/manager/settings",     label: "위탁기관 정보 관리" },
       { href: "/manager/signature",    label: "관리자 서명 관리" },
       { href: "/manager/subscription", label: "구독 관리" },
-      { href: "/manager/support",      label: "운영자 문의" },
+      { href: "/manager/support",      label: "시스템 관리자 문의" },
     ],
   },
 ];

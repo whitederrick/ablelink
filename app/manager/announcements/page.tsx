@@ -1,7 +1,7 @@
 "use client";
 
 // 위탁기관 공지 게시판 — 매니저가 작성/수정/고정/삭제. 소속 직무지도원이 앱 '공지사항'에서 열람.
-// 카테고리는 시스템 운영자가 전역 관리(app/admin/settings) → 매니저는 작성 시 선택만.
+// 카테고리는 시스템 관리자가 전역 관리(app/admin/settings) → 매니저는 작성 시 선택만.
 // 표준 게시판: PageHeader(+등록) → StatCardRow → ListToolbar(검색·카테고리 멀티필터) → 목록+우측 상세 → Pagination.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pin, Trash2, Pencil } from "lucide-react";
@@ -252,7 +252,7 @@ export default function AgencyAnnouncementsPage() {
                 <label className={T.label}>카테고리</label>
                 {categories.length === 0 ? (
                   <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
-                    등록된 카테고리가 없습니다. 시스템 운영자에게 카테고리 등록을 요청하세요.
+                    등록된 카테고리가 없습니다. 시스템 관리자에게 카테고리 등록을 요청하세요.
                   </p>
                 ) : (
                   <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className={`w-full ${T.select}`}>

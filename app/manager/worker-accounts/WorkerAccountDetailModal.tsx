@@ -95,7 +95,7 @@ function SurveyDetailModal({ survey, onClose }: { survey: SurveyRow; onClose: ()
 
         <div className="space-y-4">
           {(survey.isRubric || survey.totalScore != null) ? (
-            // 역량 평가표 결과 — 위탁기관은 '총점 + 카테고리'만 열람(문항·의견은 운영자 전용)
+            // 역량 평가표 결과 — 위탁기관은 '총점 + 카테고리'만 열람(문항·의견은 시스템 관리자 전용)
             survey.totalScore != null ? (
               <>
                 <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
@@ -120,13 +120,13 @@ function SurveyDetailModal({ survey, onClose }: { survey: SurveyRow; onClose: ()
                     ))}
                   </div>
                 )}
-                <p className="text-xs font-semibold text-slate-400">문항별 점수·작성 의견은 비공개입니다(시스템 운영자 보관).</p>
+                <p className="text-xs font-semibold text-slate-400">문항별 점수·작성 의견은 비공개입니다(시스템 관리자 보관).</p>
               </>
             ) : (
               <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
                 <span className="text-sm font-semibold text-slate-500">평가 결과</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-slate-400">운영자 확인</span>
+                  <span className="text-sm font-semibold text-slate-400">시스템 관리자 확인</span>
                   <span className={`${T.badge} ${st.cls}`}>{st.label}</span>
                 </div>
               </div>
@@ -160,7 +160,7 @@ function SurveyDetailModal({ survey, onClose }: { survey: SurveyRow; onClose: ()
                   : <p className="text-sm font-semibold text-slate-300">작성된 코멘트가 없습니다.</p>}
               </div>
               {survey.status === "RESPONDED" && survey.overallScore == null && (
-                <p className="text-xs font-semibold text-slate-400">운영자 전달 후 점수·코멘트가 표시됩니다.</p>
+                <p className="text-xs font-semibold text-slate-400">시스템 관리자 전달 후 점수·코멘트가 표시됩니다.</p>
               )}
             </>
           )}

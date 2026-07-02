@@ -286,7 +286,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
   const [unreadNotices,  setUnreadNotices]  = useState(initialData?.unreadCount ?? 0);
   const [showNotices,    setShowNotices]    = useState(false);
   const [notices,        setNotices]        = useState<NoticeItem[]>(initialData?.notices ?? []);
-  // 출퇴근 카드 격려 문구(운영자 편집, SystemConfig)
+  // 출퇴근 카드 격려 문구(시스템 관리자 편집, SystemConfig)
   const [homeMessages,   setHomeMessages]   = useState<HomeSummary["homeMessages"] | null>(initialData?.homeMessages ?? null);
   // 놓친 업무 / 오늘 일지 상태
   const [missingCount,   setMissingCount]   = useState(initialData?.missing.count ?? 0);
@@ -692,7 +692,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
 
   const hasSite = !!homeData?.siteName;
   const traineeList = homeData?.trainees ?? [];
-  // 출퇴근 버튼 면제(운영자 부여, 시프티 병행): 버튼 대신 자동 처리 안내. 워커가 끌 수 없음.
+  // 출퇴근 버튼 면제(시스템 관리자 부여, 시프티 병행): 버튼 대신 자동 처리 안내. 워커가 끌 수 없음.
   const isExempt = homeData?.attendanceButtonExempt ?? false;
 
   const NAV_ITEMS = [
@@ -943,7 +943,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
               이 현장은 출퇴근 버튼을 사용하지 않아요. 근무형태 기준으로 출근부가 매일 자동으로 작성됩니다.
             </p>
             <p className="mt-3 text-center text-xs font-semibold text-sky-500">
-              변경이 필요하면 시스템 운영자에게 문의하세요.
+              변경이 필요하면 시스템 관리자에게 문의하세요.
             </p>
           </div>
         ) : (
@@ -1188,7 +1188,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
             </div>
             <p className="mb-1 text-sm font-semibold text-slate-500">배정된 현장이 없습니다.</p>
             <p className="mb-5 px-6 text-xs font-semibold leading-relaxed text-slate-400">
-              소속 위탁기관 또는 시스템 운영자가 현장을 배정하면 시작할 수 있어요.
+              소속 위탁기관 또는 시스템 관리자가 현장을 배정하면 시작할 수 있어요.
             </p>
             <button
               onClick={() => router.push("/recruit")}
