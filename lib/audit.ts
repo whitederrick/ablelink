@@ -77,35 +77,34 @@ function extractEntityId(args: any, result: any): string | null {
 }
 
 /**
- * Prisma 확장 팩토리. base(비확장 클라이언트)로 audit_events에 기록해 재귀를 피한다.
+ * Prisma $use 미들웨어 팩토리. 미들웨어는 호출자의 async 컨텍스트에서 실행되므로
+ * AsyncLocalStorage(행위자)가 정상 전파된다($extends query 훅은 컨텍스트가 소실됨).
+ * client로 audit_events에 기록(AuditEvent 모델은 스킵해 무한루프 방지).
  */
-export function makeAuditExtension(base: PrismaClient) {
-  return Prisma.defineExtension({
-    name: "audit",
-    query: {
-      $allModels: {
-        async $allOperations({ model, operation, args, query }) {
-          const result = await query(args);
-          if (WRITE_OPS.has(operation) && AUDITED_MODELS.has(model)) {
-            const actor = getAuditActor();
-            try {
-              await base.auditEvent.create({
-                data: {
-                  agencyId: actor.agencyId ?? null,
-                  actorType: actor.actorType,
-                  actorId: actor.actorId ?? null,
-                  actorLabel: actor.actorLabel ?? null,
-                  entityType: model,
-                  entityId: extractEntityId(args, result),
-                  action: operation,
-                  payload: buildPayload(args),
-                },
-              });
-            } catch { /* 감사 실패는 본 작업에 영향 없음 */ }
-          }
-          return result;
-        },
-      },
-    },
-  });
+export function makeAuditMiddleware(client: PrismaClient) {
+  return async (params: Prisma.MiddlewareParams, next: (p: Prisma.MiddlewareParams) => Promise<any>) => {
+    const model = params.model;
+    const action = params.action as string;
+    const audited = !!model && model !== "AuditEvent" && WRITE_OPS.has(action) && AUDITED_MODELS.has(model);
+    // 행위자는 next() 이전(컨텍스트 살아있는 시점)에 캡처.
+    const actor = audited ? getAuditActor() : null;
+    const result = await next(params);
+    if (audited && actor && model) {
+      try {
+        await client.auditEvent.create({
+          data: {
+            agencyId: actor.agencyId ?? null,
+            actorType: actor.actorType,
+            actorId: actor.actorId ?? null,
+            actorLabel: actor.actorLabel ?? null,
+            entityType: model,
+            entityId: extractEntityId(params.args, result),
+            action,
+            payload: buildPayload(params.args),
+          },
+        });
+      } catch { /* 감사 실패는 본 작업에 영향 없음 */ }
+    }
+    return result;
+  };
 }
