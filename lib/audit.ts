@@ -21,7 +21,7 @@ export function auditActorFrom(scope: any): AuditActor {
   if (scope.kind === "manager") return { actorType: "MANAGER", actorId: scope.managerId ?? null, agencyId: scope.agencyId ?? null, actorLabel: scope.loginId ?? null };
   if (scope.adminId != null && scope.managerId == null) return { actorType: "ADMIN", actorId: scope.adminId, actorLabel: scope.loginId ?? null };
   if (scope.managerId != null) return { actorType: "MANAGER", actorId: scope.managerId, agencyId: scope.agencyId ?? null, actorLabel: scope.loginId ?? null };
-  if (scope.workerId != null) return { actorType: "WORKER", actorId: scope.workerId, actorLabel: scope.loginId ?? null };
+  if (scope.workerId != null) return { actorType: "WORKER", actorId: scope.workerId, actorLabel: scope.loginId ?? scope.workerName ?? scope.name ?? null };
   return { actorType: "SYSTEM" };
 }
 

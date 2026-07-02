@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import { audit } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   try {
@@ -65,11 +66,12 @@ export async function POST(req: NextRequest) {
           proposedEnd:   proposedEnd   || null,
         },
       });
+      await audit(session, { entityType: "AttendanceEditRequest", entityId: existing.id, action: "update", summary: "출근부 수정요청(재제출)" });
       await notifyManagers("업데이트(재제출)");
       return NextResponse.json({ success: true, message: "수정 요청이 업데이트되었습니다." });
     }
 
-    await prisma.attendanceEditRequest.create({
+    const createdReq = await prisma.attendanceEditRequest.create({
       data: {
         attendanceId: attId,
         workerId,
@@ -80,6 +82,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await audit(session, { entityType: "AttendanceEditRequest", entityId: createdReq.id, action: "create", summary: "출근부 수정요청" });
     await notifyManagers("제출");
     return NextResponse.json({ success: true, message: "수정 요청이 제출되었습니다. 위탁기관 관리자 승인 후 반영됩니다." });
   } catch (e: any) {

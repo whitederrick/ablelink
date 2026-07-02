@@ -65,7 +65,7 @@ export async function GET(req: Request) {
     if (searchParams.get("format") === "csv") {
       const rows = await prisma.auditEvent.findMany({ where, orderBy: { createdAt: "desc" }, take: 10000 });
       const esc = (v: unknown) => { const s = v == null ? "" : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-      const header = ["시각", "행위자유형", "행위자", "위탁기관ID", "대상", "대상ID", "액션", "요약", "변경(JSON)"];
+      const header = ["시각", "변경주체유형", "변경주체", "위탁기관ID", "대상", "대상ID", "활동", "요약", "변경(JSON)"];
       const lines = [header.join(",")];
       for (const e of rows) {
         lines.push([

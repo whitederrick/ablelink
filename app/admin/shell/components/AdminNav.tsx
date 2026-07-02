@@ -19,7 +19,7 @@ const groups: NavGroup[] = [
     items: [
       { href: "/admin/agencies",                 label: "위탁기관 관리" },
       { href: "/admin/manager-signup-requests",  label: "위탁기관 관리자 관리" },
-      { href: "/admin/admins",                   label: "시스템 운영자 관리" },
+      { href: "/admin/admins",                   label: "시스템 관리자 관리" },
     ],
   },
   {
@@ -71,7 +71,7 @@ const groups: NavGroup[] = [
       { href: "/admin/settings/insurance-rates",    label: "4대보험 요율" },
       { href: "/admin/settings/categories",         label: "공지 카테고리 관리" },
       { href: "/admin/backup",                      label: "데이터 백업" },
-      { href: "/admin/logs",                        label: "운영자 활동 로그" },
+      { href: "/admin/logs",                        label: "시스템 관리자 로그" },
       { href: "/admin/audit",                       label: "데이터 변경 이력" },
     ],
   },

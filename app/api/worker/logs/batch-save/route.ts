@@ -8,6 +8,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { WorkStatus } from "@prisma/client";
+import { audit } from "@/lib/audit";
 
 interface LogEntry {
   date: string;
@@ -109,6 +110,10 @@ export async function POST(request: NextRequest) {
         await prisma.traineeLog.create({ data: logData });
       }
       saved++;
+    }
+
+    if (saved > 0) {
+      await audit(session, { entityType: "TraineeLog", action: "createMany", summary: `일지 일괄 저장 ${saved}건` });
     }
 
     return NextResponse.json({ success: true, saved });

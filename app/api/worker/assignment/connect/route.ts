@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { audit } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   try {
@@ -68,6 +69,8 @@ export async function POST(req: NextRequest) {
       }));
     }
     await prisma.$transaction(ops);
+
+    await audit(session, { entityType: "SiteAssignment", entityId: assignment.id, action: "update", summary: "배정 연결" });
 
     return NextResponse.json({
       success: true,

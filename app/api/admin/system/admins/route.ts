@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
 import bcrypt from "bcryptjs";
 import { logAudit } from "@/lib/auditLog";
+import { audit } from "@/lib/audit";
 
 export async function GET(req: Request) {
   try {
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
       target:  `Admin:${admin.id}`,
       detail:  { loginId: admin.loginId },
     });
+    await audit(scope, { entityType: "Admin", entityId: admin.id, action: "create", after: { loginId: admin.loginId, displayName: admin.displayName, email: admin.email, phone: admin.phone } });
     return NextResponse.json({ success: true, id: admin.id.toString() });
   } catch (e: any) {
     if (e instanceof Response) return e;

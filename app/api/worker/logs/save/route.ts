@@ -5,6 +5,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
+import { audit } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -124,6 +125,8 @@ export async function POST(request: NextRequest) {
         },
       });
     }
+
+    await audit(session, { entityType: "TraineeLog", entityId: log.id, action: existing ? "update" : "create", summary: "일지 저장" });
 
     return NextResponse.json({ success: true, logId: log.id.toString() });
   } catch (error: any) {

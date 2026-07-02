@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
 import { computeWorkTimes, kstWallTimeToInstant } from "@/lib/workSchedule";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { audit } from "@/lib/audit";
 
 /**
  * 하버사인(Haversine) 거리(m) 계산
@@ -250,6 +251,8 @@ export async function POST(request: NextRequest) {
         // accuracyM를 DB에 별도 저장하는 필드가 없다면 여기선 보관하지 않음
       },
     });
+
+    await audit(session, { entityType: "DailyAttendance", entityId: newAttendance.id, action: "create", summary: "출근", after: { workDate: todayString, siteId: String(site.id), status: "WORKING" } });
 
     return NextResponse.json({
       success: true,

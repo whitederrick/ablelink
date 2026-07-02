@@ -23,10 +23,10 @@ type AuditItem = {
 };
 
 const ACTOR_MAP: Record<AuditItem["actorType"], { label: string; cls: string }> = {
-  ADMIN:   { label: "운영자", cls: "bg-emerald-50 text-emerald-600" },
-  MANAGER: { label: "매니저", cls: "bg-sky-50 text-sky-600" },
-  WORKER:  { label: "워커",   cls: "bg-amber-50 text-amber-600" },
-  SYSTEM:  { label: "시스템", cls: "bg-slate-100 text-slate-500" },
+  ADMIN:   { label: "시스템 관리자",   cls: "bg-emerald-50 text-emerald-600" },
+  MANAGER: { label: "위탁기관 담당자", cls: "bg-sky-50 text-sky-600" },
+  WORKER:  { label: "직무지도원",      cls: "bg-amber-50 text-amber-600" },
+  SYSTEM:  { label: "시스템",          cls: "bg-slate-100 text-slate-500" },
 };
 
 const ACTION_MAP: Record<string, { label: string; cls: string }> = {
@@ -148,10 +148,10 @@ export default function AuditPage() {
       <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center gap-2.5">
           <select value={fActorType} onChange={e => setFActorType(e.target.value)} className={`${T.select} w-32`}>
-            <option value="">행위자 전체</option>
-            <option value="ADMIN">운영자</option>
-            <option value="MANAGER">매니저</option>
-            <option value="WORKER">워커</option>
+            <option value="">변경주체 전체</option>
+            <option value="ADMIN">시스템 관리자</option>
+            <option value="MANAGER">위탁기관 담당자</option>
+            <option value="WORKER">직무지도원</option>
             <option value="SYSTEM">시스템</option>
           </select>
           <select value={fEntityType} onChange={e => setFEntityType(e.target.value)} className={`${T.select} w-40`}>
@@ -168,7 +168,7 @@ export default function AuditPage() {
             <input type="date" value={fTo} onChange={e => setFTo(e.target.value)} className={`${T.input} w-36`} />
           </div>
           <input value={fQ} onChange={e => setFQ(e.target.value)} onKeyDown={e => e.key === "Enter" && apply()}
-            placeholder="행위자·대상·대상ID 검색" className={`${T.input} w-56`} />
+            placeholder="변경주체·대상·대상ID 검색" className={`${T.input} w-56`} />
           <button onClick={apply} className={T.btnPrimary}>조회</button>
           <button onClick={reset} className={T.btnSecondary}>초기화</button>
           <button onClick={downloadCsv} className={`${T.btnSecondary} ml-auto`}>CSV 다운로드</button>
@@ -176,16 +176,16 @@ export default function AuditPage() {
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[918px] table-fixed border-collapse">
+        <table className="w-full min-w-[964px] table-fixed border-collapse">
           <colgroup>
-            <col className="w-[160px]" />{/* 시각 */}
-            <col className="w-[120px]" />{/* 행위자 */}
-            <col className="w-[160px]" />{/* 대상 */}
-            <col className="w-[88px]" />{/* 액션 */}
-            <col className="w-[390px]" />{/* 요약/변경 (+30%) */}
+            <col className="w-[150px]" />{/* 시각 */}
+            <col className="w-[196px]" />{/* 변경주체 */}
+            <col className="w-[150px]" />{/* 대상 */}
+            <col className="w-[80px]" />{/* 액션 */}
+            <col className="w-[388px]" />{/* 요약/변경 */}
           </colgroup>
           <thead>
-            <tr>{["시각", "행위자", "대상", "액션", "요약/변경"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr>
+            <tr>{["시각", "변경주체", "대상", "액션", "요약/변경"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {loading ? (
@@ -239,7 +239,7 @@ export default function AuditPage() {
             <div className="grid grid-cols-[92px_1fr] gap-x-3 gap-y-2 text-sm">
               <span className="text-[13px] font-semibold text-slate-400">시각</span>
               <span className="font-semibold text-slate-800">{new Date(detail.createdAt).toLocaleString("ko-KR")}</span>
-              <span className="text-[13px] font-semibold text-slate-400">행위자</span>
+              <span className="text-[13px] font-semibold text-slate-400">변경주체</span>
               <span className="font-semibold text-slate-800">{detail.actorLabel || "-"}{detail.actorId ? ` (id ${detail.actorId})` : ""}</span>
               <span className="text-[13px] font-semibold text-slate-400">위탁기관</span>
               <span className="font-semibold text-slate-800">{detail.agencyId ? `#${detail.agencyId}` : "-"}</span>

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
 import { logAudit } from "@/lib/auditLog";
+import { audit } from "@/lib/audit";
 import { CONFIG_REGISTRY, listConfigs, invalidateConfigCache } from "@/lib/systemConfig";
 
 const SPEC = Object.fromEntries(CONFIG_REGISTRY.map(s => [s.key, s]));
@@ -53,6 +54,8 @@ export async function PATCH(req: NextRequest) {
       target: `SystemConfig:${key}`,
       detail: { key, value: v },
     });
+
+    await audit(scope, { entityType: "SystemConfig", entityId: key, action: "update", summary: `${key} 변경`, after: { key, value: v } });
 
     return NextResponse.json({ success: true, message: "저장되었습니다." });
   } catch (e: any) {

@@ -12,6 +12,7 @@ import { getKstDateString } from "@/lib/time";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { computeWorkTimes, kstWallTimeToInstant } from "@/lib/workSchedule";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { audit } from "@/lib/audit";
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_RANGE_DAYS = 100; // 과도한 일괄 생성 방지
@@ -170,6 +171,10 @@ export async function POST(request: NextRequest) {
         skipDuplicates: true,
       });
       created = result.count;
+    }
+
+    if (created > 0) {
+      await audit(session, { entityType: "DailyAttendance", action: "createMany", summary: `출근부 일괄생성 ${created}건 (${from}~${effectiveTo})` });
     }
 
     return NextResponse.json({

@@ -55,19 +55,19 @@ export default function LogsPage() {
 
   return (
     <div>
-      <PageHeader title="운영자 활동 로그" sub="시스템 운영자의 접속·주요 액션 이력(IP 포함)을 조회합니다." />
+      <PageHeader title="시스템 관리자 로그" sub="시스템 관리자의 접속·주요 활동 내용(IP 포함)을 조회합니다." />
 
       <div className="mb-4">
         <ListToolbar
           query={query}
           onQueryChange={setQuery}
-          placeholder="액션·대상·계정 검색"
+          placeholder="활동 내용·대상·계정 검색"
           extra={
             <div className="relative">
               <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/>
               <select value={filter} onChange={e=>{setFilter(e.target.value);load(e.target.value);}}
                 className="h-10 rounded-xl border border-slate-200 bg-white pl-9 pr-4 text-sm font-semibold text-slate-700 outline-none focus:border-sky-400">
-                <option value="">전체 액션</option>
+                <option value="">전체 활동</option>
                 <option value="AGENCY">위탁기관 관련</option>
                 <option value="WORKER">직무지도원 관련</option>
                 <option value="ATTENDANCE">출근 기록 수정</option>
@@ -85,7 +85,7 @@ export default function LogsPage() {
           <table className="w-full">
             <thead>
               <tr>
-                <th className={T.th}>액션</th>
+                <th className={T.th}>활동 내용</th>
                 <th className={T.th}>대상</th>
                 <th className={T.th}>계정</th>
                 <th className={T.th}>일시</th>

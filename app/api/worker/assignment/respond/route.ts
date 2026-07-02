@@ -10,6 +10,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { audit } from "@/lib/audit";
 
 const VALID_WT = ["AM", "PM", "FULL_DAY", "CUSTOM"];
 
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest) {
         where: { id: asgn.id, status: "REQUESTED" },
         data: { status: "REJECTED", rejectedAt: new Date(), statusReason: "후보 거절" },
       });
+      await audit(session, { entityType: "SiteAssignment", entityId: asgn.id, action: "update", summary: "배정 응답(거절)" });
       await notifyManagers("거절");
       return NextResponse.json({ success: true, status: "REJECTED", message: "배정 요청을 거절했습니다." });
     }
@@ -106,6 +108,7 @@ export async function POST(req: NextRequest) {
         where: { id: asgn.id, status: "REQUESTED" },
         data: { status: "ASSIGNED", workType, commuteGuidanceIncluded, connectedAt: new Date() },
       });
+      await audit(session, { entityType: "SiteAssignment", entityId: asgn.id, action: "update", summary: "배정 응답(수락·계약 대기)" });
       await notifyManagers("수락(계약 대기)");
       return NextResponse.json({
         success: true, status: "ASSIGNED",
@@ -119,6 +122,7 @@ export async function POST(req: NextRequest) {
       where: { id: asgn.id, status: "REQUESTED" },
       data: { status: "ACCEPTED", workType, commuteGuidanceIncluded, connectedAt: new Date() },
     });
+    await audit(session, { entityType: "SiteAssignment", entityId: asgn.id, action: "update", summary: "배정 응답(수락·확정 대기)" });
     await notifyManagers("수락(확정 대기)");
     return NextResponse.json({
       success: true, status: "ACCEPTED",

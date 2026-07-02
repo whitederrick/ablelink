@@ -12,6 +12,7 @@ import { DocumentStage } from "@prisma/client";
 import { buildDocPayload, DocPayloadError } from "@/lib/docs/buildDocPayload";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { audit } from "@/lib/audit";
 
 const MAX_VERSIONS_PER_RUN = 20; // 보존: run당 최근 N개 버전만 유지(과도 누적·PII 적재 방지)
 
@@ -178,6 +179,8 @@ export async function POST(req: NextRequest) {
         })),
       });
     }
+
+    await audit(session, { entityType: "DocumentRun", action: "update", summary: `문서 제출 ${submitted.length}건 (${periodStart}~${periodEnd})` });
 
     return NextResponse.json({ success: true, submitted: submitted.length });
   } catch (e: any) {

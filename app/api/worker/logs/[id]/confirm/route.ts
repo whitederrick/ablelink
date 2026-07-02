@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import { audit } from "@/lib/audit";
 
 export async function PATCH(
   req: NextRequest,
@@ -27,6 +28,7 @@ export async function PATCH(
 
     if (unconfirm) {
       await prisma.traineeLog.update({ where: { id: log.id }, data: { isCompleted: false } });
+      await audit(session, { entityType: "TraineeLog", entityId: log.id, action: "update", summary: "일지 완료 취소" });
       return NextResponse.json({ success: true, action: "unconfirmed" });
     }
 
@@ -34,6 +36,7 @@ export async function PATCH(
       return NextResponse.json({ success: false, message: "이미 확정된 일지입니다." }, { status: 409 });
 
     await prisma.traineeLog.update({ where: { id: log.id }, data: { isCompleted: true } });
+    await audit(session, { entityType: "TraineeLog", entityId: log.id, action: "update", summary: "일지 완료" });
     return NextResponse.json({ success: true, action: "confirmed" });
   } catch (e: any) {
     console.error("[logs/[id]/confirm]", e);

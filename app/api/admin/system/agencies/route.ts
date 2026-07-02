@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
 import { logAudit } from "@/lib/auditLog";
+import { audit } from "@/lib/audit";
 import bcrypt from "bcryptjs";
 
 export async function GET(req: Request) {
@@ -97,6 +98,8 @@ export async function POST(req: NextRequest) {
       target: `Agency:${agency.id}`,
       detail: { name: agency.name, planType, managerLoginId },
     });
+
+    await audit(scope, { entityType: "Agency", entityId: agency.id, action: "create", after: { name: agency.name, planType: planType || "FREE" } });
 
     return NextResponse.json({ success: true, id: agency.id.toString() });
   } catch (e: any) {

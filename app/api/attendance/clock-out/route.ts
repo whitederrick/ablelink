@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
 import { computeWorkTimes, kstWallTimeToInstant } from "@/lib/workSchedule";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { audit } from "@/lib/audit";
 
 /**
  * 하버사인(Haversine) 공식을 이용한 두 좌표 사이의 거리 계산 함수 (단위: m)
@@ -338,6 +339,8 @@ export async function POST(request: NextRequest) {
         : action === "RECONFIRM"
         ? `퇴근 시간이 재확인(업데이트)되었습니다.`
         : `업무가 최종 종료되었습니다.`;
+
+    await audit(session, { entityType: "DailyAttendance", entityId: attendance.id, action: "update", summary: action === "FINALIZE" ? "업무 종료" : action === "RECONFIRM" ? "퇴근 재확인" : "퇴근" });
 
     return NextResponse.json({
       success: true,

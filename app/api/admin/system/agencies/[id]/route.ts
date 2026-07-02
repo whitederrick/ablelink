@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 import { logAudit } from "@/lib/auditLog";
+import { audit, auditSnapshot } from "@/lib/audit";
 import { RESTRICTED_TEMPLATES } from "@/lib/contractTemplates";
 
 const RESTRICTED_KEYS = new Set(RESTRICTED_TEMPLATES.map(t => t.key));
@@ -59,6 +60,7 @@ export async function PATCH(
       updateData.allowedContractTemplates = cleaned;
     }
 
+    const auditBefore = await auditSnapshot("Agency", { id: agency.id }, updateData);
     await prisma.agency.update({ where: { id: agency.id }, data: updateData });
 
     await logAudit({
@@ -67,6 +69,8 @@ export async function PATCH(
       target: `Agency:${agency.id}`,
       detail: { before: { planType: agency.planType }, after: updateData },
     });
+
+    await audit(scope, { entityType: "Agency", entityId: agency.id, action: "update", before: auditBefore, after: updateData as any });
 
     return NextResponse.json({ success: true, message: "위탁기관 정보가 업데이트되었습니다." });
   } catch (e: any) {

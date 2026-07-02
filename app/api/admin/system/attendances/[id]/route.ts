@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
 import { logAudit } from "@/lib/auditLog";
+import { audit } from "@/lib/audit";
 
 export async function PATCH(
   req: NextRequest,
@@ -57,6 +58,23 @@ export async function PATCH(
         },
         after: updateData,
         reason,
+      },
+    });
+
+    await audit(scope, {
+      entityType: "DailyAttendance",
+      entityId: attendance.id,
+      action: "update",
+      summary: `출근기록 보정: ${reason}`,
+      before: {
+        startTime: attendance.startTime?.toISOString() ?? null,
+        endTime: attendance.endTime?.toISOString() ?? null,
+        status: attendance.status,
+      },
+      after: {
+        startTime: (updateData.startTime ?? attendance.startTime)?.toISOString() ?? null,
+        endTime: (updateData.endTime ?? attendance.endTime)?.toISOString() ?? null,
+        status: updateData.status ?? attendance.status,
       },
     });
 
