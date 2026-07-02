@@ -55,7 +55,7 @@ export default function LogsPage() {
 
   return (
     <div>
-      <PageHeader title="감사 로그" sub="시스템 운영자의 모든 데이터 변경 이력을 조회합니다." />
+      <PageHeader title="운영자 활동 로그" sub="시스템 운영자의 접속·주요 액션 이력(IP 포함)을 조회합니다." />
 
       <div className="mb-4">
         <ListToolbar

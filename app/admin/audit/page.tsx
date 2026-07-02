@@ -43,12 +43,17 @@ function actionBadge(action: string) {
   return <span className={`${T.badge} ${m?.cls ?? "bg-slate-100 text-slate-500"}`}>{m?.label ?? action}</span>;
 }
 
-function payloadPreview(payload: unknown): string {
-  if (payload == null) return "";
+// payload.data에서 스칼라 필드(문자/숫자/불리언/null)만 뽑아 읽기 쉬운 변경쌍으로. 좌표(Decimal)·관계(contacts/ownerManager 등) 객체는 제외.
+function changePairs(payload: unknown): { field: string; value: string }[] {
+  if (payload == null) return [];
   try {
-    const s = typeof payload === "string" ? payload : JSON.stringify(payload);
-    return s.length > 120 ? s.slice(0, 120) + "…" : s;
-  } catch { return ""; }
+    const p: any = typeof payload === "string" ? JSON.parse(payload) : payload;
+    const data = p?.data ?? p?.changed ?? p;
+    if (!data || typeof data !== "object") return [];
+    return Object.entries(data as Record<string, unknown>)
+      .filter(([, v]) => v === null || (typeof v !== "object"))
+      .map(([field, v]) => ({ field, value: v === null ? "(비움)" : String(v) }));
+  } catch { return []; }
 }
 
 function prettyJson(payload: unknown): string {
@@ -123,7 +128,7 @@ export default function AuditPage() {
 
   return (
     <div>
-      <PageHeader title="감사 로그" sub="시스템의 모든 데이터 변경 이력(누가·언제·무엇을)." />
+      <PageHeader title="데이터 변경 이력" sub="시스템의 모든 데이터 변경을 자동 기록합니다(누가·언제·무엇을)." />
 
       {/* 필터 툴바 */}
       <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4">
@@ -156,13 +161,13 @@ export default function AuditPage() {
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[1080px] table-fixed border-collapse">
+        <table className="w-full min-w-[828px] table-fixed border-collapse">
           <colgroup>
             <col className="w-[160px]" />{/* 시각 */}
-            <col className="w-[150px]" />{/* 행위자 */}
-            <col className="w-[200px]" />{/* 대상 */}
-            <col className="w-[110px]" />{/* 액션 */}
-            <col className="w-[360px]" />{/* 요약/변경 */}
+            <col className="w-[120px]" />{/* 행위자 */}
+            <col className="w-[160px]" />{/* 대상 */}
+            <col className="w-[88px]" />{/* 액션 */}
+            <col className="w-[300px]" />{/* 요약/변경 */}
           </colgroup>
           <thead>
             <tr>{["시각", "행위자", "대상", "액션", "요약/변경"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr>
@@ -171,7 +176,7 @@ export default function AuditPage() {
             {loading ? (
               <tr><td colSpan={5} className={T.tdCenter}>로딩 중...</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={5} className={T.tdCenter}>감사 로그가 없습니다.</td></tr>
+              <tr><td colSpan={5} className={T.tdCenter}>변경 이력이 없습니다.</td></tr>
             ) : items.map(e => (
               <tr key={e.id} onClick={() => setDetail(e)} className={`${T.trBase} cursor-pointer hover:bg-slate-50`}>
                 <td className={`${T.td} truncate whitespace-nowrap text-[13px] text-slate-500`}>{new Date(e.createdAt).toLocaleString("ko-KR")}</td>
@@ -184,7 +189,19 @@ export default function AuditPage() {
                   {e.entityId ? <span className="text-slate-400"> #{e.entityId}</span> : null}
                 </td>
                 <td className={T.td}>{actionBadge(e.action)}</td>
-                <td className={`${T.td} truncate text-slate-600`}>{e.summary || payloadPreview(e.payload) || <span className="text-slate-300">-</span>}</td>
+                <td className={`${T.td} truncate`}>
+                  {(() => {
+                    const pairs = changePairs(e.payload);
+                    if (pairs.length === 0) return e.summary ? <span className="text-slate-600">{e.summary}</span> : <span className="text-slate-300">-</span>;
+                    return (
+                      <span className="text-[13px] text-slate-500">
+                        {pairs.map((c, i) => (
+                          <span key={i} className="mr-2 whitespace-nowrap"><b className="font-bold text-slate-700">{c.field}</b>=<span className="text-sky-700">{c.value}</span></span>
+                        ))}
+                      </span>
+                    );
+                  })()}
+                </td>
               </tr>
             ))}
           </tbody>
