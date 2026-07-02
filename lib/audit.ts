@@ -1,50 +1,40 @@
 // lib/audit.ts
-// 감사로그(AuditEvent) 인프라 — "가능한 모든 변경" 자동 기록.
-//  · 행위자(누가)는 AsyncLocalStorage로 요청별 주입(인증 헬퍼가 setAuditActor 호출).
-//  · Prisma 확장이 감사대상 모델의 모든 쓰기(create/update/delete/…)를 가로채 audit_events에 기록.
-//  · 감사 기록 실패는 본 작업에 영향 없음(try/catch). AuditEvent 자체·세션/로그성 모델은 제외(무한루프·노이즈 방지).
-import { AsyncLocalStorage } from "node:async_hooks";
-import { Prisma, type PrismaClient } from "@prisma/client";
+// 감사로그(AuditEvent) — 명시적 기록 헬퍼. 라우트가 세션(scope)과 함께 호출한다.
+//  · Prisma 미들웨어/ALS는 쿼리엔진이 컨텍스트를 소실해 행위자를 못 붙임 → 명시 방식으로 정확한 '누가' 보장.
+//  · update는 before(변경 전 스칼라)와 after(data)를 주면 실제 바뀐 필드만 old→new 로 기록.
+//  · 기록 실패는 본 작업에 영향 없음(try/catch).
+import { prisma } from "./prisma";
+import { Prisma } from "@prisma/client";
 
 export type AuditActorType = "ADMIN" | "MANAGER" | "WORKER" | "SYSTEM";
 export interface AuditActor {
   actorType: AuditActorType;
-  actorId?: bigint | null;
-  actorLabel?: string | null; // 로그인ID/이름 스냅샷
-  agencyId?: bigint | null;
+  actorId?: bigint | number | null;
+  actorLabel?: string | null;
+  agencyId?: bigint | number | null;
 }
 
-const store = new AsyncLocalStorage<AuditActor>();
-
-/** 현재 요청의 행위자 설정(인증 헬퍼에서 호출). 이후 같은 async 컨텍스트의 모든 쓰기에 적용된다. */
-export function setAuditActor(actor: AuditActor): void {
-  store.enterWith(actor);
-}
-/** 행위자 없으면 SYSTEM(크론/시드 등). */
-export function getAuditActor(): AuditActor {
-  return store.getStore() ?? { actorType: "SYSTEM" };
-}
-/** 명시적 스코프 실행(크론 등에서 SYSTEM 행위자로 감싸기). */
-export function runWithAuditActor<T>(actor: AuditActor, fn: () => T): T {
-  return store.run(actor, fn);
+/** 인증 scope(adminScope/managerScope/dual/worker)에서 행위자 도출. */
+export function auditActorFrom(scope: any): AuditActor {
+  if (!scope) return { actorType: "SYSTEM" };
+  if (scope.kind === "admin") return { actorType: "ADMIN", actorId: scope.adminId ?? null, actorLabel: scope.loginId ?? null };
+  if (scope.kind === "manager") return { actorType: "MANAGER", actorId: scope.managerId ?? null, agencyId: scope.agencyId ?? null, actorLabel: scope.loginId ?? null };
+  if (scope.adminId != null && scope.managerId == null) return { actorType: "ADMIN", actorId: scope.adminId, actorLabel: scope.loginId ?? null };
+  if (scope.managerId != null) return { actorType: "MANAGER", actorId: scope.managerId, agencyId: scope.agencyId ?? null, actorLabel: scope.loginId ?? null };
+  if (scope.workerId != null) return { actorType: "WORKER", actorId: scope.workerId, actorLabel: scope.loginId ?? null };
+  return { actorType: "SYSTEM" };
 }
 
-// 쓰기 연산만 감사.
-const WRITE_OPS = new Set(["create", "createMany", "update", "updateMany", "upsert", "delete", "deleteMany"]);
-
-// 감사 대상 도메인 모델(중요 데이터). 세션/알림/조회로그성 모델은 제외해 노이즈를 줄인다.
-const AUDITED_MODELS = new Set<string>([
-  "Site", "SiteAssignment", "SiteContact", "SiteHoliday", "SiteBasePoint",
-  "PayrollRun", "PayrollItem", "PayContract", "EmploymentContract", "AgencyDeduction",
-  "DailyAttendance", "AttendanceIssue", "AttendanceEditRequest",
-  "Trainee", "TraineePlacement", "TraineeEvaluation",
-  "Worker", "Manager", "Agency", "Admin",
-  "InsuranceRates", "IncomeTaxTable", "SystemConfig",
-  "DocumentRun", "RecruitPost", "TalentOffer", "DashboardPromo", "SystemAnnouncement",
-]);
-
-// 감사 payload에서 마스킹할 민감 필드.
+// ── diff/마스킹 유틸 ──
 const SENSITIVE_KEYS = new Set(["password", "passwordHash", "signatureUrl", "adminSignatureUrl", "workerSignatureUrl", "representativeSignatureUrl", "accountNumber", "ciKey", "verifyCode"]);
+const fmtVal = (v: unknown): string => (v === null || v === undefined ? "(비움)" : String(v));
+const eqScalar = (a: unknown, b: unknown): boolean => fmtVal(a) === fmtVal(b);
+
+/** 스칼라(문자/숫자/불리언/null) 키만 — 좌표(Decimal)·관계(create/connect 등) 객체는 diff 제외. */
+export function scalarKeysOf(data: any): string[] {
+  if (!data || typeof data !== "object") return [];
+  return Object.keys(data).filter((k) => { const v = data[k]; return v === null || typeof v !== "object"; });
+}
 
 function maskSensitive(data: unknown): unknown {
   if (!data || typeof data !== "object") return data;
@@ -56,55 +46,61 @@ function maskSensitive(data: unknown): unknown {
   return out;
 }
 
-function buildPayload(args: any): Prisma.InputJsonValue | undefined {
+/** update 감사 전 변경 전 스칼라값 스냅샷(라우트가 update 이전에 호출). */
+export async function auditSnapshot(model: string, where: any, data: any): Promise<Record<string, unknown> | null> {
   try {
-    const p: Record<string, unknown> = {};
-    if (args?.data !== undefined) p.data = maskSensitive(args.data);
-    if (args?.where !== undefined) p.where = args.where;
-    // BigInt 등 직렬화 불가 값 제거를 위해 JSON 왕복(BigInt.toJSON 패치가 문자열화).
-    return JSON.parse(JSON.stringify(p)) as Prisma.InputJsonValue;
-  } catch {
-    return undefined;
-  }
+    const keys = scalarKeysOf(data);
+    if (!keys.length || !where) return null;
+    const delegate = (prisma as any)[model.charAt(0).toLowerCase() + model.slice(1)];
+    return await delegate.findUnique({ where, select: Object.fromEntries(keys.map((k) => [k, true])) });
+  } catch { return null; }
 }
 
-function extractEntityId(args: any, result: any): string | null {
-  try {
-    if (result && typeof result === "object" && !Array.isArray(result) && result.id != null) return String(result.id);
-    if (args?.where?.id != null) return String(args.where.id);
-  } catch { /* noop */ }
-  return null;
+export interface AuditEntry {
+  entityType: string;
+  entityId?: string | number | bigint | null;
+  action: string; // create | update | delete | …
+  summary?: string | null;
+  before?: Record<string, unknown> | null; // 변경 전 스칼라(auditSnapshot 결과)
+  after?: Record<string, unknown> | null;  // 보통 args.data
+  payload?: Prisma.InputJsonValue;         // 직접 지정(override)
 }
 
-/**
- * Prisma $use 미들웨어 팩토리. 미들웨어는 호출자의 async 컨텍스트에서 실행되므로
- * AsyncLocalStorage(행위자)가 정상 전파된다($extends query 훅은 컨텍스트가 소실됨).
- * client로 audit_events에 기록(AuditEvent 모델은 스킵해 무한루프 방지).
- */
-export function makeAuditMiddleware(client: PrismaClient) {
-  return async (params: Prisma.MiddlewareParams, next: (p: Prisma.MiddlewareParams) => Promise<any>) => {
-    const model = params.model;
-    const action = params.action as string;
-    const audited = !!model && model !== "AuditEvent" && WRITE_OPS.has(action) && AUDITED_MODELS.has(model);
-    // 행위자는 next() 이전(컨텍스트 살아있는 시점)에 캡처.
-    const actor = audited ? getAuditActor() : null;
-    const result = await next(params);
-    if (audited && actor && model) {
-      try {
-        await client.auditEvent.create({
-          data: {
-            agencyId: actor.agencyId ?? null,
-            actorType: actor.actorType,
-            actorId: actor.actorId ?? null,
-            actorLabel: actor.actorLabel ?? null,
-            entityType: model,
-            entityId: extractEntityId(params.args, result),
-            action,
-            payload: buildPayload(params.args),
-          },
-        });
-      } catch { /* 감사 실패는 본 작업에 영향 없음 */ }
+/** 감사 이벤트 기록. */
+export async function logAudit(actor: AuditActor, entry: AuditEntry): Promise<void> {
+  try {
+    let summary = entry.summary ?? null;
+    let payload = entry.payload;
+    if (payload === undefined) {
+      if (entry.before && entry.after) {
+        const keys = scalarKeysOf(entry.after);
+        const changed = keys
+          .filter((k) => !eqScalar(entry.before![k], entry.after![k]))
+          .map((k) => ({ field: k, from: fmtVal(entry.before![k]), to: fmtVal(entry.after![k]) }));
+        if (summary == null) summary = changed.length ? changed.map((c) => c.field).join(", ") : null;
+        payload = { changed } as Prisma.InputJsonValue;
+      } else if (entry.after) {
+        payload = JSON.parse(JSON.stringify(maskSensitive(entry.after))) as Prisma.InputJsonValue;
+        if (summary == null) summary = scalarKeysOf(entry.after).join(", ") || null;
+      }
     }
-    return result;
-  };
+    await prisma.auditEvent.create({
+      data: {
+        agencyId: actor.agencyId != null ? BigInt(actor.agencyId) : null,
+        actorType: actor.actorType,
+        actorId: actor.actorId != null ? BigInt(actor.actorId) : null,
+        actorLabel: actor.actorLabel ?? null,
+        entityType: entry.entityType,
+        entityId: entry.entityId != null ? String(entry.entityId) : null,
+        action: entry.action,
+        summary,
+        payload,
+      },
+    });
+  } catch { /* 감사 실패는 본 작업에 영향 없음 */ }
+}
+
+/** scope + entry 한 번에. */
+export function audit(scope: any, entry: AuditEntry): Promise<void> {
+  return logAudit(auditActorFrom(scope), entry);
 }

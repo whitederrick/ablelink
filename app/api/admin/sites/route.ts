@@ -10,6 +10,7 @@ import { Prisma } from "@prisma/client";
 import { requireAdminOrManagerSession, resolveScopeAgencyId } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
+import { audit } from "@/lib/audit";
 
 const PROFESSIONS = ["JOB_COACH", "CAREGIVER", "ACTIVITY_ASSISTANT"] as const;
 
@@ -311,6 +312,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await audit(session, { entityType: "Site", entityId: created.id, action: "create", after: { companyName, address, businessContactName, businessContactPhone } });
     return NextResponse.json({ success: true, item: toRow(created) });
   } catch (e: any) {
     if (e instanceof Response) return e;

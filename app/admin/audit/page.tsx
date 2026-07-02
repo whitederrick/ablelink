@@ -43,13 +43,16 @@ function actionBadge(action: string) {
   return <span className={`${T.badge} ${m?.cls ?? "bg-slate-100 text-slate-500"}`}>{m?.label ?? action}</span>;
 }
 
-// payload.data에서 스칼라 필드(문자/숫자/불리언/null)만 뽑아 읽기 쉬운 변경쌍으로. 좌표(Decimal)·관계(contacts/ownerManager 등) 객체는 제외.
+// 변경 표시: diff({changed:[{field,from,to}]})는 'from → to', 생성(data 객체)은 값. 좌표·관계 객체는 제외.
 function changePairs(payload: unknown): { field: string; value: string }[] {
   if (payload == null) return [];
   try {
     const p: any = typeof payload === "string" ? JSON.parse(payload) : payload;
-    const data = p?.data ?? p?.changed ?? p;
-    if (!data || typeof data !== "object") return [];
+    if (Array.isArray(p?.changed)) {
+      return p.changed.map((c: any) => ({ field: String(c.field), value: `${c.from ?? "(비움)"} → ${c.to ?? "(비움)"}` }));
+    }
+    const data = p?.data ?? p;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return [];
     return Object.entries(data as Record<string, unknown>)
       .filter(([, v]) => v === null || (typeof v !== "object"))
       .map(([field, v]) => ({ field, value: v === null ? "(비움)" : String(v) }));
@@ -161,13 +164,13 @@ export default function AuditPage() {
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[828px] table-fixed border-collapse">
+        <table className="w-full min-w-[918px] table-fixed border-collapse">
           <colgroup>
             <col className="w-[160px]" />{/* 시각 */}
             <col className="w-[120px]" />{/* 행위자 */}
             <col className="w-[160px]" />{/* 대상 */}
             <col className="w-[88px]" />{/* 액션 */}
-            <col className="w-[300px]" />{/* 요약/변경 */}
+            <col className="w-[390px]" />{/* 요약/변경 (+30%) */}
           </colgroup>
           <thead>
             <tr>{["시각", "행위자", "대상", "액션", "요약/변경"].map(h => <th key={h} className={T.th}>{h}</th>)}</tr>
@@ -196,7 +199,7 @@ export default function AuditPage() {
                     return (
                       <span className="text-[13px] text-slate-500">
                         {pairs.map((c, i) => (
-                          <span key={i} className="mr-2 whitespace-nowrap"><b className="font-bold text-slate-700">{c.field}</b>=<span className="text-sky-700">{c.value}</span></span>
+                          <span key={i} className="mr-3 whitespace-nowrap"><b className="font-bold text-slate-700">{c.field}</b> <span className="text-sky-700">{c.value}</span></span>
                         ))}
                       </span>
                     );

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
+import { audit, auditSnapshot } from "@/lib/audit";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -271,6 +272,8 @@ export async function PATCH(
       }
     }
 
+    // 감사: 변경 전 스칼라값 스냅샷(diff용)
+    const auditBefore = await auditSnapshot("Site", { id: siteId }, data);
     const updated = await prisma.site.update({
       where: { id: siteId },
       data,
@@ -304,6 +307,7 @@ export async function PATCH(
       },
     });
 
+    await audit(session, { entityType: "Site", entityId: siteId, action: "update", before: auditBefore, after: data as any });
     return NextResponse.json({ success: true, item: toRow(updated) });
   } catch (e: any) {
     if (e instanceof Response) return e;
@@ -337,6 +341,7 @@ export async function DELETE(
 
     // 하드 삭제 대신 비활성화(소프트 삭제) — 배정·문서 등 연관 데이터가 있어도 안전.
     await prisma.site.update({ where: { id: siteId }, data: { isActive: false } });
+    await audit(session, { entityType: "Site", entityId: siteId, action: "update", summary: "비활성화(삭제)", payload: { changed: [{ field: "isActive", from: "true", to: "false" }] } });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     if (e instanceof Response) return e;
