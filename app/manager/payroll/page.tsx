@@ -877,6 +877,26 @@ export default function PayrollPage() {
             ]}
           />
 
+          {/* 적용 기준(요율·세액표) 연도 배너 — run 내 전 항목 공통. 미설정 시 붉은 경고. */}
+          {(() => {
+            const firstIns = selectedRun.items.map(it => (it.breakdown as any)?.insurance).find(Boolean);
+            const rateYear: number | null = firstIns?.rateYear ?? null;
+            const taxYear: number | null = firstIns?.taxYear ?? null;
+            const runYear = Number(selectedRun.yearMonth.slice(0, 4));
+            const missing = !rateYear || !taxYear;
+            return (
+              <div className={`rounded-xl border px-4 py-2.5 text-sm font-semibold ${missing ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
+                <b>적용 기준</b> — 4대보험 요율{" "}
+                {rateYear ? <span className="font-black text-slate-900">{rateYear}년</span> : <span className="font-black text-rose-700">미설정 → 4대보험 0원</span>}
+                {" · "}소득세 간이세액표{" "}
+                {taxYear ? <span className="font-black text-slate-900">{taxYear}년</span> : <span className="font-black text-rose-700">미설정 → 소득세 0원</span>}
+                {rateYear != null && rateYear !== runYear && (
+                  <span className="ml-1 font-bold text-rose-600">(급여연도 {runYear}년 요율 미등록 — {rateYear}년 요율 적용됨)</span>
+                )}
+              </div>
+            );
+          })()}
+
           {loadingRun ? (
             <p className={T.empty}>로딩 중...</p>
           ) : (
