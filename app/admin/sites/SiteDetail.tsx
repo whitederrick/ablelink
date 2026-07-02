@@ -211,6 +211,10 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
     if (!businessContactName.trim()) return alert("사업체 담당자 성명을 입력하세요.");
     if (!businessContactPhone.trim()) return alert("사업체 담당자 연락처를 입력하세요.");
     if (isNaN(finalRange) || finalRange < 50 || finalRange > 1000) return alert("GPS 허용 범위는 50m ~ 1000m 사이로 설정해주세요.");
+    if (additionalContacts.some(c => (c.phone.trim() || c.email.trim()) && !c.name.trim()))
+      return alert("추가 사업체 담당자의 성명을 입력하세요. (성명 필수)");
+    if (govContacts.some(c => (c.name.trim() || c.phone.trim()) && !c.email.trim()))
+      return alert("장애인고용공단 담당자의 이메일(수신처)을 입력하세요. (이메일 필수)");
 
     setSaving(true);
     try {
@@ -355,11 +359,11 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
             {additionalContacts.map((c, i) => (
               <div key={i} className="flex items-center gap-2">
                 <input value={c.name} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
-                  placeholder="성명 *" className={`w-[120px] shrink-0 ${T.input}`} />
+                  placeholder="성명 *" className={`w-[100px] shrink-0 ${T.input}`} />
                 <input value={c.phone} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))}
-                  placeholder="연락처" className={`min-w-0 flex-1 ${T.input}`} />
+                  placeholder="연락처(선택)" className={`w-[136px] shrink-0 ${T.input}`} />
                 <input value={c.email} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))}
-                  placeholder="이메일" className={`min-w-0 flex-[1.3] ${T.input}`} />
+                  placeholder="이메일(선택)" className={`min-w-0 flex-1 ${T.input}`} />
                 <button onClick={() => setAdditionalContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
               </div>
             ))}
@@ -381,9 +385,9 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
             {govContacts.map((c, i) => (
               <div key={i} className="flex items-center gap-2">
                 <input value={c.name} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
-                  placeholder="담당자명" className={`w-[96px] shrink-0 ${T.input}`} />
+                  placeholder="담당자명(선택)" className={`w-[100px] shrink-0 ${T.input}`} />
                 <input value={c.phone} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))}
-                  placeholder="연락처(선택)" className={`w-[120px] shrink-0 ${T.input}`} />
+                  placeholder="연락처(선택)" className={`w-[136px] shrink-0 ${T.input}`} />
                 <input value={c.email} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))}
                   placeholder="이메일 (수신처) *" className={`min-w-0 flex-1 ${T.input}`} />
                 <button onClick={() => setGovContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>

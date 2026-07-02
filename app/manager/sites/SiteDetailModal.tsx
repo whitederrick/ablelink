@@ -177,6 +177,12 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
       if (!Number.isInteger(lt) || lt < 0 || lt > 180) return alert("지각 기준은 0~180분 사이로 설정하세요. (비우면 기관 기본값 사용)");
     }
     if (isCreate && isAdmin && !agencyId) return alert("기관을 선택하세요.");
+    // 추가 사업체 담당자: 성명 필수(연락처/이메일만 채우고 성명 비운 행 차단)
+    if (additionalContacts.some(c => (c.phone.trim() || c.email.trim()) && !c.name.trim()))
+      return alert("추가 사업체 담당자의 성명을 입력하세요. (성명 필수)");
+    // 장애인고용공단 담당자: 이메일(수신처) 필수
+    if (govContacts.some(c => (c.name.trim() || c.phone.trim()) && !c.email.trim()))
+      return alert("장애인고용공단 담당자의 이메일(수신처)을 입력하세요. (이메일 필수)");
     setSaving(true);
     try {
       const payload: any = {
@@ -235,7 +241,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={onClose}>
-        <div className="w-full max-w-[66rem] max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="w-full max-w-[70rem] max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
           {/* 헤더 */}
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
@@ -261,7 +267,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                   </select>
                 </div>
               )}
-              <div className="grid items-start gap-5 lg:grid-cols-[1fr_1.4fr]">
+              <div className="grid items-start gap-5 lg:grid-cols-[1fr_1.25fr]">
                 {/* 좌측: 기본 정보 + 위탁기관 담당자 지정 */}
                 <div className="min-w-0 space-y-5">
                 <div className={CARD}>
@@ -318,7 +324,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                 {/* 위탁기관 담당자 지정 (기본 정보 아래로 이동) */}
                 <div className={CARD}>
                   <h3 className="mb-1 text-sm font-black text-slate-900">위탁기관 담당자 지정</h3>
-                  <p className="mb-3 text-xs font-semibold text-slate-400">해당 직무지도 현장(사업체)를 담당하는 담당자를 지정합니다. 담당자 미지정인 경우 담당자 지정이 필요합니다.</p>
+                  <p className="mb-3 text-xs font-semibold text-slate-400">해당 직무지도 현장(사업체)를 담당하는 담당자를 지정합니다.<br />담당자 미지정인 경우 담당자 지정이 필요합니다.</p>
                   <select value={ownerManagerId} onChange={e => setOwnerManagerId(e.target.value)} className={`w-full ${T.select}`}>
                     <option value="">담당자 지정 필요</option>
                     {ownerManagers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -332,9 +338,9 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                     <h3 className="mb-1 text-sm font-black text-slate-900">사업체 담당자 (대표)</h3>
                     <p className="mb-3 text-xs font-semibold text-slate-400">현장 측 <b>대표</b> 담당자. 출근부 ‘사업체담당자’ 서명 요청·워커앱 표시에 자동 채워집니다.</p>
                     <div className="flex items-end gap-2">
-                      <div className="w-[120px] shrink-0"><label className={T.label}>성명 *</label><input value={businessContactName} onChange={e => setBusinessContactName(e.target.value)} className={`w-full ${T.input}`} /></div>
-                      <div className="min-w-0 flex-1"><label className={T.label}>연락처 *</label><input value={businessContactPhone} onChange={e => setBusinessContactPhone(e.target.value)} className={`w-full ${T.input}`} placeholder="010-0000-0000" /></div>
-                      <div className="min-w-0 flex-[1.3]"><label className={T.label}>이메일 (선택)</label><input value={businessContactEmail} onChange={e => setBusinessContactEmail(e.target.value)} className={`w-full ${T.input}`} /></div>
+                      <div className="w-[100px] shrink-0"><label className={T.label}>성명 *</label><input value={businessContactName} onChange={e => setBusinessContactName(e.target.value)} className={`w-full ${T.input}`} /></div>
+                      <div className="w-[136px] shrink-0"><label className={T.label}>연락처 *</label><input value={businessContactPhone} onChange={e => setBusinessContactPhone(e.target.value)} className={`w-full ${T.input}`} placeholder="010-0000-0000" /></div>
+                      <div className="min-w-0 flex-1"><label className={T.label}>이메일 (선택)</label><input value={businessContactEmail} onChange={e => setBusinessContactEmail(e.target.value)} className={`w-full ${T.input}`} /></div>
                     </div>
                   </div>
 
@@ -350,9 +356,9 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                       <div className="space-y-2">
                         {additionalContacts.map((c, i) => (
                           <div key={i} className="flex items-center gap-2">
-                            <input value={c.name} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="성명 *" className={`w-[120px] shrink-0 ${T.input}`} />
-                            <input value={c.phone} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))} placeholder="연락처" className={`min-w-0 flex-1 ${T.input}`} />
-                            <input value={c.email} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="이메일" className={`min-w-0 flex-[1.3] ${T.input}`} />
+                            <input value={c.name} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="성명 *" className={`w-[100px] shrink-0 ${T.input}`} />
+                            <input value={c.phone} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))} placeholder="연락처(선택)" className={`w-[136px] shrink-0 ${T.input}`} />
+                            <input value={c.email} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="이메일(선택)" className={`min-w-0 flex-1 ${T.input}`} />
                             <button type="button" onClick={() => setAdditionalContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
                           </div>
                         ))}
@@ -365,15 +371,15 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                       <h3 className="text-sm font-black text-slate-900">장애인고용공단 담당자 (현장별)</h3>
                       <button type="button" onClick={() => setGovContacts(p => [...p, { name: "", email: "", phone: "" }])} className={`${T.btnSecondary} py-1.5`}>+ 추가</button>
                     </div>
-                    <p className="mb-3 text-xs font-semibold text-slate-400">일지를 이 현장으로 묶어 발송할 때 자동 수신처가 됩니다. 비우면 위탁기관 기본 공단 담당자가 사용됩니다.</p>
+                    <p className="mb-3 text-xs font-semibold text-slate-400">일지를 이 현장으로 묶어 발송할 때 자동 수신처가 됩니다.<br />비우면 위탁기관 기본 공단 담당자가 사용됩니다.</p>
                     {govContacts.length === 0 ? (
                       <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-[13px] font-semibold text-slate-400">현장 전용 공단 담당자가 없습니다. (기관 기본값 사용)</p>
                     ) : (
                       <div className="space-y-2">
                         {govContacts.map((c, i) => (
                           <div key={i} className="flex items-center gap-2">
-                            <input value={c.name} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="담당자명" className={`w-[96px] shrink-0 ${T.input}`} />
-                            <input value={c.phone} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))} placeholder="연락처(선택)" className={`w-[120px] shrink-0 ${T.input}`} />
+                            <input value={c.name} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="담당자명(선택)" className={`w-[100px] shrink-0 ${T.input}`} />
+                            <input value={c.phone} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))} placeholder="연락처(선택)" className={`w-[136px] shrink-0 ${T.input}`} />
                             <input value={c.email} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="이메일 (수신처) *" className={`min-w-0 flex-1 ${T.input}`} />
                             <button type="button" onClick={() => setGovContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
                           </div>

@@ -101,6 +101,8 @@ export default function AdminSiteNewPage() {
     if (!form.businessContactName.trim()) return alert("사업체 담당자 성명은 필수입니다.");
     if (!form.businessContactPhone.trim()) return alert("사업체 담당자 연락처는 필수입니다.");
     if (isAdmin && !agencyId) return alert("기관을 선택하십시오(ADMIN).");
+    if (additionalContacts.some((c) => (c.phone.trim() || c.email.trim()) && !c.name.trim()))
+      return alert("추가 사업체 담당자의 성명은 필수입니다.");
 
     setSaving(true);
     try {
@@ -325,11 +327,11 @@ export default function AdminSiteNewPage() {
               {additionalContacts.map((c, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <input value={c.name} onChange={(e) => setAdditionalContacts((p) => p.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
-                    placeholder="성명 *" className={`w-[120px] shrink-0 ${T.input}`} />
+                    placeholder="성명 *" className={`w-[100px] shrink-0 ${T.input}`} />
                   <input value={c.phone} onChange={(e) => setAdditionalContacts((p) => p.map((x, j) => (j === i ? { ...x, phone: e.target.value } : x)))}
-                    placeholder="연락처" className={`min-w-0 flex-1 ${T.input}`} />
+                    placeholder="연락처(선택)" className={`w-[136px] shrink-0 ${T.input}`} />
                   <input value={c.email} onChange={(e) => setAdditionalContacts((p) => p.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))}
-                    placeholder="이메일" className={`min-w-0 flex-[1.3] ${T.input}`} />
+                    placeholder="이메일(선택)" className={`min-w-0 flex-1 ${T.input}`} />
                   <button type="button" onClick={() => setAdditionalContacts((p) => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
                 </div>
               ))}
