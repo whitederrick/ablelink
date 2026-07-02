@@ -11,8 +11,8 @@ type SiteDetail = {
   gpsLat: string; gpsLon: string; allowanceRange: number; lateThresholdMin?: number | null; agencyName: string;
   amCapacity?: number; pmCapacity?: number; fullDayCapacity?: number;
   businessContactName: string | null; businessContactPhone: string | null; businessContactEmail: string | null;
-  govContacts?: { name: string; email: string }[];
-  additionalContacts?: { id?: string; name: string; phone: string | null; email: string | null; role: string | null }[];
+  govContacts?: { name: string; email: string; phone?: string | null }[];
+  additionalContacts?: { id?: string; name: string; phone: string | null; email: string | null }[];
   ownerManagerId: string | null; ownerManagerName: string | null;
   basePointConfirmed: boolean; basePointApprovalStatus: string; isActive: boolean;
 };
@@ -53,8 +53,8 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
   const [businessContactName, setBusinessContactName] = useState("");
   const [businessContactPhone, setBusinessContactPhone] = useState("");
   const [businessContactEmail, setBusinessContactEmail] = useState("");
-  const [govContacts, setGovContacts] = useState<{ name: string; email: string }[]>([]);
-  const [additionalContacts, setAdditionalContacts] = useState<{ name: string; phone: string; email: string; role: string }[]>([]);
+  const [govContacts, setGovContacts] = useState<{ name: string; email: string; phone: string }[]>([]);
+  const [additionalContacts, setAdditionalContacts] = useState<{ name: string; phone: string; email: string }[]>([]);
 
   const [ownerManagerId, setOwnerManagerId] = useState("");
   const [ownerManagers, setOwnerManagers] = useState<{ id: string; name: string }[]>([]);
@@ -121,9 +121,9 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
         setBusinessContactName(it.businessContactName || "");
         setBusinessContactPhone(it.businessContactPhone || "");
         setBusinessContactEmail(it.businessContactEmail || "");
-        setGovContacts(Array.isArray(it.govContacts) ? it.govContacts : []);
+        setGovContacts(Array.isArray(it.govContacts) ? it.govContacts.map((c: any) => ({ name: c.name ?? "", email: c.email ?? "", phone: c.phone ?? "" })) : []);
         setAdditionalContacts(Array.isArray(it.additionalContacts)
-          ? it.additionalContacts.map((c: any) => ({ name: c.name ?? "", phone: c.phone ?? "", email: c.email ?? "", role: c.role ?? "" }))
+          ? it.additionalContacts.map((c: any) => ({ name: c.name ?? "", phone: c.phone ?? "", email: c.email ?? "" }))
           : []);
         setOwnerManagerId(it.ownerManagerId || "");
       } catch {
@@ -188,9 +188,9 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
         businessContactName: businessContactName.trim(),
         businessContactPhone: businessContactPhone.trim(),
         businessContactEmail: businessContactEmail.trim() || null,
-        govContacts: govContacts.map(c => ({ name: c.name.trim(), email: c.email.trim() })).filter(c => c.email),
+        govContacts: govContacts.map(c => ({ name: c.name.trim(), email: c.email.trim(), phone: c.phone.trim() })).filter(c => c.email),
         additionalContacts: additionalContacts
-          .map(c => ({ name: c.name.trim(), phone: c.phone.trim(), email: c.email.trim(), role: c.role.trim() }))
+          .map(c => ({ name: c.name.trim(), phone: c.phone.trim(), email: c.email.trim() }))
           .filter(c => c.name),
         ownerManagerId: ownerManagerId || "",
       };
@@ -235,7 +235,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={onClose}>
-        <div className="w-full max-w-[62rem] max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="w-full max-w-[66rem] max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
           {/* 헤더 */}
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
@@ -261,8 +261,9 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                   </select>
                 </div>
               )}
-              <div className="grid gap-5 lg:grid-cols-2">
-                {/* 기본 정보 */}
+              <div className="grid items-start gap-5 lg:grid-cols-[1fr_1.4fr]">
+                {/* 좌측: 기본 정보 + 위탁기관 담당자 지정 */}
+                <div className="min-w-0 space-y-5">
                 <div className={CARD}>
                   <h3 className="mb-3 text-sm font-black text-slate-900">기본 정보</h3>
                   <div className="space-y-3">
@@ -314,22 +315,33 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                   </div>
                 </div>
 
-                {/* 사업체 담당자 + 업무 이관 담당자 */}
-                <div className="space-y-5">
+                {/* 위탁기관 담당자 지정 (기본 정보 아래로 이동) */}
+                <div className={CARD}>
+                  <h3 className="mb-1 text-sm font-black text-slate-900">위탁기관 담당자 지정</h3>
+                  <p className="mb-3 text-xs font-semibold text-slate-400">해당 직무지도 현장(사업체)를 담당하는 담당자를 지정합니다. 담당자 미지정인 경우 담당자 지정이 필요합니다.</p>
+                  <select value={ownerManagerId} onChange={e => setOwnerManagerId(e.target.value)} className={`w-full ${T.select}`}>
+                    <option value="">담당자 지정 필요</option>
+                    {ownerManagers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+                </div>
+
+                {/* 우측: 사업체 담당자 */}
+                <div className="min-w-0 space-y-5">
                   <div className={CARD}>
                     <h3 className="mb-1 text-sm font-black text-slate-900">사업체 담당자 (대표)</h3>
                     <p className="mb-3 text-xs font-semibold text-slate-400">현장 측 <b>대표</b> 담당자. 출근부 ‘사업체담당자’ 서명 요청·워커앱 표시에 자동 채워집니다.</p>
-                    <div className="space-y-3">
-                      <div><label className={T.label}>담당자 성명 *</label><input value={businessContactName} onChange={e => setBusinessContactName(e.target.value)} className={`w-full ${T.input}`} /></div>
-                      <div><label className={T.label}>담당자 연락처 *</label><input value={businessContactPhone} onChange={e => setBusinessContactPhone(e.target.value)} className={`w-full ${T.input}`} placeholder="010-0000-0000" /></div>
-                      <div><label className={T.label}>담당자 이메일 (선택)</label><input value={businessContactEmail} onChange={e => setBusinessContactEmail(e.target.value)} className={`w-full ${T.input}`} /></div>
+                    <div className="flex items-end gap-2">
+                      <div className="w-[120px] shrink-0"><label className={T.label}>성명 *</label><input value={businessContactName} onChange={e => setBusinessContactName(e.target.value)} className={`w-full ${T.input}`} /></div>
+                      <div className="min-w-0 flex-1"><label className={T.label}>연락처 *</label><input value={businessContactPhone} onChange={e => setBusinessContactPhone(e.target.value)} className={`w-full ${T.input}`} placeholder="010-0000-0000" /></div>
+                      <div className="min-w-0 flex-[1.3]"><label className={T.label}>이메일 (선택)</label><input value={businessContactEmail} onChange={e => setBusinessContactEmail(e.target.value)} className={`w-full ${T.input}`} /></div>
                     </div>
                   </div>
 
                   <div className={CARD}>
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <h3 className="text-sm font-black text-slate-900">추가 사업체 담당자</h3>
-                      <button type="button" onClick={() => setAdditionalContacts(p => [...p, { name: "", phone: "", email: "", role: "" }])} className={`${T.btnSecondary} py-1.5`}>+ 추가</button>
+                      <button type="button" onClick={() => setAdditionalContacts(p => [...p, { name: "", phone: "", email: "" }])} className={`${T.btnSecondary} py-1.5`}>+ 추가</button>
                     </div>
                     <p className="mb-3 text-xs font-semibold text-slate-400">대표 외 추가 연락 담당자를 여러 명 등록할 수 있습니다. (서명·워커앱 표시는 대표 담당자 기준)</p>
                     {additionalContacts.length === 0 ? (
@@ -337,11 +349,10 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                     ) : (
                       <div className="space-y-2">
                         {additionalContacts.map((c, i) => (
-                          <div key={i} className="flex items-center gap-1.5">
-                            <input value={c.name} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="성명 *" className={`w-[72px] shrink-0 ${T.input}`} />
-                            <input value={c.phone} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))} placeholder="연락처" className={`min-w-0 flex-[1.1] ${T.input}`} />
-                            <input value={c.email} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="이메일" className={`min-w-0 flex-[1.4] ${T.input}`} />
-                            <input value={c.role} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, role: e.target.value } : x))} placeholder="역할" className={`w-[52px] shrink-0 ${T.input}`} />
+                          <div key={i} className="flex items-center gap-2">
+                            <input value={c.name} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="성명 *" className={`w-[120px] shrink-0 ${T.input}`} />
+                            <input value={c.phone} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))} placeholder="연락처" className={`min-w-0 flex-1 ${T.input}`} />
+                            <input value={c.email} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="이메일" className={`min-w-0 flex-[1.3] ${T.input}`} />
                             <button type="button" onClick={() => setAdditionalContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
                           </div>
                         ))}
@@ -352,7 +363,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                   <div className={CARD}>
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <h3 className="text-sm font-black text-slate-900">장애인고용공단 담당자 (현장별)</h3>
-                      <button type="button" onClick={() => setGovContacts(p => [...p, { name: "", email: "" }])} className={`${T.btnSecondary} py-1.5`}>+ 추가</button>
+                      <button type="button" onClick={() => setGovContacts(p => [...p, { name: "", email: "", phone: "" }])} className={`${T.btnSecondary} py-1.5`}>+ 추가</button>
                     </div>
                     <p className="mb-3 text-xs font-semibold text-slate-400">일지를 이 현장으로 묶어 발송할 때 자동 수신처가 됩니다. 비우면 위탁기관 기본 공단 담당자가 사용됩니다.</p>
                     {govContacts.length === 0 ? (
@@ -361,22 +372,14 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                       <div className="space-y-2">
                         {govContacts.map((c, i) => (
                           <div key={i} className="flex items-center gap-2">
-                            <input value={c.name} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="담당자명" className={`w-[120px] ${T.input}`} />
-                            <input value={c.email} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="이메일 (수신처) *" className={`flex-1 ${T.input}`} />
+                            <input value={c.name} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="담당자명" className={`w-[96px] shrink-0 ${T.input}`} />
+                            <input value={c.phone} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))} placeholder="연락처(선택)" className={`w-[120px] shrink-0 ${T.input}`} />
+                            <input value={c.email} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="이메일 (수신처) *" className={`min-w-0 flex-1 ${T.input}`} />
                             <button type="button" onClick={() => setGovContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
                           </div>
                         ))}
                       </div>
                     )}
-                  </div>
-
-                  <div className={CARD}>
-                    <h3 className="mb-1 text-sm font-black text-slate-900">위탁기관 담당자 지정</h3>
-                    <p className="mb-3 text-xs font-semibold text-slate-400">해당 직무지도 현장(사업체)를 담당하는 담당자를 지정합니다. 담당자 미지정인 경우 담당자 지정이 필요합니다.</p>
-                    <select value={ownerManagerId} onChange={e => setOwnerManagerId(e.target.value)} className={`w-full ${T.select}`}>
-                      <option value="">담당자 지정 필요</option>
-                      {ownerManagers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
                   </div>
                 </div>
               </div>
@@ -412,7 +415,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                     <span className="text-sm font-semibold text-slate-500">직접 설정</span>
                     <input type="number" min={0} max={180} value={customLate}
                       onChange={e => { setCustomLate(e.target.value); setLateThresholdMin(e.target.value); }}
-                      placeholder="분" className={`w-24 text-center ${T.input}`} />
+                      placeholder="0" className={`w-24 text-center ${T.input}`} />
                     <span className="text-sm font-semibold text-slate-500">분</span>
                   </div>
                   <button type="button" onClick={() => { setLateThresholdMin(""); setCustomLate(""); }}

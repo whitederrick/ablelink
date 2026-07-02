@@ -15,8 +15,8 @@ type SiteDetailT = {
   gpsLat: string; gpsLon: string; allowanceRange: number;
   agencyId: string | null; agencyName: string;
   businessContactName: string | null; businessContactPhone: string | null; businessContactEmail: string | null;
-  govContacts?: { name: string; email: string }[];
-  additionalContacts?: { id?: string; name: string; phone: string | null; email: string | null; role: string | null }[];
+  govContacts?: { name: string; email: string; phone?: string | null }[];
+  additionalContacts?: { id?: string; name: string; phone: string | null; email: string | null }[];
   ownerManagerId: string | null; ownerManagerName: string | null;
   requiredProfession: string | null;
   basePointConfirmed: boolean; basePointApprovalStatus: string; basePointUpdatedAt: string | null;
@@ -63,8 +63,8 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
   const [businessContactName, setBusinessContactName] = useState("");
   const [businessContactPhone, setBusinessContactPhone] = useState("");
   const [businessContactEmail, setBusinessContactEmail] = useState("");
-  const [govContacts, setGovContacts] = useState<{ name: string; email: string }[]>([]);
-  const [additionalContacts, setAdditionalContacts] = useState<{ name: string; phone: string; email: string; role: string }[]>([]);
+  const [govContacts, setGovContacts] = useState<{ name: string; email: string; phone: string }[]>([]);
+  const [additionalContacts, setAdditionalContacts] = useState<{ name: string; phone: string; email: string }[]>([]);
 
   const [ownerManagerId, setOwnerManagerId] = useState("");
   const [ownerManagers, setOwnerManagers] = useState<{ id: string; name: string }[]>([]);
@@ -180,9 +180,11 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
       setBusinessContactName(it.businessContactName || "");
       setBusinessContactPhone(it.businessContactPhone || "");
       setBusinessContactEmail(it.businessContactEmail || "");
-      setGovContacts(Array.isArray(it.govContacts) ? it.govContacts : []);
+      setGovContacts(Array.isArray(it.govContacts)
+        ? it.govContacts.map((c: any) => ({ name: c.name ?? "", email: c.email ?? "", phone: c.phone ?? "" }))
+        : []);
       setAdditionalContacts(Array.isArray(it.additionalContacts)
-        ? it.additionalContacts.map((c: any) => ({ name: c.name ?? "", phone: c.phone ?? "", email: c.email ?? "", role: c.role ?? "" }))
+        ? it.additionalContacts.map((c: any) => ({ name: c.name ?? "", phone: c.phone ?? "", email: c.email ?? "" }))
         : []);
       setOwnerManagerId(it.ownerManagerId || "");
       fetch(`/api/admin/site-owners?agencyId=${it.agencyId ?? ""}`, { headers: ACG, cache: "no-store" })
@@ -219,9 +221,9 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
           gpsLat: Number(gpsLat), gpsLon: Number(gpsLon), allowanceRange: finalRange,
           businessContactName: businessContactName.trim(), businessContactPhone: businessContactPhone.trim(),
           businessContactEmail: businessContactEmail.trim() || null, ownerManagerId: ownerManagerId || null,
-          govContacts: govContacts.map(c => ({ name: c.name.trim(), email: c.email.trim() })).filter(c => c.email),
+          govContacts: govContacts.map(c => ({ name: c.name.trim(), email: c.email.trim(), phone: c.phone.trim() })).filter(c => c.email),
           additionalContacts: additionalContacts
-            .map(c => ({ name: c.name.trim(), phone: c.phone.trim(), email: c.email.trim(), role: c.role.trim() }))
+            .map(c => ({ name: c.name.trim(), phone: c.phone.trim(), email: c.email.trim() }))
             .filter(c => c.name),
         }),
       });
@@ -343,7 +345,7 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
       <div className={T.card}>
         <div className="mb-1 flex items-center justify-between gap-2">
           <h2 className="text-sm font-black text-slate-900">추가 사업체 담당자</h2>
-          <button onClick={() => setAdditionalContacts(p => [...p, { name: "", phone: "", email: "", role: "" }])} className={`${T.btnSecondary} py-1.5`}>+ 추가</button>
+          <button onClick={() => setAdditionalContacts(p => [...p, { name: "", phone: "", email: "" }])} className={`${T.btnSecondary} py-1.5`}>+ 추가</button>
         </div>
         <p className="mb-3 text-xs font-semibold text-slate-400">대표 외 추가 연락 담당자를 여러 명 등록할 수 있습니다. (서명·워커앱 표시는 대표 담당자 기준)</p>
         {additionalContacts.length === 0 ? (
@@ -351,15 +353,13 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
         ) : (
           <div className="space-y-2">
             {additionalContacts.map((c, i) => (
-              <div key={i} className="flex items-center gap-1.5">
+              <div key={i} className="flex items-center gap-2">
                 <input value={c.name} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
-                  placeholder="성명 *" className={`w-[72px] shrink-0 ${T.input}`} />
+                  placeholder="성명 *" className={`w-[120px] shrink-0 ${T.input}`} />
                 <input value={c.phone} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))}
-                  placeholder="연락처" className={`min-w-0 flex-[1.1] ${T.input}`} />
+                  placeholder="연락처" className={`min-w-0 flex-1 ${T.input}`} />
                 <input value={c.email} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))}
-                  placeholder="이메일" className={`min-w-0 flex-[1.4] ${T.input}`} />
-                <input value={c.role} onChange={e => setAdditionalContacts(p => p.map((x, j) => j === i ? { ...x, role: e.target.value } : x))}
-                  placeholder="역할" className={`w-[52px] shrink-0 ${T.input}`} />
+                  placeholder="이메일" className={`min-w-0 flex-[1.3] ${T.input}`} />
                 <button onClick={() => setAdditionalContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
               </div>
             ))}
@@ -371,7 +371,7 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
       <div className={T.card}>
         <div className="mb-1 flex items-center justify-between gap-2">
           <h2 className="text-sm font-black text-slate-900">장애인고용공단 담당자 (현장별)</h2>
-          <button onClick={() => setGovContacts(p => [...p, { name: "", email: "" }])} className={`${T.btnSecondary} py-1.5`}>+ 추가</button>
+          <button onClick={() => setGovContacts(p => [...p, { name: "", email: "", phone: "" }])} className={`${T.btnSecondary} py-1.5`}>+ 추가</button>
         </div>
         <p className="mb-3 text-xs font-semibold text-slate-400">일지를 이 현장으로 묶어 발송할 때 자동 수신처가 됩니다. 비우면 위탁기관 기본 공단 담당자가 사용됩니다.</p>
         {govContacts.length === 0 ? (
@@ -381,9 +381,11 @@ export default function SiteDetail({ id, onClose, onChanged }: { id: string; onC
             {govContacts.map((c, i) => (
               <div key={i} className="flex items-center gap-2">
                 <input value={c.name} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
-                  placeholder="담당자명" className={`w-[130px] ${T.input}`} />
+                  placeholder="담당자명" className={`w-[96px] shrink-0 ${T.input}`} />
+                <input value={c.phone} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))}
+                  placeholder="연락처(선택)" className={`w-[120px] shrink-0 ${T.input}`} />
                 <input value={c.email} onChange={e => setGovContacts(p => p.map((x, j) => j === i ? { ...x, email: e.target.value } : x))}
-                  placeholder="이메일 (수신처) *" className={`flex-1 ${T.input}`} />
+                  placeholder="이메일 (수신처) *" className={`min-w-0 flex-1 ${T.input}`} />
                 <button onClick={() => setGovContacts(p => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
               </div>
             ))}

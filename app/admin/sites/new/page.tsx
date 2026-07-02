@@ -34,7 +34,7 @@ export default function AdminSiteNewPage() {
   });
   const [allowanceRange, setAllowanceRange] = useState(100);
   const [requiredProfession, setRequiredProfession] = useState<string>("JOB_COACH");
-  const [additionalContacts, setAdditionalContacts] = useState<{ name: string; phone: string; email: string; role: string }[]>([]);
+  const [additionalContacts, setAdditionalContacts] = useState<{ name: string; phone: string; email: string }[]>([]);
 
   const [addrQ, setAddrQ] = useState("");
   const [addrLoading, setAddrLoading] = useState(false);
@@ -115,7 +115,7 @@ export default function AdminSiteNewPage() {
         businessContactPhone: form.businessContactPhone.trim(),
         businessContactEmail: form.businessContactEmail.trim() || null,
         additionalContacts: additionalContacts
-          .map((c) => ({ name: c.name.trim(), phone: c.phone.trim(), email: c.email.trim(), role: c.role.trim() }))
+          .map((c) => ({ name: c.name.trim(), phone: c.phone.trim(), email: c.email.trim() }))
           .filter((c) => c.name),
         requiredProfession,
       };
@@ -309,7 +309,7 @@ export default function AdminSiteNewPage() {
             <p className="text-sm font-black text-slate-900">추가 사업체 담당자</p>
             <button
               type="button"
-              onClick={() => setAdditionalContacts((p) => [...p, { name: "", phone: "", email: "", role: "" }])}
+              onClick={() => setAdditionalContacts((p) => [...p, { name: "", phone: "", email: "" }])}
               className={`${T.btnSecondary} py-1.5`}
             >
               + 추가
@@ -323,15 +323,13 @@ export default function AdminSiteNewPage() {
           ) : (
             <div className="space-y-2">
               {additionalContacts.map((c, i) => (
-                <div key={i} className="flex items-center gap-1.5">
+                <div key={i} className="flex items-center gap-2">
                   <input value={c.name} onChange={(e) => setAdditionalContacts((p) => p.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
-                    placeholder="성명 *" className={`w-[72px] shrink-0 ${T.input}`} />
+                    placeholder="성명 *" className={`w-[120px] shrink-0 ${T.input}`} />
                   <input value={c.phone} onChange={(e) => setAdditionalContacts((p) => p.map((x, j) => (j === i ? { ...x, phone: e.target.value } : x)))}
-                    placeholder="연락처" className={`min-w-0 flex-[1.1] ${T.input}`} />
+                    placeholder="연락처" className={`min-w-0 flex-1 ${T.input}`} />
                   <input value={c.email} onChange={(e) => setAdditionalContacts((p) => p.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))}
-                    placeholder="이메일" className={`min-w-0 flex-[1.4] ${T.input}`} />
-                  <input value={c.role} onChange={(e) => setAdditionalContacts((p) => p.map((x, j) => (j === i ? { ...x, role: e.target.value } : x)))}
-                    placeholder="역할" className={`w-[52px] shrink-0 ${T.input}`} />
+                    placeholder="이메일" className={`min-w-0 flex-[1.3] ${T.input}`} />
                   <button type="button" onClick={() => setAdditionalContacts((p) => p.filter((_, j) => j !== i))} className={`${T.btnDanger} shrink-0`}>삭제</button>
                 </div>
               ))}

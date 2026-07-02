@@ -188,7 +188,7 @@ export async function PATCH(
     if (body.govContacts !== undefined) {
       const arr = Array.isArray(body.govContacts) ? body.govContacts : [];
       const clean = arr
-        .map((c: any) => ({ name: String(c?.name ?? "").trim(), email: String(c?.email ?? "").trim() }))
+        .map((c: any) => ({ name: String(c?.name ?? "").trim(), email: String(c?.email ?? "").trim(), phone: String(c?.phone ?? "").trim() }))
         .filter((c: { email: string }) => c.email);
       (data as any).govContacts = clean.length ? clean : null;
     }
