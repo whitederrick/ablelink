@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit } from "@/lib/audit";
 
 const VALID = ["NONE", "SUBMITTED", "RESUBMIT"] as const;
 
@@ -38,6 +39,7 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
+    await audit(scope, { entityType: "DocumentRun", action: "update", summary: `공단 제출 상태 변경: ${status} (${r.count}건)` });
     return NextResponse.json({ success: true, updated: r.count, message: `${r.count}건의 제출 상태를 변경했습니다.` });
   } catch (e: any) {
     if (e instanceof Response) return e;

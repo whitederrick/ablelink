@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit, auditSnapshot } from "@/lib/audit";
 import { syncPlacementForStatus } from "@/lib/traineePlacement";
 
 export async function PATCH(
@@ -44,12 +45,14 @@ export async function PATCH(
     }
 
     // 훈련생 수정 + (상태 변경 시) 현장배치 이력 동기화 — 급여/출근부/목록/캘린더 근거 유지
+    const auditBefore = await auditSnapshot("Trainee", { id: trainee.id }, updateData);
     await prisma.$transaction(async (tx) => {
       await tx.trainee.update({ where: { id: trainee.id }, data: updateData });
       if (status !== undefined) {
         await syncPlacementForStatus(tx, trainee.id, status, trainee.currentSiteId, now);
       }
     });
+    await audit(scope, { entityType: "Trainee", entityId: trainee.id, action: "update", before: auditBefore, after: updateData as any });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     if (e instanceof Response) return e;

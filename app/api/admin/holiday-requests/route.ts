@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   try {
@@ -134,6 +135,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    await audit(scope, { entityType: "SiteHoliday", entityId: BigInt(holidayId), action: "create", summary: `커스텀 휴무일 ${requestType === "DELETE" ? "삭제" : "근무인정 변경"} 요청` });
     return NextResponse.json({ success: true, id: request.id.toString() });
   } catch (e: any) {
     if (e instanceof Response) return e;
@@ -168,6 +170,7 @@ export async function PATCH(req: NextRequest) {
       where: { id: holiday.id },
       data: { countAsWorkday },
     });
+    await audit(scope, { entityType: "SiteHoliday", entityId: holiday.id, action: "update", before: { countAsWorkday: holiday.countAsWorkday }, after: { countAsWorkday } });
 
     // 직무지도원에게 결정 알림
     await prisma.workerNotice.create({

@@ -7,12 +7,13 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
+import { audit } from "@/lib/audit";
 import { bracketsFromMatrix, extractChildCreditFromText, summarizeBrackets } from "@/lib/payroll/incomeTax";
 import ExcelJS from "exceljs";
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdminSession(req);
+    const session = await requireAdminSession(req);
     const form = await req.formData();
     const year = Number(form.get("year"));
     const file = form.get("file");
@@ -66,11 +67,12 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    await prisma.incomeTaxTable.upsert({
+    const saved = await prisma.incomeTaxTable.upsert({
       where: { year },
       create: { year, data: brackets as any, meta: { childCredit } as any, rowCount: brackets.length },
       update: { data: brackets as any, meta: { childCredit } as any, rowCount: brackets.length },
     });
+    await audit(session, { entityType: "IncomeTaxTable", entityId: saved.id, action: "update", summary: `간이세액표 업로드 ${year} (${brackets.length}구간)` });
     return NextResponse.json({ success: true, year, rowCount: brackets.length, sheet: usedSheet, childCredit, summary: summarizeBrackets(brackets) });
   } catch (e: any) {
     if (e instanceof Response) return e;

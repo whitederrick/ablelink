@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
+import { audit } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
   try {
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     // 4대보험 요율은 시스템 운영자(Admin) 전용 설정 — 간이세액표와 동일하게 AdminSession으로 제한.
-    await requireAdminSession(req);
+    const session = await requireAdminSession(req);
 
     const body = await req.json();
     const { year, nationalPension, healthInsurance, longTermCare, employmentInsurance, industrialAccident } = body;
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
       } as any,
     });
 
+    await audit(session, { entityType: "InsuranceRates", entityId: rates.id, action: "update", after: { year: Number(year), nationalPension: Number(nationalPension), healthInsurance: Number(healthInsurance), longTermCare: Number(longTermCare), employmentInsurance: Number(employmentInsurance), industrialAccident: industrial } });
     return NextResponse.json({ success: true, id: rates.id.toString() });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;

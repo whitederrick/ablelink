@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit } from "@/lib/audit";
 import { Prisma, DocumentType, DocumentRunStatus } from "@prisma/client";
 
 function errToStatus(msg: string) {
@@ -244,6 +245,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await audit(scope, { entityType: "DocumentRun", entityId: created.id, action: "create", after: { assignmentId: String(created.assignmentId), siteId: String(created.siteId), workerId: String(created.workerId), docType: created.docType, status: created.status } });
     return NextResponse.json({ success: true, item: toItem(created) });
   } catch (e: any) {
     if (e instanceof Response) return e;

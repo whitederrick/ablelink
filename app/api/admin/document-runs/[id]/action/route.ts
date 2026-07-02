@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit } from "@/lib/audit";
 
 const DOC_LABEL: Record<string, string> = {
   ATTENDANCE_SHEET:              "출근부",
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           },
         });
       } catch (e) { console.warn("[document-runs confirm] 워커 알림 실패:", e); }
+      await audit(scope, { entityType: "DocumentRun", entityId: runId, action: "update", before: { signStage: run.signStage }, after: { signStage: "CONFIRMED" } });
       return NextResponse.json({ success: true, signStage: "CONFIRMED" });
     }
 
@@ -74,6 +76,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           signStage: "MANAGER_SIGNED",
         },
       });
+      await audit(scope, { entityType: "DocumentRun", entityId: runId, action: "update", before: { signStage: run.signStage }, after: { signStage: "MANAGER_SIGNED" } });
       return NextResponse.json({ success: true, signStage: "MANAGER_SIGNED" });
     }
 
@@ -92,6 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           link: "/worker/docs",
         },
       });
+      await audit(scope, { entityType: "DocumentRun", entityId: runId, action: "update", before: { signStage: run.signStage }, after: { signStage: "CHANGES_REQUESTED" } });
       return NextResponse.json({ success: true, signStage: "CHANGES_REQUESTED" });
     }
 

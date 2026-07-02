@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit, auditSnapshot } from "@/lib/audit";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 
@@ -122,7 +123,11 @@ export async function PATCH(
       return NextResponse.json({ success: false, message: "변경할 내용이 없습니다." }, { status: 400 });
     }
 
+    // 감사: 비밀번호 해시는 제외(민감정보)하고 변경 전 스칼라값 스냅샷(diff용)
+    const { password: _pw, ...auditAfter } = updates;
+    const auditBefore = await auditSnapshot("Worker", { id: workerId }, auditAfter);
     await prisma.worker.update({ where: { id: workerId }, data: updates });
+    await audit(scope, { entityType: "Worker", entityId: workerId, action: "update", before: auditBefore, after: auditAfter as any });
 
     // 임시 비밀번호는 화면에 표시 → 매니저가 직무지도원에게 직접 안내(외부 발송 0건, 무료).
     // 고령 사용자 비번 분실이 잦아 SMS 건당 과금을 피하기 위한 주 동선.

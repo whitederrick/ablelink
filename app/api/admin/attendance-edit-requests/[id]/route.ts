@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit } from "@/lib/audit";
 import { kstWallTimeToInstant } from "@/lib/workSchedule";
 
 export async function PATCH(
@@ -79,6 +80,7 @@ export async function PATCH(
         });
       } catch (e) { console.warn("[edit-request approve] 워커 알림 실패:", e); }
 
+      await audit(scope, { entityType: "AttendanceEditRequest", entityId: request.id, action: "update", before: { status: request.status }, after: { status: "APPROVED" } });
       return NextResponse.json({ success: true, message: "수정 요청이 승인되었습니다. 출근 기록이 업데이트되었습니다." });
     } else {
       // 반려
@@ -103,6 +105,7 @@ export async function PATCH(
         });
       } catch (e) { console.warn("[edit-request reject] 워커 알림 실패:", e); }
 
+      await audit(scope, { entityType: "AttendanceEditRequest", entityId: request.id, action: "update", before: { status: request.status }, after: { status: "REJECTED" } });
       return NextResponse.json({ success: true, message: "수정 요청이 반려되었습니다." });
     }
   } catch (e: any) {

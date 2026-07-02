@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit } from "@/lib/audit";
 import { MAX_TRAINEES_PER_WORKER } from "@/lib/rules";
 import { openTraineePlacement } from "@/lib/traineePlacement";
 
@@ -98,6 +99,7 @@ export async function POST(req: NextRequest) {
       return t;
     });
 
+    await audit(scope, { entityType: "Trainee", entityId: trainee.id, action: "create", after: { name: trainee.name, siteId: String(siteId), gender: trainee.gender, disabilityType: trainee.disabilityType, severity: trainee.severity, status: trainee.status } });
     return NextResponse.json({ success: true, id: trainee.id.toString() });
   } catch (e: any) {
     if (e instanceof Response) return e;

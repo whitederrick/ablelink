@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit, auditSnapshot } from "@/lib/audit";
 
 // KST "HH:MM" + workDate "YYYY-MM-DD" → UTC Date
 function kstToUTC(hhMM: string, workDate: string): Date | null {
@@ -52,7 +53,9 @@ export async function PATCH(
       if (body.isFinalClosed) updateData.finalizedAt = new Date();
     }
 
+    const auditBefore = await auditSnapshot("DailyAttendance", { id: record.id }, updateData);
     await prisma.dailyAttendance.update({ where: { id: record.id }, data: updateData });
+    await audit(scope, { entityType: "DailyAttendance", entityId: record.id, action: "update", before: auditBefore, after: updateData as any });
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

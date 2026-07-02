@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit, auditSnapshot } from "@/lib/audit";
 import { isValidBRN, formatBRN } from "@/lib/validateBRN";
 import { isValidTemplateKey, canUseTemplate } from "@/lib/contractTemplates";
 
@@ -160,6 +161,9 @@ export async function PATCH(req: NextRequest) {
       data.businessNumber = bn ? formatBRN(bn) : null;
     }
 
+    // 감사: 서명 이미지(민감정보)는 제외하고 변경 전 스칼라값 스냅샷(diff용)
+    const { representativeSignatureUrl: _sig, ...auditData } = data;
+    const auditBefore = await auditSnapshot("Agency", { id: scope.agencyId }, auditData);
     try {
       await prisma.agency.update({ where: { id: scope.agencyId }, data });
     } catch (e: any) {
@@ -169,6 +173,7 @@ export async function PATCH(req: NextRequest) {
       throw e;
     }
 
+    await audit(scope, { entityType: "Agency", entityId: scope.agencyId, action: "update", before: auditBefore, after: auditData as any });
     return NextResponse.json({ success: true, message: "사업주 정보가 저장되었습니다." });
   } catch (e: any) {
     if (e instanceof Response) return e;
