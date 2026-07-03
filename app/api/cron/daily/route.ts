@@ -22,7 +22,11 @@ function kstDateStr(offsetDays = 0): string {
 }
 
 export async function GET(req: NextRequest) {
-  const secret = req.headers.get("x-cron-secret") || req.nextUrl.searchParams.get("secret");
+  // 인증: 헤더 전용(x-cron-secret 또는 Vercel Cron의 Authorization: Bearer).
+  //  · 쿼리스트링(?secret=)은 프록시/브라우저/모니터링 로그에 남아 제거함.
+  const secret =
+    req.headers.get("x-cron-secret") ||
+    (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
   }

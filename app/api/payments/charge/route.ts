@@ -22,12 +22,12 @@ function tossAuth() {
 }
 
 // 스케줄러에서 호출 (매일 UTC 01:00 = KST 10:00)
-// x-cron-secret 헤더 또는 Authorization: Bearer 또는 ?secret= 쿼리 파라미터 중 하나
+// 인증: 헤더 전용 — x-cron-secret 또는 Authorization: Bearer.
+//  · 쿼리스트링(?secret=)은 프록시/브라우저/모니터링 로그에 남아 제거함.
 export async function POST(request: NextRequest) {
   const secret =
     request.headers.get("x-cron-secret") ||
-    (request.headers.get("Authorization") || "").replace("Bearer ", "") ||
-    new URL(request.url).searchParams.get("secret");
+    (request.headers.get("Authorization") || "").replace("Bearer ", "");
   if (!CRON_SECRET || secret !== CRON_SECRET) {
     return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
   }

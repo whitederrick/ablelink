@@ -114,7 +114,7 @@ npx prisma studio
 
 - `0 15 * * *` = UTC 15:00 = KST 00:00 (일일 배치)
 - `0 1 * * *` = UTC 01:00 = KST 10:00 (자동 결제)
-- 인증: `x-cron-secret` 헤더 또는 `?secret=` 쿼리 파라미터
+- 인증: **헤더 전용** — `x-cron-secret` 헤더 또는 `Authorization: Bearer <CRON_SECRET>`(Vercel Cron 기본). `?secret=` 쿼리는 로그 유출 위험으로 제거됨
 
 **수동 실행:**
 ```bash
