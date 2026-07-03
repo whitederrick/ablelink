@@ -10,20 +10,12 @@ import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { buildDocFileName, contentDisposition } from "@/lib/pdf/filename";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
+import { imageToDataUri } from "@/lib/signatureImage";
 
 function fmtDot(s: string) { return s.replace(/-/g, "."); }
 function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`; }
 function scoreLabel(n?: number|null) {
   return n ? ({1:"매우못함",2:"못함",3:"보통",4:"잘함",5:"매우잘함"} as any)[n]||String(n) : "";
-}
-async function toBase64DataUri(url?: string|null): Promise<string|undefined> {
-  if (!url || !url.startsWith("http")) return url||undefined;
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return undefined;
-    const buf = await res.arrayBuffer();
-    return `data:${res.headers.get("content-type")||"image/png"};base64,${Buffer.from(buf).toString("base64")}`;
-  } catch { return undefined; }
 }
 
 export async function GET(request: NextRequest) {
@@ -60,7 +52,7 @@ export async function GET(request: NextRequest) {
       });
     }
     const [workerImg] = await Promise.all([
-      toBase64DataUri(user?.signatureUrl),
+      imageToDataUri(user?.signatureUrl),
     ]);
     // 매니저(govAgent/agencyAgent) 서명은 실시간 미리보기에서 자동 주입하지 않는다.
     //  → 매니저 서명은 명시적 서명 액션을 거친 제출본 스냅샷에서만 표시된다.

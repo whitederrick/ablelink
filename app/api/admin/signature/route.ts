@@ -8,6 +8,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { requireManagerSession } from "@/lib/managerScope";
 import { prisma } from "@/lib/prisma";
 import { validateSignatureImage } from "@/lib/imageValidation";
+import { signatureDisplayUrl } from "@/lib/signatureImage";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
       where: { id: scope.managerId },
       select: { signatureUrl: true, displayName: true },
     });
-    return NextResponse.json({ success: true, signatureUrl: manager?.signatureUrl ?? null, displayName: manager?.displayName });
+    return NextResponse.json({ success: true, signatureUrl: await signatureDisplayUrl(manager?.signatureUrl), displayName: manager?.displayName });
   } catch (e: any) {
     if (e instanceof Response) return e;
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
       data: { signatureUrl: publicUrl },
     });
 
-    return NextResponse.json({ success: true, signatureUrl: publicUrl });
+    return NextResponse.json({ success: true, signatureUrl: await signatureDisplayUrl(publicUrl) });
   } catch (e: any) {
     if (e instanceof Response) return e;
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });

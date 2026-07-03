@@ -14,6 +14,7 @@ import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { sigRequirement } from "@/lib/docs/requiredSignatures";
+import { imageToDataUri } from "@/lib/signatureImage";
 
 // 빌드 중 사용자에게 보여줄 검증 오류(라우트가 적절한 status/메시지로 변환).
 export class DocPayloadError extends Error {
@@ -33,27 +34,6 @@ function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`;
 function scoreLabel(n?: number | null): string {
   if (!n) return "";
   return ({ 1: "매우못함", 2: "못함", 3: "보통", 4: "잘함", 5: "매우잘함" } as any)[n] || String(n);
-}
-
-const ALLOWED_IMG_HOST = (() => {
-  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "").hostname; } catch { return ""; }
-})();
-
-// 서명 이미지 URL → base64 변환
-async function toBase64DataUri(url?: string | null): Promise<string | undefined> {
-  if (!url || !url.startsWith("http")) return url || undefined;
-  try {
-    const host = new URL(url).hostname;
-    if (ALLOWED_IMG_HOST && host !== ALLOWED_IMG_HOST) return undefined;
-  } catch { return undefined; }
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return undefined;
-    const buf = await res.arrayBuffer();
-    const mime = res.headers.get("content-type") || "image/png";
-    if (!mime.startsWith("image/")) return undefined;
-    return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
-  } catch { return undefined; }
 }
 
 export interface BuildDocOptions {
@@ -150,8 +130,8 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
   }
 
   const [workerImg, companyImg] = await Promise.all([
-    toBase64DataUri(user?.signatureUrl),
-    toBase64DataUri(companyManagerSignatureUrl),
+    imageToDataUri(user?.signatureUrl),
+    imageToDataUri(companyManagerSignatureUrl),
   ]);
 
   const sigs = {

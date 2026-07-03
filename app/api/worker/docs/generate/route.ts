@@ -13,6 +13,7 @@ import { sendEmailWithPdf } from "@/lib/email";
 import { getKrHolidayDates } from "@/lib/krHolidays";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
+import { imageToDataUri } from "@/lib/signatureImage";
 
 // ── 유틸 ──────────────────────────────────────────────────────
 function fmtDot(s: string) { return s.replace(/-/g, "."); }
@@ -29,27 +30,6 @@ const DOC_LABELS: Record<string, string> = {
   "ADAPTATION_DAILY_LOG":  "취업 후 적응지도 일지",
   "ADAPTATION_FINAL_EVAL": "적응지도 대상자 종합 평가기록부",
 };
-
-const ALLOWED_IMG_HOST = (() => {
-  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "").hostname; } catch { return ""; }
-})();
-
-// ── 서명 이미지 URL → base64 변환 ────────────────────────────
-async function toBase64DataUri(url?: string | null): Promise<string | undefined> {
-  if (!url || !url.startsWith("http")) return url || undefined;
-  try {
-    const host = new URL(url).hostname;
-    if (ALLOWED_IMG_HOST && host !== ALLOWED_IMG_HOST) return undefined;
-  } catch { return undefined; }
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return undefined;
-    const buf = await res.arrayBuffer();
-    const mime = res.headers.get("content-type") || "image/png";
-    if (!mime.startsWith("image/")) return undefined;
-    return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
-  } catch { return undefined; }
-}
 
 // ── 메인 핸들러 ───────────────────────────────────────────────
 export async function POST(request: NextRequest) {
@@ -126,8 +106,8 @@ export async function POST(request: NextRequest) {
 
     // 위탁기관 관리자 서명은 관리자가 명시적으로 서명 후 첨부 — 여기서는 자동 삽입 안 함
     const [workerImg, companyImg] = await Promise.all([
-      toBase64DataUri(user?.signatureUrl),
-      toBase64DataUri(companyManagerSignatureUrl),
+      imageToDataUri(user?.signatureUrl),
+      imageToDataUri(companyManagerSignatureUrl),
     ]);
 
     const sigs = {

@@ -9,28 +9,12 @@ import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
-
-const ALLOWED_IMG_HOST = (() => {
-  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "").hostname; } catch { return ""; }
-})();
+import { imageToDataUri } from "@/lib/signatureImage";
 
 function fmtDot(s: string) { return s.replace(/-/g, "."); }
 function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`; }
 function scoreLabel(n?: number|null) {
   return n ? ({1:"매우못함",2:"못함",3:"보통",4:"잘함",5:"매우잘함"} as any)[n]||String(n) : "";
-}
-async function toBase64DataUri(url?: string|null): Promise<string|undefined> {
-  if (!url || !url.startsWith("http")) return url||undefined;
-  try {
-    const host = new URL(url).hostname;
-    if (ALLOWED_IMG_HOST && host !== ALLOWED_IMG_HOST) return undefined;
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return undefined;
-    const mime = res.headers.get("content-type") || "image/png";
-    if (!mime.startsWith("image/")) return undefined;
-    const buf = await res.arrayBuffer();
-    return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
-  } catch { return undefined; }
 }
 
 export async function GET(request: NextRequest) {
@@ -80,8 +64,8 @@ export async function GET(request: NextRequest) {
     });
 
     const [workerImg, companyImg] = await Promise.all([
-      toBase64DataUri(user?.signatureUrl),
-      toBase64DataUri(managerToken?.signatureUrl),
+      imageToDataUri(user?.signatureUrl),
+      imageToDataUri(managerToken?.signatureUrl),
     ]);
     // 매니저(govAgent/agencyAgent) 서명은 실시간 미리보기/조회에서 자동 주입하지 않는다.
     //  → 매니저 서명은 '일지 관리'의 명시적 서명 액션(DocumentRun.managerSignatureUrl)을 거친

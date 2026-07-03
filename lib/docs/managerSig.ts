@@ -10,26 +10,7 @@
 
 export const runtime = "nodejs";
 
-const ALLOWED_IMG_HOST = (() => {
-  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "").hostname; } catch { return ""; }
-})();
-
-// 서명 이미지 URL → base64 data URI (호스트 허용목록 + 5s 타임아웃)
-export async function toSigDataUri(url?: string | null): Promise<string | undefined> {
-  if (!url || !url.startsWith("http")) return url || undefined;
-  try {
-    const host = new URL(url).hostname;
-    if (ALLOWED_IMG_HOST && host !== ALLOWED_IMG_HOST) return undefined;
-  } catch { return undefined; }
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return undefined;
-    const mime = res.headers.get("content-type") || "image/png";
-    if (!mime.startsWith("image/")) return undefined;
-    const buf = await res.arrayBuffer();
-    return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
-  } catch { return undefined; }
-}
+import { imageToDataUri } from "@/lib/signatureImage";
 
 type ManagerSig = { managerSignatureUrl?: string | null; managerSignerName?: string | null };
 
@@ -41,7 +22,7 @@ type ManagerSig = { managerSignatureUrl?: string | null; managerSignerName?: str
 export async function injectManagerSignature<T extends { signatures?: any }>(payload: T, run: ManagerSig): Promise<T> {
   const url = run?.managerSignatureUrl;
   if (!url) return payload;
-  const img = await toSigDataUri(url);
+  const img = await imageToDataUri(url);
   if (!img) return payload;
   const name = run.managerSignerName || "";
   const sigs = { ...(payload.signatures ?? {}) };

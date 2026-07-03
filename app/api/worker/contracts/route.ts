@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendAlimtalk } from "@/lib/kakao";
 import { getAcknowledgement } from "@/lib/contractTemplates";
+import { imageToDataUri } from "@/lib/signatureImage";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 
@@ -96,7 +97,8 @@ export async function GET(req: NextRequest) {
       // 양식 — 07 성동은 제3조⑧ '듣고 인지함' 손글씨 입력 필요
       templateKey: (contract as any).templateKey ?? "STANDARD",
       // 프로필에 저장된 전자서명 — 있으면 서명란에 자동 채움(다시 그리기 가능)
-      savedSignatureUrl: contract.user.signatureUrl || null,
+      //  서명 버킷 private 대응: base64 data URI로 반환(표시 + 재사용 제출 모두 가능).
+      savedSignatureUrl: (await imageToDataUri(contract.user.signatureUrl)) ?? null,
     },
   });
 }

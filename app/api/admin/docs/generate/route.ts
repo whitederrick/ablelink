@@ -12,6 +12,7 @@ import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
 import { sigRequirement } from "@/lib/docs/requiredSignatures";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
+import { imageToDataUri } from "@/lib/signatureImage";
 
 function fmtDot(s: string) { return s.replace(/-/g, "."); }
 function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`; }
@@ -26,30 +27,6 @@ const DOC_LABELS: Record<string, string> = {
   "ADAPTATION_DAILY_LOG":  "취업 후 적응지도 일지",
   "ADAPTATION_FINAL_EVAL": "적응지도 대상자 종합 평가기록부",
 };
-
-const ALLOWED_IMG_HOST = (() => {
-  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "").hostname; } catch { return ""; }
-})();
-
-async function toBase64DataUri(url?: string | null): Promise<string | undefined> {
-  if (!url || !url.startsWith("http")) return url || undefined;
-  // SSRF 방지: Supabase 스토리지 도메인만 허용
-  try {
-    const host = new URL(url).hostname;
-    if (ALLOWED_IMG_HOST && host !== ALLOWED_IMG_HOST) {
-      console.warn("[toBase64DataUri] 허용되지 않은 도메인 차단:", host);
-      return undefined;
-    }
-  } catch { return undefined; }
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return undefined;
-    const buf = await res.arrayBuffer();
-    const mime = res.headers.get("content-type") || "image/png";
-    if (!mime.startsWith("image/")) return undefined;
-    return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
-  } catch { return undefined; }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -95,7 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     const [workerImg] = await Promise.all([
-      toBase64DataUri(user?.signatureUrl),
+      imageToDataUri(user?.signatureUrl),
     ]);
 
     // 매니저(govAgent/agencyAgent) 서명은 프로필에서 자동 주입하지 않는다(등록된 서명만 표시).

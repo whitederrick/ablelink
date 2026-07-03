@@ -12,6 +12,7 @@ import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
 import JSZip from "jszip";
+import { imageToDataUri } from "@/lib/signatureImage";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -20,25 +21,6 @@ function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`;
 function scoreLabel(n?: number | null) {
   if (!n) return "";
   return ({ 1: "매우못함", 2: "못함", 3: "보통", 4: "잘함", 5: "매우잘함" } as any)[n] || String(n);
-}
-const ALLOWED_IMG_HOST = (() => {
-  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "").hostname; } catch { return ""; }
-})();
-
-async function toBase64DataUri(url?: string | null): Promise<string | undefined> {
-  if (!url || !url.startsWith("http")) return url || undefined;
-  try {
-    const host = new URL(url).hostname;
-    if (ALLOWED_IMG_HOST && host !== ALLOWED_IMG_HOST) return undefined;
-  } catch { return undefined; }
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return undefined;
-    const buf = await res.arrayBuffer();
-    const mime = res.headers.get("content-type") || "image/png";
-    if (!mime.startsWith("image/")) return undefined;
-    return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
-  } catch { return undefined; }
 }
 function safeFilename(s: string) { return s.replace(/[\\/:*?"<>|]/g, "_"); }
 
@@ -85,7 +67,7 @@ export async function GET(request: NextRequest) {
     const end   = periodEnd;
 
     // 서명 이미지 로드
-    const workerImg = await toBase64DataUri(user?.signatureUrl);
+    const workerImg = await imageToDataUri(user?.signatureUrl);
     const sigs = {
       worker:          { name: user?.workerName || "", imageUrl: workerImg },
       govAgent:       { name: "", imageUrl: undefined },

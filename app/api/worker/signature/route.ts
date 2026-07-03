@@ -9,6 +9,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { validateSignatureImage } from "@/lib/imageValidation";
+import { signatureDisplayUrl } from "@/lib/signatureImage";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
       select: { signatureUrl: true },
     });
 
-    return NextResponse.json({ success: true, signatureUrl: user?.signatureUrl ?? null });
+    return NextResponse.json({ success: true, signatureUrl: await signatureDisplayUrl(user?.signatureUrl) });
   } catch (error: any) {
     console.error("[signature GET]", error);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
       data: { signatureUrl: publicUrl },
     });
 
-    return NextResponse.json({ success: true, signatureUrl: publicUrl });
+    return NextResponse.json({ success: true, signatureUrl: await signatureDisplayUrl(publicUrl) });
   } catch (error: any) {
     console.error("[signature POST]", error);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
