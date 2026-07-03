@@ -24,6 +24,16 @@ function getSupabaseAdmin() {
   return createClient(url, key);
 }
 
+// magic-byte(파일 시그니처)로 실제 형식 판별 — 클라이언트 제공 file.type(위조 가능)과 교차검증용.
+function sniffMime(buf: Buffer): string | null {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
+      buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a) return "image/png";
+  if (buf.length >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  if (buf.length >= 5 && buf.toString("ascii", 0, 5) === "%PDF-") return "application/pdf";
+  return null;
+}
+
 function getExtension(mimeType: string): string {
   switch (mimeType) {
     case "image/jpeg": return "jpg";
@@ -96,6 +106,15 @@ export async function POST(req: NextRequest) {
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+
+    // ★내용 기반 검증(MIME spoofing 방지): 실제 시그니처가 허용형식이고 선언 file.type와 일치해야 함.
+    const detected = sniffMime(buffer);
+    if (!detected || !ALLOWED_MIME_TYPES.includes(detected) || detected !== file.type) {
+      return NextResponse.json(
+        { success: false, message: "파일 내용이 형식과 일치하지 않습니다. (jpeg, png, webp, pdf만 허용)" },
+        { status: 400 }
+      );
+    }
 
     const { error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
