@@ -569,6 +569,10 @@ export default function BatchWorklogPage() {
                 날짜별·훈련생별로 어떤 지도를 했는지 자유롭게 말씀해주세요.<br />
                 AI가 자동으로 각 조합별 일지로 분리합니다.
               </p>
+              {/* 개인정보 국외이전 고지 */}
+              <p className="text-[11px] text-slate-400 leading-snug">
+                음성과 일지 맥락은 문장 변환을 위해 외부 AI 서비스(해외 처리 포함)로 전송·처리됩니다.
+              </p>
             </div>
 
             <div className="rounded-2xl bg-white p-6 shadow-sm flex flex-col items-center gap-5">

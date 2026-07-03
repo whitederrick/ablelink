@@ -657,6 +657,11 @@ function WorklogForm() {
               </div>
             </div>
           </div>
+          {/* 개인정보 국외이전 고지 — 음성·일지 맥락이 외부(해외) AI로 처리됨 */}
+          <p className="mb-3 flex items-start gap-1 text-[11px] leading-snug text-slate-400">
+            <Info className="mt-0.5 h-3 w-3 shrink-0" />
+            음성 입력 시 녹음과 일지 맥락이 문장 변환을 위해 외부 AI 서비스(해외 처리 포함)로 전송·처리됩니다.
+          </p>
           {isRecording && (
             <div className="mb-2 flex items-center gap-2 py-2">
               <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500" />
