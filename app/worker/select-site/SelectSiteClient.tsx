@@ -36,8 +36,9 @@ export default function SelectSiteClient({ items }: { items: ActiveAssignmentIte
         <div className="pt-4 pb-6">
           <h1 className="text-2xl font-black tracking-tight text-slate-950">오늘 근무 현장 선택</h1>
           <p className="mt-1.5 text-sm font-semibold text-slate-500">
-            오늘 배정된 현장이 여러 곳입니다. 지금 근무할 현장을 선택하세요.
-            <br />(오전·오후는 상단에서 언제든 전환할 수 있어요.)
+            오늘 배정된 현황이 여러 곳입니다.
+            <br />지금 근무할 현장을 선택하세요.
+            <br />(오전, 오후는 상단에서 언제든지 전환할 수 있습니다.)
           </p>
         </div>
 

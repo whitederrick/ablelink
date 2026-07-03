@@ -1037,8 +1037,8 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
               <p className="text-sm font-black text-amber-900">퇴근 미실행 {missedClockOuts.length}건</p>
             </div>
             <p className="mb-3 text-xs font-semibold leading-5 text-amber-700">
-              퇴근 버튼을 누르지 않은 날이 있어요. 사유와 함께 퇴근을 처리해 주세요.
-              <br />처리 전까지 출근부에 퇴근 시각이 비어 있습니다.
+              퇴근 버튼을 누르지 않은 날이 있어요. 사유를 등록해주세요.
+              <br />처리 전까지 출근부에 퇴근 시각이 반영되지 않습니다.
             </p>
             <div className="flex flex-col gap-2">
               {missedClockOuts.map(m => (
