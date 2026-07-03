@@ -67,8 +67,11 @@ export async function buildAttendanceSheetPayload(
 ): Promise<BuildAttendanceSheetResult> {
   const { workerId, start, end, siteId, companyName, workerName, workerPhone, fallbackAssignment, signatures } = args;
 
+  // ★현장 필터 필수: 멀티현장 직무지도원이 같은 기간 다른 현장(B) 출근기록을 가지면
+  //   siteId 필터가 없을 경우 이 현장(siteId=A) 출근부에 B현장 행이 섞인다(공단 문서 오염).
+  //   DailyAttendance.siteId는 non-null(모든 생성경로 필수)이라 필터로 정상 행 누락 없음.
   const attendances = await prisma.dailyAttendance.findMany({
-    where: { workerId, workDate: { gte: start, lte: end } },
+    where: { workerId, siteId, workDate: { gte: start, lte: end } },
     include: {
       logs: { select: { extTime1on1: true, extTimeGroup: true } },
       assignment: {
