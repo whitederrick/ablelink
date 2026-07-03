@@ -201,7 +201,7 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
 
   } else if (docType === "TRAINING_DAILY_LOG") {
     if (!traineeIdBig) throw new DocPayloadError("훈련생을 선택해주세요.");
-    const trainee = await prisma.trainee.findUnique({ where: { id: traineeIdBig }, select: { name: true } });
+    const trainee = await prisma.trainee.findFirst({ where: { id: traineeIdBig, site: { agencyId: assignment.agencyId } }, select: { name: true } }); // IDOR 방지: 배정 기관 소속 훈련생만
     traineeName = trainee?.name || "";
     const logs = await prisma.traineeLog.findMany({
       where: {
@@ -245,7 +245,7 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
 
   } else if (docType === "TRAINEE_FINAL_EVAL") {
     if (!traineeIdBig) throw new DocPayloadError("훈련생을 선택해주세요.");
-    const trainee = await prisma.trainee.findUnique({ where: { id: traineeIdBig }, select: { name: true } });
+    const trainee = await prisma.trainee.findFirst({ where: { id: traineeIdBig, site: { agencyId: assignment.agencyId } }, select: { name: true } }); // IDOR 방지: 배정 기관 소속 훈련생만
     traineeName = trainee?.name || "";
     const ev = await prisma.traineeEvaluation.findFirst({
       where: { traineeId: traineeIdBig, writerId: workerId, evalType: "TRAINING" },
@@ -269,7 +269,7 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
 
   } else if (docType === "ADAPTATION_DAILY_LOG") {
     if (!traineeIdBig) throw new DocPayloadError("훈련생을 선택해주세요.");
-    const trainee = await prisma.trainee.findUnique({ where: { id: traineeIdBig }, select: { name: true } });
+    const trainee = await prisma.trainee.findFirst({ where: { id: traineeIdBig, site: { agencyId: assignment.agencyId } }, select: { name: true } }); // IDOR 방지: 배정 기관 소속 훈련생만
     traineeName = trainee?.name || "";
     const logs = await prisma.traineeLog.findMany({
       where: {
@@ -309,7 +309,7 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
 
   } else if (docType === "ADAPTATION_FINAL_EVAL") {
     if (!traineeIdBig) throw new DocPayloadError("훈련생을 선택해주세요.");
-    const trainee = await prisma.trainee.findUnique({ where: { id: traineeIdBig }, select: { name: true } });
+    const trainee = await prisma.trainee.findFirst({ where: { id: traineeIdBig, site: { agencyId: assignment.agencyId } }, select: { name: true } }); // IDOR 방지: 배정 기관 소속 훈련생만
     traineeName = trainee?.name || "";
     const ev = await prisma.traineeEvaluation.findFirst({
       where: { traineeId: traineeIdBig, writerId: workerId, evalType: "ADAPTATION" },

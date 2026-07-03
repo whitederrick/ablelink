@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
     } else if (docType === "TRAINING_DAILY_LOG") {
       if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
 
-      const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
+      const trainee = await prisma.trainee.findFirst({ where: { id: BigInt(traineeId), site: { agencyId: assignment.agencyId } }, select: { name: true } }); // IDOR 방지: 배정 기관 소속 훈련생만
       const logs = await prisma.traineeLog.findMany({
         where: {
           writerId: workerId, traineeId: BigInt(traineeId),
@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
 
     } else if (docType === "TRAINEE_FINAL_EVAL") {
       if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
-      const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
+      const trainee = await prisma.trainee.findFirst({ where: { id: BigInt(traineeId), site: { agencyId: assignment.agencyId } }, select: { name: true } }); // IDOR 방지: 배정 기관 소속 훈련생만
       const ev = await prisma.traineeEvaluation.findFirst({
         where: { traineeId: BigInt(traineeId), writerId: workerId, evalType: "TRAINING" },
         orderBy: { updatedAt: "desc" },
@@ -230,7 +230,7 @@ export async function POST(request: NextRequest) {
 
     } else if (docType === "ADAPTATION_DAILY_LOG") {
       if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
-      const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
+      const trainee = await prisma.trainee.findFirst({ where: { id: BigInt(traineeId), site: { agencyId: assignment.agencyId } }, select: { name: true } }); // IDOR 방지: 배정 기관 소속 훈련생만
       const logs = await prisma.traineeLog.findMany({
         where: {
           writerId: workerId, traineeId: BigInt(traineeId),
@@ -270,7 +270,7 @@ export async function POST(request: NextRequest) {
 
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
       if (!traineeId) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
-      const trainee = await prisma.trainee.findUnique({ where: { id: BigInt(traineeId) }, select: { name: true } });
+      const trainee = await prisma.trainee.findFirst({ where: { id: BigInt(traineeId), site: { agencyId: assignment.agencyId } }, select: { name: true } }); // IDOR 방지: 배정 기관 소속 훈련생만
       const ev = await prisma.traineeEvaluation.findFirst({
         where: { traineeId: BigInt(traineeId), writerId: workerId, evalType: "ADAPTATION" },
         orderBy: { updatedAt: "desc" },

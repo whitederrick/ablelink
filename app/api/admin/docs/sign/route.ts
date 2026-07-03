@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
 
     } else if (docType === "TRAINING_DAILY_LOG") {
       const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await prisma.trainee.findUnique({ where: { id: tid }, select: { name: true } }) : null;
+      const trainee = tid ? await prisma.trainee.findFirst({ where: { id: tid, site: { agencyId: scope.agencyId } }, select: { name: true } }) : null; // IDOR 방지: 기관 소속 훈련생만
       const logs = tid ? await prisma.traineeLog.findMany({
         where: { writerId: workerId, traineeId: tid, trainingType: { in: ["PRE", "FIELD"] }, attendance: { workDate: { gte: start, lte: end } } },
         include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
 
     } else if (docType === "TRAINEE_FINAL_EVAL") {
       const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await prisma.trainee.findUnique({ where: { id: tid }, select: { name: true } }) : null;
+      const trainee = tid ? await prisma.trainee.findFirst({ where: { id: tid, site: { agencyId: scope.agencyId } }, select: { name: true } }) : null; // IDOR 방지: 기관 소속 훈련생만
       const ev = tid ? await prisma.traineeEvaluation.findFirst({
         where: { traineeId: tid, writerId: workerId, evalType: "TRAINING" }, orderBy: { updatedAt: "desc" },
       }) : null;
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
 
     } else if (docType === "ADAPTATION_DAILY_LOG") {
       const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await prisma.trainee.findUnique({ where: { id: tid }, select: { name: true } }) : null;
+      const trainee = tid ? await prisma.trainee.findFirst({ where: { id: tid, site: { agencyId: scope.agencyId } }, select: { name: true } }) : null; // IDOR 방지: 기관 소속 훈련생만
       const logs = tid ? await prisma.traineeLog.findMany({
         where: { writerId: workerId, traineeId: tid, trainingType: "ADAPTATION", attendance: { workDate: { gte: start, lte: end } } },
         include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
 
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
       const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await prisma.trainee.findUnique({ where: { id: tid }, select: { name: true } }) : null;
+      const trainee = tid ? await prisma.trainee.findFirst({ where: { id: tid, site: { agencyId: scope.agencyId } }, select: { name: true } }) : null; // IDOR 방지: 기관 소속 훈련생만
       const ev = tid ? await prisma.traineeEvaluation.findFirst({
         where: { traineeId: tid, writerId: workerId, evalType: "ADAPTATION" }, orderBy: { updatedAt: "desc" },
       }) : null;
