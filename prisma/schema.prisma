@@ -65,6 +65,8 @@ model Worker {
   consentTermsAt    DateTime? @map("consent_terms_at")
   consentPrivacyAt  DateTime? @map("consent_privacy_at")
   consentLocationAt DateTime? @map("consent_location_at")
+  // AI 음성 국외이전 동의(사용 시점 별도 동의 — Groq/Google 해외 처리)
+  consentAiCrossBorderAt DateTime? @map("consent_ai_crossborder_at")
 
   // ✅ 인력 pool / 매칭 속성 (직무지도원·요양보호사·활동보호사 공통)
   residenceAddress String?  @map("residence_address")

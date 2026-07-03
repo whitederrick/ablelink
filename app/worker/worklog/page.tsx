@@ -7,6 +7,8 @@ import {
   Info, Loader2, Mic, Square, Trash2,
 } from "lucide-react";
 import { getActiveAssignmentCookie } from "../_lib/activeAssignmentCookie";
+import { useAiVoiceConsent, AiVoiceConsentModal } from "../_components/AiVoiceConsent";
+import { LegalDocLink } from "@/components/LegalDocModal";
 
 // ─── 타입 ──────────────────────────────────────────────────────────
 type Attendance = "출석" | "결석" | "지각" | "조퇴";
@@ -121,6 +123,7 @@ function WorklogForm() {
   const [weekendReason, setWeekendReason] = useState("");  // 주말 작성 사유
 
   // AI 음성
+  const { ensureConsent, modalProps: aiConsentModal } = useAiVoiceConsent(); // 국외이전 동의 게이트
   const [isRecording, setIsRecording] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [recordingSec, setRecordingSec] = useState(0);
@@ -224,6 +227,8 @@ function WorklogForm() {
   // 음성 녹음
   async function startRecording(raw: boolean) {
     if (!premium) { alert(siteInfo.premiumMessage || "음성 AI 변환은 유료 기능이에요.\n근로계약 기간 중에 사용할 수 있어요."); return; }
+    // 국외이전 동의 게이트 — 미동의 시 모달을 띄우고, 동의 완료 후에만 녹음 진행(취소 시 중단).
+    if (!(await ensureConsent())) return;
     recRawRef.current = raw;
     setRecMode(raw ? "raw" : "ai");
     try {
@@ -657,11 +662,15 @@ function WorklogForm() {
               </div>
             </div>
           </div>
-          {/* 개인정보 국외이전 고지 — 음성·일지 맥락이 외부(해외) AI로 처리됨 */}
+          {/* 개인정보 국외이전 고지 — 음성·일지 맥락이 외부(해외) AI로 처리됨. 최초 사용 시 동의 모달. */}
           <p className="mb-3 flex items-start gap-1 text-[11px] leading-snug text-slate-400">
             <Info className="mt-0.5 h-3 w-3 shrink-0" />
-            음성 입력 시 녹음과 일지 맥락이 문장 변환을 위해 외부 AI 서비스(해외 처리 포함)로 전송·처리됩니다.
+            <span>
+              음성 입력 시 해당 내용은 외부 AI 서비스(해외 처리 포함)로 전송 및 처리됩니다.<br />
+              자세한 내용은 <LegalDocLink doc="privacy" />을 확인 바랍니다.
+            </span>
           </p>
+          <AiVoiceConsentModal {...aiConsentModal} />
           {isRecording && (
             <div className="mb-2 flex items-center gap-2 py-2">
               <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500" />

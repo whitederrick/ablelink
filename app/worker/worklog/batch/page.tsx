@@ -7,6 +7,8 @@ import {
   Loader2, Mic, Square, Users,
 } from "lucide-react";
 import { getActiveAssignmentCookie } from "../../_lib/activeAssignmentCookie";
+import { useAiVoiceConsent, AiVoiceConsentModal } from "../../_components/AiVoiceConsent";
+import { LegalDocLink } from "@/components/LegalDocModal";
 
 // ─── 타입 ───────────────────────────────────────────────────
 interface Trainee { id: string; name: string; gender?: string; }
@@ -48,6 +50,7 @@ export default function BatchWorklogPage() {
 
   // STEP 2: 녹음
   const [step, setStep]             = useState<1 | 2 | 3>(1);
+  const { ensureConsent, modalProps: aiConsentModal } = useAiVoiceConsent(); // 국외이전 동의 게이트
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSec, setRecordingSec] = useState(0);
   const [aiLoading, setAiLoading]     = useState(false);
@@ -148,6 +151,8 @@ export default function BatchWorklogPage() {
 
   // ── 녹음 시작/중지 ──────────────────────────────────────────
   async function startRecording() {
+    // 국외이전 동의 게이트 — 미동의 시 모달, 동의 후에만 녹음(취소 시 중단).
+    if (!(await ensureConsent())) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -569,9 +574,10 @@ export default function BatchWorklogPage() {
                 날짜별·훈련생별로 어떤 지도를 했는지 자유롭게 말씀해주세요.<br />
                 AI가 자동으로 각 조합별 일지로 분리합니다.
               </p>
-              {/* 개인정보 국외이전 고지 */}
+              {/* 개인정보 국외이전 고지 — 최초 사용 시 동의 모달 */}
               <p className="text-[11px] text-slate-400 leading-snug">
-                음성과 일지 맥락은 문장 변환을 위해 외부 AI 서비스(해외 처리 포함)로 전송·처리됩니다.
+                음성 입력 시 해당 내용은 외부 AI 서비스(해외 처리 포함)로 전송 및 처리됩니다.<br />
+                자세한 내용은 <LegalDocLink doc="privacy" />을 확인 바랍니다.
               </p>
             </div>
 
@@ -744,6 +750,7 @@ export default function BatchWorklogPage() {
           </div>
         )}
       </div>
+      <AiVoiceConsentModal {...aiConsentModal} />
     </div>
   );
 }

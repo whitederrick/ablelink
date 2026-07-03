@@ -76,6 +76,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── AI 음성 국외이전 동의 게이트 ──
+    // 음성·일지 맥락이 Groq(미국)·Google Gemini(미국)로 전송되므로 최초 사용 전 별도 동의 필수.
+    const consentRow = await prisma.worker.findUnique({ where: { id: workerId }, select: { consentAiCrossBorderAt: true } });
+    if (!consentRow?.consentAiCrossBorderAt) {
+      return NextResponse.json(
+        { success: false, needConsent: true, message: "AI 음성 변환을 위한 개인정보 국외이전 동의가 필요합니다." },
+        { status: 403 },
+      );
+    }
+
     // 개인당 월 N회 (AI 일괄, 운영자 설정값). 비용 방어 — STT/LLM 호출 전에 선차단. 단일 음성 일지는 무제한.
     const monthlyLimit = await getConfigNumber("AI_BATCH_MONTHLY_LIMIT");
     const now = new Date();
