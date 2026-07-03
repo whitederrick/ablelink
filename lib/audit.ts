@@ -26,7 +26,14 @@ export function auditActorFrom(scope: any): AuditActor {
 }
 
 // ── diff/마스킹 유틸 ──
-const SENSITIVE_KEYS = new Set(["password", "passwordHash", "signatureUrl", "adminSignatureUrl", "workerSignatureUrl", "representativeSignatureUrl", "accountNumber", "ciKey", "verifyCode"]);
+// 감사 diff/payload에서 값 마스킹 대상. 비밀·서명 + 개인정보(생년월일·연락처·계좌 실명 등).
+//  · 필드 '무엇이' 바뀌었는지는 남기되(키), 원문 값은 남기지 않아 데이터 최소화.
+const SENSITIVE_KEYS = new Set([
+  "password", "passwordHash", "signatureUrl", "adminSignatureUrl", "workerSignatureUrl", "representativeSignatureUrl",
+  "accountNumber", "ciKey", "verifyCode",
+  // 개인정보(PII)
+  "birthDate", "phoneNumber", "guardianPhoneNumber", "guardianPhoneNumber2", "accountHolder", "businessContactPhone",
+]);
 const fmtVal = (v: unknown): string => (v === null || v === undefined ? "(비움)" : String(v));
 const eqScalar = (a: unknown, b: unknown): boolean => fmtVal(a) === fmtVal(b);
 
@@ -76,7 +83,10 @@ export async function logAudit(actor: AuditActor, entry: AuditEntry): Promise<vo
         const keys = scalarKeysOf(entry.after);
         const changed = keys
           .filter((k) => !eqScalar(entry.before![k], entry.after![k]))
-          .map((k) => ({ field: k, from: fmtVal(entry.before![k]), to: fmtVal(entry.after![k]) }));
+          // ★민감/개인정보 필드는 diff에서도 값 마스킹(예: accountNumber·phoneNumber 수정 시 old→new 평문 노출 방지).
+          .map((k) => SENSITIVE_KEYS.has(k)
+            ? { field: k, from: "***", to: "***" }
+            : { field: k, from: fmtVal(entry.before![k]), to: fmtVal(entry.after![k]) });
         if (summary == null) summary = changed.length ? changed.map((c) => c.field).join(", ") : null;
         payload = { changed } as Prisma.InputJsonValue;
       } else if (entry.after) {
