@@ -4,7 +4,6 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
-import { logAudit } from "@/lib/auditLog";
 import { audit } from "@/lib/audit";
 import bcrypt from "bcryptjs";
 
@@ -30,7 +29,6 @@ export async function PATCH(
       }
       const hashedPassword = await bcrypt.hash(newPassword, 12);
       await prisma.worker.update({ where: { id: user.id }, data: { password: hashedPassword } });
-      await logAudit({ adminId: scope.adminId, action: "WORKER_PASSWORD_RESET", target: `User:${user.id}`, detail: { workerName: user.workerName } });
       await audit(scope, { entityType: "Worker", entityId: user.id, action: "update", summary: "비밀번호 초기화" });
       return NextResponse.json({ success: true, message: "비밀번호가 초기화되었습니다." });
     }
@@ -41,8 +39,7 @@ export async function PATCH(
         return NextResponse.json({ success: false, message: "유효하지 않은 상태입니다." }, { status: 400 });
       }
       await prisma.worker.update({ where: { id: user.id }, data: { status } });
-      await logAudit({ adminId: scope.adminId, action: "WORKER_STATUS_CHANGED", target: `User:${user.id}`, detail: { before: user.status, after: status, memo } });
-      await audit(scope, { entityType: "Worker", entityId: user.id, action: "update", before: { status: user.status }, after: { status } });
+      await audit(scope, { entityType: "Worker", entityId: user.id, action: "update", summary: memo ? `상태 변경 (사유: ${memo})` : undefined, before: { status: user.status }, after: { status } });
       return NextResponse.json({ success: true, message: `상태가 ${status}로 변경되었습니다.` });
     }
 
@@ -55,8 +52,7 @@ export async function PATCH(
         return NextResponse.json({ success: false, message: "planType은 FREE/STARTER/STANDARD/PRO/PREMIUM 중 하나여야 합니다." }, { status: 400 });
       }
       await prisma.worker.update({ where: { id: user.id }, data: { planType: plan as any } });
-      await logAudit({ adminId: scope.adminId, action: "WORKER_PLAN_CHANGED", target: `Worker:${user.id}`, detail: { before: user.planType, after: plan, memo } });
-      await audit(scope, { entityType: "Worker", entityId: user.id, action: "update", before: { planType: user.planType }, after: { planType: plan } });
+      await audit(scope, { entityType: "Worker", entityId: user.id, action: "update", summary: memo ? `구독 변경 (사유: ${memo})` : undefined, before: { planType: user.planType }, after: { planType: plan } });
       const msg = plan === "FREE" ? "개인 구독이 회수되었습니다." : `개인 구독(${plan})이 부여되었습니다.`;
       return NextResponse.json({ success: true, message: msg });
     }

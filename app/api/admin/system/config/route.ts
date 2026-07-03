@@ -6,7 +6,6 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
-import { logAudit } from "@/lib/auditLog";
 import { audit } from "@/lib/audit";
 import { CONFIG_REGISTRY, listConfigs, invalidateConfigCache } from "@/lib/systemConfig";
 
@@ -47,13 +46,6 @@ export async function PATCH(req: NextRequest) {
       create: { key, value: v },
     });
     invalidateConfigCache();
-
-    await logAudit({
-      adminId: scope.adminId,
-      action: "SYSTEM_CONFIG_CHANGED",
-      target: `SystemConfig:${key}`,
-      detail: { key, value: v },
-    });
 
     await audit(scope, { entityType: "SystemConfig", entityId: key, action: "update", summary: `${key} 변경`, after: { key, value: v } });
 

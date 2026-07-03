@@ -4,7 +4,6 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
-import { logAudit } from "@/lib/auditLog";
 import { audit } from "@/lib/audit";
 
 export async function PATCH(
@@ -44,22 +43,6 @@ export async function PATCH(
     }
 
     await prisma.dailyAttendance.update({ where: { id: attendance.id }, data: updateData });
-
-    await logAudit({
-      adminId: scope.adminId,
-      action:  "ATTENDANCE_CORRECTED",
-      target:  `DailyAttendance:${attendance.id}`,
-      detail:  {
-        workerName: attendance.user?.workerName,
-        workDate: attendance.workDate,
-        before:   {
-          startTime: attendance.startTime?.toISOString(),
-          endTime:   attendance.endTime?.toISOString(),
-        },
-        after: updateData,
-        reason,
-      },
-    });
 
     await audit(scope, {
       entityType: "DailyAttendance",

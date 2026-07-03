@@ -568,7 +568,6 @@ model Admin {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  systemAuditLogs      SystemAuditLog[]
   announcements        SystemAnnouncement[]
   repliedTickets       SupportTicket[]        @relation("TicketReplier")
   signupRequestReviews ManagerSignupRequest[] @relation("SignupRequestReviewer")
@@ -1267,22 +1266,6 @@ model AnnouncementCategory {
 // ------------------------------------------------------
 // 7b. 시스템 감사 로그 (System Audit Log)
 // ------------------------------------------------------
-
-model SystemAuditLog {
-  id        BigInt   @id @default(autoincrement())
-  adminId   BigInt?  @map("admin_id")
-  action    String // e.g. "AGENCY_PLAN_CHANGED"
-  target    String? // e.g. "Agency:123"
-  detail    String? // JSON 형태 상세 정보
-  ipAddress String?  @map("ip_address")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  admin Admin? @relation(fields: [adminId], references: [id])
-
-  @@index([adminId, createdAt])
-  @@index([createdAt])
-  @@map("system_audit_logs")
-}
 
 // ------------------------------------------------------
 // 7b. 출근부 수정 요청 (직무지도원 → 에이전시 관리자 승인)

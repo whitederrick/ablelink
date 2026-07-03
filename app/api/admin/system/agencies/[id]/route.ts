@@ -4,7 +4,6 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
-import { logAudit } from "@/lib/auditLog";
 import { audit, auditSnapshot } from "@/lib/audit";
 import { RESTRICTED_TEMPLATES } from "@/lib/contractTemplates";
 
@@ -63,12 +62,6 @@ export async function PATCH(
     const auditBefore = await auditSnapshot("Agency", { id: agency.id }, updateData);
     await prisma.agency.update({ where: { id: agency.id }, data: updateData });
 
-    await logAudit({
-      adminId: scope.adminId,
-      action: "AGENCY_PLAN_CHANGED",
-      target: `Agency:${agency.id}`,
-      detail: { before: { planType: agency.planType }, after: updateData },
-    });
 
     await audit(scope, { entityType: "Agency", entityId: agency.id, action: "update", before: auditBefore, after: updateData as any });
 

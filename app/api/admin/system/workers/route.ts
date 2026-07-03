@@ -5,7 +5,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
 import { hashPassword } from "@/lib/password";
-import { logAudit } from "@/lib/auditLog";
 import { audit } from "@/lib/audit";
 
 const PHONE_RE = /^01[0-9]{8,9}$/;
@@ -116,12 +115,6 @@ export async function POST(req: Request) {
       select: { id: true, loginId: true, workerName: true },
     });
 
-    await logAudit({
-      adminId: scope.adminId,
-      action: "WORKER_CREATED",
-      target: `Worker:${worker.id}`,
-      detail: { workerName, phoneNumber, planType, via: "admin-promo" },
-    });
 
     await audit(scope, { entityType: "Worker", entityId: worker.id, action: "create", after: { workerName, phoneNumber, planType, status: "ACTIVE" } });
 

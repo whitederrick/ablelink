@@ -71,7 +71,6 @@ const groups: NavGroup[] = [
       { href: "/admin/settings/insurance-rates",    label: "4대보험 요율" },
       { href: "/admin/settings/categories",         label: "공지 카테고리 관리" },
       { href: "/admin/backup",                      label: "데이터 백업" },
-      { href: "/admin/logs",                        label: "시스템 관리자 로그" },
       { href: "/admin/audit",                       label: "데이터 변경 이력" },
       { href: "/admin/access-log",                  label: "개인정보 접속기록" },
     ],

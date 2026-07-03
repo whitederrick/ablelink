@@ -5,7 +5,6 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
-import { logAudit } from "@/lib/auditLog";
 import { audit } from "@/lib/audit";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -30,12 +29,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         verifiedAt: new Date(),
         verifiedByAdminId: scope.adminId,
       },
-    });
-    await logAudit({
-      adminId: scope.adminId,
-      action: action === "approve" ? "PROFESSION_VERIFIED" : "PROFESSION_REJECTED",
-      target: `WorkerProfession:${wpId}`,
-      detail: { workerId: wp.workerId.toString(), profession: wp.profession, certNumber: wp.certNumber },
     });
     await audit(scope, {
       entityType: "Worker",
