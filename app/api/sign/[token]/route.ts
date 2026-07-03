@@ -94,10 +94,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
 
-  await prisma.siteSignToken.update({
-    where: { token: token },
+  // ★원자적 1회 사용 처리: usedAt:null 조건부 update. 동시 제출 race에서 먼저 성공한 1건만 반영
+  //   (초기 usedAt 체크만으로는 두 요청이 모두 통과해 마지막 서명이 덮어쓸 수 있음).
+  const claim = await prisma.siteSignToken.updateMany({
+    where: { token: token, usedAt: null },
     data: { signatureUrl: publicUrl, usedAt: new Date() },
   });
+  if (claim.count === 0) {
+    return NextResponse.json({ success: false, message: "이미 서명이 완료되었습니다." }, { status: 409 });
+  }
 
   return NextResponse.json({ success: true, signatureUrl: publicUrl });
   } catch (e: any) {
