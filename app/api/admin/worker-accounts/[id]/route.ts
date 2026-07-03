@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { logAccess } from "@/lib/accessLog";
 import { AssignStatus } from "@prisma/client";
 
 const ACTIVE_ASSIGN: AssignStatus[] = [AssignStatus.ACTIVE, AssignStatus.ASSIGNED, AssignStatus.CONFIRMED];
@@ -41,6 +42,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     });
     if (!w) return NextResponse.json({ success: false, message: "직무지도원을 찾을 수 없습니다." }, { status: 404 });
+
+    // 개인정보 접속기록 — 급여계좌·본인인증 열람
+    await logAccess(req, scope, { subjectType: "Worker", subjectId: w.id, subjectLabel: w.workerName, resource: "account" });
 
     // 계약(배정) 이력 — 본 위탁기관 현장만, 최신순
     const assignments = await prisma.siteAssignment.findMany({

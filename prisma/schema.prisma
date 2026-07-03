@@ -977,6 +977,32 @@ model AuditEvent {
   @@map("audit_events")
 }
 
+// 개인정보 접속기록 — 안전성 확보조치 기준 제8조: 개인정보취급자(운영자·위탁기관 담당자)가
+// 정보주체의 (민감·식별) 개인정보를 열람/출력한 기록. AuditEvent(데이터 '변경' 이력)와 별개.
+//  · 법정 필수항목 매핑: actorLabel=계정, createdAt=접속일시, ip=접속지 정보, subject*=정보주체, action/resource=수행업무
+//  · 정보주체 본인(WORKER)이 자기 정보 열람하는 것은 취급자 접속기록 대상 아님 → 기록 제외
+model AccessLog {
+  id           BigInt    @id @default(autoincrement())
+  agencyId     BigInt?   @map("agency_id")   // 위탁기관 스코프(운영자=null)
+  actorType    ActorType @map("actor_type")  // ADMIN | MANAGER (취급자)
+  actorId      BigInt?   @map("actor_id")
+  actorLabel   String?   @map("actor_label")  // 로그인ID/이름 스냅샷(계정)
+  ip           String?   @map("ip")           // 접속지 정보(x-forwarded-for 첫 홉)
+  subjectType  String    @map("subject_type") // 정보주체 유형(Worker, Trainee 등)
+  subjectId    String?   @map("subject_id")   // 정보주체 레코드 id(문자열)
+  subjectLabel String?   @map("subject_label")// 정보주체 성명 스냅샷(표시용)
+  resource     String    @map("resource")     // account|verification|payslip|disability|worker_detail|contract
+  action       String    @map("action")       // view | export | print
+  path         String?   @map("path")          // 요청 경로(참고)
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([agencyId, createdAt])
+  @@index([actorType, actorId])
+  @@index([subjectType, subjectId])
+  @@index([createdAt])
+  @@map("access_logs")
+}
+
 model PayContract {
   id       BigInt @id @default(autoincrement())
   agencyId BigInt @map("agency_id")

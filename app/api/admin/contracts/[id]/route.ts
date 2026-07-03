@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
 import { renderContractPdf } from "@/lib/contractPdf";
 import { audit } from "@/lib/audit";
+import { logAccess } from "@/lib/accessLog";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -63,6 +64,8 @@ export async function GET(req: NextRequest, { params }: Params) {
     }
 
     const format = new URL(req.url).searchParams.get("format");
+    // 개인정보 접속기록 — 근로계약서(성명·생년월일·계좌 등) 열람/출력
+    await logAccess(req, session, { subjectType: "Worker", subjectId: c.workerId, subjectLabel: c.user?.workerName ?? null, resource: "contract", action: format === "pdf" ? "print" : "view" });
     if (format === "pdf") {
       const buf = await renderContractPdf(c);
       return new NextResponse(new Uint8Array(buf), {

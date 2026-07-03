@@ -73,6 +73,7 @@ const groups: NavGroup[] = [
       { href: "/admin/backup",                      label: "데이터 백업" },
       { href: "/admin/logs",                        label: "시스템 관리자 로그" },
       { href: "/admin/audit",                       label: "데이터 변경 이력" },
+      { href: "/admin/access-log",                  label: "개인정보 접속기록" },
     ],
   },
 ];

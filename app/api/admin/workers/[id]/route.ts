@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { audit, auditSnapshot } from "@/lib/audit";
+import { logAccess } from "@/lib/accessLog";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 
@@ -38,8 +39,10 @@ export async function GET(
     }
     const w = await prisma.worker.findUnique({
       where: { id: workerId },
-      select: { bankName: true, accountNumber: true, accountHolder: true },
+      select: { workerName: true, bankName: true, accountNumber: true, accountHolder: true },
     });
+    // 개인정보 접속기록 — 급여계좌 열람
+    await logAccess(req, scope, { subjectType: "Worker", subjectId: workerId, subjectLabel: w?.workerName ?? null, resource: "account" });
     return NextResponse.json({
       success: true,
       data: {

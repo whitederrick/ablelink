@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { renderPdfToBuffer } from "@/lib/pdf";
 import { buildPayslipPayload } from "@/lib/payroll/payslipPayload";
+import { logAccess } from "@/lib/accessLog";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ itemId: string }> }) {
   try {
@@ -26,6 +27,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ item
     if (item.run.agencyId !== scope.agencyId) {
       return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
     }
+
+    // 개인정보 접속기록 — 급여명세서 PDF 출력
+    await logAccess(req, scope, { subjectType: "Worker", subjectId: item.workerId, subjectLabel: item.user?.workerName ?? null, resource: "payslip", action: "print" });
 
     const payload = buildPayslipPayload(
       {

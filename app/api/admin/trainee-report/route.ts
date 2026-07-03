@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
+import { logAccess } from "@/lib/accessLog";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
@@ -31,6 +32,9 @@ export async function GET(request: NextRequest) {
 
     const periodStart = `${year}-${pad2(month)}-01`;
     const periodEnd   = `${year}-${pad2(month)}-31`;
+
+    // 개인정보 접속기록 — 훈련생 장애정보(민감정보) 포함 진척도 리포트 열람(리스트 개별행이 아닌 리포트 단위 1건)
+    await logAccess(request, session, { subjectType: "Trainee", subjectId: null, subjectLabel: `훈련생 진척도 리포트 ${year}-${pad2(month)}`, resource: "disability", action: "view" });
 
     // 위탁기관 소속 활성 배정 전체
     const assignments = await prisma.siteAssignment.findMany({
