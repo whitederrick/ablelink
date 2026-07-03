@@ -75,7 +75,10 @@ export async function computePayrollItems(
     prisma.siteAssignment.findMany({
       where: {
         agencyId,
-        status: "ACTIVE",
+        // ★status:"ACTIVE"만 쓰면 과거월 재계산 시 이미 종료(ENDED)된 배정이 빠져 그 워커 급여가 통째 누락됨.
+        //   근무가 발생할 수 있는 상태(출근 가능 ASSIGNED/CONFIRMED/ACTIVE + 종료 후 ENDED)만 포함하고,
+        //   미근무 상태(REQUESTED/ACCEPTED/DROPPED/REJECTED/EXPIRED)는 date-overlap과 무관하게 제외.
+        status: { in: ["ACTIVE", "ENDED", "ASSIGNED", "CONFIRMED"] },
         startDate: { lte: new Date(periodEnd + "T23:59:59+09:00") },
         OR: [{ endDate: null }, { endDate: { gte: new Date(periodStart + "T00:00:00+09:00") } }],
       },
@@ -94,7 +97,7 @@ export async function computePayrollItems(
 
   const userDataList = await Promise.all(userIds.map(async (workerId) => {
     const userSiteIds = assignments.filter((a) => a.workerId === workerId).map((a) => a.siteId);
-    const [contract, attendances, placementBySite, empContract, firstContract, customHolidays] = await Promise.all([
+    const [contract, attendances, placements, empContract, firstContract, customHolidays] = await Promise.all([
       prisma.payContract.findFirst({
         where: {
           agencyId, workerId,
@@ -112,19 +115,18 @@ export async function computePayrollItems(
           logs: { select: { extTime1on1: true, extTimeGroup: true } },
         },
       }),
-      // 1:多 배율용 훈련생 수 = "그 기간 이 현장에 있던" 인원(기간겹침) — **현장별로** 집계.
-      // · status 필터 없음: 이탈 훈련생은 endDate로 표현되므로 과거기간 재계산 시에도 그때 재적 인원이 정확히 잡힌다.
-      //   (status:"ACTIVE"로 필터하면 ACTIVE는 항상 endDate=null이라 date-overlap이 죽어 과거 인원 누락 → 1:多가 조용히 1:1로 하향)
-      // · 현장별(groupBy): 1:1 vs 1:多는 "그 현장 인원"으로 판정(규칙·출근부와 동일). AM/현장X + PM/현장Y처럼
-      //   같은 날 다현장이면 전현장 합산이 아니라 각 현장 인원으로 그날 시간의 배율을 결정해야 한다.
-      prisma.traineePlacement.groupBy({
-        by: ["siteId"],
+      // 1:多 배율용 훈련생 배치 이력(현장·기간). 그 기간 이 현장들에 걸친 placement를 그대로 가져와
+      //  **일자별 동시 재적 수**를 계산한다(아래 traineeCountOn).
+      // · status 필터 없음: 이탈 훈련생은 endDate로 표현 → 과거기간 재계산에서도 그때 재적이 정확.
+      // · 기간 전체 count(groupBy)는 월중 증감을 못 잡고, 비동시 재적(1명 이탈→1명 합류, 최대 1명)도 2로 세어
+      //   실제로 1:1인 날을 1:多로 잘못 올림 → 일자별 동시 재적으로 판정해야 정확.
+      prisma.traineePlacement.findMany({
         where: {
           siteId: { in: userSiteIds },
           startDate: { lte: periodEndDate },
           OR: [{ endDate: null }, { endDate: { gte: periodStartDate } }],
         },
-        _count: { _all: true },
+        select: { siteId: true, startDate: true, endDate: true },
       }),
       prisma.employmentContract.findFirst({
         where: { agencyId, workerId, contractStart: { lte: periodEndDate }, contractEnd: { gte: periodStartDate } },
@@ -142,17 +144,18 @@ export async function computePayrollItems(
         select: { date: true },
       }),
     ]);
-    return { workerId, contract, attendances, placementBySite, empContract, firstContract, customHolidays };
+    return { workerId, contract, attendances, placements, empContract, firstContract, customHolidays };
   }));
 
-  for (const { workerId, contract, attendances, placementBySite, empContract, firstContract, customHolidays } of userDataList) {
-    // 현장별 훈련생 수 → 그 현장 시간의 1:1(일반) vs 1:多 배율 결정.
-    const countBySite = new Map<string, number>();
-    for (const g of placementBySite) countBySite.set(String(g.siteId), g._count._all);
-    const traineeCountFor = (siteId: bigint | null | undefined) => (siteId == null ? 0 : (countBySite.get(String(siteId)) ?? 0));
-    // DAILY/MONTHLY(일급·월급)는 시간분해가 없어 현장별 배분 불가 → 담당 현장 중 최대 인원으로 1:多 판정
-    // (합산이 아닌 max: 1인 현장 둘을 담당해도 각각 1:1이므로 1:多 아님). 단일현장이면 그 현장 인원.
-    const maxSiteCount = placementBySite.reduce((mx, g) => Math.max(mx, g._count._all), 0);
+  for (const { workerId, contract, attendances, placements, empContract, firstContract, customHolidays } of userDataList) {
+    // 그 날 그 현장에 "동시에 재적 중인" 훈련생 수 → 1:1(일반) vs 1:多 배율 판정(일자별).
+    //  · placement.startDate ≤ 그날 && (endDate=null || endDate ≥ 그날) 인 배치 수 = 그날 동시 재적.
+    const traineeCountOn = (siteId: bigint | null | undefined, workDate: string): number => {
+      if (siteId == null) return 0;
+      const ds = new Date(workDate + "T00:00:00+09:00");
+      const de = new Date(workDate + "T23:59:59+09:00");
+      return placements.filter((p) => String(p.siteId) === String(siteId) && p.startDate <= de && (p.endDate == null || p.endDate >= ds)).length;
+    };
     // 급여 게이트: 심한 지각 미컨펌(보정대기) 날은 급여 산정에서 제외(출근부 PDF와 동일 기준).
     // 지각 기준 = 현장값(site.lateThresholdMin) ?? 위탁기관 기본값 ?? 30.
     const confirmedAtt = attendances.filter((a) => !isPayrollPending({
@@ -166,6 +169,10 @@ export async function computePayrollItems(
       exempt: a.assignment?.attendanceButtonExempt ?? false,
     }, (a.assignment as any)?.site?.lateThresholdMin ?? lateThresholdMin));
     const pendingDays = attendances.length - confirmedAtt.length;
+
+    // DAILY/MONTHLY(일급·월급)는 시간분해가 없어 일자별 배분 불가 → 근무일 중 "동시 재적 최대치"로 1:多 판정
+    //  (기간 전체 총원이 아니라 실제 근무한 날들의 동시 재적 peak — 비동시 재적을 1:多로 오판하지 않음).
+    const maxSiteCount = confirmedAtt.reduce((mx, a) => Math.max(mx, traineeCountOn(a.assignment?.siteId, a.workDate)), 0);
 
     const workedDays = confirmedAtt.length;
     const workedMinutes = confirmedAtt.reduce((s, a) => s + minutesBetween(a.startTime, a.endTime), 0);
@@ -227,7 +234,7 @@ export async function computePayrollItems(
       const rate2 = contract.hourlyRate2Plus != null ? Number(contract.hourlyRate2Plus) : null;
       // 그 날 근무한 "현장"의 훈련생 수로 1:1(일반) vs 1:多 배율 결정 — 현장별 별도 계산.
       // (AM/현장X=1:1 + PM/현장Y=1:多 혼재도 각 현장 인원으로 정확히. 단일현장이면 기존과 동일.)
-      const dayIsMulti = (a: (typeof confirmedAtt)[number]) => rate2 != null && traineeCountFor(a.assignment?.siteId) >= 2;
+      const dayIsMulti = (a: (typeof confirmedAtt)[number]) => rate2 != null && traineeCountOn(a.assignment?.siteId, a.workDate) >= 2;
 
       let ordinaryWage = 0;
       if (contract.payType === "HOURLY") {
