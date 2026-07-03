@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { Building2, CheckCircle2, KeyRound, Lock, Shield, User, XCircle } from "lucide-react";
+import { LegalDocLink, type LegalDoc } from "@/components/LegalDocModal";
 
 type Step = "verify" | "info" | "terms" | "done";
 
@@ -227,11 +228,11 @@ export default function InvitePage() {
               </button>
 
               <div className="space-y-2">
-                {[
-                  { key: "terms",    label: "서비스 이용약관",   required: true,  checked: consentTerms,    set: setConsentTerms,    href: "/terms" },
-                  { key: "privacy",  label: "개인정보처리방침",   required: true,  checked: consentPrivacy,  set: setConsentPrivacy,  href: "/privacy" },
-                  { key: "location", label: "위치정보 이용 동의", required: false, checked: consentLocation, set: setConsentLocation, href: null },
-                ].map(item => (
+                {([
+                  { key: "terms",    label: "서비스 이용약관",   required: true,  checked: consentTerms,    set: setConsentTerms,    doc: "terms" },
+                  { key: "privacy",  label: "개인정보처리방침",   required: true,  checked: consentPrivacy,  set: setConsentPrivacy,  doc: "privacy" },
+                  { key: "location", label: "위치정보 이용 동의", required: false, checked: consentLocation, set: setConsentLocation, doc: null },
+                ] as { key: string; label: string; required: boolean; checked: boolean; set: (v: boolean) => void; doc: LegalDoc | null }[]).map(item => (
                   <div key={item.key} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3">
                     <button onClick={() => item.set(!item.checked)}
                       className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border-2 transition ${item.checked ? "border-sky-500 bg-sky-500" : "border-slate-300"}`}>
@@ -244,7 +245,7 @@ export default function InvitePage() {
                         </span>
                         {item.label}
                       </span>
-                      {item.href && <Link href={item.href} target="_blank" className="text-xs font-black text-sky-600">보기</Link>}
+                      {item.doc && <LegalDocLink doc={item.doc} label="보기" className="text-xs font-black text-sky-600" />}
                     </div>
                   </div>
                 ))}

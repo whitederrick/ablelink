@@ -1,14 +1,15 @@
 // components/LegalFooter.tsx
 // 공개 화면 공통 법정 표시 footer — 사업자정보(확보분만) + 약관/방침/환불/요금 링크.
 // 전자상거래법·PG 심사 대응. 값은 lib/businessInfo 단일 출처(미확보 항목 자동 숨김).
-import Link from "next/link";
 import { BUSINESS_INFO, businessInfoRows } from "@/lib/businessInfo";
+import { LegalDocLink, type LegalDoc } from "@/components/LegalDocModal";
 
-const LINKS = [
-  { href: "/terms", label: "이용약관" },
-  { href: "/privacy", label: "개인정보처리방침" },
-  { href: "/refund", label: "환불정책" },
-  { href: "/pricing", label: "요금안내" },
+// 실제 페이지(href)는 유지하되 탭 시 모달로 — 스마트폰에서 화면 전환 없이 확인.
+const LINKS: { doc: LegalDoc; label: string }[] = [
+  { doc: "terms", label: "이용약관" },
+  { doc: "privacy", label: "개인정보처리방침" },
+  { doc: "refund", label: "환불정책" },
+  { doc: "pricing", label: "요금안내" },
 ];
 
 // 사업자정보 줄 구성 — 의미 단위로 묶어 줄바꿈(확보된 항목만 표시, 미확보 줄은 자동 생략).
@@ -32,7 +33,7 @@ export default function LegalFooter() {
     <footer className="mt-8 border-t border-slate-200 pt-5 text-center text-slate-400">
       <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs font-bold text-slate-500">
         {LINKS.map((l) => (
-          <Link key={l.href} href={l.href} target="_blank" rel="noopener noreferrer" className="hover:text-slate-700">{l.label}</Link>
+          <LegalDocLink key={l.doc} doc={l.doc} label={l.label} className="hover:text-slate-700" />
         ))}
       </nav>
 
