@@ -40,8 +40,12 @@ export async function GET(request: NextRequest) {
 
     const workerId = BigInt(session.workerId);
 
+    // 멀티현장: 클라가 선택 배정(assignmentId)을 주면 그 현장으로 조회(소유 검증). 없으면 최신 1건 폴백.
+    let selAssignmentId: bigint | null = null;
+    try { const raw = searchParams.get("assignmentId"); selAssignmentId = raw ? BigInt(raw) : null; } catch { selAssignmentId = null; }
+
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(selAssignmentId != null ? { id: selAssignmentId } : {}) },
       include: { site: true },
       orderBy: { assignedAt: "desc" },
     });

@@ -12,6 +12,7 @@ import { getKrHolidayDates } from "@/lib/krHolidays";
 import { getKstDateString } from "@/lib/time";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
+import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { sigRequirement } from "@/lib/docs/requiredSignatures";
 import { imageToDataUri } from "@/lib/signatureImage";
@@ -43,6 +44,8 @@ export interface BuildDocOptions {
   periodEnd?: string | null;
   traineeId?: string | number | bigint | null;
   companyManagerSignToken?: string | null;
+  /** 멀티현장: 선택 배정(assignmentId). 주면 그 현장으로 문서 생성(소유 검증). 없으면 최신 1건 폴백. */
+  assignmentId?: string | number | bigint | null;
 }
 
 export interface DocPayloadMeta {
@@ -79,8 +82,11 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
     select: { workerName: true, phoneNumber: true, signatureUrl: true, loginId: true },
   });
 
+  let selAssignmentId: bigint | null = null;
+  try { selAssignmentId = opts.assignmentId != null && String(opts.assignmentId).trim() !== "" ? BigInt(opts.assignmentId as any) : null; } catch { selAssignmentId = null; }
+
   const assignment = await prisma.siteAssignment.findFirst({
-    where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+    where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(selAssignmentId != null ? { id: selAssignmentId } : {}) },
     include: { site: true },
     orderBy: { assignedAt: "desc" },
   });
@@ -181,7 +187,8 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
 
   } else if (docType === "TRAINING_DAILY_LOG") {
     if (!traineeIdBig) throw new DocPayloadError("훈련생을 선택해주세요.");
-    const trainee = await prisma.trainee.findFirst({ where: { id: traineeIdBig, site: { agencyId: assignment.agencyId } }, select: { name: true } }); // IDOR 방지: 배정 기관 소속 훈련생만
+    const trainee = await findTraineeAtSiteInPeriod(traineeIdBig, site.id, start, end); // IDOR 방지: 배정 현장+기간 재적 훈련생만
+    if (!trainee) throw new DocPayloadError("해당 기간에 이 현장 소속이 아닌 훈련생입니다.");
     traineeName = trainee?.name || "";
     const logs = await prisma.traineeLog.findMany({
       where: {
@@ -225,7 +232,8 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
 
   } else if (docType === "TRAINEE_FINAL_EVAL") {
     if (!traineeIdBig) throw new DocPayloadError("훈련생을 선택해주세요.");
-    const trainee = await prisma.trainee.findFirst({ where: { id: traineeIdBig, site: { agencyId: assignment.agencyId } }, select: { name: true } }); // IDOR 방지: 배정 기관 소속 훈련생만
+    const trainee = await findTraineeAtSiteInPeriod(traineeIdBig, site.id, start, end); // IDOR 방지: 배정 현장+기간 재적 훈련생만
+    if (!trainee) throw new DocPayloadError("해당 기간에 이 현장 소속이 아닌 훈련생입니다.");
     traineeName = trainee?.name || "";
     const ev = await prisma.traineeEvaluation.findFirst({
       where: { traineeId: traineeIdBig, writerId: workerId, evalType: "TRAINING" },
@@ -249,7 +257,8 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
 
   } else if (docType === "ADAPTATION_DAILY_LOG") {
     if (!traineeIdBig) throw new DocPayloadError("훈련생을 선택해주세요.");
-    const trainee = await prisma.trainee.findFirst({ where: { id: traineeIdBig, site: { agencyId: assignment.agencyId } }, select: { name: true } }); // IDOR 방지: 배정 기관 소속 훈련생만
+    const trainee = await findTraineeAtSiteInPeriod(traineeIdBig, site.id, start, end); // IDOR 방지: 배정 현장+기간 재적 훈련생만
+    if (!trainee) throw new DocPayloadError("해당 기간에 이 현장 소속이 아닌 훈련생입니다.");
     traineeName = trainee?.name || "";
     const logs = await prisma.traineeLog.findMany({
       where: {
@@ -289,7 +298,8 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
 
   } else if (docType === "ADAPTATION_FINAL_EVAL") {
     if (!traineeIdBig) throw new DocPayloadError("훈련생을 선택해주세요.");
-    const trainee = await prisma.trainee.findFirst({ where: { id: traineeIdBig, site: { agencyId: assignment.agencyId } }, select: { name: true } }); // IDOR 방지: 배정 기관 소속 훈련생만
+    const trainee = await findTraineeAtSiteInPeriod(traineeIdBig, site.id, start, end); // IDOR 방지: 배정 현장+기간 재적 훈련생만
+    if (!trainee) throw new DocPayloadError("해당 기간에 이 현장 소속이 아닌 훈련생입니다.");
     traineeName = trainee?.name || "";
     const ev = await prisma.traineeEvaluation.findFirst({
       where: { traineeId: traineeIdBig, writerId: workerId, evalType: "ADAPTATION" },

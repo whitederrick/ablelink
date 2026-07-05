@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess } from "@/lib/planGuard";
 import ExcelJS from "exceljs";
+import { escapeCsvCell } from "@/lib/csv";
 
 function isDateOnly(s: string) { return /^\d{4}-\d{2}-\d{2}$/.test(s); }
 function pad2(n: number) { return String(n).padStart(2, "0"); }
@@ -20,14 +21,8 @@ function formatKst(d: Date | null | undefined): string {
   return `${k.getUTCFullYear()}-${pad2(k.getUTCMonth() + 1)}-${pad2(k.getUTCDate())} ${pad2(k.getUTCHours())}:${pad2(k.getUTCMinutes())}`;
 }
 
-function escapeCsv(val: unknown): string {
-  if (val == null) return "";
-  const s = String(val);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 function csvBody(header: string[], rows: (string | number)[][]): string {
-  const lines = [header.join(","), ...rows.map(r => r.map(escapeCsv).join(","))];
+  const lines = [header.join(","), ...rows.map(r => r.map(escapeCsvCell).join(","))];
   return "﻿" + lines.join("\r\n"); // BOM → Excel 한글 정상
 }
 

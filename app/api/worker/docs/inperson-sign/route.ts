@@ -8,6 +8,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
+import { validateSignatureImage } from "@/lib/imageValidation";
 import { randomUUID } from "crypto";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -30,8 +31,11 @@ export async function POST(request: NextRequest) {
     const periodEnd   = (formData.get("periodEnd")   as string || "").trim();
     const signerNameRaw = (formData.get("signerName") as string || "").trim();
 
-    if (!imageBlob || imageBlob.size === 0) {
-      return NextResponse.json({ success: false, message: "서명 이미지가 없습니다." }, { status: 400 });
+    // 공개 토큰 서명(sign/[token])과 동일한 이미지 검증(magic bytes MIME + 500KB 상한).
+    // Content-Type 헤더는 위조 가능하므로 파일 내용 기반으로 확인.
+    const imgCheck = await validateSignatureImage(imageBlob as Blob);
+    if (!imgCheck.valid) {
+      return NextResponse.json({ success: false, message: imgCheck.error }, { status: 400 });
     }
     if (!docType || !periodStart || !periodEnd) {
       return NextResponse.json({ success: false, message: "문서 정보가 누락되었습니다." }, { status: 400 });

@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { logAccess } from "@/lib/accessLog";
 
 export async function GET(req: NextRequest) {
   try {
@@ -46,6 +47,14 @@ export async function GET(req: NextRequest) {
       },
       orderBy: { id: "desc" },
       take: 200,
+    });
+
+    // 개인정보 접속기록: 취급자(관리자)의 훈련생 일지 내용 열람.
+    await logAccess(req, scope, {
+      subjectType: "Trainee",
+      subjectId: traineeId || null,
+      resource: "trainee_logs",
+      action: "view",
     });
 
     return NextResponse.json({

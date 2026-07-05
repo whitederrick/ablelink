@@ -9,7 +9,9 @@ import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
+import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 import { imageToDataUri } from "@/lib/signatureImage";
+import { logAccess } from "@/lib/accessLog";
 
 function fmtDot(s: string) { return s.replace(/-/g, "."); }
 function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`; }
@@ -101,10 +103,10 @@ export async function GET(request: NextRequest) {
       }));
     } else if (docType === "TRAINING_DAILY_LOG") {
       const tid = traineeId ? BigInt(traineeId) : null;
-      // ★소속 검증(IDOR 방지): 이 매니저 기관 소속 훈련생만. 무스코프면 traineeId 조작으로 타 기관 훈련생 이름 유출.
-      const trainee = tid ? await prisma.trainee.findFirst({ where:{id:tid, site:{ agencyId: scope.agencyId }}, select:{name:true} }) : null;
-      const logs = tid ? await prisma.traineeLog.findMany({
-        where:{ writerId:workerId, traineeId:tid, trainingType:{in:["PRE","FIELD"]}, attendance:{workDate:{gte:start,lte:end}} },
+      // ★소속 검증(IDOR 방지): 배정 현장+기간 재적 훈련생만. 기관 스코프만으론 같은 기관 타 현장 훈련생 주입을 못 막음.
+      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
+      const logs = trainee ? await prisma.traineeLog.findMany({
+        where:{ writerId:workerId, traineeId:trainee.id, trainingType:{in:["PRE","FIELD"]}, attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
       }) : [];
       payload = {
@@ -119,10 +121,10 @@ export async function GET(request: NextRequest) {
       };
     } else if (docType === "ADAPTATION_DAILY_LOG") {
       const tid = traineeId ? BigInt(traineeId) : null;
-      // ★소속 검증(IDOR 방지): 이 매니저 기관 소속 훈련생만. 무스코프면 traineeId 조작으로 타 기관 훈련생 이름 유출.
-      const trainee = tid ? await prisma.trainee.findFirst({ where:{id:tid, site:{ agencyId: scope.agencyId }}, select:{name:true} }) : null;
-      const logs = tid ? await prisma.traineeLog.findMany({
-        where:{ writerId:workerId, traineeId:tid, trainingType:"ADAPTATION", attendance:{workDate:{gte:start,lte:end}} },
+      // ★소속 검증(IDOR 방지): 배정 현장+기간 재적 훈련생만. 기관 스코프만으론 같은 기관 타 현장 훈련생 주입을 못 막음.
+      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
+      const logs = trainee ? await prisma.traineeLog.findMany({
+        where:{ writerId:workerId, traineeId:trainee.id, trainingType:"ADAPTATION", attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
       }) : [];
       payload = {
@@ -134,10 +136,10 @@ export async function GET(request: NextRequest) {
       };
     } else if (docType === "TRAINEE_FINAL_EVAL") {
       const tid = traineeId ? BigInt(traineeId) : null;
-      // ★소속 검증(IDOR 방지): 이 매니저 기관 소속 훈련생만. 무스코프면 traineeId 조작으로 타 기관 훈련생 이름 유출.
-      const trainee = tid ? await prisma.trainee.findFirst({ where:{id:tid, site:{ agencyId: scope.agencyId }}, select:{name:true} }) : null;
-      const ev = tid ? await prisma.traineeEvaluation.findFirst({
-        where:{ traineeId:tid, writerId:workerId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
+      // ★소속 검증(IDOR 방지): 배정 현장+기간 재적 훈련생만. 기관 스코프만으론 같은 기관 타 현장 훈련생 주입을 못 막음.
+      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
+      const ev = trainee ? await prisma.traineeEvaluation.findFirst({
+        where:{ traineeId:trainee.id, writerId:workerId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
       }) : null;
       payload = {
         traineeName:trainee?.name||"", companyName:site.companyName,
@@ -148,10 +150,10 @@ export async function GET(request: NextRequest) {
       };
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
       const tid = traineeId ? BigInt(traineeId) : null;
-      // ★소속 검증(IDOR 방지): 이 매니저 기관 소속 훈련생만. 무스코프면 traineeId 조작으로 타 기관 훈련생 이름 유출.
-      const trainee = tid ? await prisma.trainee.findFirst({ where:{id:tid, site:{ agencyId: scope.agencyId }}, select:{name:true} }) : null;
-      const ev = tid ? await prisma.traineeEvaluation.findFirst({
-        where:{ traineeId:tid, writerId:workerId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
+      // ★소속 검증(IDOR 방지): 배정 현장+기간 재적 훈련생만. 기관 스코프만으론 같은 기관 타 현장 훈련생 주입을 못 막음.
+      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
+      const ev = trainee ? await prisma.traineeEvaluation.findFirst({
+        where:{ traineeId:trainee.id, writerId:workerId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
       }) : null;
       payload = {
         traineeName:trainee?.name||"", companyName:site.companyName,
@@ -164,6 +166,15 @@ export async function GET(request: NextRequest) {
     }
 
     const pdfBuffer = await renderPdfToBuffer({ documentType: docType, payload });
+
+    // 개인정보 접속기록: 취급자의 직무지도원/훈련생 공식문서 미리보기 열람.
+    await logAccess(request, scope, {
+      subjectType: "Worker",
+      subjectId: workerId,
+      subjectLabel: user?.workerName ?? null,
+      resource: "official_document_preview",
+      action: "view",
+    });
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,

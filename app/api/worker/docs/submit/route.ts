@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
 
     const body = await req.json().catch(() => ({}));
-    const { periodStart, periodEnd, documents, companyManagerSignToken } = body;
+    const { periodStart, periodEnd, documents, companyManagerSignToken, assignmentId } = body;
 
     if (!periodStart || !periodEnd || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart) || !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd))
       return NextResponse.json({ success: false, message: "기간(YYYY-MM-DD)이 필요합니다." }, { status: 400 });
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
 
       let built;
       try {
-        built = await buildDocPayload({ workerId, docType, periodStart, periodEnd, traineeId, companyManagerSignToken });
+        built = await buildDocPayload({ workerId, docType, periodStart, periodEnd, traineeId, companyManagerSignToken, assignmentId });
       } catch (e: any) {
         if (e instanceof DocPayloadError)
           return NextResponse.json({ success: false, message: `${DOC_LABELS[docType] || docType}: ${e.message}`, ...(e.extra || {}) }, { status: e.status });

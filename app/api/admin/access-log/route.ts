@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
+import { escapeCsvCell } from "@/lib/csv";
 
 const ACTOR_TYPES = ["ADMIN", "MANAGER"] as const;
 const PAGE_SIZES = [10, 20, 50];
@@ -61,7 +62,7 @@ export async function GET(req: Request) {
     // CSV 다운로드(현재 필터 기준, 최대 10000건) — 월점검·보관 근거
     if (searchParams.get("format") === "csv") {
       const rows = await prisma.accessLog.findMany({ where, orderBy: { createdAt: "desc" }, take: 10000 });
-      const esc = (v: unknown) => { const s = v == null ? "" : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+      const esc = escapeCsvCell;
       const header = ["접속일시", "취급자유형", "취급자(계정)", "위탁기관ID", "접속지(IP)", "정보주체유형", "정보주체ID", "정보주체", "열람정보", "수행업무", "경로"];
       const lines = [header.join(",")];
       for (const e of rows) {

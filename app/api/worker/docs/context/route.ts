@@ -17,6 +17,10 @@ export async function GET(req: NextRequest) {
   const todayStr = getKstDateString();
   const today = new Date(`${todayStr}T00:00:00.000Z`);
 
+  // 멀티현장: 클라가 선택 배정(assignmentId)을 주면 그 현장의 훈련생 목록(소유·활성·기간 검증). 없으면 최신 1건.
+  let selAssignmentId: bigint | null = null;
+  try { const raw = req.nextUrl.searchParams.get("assignmentId"); selAssignmentId = raw ? BigInt(raw) : null; } catch { selAssignmentId = null; }
+
   // 단일 쿼리: 활성 배정 + 현장명 + 사업체담당자 + 훈련생
   const assignment = await prisma.siteAssignment.findFirst({
     where: {
@@ -24,6 +28,7 @@ export async function GET(req: NextRequest) {
       status: "ACTIVE",
       startDate: { lte: today },
       OR: [{ endDate: null }, { endDate: { gte: today } }],
+      ...(selAssignmentId != null ? { id: selAssignmentId } : {}),
     },
     select: {
       serviceStep: true,

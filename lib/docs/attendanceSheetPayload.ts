@@ -84,19 +84,31 @@ export async function buildAttendanceSheetPayload(
     orderBy: { workDate: "asc" },
   });
 
-  // 1:1 vs 1:多 = "이 현장(site)에 배정된 훈련생 수"로 결정(워커 입력 아님).
-  //  · 1명  → 일반(1:1) 칸에 인정 지도시간, 1:多 = 공란
-  //  · 2명+ → 1:多 칸에 인정 지도시간, 일반(1:1) = 공란
-  // status 필터 없이 기간겹침으로만 집계 — 이탈 훈련생은 endDate로 표현되므로 과거기간 출근부
-  // 재생성 시에도 그때 재적이던 인원이 정확히 잡힌다(status:"ACTIVE"는 endDate=null만이라 과거 인원 누락).
-  const traineeCount = await prisma.traineePlacement.count({
+  // 1:1 vs 1:多 = "그 날짜에 이 현장(site)에 재적한 훈련생 수"로 날짜별 결정(워커 입력 아님).
+  //  · 1명  → 그 날은 일반(1:1) 칸에 인정 지도시간
+  //  · 2명+ → 그 날은 1:多 칸에 인정 지도시간
+  // ★월 중 훈련생 수가 바뀌면(1→2명 등) 날짜마다 판정이 달라진다. 기간 단일값이 아니라 날짜별로 계산.
+  // status 필터 없이 기간겹침으로만 집계 — 이탈 훈련생은 endDate로 표현되므로 과거기간 재생성도 정확.
+  const placements = await prisma.traineePlacement.findMany({
     where: {
       siteId,
       startDate: { lte: new Date(end + "T23:59:59+09:00") },
       OR: [{ endDate: null }, { endDate: { gte: new Date(start + "T00:00:00+09:00") } }],
     },
+    select: { startDate: true, endDate: true },
   });
-  const isMulti = traineeCount >= 2;
+  // 특정 날짜(yyyy-mm-dd, KST)에 재적(기간포함)한 훈련생 수가 2명 이상인지.
+  const isMultiOnDate = (ymd: string): boolean => {
+    const dayStart = new Date(ymd + "T00:00:00+09:00");
+    const dayEnd   = new Date(ymd + "T23:59:59+09:00");
+    let n = 0;
+    for (const p of placements) {
+      if (p.startDate <= dayEnd && (p.endDate == null || p.endDate >= dayStart)) {
+        if (++n >= 2) return true;
+      }
+    }
+    return false;
+  };
 
   // 지각 인정 기준(분) = 현장값 ?? 위탁기관 기본값 ?? 30. 보정대기 게이트와 동일 기준.
   const siteRow: any = await prisma.site.findUnique({ where: { id: siteId }, select: { lateThresholdMin: true, agencyId: true } as any });
@@ -138,19 +150,24 @@ export async function buildAttendanceSheetPayload(
       customWorkEnd: af.customWorkEnd,
       manualExtHours: a.logs.reduce((s, l) => s + Number(l.extTime1on1) + Number(l.extTimeGroup), 0),
     }) / 60).toFixed(2);
+    const multi = isMultiOnDate(a.workDate); // 그 날짜 기준 1:多 여부(날짜별)
     return {
       date: a.workDate,
       start: pending ? "" : (a.startTime ? fmtHHMM(a.startTime) : ""),
       end:   pending ? "" : (a.endTime   ? fmtHHMM(a.endTime)   : ""),
       pending,
       hours: baseH,                    // 총 지도시간(근무형태 인정시간)
-      multiHours: isMulti ? baseH : 0, // 1:多 지도(2인 이상 배정일 때만)
+      multiHours: multi ? baseH : 0,   // 1:多 지도(그 날 2인 이상 재적일 때만)
       _ext: extH,                      // 연장 지도시간(합계 집계용, 렌더 미사용)
+      _multi: multi,                   // 날짜별 1:多 플래그(총계 분리용, 렌더 미사용)
     };
   });
 
   const baseTotal = entries.reduce((s, e) => s + Number(e.hours), 0);
   const extTotal  = entries.reduce((s, e) => s + Number(e._ext), 0);
+  // 총계 1:1 vs 1:多 분리 = 날짜별 플래그로 각 날의 시간을 해당 버킷에 합산.
+  const oneToManyBase = entries.reduce((s, e) => s + (e._multi ? Number(e.hours) : 0), 0);
+  const oneToManyExt  = entries.reduce((s, e) => s + (e._multi ? Number(e._ext)  : 0), 0);
 
   const payload = {
     workerName,
@@ -163,12 +180,12 @@ export async function buildAttendanceSheetPayload(
     weeklyHolidayCount: 0,
     monthlyLeaveCount: 0,
     allowanceTotalWon: "0",
-    // 일반(1:1)·1:多는 배정 훈련생 수로 택1(둘 다 채우지 않음). 연장도 동일 기준으로 분리.
-    oneToOneHours:    isMulti ? 0 : baseTotal,
-    oneToManyHours:   isMulti ? baseTotal : 0,
-    otOneToOneHours:  isMulti ? 0 : extTotal,
-    otOneToManyHours: isMulti ? extTotal : 0,
-    entries: entries.map(({ _ext, ...e }) => e),
+    // 일반(1:1)·1:多는 날짜별 재적 훈련생 수로 각 날을 분리 합산(기간 단일값 아님).
+    oneToOneHours:    baseTotal - oneToManyBase,
+    oneToManyHours:   oneToManyBase,
+    otOneToOneHours:  extTotal - oneToManyExt,
+    otOneToManyHours: oneToManyExt,
+    entries: entries.map(({ _ext, _multi, ...e }) => e),
     signatures: { govAgent: signatures.govAgent, companyManager: signatures.companyManager, worker: signatures.worker },
   };
   const fileName = buildDocFileName("ATTENDANCE_SHEET", { companyName, start, end });

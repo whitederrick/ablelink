@@ -33,6 +33,14 @@ export interface WeeklyHolidayInput {
    * 그 주 소정근로일수에서 제외한다 → 공휴일 낀 주도 나머지 소정근로일만 개근하면 주휴 지급.
    */
   holidaySet?: Set<string>;
+  /**
+   * 급여기간 경계 "YYYY-MM-DD"(선택). 주면 기간 내 모든 주를 미리 seed 하여
+   * "출근 기록이 전혀 없는 주(결근주/무출근주)"도 부적격 주로 명시한다.
+   * (없으면 출근한 주만 집계되어 결근주가 주차 목록에서 사라져 판정이 왜곡됨)
+   * 주휴수당액에는 영향 없음(결근주는 어차피 0원) — 주차 목록·집계의 정확성만 보정.
+   */
+  periodStart?: string;
+  periodEnd?: string;
 }
 
 export interface WeekResult {
@@ -67,6 +75,20 @@ export function isoWeekKey(dateISO: string): string {
   return `${dt.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
+/** [startISO, endISO] 사이 모든 날짜를 "YYYY-MM-DD"(KST 날짜문자열)로 순회. */
+function* eachDateISO(startISO: string, endISO: string): Generator<string> {
+  const [sy, sm, sd] = startISO.split("-").map(Number);
+  const [ey, em, ed] = endISO.split("-").map(Number);
+  if (!sy || !ey) return;
+  let cur = Date.UTC(sy, sm - 1, sd);
+  const end = Date.UTC(ey, em - 1, ed);
+  while (cur <= end) {
+    const d = new Date(cur);
+    yield `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+    cur += 86400000;
+  }
+}
+
 function won(n: number): string { return `${Math.round(n).toLocaleString()}원`; }
 function hStr(min: number): string {
   const h = min / 60;
@@ -86,6 +108,15 @@ export function computeWeeklyHoliday(input: WeeklyHolidayInput): WeeklyHolidayRe
     if (!w) { w = { workedDays: new Set(), minutes: 0 }; byWeek.set(key, w); }
     w.workedDays.add(dw.dateISO);
     w.minutes += dw.scheduledMinutes;
+  }
+
+  // 결근주/무출근주 명시: 급여기간 내 모든 주를 seed → 출근 0인 주도 부적격 주로 남는다.
+  // (기간이 주어지지 않으면 종전대로 출근한 주만 집계)
+  if (input.periodStart && input.periodEnd) {
+    for (const ymd of eachDateISO(input.periodStart, input.periodEnd)) {
+      const key = isoWeekKey(ymd);
+      if (!byWeek.has(key)) byWeek.set(key, { workedDays: new Set(), minutes: 0 });
+    }
   }
 
   // 주차별 "소정근로일에 걸린 공휴일수" — 그 주 소정근로일수를 그만큼 줄인다.

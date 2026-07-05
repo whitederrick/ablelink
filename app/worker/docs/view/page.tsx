@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { getActiveAssignmentCookie } from "@/app/worker/_lib/activeAssignmentCookie";
 import {
   BarChart2,
   BookOpen,
@@ -101,8 +102,12 @@ function DocsViewInner() {
 
   const needsTrainee = DOC_GROUPS.flatMap(g => g.docs).find(d => d.id === docType)?.needsTrainee ?? false;
 
+  // 멀티현장 선택 배정(스위처 쿠키) — 컨텍스트·미리보기를 이 현장 기준으로.
+  const activeAssignmentId = typeof window !== "undefined" ? getActiveAssignmentCookie() : null;
+
   useEffect(() => {
-    fetch("/api/worker/docs/context", { cache: "no-store" })
+    const ctxQ = activeAssignmentId ? `?assignmentId=${encodeURIComponent(activeAssignmentId)}` : "";
+    fetch(`/api/worker/docs/context${ctxQ}`, { cache: "no-store" })
       .then(async r => { try { return await r.json(); } catch { return null; } })
       .then(d => {
         if (d?.success && d.data) {
@@ -121,6 +126,7 @@ function DocsViewInner() {
     const p = new URLSearchParams({
       docType, periodStart, periodEnd,
       ...(selectedTrainee ? { traineeId: selectedTrainee } : {}),
+      ...(activeAssignmentId ? { assignmentId: activeAssignmentId } : {}),
     });
     return `/api/worker/docs/preview?${p.toString()}`;
   }

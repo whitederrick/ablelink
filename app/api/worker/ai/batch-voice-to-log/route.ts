@@ -116,14 +116,46 @@ export async function POST(request: NextRequest) {
     if (audioBlob.size > MAX_AUDIO_BYTES) {
       return NextResponse.json({ success: false, message: "음성 파일이 너무 큽니다. (최대 20MB)" }, { status: 413 });
     }
-    if (!dateFrom || !dateTo) {
-      return NextResponse.json({ success: false, message: "날짜 범위를 선택해주세요." }, { status: 400 });
+    if (!dateFrom || !dateTo || !/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+      return NextResponse.json({ success: false, message: "날짜 범위(YYYY-MM-DD)를 선택해주세요." }, { status: 400 });
     }
 
     let trainees: { id: string; name: string }[] = [];
     try { trainees = JSON.parse(traineesJson); } catch {}
-    if (trainees.length === 0) {
+    if (!Array.isArray(trainees) || trainees.length === 0) {
       return NextResponse.json({ success: false, message: "훈련생을 1명 이상 선택해주세요." }, { status: 400 });
+    }
+
+    // ★서버 재검증(IDOR·PII): 클라가 보낸 훈련생 목록을 그대로 외부 AI(Groq·Gemini)에 넣지 않는다.
+    //   워커가 배정된 현장(들)에 기간([dateFrom,dateTo]) 재적한 훈련생만 허용하고, 이름도 서버 값으로 강제.
+    {
+      const workerSites = await prisma.siteAssignment.findMany({
+        where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+        select: { siteId: true },
+      });
+      const siteIds = [...new Set(workerSites.map(s => s.siteId))];
+      const reqIds = trainees
+        .map(t => { try { return BigInt(t.id); } catch { return null; } })
+        .filter((v): v is bigint => v != null);
+      const placements = siteIds.length && reqIds.length
+        ? await prisma.traineePlacement.findMany({
+            where: {
+              siteId: { in: siteIds },
+              traineeId: { in: reqIds },
+              startDate: { lte: new Date(dateTo + "T23:59:59+09:00") },
+              OR: [{ endDate: null }, { endDate: { gte: new Date(dateFrom + "T00:00:00+09:00") } }],
+            },
+            select: { trainee: { select: { id: true, name: true } } },
+          })
+        : [];
+      const allowed = new Map<string, string>();
+      for (const p of placements) allowed.set(String(p.trainee.id), p.trainee.name);
+      trainees = trainees
+        .filter(t => allowed.has(String(t.id)))
+        .map(t => ({ id: String(t.id), name: allowed.get(String(t.id))! }));
+      if (trainees.length === 0) {
+        return NextResponse.json({ success: false, message: "선택한 훈련생이 해당 기간 담당 현장 소속이 아닙니다." }, { status: 403 });
+      }
     }
 
     // 클라이언트가 주말 제외 날짜 목록을 보내면 그대로 사용, 아니면 서버에서 주말 제외 계산
@@ -167,7 +199,8 @@ export async function POST(request: NextRequest) {
     });
 
     if (!groqRes.ok) {
-      console.error("[batch-voice-to-log] Groq STT 오류:", groqRes.status, await groqRes.text());
+      // 제공자 오류 body는 발화 원문 등 PII를 되돌려줄 수 있어 로그에 남기지 않는다(상태코드만).
+      console.error("[batch-voice-to-log] Groq STT 오류:", groqRes.status);
       void logApiCall(workerId, "GROQ_STT", false);
       return NextResponse.json({ success: false, message: "음성 인식에 실패했습니다." }, { status: 500 });
     }
@@ -253,7 +286,8 @@ ${contextBlock}
     );
 
     if (!geminiRes.ok) {
-      console.error("[batch-voice-to-log] Gemini 오류:", geminiRes.status, await geminiRes.text());
+      // 제공자 오류 body는 프롬프트(발화·훈련생명 포함) 일부를 되돌려줄 수 있어 로그에 남기지 않는다(상태코드만).
+      console.error("[batch-voice-to-log] Gemini 오류:", geminiRes.status);
       void logApiCall(workerId, "GEMINI_BATCH", false);
       const drafts = dates.flatMap(date =>
         trainees.map(t => ({ date, traineeId: t.id, traineeName: t.name, content: transcript }))
@@ -270,7 +304,8 @@ ${contextBlock}
     try {
       aiDrafts = JSON.parse(cleaned);
     } catch {
-      console.error("[batch-voice-to-log] JSON 파싱 실패:", rawText.slice(0, 200));
+      // rawText는 생성된 일지 내용(훈련생명·지도내용=PII)이라 로그에 남기지 않는다. 길이만 기록.
+      console.error("[batch-voice-to-log] JSON 파싱 실패, 응답 길이:", rawText.length);
     }
 
     const drafts = dates.flatMap(date =>

@@ -356,6 +356,9 @@ export async function computePayrollItems(
           days, workDaysPerWeek: wpw, ordinaryWage,
           flatWeeklyHolidayPay: contract.weeklyHolidayPay ? Number(contract.weeklyHolidayPay) : null,
           workingWeekdays, holidaySet: monthHolidaySet,
+          // 급여월 전체 주를 판정 대상에 포함 → 결근주/무출근주도 부적격 주로 명시.
+          periodStart: `${yearMonth}-01`,
+          periodEnd: `${yearMonth}-${String(daysInMonth).padStart(2, "0")}`,
         });
         if (wh.totalHolidayPay > 0) {
           grossPay += wh.totalHolidayPay;

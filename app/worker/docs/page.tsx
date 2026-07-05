@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { getActiveAssignmentCookie } from "@/app/worker/_lib/activeAssignmentCookie";
 import {
   BarChart2,
   BookOpen,
@@ -104,8 +105,12 @@ function DocsContent() {
     }
   }, []);
 
+  // 멀티현장 선택 배정(스위처가 세팅한 쿠키). 문서 조회·생성이 이 현장 기준으로 동작하도록 서버에 전달.
+  const activeAssignmentId = typeof window !== "undefined" ? getActiveAssignmentCookie() : null;
+
   useEffect(() => {
-    fetch("/api/worker/site/current", { cache: "no-store" }).then(r => r.json()).then(d => {
+    const q = activeAssignmentId ? `?assignmentId=${encodeURIComponent(activeAssignmentId)}` : "";
+    fetch(`/api/worker/site/current${q}`, { cache: "no-store" }).then(r => r.json()).then(d => {
       if (d.success && d.data) {
         setSiteInfo({
           companyName:  d.data.companyName,
@@ -179,6 +184,7 @@ function DocsContent() {
           periodEnd,
           traineeId: state.traineeIds[0] || undefined,
           companyManagerSignToken: signToken || undefined,
+          assignmentId: activeAssignmentId || undefined,
         }),
       });
       const data = await res.json();
@@ -222,7 +228,7 @@ function DocsContent() {
       const res = await fetch("/api/worker/docs/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ periodStart, periodEnd, documents, companyManagerSignToken: signToken || undefined }),
+        body: JSON.stringify({ periodStart, periodEnd, documents, companyManagerSignToken: signToken || undefined, assignmentId: activeAssignmentId || undefined }),
       });
       const data = await res.json();
       if (data.success) alert(`${data.submitted}건을 위탁기관에 제출했습니다. 담당 매니저에게 알림이 전송되었습니다.`);

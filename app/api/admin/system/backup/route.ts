@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
 import ExcelJS from "exceljs";
+import { escapeCsvCell } from "@/lib/csv";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function fmtKst(d: Date | null | undefined): string {
@@ -16,13 +17,8 @@ function fmtKst(d: Date | null | undefined): string {
   const k = new Date(d.getTime() + 9 * 3600 * 1000);
   return `${k.getUTCFullYear()}-${pad2(k.getUTCMonth() + 1)}-${pad2(k.getUTCDate())} ${pad2(k.getUTCHours())}:${pad2(k.getUTCMinutes())}`;
 }
-function escapeCsv(v: unknown): string {
-  if (v == null) return "";
-  const s = String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
 function csvBody(header: string[], rows: (string | number)[][]): string {
-  return "﻿" + [header.join(","), ...rows.map(r => r.map(escapeCsv).join(","))].join("\r\n");
+  return "﻿" + [header.join(","), ...rows.map(r => r.map(escapeCsvCell).join(","))].join("\r\n");
 }
 async function xlsxBody(sheet: string, header: string[], rows: (string | number)[][]): Promise<Uint8Array> {
   const wb = new ExcelJS.Workbook();

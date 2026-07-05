@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { logAccess } from "@/lib/accessLog";
 import { Prisma, DocumentStage } from "@prisma/client";
 
 function errToStatus(msg: string) {
@@ -72,6 +73,14 @@ export async function GET(req: NextRequest) {
         createdByWorkerId: true,
         createdByManagerId: true,
       },
+    });
+
+    // 개인정보 접속기록: 취급자의 제출 문서(사업자 제출 서류) 내용(sourceData) 열람.
+    await logAccess(req, scope, {
+      subjectType: "DocumentRun",
+      subjectId: runId,
+      resource: "submitted_document",
+      action: "view",
     });
 
     return NextResponse.json({ success: true, items: rows.map(toItem) });

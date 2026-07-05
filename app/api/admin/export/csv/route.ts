@@ -10,6 +10,8 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
+import { escapeCsvCell } from "@/lib/csv";
+import { logAccess } from "@/lib/accessLog";
 
 function errStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -28,17 +30,8 @@ function retentionMonths(plan: string): number {
   return 12;                     // TRIAL·STARTER·STANDARD·PRO = 1년
 }
 
-function escapeCsv(val: unknown): string {
-  if (val == null) return "";
-  const s = String(val);
-  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
-}
-
 function row(cols: unknown[]): string {
-  return cols.map(escapeCsv).join(",");
+  return cols.map(escapeCsvCell).join(",");
 }
 
 function pad2(n: number) {
@@ -95,6 +88,14 @@ export async function GET(req: NextRequest) {
       ? (fromStr && fromStr > earliest ? fromStr : earliest)
       : (fromStr || undefined);
     const effectiveTo = toStr || `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
+
+    // 개인정보 접속기록: 취급자의 근태/일지 원자료 CSV 대량 내보내기(정보주체 다수 → 라벨로 범위 기록).
+    await logAccess(req, session, {
+      subjectType: type === "logs" ? "Trainee" : "Worker",
+      resource: type === "logs" ? "logs_csv_export" : "attendance_csv_export",
+      subjectLabel: `${type} ${effectiveFrom ?? "all"}~${effectiveTo}`,
+      action: "export",
+    });
 
     if (type === "attendance") {
       const where: any = {};

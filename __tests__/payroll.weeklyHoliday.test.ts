@@ -88,6 +88,32 @@ describe("computeWeeklyHoliday — 2조건 판정", () => {
   });
 });
 
+describe("computeWeeklyHoliday — 무출근/결근주 명시(periodStart/End)", () => {
+  it("periodStart/End 주면 출근 0인 주도 부적격 주로 남는다(사라지지 않음)", () => {
+    // 6월 전체 기간인데 W24만 출근 → 나머지 주(W23·W25·W26·W27)는 무출근 주로 부적격 명시.
+    const days = fullWeek([8, 9, 10, 11, 12]); // W24만 개근
+    const r = computeWeeklyHoliday({
+      days, workDaysPerWeek: 5, ordinaryWage: 12000,
+      periodStart: "2026-06-01", periodEnd: "2026-06-30",
+    });
+    // 6월을 걸치는 모든 주가 목록에 존재
+    expect(r.weeks.length).toBeGreaterThanOrEqual(5);
+    const empty = r.weeks.filter(w => w.workedDays === 0);
+    expect(empty.length).toBeGreaterThan(0);
+    expect(empty.every(w => !w.eligible && w.holidayPay === 0)).toBe(true);
+    // 결근주가 명시돼도 실제 지급액은 출근한 적격주(W24)만 반영 — 금액 왜곡 없음.
+    expect(r.eligibleWeeks).toBe(1);
+    expect(r.totalHolidayPay).toBe(48000);
+  });
+
+  it("periodStart/End 없으면 종전대로 출근한 주만 집계(하위호환)", () => {
+    const days = fullWeek([8, 9, 10, 11, 12]);
+    const r = computeWeeklyHoliday({ days, workDaysPerWeek: 5, ordinaryWage: 12000 });
+    expect(r.weeks.length).toBe(1);
+    expect(r.weeks[0].weekKey).toBe("2026-W24");
+  });
+});
+
 describe("computeWeeklyHoliday — 공휴일 낀 주 개근 인정", () => {
   it("공휴일(6/10 수)에 안 나왔어도 나머지 소정근로일(4일) 개근이면 주휴 지급", () => {
     // W24: 월~금 중 6/10(수)이 공휴일 → 소정근로일 4일. 6/8,9,11,12 출근(4일) = 개근.

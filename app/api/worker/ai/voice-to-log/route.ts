@@ -100,8 +100,8 @@ export async function POST(request: NextRequest) {
     });
 
     if (!groqRes.ok) {
-      const errText = await groqRes.text();
-      console.error("[voice-to-log] Groq STT 오류:", groqRes.status, errText);
+      // 제공자 오류 body는 발화 원문 등 PII를 되돌려줄 수 있어 로그에 남기지 않는다(상태코드만).
+      console.error("[voice-to-log] Groq STT 오류:", groqRes.status);
       void logApiCall(workerId, "GROQ_STT", false);
       return NextResponse.json({ success: false, message: "음성 인식에 실패했습니다." }, { status: 500 });
     }
@@ -182,8 +182,8 @@ ${contextBlock}- 위 '현장 주요 활동'·'자주 수행한 과제'를 반영
     );
 
     if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error("[voice-to-log] Gemini 오류:", geminiRes.status, errText);
+      // 제공자 오류 body는 프롬프트(발화·훈련생명 포함) 일부를 되돌려줄 수 있어 로그에 남기지 않는다(상태코드만).
+      console.error("[voice-to-log] Gemini 오류:", geminiRes.status);
       void logApiCall(workerId, "GEMINI_LOG", false);
       return NextResponse.json({ success: true, content: transcript });
     }
