@@ -20,10 +20,11 @@ describe("escapeCsvCell — 수식 인젝션 방지(G1)", () => {
     expect(escapeCsvCell(-100)).toBe("-100");
   });
 
-  it("전화/국제번호는 손상되지 않음(G2)", () => {
-    expect(escapeCsvCell("+821012345678")).toBe("+821012345678");
+  it("R2-7: + 국제전화는 Excel 표시 위해 이스케이프('+8210…)", () => {
+    // 사람이 Excel로 여는 게 기본 → '+' 시작 값은 이스케이프해야 Excel이 수식으로 안 먹고 텍스트로 표시.
+    expect(escapeCsvCell("+821012345678")).toBe("'+821012345678");
+    // 숫자로 시작(formula-char 아님)하는 전화는 애초에 이스케이프 로직 대상 아님 → 원본 유지.
     expect(escapeCsvCell("010-1234-5678")).toBe("010-1234-5678");
-    // +뒤에 수식이 섞이면 예외 아님 → 이스케이프
     expect(escapeCsvCell("+1+cmd").startsWith("'")).toBe(true);
   });
 

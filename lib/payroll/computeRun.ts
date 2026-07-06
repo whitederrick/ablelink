@@ -159,6 +159,10 @@ export async function computePayrollItems(
     //  ★기본계약 없이 현장 override만 있으면(고아) '급여 계약 없음'으로 처리한다 —
     //   과거엔 payContracts[0](고아 override)로 폴백해 그 현장 금액이 전 현장을 지배하는 버그가 있었다.
     //   (기본계약 삭제는 override가 남아있으면 API에서 거부. 시딩도 siteId:null 기준으로 존재확인.)
+    //  ★M9 정책(사용자 확정 2026-07-06): **월중 단가변경은 지원하지 않는다**(계약변경은 월 경계 기준).
+    //   한 달에 겹치는 기본계약은 하나라는 전제 → 최신 계약을 그 달 전체에 적용한다(일자별 분할 안 함).
+    //   월 중간 '입사'(그 달 유일 계약이 mid-month 시작)는 정상 지급됨. 만약 월중 단가변경이 발생하면
+    //   그 달 전체가 최신 단가로 소급 계산되며, 정밀 일할이 필요한 소급 조정은 **별도 수동 프로세스**로 처리한다.
     const contract = payContracts.find((c) => c.siteId == null) ?? null;
     // 현장별 금액 override 맵(siteId → 최신 계약). 금액(baseAmount·hourlyRate2Plus)만 사용.
     const rateBySite = new Map<string, (typeof payContracts)[number]>();
