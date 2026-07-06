@@ -34,10 +34,12 @@ export async function POST(request: NextRequest) {
   try {
     const scope = await requireManagerSession(request);
     const body = await request.json();
-    const { workerId: workerIdRaw, docType, periodStart, periodEnd, traineeId, toEmail } = body;
+    const { workerId: workerIdRaw, docType, periodStart, periodEnd, traineeId, toEmail, assignmentId: assignmentIdRaw } = body;
 
     if (!workerIdRaw || !docType || !periodStart || !periodEnd)
       return NextResponse.json({ success:false, message:"필수 파라미터 누락" }, { status:400 });
+    if (!/^[0-9]+$/.test(String(workerIdRaw)))
+      return NextResponse.json({ success:false, message:"workerId 오류" }, { status:400 });
 
     const workerId = BigInt(workerIdRaw);
     const start = periodStart, end = periodEnd;
@@ -47,8 +49,16 @@ export async function POST(request: NextRequest) {
       select: { workerName:true, phoneNumber:true, signatureUrl:true, loginId:true },
     });
 
+    // C2: 멀티현장 워커는 assignmentId로 정확한 현장을 지정할 수 있게 한다(미지정 시 기존대로 최신 배정).
+    //  지정 배정은 소유(같은 워커)·기관 스코프를 검증 — 임의 배정으로 타현장 문서를 만들지 못하도록.
+    const assignmentId = assignmentIdRaw && /^[0-9]+$/.test(String(assignmentIdRaw)) ? BigInt(assignmentIdRaw) : null;
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { workerId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] }, ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
+      where: {
+        workerId,
+        status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] },
+        ...(assignmentId ? { id: assignmentId } : {}),
+        ...(scope.agencyId ? { agencyId: scope.agencyId } : {}),
+      },
       include: {
         site: true,
         assignedByManager: { select: { signatureUrl:true, displayName:true } },
@@ -90,6 +100,18 @@ export async function POST(request: NextRequest) {
     let payload: any;
     let fileName: string;
 
+    // C1: 훈련생 문서는 traineeId가 이 현장·기간에 재적한 훈련생일 때만 생성한다.
+    //  (가드 null인데도 traineeName=""·logs=[]로 진행하면 빈 공식 PDF가 공단으로 이메일 발송되던 심각 버그.)
+    const TRAINEE_DOCS = ["TRAINING_DAILY_LOG", "TRAINEE_FINAL_EVAL", "ADAPTATION_DAILY_LOG", "ADAPTATION_FINAL_EVAL"];
+    let guardedTrainee: { id: bigint; name: string } | null = null;
+    if (TRAINEE_DOCS.includes(docType)) {
+      const tid = traineeId && /^[0-9]+$/.test(String(traineeId)) ? BigInt(traineeId) : null;
+      guardedTrainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
+      if (!guardedTrainee) {
+        return NextResponse.json({ success:false, message:"이 현장·기간에 배정된 훈련생이 아닙니다. 훈련생·현장·기간을 확인해주세요." }, { status:400 });
+      }
+    }
+
     if (docType === "ATTENDANCE_SHEET") {
       ({ payload, fileName } = await buildAttendanceSheetPayload({
         workerId,
@@ -109,8 +131,7 @@ export async function POST(request: NextRequest) {
       }));
 
     } else if (docType === "TRAINING_DAILY_LOG") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const logs = trainee ? await prisma.traineeLog.findMany({
         where:{ writerId:workerId, traineeId:trainee.id, trainingType:{in:["PRE","FIELD"]}, attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
@@ -131,8 +152,7 @@ export async function POST(request: NextRequest) {
       fileName = `훈련일지_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
 
     } else if (docType === "TRAINEE_FINAL_EVAL") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
         where:{ traineeId:trainee.id, writerId:workerId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
       }) : null;
@@ -146,8 +166,7 @@ export async function POST(request: NextRequest) {
       fileName = `훈련생평가_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
 
     } else if (docType === "ADAPTATION_DAILY_LOG") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const logs = trainee ? await prisma.traineeLog.findMany({
         where:{ writerId:workerId, traineeId:trainee.id, trainingType:"ADAPTATION", attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
@@ -165,8 +184,7 @@ export async function POST(request: NextRequest) {
       fileName = `적응지도일지_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;
 
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
         where:{ traineeId:trainee.id, writerId:workerId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
       }) : null;

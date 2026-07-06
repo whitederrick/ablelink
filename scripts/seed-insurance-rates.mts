@@ -54,6 +54,11 @@ try {
         longTermCare: pct(d.longTermCare),
         employmentInsurance: pct(d.employmentInsurance),
         industrialAccident: 0,
+        // 국민연금 기준소득월액 하한/상한은 **의도적으로 null**(종전 근사=지급액×요율 유지).
+        //  잠정 고시값을 시드로 넣으면 노무사 확정 전 무단 clamp(저소득 과공제)가 되므로 넣지 않는다.
+        //  운영자가 매년 7월 고시값을 확인해 설정 화면에서 직접 입력해야 clamp가 활성화된다. (B1/B2)
+        pensionBaseMin: null,
+        pensionBaseMax: null,
       } as any,
       update: {
         nationalPension: pct(d.nationalPension),

@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { sendAlimtalk } from "@/lib/kakao";
 import { getAcknowledgement } from "@/lib/contractTemplates";
 import { imageToDataUri } from "@/lib/signatureImage";
+import { findTimeConflict } from "@/lib/assignmentOverlap";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 
@@ -189,19 +190,51 @@ export async function POST(req: NextRequest) {
   if (contract.assignmentId) {
     const isFullDay = contract.workType === "FULL_DAY";
     const isCustom  = contract.workType === "CUSTOM";
-    await prisma.siteAssignment.updateMany({
-      where: { id: contract.assignmentId, status: { in: ["ASSIGNED", "CONFIRMED"] } },
-      data: {
-        workType: contract.workType ?? undefined,
-        commuteGuidanceIncluded: isFullDay ? false : contract.commuteGuidanceIncluded,
-        customWorkStart: isCustom ? contract.customWorkStart : null,
-        customWorkEnd:   isCustom ? contract.customWorkEnd   : null,
-        startDate: contract.contractStart,
-        endDate:   contract.contractEnd,
-        status:    "CONFIRMED",
-        confirmedAt: new Date(),
+    // E1: 서명 시 workType/기간을 배정에 덮어쓰며 CONFIRMED로 승격하는데, 겹침가드 없이 하면
+    //  respond/PATCH/offers의 409를 우회해 이중배정(AM+FULL_DAY 등)이 생긴다.
+    //  → 계약 workType·기간을 후보로 같은 워커의 다른 진행중 배정과 시간겹침을 검사, 충돌 시 승격 보류 + 알림.
+    const others = await prisma.siteAssignment.findMany({
+      where: {
+        workerId: contract.workerId,
+        status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] },
+        NOT: { id: contract.assignmentId },
       },
+      select: { id: true, workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
     });
+    const conflict = findTimeConflict(
+      { workType: contract.workType, customWorkStart: isCustom ? contract.customWorkStart : null, customWorkEnd: isCustom ? contract.customWorkEnd : null, startDate: contract.contractStart, endDate: contract.contractEnd },
+      others,
+    );
+    if (conflict) {
+      // 이중배정 방지: 승격/덮어쓰기 보류. 매니저에게 일정 충돌 알림(수동 해소 유도).
+      if (contract.agencyId) {
+        try {
+          const mgrs = await prisma.manager.findMany({ where: { agencyId: contract.agencyId, isActive: true }, select: { id: true } });
+          if (mgrs.length) await prisma.managerNotice.createMany({
+            data: mgrs.map((m) => ({
+              managerId: m.id,
+              title: "[일정 충돌] 계약 서명 — 배정 확정 보류",
+              body: `계약 근무형태·기간이 '${conflict.site?.companyName ?? "다른 현장"}' 배정과 같은 날 근무시간이 겹쳐 배정 확정(CONFIRMED)을 보류했습니다.\n배정 관리에서 일정을 조정한 뒤 확정해 주세요.`,
+              link: "/manager/workers",
+            })),
+          });
+        } catch { /* 알림 실패는 서명 흐름에 영향 없음 */ }
+      }
+    } else {
+      await prisma.siteAssignment.updateMany({
+        where: { id: contract.assignmentId, status: { in: ["ASSIGNED", "CONFIRMED"] } },
+        data: {
+          workType: contract.workType ?? undefined,
+          commuteGuidanceIncluded: isFullDay ? false : contract.commuteGuidanceIncluded,
+          customWorkStart: isCustom ? contract.customWorkStart : null,
+          customWorkEnd:   isCustom ? contract.customWorkEnd   : null,
+          startDate: contract.contractStart,
+          endDate:   contract.contractEnd,
+          status:    "CONFIRMED",
+          confirmedAt: new Date(),
+        },
+      });
+    }
   }
 
   // ── 급여 기준 자동 생성 (1단계-②) ──

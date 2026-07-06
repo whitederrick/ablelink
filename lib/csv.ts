@@ -10,7 +10,11 @@
 export function escapeCsvCell(val: unknown): string {
   if (val == null) return "";
   let s = String(val);
-  if (/^[=+\-@\t\r]/.test(s) && !/^-?\d/.test(s)) s = `'${s}`;
+  // 수식 인젝션 예외는 '전체가 숫자/좌표/전화번호'일 때만 — 과거엔 시작이 -숫자이기만 하면 예외라
+  //  `-1+cmd|'/C calc'!A0` 같은 페이로드가 그대로 통과했다(G1). 시작만 검사하지 않고 셀 전체를 검사.
+  //  · 숫자/좌표: -37.5, 12000  · 전화/국제번호: +821012345678, 010-1234-5678 (G2: + 전화가 손상되지 않도록 예외)
+  const isSafeNumeric = /^-?\d+(\.\d+)?$/.test(s) || /^\+?\d[\d\s\-()]*$/.test(s);
+  if (/^[=+\-@\t\r]/.test(s) && !isSafeNumeric) s = `'${s}`;
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }

@@ -29,16 +29,19 @@ export async function GET(request: NextRequest) {
     const periodEnd   = searchParams.get("periodEnd")   || periodStart;
     const traineeId   = searchParams.get("traineeId");
     const workerIdRaw = searchParams.get("workerId");
+    const assignmentIdRaw = searchParams.get("assignmentId");
 
-    if (!docType || !workerIdRaw) return NextResponse.json({ success:false, message:"docType, workerId 필요" }, { status:400 });
+    if (!docType || !workerIdRaw || !/^[0-9]+$/.test(workerIdRaw)) return NextResponse.json({ success:false, message:"docType, workerId 필요" }, { status:400 });
 
     const workerId = BigInt(workerIdRaw);
     const user = await prisma.worker.findUnique({
       where: { id: workerId },
       select: { workerName:true, phoneNumber:true, signatureUrl:true, loginId:true },
     });
+    // C2: 멀티현장 워커는 assignmentId로 현장 지정(미지정 시 최신 배정). 지정 배정은 소유·기관 스코프 검증.
+    const assignmentId = assignmentIdRaw && /^[0-9]+$/.test(assignmentIdRaw) ? BigInt(assignmentIdRaw) : null;
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { workerId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] }, ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
+      where: { workerId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] }, ...(assignmentId ? { id: assignmentId } : {}), ...(scope.agencyId ? { agencyId: scope.agencyId } : {}) },
       include: { site:true, assignedByManager:{ select:{ signatureUrl:true, displayName:true } } },
       orderBy: { assignedAt:"desc" },
     });
@@ -84,6 +87,17 @@ export async function GET(request: NextRequest) {
     const start = periodStart, end = periodEnd;
     let payload: any;
 
+    // C1: 훈련생 문서는 이 현장·기간 재적 훈련생일 때만 렌더(빈 공식문서 미리보기 방지).
+    const TRAINEE_DOCS = ["TRAINING_DAILY_LOG", "TRAINEE_FINAL_EVAL", "ADAPTATION_DAILY_LOG", "ADAPTATION_FINAL_EVAL"];
+    let guardedTrainee: { id: bigint; name: string } | null = null;
+    if (TRAINEE_DOCS.includes(docType)) {
+      const tid = traineeId && /^[0-9]+$/.test(String(traineeId)) ? BigInt(traineeId) : null;
+      guardedTrainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
+      if (!guardedTrainee) {
+        return NextResponse.json({ success:false, message:"이 현장·기간에 배정된 훈련생이 아닙니다. 훈련생·현장·기간을 확인해주세요." }, { status:400 });
+      }
+    }
+
     if (docType === "ATTENDANCE_SHEET") {
       ({ payload } = await buildAttendanceSheetPayload({
         workerId,
@@ -102,9 +116,7 @@ export async function GET(request: NextRequest) {
         signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
       }));
     } else if (docType === "TRAINING_DAILY_LOG") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      // ★소속 검증(IDOR 방지): 배정 현장+기간 재적 훈련생만. 기관 스코프만으론 같은 기관 타 현장 훈련생 주입을 못 막음.
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
+      const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const logs = trainee ? await prisma.traineeLog.findMany({
         where:{ writerId:workerId, traineeId:trainee.id, trainingType:{in:["PRE","FIELD"]}, attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
@@ -120,9 +132,7 @@ export async function GET(request: NextRequest) {
         signatures:{ govAgent:sigs.govAgent, companyManager:sigs.companyManager, worker:sigs.worker },
       };
     } else if (docType === "ADAPTATION_DAILY_LOG") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      // ★소속 검증(IDOR 방지): 배정 현장+기간 재적 훈련생만. 기관 스코프만으론 같은 기관 타 현장 훈련생 주입을 못 막음.
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
+      const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const logs = trainee ? await prisma.traineeLog.findMany({
         where:{ writerId:workerId, traineeId:trainee.id, trainingType:"ADAPTATION", attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
@@ -135,9 +145,7 @@ export async function GET(request: NextRequest) {
         signatures:{ worker:sigs.worker, govAgent:sigs.govAgent },
       };
     } else if (docType === "TRAINEE_FINAL_EVAL") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      // ★소속 검증(IDOR 방지): 배정 현장+기간 재적 훈련생만. 기관 스코프만으론 같은 기관 타 현장 훈련생 주입을 못 막음.
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
+      const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
         where:{ traineeId:trainee.id, writerId:workerId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
       }) : null;
@@ -149,9 +157,7 @@ export async function GET(request: NextRequest) {
         signatures:{ worker:sigs.worker, agencyAgent:sigs.agencyAgent },
       };
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      // ★소속 검증(IDOR 방지): 배정 현장+기간 재적 훈련생만. 기관 스코프만으론 같은 기관 타 현장 훈련생 주입을 못 막음.
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
+      const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
         where:{ traineeId:trainee.id, writerId:workerId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
       }) : null;

@@ -4,6 +4,7 @@
 
 import { Redis } from "@upstash/redis";
 
+// 기본 정책(로그인 브루트포스용). 라우트별로 checkRateLimit(key, policy)로 완화/강화 가능.
 const WINDOW_SEC = 15 * 60;   // 15분 윈도우
 const MAX_ATTEMPTS = 10;       // 최대 시도 횟수
 const BLOCK_SEC = 30 * 60;    // 30분 차단
@@ -12,6 +13,13 @@ export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
   retryAfterMs?: number;
+}
+
+// 정책 옵션 — 미지정 필드는 기본값 사용. (H1: 공개 서명 조회처럼 정상 트래픽이 많은 GET은 느슨한 예산 필요)
+export interface RateLimitPolicy {
+  max?: number;
+  windowSec?: number;
+  blockSec?: number;
 }
 
 // ── Redis 클라이언트 (환경변수 없으면 null) ──────────────────
@@ -24,7 +32,7 @@ const redis =
     : null;
 
 // ── Redis 기반 rate limit ─────────────────────────────────────
-async function redisRateLimit(key: string): Promise<RateLimitResult> {
+async function redisRateLimit(key: string, max: number, windowSec: number, blockSec: number): Promise<RateLimitResult> {
   const blockKey = `rl:block:${key}`;
   const countKey = `rl:count:${key}`;
 
@@ -41,16 +49,16 @@ async function redisRateLimit(key: string): Promise<RateLimitResult> {
   // 카운트 증가 (처음이면 윈도우 TTL 설정)
   const count = await redis!.incr(countKey);
   if (count === 1) {
-    await redis!.expire(countKey, WINDOW_SEC);
+    await redis!.expire(countKey, windowSec);
   }
 
-  if (count > MAX_ATTEMPTS) {
-    const blockedUntilMs = Date.now() + BLOCK_SEC * 1000;
-    await redis!.set(blockKey, blockedUntilMs, { ex: BLOCK_SEC });
-    return { allowed: false, remaining: 0, retryAfterMs: BLOCK_SEC * 1000 };
+  if (count > max) {
+    const blockedUntilMs = Date.now() + blockSec * 1000;
+    await redis!.set(blockKey, blockedUntilMs, { ex: blockSec });
+    return { allowed: false, remaining: 0, retryAfterMs: blockSec * 1000 };
   }
 
-  return { allowed: true, remaining: MAX_ATTEMPTS - count };
+  return { allowed: true, remaining: max - count };
 }
 
 // ── 인메모리 폴백 (로컬 개발용) ──────────────────────────────
@@ -64,43 +72,46 @@ setInterval(() => {
   }
 }, 60_000);
 
-function memoryRateLimit(key: string): RateLimitResult {
+function memoryRateLimit(key: string, max: number, windowSec: number, blockSec: number): RateLimitResult {
   const now = Date.now();
   const entry = store.get(key);
 
   if (!entry) {
     store.set(key, { count: 1, firstAt: now });
-    return { allowed: true, remaining: MAX_ATTEMPTS - 1 };
+    return { allowed: true, remaining: max - 1 };
   }
   if (entry.blockedUntil && now < entry.blockedUntil) {
     return { allowed: false, remaining: 0, retryAfterMs: entry.blockedUntil - now };
   }
-  if (now - entry.firstAt > WINDOW_SEC * 1000) {
+  if (now - entry.firstAt > windowSec * 1000) {
     store.set(key, { count: 1, firstAt: now });
-    return { allowed: true, remaining: MAX_ATTEMPTS - 1 };
+    return { allowed: true, remaining: max - 1 };
   }
 
   entry.count++;
-  if (entry.count > MAX_ATTEMPTS) {
-    entry.blockedUntil = now + BLOCK_SEC * 1000;
-    return { allowed: false, remaining: 0, retryAfterMs: BLOCK_SEC * 1000 };
+  if (entry.count > max) {
+    entry.blockedUntil = now + blockSec * 1000;
+    return { allowed: false, remaining: 0, retryAfterMs: blockSec * 1000 };
   }
-  return { allowed: true, remaining: MAX_ATTEMPTS - entry.count };
+  return { allowed: true, remaining: max - entry.count };
 }
 
 // ── 공개 API ─────────────────────────────────────────────────
-export async function checkRateLimit(key: string): Promise<RateLimitResult> {
+export async function checkRateLimit(key: string, policy?: RateLimitPolicy): Promise<RateLimitResult> {
+  const max = policy?.max ?? MAX_ATTEMPTS;
+  const windowSec = policy?.windowSec ?? WINDOW_SEC;
+  const blockSec = policy?.blockSec ?? BLOCK_SEC;
   if (redis) {
     try {
-      return await redisRateLimit(key);
+      return await redisRateLimit(key, max, windowSec, blockSec);
     } catch (err) {
       // Redis(Upstash) 장애·DNS 실패 등으로 접근 불가하면 인메모리로 폴백.
       // rate limit 인프라 문제로 로그인 자체가 막히면 안 됨.
       console.error("[rateLimit] Redis 접근 실패, 인메모리 폴백:", err);
-      return memoryRateLimit(key);
+      return memoryRateLimit(key, max, windowSec, blockSec);
     }
   }
-  return memoryRateLimit(key);
+  return memoryRateLimit(key, max, windowSec, blockSec);
 }
 
 export async function resetRateLimit(key: string): Promise<void> {
