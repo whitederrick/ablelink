@@ -159,11 +159,11 @@ export async function computePayrollItems(
     //  ★기본계약 없이 현장 override만 있으면(고아) '급여 계약 없음'으로 처리한다 —
     //   과거엔 payContracts[0](고아 override)로 폴백해 그 현장 금액이 전 현장을 지배하는 버그가 있었다.
     //   (기본계약 삭제는 override가 남아있으면 API에서 거부. 시딩도 siteId:null 기준으로 존재확인.)
-    const contract = payContracts.find((c) => (c as any).siteId == null) ?? null;
+    const contract = payContracts.find((c) => c.siteId == null) ?? null;
     // 현장별 금액 override 맵(siteId → 최신 계약). 금액(baseAmount·hourlyRate2Plus)만 사용.
     const rateBySite = new Map<string, (typeof payContracts)[number]>();
     for (const c of payContracts) {
-      const sid = (c as any).siteId;
+      const sid = c.siteId;
       if (sid == null) continue;
       if (!rateBySite.has(String(sid))) rateBySite.set(String(sid), c); // desc 정렬이라 최신 우선
     }
@@ -530,8 +530,8 @@ export async function computePayrollItems(
           //  하한/상한 미설정(null) 연도는 종전 근사(지급액×요율) 유지 — 하위호환.
           const pBase = standardMonthlyIncome(
             grossPay,
-            (insuranceRates as any).pensionBaseMin != null ? Number((insuranceRates as any).pensionBaseMin) : null,
-            (insuranceRates as any).pensionBaseMax != null ? Number((insuranceRates as any).pensionBaseMax) : null,
+            insuranceRates.pensionBaseMin != null ? Number(insuranceRates.pensionBaseMin) : null,
+            insuranceRates.pensionBaseMax != null ? Number(insuranceRates.pensionBaseMax) : null,
           );
           const pensionBase = pBase ?? grossPay;
           pushDed("pension", "국민연금", Math.round(pensionBase * Number(insuranceRates.nationalPension)));
