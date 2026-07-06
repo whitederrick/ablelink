@@ -26,6 +26,9 @@ export async function GET(req: NextRequest) {
         longTermCare: Number(r.longTermCare),
         employmentInsurance: Number(r.employmentInsurance),
         industrialAccident: Number((r as any).industrialAccident ?? 0), // 산재(사업주 부담, 표기용)
+        // 국민연금 기준소득월액 하한/상한(원). null=미설정(종전 근사).
+        pensionBaseMin: (r as any).pensionBaseMin != null ? Number((r as any).pensionBaseMin) : null,
+        pensionBaseMax: (r as any).pensionBaseMax != null ? Number((r as any).pensionBaseMax) : null,
         total: +(
           Number(r.nationalPension) +
           Number(r.healthInsurance) +
@@ -46,13 +49,19 @@ export async function POST(req: NextRequest) {
     const session = await requireAdminSession(req);
 
     const body = await req.json();
-    const { year, nationalPension, healthInsurance, longTermCare, employmentInsurance, industrialAccident } = body;
+    const { year, nationalPension, healthInsurance, longTermCare, employmentInsurance, industrialAccident, pensionBaseMin, pensionBaseMax } = body;
 
     if (!year || nationalPension == null || healthInsurance == null || longTermCare == null || employmentInsurance == null) {
       return NextResponse.json({ success: false, message: "필수 항목 누락" }, { status: 400 });
     }
 
     const industrial = industrialAccident == null ? 0 : Number(industrialAccident); // 산재(선택, 기본 0)
+    // 국민연금 기준소득월액 하한/상한(원, 선택). 빈값/0이면 null(등급표 미설정 → 종전 근사).
+    const pMin = pensionBaseMin != null && Number(pensionBaseMin) > 0 ? Number(pensionBaseMin) : null;
+    const pMax = pensionBaseMax != null && Number(pensionBaseMax) > 0 ? Number(pensionBaseMax) : null;
+    if (pMin != null && pMax != null && pMin > pMax) {
+      return NextResponse.json({ success: false, message: "국민연금 하한액이 상한액보다 클 수 없습니다." }, { status: 400 });
+    }
     const rates = await prisma.insuranceRates.upsert({
       where: { year: Number(year) },
       create: {
@@ -62,6 +71,8 @@ export async function POST(req: NextRequest) {
         longTermCare,
         employmentInsurance,
         industrialAccident: industrial,
+        pensionBaseMin: pMin,
+        pensionBaseMax: pMax,
       } as any,
       update: {
         nationalPension,
@@ -69,10 +80,12 @@ export async function POST(req: NextRequest) {
         longTermCare,
         employmentInsurance,
         industrialAccident: industrial,
+        pensionBaseMin: pMin,
+        pensionBaseMax: pMax,
       } as any,
     });
 
-    await audit(session, { entityType: "InsuranceRates", entityId: rates.id, action: "update", after: { year: Number(year), nationalPension: Number(nationalPension), healthInsurance: Number(healthInsurance), longTermCare: Number(longTermCare), employmentInsurance: Number(employmentInsurance), industrialAccident: industrial } });
+    await audit(session, { entityType: "InsuranceRates", entityId: rates.id, action: "update", after: { year: Number(year), nationalPension: Number(nationalPension), healthInsurance: Number(healthInsurance), longTermCare: Number(longTermCare), employmentInsurance: Number(employmentInsurance), industrialAccident: industrial, pensionBaseMin: pMin, pensionBaseMax: pMax } });
     return NextResponse.json({ success: true, id: rates.id.toString() });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;

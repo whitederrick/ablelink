@@ -3,7 +3,7 @@
 // 시스템 설정 세부 섹션 컴포넌트 — 설정 메뉴를 세부 페이지로 분리하기 위해 추출.
 import { useEffect, useState } from "react";
 import { Plus, Trash2, GripVertical } from "lucide-react";
-import { INSURANCE_RATE_DEFAULTS, insuranceRateDefaultForYear } from "@/lib/payroll/insuranceRateDefaults";
+import { INSURANCE_RATE_DEFAULTS, insuranceRateDefaultForYear, pensionBaseBoundDefaultForYear } from "@/lib/payroll/insuranceRateDefaults";
 import Pagination from "../_components/Pagination";
 
 const CAT_TONES = ["sky", "amber", "rose", "emerald", "violet", "slate"] as const;
@@ -220,6 +220,7 @@ type Rate = {
   id: string; year: number;
   nationalPension: number; healthInsurance: number; longTermCare: number;
   employmentInsurance: number; industrialAccident: number; total: number;
+  pensionBaseMin: number | null; pensionBaseMax: number | null;
 };
 
 // 4대보험 + 산재 요율(연도별). 입력은 %(예: 4.5), 저장은 분수(0.045). 급여 계산이 grossPay×요율로 공제.
@@ -237,6 +238,9 @@ export function InsuranceRatesManager({ onToast }: { onToast: (m: string) => voi
   const [rows, setRows] = useState<Rate[]>([]);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [f, setF] = useState<Record<FKey, string>>({ ...EMPTY });
+  // 국민연금 기준소득월액 하한/상한(원). 별도 입력(요율과 단위 다름).
+  const [pMin, setPMin] = useState("");
+  const [pMax, setPMax] = useState("");
   const [busy, setBusy] = useState(false);
   const [prefillNote, setPrefillNote] = useState("");
   const [page, setPage] = useState(1);
@@ -259,20 +263,27 @@ export function InsuranceRatesManager({ onToast }: { onToast: (m: string) => voi
         employmentInsurance: String(+(r.employmentInsurance * 100).toFixed(4)),
         industrialAccident: String(+(r.industrialAccident * 100).toFixed(4)),
       });
+      setPMin(r.pensionBaseMin != null ? String(r.pensionBaseMin) : "");
+      setPMax(r.pensionBaseMax != null ? String(r.pensionBaseMax) : "");
       return;
     }
     const def = insuranceRateDefaultForYear(Number(y));
-    if (def) {
+    const bnd = pensionBaseBoundDefaultForYear(Number(y));
+    if (def || bnd) {
       setF({
-        nationalPension: String(def.nationalPension),
-        healthInsurance: String(def.healthInsurance),
-        longTermCare: String(def.longTermCare),
-        employmentInsurance: String(def.employmentInsurance),
+        nationalPension: def ? String(def.nationalPension) : "",
+        healthInsurance: def ? String(def.healthInsurance) : "",
+        longTermCare: def ? String(def.longTermCare) : "",
+        employmentInsurance: def ? String(def.employmentInsurance) : "",
         industrialAccident: "",
       });
-      setPrefillNote(`${y}년 공식 참고 기본값을 자동으로 채웠습니다 — 저장 전 확인하세요${def.note ? ` · ${def.note}` : ""}`);
+      setPMin(bnd ? String(bnd.min) : "");
+      setPMax(bnd ? String(bnd.max) : "");
+      const notes = [def?.note, bnd ? `국민연금 기준소득월액 ${bnd.note ?? "고시 확인 필요"}` : null].filter(Boolean).join(" · ");
+      setPrefillNote(`${y}년 공식 참고 기본값을 자동으로 채웠습니다 — 저장 전 확인하세요${notes ? ` · ${notes}` : ""}`);
     } else {
       setF({ ...EMPTY });
+      setPMin(""); setPMax("");
       setPrefillNote("");
     }
   }
@@ -284,6 +295,9 @@ export function InsuranceRatesManager({ onToast }: { onToast: (m: string) => voi
     for (const fld of FIELDS) {
       if (fld.required && pct(f[fld.key]) == null) { onToast(`${fld.label} 요율을 입력하세요.`); return; }
     }
+    const won = (s: string) => (s.trim() === "" ? null : Math.round(Number(s.replace(/,/g, ""))));
+    const bMin = won(pMin), bMax = won(pMax);
+    if (bMin != null && bMax != null && bMin > bMax) { onToast("국민연금 하한액이 상한액보다 클 수 없습니다."); return; }
     const body = {
       year: yr,
       nationalPension: pct(f.nationalPension),
@@ -291,6 +305,8 @@ export function InsuranceRatesManager({ onToast }: { onToast: (m: string) => voi
       longTermCare: pct(f.longTermCare),
       employmentInsurance: pct(f.employmentInsurance),
       industrialAccident: pct(f.industrialAccident) ?? 0,
+      pensionBaseMin: bMin,
+      pensionBaseMax: bMax,
     };
     setBusy(true);
     try {
@@ -308,9 +324,14 @@ export function InsuranceRatesManager({ onToast }: { onToast: (m: string) => voi
     if (!confirm(`${y}년 요율을 저장·적용합니다.`)) return;
     setBusy(true);
     try {
+      // 국민연금 기준소득월액 하한/상한은 기존 저장값 유지(없으면 참고 기본값). 재적용으로 wipe 방지.
+      const saved = rows.find(x => x.year === y);
+      const bnd = pensionBaseBoundDefaultForYear(y);
+      const keepMin = saved?.pensionBaseMin ?? bnd?.min ?? null;
+      const keepMax = saved?.pensionBaseMax ?? bnd?.max ?? null;
       const d = await fetch("/api/admin/payroll/insurance-rates", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ year: y, nationalPension: np / 100, healthInsurance: hi / 100, longTermCare: ltc / 100, employmentInsurance: ei / 100, industrialAccident: (ia ?? 0) / 100 }),
+        body: JSON.stringify({ year: y, nationalPension: np / 100, healthInsurance: hi / 100, longTermCare: ltc / 100, employmentInsurance: ei / 100, industrialAccident: (ia ?? 0) / 100, pensionBaseMin: keepMin, pensionBaseMax: keepMax }),
       }).then(r => r.json());
       if (d.success) { onToast(`${y}년 요율 저장·적용`); pickYear(String(y)); load(); }
       else onToast(d.message || "저장 실패");
@@ -339,6 +360,7 @@ export function InsuranceRatesManager({ onToast }: { onToast: (m: string) => voi
         연도별 근로자 부담 요율(국민연금·건강·장기요양·고용)과 <b>산재(전액 사업주 부담)</b>를 입력합니다. 단위는 <b>%</b>(예: 4.5).
         급여 계산 시 가입 유형(일용/초단시간/일반)에 따라 해당 보험만 자동 공제됩니다. 산재는 워커 공제에서 제외(표기용).
         <br />연도를 입력하면 <b>공식 참고 기본값</b>이 자동으로 채워집니다(저장 전 확인). <b>장기요양</b>은 과세급여 기준 실효율(예: 0.4591)로 넣습니다.
+        <br /><b>국민연금 기준소득월액 하한/상한(원)</b>을 입력하면 국민연금 보험료를 지급액이 아닌 <b>기준소득월액</b>(월보수 1,000원 절사 후 하한~상한 clamp)으로 계산합니다(엄밀). 비우면 종전(지급액×요율) 근사. ⚠️매년 7월 고시값 확인.
       </p>
 
       {rows.length === 0 && (
@@ -364,6 +386,16 @@ export function InsuranceRatesManager({ onToast }: { onToast: (m: string) => voi
               className="h-10 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-sky-400" />
           </div>
         ))}
+        <div>
+          <label className="mb-1 block text-[11px] font-black text-slate-500">연금 하한액 (원)</label>
+          <input type="number" step="1000" value={pMin} onChange={e => setPMin(e.target.value)} placeholder="예: 400000"
+            className="h-10 w-28 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-sky-400" />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-black text-slate-500">연금 상한액 (원)</label>
+          <input type="number" step="1000" value={pMax} onChange={e => setPMax(e.target.value)} placeholder="예: 6370000"
+            className="h-10 w-28 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-sky-400" />
+        </div>
         <button onClick={save} disabled={busy}
           className="h-10 rounded-xl bg-slate-950 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-40">
           {busy ? "저장 중…" : "저장"}

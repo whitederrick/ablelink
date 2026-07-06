@@ -1094,6 +1094,10 @@ model InsuranceRates {
   employmentInsurance Decimal @map("employment_insurance")
   // 산재보험 — 전액 사업주 부담(워커 공제 아님). 명세서·리포트 표기용. 기본 0.
   industrialAccident  Decimal @default(0) @map("industrial_accident")
+  // 국민연금 기준소득월액 하한액/상한액(원, 매년 7월 고시). 국민연금 보험료 = 기준소득월액 × 요율.
+  //  기준소득월액 = 월 보수 1,000원 절사 후 [하한, 상한] clamp. null이면 종전(지급액×요율) 근사 유지(하위호환).
+  pensionBaseMin      Decimal? @map("pension_base_min")
+  pensionBaseMax      Decimal? @map("pension_base_max")
 
   @@map("insurance_rates")
 }

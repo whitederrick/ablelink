@@ -45,5 +45,21 @@ export function insuranceRateDefaultForYear(year: number): InsuranceRateDefaultP
   return INSURANCE_RATE_DEFAULTS[year] ?? null;
 }
 
+// 국민연금 기준소득월액 하한액/상한액(원). ★매년 7월 고시(적용기간 7월~다음해 6월) → 저장 전 반드시 공식 고시로 확인.
+//  연도 키 = 그 해 7월 적용분(달력연도 대부분을 차지) 기준의 참고값(잠정). 운영자가 정확한 고시값으로 저장.
+export interface PensionBaseBoundDefault { min: number; max: number; note?: string; }
+export const PENSION_BASE_BOUND_DEFAULTS: Record<number, PensionBaseBoundDefault> = {
+  2022: { min: 350000, max: 5530000, note: "참고값 — 고시 확인 필요" },
+  2023: { min: 370000, max: 5900000, note: "참고값 — 고시 확인 필요" },
+  2024: { min: 390000, max: 6170000, note: "참고값 — 고시 확인 필요" },
+  2025: { min: 400000, max: 6370000, note: "잠정 — 2025.7 고시 확인 필요" },
+  2026: { min: 400000, max: 6370000, note: "잠정 — 2026.7 고시 미정, 2025값 유지(확인 필요)" },
+};
+
+/** 해당 연도의 국민연금 기준소득월액 하한/상한 참고 기본값. 없으면 null. */
+export function pensionBaseBoundDefaultForYear(year: number): PensionBaseBoundDefault | null {
+  return PENSION_BASE_BOUND_DEFAULTS[year] ?? null;
+}
+
 /** 기본값이 정의된 연도 목록(오름차순). */
 export const INSURANCE_DEFAULT_YEARS = Object.keys(INSURANCE_RATE_DEFAULTS).map(Number).sort((a, b) => a - b);

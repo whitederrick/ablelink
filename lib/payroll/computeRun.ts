@@ -10,6 +10,7 @@ import { computeWeeklyHoliday } from "@/lib/payroll/weeklyHoliday";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
 import { determineEligibility, isIllegalBusinessIncome, type IncomeType } from "@/lib/payroll/insuranceEligibility";
+import { standardMonthlyIncome } from "@/lib/payroll/pensionBase";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const SERVICE_STEP_LABEL: Record<string, string> = {
@@ -468,7 +469,19 @@ export async function computePayrollItems(
       pushDed("localTax", "주민세", taxR.localTax);
       if (insuranceRates) {
         const ded = new Set(elig.workerDeductible);
-        if (ded.has("pension"))    pushDed("pension", "국민연금", Math.round(grossPay * Number(insuranceRates.nationalPension)));
+        if (ded.has("pension")) {
+          // 국민연금 = 기준소득월액 × 요율. 기준소득월액 = 월 보수 1,000원 절사 + [하한,상한] clamp.
+          //  하한/상한 미설정(null) 연도는 종전 근사(지급액×요율) 유지 — 하위호환.
+          const pBase = standardMonthlyIncome(
+            grossPay,
+            (insuranceRates as any).pensionBaseMin != null ? Number((insuranceRates as any).pensionBaseMin) : null,
+            (insuranceRates as any).pensionBaseMax != null ? Number((insuranceRates as any).pensionBaseMax) : null,
+          );
+          const pensionBase = pBase ?? grossPay;
+          pushDed("pension", "국민연금", Math.round(pensionBase * Number(insuranceRates.nationalPension)));
+          (breakdown as any).pensionBase = pensionBase;         // 명세 투명성(적용된 기준소득월액)
+          (breakdown as any).pensionBaseClamped = pBase != null; // 등급표 적용 여부(하한/상한)
+        }
         if (ded.has("health"))     pushDed("health", "건강보험", Math.round(grossPay * Number(insuranceRates.healthInsurance)));
         if (ded.has("ltc"))        pushDed("ltc", "장기요양보험", Math.round(grossPay * Number(insuranceRates.longTermCare)));
         if (ded.has("employment")) pushDed("employment", "고용보험", Math.round(grossPay * Number(insuranceRates.employmentInsurance)));
