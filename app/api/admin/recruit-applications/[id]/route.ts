@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
+import { findTimeConflict } from "@/lib/assignmentOverlap";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -62,6 +63,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const wq = await checkQuota(app.post.agencyId!, "workers");
       if (!wq.allowed) {
         return NextResponse.json({ success: false, message: `인력 한도(${wq.current}/${wq.max})를 초과했습니다. 플랜을 업그레이드해주세요.` }, { status: 409 });
+      }
+      // ④ 시간겹침: 자동배정은 FULL_DAY라 다른 현장 진행중 배정과 기간이 겹치면 충돌 → 차단.
+      const others = await prisma.siteAssignment.findMany({
+        where: { workerId: app.workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(app.post.siteId != null ? { NOT: { siteId: app.post.siteId } } : {}) },
+        select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
+      });
+      const tc = findTimeConflict({ workType: "FULL_DAY", startDate: new Date(), endDate: null }, others);
+      if (tc) {
+        return NextResponse.json({ success: false, message: `이미 다른 현장(${(tc as any).site?.companyName ?? "-"})에 근무시간이 겹치는 배정이 있습니다. 기존 배정을 종료한 뒤 다시 시도해주세요.` }, { status: 409 });
       }
     }
 

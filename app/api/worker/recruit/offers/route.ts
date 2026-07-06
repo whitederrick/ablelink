@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
+import { findTimeConflict } from "@/lib/assignmentOverlap";
 
 export async function GET(req: NextRequest) {
   try {
@@ -70,7 +71,17 @@ export async function PATCH(req: NextRequest) {
           where: { siteId: site.id, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
           select: { id: true },
         });
-        if (wq.allowed && !dup) { assignSiteId = site.id; assignAgencyId = site.agencyId; }
+        // 시간겹침: 다른 현장 진행중 배정과 같은 날 반나절 슬롯이 겹치면 자동배정 스킵(수락 자체는 진행).
+        //  제안 자동배정은 FULL_DAY라 기존 활성 배정과 기간이 겹치면 무조건 충돌.
+        const others = await prisma.siteAssignment.findMany({
+          where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { siteId: site.id } },
+          select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
+        });
+        const timeConflict = findTimeConflict(
+          { workType: "FULL_DAY", startDate: offer.serviceStart ?? new Date(), endDate: offer.serviceEnd ?? null },
+          others,
+        );
+        if (wq.allowed && !dup && !timeConflict) { assignSiteId = site.id; assignAgencyId = site.agencyId; }
       }
     }
 

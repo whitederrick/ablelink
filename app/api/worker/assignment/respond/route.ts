@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { audit } from "@/lib/audit";
+import { findTimeConflict } from "@/lib/assignmentOverlap";
 
 const VALID_WT = ["AM", "PM", "FULL_DAY", "CUSTOM"];
 
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
 
     const asgn = await prisma.siteAssignment.findFirst({
       where: { id: BigInt(assignmentId), workerId, status: "REQUESTED" },
-      select: { id: true, siteId: true, replyDeadline: true, requestedWorkTypes: true, site: { select: { companyName: true, ownerManagerId: true, agencyId: true } } },
+      select: { id: true, siteId: true, startDate: true, endDate: true, replyDeadline: true, requestedWorkTypes: true, site: { select: { companyName: true, ownerManagerId: true, agencyId: true } } },
     });
     if (!asgn) {
       return NextResponse.json({ success: false, message: "회신할 배정 요청을 찾을 수 없습니다." }, { status: 404 });
@@ -92,6 +93,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "요청된 근무형태 중 하나를 선택해주세요." }, { status: 400 });
     }
     const commuteGuidanceIncluded = workType === "FULL_DAY" ? false : true;
+
+    // ★멀티현장 시간겹침 방지: 선택한 근무형태가 같은 워커의 다른 현장 진행중 배정과
+    //   같은 날 반나절 슬롯(AM/PM)이 겹치면 수락 차단(예: 다른 현장 오전 + 이 요청 종일).
+    {
+      const others = await prisma.siteAssignment.findMany({
+        where: { workerId, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { id: asgn.id } },
+        select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
+      });
+      const conflict = findTimeConflict(
+        { workType, startDate: asgn.startDate, endDate: asgn.endDate },
+        others,
+      );
+      if (conflict) {
+        return NextResponse.json(
+          { success: false, message: `다른 현장(${(conflict as any).site?.companyName ?? "-"}) 배정과 같은 날 근무시간이 겹칩니다. 겹치지 않는 근무형태(오전/오후)를 선택하거나 담당자에게 문의해주세요.` },
+          { status: 409 },
+        );
+      }
+    }
 
     // 같은 현장에 경쟁 후보(요청 중 또는 이미 수락) 존재 여부 → 단일/복수 판정
     const others = await prisma.siteAssignment.count({
