@@ -41,8 +41,9 @@ export async function GET(request: NextRequest) {
       select: { workerName:true, phoneNumber:true, signatureUrl:true, loginId:true },
     });
     // 딥링크가 배정을 '명시'하면 종료(ENDED)여도 그 배정으로(과거문서 미리보기·재제출) — generate/submit과 통일.
+    //  ★근무 발생 가능 상태(ASSIGNED/CONFIRMED/ACTIVE/ENDED)만 허용 — 미근무 배정(REQUESTED 등) 문서 차단.
     const assignment = selAssignmentId != null
-      ? await prisma.siteAssignment.findFirst({ where: { id: selAssignmentId, workerId }, include: { site:true, assignedByManager:{ select:{ signatureUrl:true, displayName:true } } } })
+      ? await prisma.siteAssignment.findFirst({ where: { id: selAssignmentId, workerId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE","ENDED"] } }, include: { site:true, assignedByManager:{ select:{ signatureUrl:true, displayName:true } } } })
       : await prisma.siteAssignment.findFirst({
           where: { workerId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] } },
           include: { site:true, assignedByManager:{ select:{ signatureUrl:true, displayName:true } } },

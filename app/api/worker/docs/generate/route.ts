@@ -59,8 +59,9 @@ export async function POST(request: NextRequest) {
 
     // 딥링크/쿠키가 배정을 '명시'하면 종료(ENDED)여도 그 배정으로(과거문서 재제출·수정요청) — buildDocPayload/submit과 통일.
     //  소유(workerId)만 검증하므로 타현장으로 새지 않는다. 명시 없으면 최신 활성 배정.
+    //  ★근무 발생 가능 상태(ASSIGNED/CONFIRMED/ACTIVE/ENDED)만 허용 — 미근무 배정(REQUESTED 등) 공식문서 차단.
     const assignment = selAssignmentId != null
-      ? await prisma.siteAssignment.findFirst({ where: { id: selAssignmentId, workerId }, include: { site: true } })
+      ? await prisma.siteAssignment.findFirst({ where: { id: selAssignmentId, workerId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE","ENDED"] } }, include: { site: true } })
       : await prisma.siteAssignment.findFirst({
           where: { workerId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] } },
           include: { site: true },
