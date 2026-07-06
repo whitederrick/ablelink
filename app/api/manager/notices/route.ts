@@ -11,37 +11,65 @@ export async function GET(req: NextRequest) {
   try {
     const { managerId } = await requireManagerSession(req);
 
-    const [notices, unreadCount] = await Promise.all([
+    // 통합 피드: 개별 알림(ManagerNotice) + 운영자 시스템공지(SystemAnnouncement, 매니저별 읽음=SystemAnnouncementRead).
+    //  시스템공지는 관계 없이 별도 조회 후 SystemAnnouncementRead 로 읽음상태 병합(가상 병합 — fan-out 미사용).
+    const [notices, sysAnnouncements, sysReads] = await Promise.all([
       prisma.managerNotice.findMany({
         where: { managerId },
         orderBy: [{ readAt: "asc" }, { createdAt: "desc" }],
         take: 50,
-        select: {
-          id:        true,
-          ticketId:  true,
-          title:     true,
-          body:      true,
-          link:      true,
-          readAt:    true,
-          createdAt: true,
-        },
+        select: { id: true, ticketId: true, title: true, body: true, link: true, readAt: true, createdAt: true },
       }),
-      // take:50로 잘리지 않도록 미읽음 개수는 별도 count 쿼리로 정확히 집계
-      prisma.managerNotice.count({ where: { managerId, readAt: null } }),
+      prisma.systemAnnouncement.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: { id: true, title: true, body: true, type: true, createdAt: true },
+      }),
+      prisma.systemAnnouncementRead.findMany({ where: { managerId }, select: { announcementId: true, readAt: true } }),
     ]);
+
+    const readMap = new Map(sysReads.map(r => [r.announcementId.toString(), r.readAt]));
+
+    const noticeItems = notices.map(n => ({
+      id:        n.id.toString(),
+      source:    "notice" as const,
+      ticketId:  n.ticketId?.toString() ?? null,
+      title:     n.title,
+      body:      n.body,
+      link:      (n as any).link ?? null,
+      readAt:    n.readAt?.toISOString() ?? null,
+      createdAt: n.createdAt.toISOString(),
+    }));
+
+    const sysLabel = (t: string) => (t === "URGENT" ? "긴급 공지" : t === "MAINTENANCE" ? "점검 안내" : "시스템 공지");
+    const sysItems = sysAnnouncements.map(a => {
+      const rd = readMap.get(a.id.toString());
+      return {
+        id:        `sys:${a.id}`,
+        source:    "system" as const,
+        ticketId:  null,
+        title:     `[${sysLabel(a.type)}] ${a.title}`,
+        body:      a.body,
+        link:      "/manager/system-notices",
+        readAt:    rd ? rd.toISOString() : null,
+        createdAt: a.createdAt.toISOString(),
+      };
+    });
+
+    // 미읽음 우선, 그다음 최신순 — 개별알림 정렬과 동일 기준으로 통합.
+    const merged = [...noticeItems, ...sysItems].sort((x, y) => {
+      const xu = x.readAt ? 1 : 0, yu = y.readAt ? 1 : 0;
+      if (xu !== yu) return xu - yu;
+      return y.createdAt.localeCompare(x.createdAt);
+    });
+
+    const unreadNotice = notices.filter(n => !n.readAt).length;
+    const unreadSys = sysItems.filter(s => !s.readAt).length;
 
     return NextResponse.json({
       success: true,
-      unreadCount,
-      notices: notices.map(n => ({
-        id:        n.id.toString(),
-        ticketId:  n.ticketId?.toString() ?? null,
-        title:     n.title,
-        body:      n.body,
-        link:      (n as any).link ?? null,
-        readAt:    n.readAt?.toISOString() ?? null,
-        createdAt: n.createdAt.toISOString(),
-      })),
+      unreadCount: unreadNotice + unreadSys,
+      notices: merged,
     });
   } catch (e: any) {
     if (e instanceof Response) return e;
@@ -60,6 +88,31 @@ export async function POST(req: NextRequest) {
       await prisma.managerNotice.updateMany({
         where: { managerId, readAt: null },
         data: { readAt: now },
+      });
+      // 시스템 공지도 전부 읽음 처리(관계 없어 수동 diff → 미읽음만 read 레코드 생성).
+      const [allSys, reads] = await Promise.all([
+        prisma.systemAnnouncement.findMany({ select: { id: true }, orderBy: { createdAt: "desc" }, take: 200 }),
+        prisma.systemAnnouncementRead.findMany({ where: { managerId }, select: { announcementId: true } }),
+      ]);
+      const readSet = new Set(reads.map(r => r.announcementId.toString()));
+      const toMark = allSys.filter(a => !readSet.has(a.id.toString()));
+      if (toMark.length > 0) {
+        await prisma.systemAnnouncementRead.createMany({
+          data: toMark.map(a => ({ announcementId: a.id, managerId })),
+          skipDuplicates: true,
+        });
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    // 시스템 공지 읽음(id="sys:<announcementId>") — SystemAnnouncementRead upsert.
+    if (typeof body?.noticeId === "string" && body.noticeId.startsWith("sys:")) {
+      const aid = parseBigInt(body.noticeId.slice(4));
+      if (!aid) return NextResponse.json({ success: false, message: "noticeId가 필요합니다." }, { status: 400 });
+      await prisma.systemAnnouncementRead.upsert({
+        where: { announcementId_managerId: { announcementId: aid, managerId } },
+        create: { announcementId: aid, managerId },
+        update: {},
       });
       return NextResponse.json({ success: true });
     }

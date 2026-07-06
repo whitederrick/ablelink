@@ -89,23 +89,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 위탁기관 관리자(담당자) 알림 fan-out — 전체(긴급) 발송 시에만 관리자 알림 벨에 실제 알림 생성.
-    // (일반 MANAGERS 공지는 '시스템 공지사항' 화면에서만 조용히 열람 — 벨 알림 X)
-    if (toAll) {
-      const activeManagers = await prisma.manager.findMany({
-        where: { isActive: true },
-        select: { id: true },
-      });
-      if (activeManagers.length > 0) {
-        await prisma.managerNotice.createMany({
-          data: activeManagers.map(m => ({
-            managerId: m.id,
-            title:     `[긴급 공지] ${title.trim()}`.slice(0, 100),
-            body:      body.trim().slice(0, 500),
-          })),
-        });
-      }
-    }
+    // 위탁기관 관리자는 시스템 공지를 알림 벨의 '통합 피드'에서 직접 본다(manager/notices GET이
+    // SystemAnnouncement + SystemAnnouncementRead 를 가상 병합). → 별도 ManagerNotice fan-out 불필요.
+    //  (fan-out 하면 통합 피드에서 '[긴급 공지]'와 '[시스템 공지]'가 중복 노출됨)
 
     return NextResponse.json({
       success: true,

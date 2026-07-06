@@ -912,6 +912,21 @@ export default function PayrollPage() {
             );
           })()}
 
+          {/* 국민연금 가입 검토 대상 — 계약 1개월 미만이나 월 8일↑/60h↑. 자동 공제 안 함, 위탁기관 담당자가 노무사·공단 확인. */}
+          {(() => {
+            const flagged = selectedRun.items.filter(it => (it.breakdown as any)?.insurance?.needsPensionReview);
+            if (flagged.length === 0) return null;
+            return (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+                <p className="font-black text-amber-800">🔔 국민연금 가입 검토 대상 {flagged.length}명</p>
+                <p className="mt-1 font-semibold leading-relaxed text-amber-700">
+                  {flagged.map(it => it.workerName).join(", ")} — 계약 1개월 미만이나 해당 월 근로일수 8일 이상 또는 60시간 이상입니다.
+                  국민연금공단 안내상 사업장가입 대상이 될 수 있어 <b>공제·신고 전 노무사 또는 공단 확인</b>이 필요합니다. (현재 자동 공제하지 않습니다.)
+                </p>
+              </div>
+            );
+          })()}
+
           {loadingRun ? (
             <p className={T.empty}>로딩 중...</p>
           ) : (
@@ -944,6 +959,7 @@ export default function PayrollPage() {
                           {isZeroPay && <span className="ml-1.5 inline-flex items-center rounded bg-rose-100 px-1.5 py-0.5 text-[11px] font-bold text-rose-600">급여 0원</span>}
                           {bd?.note && <span className="ml-1.5 text-[11px] font-semibold text-amber-600">⚠ {bd.note}</span>}
                           {warn && <span className="ml-1.5 text-[11px] font-semibold text-rose-600">⚠ {warn}</span>}
+                          {bd?.insurance?.needsPensionReview && <span className="ml-1.5 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-700" title="계약 1개월 미만이나 월 8일↑/60h↑ — 국민연금 사업장가입 대상 여지. 노무사·공단 확인 후 공제(현재 자동 공제 안 함).">국민연금 검토</span>}
                         </td>
                         <td className={T.td}>
                           <span className={`${T.badge} ${incType === "EMPLOYMENT" ? "bg-emerald-50 text-emerald-600" : "bg-sky-50 text-sky-600"}`}>{incType === "EMPLOYMENT" ? "근로소득" : "사업소득"}</span>
