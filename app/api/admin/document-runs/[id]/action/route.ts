@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const run = await prisma.documentRun.findUnique({
       where: { id: runId },
-      select: { id: true, agencyId: true, workerId: true, traineeId: true, signStage: true, docType: true, periodStart: true, periodEnd: true },
+      select: { id: true, agencyId: true, workerId: true, traineeId: true, assignmentId: true, signStage: true, docType: true, periodStart: true, periodEnd: true },
     });
     if (!run) return NextResponse.json({ success: false, message: "문서를 찾을 수 없습니다." }, { status: 404 });
     if (run.agencyId !== scope.agencyId) return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
@@ -42,13 +42,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const t = await prisma.trainee.findUnique({ where: { id: run.traineeId }, select: { name: true } });
       traineeName = t?.name ? `(${t.name})` : "";
     }
-    const ps = run.periodStart.toISOString().slice(0, 10);
-    const pe = run.periodEnd.toISOString().slice(0, 10);
+    // C4: periodStart/End 는 KST 자정으로 저장(예 2026-07-01T00:00+09:00 = UTC 06-30T15:00).
+    //  .toISOString()은 UTC라 하루 빠른 날짜(06-30)를 줘 딥링크 기간이 어긋나고 재제출 시 원본 매칭 실패→중복 run.
+    //  → KST 기준(+9h)으로 날짜 문자열 산출.
+    const kstDate = (d: Date) => new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const ps = kstDate(run.periodStart);
+    const pe = kstDate(run.periodEnd);
     const docTitle = `${docLabel}${traineeName} · ${ps}~${pe}`;
 
-    // 워커 알림 딥링크 — 해당 문서(종류·기간·훈련생)로 정밀 이동. 워커 docs 페이지가 파라미터로 자동 선택.
+    // 워커 알림 딥링크 — 해당 문서(종류·기간·훈련생·배정)로 정밀 이동. 워커 docs 페이지가 파라미터로 자동 선택.
     const linkParams = new URLSearchParams({ focusDoc: PRISMA_TO_PDF_DOCTYPE[run.docType] ?? run.docType, ps, pe });
     if (run.traineeId != null) linkParams.set("tid", run.traineeId.toString());
+    // C5: 원본 run의 assignmentId를 딥링크에 포함 — 멀티현장 워커가 쿠키(다른 현장)로 엉뚱한 현장에 재제출하는 것 방지.
+    if (run.assignmentId != null) linkParams.set("aid", run.assignmentId.toString());
     const workerDocLink = `/worker/docs?${linkParams.toString()}`;
 
     // 상태머신 가드: 제출된 문서만, 올바른 단계에서만 액션 허용(스테일 UI·중복·직접호출 방어).

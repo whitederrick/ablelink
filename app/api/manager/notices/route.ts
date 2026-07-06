@@ -13,10 +13,14 @@ export async function GET(req: NextRequest) {
 
     // 통합 피드: 개별 알림(ManagerNotice) + 운영자 시스템공지(SystemAnnouncement, 매니저별 읽음=SystemAnnouncementRead).
     //  시스템공지는 관계 없이 별도 조회 후 SystemAnnouncementRead 로 읽음상태 병합(가상 병합 — fan-out 미사용).
-    const [notices, sysAnnouncements, sysReads] = await Promise.all([
+    // F1: 미읽음 배지·목록 정확도.
+    //  · 정렬 `readAt: asc`는 Postgres에서 NULL(미읽음)을 뒤로 보내(nulls last) take:50 창에서 미읽음이 잘려나가
+    //    "미읽음 먼저" 주석과 반대로 동작 → 배지 0·목록 누락. `nulls: "first"`로 미읽음을 창 앞으로.
+    //  · 미읽음 개수는 창 절단과 무관하게 별도 count 쿼리로 정확히 집계(F1/F2).
+    const [notices, sysAnnouncements, sysReads, unreadNotice, totalSys, sysReadCount] = await Promise.all([
       prisma.managerNotice.findMany({
         where: { managerId },
-        orderBy: [{ readAt: "asc" }, { createdAt: "desc" }],
+        orderBy: [{ readAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
         take: 50,
         select: { id: true, ticketId: true, title: true, body: true, link: true, readAt: true, createdAt: true },
       }),
@@ -26,6 +30,9 @@ export async function GET(req: NextRequest) {
         select: { id: true, title: true, body: true, type: true, createdAt: true },
       }),
       prisma.systemAnnouncementRead.findMany({ where: { managerId }, select: { announcementId: true, readAt: true } }),
+      prisma.managerNotice.count({ where: { managerId, readAt: null } }),
+      prisma.systemAnnouncement.count(),
+      prisma.systemAnnouncementRead.count({ where: { managerId } }),
     ]);
 
     const readMap = new Map(sysReads.map(r => [r.announcementId.toString(), r.readAt]));
@@ -63,8 +70,8 @@ export async function GET(req: NextRequest) {
       return y.createdAt.localeCompare(x.createdAt);
     });
 
-    const unreadNotice = notices.filter(n => !n.readAt).length;
-    const unreadSys = sysItems.filter(s => !s.readAt).length;
+    // F2: 시스템공지 미읽음 = 전체 공지 − 이 매니저가 읽은 공지 수(take:50 창 밖 오래된 미읽음도 정확히 집계).
+    const unreadSys = Math.max(0, totalSys - sysReadCount);
 
     return NextResponse.json({
       success: true,

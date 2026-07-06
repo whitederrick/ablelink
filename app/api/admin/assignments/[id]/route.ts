@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
 import { VALID_WORK_TYPES, type WorkType, computeWorkTimes } from "@/lib/workSchedule";
 import { audit, auditSnapshot } from "@/lib/audit";
-import { findTimeConflict } from "@/lib/assignmentOverlap";
+import { findTimeConflict, assignmentsTimeConflict } from "@/lib/assignmentOverlap";
 
 // 배정 취소(종료) — 위탁기관 담당자(매니저)·시스템 운영자 공통.
 // 진행 중(REQUESTED/ACCEPTED/ASSIGNED/CONFIRMED/ACTIVE) 배정을 ENDED로 종료 → 재배정 가능.
@@ -80,7 +80,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // 매니저는 본 기관 배정만, 운영자는 전체
     const existing = await prisma.siteAssignment.findUnique({
       where: { id: assignmentId },
-      select: { agencyId: true, workerId: true, startDate: true, endDate: true },
+      select: { agencyId: true, workerId: true, startDate: true, endDate: true, workType: true, customWorkStart: true, customWorkEnd: true },
     });
     if (!existing) return NextResponse.json({ success: false, message: "NOT_FOUND" }, { status: 404 });
     if (session.kind === "manager" && existing.agencyId !== session.agencyId) return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
@@ -112,14 +112,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         startDate: updateData.startDate ?? existing.startDate,
         endDate: "endDate" in updateData ? updateData.endDate : existing.endDate,
       };
+      // W#2: 같은 기관 내 배정만 대상 — 스코프 없으면 타 기관 배정으로 편집이 막히고 그 현장명이 409에 노출된다.
+      //  (관리자는 여러 기관 배정을 볼 수 있으나, 겹침 판정/차단은 편집 대상 배정과 같은 기관 안에서만 의미가 있다.)
+      // E3: ACCEPTED(최종확정 대기)도 점유로 포함(respond 경로와 통일).
       const others = await prisma.siteAssignment.findMany({
-        where: { workerId: existing.workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { id: assignmentId } },
+        where: { workerId: existing.workerId, agencyId: existing.agencyId, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { id: assignmentId } },
         select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
       });
-      const conflict = findTimeConflict(candidate, others);
-      if (conflict) {
+      // W#6: '새로 생기는' 충돌만 차단 — 편집 전부터 겹치던 레거시 배정은 무관 필드(serviceStep·면제 등) 편집을 막지 않는다.
+      //  (편집 전 상태가 이미 그 배정과 겹쳤다면 grandfather. 편집이 새 충돌을 만들 때만 409.)
+      const preEdit = { workType: existing.workType, customWorkStart: existing.customWorkStart, customWorkEnd: existing.customWorkEnd, startDate: existing.startDate, endDate: existing.endDate };
+      const newConflict = others.find(o => assignmentsTimeConflict(candidate, o) && !assignmentsTimeConflict(preEdit, o));
+      if (newConflict) {
         return NextResponse.json(
-          { success: false, message: `다른 현장(${(conflict as any).site?.companyName ?? "-"}) 배정과 같은 날 근무시간이 겹칩니다. 근무형태(오전/오후/종일)를 조정해주세요.` },
+          { success: false, message: `다른 현장(${(newConflict as any).site?.companyName ?? "-"}) 배정과 같은 날 근무시간이 겹칩니다. 근무형태(오전/오후/종일)를 조정해주세요.` },
           { status: 409 },
         );
       }

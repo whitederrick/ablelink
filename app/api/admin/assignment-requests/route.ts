@@ -10,6 +10,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { findTimeConflict } from "@/lib/assignmentOverlap";
 
 async function expirePastDeadline(agencyId: bigint) {
   await prisma.siteAssignment.updateMany({
@@ -172,6 +173,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, code: "OVER_CAPACITY", message: `선정 인원이 모집 인원을 초과하였습니다. 최종 선정을 재확인해주십시오. (선정 ${selectedIds.length}명 / 모집 ${remaining}명)` }, { status: 409 });
       }
       const isFull = filledCnt + selectedIds.length >= cap; // 이번 확정으로 정원이 다 차는가
+
+      // E3: ASSIGNED 승격 전 시간겹침 검사 — 선정자가 다른 현장 진행중 배정과 같은 날 슬롯이 겹치면 이중배정.
+      //  (finalize·restore가 겹침가드 없이 상태를 올려 respond/PATCH의 409를 우회하던 경로 차단.)
+      const selDetails = await prisma.siteAssignment.findMany({
+        where: { id: { in: selectedIds } },
+        select: { id: true, workerId: true, workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
+      });
+      for (const s of selDetails) {
+        const others = await prisma.siteAssignment.findMany({
+          where: { workerId: s.workerId, agencyId, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { id: s.id }, siteId: { not: siteId } },
+          select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
+        });
+        const c = findTimeConflict(s, others);
+        if (c) {
+          const w = await prisma.worker.findUnique({ where: { id: s.workerId }, select: { workerName: true } });
+          return NextResponse.json({ success: false, code: "TIME_CONFLICT", message: `${w?.workerName ?? "직무지도원"}님이 다른 현장(${(c as any).site?.companyName ?? "-"}) 배정과 같은 날 근무시간이 겹칩니다. 근무형태를 조정한 뒤 확정해주세요.` }, { status: 409 });
+        }
+      }
 
       // 선정 → ASSIGNED(계약 대기). 선정하지 않은 수락/제외 후보 → DROPPED('제외', 부분 재요청 시 복원 가능).
       // 회신 대기(REQUESTED)는 건드리지 않음(여전히 응답 대기). '제외 상태 저장'은 이 확정 시점에 일괄 반영.

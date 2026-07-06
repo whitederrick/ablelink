@@ -85,11 +85,21 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
   let selAssignmentId: bigint | null = null;
   try { selAssignmentId = opts.assignmentId != null && String(opts.assignmentId).trim() !== "" ? BigInt(opts.assignmentId as any) : null; } catch { selAssignmentId = null; }
 
-  const assignment = await prisma.siteAssignment.findFirst({
+  let assignment = await prisma.siteAssignment.findFirst({
     where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(selAssignmentId != null ? { id: selAssignmentId } : {}) },
     include: { site: true },
     orderBy: { assignedAt: "desc" },
   });
+
+  // C3: 선택 쿠키(activeAssignment)의 id가 종료(ENDED)·무효라 매칭에 실패하면 최신 활성 배정으로 폴백.
+  //  (쿠키는 90일 TTL이라 배정 종료 후에도 남아, 폴백이 없으면 모든 문서 화면이 '배정 없음'으로 전면 차단됐다.)
+  if (!assignment && selAssignmentId != null) {
+    assignment = await prisma.siteAssignment.findFirst({
+      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      include: { site: true },
+      orderBy: { assignedAt: "desc" },
+    });
+  }
 
   if (!assignment?.site) throw new DocPayloadError("배정된 현장이 없습니다.");
 

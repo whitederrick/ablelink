@@ -22,11 +22,13 @@ export async function GET(req: NextRequest) {
     const lastDay = new Date(y, m, 0).getDate();
     const monthEnd = new Date(`${ym}-${String(lastDay).padStart(2, "0")}T23:59:59+09:00`);
 
-    // 그 달에 활성(기간 겹침)인 배정
+    // 그 달에 근무 중이거나 근무한(기간 겹침) 배정.
+    //  D1: ACTIVE만 보면 계약서명됐지만 아직 ACTIVE 아닌(CONFIRMED)·그 달 종료된(ENDED) 배정의 출근부 미제출이
+    //   후보에서 빠져 "모두 제출" 오신호가 났다 → 출근부 제출이 가능한/필요한 상태집합으로 확장.
     const assignments = await prisma.siteAssignment.findMany({
       where: {
         agencyId: scope.agencyId,
-        status: "ACTIVE",
+        status: { in: ["CONFIRMED", "ACTIVE", "ENDED"] },
         startDate: { lte: monthEnd },
         OR: [{ endDate: null }, { endDate: { gte: monthStart } }],
       },
@@ -44,7 +46,8 @@ export async function GET(req: NextRequest) {
       where: {
         agencyId: scope.agencyId,
         docType: "ATTENDANCE_SHEET",
-        signStage: { not: "DRAFT" },
+        // D2: 반려(CHANGES_REQUESTED)는 '제출됨'이 아니다 — 제출→반려→미재제출을 준수로 오카운트하지 않도록 제외.
+        signStage: { notIn: ["DRAFT", "CHANGES_REQUESTED"] },
         periodStart: { lte: monthEnd },
         periodEnd: { gte: monthStart },
       },
