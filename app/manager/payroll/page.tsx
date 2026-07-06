@@ -29,6 +29,7 @@ type DeductionType = "FIXED" | "PERCENTAGE";
 
 interface Contract {
   id: string; workerId: string; workerName: string; loginId: string;
+  siteId: string | null; siteName: string | null;
   workerType: WorkerType; payType: PayType; baseAmount: number; incomeType: IncomeType;
   hourlyRate2Plus: number | null; weeklyHolidayPay: number | null;
   effectiveFrom: string; effectiveTo: string | null;
@@ -105,7 +106,7 @@ function makeInitialForm() {
   const start = new Date();
   const end = new Date(); end.setFullYear(end.getFullYear() + 1); end.setDate(end.getDate() - 1);
   return {
-    workerId: "", workerType: "EXTERNAL" as WorkerType, payType: "HOURLY" as PayType,
+    workerId: "", siteId: "", workerType: "EXTERNAL" as WorkerType, payType: "HOURLY" as PayType,
     baseAmount: String(MIN_WAGE_2026), incomeType: "BUSINESS" as IncomeType,
     hourlyRate2Plus: auto2Plus(MIN_WAGE_2026), weeklyHolidayPay: autoWeeklyHoliday(MIN_WAGE_2026),
     effectiveFrom: ymd(start), effectiveTo: ymd(end),
@@ -120,6 +121,7 @@ export default function PayrollPage() {
   const [loadingContracts, setLoadingContracts] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(makeInitialForm);
+  const [siteOptions, setSiteOptions] = useState<{ id: string; name: string }[]>([]); // 선택 워커의 현장(다시급 override용)
   const [saving, setSaving] = useState(false);
   const [cQuery, setCQuery] = useState("");
   const [cTypeFilter, setCTypeFilter] = useState<string[]>([]);
@@ -194,10 +196,22 @@ export default function PayrollPage() {
   // 워커 선택 시: 근로계약서(서명 완료 우선·최신)에서 시급·기간 자동 프리필.
   // 급여 전용 필드(직무지도원 유형·소득유형·공제)는 건드리지 않는다. 실패 시 수동 입력 가능.
   async function onPickWorker(workerId: string) {
-    setForm(f => ({ ...f, workerId }));
+    setForm(f => ({ ...f, workerId, siteId: "" }));
     setContractHint(null);
+    setSiteOptions([]);
     setConfirmed({ base: false, rate2: false, weekly: false }); // 워커 변경 → 자동값 재확인 필요
     if (!workerId) return;
+    // 다시급: 이 워커의 현장 목록(진행중 배정) → 현장별 금액 override 선택지.
+    fetch(`/api/admin/assignments?workerId=${workerId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && Array.isArray(d.items)) {
+          const active = new Set(["ASSIGNED", "CONFIRMED", "ACTIVE"]);
+          const uniq = new Map<string, string>();
+          for (const it of d.items) if (active.has(it.status) && it.site?.id) uniq.set(String(it.site.id), it.site.companyName);
+          setSiteOptions([...uniq].map(([id, name]) => ({ id, name })));
+        }
+      }).catch(() => {});
     try {
       const res = await fetch(`/api/admin/contracts?workerId=${workerId}`);
       const d = await res.json();
@@ -263,7 +277,8 @@ export default function PayrollPage() {
     setSaving(true);
     try {
       const body: any = {
-        workerId: form.workerId, workerType: form.workerType, payType: form.payType,
+        workerId: form.workerId, siteId: form.siteId || null,
+        workerType: form.workerType, payType: form.payType,
         baseAmount: Number(form.baseAmount), incomeType: form.incomeType,
         effectiveFrom: form.effectiveFrom, effectiveTo: form.effectiveTo || null,
       };
@@ -538,6 +553,20 @@ export default function PayrollPage() {
                         <p className="text-[11px] font-semibold text-slate-400">4대보험 대상 여부는 근태·소득유형으로 급여 계산 시 자동 판정됩니다.</p>
                       </div>
                     </div>
+                    {/* 같은 기관 다시급 — 현장별 금액 override. '기관 전체(기본)' 또는 특정 현장 선택. */}
+                    {siteOptions.length > 0 && (
+                      <div className="mt-3 space-y-1.5">
+                        <label className={T.label}>적용 현장 <span className="font-semibold text-slate-400">(같은 기관 다시급)</span></label>
+                        <select value={form.siteId} onChange={e => setForm(f => ({ ...f, siteId: e.target.value }))} className={`w-full ${T.select}`}>
+                          <option value="">기관 전체 (기본 급여 기준)</option>
+                          {siteOptions.map(s => <option key={s.id} value={s.id}>{s.name} — 이 현장만 다른 금액</option>)}
+                        </select>
+                        {form.siteId
+                          ? <p className="text-[11px] font-bold text-sky-600">이 현장 출근일에만 아래 <b>금액</b>이 적용됩니다. 급여유형·소득유형·4대보험은 <b>기관 기본 계약</b>을 따릅니다(기본 계약 필요).</p>
+                          : <p className="text-[11px] font-semibold text-slate-400">현장을 선택하면 그 현장만 다른 시급/일급을 적용할 수 있습니다(다시급).</p>}
+                      </div>
+                    )}
+
                     {/* 소득 유형 — 근로소득/사업소득(프리랜서 3.3%) 명시 선택. 워커 선택 시 근로계약 유무로 기본값 제안. */}
                     <div className="mt-3 space-y-1.5">
                       <label className={T.label}>소득 유형</label>
@@ -654,7 +683,12 @@ export default function PayrollPage() {
                 <tbody>
                   {cPageItems.map(c => (
                     <tr key={c.id} className={T.trBase}>
-                      <td className={`${T.td} whitespace-nowrap`}>{c.workerName} <span className="text-[13px] text-slate-500">({maskLoginId(c.loginId)})</span></td>
+                      <td className={`${T.td} whitespace-nowrap`}>
+                        {c.workerName} <span className="text-[13px] text-slate-500">({maskLoginId(c.loginId)})</span>
+                        {c.siteId
+                          ? <span className="ml-1.5 inline-flex items-center rounded bg-sky-50 px-1.5 py-0.5 text-[11px] font-bold text-sky-600">📍 {c.siteName ?? "현장"}</span>
+                          : <span className="ml-1.5 inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">기관 전체</span>}
+                      </td>
                       <td className={T.td}>
                         <div className="flex flex-wrap gap-1">
                           <span className={`${T.badge} ${c.workerType === "INTERNAL" ? "bg-amber-50 text-amber-600" : "bg-slate-50 text-slate-600"}`}>

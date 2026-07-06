@@ -205,6 +205,7 @@ model Site {
   assignments SiteAssignment[]
   placements  TraineePlacement[]
   trainees    Trainee[]
+  payContracts PayContract[]
   basePoints  SiteBasePoint[]
   contacts    SiteContact[]
 
@@ -1008,6 +1009,10 @@ model PayContract {
   id       BigInt @id @default(autoincrement())
   agencyId BigInt @map("agency_id")
   workerId   BigInt @map("worker_id")
+  // 같은 기관 다시급: 현장별 급여 금액(시급/일급/월급) override.
+  //  null = 기관 기본 계약(급여유형·소득유형·4대보험 등 워커단위 항목의 기준 + 기본 금액).
+  //  특정 현장(siteId) = 그 현장 출근일에 대해 '금액'만 이 계약값으로 대체(그 외 항목은 기본 계약 사용).
+  siteId   BigInt? @map("site_id")
 
   // 내부(소속직원) vs 외부 구분 — 4대보험·주휴수당 적용 여부를 결정
   workerType WorkerType @default(EXTERNAL) @map("worker_type")
@@ -1029,8 +1034,10 @@ model PayContract {
 
   user   Worker @relation(fields: [workerId], references: [id])
   agency Agency @relation(fields: [agencyId], references: [id])
+  site   Site?  @relation(fields: [siteId], references: [id])
 
   @@index([agencyId, workerId, effectiveFrom])
+  @@index([agencyId, workerId, siteId, effectiveFrom])
   @@map("pay_contracts")
 }
 
