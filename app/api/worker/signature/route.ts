@@ -9,7 +9,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { validateSignatureImage } from "@/lib/imageValidation";
-import { signatureDisplayUrl } from "@/lib/signatureImage";
+import { signatureDisplayUrl, signaturePathFromStored } from "@/lib/signatureImage";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -128,21 +128,9 @@ export async function DELETE(request: NextRequest) {
 }
 
 // ── 유틸 ─────────────────────────────────────────────────
-function extractStoragePath(url: string): string | null {
-  try {
-    // 구(공개 URL)·신(signed URL)·신포맷(경로) 모두 처리 — 서명 저장 포맷 전환 대응.
-    const pub = `/object/public/${BUCKET}/`;
-    let i = url.indexOf(pub);
-    if (i >= 0) return url.slice(i + pub.length).split("?")[0];
-    const signed = `/object/sign/${BUCKET}/`;
-    i = url.indexOf(signed);
-    if (i >= 0) return url.slice(i + signed.length).split("?")[0];
-    if (!/^https?:\/\//i.test(url) && !url.startsWith("data:")) return url.replace(/^\/+/, "");
-    return null;
-  } catch {
-    return null;
-  }
-}
+// 서명 경로 파서는 단일 출처(lib/signatureImage) 사용 — 로컬 재구현은 decodeURIComponent 누락으로
+//  URL 인코딩된 경로의 기존 서명 삭제가 조용히 실패해 스토리지에 PII가 쌓이던 drift를 제거.
+const extractStoragePath = signaturePathFromStored;
 
 async function deleteFromStorage(path: string): Promise<void> {
   const url = `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`;
