@@ -70,7 +70,16 @@ export async function POST(req: NextRequest) {
     }
 
     const run = await prisma.$transaction(async (tx) => {
-      if (existing) await tx.payrollRun.delete({ where: { id: existing.id } });
+      // 확인(위 findUnique)과 삭제 사이에 다른 요청이 확정할 수 있으므로 트랜잭션 안에서 상태 재확인 후 삭제.
+      //  (재확인 없이 id로만 삭제하면 그 사이 FINALIZED된 run을 지우고 DRAFT로 덮어쓰는 경합이 생김.)
+      const cur = await tx.payrollRun.findUnique({
+        where: { agencyId_yearMonth: { agencyId, yearMonth } },
+        select: { id: true, status: true },
+      });
+      if (cur?.status === "FINALIZED") {
+        throw NextResponse.json({ success: false, message: "이미 확정된 급여입니다. 수정할 수 없습니다." }, { status: 409 });
+      }
+      if (cur) await tx.payrollRun.delete({ where: { id: cur.id } });
       return tx.payrollRun.create({
         data: { agencyId, yearMonth, status: "DRAFT", items: { create: items } },
         include: { items: { include: { user: { select: { id: true, workerName: true } } } } },

@@ -159,8 +159,16 @@ export async function GET(req: NextRequest) {
     const isKrHoliday = Object.prototype.hasOwnProperty.call(getKrHolidays(yy, mm), yesterday);
 
     if (!isWeekend && !isKrHoliday) {
+      // ★배정 기간(startDate~endDate)이 전일을 포함하는 배정만 — 시작 전/종료 후 날짜가 출근부·급여에 들어가던 버그 차단.
+      const yStart = new Date(`${yesterday}T00:00:00+09:00`);
+      const yEnd = new Date(`${yesterday}T23:59:59+09:00`);
       const exemptAssignments = await prisma.siteAssignment.findMany({
-        where: { attendanceButtonExempt: true, status: { in: ["ACTIVE", "CONFIRMED", "ASSIGNED"] } },
+        where: {
+          attendanceButtonExempt: true,
+          status: { in: ["ACTIVE", "CONFIRMED", "ASSIGNED"] },
+          startDate: { lte: yEnd },
+          OR: [{ endDate: null }, { endDate: { gte: yStart } }],
+        },
         select: {
           id: true, workerId: true, siteId: true,
           workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true,

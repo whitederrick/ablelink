@@ -212,10 +212,12 @@ export async function POST(req: NextRequest) {
     if (contract.agencyId && contract.wageAmount != null && (wt === "HOURLY" || wt === "DAILY" || wt === "MONTHLY")) {
       const existingPay = await prisma.payContract.findFirst({
         where: {
-          agencyId: contract.agencyId, workerId: contract.workerId,
+          // 기관 기본 계약(siteId=null)만 존재확인 대상 — 현장 override만 있는 고아 상태에서
+          //  기본계약 시딩이 건너뛰어지지 않도록(A3). 시드 create는 siteId 미지정=null(기본).
+          agencyId: contract.agencyId, workerId: contract.workerId, siteId: null,
           effectiveFrom: { lte: contract.contractEnd },
           OR: [{ effectiveTo: null }, { effectiveTo: { gte: contract.contractStart } }],
-        },
+        } as any,
         select: { id: true },
       });
       if (!existingPay) {

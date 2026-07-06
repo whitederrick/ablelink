@@ -77,6 +77,20 @@ export async function POST(request: NextRequest) {
         pendingLoginId: null,   // 변경 대기 중이던 이메일
         verifyCode:     null,
         verifyCodeExpiresAt: null,
+        // 급여 이체 계좌(민감정보) — 탈퇴 시 파기
+        bankName:       null,
+        accountNumber:  null,
+        accountHolder:  null,
+        bankCode:       null,
+        accountVerifiedAt:     null,
+        accountHolderVerified: null,
+        accountVerifyMethod:   null,
+        // 본인확인(신원) 결과 이력 — 탈퇴 시 파기
+        identityVerifiedAt: null,
+        identityMethod:     null,
+        identityVerifiedBy: null,
+        // 임금명세서 기재용 생년월일(PII)
+        birthDate:      null,
         // 거주지·자기소개 등 매칭용 PII 제거
         residenceAddress: null,
         residenceLat:     null,

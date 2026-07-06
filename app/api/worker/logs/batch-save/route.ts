@@ -9,6 +9,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { WorkStatus } from "@prisma/client";
 import { audit } from "@/lib/audit";
+import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 
 interface LogEntry {
   date: string;
@@ -48,6 +49,20 @@ export async function POST(request: NextRequest) {
 
     const { siteId } = assignment;
 
+    // IDOR 방지: 임의 traineeId 주입 차단 — 이 현장·기간에 재적한 훈련생만 허용.
+    const allDates = logs.map(l => l.date).filter(Boolean).sort();
+    const minDate = allDates[0], maxDate = allDates[allDates.length - 1];
+    const uniqueTraineeIds = [...new Set(logs.map(l => String(l.traineeId)))];
+    for (const tid of uniqueTraineeIds) {
+      if (!/^[0-9]+$/.test(tid)) {
+        return NextResponse.json({ success: false, message: "잘못된 훈련생 정보입니다." }, { status: 400 });
+      }
+      const ok = await findTraineeAtSiteInPeriod(BigInt(tid), siteId, minDate, maxDate);
+      if (!ok) {
+        return NextResponse.json({ success: false, message: "이 현장에 배정되지 않은 훈련생이 포함되어 있습니다." }, { status: 403 });
+      }
+    }
+
     // 고유 날짜 목록 추출
     const uniqueDates = [...new Set(logs.map(l => l.date))];
 
@@ -65,7 +80,8 @@ export async function POST(request: NextRequest) {
         const todayKST = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
         if (date >= todayKST) continue;
 
-        // 과거 날짜: 소급 입력 → DONE + 최종확정 상태로 생성
+        // 과거 날짜: 소급 일지 입력용 출근기록 생성. ★출퇴근 시각이 없으므로 최종확정하지 않는다(isFinalClosed:false).
+        //  (시각 0분인 채 확정하면 급여 엔진이 DAILY/MONTHLY 근무일수로 세어 과지급됨 — 시각은 출퇴근 기록/보정으로 채워져야 함.)
         const created = await prisma.dailyAttendance.create({
           data: {
             workerId: writerId,
@@ -73,7 +89,7 @@ export async function POST(request: NextRequest) {
             assignmentId: assignId,
             workDate: date,
             status: WorkStatus.DONE,
-            isFinalClosed: true,
+            isFinalClosed: false,
           },
           select: { id: true },
         });

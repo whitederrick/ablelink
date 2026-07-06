@@ -103,8 +103,11 @@ export async function computePayrollItems(
       prisma.payContract.findMany({
         where: {
           agencyId, workerId,
-          effectiveFrom: { lte: new Date(periodStart) },
-          OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date(periodEnd) } }],
+          // 급여월과 '겹치는' 계약을 모두 포함(월중 단가 변경으로 구/신 계약이 월을 split 해도 누락 없음).
+          //  · 과거엔 effectiveFrom<=월초 AND effectiveTo>=월말만 잡아, 월중 split 시 양쪽 다 탈락→"계약 없음"이 됐다.
+          //  · 겹침 = effectiveFrom<=월말 AND (effectiveTo=null OR effectiveTo>=월초). 최신(effectiveFrom desc) 우선 적용.
+          effectiveFrom: { lte: new Date(periodEnd) },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date(periodStart) } }],
         },
         orderBy: { effectiveFrom: "desc" },
       }),
@@ -150,9 +153,12 @@ export async function computePayrollItems(
   }));
 
   for (const { workerId, payContracts, attendances, placements, empContract, firstContract, customHolidays } of userDataList) {
-    // 기관 기본 계약(siteId=null) = 급여유형·소득유형·4대보험·기본금액의 기준. 없으면 현장계약 하나로 폴백.
+    // 기관 기본 계약(siteId=null) = 급여유형·소득유형·4대보험·기본금액의 기준.
     //  (findMany는 effectiveFrom desc 정렬 → 각 그룹의 최신이 앞. 최신 기본계약 우선.)
-    const contract = payContracts.find((c) => (c as any).siteId == null) ?? payContracts[0] ?? null;
+    //  ★기본계약 없이 현장 override만 있으면(고아) '급여 계약 없음'으로 처리한다 —
+    //   과거엔 payContracts[0](고아 override)로 폴백해 그 현장 금액이 전 현장을 지배하는 버그가 있었다.
+    //   (기본계약 삭제는 override가 남아있으면 API에서 거부. 시딩도 siteId:null 기준으로 존재확인.)
+    const contract = payContracts.find((c) => (c as any).siteId == null) ?? null;
     // 현장별 금액 override 맵(siteId → 최신 계약). 금액(baseAmount·hourlyRate2Plus)만 사용.
     const rateBySite = new Map<string, (typeof payContracts)[number]>();
     for (const c of payContracts) {
@@ -161,12 +167,15 @@ export async function computePayrollItems(
       if (!rateBySite.has(String(sid))) rateBySite.set(String(sid), c); // desc 정렬이라 최신 우선
     }
     // 그 현장 출근일에 적용할 금액(현장전용 있으면 그 값, 없으면 기본계약).
+    const baseRate2Plus = contract?.hourlyRate2Plus != null ? Number(contract.hourlyRate2Plus) : null;
     const rateForSite = (siteId: bigint | null | undefined): { base: number; rate2: number | null } => {
       const sc = siteId != null ? rateBySite.get(String(siteId)) : undefined;
       const src = sc ?? contract;
       return {
         base: src ? Number(src.baseAmount) : 0,
-        rate2: src?.hourlyRate2Plus != null ? Number(src.hourlyRate2Plus) : null,
+        // 현장 override는 '금액만' — baseAmount만 지정하고 2인+시급(rate2)을 비우면(null) 기관 기본계약의 rate2로 폴백.
+        //  (폴백 안 하면 override 현장의 1:多 날이 1:1 단가로 과소지급됨 — "금액만 override" 취지와도 배치.)
+        rate2: src?.hourlyRate2Plus != null ? Number(src.hourlyRate2Plus) : baseRate2Plus,
       };
     };
     const usesSiteRates = rateBySite.size > 0;
@@ -180,7 +189,11 @@ export async function computePayrollItems(
     };
     // 급여 게이트: 심한 지각 미컨펌(보정대기) 날은 급여 산정에서 제외(출근부 PDF와 동일 기준).
     // 지각 기준 = 현장값(site.lateThresholdMin) ?? 위탁기관 기본값 ?? 30.
-    const confirmedAtt = attendances.filter((a) => !isPayrollPending({
+    const confirmedAtt = attendances.filter((a) =>
+      // 소급 일괄저장(batch-save)이 시각 없이 DONE+최종확정으로 만든 행은 급여 근무일에서 제외.
+      //  (출퇴근 시각이 0분이어도 DAILY/MONTHLY 근무일수로 돈이 붙던 과지급 차단 — 시각 입력 후에만 지급.)
+      a.startTime != null && a.endTime != null &&
+      !isPayrollPending({
       actualStartTime: a.actualStartTime ?? null,
       actualEndTime: a.actualEndTime ?? null,
       payrollConfirmedAt: a.payrollConfirmedAt ?? null,
@@ -259,16 +272,20 @@ export async function computePayrollItems(
       let ordinaryWage = 0;
       if (contract.payType === "HOURLY") {
         // 날짜(=현장)별 시급으로 지급시간을 합산. 1:1/1:多 + 현장별 금액 override 모두 반영.
-        let base = 0, oneToOneHours = 0, oneToManyHours = 0;
+        let base = 0, oneToOneHours = 0, oneToManyHours = 0, amount1 = 0, amount2 = 0;
         for (const a of confirmedAtt) {
           const span = minutesBetween(a.startTime, a.endTime);
           const ph = Math.max(0, span - unpaidBreakMin(a.assignment?.workType, span)) / 60;
           const { base: dBase, rate2: dRate2 } = rateForSite(a.assignment?.siteId);
           const isMulti = dRate2 != null && traineeCountOn(a.assignment?.siteId, a.workDate) >= 2;
-          if (isMulti) { base += ph * (dRate2 as number); oneToManyHours += ph; }
-          else { base += ph * dBase; oneToOneHours += ph; }
+          // 현장별 시급이 섞여도 지급내역 라인(1인/2인지원)이 총액과 일치하도록 일자별 금액을 별도 누적.
+          if (isMulti) { const amt = ph * (dRate2 as number); base += amt; amount2 += amt; oneToManyHours += ph; }
+          else { const amt = ph * dBase; base += amt; amount1 += amt; oneToOneHours += ph; }
         }
         grossPay = Math.round(base);
+        // 지원 라인 금액(반올림 정합: support1 + support2 == 기본급 합계). payLines(A4)·명세 편집기 gross 재계산의 단일 기준.
+        const support1Amount = Math.round(amount1);
+        const support2Amount = grossPay - support1Amount;
         // 통상시급(연장·야간·휴일·주휴 가산 기준) = 지급시간 가중평균 시급. 단일현장·단일계약이면 그 시급과 동일.
         ordinaryWage = paidHours > 0 ? Math.round(base / paidHours) : baseRate;
         const used2Plus = oneToManyHours > 0;
@@ -277,7 +294,7 @@ export async function computePayrollItems(
           : (used2Plus && oneToOneHours > 0
             ? `1:1 ${(+oneToOneHours.toFixed(2))}h × ${baseRate.toLocaleString()}원 + 1:多 ${(+oneToManyHours.toFixed(2))}h × ${(rate2 as number).toLocaleString()}원 (휴게 제외)`
             : `${paidHours}시간 × ${(used2Plus ? (rate2 as number) : baseRate).toLocaleString()}원 (휴게 제외)`);
-        breakdown = { payType: "HOURLY", hourlyRate: baseRate, hourlyRate2Plus: rate2, siteRates: usesSiteRates, oneToOneHours: +oneToOneHours.toFixed(2), oneToManyHours: +oneToManyHours.toFixed(2), used2PlusRate: used2Plus, workedMinutes, workedHours, paidMinutes, paidHours, workedDays, pendingDays };
+        breakdown = { payType: "HOURLY", hourlyRate: baseRate, hourlyRate2Plus: rate2, siteRates: usesSiteRates, oneToOneHours: +oneToOneHours.toFixed(2), oneToManyHours: +oneToManyHours.toFixed(2), used2PlusRate: used2Plus, support1Amount, support2Amount, workedMinutes, workedHours, paidMinutes, paidHours, workedDays, pendingDays };
       } else if (contract.payType === "DAILY") {
         // 현장별 일급: 각 근무일에 그 현장 일급(그 현장 1:多 peak면 rate2) 합산. 단일현장이면 기존과 동일.
         const siteMaxCache = new Map<string, number>();
@@ -421,8 +438,14 @@ export async function computePayrollItems(
       // 1:1(일반)·1:多(2인이상) 지원시간은 현장별로 이미 분리 집계됨(oneToOneHours/oneToManyHours).
       const h1 = Number(bd.oneToOneHours ?? 0);
       const h2 = Number(bd.oneToManyHours ?? 0);
-      payLines.push({ key: "support1", name: "1인지원", hours: h1, amount: Math.round(h1 * rate1), method: rate1 ? `지원시간 × ${rate1.toLocaleString()}원` : "" });
-      payLines.push({ key: "support2", name: "2인이상지원", hours: h2, amount: Math.round(h2 * rate2), method: rate1 ? `지원시간 × ${rate1.toLocaleString()}원 × 120%` : "" });
+      // 현장별 시급이 섞이면 단일 rate×hours로는 총액과 어긋난다 → grossPay와 동일하게 일자별 누적한 금액을 사용.
+      //  (support1Amount/support2Amount 없으면 단일현장 레거시 → rate×hours 폴백.)
+      const amt1 = bd.support1Amount != null ? Number(bd.support1Amount) : Math.round(h1 * rate1);
+      const amt2 = bd.support2Amount != null ? Number(bd.support2Amount) : Math.round(h2 * rate2);
+      const m1 = bd.siteRates ? "현장별 시급 적용 (지원시간 가중)" : (rate1 ? `지원시간 × ${rate1.toLocaleString()}원` : "");
+      const m2 = bd.siteRates ? "현장별 시급 적용 (지원시간 가중)" : (rate1 ? `지원시간 × ${rate1.toLocaleString()}원 × 120%` : "");
+      payLines.push({ key: "support1", name: "1인지원", hours: h1, amount: amt1, method: m1 });
+      payLines.push({ key: "support2", name: "2인이상지원", hours: h2, amount: amt2, method: m2 });
     } else if (contract) {
       payLines.push({ key: "base", name: "기본급", hours: workedHours, amount: basePay, method: calcMethods["기본급"] ?? "" });
     }
