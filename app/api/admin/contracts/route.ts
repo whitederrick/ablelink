@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
       catch { throw new Error("VALIDATION:잘못된 assignmentId입니다."); }
       const asgn = await prisma.siteAssignment.findFirst({
         where: { id: assignmentIdBig, workerId: userIdBig, agencyId },
-        select: { id: true },
+        select: { id: true, siteId: true },
       });
       if (!asgn) throw new Error("VALIDATION:연결할 배정을 찾을 수 없습니다. (직무지도원/기관 불일치)");
 
@@ -224,8 +224,10 @@ export async function POST(req: NextRequest) {
       //  그 값이 같은 워커의 다른 진행중 배정(같은 기관)과 같은 날 겹치면 이중배정이 된다. 발행을 여기서 막으면
       //  서명 경로는 항상 안전해진다(서명 시점 차단 → 서명은 됐는데 배정 미활성=무급, 이던 딜레마 제거).
       const isCustom = workType === "CUSTOM";
+      // R4-10: 겹침검사는 '다른 현장'만 대상(finalize=assignment-requests와 기준 통일). 같은 현장 배정은
+      //  갱신/재계약(같은 현장 연속)일 수 있어 슬롯이 겹쳐도 이중배정이 아니다 → 같은 현장 신규행 발행시 오탐 409 방지.
       const others = await prisma.siteAssignment.findMany({
-        where: { workerId: userIdBig, agencyId, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { id: assignmentIdBig } },
+        where: { workerId: userIdBig, agencyId, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { id: assignmentIdBig }, siteId: { not: asgn.siteId } },
         select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
       });
       const conflict = findTimeConflict(
