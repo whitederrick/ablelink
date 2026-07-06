@@ -59,10 +59,13 @@ export async function GET(req: NextRequest) {
     // D1 정정: 그 달 '실제 출근기록이 있는' 배정만 출근부 제출 대상으로 본다.
     //  (근무 0일 배정 — 예: 25일 시작 CONFIRMED, 계약취소 후 무근무 ENDED — 을 미제출로 잡아 매니저에게 불가능한
     //   제출을 독촉하던 허위 미제출 방지. 출근부는 근무가 있어야 제출 의무가 생긴다.)
+    //  ★출근기록이 '존재'하면 근무한 것으로 본다 — startTime 유무로 거르지 않는다.
+    //   (소급 일지입력(batch-save/logs-save)으로 만든 출근기록은 clock-in이 없어 startTime=null이지만, 그래도
+    //    그 달 근무했고 출근부 제출 의무가 있다. startTime 조건을 걸면 이런 배정이 미제출 보드에서 숨겨진다.)
     const periodStartStr = `${ym}-01`;
     const periodEndStr = `${ym}-${String(lastDay).padStart(2, "0")}`;
     const attended = assignments.length ? await prisma.dailyAttendance.findMany({
-      where: { assignmentId: { in: assignments.map(a => a.id) }, workDate: { gte: periodStartStr, lte: periodEndStr }, startTime: { not: null } },
+      where: { assignmentId: { in: assignments.map(a => a.id) }, workDate: { gte: periodStartStr, lte: periodEndStr } },
       select: { assignmentId: true },
       distinct: ["assignmentId"],
     }) : [];

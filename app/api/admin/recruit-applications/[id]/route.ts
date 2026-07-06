@@ -73,7 +73,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         where: { workerId: app.workerId, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(app.post.siteId != null ? { NOT: { siteId: app.post.siteId } } : {}) },
         select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
       });
-      const tc = findTimeConflict({ workType: "FULL_DAY", startDate: app.post.serviceStart ?? new Date(), endDate: app.post.serviceEnd ?? null }, others);
+      //  ★후보 endDate는 '실제로 생성될 배정'과 동일하게 null(개방)로 둔다 — 생성은 endDate:null(M6)인데
+      //   검사만 serviceEnd로 좁히면 serviceEnd 이후 겹침을 못 잡아 이중배정이 새어나간다(생성값=검사값 일치).
+      const tc = findTimeConflict({ workType: "FULL_DAY", startDate: app.post.serviceStart ?? new Date(), endDate: null }, others);
       if (tc) conflictSkip = true; // 하드블록 대신 자동배정만 스킵
     }
 
