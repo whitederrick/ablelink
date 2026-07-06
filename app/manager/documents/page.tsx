@@ -62,6 +62,19 @@ export default function ManagerDocumentsHub() {
   const [versions, setVersions] = useState<{ id: string; versionNo: number; createdAt: string }[]>([]);
   const [viewVersionId, setViewVersionId] = useState<string | null>(null);
 
+  // 미제출 현황(이번 달 출근부) — 제출해야 할 활성 배정 중 미제출을 직관적으로.
+  const nowLocal = new Date();
+  const curYm = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, "0")}`;
+  const [missingMonth, setMissingMonth] = useState(curYm);
+  const [missingData, setMissingData] = useState<{ totalActive: number; submittedCount: number; missingCount: number; missing: { assignmentId: string; workerName: string; loginId: string; siteName: string; workType: string }[] } | null>(null);
+  const [missingOpen, setMissingOpen] = useState(false);
+  useEffect(() => {
+    fetch(`/api/admin/document-runs/missing?yearMonth=${missingMonth}`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setMissingData(d); })
+      .catch(() => {});
+  }, [missingMonth]);
+
   // 문서 발송(→ 장애인고용공단)
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sendOpen, setSendOpen] = useState(false);
@@ -284,6 +297,34 @@ export default function ManagerDocumentsHub() {
           { label: "수정요청", value: summary.CHANGES_REQUESTED, tone: "rose" },
         ]}
       />
+
+      {/* 미제출 현황 — 이번 달 출근부를 아직 제출하지 않은 활성 배정. 제출/미제출을 직관적으로. */}
+      <div className={`rounded-2xl border ${missingData && missingData.missingCount > 0 ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"} px-4 py-3`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => setMissingOpen(o => !o)} className="flex items-center gap-2 text-sm font-black text-slate-800">
+            <span className={missingData && missingData.missingCount > 0 ? "text-amber-700" : "text-slate-500"}>
+              📋 출근부 미제출 {missingData ? missingData.missingCount : "…"}명
+            </span>
+            {missingData && <span className="text-xs font-semibold text-slate-400">/ 활성 {missingData.totalActive}명 · 제출 {missingData.submittedCount}명</span>}
+            <span className="text-xs text-slate-400">{missingOpen ? "▲" : "▼"}</span>
+          </button>
+          <input type="month" value={missingMonth} onChange={e => setMissingMonth(e.target.value)}
+            className="ml-auto rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm font-semibold text-slate-700 outline-none" />
+        </div>
+        {missingOpen && missingData && (
+          missingData.missing.length === 0 ? (
+            <p className="mt-2 text-sm font-semibold text-emerald-600">✓ 모든 활성 배정이 출근부를 제출했습니다.</p>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {missingData.missing.map(mrow => (
+                <span key={mrow.assignmentId} className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700">
+                  {mrow.workerName} <span className="font-normal text-slate-400">· {mrow.siteName}</span>
+                </span>
+              ))}
+            </div>
+          )
+        )}
+      </div>
 
       <ListToolbar
         query={q}

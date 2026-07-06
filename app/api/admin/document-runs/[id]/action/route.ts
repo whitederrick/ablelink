@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { audit } from "@/lib/audit";
+import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 
 const DOC_LABEL: Record<string, string> = {
   ATTENDANCE_SHEET:              "출근부",
@@ -41,9 +42,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const t = await prisma.trainee.findUnique({ where: { id: run.traineeId }, select: { name: true } });
       traineeName = t?.name ? `(${t.name})` : "";
     }
-    const docTitle = `${docLabel}${traineeName} · ${run.periodStart.toISOString().slice(0, 10)}~${run.periodEnd.toISOString().slice(0, 10)}`;
+    const ps = run.periodStart.toISOString().slice(0, 10);
+    const pe = run.periodEnd.toISOString().slice(0, 10);
+    const docTitle = `${docLabel}${traineeName} · ${ps}~${pe}`;
+
+    // 워커 알림 딥링크 — 해당 문서(종류·기간·훈련생)로 정밀 이동. 워커 docs 페이지가 파라미터로 자동 선택.
+    const linkParams = new URLSearchParams({ focusDoc: PRISMA_TO_PDF_DOCTYPE[run.docType] ?? run.docType, ps, pe });
+    if (run.traineeId != null) linkParams.set("tid", run.traineeId.toString());
+    const workerDocLink = `/worker/docs?${linkParams.toString()}`;
+
+    // 상태머신 가드: 제출된 문서만, 올바른 단계에서만 액션 허용(스테일 UI·중복·직접호출 방어).
+    //  SUBMITTED --확정--> CONFIRMED --서명--> MANAGER_SIGNED / SUBMITTED --수정요청--> CHANGES_REQUESTED
+    const stageErr = (msg: string) => NextResponse.json({ success: false, message: msg }, { status: 409 });
 
     if (action === "confirm") {
+      if (run.signStage !== "SUBMITTED") return stageErr("이미 처리된 문서입니다. 목록을 새로고침해주세요.");
       await prisma.documentRun.update({ where: { id: runId }, data: { signStage: "CONFIRMED" } });
       // 워커에게 승인(확정) 알림 — 반려만 알리던 비대칭 해소.
       try {
@@ -55,7 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             body: `제출하신 문서가 승인(확정)되었습니다.\n\n■ 문서: ${docTitle}`,
             type: "INFO",
             kind: "NOTICE_INDIVIDUAL",
-            link: "/worker/docs",
+            link: workerDocLink,
           },
         });
       } catch (e) { console.warn("[document-runs confirm] 워커 알림 실패:", e); }
@@ -64,6 +77,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     if (action === "sign") {
+      if (run.signStage !== "CONFIRMED") return stageErr("먼저 '확정'한 뒤 서명할 수 있습니다. 목록을 새로고침해주세요.");
       const mgr = await prisma.manager.findUnique({ where: { id: scope.managerId }, select: { signatureUrl: true, displayName: true } });
       if (!mgr?.signatureUrl)
         return NextResponse.json({ success: false, message: "등록된 매니저 서명이 없습니다. '내 서명' 메뉴에서 먼저 서명을 등록해주세요.", needSignature: true }, { status: 400 });
@@ -81,6 +95,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     if (action === "request-changes") {
+      // 제출완료·확정 단계에서만 수정요청 가능(서명완료본은 재요청 대신 새 제출 유도).
+      if (run.signStage !== "SUBMITTED" && run.signStage !== "CONFIRMED") return stageErr("수정요청은 제출완료·확정 상태에서만 가능합니다.");
       const reason = String(body?.reason || "").trim();
       await prisma.documentRun.update({ where: { id: runId }, data: { signStage: "CHANGES_REQUESTED" } });
 
@@ -92,7 +108,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           body: `다음 문서의 수정이 필요합니다.\n\n■ 문서: ${docTitle}\n■ 사유: ${reason || "(사유 미입력)"}\n\n해당 문서를 수정 후 다시 제출해주세요.`,
           type: "WARN",
           kind: "NOTICE_INDIVIDUAL",
-          link: "/worker/docs",
+          link: workerDocLink,
         },
       });
       await audit(scope, { entityType: "DocumentRun", entityId: runId, action: "update", before: { signStage: run.signStage }, after: { signStage: "CHANGES_REQUESTED" } });

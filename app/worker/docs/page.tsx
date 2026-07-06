@@ -90,12 +90,25 @@ function DocsContent() {
   );
 
   useEffect(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const last = new Date(y, now.getMonth() + 1, 0).getDate();
-    setPeriodStart(`${y}-${m}-01`);
-    setPeriodEnd(`${y}-${m}-${String(last).padStart(2, "0")}`);
+    // 매니저 수정요청/승인 알림 딥링크: 해당 문서(종류·기간·훈련생)로 자동 이동·선택.
+    const focusDoc = searchParams.get("focusDoc");
+    const fps = searchParams.get("ps");
+    const fpe = searchParams.get("pe");
+    const ftid = searchParams.get("tid");
+    if (focusDoc && fps && fpe) {
+      setPeriodStart(fps);
+      setPeriodEnd(fpe);
+      setDocStates(prev => prev[focusDoc]
+        ? { ...prev, [focusDoc]: { ...prev[focusDoc], checked: true, traineeIds: ftid ? [ftid] : prev[focusDoc].traineeIds } }
+        : prev);
+    } else {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const last = new Date(y, now.getMonth() + 1, 0).getDate();
+      setPeriodStart(`${y}-${m}-01`);
+      setPeriodEnd(`${y}-${m}-${String(last).padStart(2, "0")}`);
+    }
 
     const tok = searchParams.get("signToken");
     const done = searchParams.get("signDone");
