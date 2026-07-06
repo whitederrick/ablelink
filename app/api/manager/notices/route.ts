@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     //  · 정렬 `readAt: asc`는 Postgres에서 NULL(미읽음)을 뒤로 보내(nulls last) take:50 창에서 미읽음이 잘려나가
     //    "미읽음 먼저" 주석과 반대로 동작 → 배지 0·목록 누락. `nulls: "first"`로 미읽음을 창 앞으로.
     //  · 미읽음 개수는 창 절단과 무관하게 별도 count 쿼리로 정확히 집계(F1/F2).
-    const [notices, sysAnnouncements, sysReads, unreadNotice, totalSys, sysReadCount] = await Promise.all([
+    const [notices, sysAnnouncements, unreadNotice, totalSys, sysReadCount] = await Promise.all([
       prisma.managerNotice.findMany({
         where: { managerId },
         orderBy: [{ readAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
@@ -29,12 +29,16 @@ export async function GET(req: NextRequest) {
         take: 50,
         select: { id: true, title: true, body: true, type: true, createdAt: true },
       }),
-      prisma.systemAnnouncementRead.findMany({ where: { managerId }, select: { announcementId: true, readAt: true } }),
       prisma.managerNotice.count({ where: { managerId, readAt: null } }),
       prisma.systemAnnouncement.count(),
       prisma.systemAnnouncementRead.count({ where: { managerId } }),
     ]);
 
+    // F4: 읽음행 조회를 '표시할 50개 공지'로 한정(60초 폴링 핫패스에서 전체 읽음행 무제한 전송 방지).
+    const sysReads = await prisma.systemAnnouncementRead.findMany({
+      where: { managerId, announcementId: { in: sysAnnouncements.map(a => a.id) } },
+      select: { announcementId: true, readAt: true },
+    });
     const readMap = new Map(sysReads.map(r => [r.announcementId.toString(), r.readAt]));
 
     const noticeItems = notices.map(n => ({
@@ -96,16 +100,12 @@ export async function POST(req: NextRequest) {
         where: { managerId, readAt: null },
         data: { readAt: now },
       });
-      // 시스템 공지도 전부 읽음 처리(관계 없어 수동 diff → 미읽음만 read 레코드 생성).
-      const [allSys, reads] = await Promise.all([
-        prisma.systemAnnouncement.findMany({ select: { id: true }, orderBy: { createdAt: "desc" }, take: 200 }),
-        prisma.systemAnnouncementRead.findMany({ where: { managerId }, select: { announcementId: true } }),
-      ]);
-      const readSet = new Set(reads.map(r => r.announcementId.toString()));
-      const toMark = allSys.filter(a => !readSet.has(a.id.toString()));
-      if (toMark.length > 0) {
+      // 시스템 공지도 전부 읽음 처리. F5: @@unique([announcementId, managerId]) + skipDuplicates가 이미 중복을
+      //  걸러주므로 기존 읽음행을 미리 조회·diff 할 필요 없이 전체 id로 createMany 하면 된다(쿼리 1회 감소).
+      const allSys = await prisma.systemAnnouncement.findMany({ select: { id: true }, orderBy: { createdAt: "desc" }, take: 200 });
+      if (allSys.length > 0) {
         await prisma.systemAnnouncementRead.createMany({
-          data: toMark.map(a => ({ announcementId: a.id, managerId })),
+          data: allSys.map(a => ({ announcementId: a.id, managerId })),
           skipDuplicates: true,
         });
       }

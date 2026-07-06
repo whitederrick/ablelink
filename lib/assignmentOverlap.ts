@@ -37,9 +37,10 @@ export function occupiedHalves(
       const s = toMin(customWorkStart), e = toMin(customWorkEnd);
       const out = new Set<Half>();
       if (s == null || e == null || e <= s) return new Set<Half>(["AM", "PM"]); // 불명확 → 종일로 간주(보수적)
+      // e>s 보장 → s<정오면 AM, 아니면(s>=정오) e>s>=정오라 PM. 항상 1개 이상이라 빈 집합 폴백은 도달 불가.
       if (s < NOON_MIN) out.add("AM");
       if (e > NOON_MIN) out.add("PM");
-      return out.size ? out : new Set<Half>(["AM", "PM"]);
+      return out;
     }
     default: return new Set<Half>(["AM", "PM"]); // 미지정 → 종일(보수적)
   }

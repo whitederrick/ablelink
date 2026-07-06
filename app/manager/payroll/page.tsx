@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
@@ -130,6 +130,7 @@ export default function PayrollPage() {
   const [contractHint, setContractHint] = useState<{ wageType: PayType | null; wageAmount: number; status: string } | null>(null);
   // 자동 입력값 항목별 확인 — 시급/2인+시급/주휴를 각각 녹색 ✓로 확인해야 저장 가능(저빈도 등록이라 검토 유도)
   const [confirmed, setConfirmed] = useState({ base: false, rate2: false, weekly: false });
+  const pickSeqRef = useRef(0); // A10: onPickWorker 요청 순번(느린 stale 응답 폐기용)
   const needRate2 = form.payType === "HOURLY";
   const needWeekly = form.payType !== "MONTHLY";
   const amountsConfirmed = confirmed.base && (!needRate2 || confirmed.rate2) && (!needWeekly || confirmed.weekly);
@@ -201,10 +202,14 @@ export default function PayrollPage() {
     setSiteOptions([]);
     setConfirmed({ base: false, rate2: false, weekly: false }); // 워커 변경 → 자동값 재확인 필요
     if (!workerId) return;
+    // A10: 워커 빠른 전환 시 느린 응답이 나중 도착해 엉뚱한 워커의 현장목록이 적용되던 race 방지 —
+    //  요청 순번을 기록하고, 응답 적용 시 최신 순번일 때만 반영(stale 응답 폐기).
+    const seq = ++pickSeqRef.current;
     // 다시급: 이 워커의 현장 목록(진행중 배정) → 현장별 금액 override 선택지.
     fetch(`/api/admin/assignments?workerId=${workerId}`)
       .then(r => r.json())
       .then(d => {
+        if (seq !== pickSeqRef.current) return; // 더 최신 선택이 있었음 → 폐기
         if (d.success && Array.isArray(d.items)) {
           const active = new Set(["ASSIGNED", "CONFIRMED", "ACTIVE"]);
           const uniq = new Map<string, string>();
@@ -215,6 +220,7 @@ export default function PayrollPage() {
     try {
       const res = await fetch(`/api/admin/contracts?workerId=${workerId}`);
       const d = await res.json();
+      if (seq !== pickSeqRef.current) return; // A10: 그 사이 다른 워커 선택됨 → stale 프리필 폐기
       if (!d.success || !Array.isArray(d.items)) return;
       const rank = (s: string) => (s === "COMPLETED" ? 0 : s === "SIGNED" ? 1 : 2);
       const cand = (d.items as any[])

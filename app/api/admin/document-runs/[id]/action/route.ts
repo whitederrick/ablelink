@@ -62,8 +62,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const stageErr = (msg: string) => NextResponse.json({ success: false, message: msg }, { status: 409 });
 
     if (action === "confirm") {
-      if (run.signStage !== "SUBMITTED") return stageErr("이미 처리된 문서입니다. 목록을 새로고침해주세요.");
-      await prisma.documentRun.update({ where: { id: runId }, data: { signStage: "CONFIRMED" } });
+      // C6: read-then-update TOCTOU 방지 — 조건부 updateMany로 원자적 전이(동시 confirm 이중처리·알림 중복 차단).
+      const upd = await prisma.documentRun.updateMany({ where: { id: runId, signStage: "SUBMITTED" }, data: { signStage: "CONFIRMED" } });
+      if (upd.count === 0) return stageErr("이미 처리된 문서입니다. 목록을 새로고침해주세요.");
       // 워커에게 승인(확정) 알림 — 반려만 알리던 비대칭 해소.
       try {
         await prisma.workerNotice.create({
@@ -87,8 +88,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const mgr = await prisma.manager.findUnique({ where: { id: scope.managerId }, select: { signatureUrl: true, displayName: true } });
       if (!mgr?.signatureUrl)
         return NextResponse.json({ success: false, message: "등록된 매니저 서명이 없습니다. '내 서명' 메뉴에서 먼저 서명을 등록해주세요.", needSignature: true }, { status: 400 });
-      await prisma.documentRun.update({
-        where: { id: runId },
+      // C6: CONFIRMED에서만 원자적으로 서명 전이(동시 서명/확정 경합 차단).
+      const upd = await prisma.documentRun.updateMany({
+        where: { id: runId, signStage: "CONFIRMED" },
         data: {
           managerSignatureUrl: mgr.signatureUrl,
           managerSignerName: mgr.displayName ?? "",
@@ -96,6 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           signStage: "MANAGER_SIGNED",
         },
       });
+      if (upd.count === 0) return stageErr("먼저 '확정'한 뒤 서명할 수 있습니다. 목록을 새로고침해주세요.");
       await audit(scope, { entityType: "DocumentRun", entityId: runId, action: "update", before: { signStage: run.signStage }, after: { signStage: "MANAGER_SIGNED" } });
       return NextResponse.json({ success: true, signStage: "MANAGER_SIGNED" });
     }
@@ -104,7 +107,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // 제출완료·확정 단계에서만 수정요청 가능(서명완료본은 재요청 대신 새 제출 유도).
       if (run.signStage !== "SUBMITTED" && run.signStage !== "CONFIRMED") return stageErr("수정요청은 제출완료·확정 상태에서만 가능합니다.");
       const reason = String(body?.reason || "").trim();
-      await prisma.documentRun.update({ where: { id: runId }, data: { signStage: "CHANGES_REQUESTED" } });
+      // C6: 제출완료·확정 단계에서만 원자적으로 수정요청 전이(확정/서명과의 경합 last-write-wins 차단).
+      const upd = await prisma.documentRun.updateMany({ where: { id: runId, signStage: { in: ["SUBMITTED", "CONFIRMED"] } }, data: { signStage: "CHANGES_REQUESTED" } });
+      if (upd.count === 0) return stageErr("이미 처리된 문서입니다. 목록을 새로고침해주세요.");
 
       await prisma.workerNotice.create({
         data: {
