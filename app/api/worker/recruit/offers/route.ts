@@ -63,8 +63,11 @@ export async function PATCH(req: NextRequest) {
     let assignSiteId: bigint | null = null;
     let assignAgencyId: bigint | null = null;
     if (action === "accept" && offer.siteId != null) {
-      const site = await prisma.site.findUnique({ where: { id: offer.siteId }, select: { id: true, agencyId: true, isActive: true } });
-      const w = await prisma.worker.findUnique({ where: { id: workerId }, select: { status: true } });
+      // 독립 조회 병렬화(현장·워커 상태).
+      const [site, w] = await Promise.all([
+        prisma.site.findUnique({ where: { id: offer.siteId }, select: { id: true, agencyId: true, isActive: true } }),
+        prisma.worker.findUnique({ where: { id: workerId }, select: { status: true } }),
+      ]);
       if (site && site.isActive && site.agencyId != null && w && String(w.status) === "ACTIVE") {
         const wq = await checkQuota(site.agencyId, "workers");
         const dup = await prisma.siteAssignment.findFirst({

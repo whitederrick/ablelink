@@ -34,12 +34,27 @@ export async function GET(req: NextRequest) {
       prisma.systemAnnouncementRead.count({ where: { managerId } }),
     ]);
 
-    // F4: 읽음행 조회를 '표시할 50개 공지'로 한정(60초 폴링 핫패스에서 전체 읽음행 무제한 전송 방지).
+    // F3: 긴급(URGENT) 공지는 50창 밖으로 밀려도 미읽음이면 노출(aging out 방지).
+    //  fan-out(per-manager 레코드)은 816324f에서 중복 때문에 제거했으므로 재도입하지 않고,
+    //  긴급 공지를 별도 조회 → 읽지 않은 것만 병합(중복은 id로 dedup). 집계는 F2(전체-읽음)로 이미 정확.
+    const urgentRecent = await prisma.systemAnnouncement.findMany({
+      where: { type: "URGENT" },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: { id: true, title: true, body: true, type: true, createdAt: true },
+    });
+    const shownSysIds = new Set(sysAnnouncements.map(a => a.id.toString()));
+    const extraUrgent = urgentRecent.filter(u => !shownSysIds.has(u.id.toString()));
+
+    // F4: 읽음행 조회를 '표시 대상 공지(최근 50 + 긴급)'로 한정(60초 폴링에서 전체 읽음행 무제한 전송 방지).
+    const readScanIds = [...sysAnnouncements.map(a => a.id), ...extraUrgent.map(a => a.id)];
     const sysReads = await prisma.systemAnnouncementRead.findMany({
-      where: { managerId, announcementId: { in: sysAnnouncements.map(a => a.id) } },
+      where: { managerId, announcementId: { in: readScanIds } },
       select: { announcementId: true, readAt: true },
     });
     const readMap = new Map(sysReads.map(r => [r.announcementId.toString(), r.readAt]));
+    // 최근 50 전체 + (창 밖) 긴급 중 '미읽음'만 목록에 병합.
+    const shownSys = [...sysAnnouncements, ...extraUrgent.filter(u => !readMap.has(u.id.toString()))];
 
     const noticeItems = notices.map(n => ({
       id:        n.id.toString(),
@@ -53,7 +68,7 @@ export async function GET(req: NextRequest) {
     }));
 
     const sysLabel = (t: string) => (t === "URGENT" ? "긴급 공지" : t === "MAINTENANCE" ? "점검 안내" : "시스템 공지");
-    const sysItems = sysAnnouncements.map(a => {
+    const sysItems = shownSys.map(a => {
       const rd = readMap.get(a.id.toString());
       return {
         id:        `sys:${a.id}`,
