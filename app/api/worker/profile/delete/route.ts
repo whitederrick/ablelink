@@ -14,9 +14,15 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const BUCKET = "signatures";
 
 function extractStoragePath(url: string): string | null {
-  const marker = `/object/public/${BUCKET}/`;
-  const idx = url.indexOf(marker);
-  return idx === -1 ? null : url.slice(idx + marker.length);
+  // 구(공개 URL)·신(signed URL)·신포맷(경로) 모두 처리 — 서명 저장 포맷 전환 대응.
+  const pub = `/object/public/${BUCKET}/`;
+  let i = url.indexOf(pub);
+  if (i >= 0) return url.slice(i + pub.length).split("?")[0];
+  const signed = `/object/sign/${BUCKET}/`;
+  i = url.indexOf(signed);
+  if (i >= 0) return url.slice(i + signed.length).split("?")[0];
+  if (!/^https?:\/\//i.test(url) && !url.startsWith("data:")) return url.replace(/^\/+/, "");
+  return null;
 }
 
 async function deleteStorageFile(path: string): Promise<void> {

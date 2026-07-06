@@ -9,6 +9,9 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkAgencyPlanAccess, isSelfManagedAgency } from "@/lib/planGuard";
 import { validateSignatureImage } from "@/lib/imageValidation";
+import { signatureDisplayUrl } from "@/lib/signatureImage";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { getClientIp } from "@/lib/clientIp";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -16,6 +19,10 @@ const BUCKET = "signatures";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   try {
+  // 공개 API(인증 없음) — IP 기준 rate limit(토큰 열거·스토리지 남용 방어).
+  const rl = await checkRateLimit(`sign-get:${getClientIp(request)}`);
+  if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
+
   const { token } = await params;
   const rec = await prisma.siteSignToken.findUnique({
     where: { token: token },
@@ -50,6 +57,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   try {
+  // 공개 API(인증 없음) — IP 기준 rate limit(스토리지 업로드 DoS·남용 방어).
+  const rl = await checkRateLimit(`sign-post:${getClientIp(request)}`);
+  if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
+
   const { token } = await params;
   const rec = await prisma.siteSignToken.findUnique({
     where: { token: token },
@@ -92,19 +103,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ success: false, message: "서명 저장에 실패했습니다." }, { status: 500 });
   }
 
-  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
+  // 서명 객체 경로만 저장(비공개 버킷). 표시=signed URL, PDF=imageToDataUri(service-role).
+  const storedPath = fileName;
 
   // ★원자적 1회 사용 처리: usedAt:null 조건부 update. 동시 제출 race에서 먼저 성공한 1건만 반영
   //   (초기 usedAt 체크만으로는 두 요청이 모두 통과해 마지막 서명이 덮어쓸 수 있음).
   const claim = await prisma.siteSignToken.updateMany({
     where: { token: token, usedAt: null },
-    data: { signatureUrl: publicUrl, usedAt: new Date() },
+    data: { signatureUrl: storedPath, usedAt: new Date() },
   });
   if (claim.count === 0) {
     return NextResponse.json({ success: false, message: "이미 서명이 완료되었습니다." }, { status: 409 });
   }
 
-  return NextResponse.json({ success: true, signatureUrl: publicUrl });
+  return NextResponse.json({ success: true, signatureUrl: await signatureDisplayUrl(storedPath) });
   } catch (e: any) {
     console.error("[sign/token POST]", e);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });

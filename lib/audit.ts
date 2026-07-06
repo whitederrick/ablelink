@@ -33,6 +33,12 @@ const SENSITIVE_KEYS = new Set([
   "accountNumber", "ciKey", "verifyCode",
   // 개인정보(PII)
   "birthDate", "phoneNumber", "guardianPhoneNumber", "guardianPhoneNumber2", "accountHolder", "businessContactPhone",
+  // 이메일·계좌 은행정보
+  "email", "businessContactEmail", "bankName", "bankCode",
+  // 공단 담당자(성명·이메일 포함 JSON/스칼라)
+  "govContacts", "govContactEmail", "govContactName",
+  // 문서 URL류(서명 외 PDF 등 — 접근 시 서류 내용 열람 가능)
+  "pdfUrl", "pdfFileName",
 ]);
 const fmtVal = (v: unknown): string => (v === null || v === undefined ? "(비움)" : String(v));
 const eqScalar = (a: unknown, b: unknown): boolean => fmtVal(a) === fmtVal(b);

@@ -9,6 +9,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { validateSignatureImage } from "@/lib/imageValidation";
+import { signatureDisplayUrl } from "@/lib/signatureImage";
 import { randomUUID } from "crypto";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -71,7 +72,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "서명 저장에 실패했습니다." }, { status: 500 });
     }
 
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
+    // 서명 객체 경로만 저장(비공개 버킷). 표시=signed URL, PDF=imageToDataUri(service-role).
+    const storedPath = fileName;
 
     // 기존 미사용 토큰 무효화
     await prisma.siteSignToken.deleteMany({
@@ -90,13 +92,13 @@ export async function POST(request: NextRequest) {
         periodEnd,
         signRole: "company_manager",
         signerName,
-        signatureUrl: publicUrl,
+        signatureUrl: storedPath,
         usedAt: now,
         expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
       },
     });
 
-    return NextResponse.json({ success: true, token, signatureUrl: publicUrl });
+    return NextResponse.json({ success: true, token, signatureUrl: await signatureDisplayUrl(storedPath) });
   } catch (error: any) {
     console.error("[inperson-sign]", error);
     return NextResponse.json({ success: false, message: error.message || "서버 오류" }, { status: 500 });

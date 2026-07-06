@@ -85,16 +85,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "서명 저장에 실패했습니다." }, { status: 500 });
     }
 
-    // Public URL 생성
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
-
-    // DB 업데이트
+    // 서명 객체 경로만 저장(비공개 버킷). 표시=signed URL, PDF=imageToDataUri(service-role).
+    //  (공개 URL을 저장하지 않는다 — 버킷 private이라 직접 접근 불가·의미 없음)
     await prisma.worker.update({
       where: { id: BigInt(workerId) },
-      data: { signatureUrl: publicUrl },
+      data: { signatureUrl: fileName },
     });
 
-    return NextResponse.json({ success: true, signatureUrl: await signatureDisplayUrl(publicUrl) });
+    return NextResponse.json({ success: true, signatureUrl: await signatureDisplayUrl(fileName) });
   } catch (error: any) {
     console.error("[signature POST]", error);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
@@ -132,10 +130,15 @@ export async function DELETE(request: NextRequest) {
 // ── 유틸 ─────────────────────────────────────────────────
 function extractStoragePath(url: string): string | null {
   try {
-    const marker = `/object/public/${BUCKET}/`;
-    const idx = url.indexOf(marker);
-    if (idx === -1) return null;
-    return url.slice(idx + marker.length);
+    // 구(공개 URL)·신(signed URL)·신포맷(경로) 모두 처리 — 서명 저장 포맷 전환 대응.
+    const pub = `/object/public/${BUCKET}/`;
+    let i = url.indexOf(pub);
+    if (i >= 0) return url.slice(i + pub.length).split("?")[0];
+    const signed = `/object/sign/${BUCKET}/`;
+    i = url.indexOf(signed);
+    if (i >= 0) return url.slice(i + signed.length).split("?")[0];
+    if (!/^https?:\/\//i.test(url) && !url.startsWith("data:")) return url.replace(/^\/+/, "");
+    return null;
   } catch {
     return null;
   }
