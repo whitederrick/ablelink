@@ -10,7 +10,8 @@ import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess } from "@/lib/planGuard";
 import ExcelJS from "exceljs";
-import { escapeCsvCell } from "@/lib/csv";
+// G3: CSV 직렬화는 단일 출처(lib/csv.csvBody) — 로컬 복사본은 헤더를 이스케이프하지 않아 인젝션/일관성 drift.
+import { csvBody } from "@/lib/csv";
 
 function isDateOnly(s: string) { return /^\d{4}-\d{2}-\d{2}$/.test(s); }
 function pad2(n: number) { return String(n).padStart(2, "0"); }
@@ -19,11 +20,6 @@ function formatKst(d: Date | null | undefined): string {
   if (!d) return "";
   const k = new Date(d.getTime() + 9 * 3600 * 1000);
   return `${k.getUTCFullYear()}-${pad2(k.getUTCMonth() + 1)}-${pad2(k.getUTCDate())} ${pad2(k.getUTCHours())}:${pad2(k.getUTCMinutes())}`;
-}
-
-function csvBody(header: string[], rows: (string | number)[][]): string {
-  const lines = [header.join(","), ...rows.map(r => r.map(escapeCsvCell).join(","))];
-  return "﻿" + lines.join("\r\n"); // BOM → Excel 한글 정상
 }
 
 async function xlsxBody(sheetName: string, header: string[], rows: (string | number)[][]): Promise<Uint8Array> {
