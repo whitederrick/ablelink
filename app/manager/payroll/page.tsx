@@ -206,7 +206,8 @@ export default function PayrollPage() {
       const cand = (d.items as any[])
         .filter(c => c.status !== "CANCELLED" && c.wageAmount != null && Number(c.wageAmount) > 0)
         .sort((a, b) => rank(a.status) - rank(b.status) || new Date(b.contractStart).getTime() - new Date(a.contractStart).getTime())[0];
-      if (!cand) return;
+      // 근로계약서가 없으면 프리랜서(사업소득) 기본값 제안. 있으면 근로소득 기본.
+      if (!cand) { setForm(f => ({ ...f, incomeType: "BUSINESS" })); return; }
       const wt = (cand.wageType as PayType | null) ?? null;
       const base = Number(cand.wageAmount) || 0;
       setContractHint({ wageType: wt, wageAmount: base, status: cand.status });
@@ -218,6 +219,8 @@ export default function PayrollPage() {
           ...f,
           baseAmount: String(base),
           payType,
+          // 근로계약서 존재 → 근로소득 기본(사용자가 명시적으로 바꿀 수 있음)
+          incomeType: "EMPLOYMENT" as IncomeType,
           effectiveFrom: String(cand.contractStart).slice(0, 10),
           effectiveTo: String(cand.contractEnd).slice(0, 10),
           hourlyRate2Plus: isHourly ? auto2Plus(base) : f.hourlyRate2Plus,
@@ -532,8 +535,20 @@ export default function PayrollPage() {
                           <option value="DAILY">일급</option>
                           <option value="MONTHLY">월급</option>
                         </select>
-                        <p className="text-[11px] font-semibold text-slate-400">소득유형·4대보험은 근로계약·근태로 급여 계산 시 자동 판정됩니다.</p>
+                        <p className="text-[11px] font-semibold text-slate-400">4대보험 대상 여부는 근태·소득유형으로 급여 계산 시 자동 판정됩니다.</p>
                       </div>
+                    </div>
+                    {/* 소득 유형 — 근로소득/사업소득(프리랜서 3.3%) 명시 선택. 워커 선택 시 근로계약 유무로 기본값 제안. */}
+                    <div className="mt-3 space-y-1.5">
+                      <label className={T.label}>소득 유형</label>
+                      <select value={form.incomeType} onChange={e => setForm(f => ({ ...f, incomeType: e.target.value as IncomeType }))} className={`w-full ${T.select}`}>
+                        <option value="EMPLOYMENT">근로소득 (4대보험·근로소득세)</option>
+                        <option value="BUSINESS">사업소득 · 프리랜서 (3.3% 원천징수)</option>
+                      </select>
+                      {form.incomeType === "BUSINESS" && contractHint && (
+                        <p className="text-[11px] font-bold text-amber-600">⚠ 이 직무지도원은 근로계약서가 있습니다. 근로계약이 있으면 사업소득(3.3%)은 위법 소지가 있어, 급여 계산 시 근로소득으로 자동 처리됩니다.</p>
+                      )}
+                      <p className="text-[11px] font-semibold text-slate-400">근로계약 기반 고용은 <b>근로소득</b>, 근로계약 없이 위촉된 프리랜서는 <b>사업소득(3.3%)</b>을 선택하세요.</p>
                     </div>
                   </section>
 
