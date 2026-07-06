@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     //  · 정렬 `readAt: asc`는 Postgres에서 NULL(미읽음)을 뒤로 보내(nulls last) take:50 창에서 미읽음이 잘려나가
     //    "미읽음 먼저" 주석과 반대로 동작 → 배지 0·목록 누락. `nulls: "first"`로 미읽음을 창 앞으로.
     //  · 미읽음 개수는 창 절단과 무관하게 별도 count 쿼리로 정확히 집계(F1/F2).
-    const [notices, sysAnnouncements, unreadNotice, totalSys, sysReadCount] = await Promise.all([
+    const [notices, sysAnnouncements, unreadNotice, allSysRows] = await Promise.all([
       prisma.managerNotice.findMany({
         where: { managerId },
         orderBy: [{ readAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
@@ -30,8 +30,8 @@ export async function GET(req: NextRequest) {
         select: { id: true, title: true, body: true, type: true, createdAt: true },
       }),
       prisma.managerNotice.count({ where: { managerId, readAt: null } }),
-      prisma.systemAnnouncement.count(),
-      prisma.systemAnnouncementRead.count({ where: { managerId } }),
+      // M5: 미읽음 계산은 '현재 존재하는 공지 id' 목록 기준(시스템공지는 저빈도라 전량 id 조회 저렴).
+      prisma.systemAnnouncement.findMany({ select: { id: true } }),
     ]);
 
     // F3: 긴급(URGENT) 공지는 50창 밖으로 밀려도 미읽음이면 노출(aging out 방지).
@@ -89,8 +89,14 @@ export async function GET(req: NextRequest) {
       return y.createdAt.localeCompare(x.createdAt);
     });
 
-    // F2: 시스템공지 미읽음 = 전체 공지 − 이 매니저가 읽은 공지 수(take:50 창 밖 오래된 미읽음도 정확히 집계).
-    const unreadSys = Math.max(0, totalSys - sysReadCount);
+    // F2+M5: 시스템공지 미읽음 = 존재하는 공지 − 그중 읽은 공지 수.
+    //  ★읽음수를 '현재 존재하는 공지 id'로 스코프해야 정확 — 삭제된 공지의 읽음행(FK/cascade 없음)이 남아
+    //   전역 읽음수를 부풀리면 미읽음이 0으로 낮춰져 실제 미읽음 긴급공지를 놓치던 버그(M5) 해소.
+    const allSysIds = allSysRows.map(a => a.id);
+    const sysReadForExisting = allSysIds.length
+      ? await prisma.systemAnnouncementRead.count({ where: { managerId, announcementId: { in: allSysIds } } })
+      : 0;
+    const unreadSys = Math.max(0, allSysIds.length - sysReadForExisting);
 
     return NextResponse.json({
       success: true,

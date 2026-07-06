@@ -172,11 +172,16 @@ export async function computePayrollItems(
     const rateForSite = (siteId: bigint | null | undefined): { base: number; rate2: number | null } => {
       const sc = siteId != null ? rateBySite.get(String(siteId)) : undefined;
       const src = sc ?? contract;
+      const srcBase = src ? Number(src.baseAmount) : 0;
+      // 현장 override는 '금액만' — 2인+시급(rate2)을 비우면(null) 폴백하되, **1:多가 1:1보다 싸지지 않게** 한다.
+      //  · M2: 단순히 기본계약 rate2로 폴백하면 override 기본단가(예 20,000)보다 낮은 기본 rate2(예 12,000)가 적용돼
+      //    1:多 날이 1:1(20,000)보다 적게(12,000) 지급되는 역전이 생겼다. → 폴백값은 max(그 현장 기본단가, 기본계약 rate2).
+      //  · 기본계약 자체가 src인 경우(override 없음)엔 srcBase=기본단가라 max가 기존 base rate2와 동일하게 동작.
+      //  · 기본계약 rate2도 없으면(null) 폴백 없음 → isMulti=false → 그 현장 기본단가로 지급(1:1과 동일, 역전 없음).
+      const rate2Fallback = baseRate2Plus != null ? Math.max(srcBase, baseRate2Plus) : null;
       return {
-        base: src ? Number(src.baseAmount) : 0,
-        // 현장 override는 '금액만' — baseAmount만 지정하고 2인+시급(rate2)을 비우면(null) 기관 기본계약의 rate2로 폴백.
-        //  (폴백 안 하면 override 현장의 1:多 날이 1:1 단가로 과소지급됨 — "금액만 override" 취지와도 배치.)
-        rate2: src?.hourlyRate2Plus != null ? Number(src.hourlyRate2Plus) : baseRate2Plus,
+        base: srcBase,
+        rate2: src?.hourlyRate2Plus != null ? Number(src.hourlyRate2Plus) : rate2Fallback,
       };
     };
     const usesSiteRates = rateBySite.size > 0;

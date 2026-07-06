@@ -196,6 +196,8 @@ export async function POST(req: NextRequest) {
     const others = await prisma.siteAssignment.findMany({
       where: {
         workerId: contract.workerId,
+        // M3: 같은 기관 배정만 대상 — PATCH(W#2)와 통일. 스코프 없으면 타 기관 배정이 계약 확정을 영구 차단(해소 불가).
+        agencyId: contract.agencyId,
         status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] },
         NOT: { id: contract.assignmentId },
       },

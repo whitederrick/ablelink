@@ -14,6 +14,7 @@ import { sendEmailWithPdf } from "@/lib/email";
 import { sigRequirement } from "@/lib/docs/requiredSignatures";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { imageToDataUri } from "@/lib/signatureImage";
+import { logAccess } from "@/lib/accessLog";
 
 function fmtDot(s: string) { return s.replace(/-/g, "."); }
 function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`; }
@@ -210,6 +211,15 @@ export async function POST(request: NextRequest) {
       });
       emailSent = true;
     }
+
+    // M10: 개인정보 접속기록(제8조) — 서명·발송도 PII PDF 렌더·제공 지점이라 기록(generate엔 있으나 sign은 누락돼 있었다).
+    await logAccess(request, scope, {
+      subjectType: "Worker",
+      subjectId: workerId,
+      subjectLabel: user?.workerName ?? null,
+      resource: "official_document_sign",
+      action: emailSent ? "export" : "print",
+    });
 
     return NextResponse.json({
       success: true,

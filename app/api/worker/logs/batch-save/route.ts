@@ -41,13 +41,17 @@ export async function POST(request: NextRequest) {
     // 배정 정보 조회 (siteId, workerId 확인)
     const assignment = await prisma.siteAssignment.findUnique({
       where: { id: assignId },
-      select: { workerId: true, siteId: true },
+      select: { workerId: true, siteId: true, startDate: true, endDate: true },
     });
     if (!assignment || assignment.workerId !== writerId) {
       return NextResponse.json({ success: false, message: "배정 정보를 찾을 수 없습니다." }, { status: 403 });
     }
 
     const { siteId } = assignment;
+    // M8: 배정 기간 밖 날짜엔 출근기록 생성 금지(cron·bulk-generate와 동일 기준).
+    const toKstDate = (d: Date) => new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const asgStart = assignment.startDate ? toKstDate(assignment.startDate) : null;
+    const asgEnd = assignment.endDate ? toKstDate(assignment.endDate) : null;
 
     // IDOR 방지: 임의 traineeId 주입 차단 — 이 현장·기간에 재적한 훈련생만 허용.
     const allDates = logs.map(l => l.date).filter(Boolean).sort();
@@ -76,6 +80,8 @@ export async function POST(request: NextRequest) {
       if (existing) {
         dateToAttendanceId.set(date, existing.id);
       } else {
+        // M8: 배정 기간 밖 날짜엔 출근기록 생성 금지(기간 밖 날짜가 출근부·급여에 새는 것 방지).
+        if ((asgStart && date < asgStart) || (asgEnd && date > asgEnd)) continue;
         // 오늘 날짜는 clock-in 없이 생성 불가 — 스킵
         const todayKST = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
         if (date >= todayKST) continue;

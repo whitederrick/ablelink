@@ -55,10 +55,17 @@ export async function POST(request: NextRequest) {
       }
       const asg = await prisma.siteAssignment.findUnique({
         where: { id: BigInt(assignmentIdFromBody) },
-        select: { workerId: true, siteId: true },
+        select: { workerId: true, siteId: true, startDate: true, endDate: true },
       });
       if (!asg || asg.workerId !== writerId || asg.siteId !== BigInt(siteId)) {
         throw new Error("VALIDATION:본인 배정이 아니거나 현장 정보가 일치하지 않습니다.");
+      }
+      // M8: 배정 기간 밖 날짜엔 출근기록 생성 금지(cron·bulk-generate와 동일 기준). 기간 밖 날짜가 출근부·급여에 새는 것 방지.
+      const toKstDate = (d: Date) => new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+      const asgStart = asg.startDate ? toKstDate(asg.startDate) : null;
+      const asgEnd = asg.endDate ? toKstDate(asg.endDate) : null;
+      if ((asgStart && workDate < asgStart) || (asgEnd && workDate > asgEnd)) {
+        throw new Error("VALIDATION:배정 기간 밖의 날짜에는 출근기록을 만들 수 없습니다.");
       }
       const created = await prisma.dailyAttendance.create({
         data: { workerId: writerId, siteId: asg.siteId, assignmentId: BigInt(assignmentIdFromBody), workDate },

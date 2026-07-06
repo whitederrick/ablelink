@@ -91,17 +91,25 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
     orderBy: { assignedAt: "desc" },
   });
 
-  // C3: 선택 쿠키(activeAssignment)의 id가 종료(ENDED)·무효라 매칭에 실패하면 최신 활성 배정으로 폴백.
-  //  (쿠키는 90일 TTL이라 배정 종료 후에도 남아, 폴백이 없으면 모든 문서 화면이 '배정 없음'으로 전면 차단됐다.)
+  // C3+M1: 쿠키/딥링크 assignmentId가 종료(ENDED)·무효라 매칭 실패 시 폴백하되 **현장은 절대 바꾸지 않는다**.
+  //  (아무 활성 배정으로 폴백하면 '현장 A 문서를 현장 B로 생성·제출'하는 공식문서 오발송이 된다.)
+  //  → 지정 배정의 '같은 현장'에 다른 활성 배정이 있을 때만 그 배정으로 폴백. 같은 현장 활성 배정이 없으면 차단하고
+  //    워커가 현장 스위처로 재선택하게 한다(전면차단 아님 — 그 현장 문서만 막힘).
   if (!assignment && selAssignmentId != null) {
-    assignment = await prisma.siteAssignment.findFirst({
-      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
-      include: { site: true },
-      orderBy: { assignedAt: "desc" },
+    const pinned = await prisma.siteAssignment.findFirst({
+      where: { id: selAssignmentId, workerId },
+      select: { siteId: true },
     });
+    if (pinned?.siteId != null) {
+      assignment = await prisma.siteAssignment.findFirst({
+        where: { workerId, siteId: pinned.siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+        include: { site: true },
+        orderBy: { assignedAt: "desc" },
+      });
+    }
   }
 
-  if (!assignment?.site) throw new DocPayloadError("배정된 현장이 없습니다.");
+  if (!assignment?.site) throw new DocPayloadError("배정된 현장이 없습니다. (현장을 다시 선택해주세요)");
 
   const site = assignment.site;
   const start = periodStart || getKstDateString();

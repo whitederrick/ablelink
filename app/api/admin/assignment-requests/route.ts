@@ -168,8 +168,10 @@ export async function POST(req: NextRequest) {
       for (const sid of selectedIds) {
         if (!eligibleIds.has(sid.toString())) return NextResponse.json({ success: false, message: "선정 대상이 올바르지 않습니다." }, { status: 400 });
       }
-      // 초과 가드: 선정 수 > 남은 모집
-      if (remaining > 0 && selectedIds.length > remaining) {
+      // 초과 가드: 선정 수 > 남은 모집.
+      //  M7: 조건을 `cap > 0`로 — 과거 `remaining > 0`은 정원이 이미 꽉 찬(remaining=0) 상태에서 초과선정을 통과시켰다.
+      //   cap=0(정원 미설정=무제한)일 때만 가드를 건너뛰고, 정원이 있으면 remaining=0에서도 1명 이상 선정을 막는다.
+      if (cap > 0 && selectedIds.length > remaining) {
         return NextResponse.json({ success: false, code: "OVER_CAPACITY", message: `선정 인원이 모집 인원을 초과하였습니다. 최종 선정을 재확인해주십시오. (선정 ${selectedIds.length}명 / 모집 ${remaining}명)` }, { status: 409 });
       }
       const isFull = filledCnt + selectedIds.length >= cap; // 이번 확정으로 정원이 다 차는가
