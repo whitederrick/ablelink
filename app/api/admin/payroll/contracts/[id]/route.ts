@@ -25,21 +25,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ success: false, message: "계약을 찾을 수 없습니다." }, { status: 404 });
     }
 
-    // A3: 기관 기본계약(siteId=null)은 현장별 금액 override가 남아있으면 삭제 금지.
-    //  (삭제하면 computeRun이 기본계약을 못 찾아 '급여 계약 없음'(급여0)이 되거나 고아 override 상태가 됨 — 복구 경로 없음.)
-    //  현장별 계약을 먼저 삭제해야 기본계약 삭제 가능.
-    //  ★M4 되돌림(2026-07-06): '만료된 옛 base는 삭제 허용'으로 좁혔더니, 만료 base 삭제 시 override만 남는 고아 상태가
-    //   재개방돼 그 워커 급여가 0이 됐다. base(현재/만료 무관)는 override가 하나라도 남아있으면 삭제 금지가 안전하다.
-    if ((contract as any).siteId == null) {
-      const override = await prisma.payContract.findFirst({
-        where: { agencyId, workerId: contract.workerId, siteId: { not: null } } as any,
-        select: { id: true },
-      });
-      if (override) {
-        return NextResponse.json({ success: false, message: "현장별 금액 계약이 남아 있어 기관 기본 급여 기준을 삭제할 수 없습니다. 현장별 계약을 먼저 삭제하세요." }, { status: 400 });
-      }
-    }
-
+    // (현장별 다시급 제거로 override/고아 개념이 없어져 삭제 가드 불필요 — 자기 기관 급여 기준은 자유 삭제.)
     await prisma.payContract.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (e: any) {

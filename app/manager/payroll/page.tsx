@@ -29,7 +29,6 @@ type DeductionType = "FIXED" | "PERCENTAGE";
 
 interface Contract {
   id: string; workerId: string; workerName: string; loginId: string;
-  siteId: string | null; siteName: string | null;
   workerType: WorkerType; payType: PayType; baseAmount: number; incomeType: IncomeType;
   hourlyRate2Plus: number | null; weeklyHolidayPay: number | null;
   effectiveFrom: string; effectiveTo: string | null;
@@ -106,7 +105,7 @@ function makeInitialForm() {
   const start = new Date();
   const end = new Date(); end.setFullYear(end.getFullYear() + 1); end.setDate(end.getDate() - 1);
   return {
-    workerId: "", siteId: "", workerType: "EXTERNAL" as WorkerType, payType: "HOURLY" as PayType,
+    workerId: "", workerType: "EXTERNAL" as WorkerType, payType: "HOURLY" as PayType,
     baseAmount: String(MIN_WAGE_2026), incomeType: "BUSINESS" as IncomeType,
     hourlyRate2Plus: auto2Plus(MIN_WAGE_2026), weeklyHolidayPay: autoWeeklyHoliday(MIN_WAGE_2026),
     effectiveFrom: ymd(start), effectiveTo: ymd(end),
@@ -121,7 +120,6 @@ export default function PayrollPage() {
   const [loadingContracts, setLoadingContracts] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(makeInitialForm);
-  const [siteOptions, setSiteOptions] = useState<{ id: string; name: string }[]>([]); // 선택 워커의 현장(다시급 override용)
   const [saving, setSaving] = useState(false);
   const [cQuery, setCQuery] = useState("");
   const [cTypeFilter, setCTypeFilter] = useState<string[]>([]);
@@ -197,26 +195,12 @@ export default function PayrollPage() {
   // 워커 선택 시: 근로계약서(서명 완료 우선·최신)에서 시급·기간 자동 프리필.
   // 급여 전용 필드(직무지도원 유형·소득유형·공제)는 건드리지 않는다. 실패 시 수동 입력 가능.
   async function onPickWorker(workerId: string) {
-    setForm(f => ({ ...f, workerId, siteId: "" }));
+    setForm(f => ({ ...f, workerId }));
     setContractHint(null);
-    setSiteOptions([]);
     setConfirmed({ base: false, rate2: false, weekly: false }); // 워커 변경 → 자동값 재확인 필요
     if (!workerId) return;
-    // A10: 워커 빠른 전환 시 느린 응답이 나중 도착해 엉뚱한 워커의 현장목록이 적용되던 race 방지 —
-    //  요청 순번을 기록하고, 응답 적용 시 최신 순번일 때만 반영(stale 응답 폐기).
+    // A10: 워커 빠른 전환 시 느린 응답이 나중 도착해 엉뚱한 워커 프리필이 적용되던 race 방지(순번 가드).
     const seq = ++pickSeqRef.current;
-    // 다시급: 이 워커의 현장 목록(진행중 배정) → 현장별 금액 override 선택지.
-    fetch(`/api/admin/assignments?workerId=${workerId}`)
-      .then(r => r.json())
-      .then(d => {
-        if (seq !== pickSeqRef.current) return; // 더 최신 선택이 있었음 → 폐기
-        if (d.success && Array.isArray(d.items)) {
-          const active = new Set(["ASSIGNED", "CONFIRMED", "ACTIVE"]);
-          const uniq = new Map<string, string>();
-          for (const it of d.items) if (active.has(it.status) && it.site?.id) uniq.set(String(it.site.id), it.site.companyName);
-          setSiteOptions([...uniq].map(([id, name]) => ({ id, name })));
-        }
-      }).catch(() => {});
     try {
       const res = await fetch(`/api/admin/contracts?workerId=${workerId}`);
       const d = await res.json();
@@ -283,7 +267,7 @@ export default function PayrollPage() {
     setSaving(true);
     try {
       const body: any = {
-        workerId: form.workerId, siteId: form.siteId || null,
+        workerId: form.workerId,
         workerType: form.workerType, payType: form.payType,
         baseAmount: Number(form.baseAmount), incomeType: form.incomeType,
         effectiveFrom: form.effectiveFrom, effectiveTo: form.effectiveTo || null,
@@ -543,7 +527,7 @@ export default function PayrollPage() {
                       </div>
                       <div className="space-y-1.5">
                         <label className={T.label}>급여 유형</label>
-                        <select value={form.payType} disabled={!!form.siteId}
+                        <select value={form.payType}
                           onChange={e => setForm(f => {
                             const pt = e.target.value as PayType;
                             const base = Number(f.baseAmount) || 0;
@@ -551,44 +535,19 @@ export default function PayrollPage() {
                             return isHourly
                               ? { ...f, payType: pt, hourlyRate2Plus: auto2Plus(base), weeklyHolidayPay: autoWeeklyHoliday(base) }
                               : { ...f, payType: pt, hourlyRate2Plus: "" };
-                          })} className={`w-full ${T.select} ${form.siteId ? "opacity-60" : ""}`}>
+                          })} className={`w-full ${T.select}`}>
                           <option value="HOURLY">시급</option>
                           <option value="DAILY">일급</option>
                           <option value="MONTHLY">월급</option>
                         </select>
-                        <p className="text-[11px] font-semibold text-slate-400">
-                          {form.siteId ? "현장별 금액은 기관 기본 계약과 같은 급여유형이어야 합니다(잠금)." : "4대보험 대상 여부는 근태·소득유형으로 급여 계산 시 자동 판정됩니다."}
-                        </p>
+                        <p className="text-[11px] font-semibold text-slate-400">4대보험 대상 여부는 근태·소득유형으로 급여 계산 시 자동 판정됩니다.</p>
                       </div>
                     </div>
-                    {/* 같은 기관 다시급 — 현장별 금액 override. '기관 전체(기본)' 또는 특정 현장 선택. */}
-                    {siteOptions.length > 0 && (
-                      <div className="mt-3 space-y-1.5">
-                        <label className={T.label}>적용 현장 <span className="font-semibold text-slate-400">(같은 기관 다시급)</span></label>
-                        <select value={form.siteId} onChange={e => {
-                          const sid = e.target.value;
-                          if (!sid) { setForm(f => ({ ...f, siteId: "" })); return; }
-                          // 현장 override 선택 시 기관 기본계약(siteId=null·현재 유효)에서 급여유형·소득유형 상속(잠금).
-                          //  기본계약 없으면(A1)·월급제면(A5) 서버가 400 → UI에서 선제 차단.
-                          const today = ymd(new Date());
-                          const base = contracts.find(c => c.workerId === form.workerId && c.siteId == null && (c.effectiveTo == null || c.effectiveTo >= today));
-                          if (!base) { alert("먼저 '기관 전체' 기본 급여 기준을 등록한 뒤 현장별 금액을 추가하세요."); return; }
-                          if (base.payType === "MONTHLY") { alert("월급제는 현장과 무관하게 월 급여가 지급되어 현장별 금액을 설정할 수 없습니다."); return; }
-                          setForm(f => ({ ...f, siteId: sid, payType: base.payType, incomeType: base.incomeType }));
-                        }} className={`w-full ${T.select}`}>
-                          <option value="">기관 전체 (기본 급여 기준)</option>
-                          {siteOptions.map(s => <option key={s.id} value={s.id}>{s.name} — 이 현장만 다른 금액</option>)}
-                        </select>
-                        {form.siteId
-                          ? <p className="text-[11px] font-bold text-sky-600">이 현장 출근일에만 아래 <b>금액</b>이 적용됩니다. 급여유형·소득유형·4대보험은 <b>기관 기본 계약</b>을 따릅니다(잠금).</p>
-                          : <p className="text-[11px] font-semibold text-slate-400">현장을 선택하면 그 현장만 다른 시급/일급을 적용할 수 있습니다(다시급). <b>월급제·기본계약 없음</b>은 제외됩니다.</p>}
-                      </div>
-                    )}
 
                     {/* 소득 유형 — 근로소득/사업소득(프리랜서 3.3%) 명시 선택. 워커 선택 시 근로계약 유무로 기본값 제안. */}
                     <div className="mt-3 space-y-1.5">
                       <label className={T.label}>소득 유형</label>
-                      <select value={form.incomeType} disabled={!!form.siteId} onChange={e => setForm(f => ({ ...f, incomeType: e.target.value as IncomeType }))} className={`w-full ${T.select} ${form.siteId ? "opacity-60" : ""}`}>
+                      <select value={form.incomeType} onChange={e => setForm(f => ({ ...f, incomeType: e.target.value as IncomeType }))} className={`w-full ${T.select}`}>
                         <option value="EMPLOYMENT">근로소득 (4대보험·근로소득세)</option>
                         <option value="BUSINESS">사업소득 · 프리랜서 (3.3% 원천징수)</option>
                       </select>
@@ -703,9 +662,6 @@ export default function PayrollPage() {
                     <tr key={c.id} className={T.trBase}>
                       <td className={`${T.td} whitespace-nowrap`}>
                         {c.workerName} <span className="text-[13px] text-slate-500">({maskLoginId(c.loginId)})</span>
-                        {c.siteId
-                          ? <span className="ml-1.5 inline-flex items-center rounded bg-sky-50 px-1.5 py-0.5 text-[11px] font-bold text-sky-600">📍 {c.siteName ?? "현장"}</span>
-                          : <span className="ml-1.5 inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">기관 전체</span>}
                       </td>
                       <td className={T.td}>
                         <div className="flex flex-wrap gap-1">

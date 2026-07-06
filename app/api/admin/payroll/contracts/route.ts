@@ -18,9 +18,8 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         user: { select: { id: true, workerName: true, loginId: true } },
-        site: { select: { id: true, companyName: true } },
       },
-      orderBy: [{ workerId: "asc" }, { siteId: "asc" }, { effectiveFrom: "desc" }],
+      orderBy: [{ workerId: "asc" }, { effectiveFrom: "desc" }],
     });
 
     return NextResponse.json({
@@ -31,8 +30,6 @@ export async function GET(req: NextRequest) {
         workerName: c.user.workerName,
         loginId: c.user.loginId,
         agencyId: c.agencyId.toString(),
-        siteId: (c as any).siteId != null ? (c as any).siteId.toString() : null,
-        siteName: (c as any).site?.companyName ?? null,
         workerType: c.workerType,
         payType: c.payType,
         baseAmount: Number(c.baseAmount),
@@ -60,7 +57,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { workerId, workerType, payType, baseAmount, effectiveFrom, effectiveTo, incomeType, hourlyRate2Plus, weeklyHolidayPay, siteId } = body;
+    const { workerId, workerType, payType, baseAmount, effectiveFrom, effectiveTo, incomeType, hourlyRate2Plus, weeklyHolidayPay } = body;
 
     if (!workerId || !payType || !baseAmount || !effectiveFrom) {
       return NextResponse.json({ success: false, message: "필수 항목 누락" }, { status: 400 });
@@ -82,55 +79,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "workerId 오류" }, { status: 400 });
     }
 
-    // 같은 기관 다시급: 현장 지정(siteId) = 그 현장 금액 override. 미지정(null) = 기관 기본 계약.
-    const hasSite = siteId != null && String(siteId).trim() !== "";
-    const siteIdVal = hasSite ? parseId(siteId) : null;
-    if (hasSite && siteIdVal == null) {
-      return NextResponse.json({ success: false, message: "siteId 오류" }, { status: 400 });
-    }
-    if (siteIdVal != null) {
-      const site = await prisma.site.findUnique({ where: { id: siteIdVal }, select: { agencyId: true } });
-      if (!site || site.agencyId !== agencyId) {
-        return NextResponse.json({ success: false, message: "현장이 이 기관 소속이 아닙니다." }, { status: 400 });
-      }
-    }
-
-    // 현장별 계약은 '금액만' override — 급여유형·소득유형·워커유형은 기관 기본 계약에서 상속(일관성 보장).
-    //  기본 계약(siteId=null)이 없으면 현장 override를 만들 수 없다(기준 부재).
-    let baseForSite: { workerType: "INTERNAL" | "EXTERNAL"; payType: string; incomeType: string } | null = null;
-    if (siteIdVal != null) {
-      // A1: 기본계약 존재 판정을 computeRun의 계약선택과 일치시킨다 — effectiveTo:null만 요구하면
-      //  폼이 종료일(+1년)을 채워 저장하는 정상 기본계약도 '없음'으로 보고 항상 400 나던 버그.
-      //  → 현장 override 시작일 기준으로 유효한(겹치는) 기본계약이면 인정.
-      const refFrom = new Date(effectiveFrom);
-      const baseC = await prisma.payContract.findFirst({
-        where: {
-          agencyId, workerId: workerIdVal, siteId: null,
-          effectiveFrom: { lte: refFrom },
-          OR: [{ effectiveTo: null }, { effectiveTo: { gte: refFrom } }],
-        },
-        orderBy: { effectiveFrom: "desc" },
-        select: { workerType: true, payType: true, incomeType: true },
-      });
-      if (!baseC) {
-        return NextResponse.json({ success: false, message: "먼저 기관 기본 급여 기준을 등록한 뒤 현장별 금액을 추가하세요." }, { status: 400 });
-      }
-      // A5: 월급제는 현장과 무관하게 월 급여가 지급 → 현장별 금액 자체가 성립하지 않음(무음 no-op 방지).
-      if (baseC.payType === "MONTHLY") {
-        return NextResponse.json({ success: false, message: "월급제는 현장과 무관하게 월 급여가 지급되어 현장별 금액을 설정할 수 없습니다." }, { status: 400 });
-      }
-      // A2: 급여유형은 기본계약과 동일해야 함 — 다르면 무음 교체(과지급 원인) 대신 명시적 400.
-      if (payType !== baseC.payType) {
-        return NextResponse.json({ success: false, message: `현장별 금액은 기관 기본 계약과 같은 급여유형(${baseC.payType})이어야 합니다.` }, { status: 400 });
-      }
-      baseForSite = { workerType: baseC.workerType as any, payType: baseC.payType as any, incomeType: baseC.incomeType as any };
-    }
-
-    const resolvedWorkerType: "INTERNAL" | "EXTERNAL" = siteIdVal != null ? baseForSite!.workerType : (workerType ?? "EXTERNAL");
-
-    // 내부직무지도원 규정 강제: 항상 일급 + 사업소득, 2명+시급/주휴수당 없음. 현장 계약은 기본에서 상속.
-    const resolvedPayType     = siteIdVal != null ? baseForSite!.payType : (resolvedWorkerType === "INTERNAL" ? "DAILY" : payType);
-    const resolvedIncomeType  = siteIdVal != null ? baseForSite!.incomeType : (resolvedWorkerType === "INTERNAL" ? "BUSINESS" : (incomeType ?? "BUSINESS"));
+    // ★현장별 다시급(siteId override) 제거(2026-07-06, 사용자 확정: 실무 미사용) — 워커당 급여 기준은 하나.
+    //  내부직무지도원 규정 강제: 항상 일급 + 사업소득, 2명+시급/주휴수당 없음.
+    const resolvedWorkerType: "INTERNAL" | "EXTERNAL" = workerType ?? "EXTERNAL";
+    const resolvedPayType     = resolvedWorkerType === "INTERNAL" ? "DAILY" : payType;
+    const resolvedIncomeType  = resolvedWorkerType === "INTERNAL" ? "BUSINESS" : (incomeType ?? "BUSINESS");
     const resolvedRate2Plus   = resolvedWorkerType === "INTERNAL" ? null : (hourlyRate2Plus != null ? hourlyRate2Plus : null);
     const resolvedHolidayPay  = resolvedWorkerType === "INTERNAL" ? null : (weeklyHolidayPay != null ? weeklyHolidayPay : null);
 
@@ -141,10 +94,10 @@ export async function POST(req: NextRequest) {
     // A9: 기존 계약 종료 + 신규 생성을 한 트랜잭션으로 — 폼 이중제출/재시도 시 effectiveTo:null 계약이 둘 생기거나
     //  종료만 되고 생성 실패로 유효계약 0개가 되던 경합 방지.
     const contract = await prisma.$transaction(async (tx) => {
-      // 기존 유효 계약 종료 처리 — 같은 스코프(같은 siteId, null=기관기본)만 종료.
+      // 기존 유효 계약(열린) 종료 처리 후 신규 생성.
       if (effectiveTo === undefined || effectiveTo === null) {
         await tx.payContract.updateMany({
-          where: { agencyId, workerId: workerIdVal, siteId: siteIdVal, effectiveTo: null },
+          where: { agencyId, workerId: workerIdVal, siteId: null, effectiveTo: null },
           data: { effectiveTo: new Date(effectiveFrom) },
         });
       }
@@ -152,7 +105,7 @@ export async function POST(req: NextRequest) {
         data: {
           agencyId,
           workerId: workerIdVal,
-          siteId: siteIdVal,
+          siteId: null,
           workerType: resolvedWorkerType,
           payType: resolvedPayType,
           baseAmount,
