@@ -123,10 +123,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           status: "ASSIGNED",
           isMainWorker: true,
           assignedAt: new Date(),
-          // M6: 배정 기간을 공고 서비스기간으로 — 겹침검사(line 72)도 serviceStart/End를 쓰므로 생성값과 일치시킨다.
-          //  (과거엔 startDate:new Date()·endDate 없음 → 미래시작 공고가 '오늘~무기한' 배정이 돼 겹침·급여·문서 기간이 틀어짐.)
+          // M6: 시작일을 공고 서비스 시작일로(과거엔 startDate:new Date()라 미래시작 공고가 '오늘'부터 잡혔음).
+          //  ★endDate는 null(개방) 유지 — serviceEnd로 못박으면 M8 배정기간 가드와 겹쳐 서비스종료 후 연장근무 로그가
+          //   막힌다. 실제 근무가 연장되면 배정은 열려 있어야 하고, 종료는 배정 종료 액션으로 처리한다.
           startDate: app.post.serviceStart ?? new Date(),
-          endDate: app.post.serviceEnd ?? null,
+          endDate: null,
           assignedByManagerId: app.post.createdByManagerId, // RecruitPost 생성 매니저(Manager.id)
           statusReason: "마켓플레이스 매칭 수락 자동 배정",
           workType: "FULL_DAY",

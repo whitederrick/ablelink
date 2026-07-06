@@ -172,20 +172,17 @@ export async function computePayrollItems(
       if (!rateBySite.has(String(sid))) rateBySite.set(String(sid), c); // desc 정렬이라 최신 우선
     }
     // 그 현장 출근일에 적용할 금액(현장전용 있으면 그 값, 없으면 기본계약).
-    const baseRate2Plus = contract?.hourlyRate2Plus != null ? Number(contract.hourlyRate2Plus) : null;
     const rateForSite = (siteId: bigint | null | undefined): { base: number; rate2: number | null } => {
       const sc = siteId != null ? rateBySite.get(String(siteId)) : undefined;
       const src = sc ?? contract;
-      const srcBase = src ? Number(src.baseAmount) : 0;
-      // 현장 override는 '금액만' — 2인+시급(rate2)을 비우면(null) 폴백하되, **1:多가 1:1보다 싸지지 않게** 한다.
-      //  · M2: 단순히 기본계약 rate2로 폴백하면 override 기본단가(예 20,000)보다 낮은 기본 rate2(예 12,000)가 적용돼
-      //    1:多 날이 1:1(20,000)보다 적게(12,000) 지급되는 역전이 생겼다. → 폴백값은 max(그 현장 기본단가, 기본계약 rate2).
-      //  · 기본계약 자체가 src인 경우(override 없음)엔 srcBase=기본단가라 max가 기존 base rate2와 동일하게 동작.
-      //  · 기본계약 rate2도 없으면(null) 폴백 없음 → isMulti=false → 그 현장 기본단가로 지급(1:1과 동일, 역전 없음).
-      const rate2Fallback = baseRate2Plus != null ? Math.max(srcBase, baseRate2Plus) : null;
+      // rate2(2인+시급)는 '그 계약(src) 자체의 값'만 사용한다.
+      //  · override(sc)에 rate2 미설정(null)이면 → null → isMulti=false → 그 현장 기본단가(override base)로 지급.
+      //  · 기본계약 없이 override면 override base가 곧 지급단가. 기본계약이 src면 그 계약의 rate2.
+      //  ★M2 되돌림(2026-07-06): 기본계약 rate2를 override로 끌어오는 폴백은 방향에 따라 과지급/과소지급(역전)을 냈다.
+      //   '금액만 override'는 그 현장 단가로 지급하는 것으로 충분 — 별도 1:多 프리미엄은 override가 명시할 때만.
       return {
-        base: srcBase,
-        rate2: src?.hourlyRate2Plus != null ? Number(src.hourlyRate2Plus) : rate2Fallback,
+        base: src ? Number(src.baseAmount) : 0,
+        rate2: src?.hourlyRate2Plus != null ? Number(src.hourlyRate2Plus) : null,
       };
     };
     const usesSiteRates = rateBySite.size > 0;
@@ -196,10 +193,10 @@ export async function computePayrollItems(
       siteId == null ? 0 : traineeCountOnDate(placements, workDate, siteId);
     // 급여 게이트: 심한 지각 미컨펌(보정대기) 날은 급여 산정에서 제외(출근부 PDF와 동일 기준).
     // 지각 기준 = 현장값(site.lateThresholdMin) ?? 위탁기관 기본값 ?? 30.
+    // ★M8/X2 되돌림(2026-07-06): 여기서 '시각 없는 확정행 제외' 가드를 뒀더니, 시각 대기 중인 정당한 근무일까지
+    //  빠져 MONTHLY 일할·DAILY 일수가 과소집계됐다. batch-save가 시각 없는 행을 isFinalClosed:false로 만들도록
+    //  근본 수정했으므로(급여 쿼리는 isFinalClosed:true만) 여기서 별도 시각가드는 불필요·유해 → 제거.
     const confirmedAtt = attendances.filter((a) =>
-      // 소급 일괄저장(batch-save)이 시각 없이 DONE+최종확정으로 만든 행은 급여 근무일에서 제외.
-      //  (출퇴근 시각이 0분이어도 DAILY/MONTHLY 근무일수로 돈이 붙던 과지급 차단 — 시각 입력 후에만 지급.)
-      a.startTime != null && a.endTime != null &&
       !isPayrollPending({
       actualStartTime: a.actualStartTime ?? null,
       actualEndTime: a.actualEndTime ?? null,

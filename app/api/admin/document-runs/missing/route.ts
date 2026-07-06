@@ -56,7 +56,19 @@ export async function GET(req: NextRequest) {
     const submittedByAssignment = new Map<string, string>();
     for (const r of submittedRuns) if (r.assignmentId != null) submittedByAssignment.set(r.assignmentId.toString(), r.signStage);
 
-    const rows = assignments.map(a => ({
+    // D1 정정: 그 달 '실제 출근기록이 있는' 배정만 출근부 제출 대상으로 본다.
+    //  (근무 0일 배정 — 예: 25일 시작 CONFIRMED, 계약취소 후 무근무 ENDED — 을 미제출로 잡아 매니저에게 불가능한
+    //   제출을 독촉하던 허위 미제출 방지. 출근부는 근무가 있어야 제출 의무가 생긴다.)
+    const periodStartStr = `${ym}-01`;
+    const periodEndStr = `${ym}-${String(lastDay).padStart(2, "0")}`;
+    const attended = assignments.length ? await prisma.dailyAttendance.findMany({
+      where: { assignmentId: { in: assignments.map(a => a.id) }, workDate: { gte: periodStartStr, lte: periodEndStr }, startTime: { not: null } },
+      select: { assignmentId: true },
+      distinct: ["assignmentId"],
+    }) : [];
+    const attendedSet = new Set(attended.map(a => a.assignmentId.toString()));
+
+    const rows = assignments.filter(a => attendedSet.has(a.id.toString())).map(a => ({
       assignmentId: a.id.toString(),
       workerName: a.user?.workerName ?? "",
       loginId: a.user?.loginId ?? "",

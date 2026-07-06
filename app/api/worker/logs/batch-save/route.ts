@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
 
     // 날짜별 attendanceId 확보 (없으면 생성)
     const dateToAttendanceId = new Map<string, bigint>();
+    const skippedOutOfRange: string[] = []; // 배정 기간 밖이라 저장 못 한 날짜(응답에 명시)
     for (const date of uniqueDates) {
       const existing = await prisma.dailyAttendance.findUnique({
         where: { assignmentId_workDate: { assignmentId: assignId, workDate: date } },
@@ -81,7 +82,8 @@ export async function POST(request: NextRequest) {
         dateToAttendanceId.set(date, existing.id);
       } else {
         // M8: 배정 기간 밖 날짜엔 출근기록 생성 금지(기간 밖 날짜가 출근부·급여에 새는 것 방지).
-        if ((asgStart && date < asgStart) || (asgEnd && date > asgEnd)) continue;
+        //  ★조용히 버리지 않고 어떤 날짜가 제외됐는지 응답에 담는다(워커가 일부 누락을 인지하도록).
+        if ((asgStart && date < asgStart) || (asgEnd && date > asgEnd)) { skippedOutOfRange.push(date); continue; }
         // 오늘 날짜는 clock-in 없이 생성 불가 — 스킵
         const todayKST = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
         if (date >= todayKST) continue;
@@ -138,7 +140,11 @@ export async function POST(request: NextRequest) {
       await audit(session, { entityType: "TraineeLog", action: "createMany", summary: `일지 일괄 저장 ${saved}건` });
     }
 
-    return NextResponse.json({ success: true, saved });
+    return NextResponse.json({
+      success: true,
+      saved,
+      ...(skippedOutOfRange.length ? { skippedOutOfRange, message: `${skippedOutOfRange.length}개 날짜는 배정 기간 밖이라 저장되지 않았습니다: ${skippedOutOfRange.join(", ")}` } : {}),
+    });
   } catch (error: any) {
     console.error("[worker/logs/batch-save]", error);
     return NextResponse.json({ success: false, message: error.message || "서버 오류" }, { status: 500 });

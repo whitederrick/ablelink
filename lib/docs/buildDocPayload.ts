@@ -85,28 +85,23 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
   let selAssignmentId: bigint | null = null;
   try { selAssignmentId = opts.assignmentId != null && String(opts.assignmentId).trim() !== "" ? BigInt(opts.assignmentId as any) : null; } catch { selAssignmentId = null; }
 
-  let assignment = await prisma.siteAssignment.findFirst({
-    where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(selAssignmentId != null ? { id: selAssignmentId } : {}) },
-    include: { site: true },
-    orderBy: { assignedAt: "desc" },
-  });
-
-  // C3+M1: 쿠키/딥링크 assignmentId가 종료(ENDED)·무효라 매칭 실패 시 폴백하되 **현장은 절대 바꾸지 않는다**.
-  //  (아무 활성 배정으로 폴백하면 '현장 A 문서를 현장 B로 생성·제출'하는 공식문서 오발송이 된다.)
-  //  → 지정 배정의 '같은 현장'에 다른 활성 배정이 있을 때만 그 배정으로 폴백. 같은 현장 활성 배정이 없으면 차단하고
-  //    워커가 현장 스위처로 재선택하게 한다(전면차단 아님 — 그 현장 문서만 막힘).
-  if (!assignment && selAssignmentId != null) {
-    const pinned = await prisma.siteAssignment.findFirst({
+  // 배정 결정 규칙(M1 정정본):
+  //  · 딥링크/쿠키가 assignmentId를 '명시'하면 그 배정을 그대로 사용한다 — 종료(ENDED)여도.
+  //    (수정요청 딥링크는 지난달 종료된 배정을 가리키므로, ENDED를 배제하면 과거문서 재제출이 데드엔드가 됨.)
+  //    소유(workerId) 검증만 하므로 타인 배정/타 현장으로 새지 않는다(오발송 방지 = M1 취지 유지).
+  //  · 명시가 없으면(핀 없음) 최신 활성 배정으로 결정.
+  let assignment;
+  if (selAssignmentId != null) {
+    assignment = await prisma.siteAssignment.findFirst({
       where: { id: selAssignmentId, workerId },
-      select: { siteId: true },
+      include: { site: true },
     });
-    if (pinned?.siteId != null) {
-      assignment = await prisma.siteAssignment.findFirst({
-        where: { workerId, siteId: pinned.siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
-        include: { site: true },
-        orderBy: { assignedAt: "desc" },
-      });
-    }
+  } else {
+    assignment = await prisma.siteAssignment.findFirst({
+      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      include: { site: true },
+      orderBy: { assignedAt: "desc" },
+    });
   }
 
   if (!assignment?.site) throw new DocPayloadError("배정된 현장이 없습니다. (현장을 다시 선택해주세요)");
