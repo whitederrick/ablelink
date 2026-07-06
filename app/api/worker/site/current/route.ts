@@ -28,14 +28,18 @@ export async function GET(request: NextRequest) {
     let selAssignmentId: bigint | null = null;
     try { selAssignmentId = reqAssignmentId ? BigInt(reqAssignmentId) : null; } catch { selAssignmentId = null; }
 
+    // 명시 배정(딥링크/쿠키)이면 종료(ENDED)여도 그 배정으로 — 과거문서 재제출·수정요청 딥링크가
+    //  ENDED를 가리키므로 ACTIVE+오늘기간 필터를 걸면 siteInfo=null → 문서 카드/제출버튼이 안 뜨는 데드엔드.
+    //  소유(workerId)+근무발생상태(generate/preview/buildDocPayload와 동일)만 검증. 미명시면 최신 활성.
     const assignment = await prisma.siteAssignment.findFirst({
-      where: {
-        workerId,
-        status: "ACTIVE",
-        startDate: { lte: today },
-        OR: [{ endDate: null }, { endDate: { gte: today } }],
-        ...(selAssignmentId != null ? { id: selAssignmentId } : {}),
-      },
+      where: selAssignmentId != null
+        ? { id: selAssignmentId, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } }
+        : {
+            workerId,
+            status: "ACTIVE",
+            startDate: { lte: today },
+            OR: [{ endDate: null }, { endDate: { gte: today } }],
+          },
       include: {
         site: {
           include: {

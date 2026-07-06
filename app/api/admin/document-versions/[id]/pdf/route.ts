@@ -9,6 +9,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { injectManagerSignature } from "@/lib/docs/managerSig";
+import { logAccess } from "@/lib/accessLog";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -38,6 +39,7 @@ export async function GET(
             docType: true,
             managerSignatureUrl: true,
             managerSignerName: true,
+            worker: { select: { id: true, workerName: true } },
             assignment: { select: { site: { select: { companyName: true, agencyId: true } } } },
           },
         },
@@ -68,6 +70,15 @@ export async function GET(
     });
 
     const pdfBuffer = await renderPdfToBuffer({ documentType: docType, payload });
+
+    // 접속기록(제8조): 제출본 PII PDF 렌더·제공 지점 기록.
+    await logAccess(req, scope, {
+      subjectType: "Worker",
+      subjectId: v.run?.worker?.id ?? null,
+      subjectLabel: v.run?.worker?.workerName ?? null,
+      resource: "official_document",
+      action: "print",
+    });
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,

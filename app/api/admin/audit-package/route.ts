@@ -13,6 +13,7 @@ import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
 import JSZip from "jszip";
 import { imageToDataUri } from "@/lib/signatureImage";
+import { logAccess } from "@/lib/accessLog";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -196,6 +197,15 @@ export async function GET(request: NextRequest) {
 
     const workerName = safeFilename(user?.workerName || workerIdRaw);
     const filename  = `감사서류_${workerName}_${start}_${end}.zip`;
+
+    // 접속기록(안전성 확보조치 제8조): 최대밀도 PII 패키지(출근부+훈련생 일지·평가) 제공 지점 기록.
+    await logAccess(request, scope, {
+      subjectType: "Worker",
+      subjectId: workerId,
+      subjectLabel: user?.workerName ?? null,
+      resource: "audit_package",
+      action: "export",
+    });
 
     return new NextResponse(new Uint8Array(zipBuffer), {
       status: 200,

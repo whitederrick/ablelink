@@ -75,6 +75,17 @@ export async function GET(request: NextRequest) {
     const docTimes = dailyDocTimes((assignment as any).workType, (assignment as any).commuteGuidanceIncluded, (assignment as any).customWorkStart, (assignment as any).customWorkEnd);
     let payload: any;
 
+    // 훈련생 문서는 유효한 훈련생 필수 — generate/submit과 동일하게 미선택/미재적이면 400.
+    //  (미선택 시 traineeName:''로 빈 훈련생 공식문서 PDF가 렌더되던 것 차단 — 문서 무결성.)
+    const TRAINEE_DOC_TYPES = ["TRAINING_DAILY_LOG", "ADAPTATION_DAILY_LOG", "TRAINEE_FINAL_EVAL", "ADAPTATION_FINAL_EVAL"];
+    let previewTrainee: { id: bigint; name: string } | null = null;
+    if (TRAINEE_DOC_TYPES.includes(docType)) {
+      let tid: bigint | null = null;
+      try { tid = traineeId ? BigInt(traineeId) : null; } catch { tid = null; }
+      previewTrainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      if (!previewTrainee) return NextResponse.json({ success: false, message: "훈련생을 선택해주세요." }, { status: 400 });
+    }
+
     if (docType === "ATTENDANCE_SHEET") {
       ({ payload } = await buildAttendanceSheetPayload({
         workerId,
@@ -94,8 +105,7 @@ export async function GET(request: NextRequest) {
         signatures: { govAgent: sigs.govAgent, companyManager: { name: "", imageUrl: undefined }, worker: sigs.worker },
       }));
     } else if (docType === "TRAINING_DAILY_LOG") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      const trainee = previewTrainee!;
       const logs = trainee ? await prisma.traineeLog.findMany({
         where:{ writerId:workerId, traineeId:trainee.id, trainingType:{in:["PRE","FIELD"]}, attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
@@ -111,8 +121,7 @@ export async function GET(request: NextRequest) {
         signatures:{ govAgent:sigs.govAgent, companyManager:{name:"",imageUrl:undefined}, worker:sigs.worker },
       };
     } else if (docType === "ADAPTATION_DAILY_LOG") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      const trainee = previewTrainee!;
       const logs = trainee ? await prisma.traineeLog.findMany({
         where:{ writerId:workerId, traineeId:trainee.id, trainingType:"ADAPTATION", attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
@@ -125,8 +134,7 @@ export async function GET(request: NextRequest) {
         signatures:{ worker:sigs.worker, govAgent:sigs.govAgent },
       };
     } else if (docType === "TRAINEE_FINAL_EVAL") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      const trainee = previewTrainee!;
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
         where:{ traineeId:trainee.id, writerId:workerId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
       }) : null;
@@ -138,8 +146,7 @@ export async function GET(request: NextRequest) {
         signatures:{ worker:sigs.worker, agencyAgent:sigs.agencyAgent },
       };
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      const trainee = previewTrainee!;
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
         where:{ traineeId:trainee.id, writerId:workerId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
       }) : null;

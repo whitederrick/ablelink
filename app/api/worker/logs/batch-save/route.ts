@@ -9,7 +9,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { WorkStatus } from "@prisma/client";
 import { audit } from "@/lib/audit";
-import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
+import { traineeCountOnDate, type PlacementSpan } from "@/lib/traineePlacement";
 
 interface LogEntry {
   date: string;
@@ -53,7 +53,11 @@ export async function POST(request: NextRequest) {
     const asgStart = assignment.startDate ? toKstDate(assignment.startDate) : null;
     const asgEnd = assignment.endDate ? toKstDate(assignment.endDate) : null;
 
-    // IDOR 방지: 임의 traineeId 주입 차단 — 이 현장·기간에 재적한 훈련생만 허용.
+    // IDOR + 날짜정합: 현장·기간 재적 placement를 일괄 조회(N+1 제거)해 두 가지를 판정.
+    //   (1) IDOR 하드차단 — 현장·봉투기간에 재적 이력이 전혀 없는 훈련생이 섞이면 거부(임의 주입 방지).
+    //   (2) 날짜정합 — 각 로그의 '그 날짜'가 그 훈련생 재적 기간 안인지 개별 검증(아래 저장 루프).
+    //       봉투[minDate,maxDate] 1회 검사만 하면, 봉투 일부만 재적한 훈련생의 봉투 밖 날짜 로그가
+    //       통과해 문서 내용이 오염된다(단건 save는 날짜별 차단이므로 배치도 날짜별로 맞춘다).
     const allDates = logs.map(l => l.date).filter(Boolean).sort();
     const minDate = allDates[0], maxDate = allDates[allDates.length - 1];
     const uniqueTraineeIds = [...new Set(logs.map(l => String(l.traineeId)))];
@@ -61,8 +65,24 @@ export async function POST(request: NextRequest) {
       if (!/^[0-9]+$/.test(tid)) {
         return NextResponse.json({ success: false, message: "잘못된 훈련생 정보입니다." }, { status: 400 });
       }
-      const ok = await findTraineeAtSiteInPeriod(BigInt(tid), siteId, minDate, maxDate);
-      if (!ok) {
+    }
+    const placements = await prisma.traineePlacement.findMany({
+      where: {
+        siteId,
+        traineeId: { in: uniqueTraineeIds.map(t => BigInt(t)) },
+        startDate: { lte: new Date(maxDate + "T23:59:59+09:00") },
+        OR: [{ endDate: null }, { endDate: { gte: new Date(minDate + "T00:00:00+09:00") } }],
+      },
+      select: { traineeId: true, siteId: true, startDate: true, endDate: true },
+    });
+    const placementsByTrainee = new Map<string, PlacementSpan[]>();
+    for (const p of placements) {
+      const k = String(p.traineeId);
+      const arr = placementsByTrainee.get(k);
+      if (arr) arr.push(p); else placementsByTrainee.set(k, [p]);
+    }
+    for (const tid of uniqueTraineeIds) {
+      if (!placementsByTrainee.has(tid)) {
         return NextResponse.json({ success: false, message: "이 현장에 배정되지 않은 훈련생이 포함되어 있습니다." }, { status: 403 });
       }
     }
@@ -106,9 +126,16 @@ export async function POST(request: NextRequest) {
     }
 
     let saved = 0;
+    const skippedNotEnrolled: string[] = []; // 그 날짜에 훈련생이 현장 재적이 아니라 건너뛴 로그(조용한 오염 방지)
     for (const entry of logs) {
       const attendanceId = dateToAttendanceId.get(entry.date);
       if (!attendanceId) continue;
+
+      // 날짜정합: 이 훈련생이 '그 날짜'에 현장 재적이 아니면 이 로그는 저장하지 않는다(봉투 밖 날짜 오염 방지).
+      if (traineeCountOnDate(placementsByTrainee.get(String(entry.traineeId)) ?? [], entry.date, siteId) < 1) {
+        skippedNotEnrolled.push(`${entry.date}(훈련생 미재적)`);
+        continue;
+      }
 
       const traineeId = BigInt(entry.traineeId);
       const logData = {
@@ -140,10 +167,16 @@ export async function POST(request: NextRequest) {
       await audit(session, { entityType: "TraineeLog", action: "createMany", summary: `일지 일괄 저장 ${saved}건` });
     }
 
+    const skipMsgs = [
+      ...(skippedOutOfRange.length ? [`${skippedOutOfRange.length}개 날짜는 배정 기간 밖이라 저장되지 않았습니다: ${skippedOutOfRange.join(", ")}`] : []),
+      ...(skippedNotEnrolled.length ? [`${skippedNotEnrolled.length}건은 해당 날짜에 훈련생이 현장 재적이 아니라 저장되지 않았습니다: ${skippedNotEnrolled.join(", ")}`] : []),
+    ];
     return NextResponse.json({
       success: true,
       saved,
-      ...(skippedOutOfRange.length ? { skippedOutOfRange, message: `${skippedOutOfRange.length}개 날짜는 배정 기간 밖이라 저장되지 않았습니다: ${skippedOutOfRange.join(", ")}` } : {}),
+      ...(skippedOutOfRange.length ? { skippedOutOfRange } : {}),
+      ...(skippedNotEnrolled.length ? { skippedNotEnrolled } : {}),
+      ...(skipMsgs.length ? { message: skipMsgs.join(" / ") } : {}),
     });
   } catch (error: any) {
     console.error("[worker/logs/batch-save]", error);

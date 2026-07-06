@@ -21,15 +21,19 @@ export async function GET(req: NextRequest) {
   let selAssignmentId: bigint | null = null;
   try { const raw = req.nextUrl.searchParams.get("assignmentId"); selAssignmentId = raw ? BigInt(raw) : null; } catch { selAssignmentId = null; }
 
-  // 단일 쿼리: 활성 배정 + 현장명 + 사업체담당자 + 훈련생
+  // 단일 쿼리: 배정 + 현장명 + 사업체담당자 + 훈련생.
+  //  명시 배정(딥링크/쿠키)이면 종료(ENDED)여도 그 배정으로 — ACTIVE+오늘기간을 걸면 ENDED 딥링크가
+  //  data:null이 돼 문서페이지 카드/제출버튼이 안 뜨는 데드엔드(generate/preview/site-current와 통일).
+  //  소유(workerId)+근무발생상태만 검증. 미명시면 최신 활성.
   const assignment = await prisma.siteAssignment.findFirst({
-    where: {
-      workerId,
-      status: "ACTIVE",
-      startDate: { lte: today },
-      OR: [{ endDate: null }, { endDate: { gte: today } }],
-      ...(selAssignmentId != null ? { id: selAssignmentId } : {}),
-    },
+    where: selAssignmentId != null
+      ? { id: selAssignmentId, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } }
+      : {
+          workerId,
+          status: "ACTIVE",
+          startDate: { lte: today },
+          OR: [{ endDate: null }, { endDate: { gte: today } }],
+        },
     select: {
       serviceStep: true,
       adaptationStartDate: true,

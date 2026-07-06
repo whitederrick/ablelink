@@ -14,6 +14,13 @@
 
 export type Half = "AM" | "PM";
 
+/**
+ * 워커를 '점유'하는 배정 상태 — 직접배정 상호배제(다른 현장 이중배정 차단) 판정 기준.
+ *  · ACCEPTED(요청 수락, 확정 전)부터 점유로 본다 — 수락했으면 그 현장에 커밋된 것.
+ *  · REQUESTED(미수락 제안)는 미점유(수락 시점의 충돌검사가 담당), 종료/거절/만료(ENDED/REJECTED/DROPPED/EXPIRED)도 미점유.
+ */
+export const OCCUPYING_STATUSES = ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] as const;
+
 const NOON_MIN = 13 * 60; // AM/PM 분기 기준(13:00)
 
 function toMin(hhmm?: string | null): number | null {
