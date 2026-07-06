@@ -11,6 +11,7 @@ import { getKrHolidays } from "@/lib/krHolidays";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
 import { determineEligibility, isIllegalBusinessIncome, type IncomeType } from "@/lib/payroll/insuranceEligibility";
 import { standardMonthlyIncome } from "@/lib/payroll/pensionBase";
+import { traineeCountOnDate } from "@/lib/traineePlacement";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const SERVICE_STEP_LABEL: Record<string, string> = {
@@ -181,12 +182,9 @@ export async function computePayrollItems(
     const usesSiteRates = rateBySite.size > 0;
     // 그 날 그 현장에 "동시에 재적 중인" 훈련생 수 → 1:1(일반) vs 1:多 배율 판정(일자별).
     //  · placement.startDate ≤ 그날 && (endDate=null || endDate ≥ 그날) 인 배치 수 = 그날 동시 재적.
-    const traineeCountOn = (siteId: bigint | null | undefined, workDate: string): number => {
-      if (siteId == null) return 0;
-      const ds = new Date(workDate + "T00:00:00+09:00");
-      const de = new Date(workDate + "T23:59:59+09:00");
-      return placements.filter((p) => String(p.siteId) === String(siteId) && p.startDate <= de && (p.endDate == null || p.endDate >= ds)).length;
-    };
+    //  판정 규칙은 출근부(attendanceSheetPayload)와 공유 — lib/traineePlacement.traineeCountOnDate 단일 소스.
+    const traineeCountOn = (siteId: bigint | null | undefined, workDate: string): number =>
+      siteId == null ? 0 : traineeCountOnDate(placements, workDate, siteId);
     // 급여 게이트: 심한 지각 미컨펌(보정대기) 날은 급여 산정에서 제외(출근부 PDF와 동일 기준).
     // 지각 기준 = 현장값(site.lateThresholdMin) ?? 위탁기관 기본값 ?? 30.
     const confirmedAtt = attendances.filter((a) =>

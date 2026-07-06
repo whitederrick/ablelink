@@ -17,6 +17,7 @@ import { buildDocFileName } from "@/lib/pdf/filename";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { overtimeMinutesForDay } from "@/lib/attendance/overtime";
+import { isMultiTraineeOnDate } from "@/lib/traineePlacement";
 
 function fmtHHMM(d: Date): string {
   const kst = new Date(d.getTime() + 9 * 3600000);
@@ -97,18 +98,10 @@ export async function buildAttendanceSheetPayload(
     },
     select: { startDate: true, endDate: true },
   });
-  // 특정 날짜(yyyy-mm-dd, KST)에 재적(기간포함)한 훈련생 수가 2명 이상인지.
-  const isMultiOnDate = (ymd: string): boolean => {
-    const dayStart = new Date(ymd + "T00:00:00+09:00");
-    const dayEnd   = new Date(ymd + "T23:59:59+09:00");
-    let n = 0;
-    for (const p of placements) {
-      if (p.startDate <= dayEnd && (p.endDate == null || p.endDate >= dayStart)) {
-        if (++n >= 2) return true;
-      }
-    }
-    return false;
-  };
+  // 특정 날짜(yyyy-mm-dd, KST)에 재적한 훈련생 수가 2명 이상인지.
+  //  판정 규칙은 급여(computeRun)와 공유 — lib/traineePlacement.isMultiTraineeOnDate 단일 소스.
+  //  (placements는 이미 이 현장으로 조회됨 → siteId 인자 불필요.)
+  const isMultiOnDate = (ymd: string): boolean => isMultiTraineeOnDate(placements, ymd);
 
   // 지각 인정 기준(분) = 현장값 ?? 위탁기관 기본값 ?? 30. 보정대기 게이트와 동일 기준.
   const siteRow: any = await prisma.site.findUnique({ where: { id: siteId }, select: { lateThresholdMin: true, agencyId: true } as any });
