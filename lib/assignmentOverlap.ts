@@ -101,3 +101,15 @@ export function findTimeConflict<T extends AssignmentSlot>(
   }
   return null;
 }
+
+/**
+ * 이중배정 차단은 기관을 넘어 전역으로 검사해야 하지만(한 워커는 시간이 겹치는 두 현장에서 동시에 일할 수 없음),
+ * 충돌 상대가 '다른 위탁기관' 배정이면 그 기관/현장 정보를 노출하면 안 된다(크로스테넌트 프라이버시).
+ * → 충돌이 조회 기관과 같은 기관일 때만 현장명을 보여주고, 다른 기관이면 일반 문구로 차단한다.
+ */
+export function isSameAgencyConflict(
+  conflictAgencyId: bigint | null | undefined,
+  viewerAgencyId: bigint | null | undefined,
+): boolean {
+  return conflictAgencyId != null && viewerAgencyId != null && conflictAgencyId === viewerAgencyId;
+}

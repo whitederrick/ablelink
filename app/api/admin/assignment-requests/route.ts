@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
-import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
+import { findTimeConflict, OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
 
 async function expirePastDeadline(agencyId: bigint) {
   await prisma.siteAssignment.updateMany({
@@ -183,14 +183,20 @@ export async function POST(req: NextRequest) {
         select: { id: true, workerId: true, workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
       });
       for (const s of selDetails) {
+        // 이중배정 방지는 전역(크로스기관)으로 검사 — 타 기관 배정과도 시간이 겹치면 안 됨.
+        //  단, 충돌이 타 기관이면 현장명 비노출(일반 문구). 같은 기관 충돌만 현장명 표시.
         const others = await prisma.siteAssignment.findMany({
-          where: { workerId: s.workerId, agencyId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { id: s.id }, siteId: { not: siteId } },
-          select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
+          where: { workerId: s.workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { id: s.id }, siteId: { not: siteId } },
+          select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, agencyId: true, site: { select: { companyName: true } } },
         });
         const c = findTimeConflict(s, others);
         if (c) {
           const w = await prisma.worker.findUnique({ where: { id: s.workerId }, select: { workerName: true } });
-          return NextResponse.json({ success: false, code: "TIME_CONFLICT", message: `${w?.workerName ?? "직무지도원"}님이 다른 현장(${(c as any).site?.companyName ?? "-"}) 배정과 같은 날 근무시간이 겹칩니다. 근무형태를 조정한 뒤 확정해주세요.` }, { status: 409 });
+          const nm = w?.workerName ?? "직무지도원";
+          const msg = isSameAgencyConflict((c as any).agencyId, agencyId)
+            ? `${nm}님이 다른 현장(${(c as any).site?.companyName ?? "-"}) 배정과 같은 날 근무시간이 겹칩니다. 근무형태를 조정한 뒤 확정해주세요.`
+            : `${nm}님은 이미 다른 일정이 있어 이 기간·근무형태로 배정할 수 없습니다. 근무형태를 조정한 뒤 확정해주세요.`;
+          return NextResponse.json({ success: false, code: "TIME_CONFLICT", message: msg }, { status: 409 });
         }
       }
 

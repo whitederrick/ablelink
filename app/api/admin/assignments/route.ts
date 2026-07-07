@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { getKstDateString } from "@/lib/time";
 import { audit } from "@/lib/audit";
-import { OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
+import { OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -226,13 +226,14 @@ export async function POST(req: NextRequest) {
     if (!isRequest) {
       const otherActive = await prisma.siteAssignment.findFirst({
         where: { workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { siteId } },
-        select: { site: { select: { companyName: true } } },
+        select: { agencyId: true, site: { select: { companyName: true } } },
       });
       if (otherActive) {
-        return NextResponse.json(
-          { success: false, message: `이미 다른 현장(${otherActive.site?.companyName ?? "-"})에 배정되어 있습니다. 기존 배정을 종료한 뒤 다시 배정해주세요.` },
-          { status: 409 },
-        );
+        // 크로스테넌트: 충돌이 '타 위탁기관' 배정이면 현장명을 노출하지 않는다(이중배정은 막되 타 기관 정보 비노출).
+        const msg = isSameAgencyConflict(otherActive.agencyId, effectiveAgencyId)
+          ? `이미 다른 현장(${otherActive.site?.companyName ?? "-"})에 배정되어 있습니다. 기존 배정을 종료한 뒤 다시 배정해주세요.`
+          : `이 직무지도원은 이미 다른 곳에 배정되어 있어 직접 배정할 수 없습니다. 기존 배정이 종료된 뒤 다시 시도해주세요.`;
+        return NextResponse.json({ success: false, message: msg }, { status: 409 });
       }
     }
 
