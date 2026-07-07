@@ -41,12 +41,13 @@ export async function GET(req: NextRequest) {
   let exemptCreated  = 0;
   let surveysSent    = 0;
   let payrollDrafted = 0;
+  let assignmentsEnded = 0;
   const errors: string[] = [];
 
   // 감사 상세: 요약 1줄 + 상세 모달에서 처리 건별 내역 조회용(변경주체=시스템)
   const detail: {
-    autoConfirmed: any[]; missedFlagged: any[]; exemptCreated: any[]; payrollDrafted: any[];
-  } = { autoConfirmed: [], missedFlagged: [], exemptCreated: [], payrollDrafted: [] };
+    autoConfirmed: any[]; missedFlagged: any[]; exemptCreated: any[]; payrollDrafted: any[]; assignmentsEnded: any[];
+  } = { autoConfirmed: [], missedFlagged: [], exemptCreated: [], payrollDrafted: [], assignmentsEnded: [] };
 
   // ── 1. 전일 미확정 출근 처리 ───────────────────────────────────
   // - status=DONE(퇴근은 눌렀으나 미확정): 기존대로 자동 확정(endTime 이미 표준시각으로 채워짐)
@@ -407,9 +408,34 @@ export async function GET(req: NextRequest) {
     }
   } catch (e: any) { errors.push(`진척독려: ${e.message}`); }
 
+  // ── 6. 만료 배정 자동 종료(ENDED) — endDate 경과한 ACTIVE 배정을 ENDED로 전환 ──
+  //   endDate가 어제까지인 배정은 오늘부터 '종료'. 상태 자체를 정리해 '현재 배정' 조회에서 빠지고,
+  //   과거문서 재제출은 ENDED 딥링크로만 열리게 한다(clock-in/문서 기간가드와 별개의 상태 정합).
+  //   endDate=오늘(종료 당일)은 아직 근무 중이므로 제외 — cutoff=오늘 00:00 KST 미만만.
+  try {
+    const todayKstStart = new Date(`${kstDateStr()}T00:00:00+09:00`);
+    const expired = await prisma.siteAssignment.findMany({
+      where: { status: "ACTIVE", endDate: { lt: todayKstStart } }, // null endDate는 lt에 매칭 안 됨(무기한 유지)
+      select: { id: true, workerId: true, endDate: true, site: { select: { companyName: true } } },
+    });
+    if (expired.length) {
+      const res = await prisma.siteAssignment.updateMany({
+        where: { id: { in: expired.map(a => a.id) }, status: "ACTIVE" },
+        data: { status: "ENDED", endedAt: now, statusReason: "계약기간 종료(자동)" },
+      });
+      assignmentsEnded = res.count;
+      detail.assignmentsEnded = expired.map(a => ({
+        assignmentId: a.id.toString(),
+        workerId: a.workerId.toString(),
+        site: a.site?.companyName ?? null,
+        endDate: a.endDate ? a.endDate.toISOString().slice(0, 10) : null,
+      }));
+    }
+  } catch (e: any) { errors.push(`배정 자동종료: ${e.message}`); }
+
   // ── 감사로그(변경주체=시스템): 데이터 변경이 있었던 배치만 요약 1건 기록. 상세는 payload에 처리 내역 전량. ──
   try {
-    const changed = autoConfirmed + missedFlagged + exemptCreated + payrollDrafted + surveysExpired + expiryNotified + surveysSent + remindAgencies + tokensCleared;
+    const changed = autoConfirmed + missedFlagged + exemptCreated + payrollDrafted + surveysExpired + expiryNotified + surveysSent + remindAgencies + tokensCleared + assignmentsEnded;
     if (changed > 0) {
       const parts: string[] = [];
       if (autoConfirmed) parts.push(`출근 자동확정 ${autoConfirmed}`);
@@ -420,10 +446,11 @@ export async function GET(req: NextRequest) {
       if (surveysSent) parts.push(`만족도 발송 ${surveysSent}`);
       if (expiryNotified) parts.push(`계약만료 알림 ${expiryNotified}`);
       if (remindAgencies) parts.push(`마감 독려 ${remindAgencies}`);
+      if (assignmentsEnded) parts.push(`배정 자동종료 ${assignmentsEnded}`);
       if (tokensCleared) parts.push(`만료 토큰 삭제 ${tokensCleared}`);
       const payload: Record<string, unknown> = {
         date: yesterday,
-        counts: { autoConfirmed, missedFlagged, exemptCreated, payrollDrafted, surveysExpired, surveysSent, expiryNotified, remindAgencies, tokensCleared },
+        counts: { autoConfirmed, missedFlagged, exemptCreated, payrollDrafted, surveysExpired, surveysSent, expiryNotified, remindAgencies, assignmentsEnded, tokensCleared },
         details: detail,
       };
       if (errors.length) payload.errors = errors;
@@ -437,11 +464,11 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* 감사 실패는 배치에 영향 없음 */ }
 
-  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 퇴근미실행:${missedFlagged} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent} 평가만료:${surveysExpired} 급여초안:${payrollDrafted} 진척독려:${remindAgencies}`, errors);
+  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 퇴근미실행:${missedFlagged} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent} 평가만료:${surveysExpired} 급여초안:${payrollDrafted} 진척독려:${remindAgencies} 배정종료:${assignmentsEnded}`, errors);
 
   return NextResponse.json({
     success: true, yesterday,
-    autoConfirmed, missedFlagged, tokensCleared, expiryNotified, exemptCreated, surveysSent, payrollDrafted, remindAgencies,
+    autoConfirmed, missedFlagged, tokensCleared, expiryNotified, exemptCreated, surveysSent, payrollDrafted, remindAgencies, assignmentsEnded,
     errors,
   });
 }
