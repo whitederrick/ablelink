@@ -135,6 +135,18 @@ export async function POST(req: NextRequest) {
       throw new Error("VALIDATION:계약 종료일은 시작일보다 이후여야 합니다.");
     }
 
+    // ─── 구독 플랜 + 한도 체크 (★Worker 생성/계약 생성 전에 — 초과 시 임시 Worker orphan 방지) ──
+    {
+      const planCheck = await checkAgencyPlanAccess(scope.agencyId, "CONTRACT_ONLINE");
+      if (!planCheck.allowed) {
+        return NextResponse.json({ success: false, message: planCheck.message, reason: planCheck.reason }, { status: 403 });
+      }
+      const quotaCheck = await checkQuota(scope.agencyId, "workers");
+      if (!quotaCheck.allowed) {
+        return NextResponse.json({ success: false, message: `직무지도원 한도(${quotaCheck.max}명)에 도달했습니다. 플랜을 업그레이드해주세요.`, reason: "QUOTA_EXCEEDED" }, { status: 403 });
+      }
+    }
+
     // ─── 직무지도원 유저 확정 ─────────────────────────────────────
     let userIdBig: bigint;
 
@@ -244,19 +256,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ─── 구독 플랜 + 한도 체크 ──────────────────────────────────
-    const planCheck = await checkAgencyPlanAccess(agencyId, "CONTRACT_ONLINE");
-    if (!planCheck.allowed) {
-      return NextResponse.json({ success: false, message: planCheck.message, reason: planCheck.reason }, { status: 403 });
-    }
-    const quotaCheck = await checkQuota(agencyId, "workers");
-    if (!quotaCheck.allowed) {
-      return NextResponse.json({
-        success: false,
-        message: `직무지도원 한도(${quotaCheck.max}명)에 도달했습니다. 플랜을 업그레이드해주세요.`,
-        reason: "QUOTA_EXCEEDED",
-      }, { status: 403 });
-    }
 
     // ─── 사업주(갑) 정보: 미입력 시 위탁기관 정보로 자동 채움(스냅샷 보존) ──
     const agencyRow: any = await prisma.agency.findUnique({

@@ -62,6 +62,12 @@ export async function POST(req: NextRequest) {
     if (!workerId || !payType || !baseAmount || !effectiveFrom) {
       return NextResponse.json({ success: false, message: "필수 항목 누락" }, { status: 400 });
     }
+    // ★월중 단가변경 미지원: computeRun은 겹치는 계약 중 최신 1개를 '월 전체'에 적용하므로,
+    //  effectiveFrom이 월 중간이면 그 달 전체가 새 단가로 조용히 재계산된다. 분할계산을 지원하기 전까지는
+    //  적용 시작일을 매월 1일로 강제해 데이터와 계산 기준을 일치시킨다.
+    if (!/^\d{4}-\d{2}-01$/.test(String(effectiveFrom))) {
+      return NextResponse.json({ success: false, message: "급여 단가 적용 시작일은 매월 1일이어야 합니다. (월 중간 단가 변경은 아직 지원하지 않습니다)" }, { status: 400 });
+    }
     if (!["INTERNAL", "EXTERNAL"].includes(workerType ?? "EXTERNAL")) {
       return NextResponse.json({ success: false, message: "workerType 오류" }, { status: 400 });
     }
