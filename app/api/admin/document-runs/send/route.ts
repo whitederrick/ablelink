@@ -16,6 +16,7 @@ import { injectManagerSignature } from "@/lib/docs/managerSig";
 import { missingSignatureLabels } from "@/lib/docs/requiredSignatures";
 import { sendEmailWithAttachments } from "@/lib/email";
 import { logAccess } from "@/lib/accessLog";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 const DOC_LABEL: Record<string, string> = {
   ATTENDANCE_SHEET:              "출근부",
@@ -123,8 +124,9 @@ export async function POST(req: NextRequest) {
       const usedNames = new Set<string>();
       const attachments: { filename: string; content: Buffer }[] = [];
       const groupRunIds: bigint[] = [];
-      for (const r of grpRuns) {
-        if (!r.currentVersion?.sourceData) continue;
+      // 렌더는 무거우므로 동시성 상한(4)으로 병렬 처리 — 순서는 보존해 파일명 번호 부여를 결정적으로 유지.
+      const renderedBufs = await mapWithConcurrency(grpRuns, 4, async (r) => {
+        if (!r.currentVersion?.sourceData) return null;
         const renderType = (PRISMA_TO_PDF_DOCTYPE[r.docType] ?? r.docType) as DocumentType;
         const basePayload = {
           ...((r.currentVersion.sourceData ?? {}) as any),
@@ -134,13 +136,18 @@ export async function POST(req: NextRequest) {
           managerSignatureUrl: r.managerSignatureUrl,
           managerSignerName: r.managerSignerName,
         });
-        let buf: Buffer;
         try {
-          buf = await renderPdfToBuffer({ documentType: renderType, payload });
+          return await renderPdfToBuffer({ documentType: renderType, payload });
         } catch (e) {
           console.error("[document-runs/send render]", r.id.toString(), e);
-          continue;
+          return null;
         }
+      });
+      // 파일명 부여·첨부는 순차(중복 번호 결정적).
+      for (let gi = 0; gi < grpRuns.length; gi++) {
+        const r = grpRuns[gi];
+        const buf = renderedBufs[gi];
+        if (!buf) continue;
         const docLabel = DOC_LABEL[r.docType] ?? r.docType;
         const who = r.traineeId != null ? (traineeMap.get(r.traineeId.toString()) ?? "") : safe(r.worker?.workerName ?? "");
         const ps = r.periodStart.toISOString().slice(0, 10);

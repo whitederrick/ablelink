@@ -10,6 +10,7 @@ import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { injectManagerSignature } from "@/lib/docs/managerSig";
 import { logAccess } from "@/lib/accessLog";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import JSZip from "jszip";
 
 const DOC_LABEL: Record<string, string> = {
@@ -64,8 +65,9 @@ export async function GET(req: NextRequest) {
     const usedNames = new Set<string>();
     const subjectMap = new Map<string, string>(); // 포함된 직무지도원(workerId→성명) — 접속기록용
 
-    for (const r of runs) {
-      if (!r.currentVersion?.sourceData) continue;
+    // 렌더는 무거우므로 동시성 상한(4)으로 병렬 — 순서 보존해 ZIP 내 파일명 번호 부여를 결정적으로 유지.
+    const renderedBufs = await mapWithConcurrency(runs, 4, async (r) => {
+      if (!r.currentVersion?.sourceData) return null;
       const renderType = (PRISMA_TO_PDF_DOCTYPE[r.docType] ?? r.docType) as DocumentType;
       const basePayload = {
         ...((r.currentVersion.sourceData ?? {}) as any),
@@ -75,13 +77,17 @@ export async function GET(req: NextRequest) {
         managerSignatureUrl: r.managerSignatureUrl,
         managerSignerName: r.managerSignerName,
       });
-      let buf: Buffer;
       try {
-        buf = await renderPdfToBuffer({ documentType: renderType, payload });
+        return await renderPdfToBuffer({ documentType: renderType, payload });
       } catch (e) {
         console.error("[document-runs/zip render]", r.id.toString(), e);
-        continue;
+        return null;
       }
+    });
+    for (let gi = 0; gi < runs.length; gi++) {
+      const r = runs[gi];
+      const buf = renderedBufs[gi];
+      if (!buf) continue;
       const label = DOC_LABEL[r.docType] ?? r.docType;
       const who = r.traineeId != null ? (traineeMap.get(r.traineeId.toString()) ?? "") : safe(r.worker?.workerName ?? "");
       const ps = r.periodStart.toISOString().slice(0, 10);
