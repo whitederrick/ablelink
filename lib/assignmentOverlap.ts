@@ -14,6 +14,13 @@
 
 export type Half = "AM" | "PM";
 
+/**
+ * 워커를 '점유'하는 배정 상태 — 직접배정 상호배제(다른 현장 이중배정 차단) 판정 기준.
+ *  · ACCEPTED(요청 수락, 확정 전)부터 점유로 본다 — 수락했으면 그 현장에 커밋된 것.
+ *  · REQUESTED(미수락 제안)는 미점유(수락 시점의 충돌검사가 담당), 종료/거절/만료(ENDED/REJECTED/DROPPED/EXPIRED)도 미점유.
+ */
+export const OCCUPYING_STATUSES = ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] as const;
+
 const NOON_MIN = 13 * 60; // AM/PM 분기 기준(13:00)
 
 function toMin(hhmm?: string | null): number | null {
@@ -37,9 +44,10 @@ export function occupiedHalves(
       const s = toMin(customWorkStart), e = toMin(customWorkEnd);
       const out = new Set<Half>();
       if (s == null || e == null || e <= s) return new Set<Half>(["AM", "PM"]); // 불명확 → 종일로 간주(보수적)
+      // e>s 보장 → s<정오면 AM, 아니면(s>=정오) e>s>=정오라 PM. 항상 1개 이상이라 빈 집합 폴백은 도달 불가.
       if (s < NOON_MIN) out.add("AM");
       if (e > NOON_MIN) out.add("PM");
-      return out.size ? out : new Set<Half>(["AM", "PM"]);
+      return out;
     }
     default: return new Set<Half>(["AM", "PM"]); // 미지정 → 종일(보수적)
   }

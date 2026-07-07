@@ -9,6 +9,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { injectManagerSignature } from "@/lib/docs/managerSig";
+import { logAccess } from "@/lib/accessLog";
 import JSZip from "jszip";
 
 const DOC_LABEL: Record<string, string> = {
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
       select: {
         id: true, docType: true, traineeId: true, periodStart: true, periodEnd: true,
         managerSignatureUrl: true, managerSignerName: true,
-        worker: { select: { workerName: true } },
+        worker: { select: { id: true, workerName: true } },
         site: { select: { companyName: true } },
         currentVersion: { select: { sourceData: true } },
       },
@@ -61,6 +62,7 @@ export async function GET(req: NextRequest) {
     const zip = new JSZip();
     let added = 0;
     const usedNames = new Set<string>();
+    const subjectMap = new Map<string, string>(); // 포함된 직무지도원(workerId→성명) — 접속기록용
 
     for (const r of runs) {
       if (!r.currentVersion?.sourceData) continue;
@@ -90,10 +92,16 @@ export async function GET(req: NextRequest) {
       usedNames.add(name);
       zip.file(name, buf);
       added++;
+      if (r.worker?.id != null) subjectMap.set(String(r.worker.id), r.worker.workerName ?? "");
     }
 
     if (added === 0)
       return NextResponse.json({ success: false, message: "생성 가능한 문서가 없습니다." }, { status: 404 });
+
+    // 접속기록(제8조): 대량 PII 문서 제공 — 포함된 직무지도원별 1건씩 기록(M10 초크포인트).
+    await Promise.all([...subjectMap].map(([sid, sname]) =>
+      logAccess(req, scope, { subjectType: "Worker", subjectId: sid, subjectLabel: sname, resource: "official_document", action: "export" }),
+    ));
 
     const zipBuf = await zip.generateAsync({ type: "nodebuffer" });
     const fileName = encodeURIComponent(`제출문서_${new Date().toISOString().slice(0, 10)}.zip`);

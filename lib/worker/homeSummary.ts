@@ -77,7 +77,14 @@ export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: 
   //  매니저가 표준시각으로 확정할 때까지 미확정으로 유지한다. 아래 missedClockOuts로 노출.)
   const AUTO_FINALIZE_MINUTES = Number(process.env.AUTO_FINALIZE_MINUTES ?? 60);
   const pendingFinalize = await prisma.dailyAttendance.findFirst({
-    where: { workerId, status: "DONE", isFinalClosed: false },
+    // ★시각이 하나라도 있는 행만 자동마감 대상. 시각이 전혀 없는 DONE 행(batch-save 소급 일지
+    //   입력이 만든 행 — isFinalClosed:false로 두어 급여에서 빼는 게 원칙)을 workDate!==today 만으로
+    //   확정하면, computeRun(isFinalClosed:true만 조회·시각가드 제거)이 이를 근무일로 세어 DAILY 일당·
+    //   MONTHLY workedDays가 과지급된다. 시각 없는 행은 여기서 건드리지 않고 missedClockOuts/보정대기로 유지.
+    where: {
+      workerId, status: "DONE", isFinalClosed: false,
+      OR: [{ actualEndTime: { not: null } }, { endTime: { not: null } }],
+    },
     orderBy: [{ workDate: "desc" }, { endTime: "desc" }],
   });
   if (pendingFinalize) {

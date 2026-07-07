@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { audit } from "@/lib/audit";
-import { findTimeConflict } from "@/lib/assignmentOverlap";
+import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 
 const VALID_WT = ["AM", "PM", "FULL_DAY", "CUSTOM"];
 
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
     //   같은 날 반나절 슬롯(AM/PM)이 겹치면 수락 차단(예: 다른 현장 오전 + 이 요청 종일).
     {
       const others = await prisma.siteAssignment.findMany({
-        where: { workerId, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { id: asgn.id } },
+        where: { workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { id: asgn.id } },
         select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
       });
       const conflict = findTimeConflict(

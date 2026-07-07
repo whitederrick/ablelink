@@ -9,6 +9,7 @@ import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/manag
 import { checkAgencyPlanAccess, checkQuota } from "@/lib/planGuard";
 import { isValidTemplateKey, DEFAULT_TEMPLATE_KEY, canUseTemplate, canUseTemplateForWage } from "@/lib/contractTemplates";
 import { sendAlimtalk } from "@/lib/kakao";
+import { findTimeConflict } from "@/lib/assignmentOverlap";
 import { randomUUID } from "crypto";
 import { hash } from "bcryptjs";
 import { audit } from "@/lib/audit";
@@ -214,9 +215,31 @@ export async function POST(req: NextRequest) {
       catch { throw new Error("VALIDATION:잘못된 assignmentId입니다."); }
       const asgn = await prisma.siteAssignment.findFirst({
         where: { id: assignmentIdBig, workerId: userIdBig, agencyId },
-        select: { id: true },
+        select: { id: true, siteId: true },
       });
       if (!asgn) throw new Error("VALIDATION:연결할 배정을 찾을 수 없습니다. (직무지도원/기관 불일치)");
+
+      // ★E1-C(사용자 확정 2026-07-06): 겹침검사를 '서명' 시점이 아니라 '계약 발행' 시점에 둔다.
+      //  서명 write-back(worker/contracts)이 이 배정의 workType·기간을 계약값으로 덮어써 CONFIRMED로 승격하는데,
+      //  그 값이 같은 워커의 다른 진행중 배정(같은 기관)과 같은 날 겹치면 이중배정이 된다. 발행을 여기서 막으면
+      //  서명 경로는 항상 안전해진다(서명 시점 차단 → 서명은 됐는데 배정 미활성=무급, 이던 딜레마 제거).
+      const isCustom = workType === "CUSTOM";
+      // R4-10: 겹침검사는 '다른 현장'만 대상(finalize=assignment-requests와 기준 통일). 같은 현장 배정은
+      //  갱신/재계약(같은 현장 연속)일 수 있어 슬롯이 겹쳐도 이중배정이 아니다 → 같은 현장 신규행 발행시 오탐 409 방지.
+      const others = await prisma.siteAssignment.findMany({
+        where: { workerId: userIdBig, agencyId, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { id: assignmentIdBig }, siteId: { not: asgn.siteId } },
+        select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
+      });
+      const conflict = findTimeConflict(
+        { workType, customWorkStart: isCustom ? customWorkStart : null, customWorkEnd: isCustom ? customWorkEnd : null, startDate, endDate },
+        others,
+      );
+      if (conflict) {
+        return NextResponse.json(
+          { success: false, code: "TIME_CONFLICT", message: `이 계약의 근무형태·기간이 '${(conflict as any).site?.companyName ?? "다른 현장"}' 배정과 같은 날 근무시간이 겹칩니다. 배정을 조정한 뒤 계약을 발행해주세요.` },
+          { status: 409 },
+        );
+      }
     }
 
     // ─── 구독 플랜 + 한도 체크 ──────────────────────────────────

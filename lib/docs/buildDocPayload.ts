@@ -85,13 +85,28 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
   let selAssignmentId: bigint | null = null;
   try { selAssignmentId = opts.assignmentId != null && String(opts.assignmentId).trim() !== "" ? BigInt(opts.assignmentId as any) : null; } catch { selAssignmentId = null; }
 
-  const assignment = await prisma.siteAssignment.findFirst({
-    where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(selAssignmentId != null ? { id: selAssignmentId } : {}) },
-    include: { site: true },
-    orderBy: { assignedAt: "desc" },
-  });
+  // 배정 결정 규칙(M1 정정본):
+  //  · 딥링크/쿠키가 assignmentId를 '명시'하면 그 배정을 그대로 사용한다 — 종료(ENDED)여도.
+  //    (수정요청 딥링크는 지난달 종료된 배정을 가리키므로, ENDED를 배제하면 과거문서 재제출이 데드엔드가 됨.)
+  //    소유(workerId) 검증만 하므로 타인 배정/타 현장으로 새지 않는다(오발송 방지 = M1 취지 유지).
+  //    ★단, '근무가 발생할 수 있는' 상태만 허용(ASSIGNED/CONFIRMED/ACTIVE/ENDED = computeRun과 동일).
+  //     REQUESTED/ACCEPTED/REJECTED/DROPPED/EXPIRED(근무한 적 없는 배정)로는 공식문서 생성·공단제출 불가.
+  //  · 명시가 없으면(핀 없음) 최신 활성 배정으로 결정.
+  let assignment;
+  if (selAssignmentId != null) {
+    assignment = await prisma.siteAssignment.findFirst({
+      where: { id: selAssignmentId, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } },
+      include: { site: true },
+    });
+  } else {
+    assignment = await prisma.siteAssignment.findFirst({
+      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      include: { site: true },
+      orderBy: { assignedAt: "desc" },
+    });
+  }
 
-  if (!assignment?.site) throw new DocPayloadError("배정된 현장이 없습니다.");
+  if (!assignment?.site) throw new DocPayloadError("배정된 현장이 없습니다. (현장을 다시 선택해주세요)");
 
   const site = assignment.site;
   const start = periodStart || getKstDateString();

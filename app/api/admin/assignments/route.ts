@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { getKstDateString } from "@/lib/time";
 import { audit } from "@/lib/audit";
+import { OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -219,11 +220,12 @@ export async function POST(req: NextRequest) {
     // 요청 근무형태(복수)·회신 기한을 저장하고, 후보 수락 시 workType이 확정된다.
     const isRequest = body.mode === "request";
 
-    // ✅ 직접 배정(요청 아님)은 동시에 한 현장만 — 다른 현장에 진행 중 배정(ASSIGNED/CONFIRMED/ACTIVE)이 있으면 차단.
-    //    (한 직무지도원이 여러 현장에 무분별하게 꽂히는 것 방지. 요청/후보 흐름은 제외.)
+    // ✅ 직접 배정(요청 아님)은 동시에 한 현장만 — 다른 현장에 점유 배정(ACCEPTED/ASSIGNED/CONFIRMED/ACTIVE)이 있으면 차단.
+    //    (한 직무지도원이 여러 현장에 무분별하게 꽂히는 것 방지. 미수락 요청(REQUESTED)은 제외.)
+    //    ★ACCEPTED 포함(수락했으면 그 현장에 커밋) — 누락 시 A현장 수락 워커를 B현장에 직접배정하는 이중배정 우회.
     if (!isRequest) {
       const otherActive = await prisma.siteAssignment.findFirst({
-        where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { siteId } },
+        where: { workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { siteId } },
         select: { site: { select: { companyName: true } } },
       });
       if (otherActive) {

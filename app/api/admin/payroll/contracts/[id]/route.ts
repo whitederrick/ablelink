@@ -16,12 +16,16 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
 
     const { id: idStr } = await params;
+    if (!/^[0-9]+$/.test(String(idStr))) {
+      return NextResponse.json({ success: false, message: "잘못된 요청입니다." }, { status: 400 });
+    }
     const id = BigInt(idStr);
     const contract = await prisma.payContract.findUnique({ where: { id } });
     if (!contract || contract.agencyId !== agencyId) {
       return NextResponse.json({ success: false, message: "계약을 찾을 수 없습니다." }, { status: 404 });
     }
 
+    // (현장별 다시급 제거로 override/고아 개념이 없어져 삭제 가드 불필요 — 자기 기관 급여 기준은 자유 삭제.)
     await prisma.payContract.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (e: any) {

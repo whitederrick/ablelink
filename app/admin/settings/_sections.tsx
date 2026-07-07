@@ -324,11 +324,14 @@ export function InsuranceRatesManager({ onToast }: { onToast: (m: string) => voi
     if (!confirm(`${y}년 요율을 저장·적용합니다.`)) return;
     setBusy(true);
     try {
-      // 국민연금 기준소득월액 하한/상한은 기존 저장값 유지(없으면 참고 기본값). 재적용으로 wipe 방지.
+      // 국민연금 기준소득월액 하한/상한: 저장된 행이 있으면 그 값을 **그대로**(null 포함) 유지한다.
+      //  B1: 과거엔 `saved?.min ?? bnd.min`이라, 운영자가 근사 모드 유지를 위해 의도적으로 null 저장한 값을
+      //   '누락'으로 보고 잠정 고시값(PENDING)으로 되살려 무단으로 clamp 모드로 전환·저소득 과공제가 됐다.
+      //   → 저장 행이 있으면 null도 보존, 참고 기본값은 저장 행이 아예 없을 때(신규 연도)만 제안.
       const saved = rows.find(x => x.year === y);
       const bnd = pensionBaseBoundDefaultForYear(y);
-      const keepMin = saved?.pensionBaseMin ?? bnd?.min ?? null;
-      const keepMax = saved?.pensionBaseMax ?? bnd?.max ?? null;
+      const keepMin = saved ? (saved.pensionBaseMin ?? null) : (bnd?.min ?? null);
+      const keepMax = saved ? (saved.pensionBaseMax ?? null) : (bnd?.max ?? null);
       const d = await fetch("/api/admin/payroll/insurance-rates", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ year: y, nationalPension: np / 100, healthInsurance: hi / 100, longTermCare: ltc / 100, employmentInsurance: ei / 100, industrialAccident: (ia ?? 0) / 100, pensionBaseMin: keepMin, pensionBaseMax: keepMax }),

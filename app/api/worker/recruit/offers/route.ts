@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
-import { findTimeConflict } from "@/lib/assignmentOverlap";
+import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 
 export async function GET(req: NextRequest) {
   try {
@@ -63,8 +63,11 @@ export async function PATCH(req: NextRequest) {
     let assignSiteId: bigint | null = null;
     let assignAgencyId: bigint | null = null;
     if (action === "accept" && offer.siteId != null) {
-      const site = await prisma.site.findUnique({ where: { id: offer.siteId }, select: { id: true, agencyId: true, isActive: true } });
-      const w = await prisma.worker.findUnique({ where: { id: workerId }, select: { status: true } });
+      // 독립 조회 병렬화(현장·워커 상태).
+      const [site, w] = await Promise.all([
+        prisma.site.findUnique({ where: { id: offer.siteId }, select: { id: true, agencyId: true, isActive: true } }),
+        prisma.worker.findUnique({ where: { id: workerId }, select: { status: true } }),
+      ]);
       if (site && site.isActive && site.agencyId != null && w && String(w.status) === "ACTIVE") {
         const wq = await checkQuota(site.agencyId, "workers");
         const dup = await prisma.siteAssignment.findFirst({
@@ -74,7 +77,8 @@ export async function PATCH(req: NextRequest) {
         // 시간겹침: 다른 현장 진행중 배정과 같은 날 반나절 슬롯이 겹치면 자동배정 스킵(수락 자체는 진행).
         //  제안 자동배정은 FULL_DAY라 기존 활성 배정과 기간이 겹치면 무조건 충돌.
         const others = await prisma.siteAssignment.findMany({
-          where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { siteId: site.id } },
+          // E3: ACCEPTED(최종확정 대기)도 점유로 포함(respond/PATCH 경로와 통일).
+          where: { workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { siteId: site.id } },
           select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
         });
         const timeConflict = findTimeConflict(

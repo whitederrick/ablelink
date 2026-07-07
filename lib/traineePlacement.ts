@@ -19,6 +19,33 @@ export function isActiveTraineeStatus(s: TraineeStatus | string): boolean {
   return s === "TRAINING" || s === "EMPLOYED";
 }
 
+// ── 1:1 vs 1:多 판정(단일 규칙) ─────────────────────────────────────
+// 출근부(attendanceSheetPayload)와 급여(computeRun)가 각각 구현하던 "그 날짜 동시 재적 수"를 통일.
+//  경계 의미가 갈리면 공식문서와 급여가 어긋나므로 단일 함수로 계산한다.
+//  status 필터 없음 — 이탈은 endDate로 표현되므로 과거기간 재계산도 그때 재적이 정확.
+export interface PlacementSpan {
+  siteId?: bigint | number | string | null;
+  startDate: Date;
+  endDate: Date | null;
+}
+
+/** 특정 날짜(KST yyyy-mm-dd)에 기간겹침으로 재적한 배치 수. siteId 지정 시 그 현장만 집계. */
+export function traineeCountOnDate(placements: PlacementSpan[], ymd: string, siteId?: bigint | null): number {
+  const dayStart = new Date(ymd + "T00:00:00+09:00");
+  const dayEnd   = new Date(ymd + "T23:59:59+09:00");
+  let n = 0;
+  for (const p of placements) {
+    if (siteId != null && p.siteId != null && String(p.siteId) !== String(siteId)) continue;
+    if (p.startDate <= dayEnd && (p.endDate == null || p.endDate >= dayStart)) n++;
+  }
+  return n;
+}
+
+/** 그 날짜에 2명 이상 동시 재적 = 1:多. */
+export function isMultiTraineeOnDate(placements: PlacementSpan[], ymd: string, siteId?: bigint | null): boolean {
+  return traineeCountOnDate(placements, ymd, siteId) >= 2;
+}
+
 /** 열린 ACTIVE 배치가 없으면 새로 연다(중복 방지). 이미 열려 있으면 그대로 둔다. */
 export async function openTraineePlacement(db: Db, traineeId: bigint, siteId: bigint, startDate: Date): Promise<void> {
   const existing = await db.traineePlacement.findFirst({

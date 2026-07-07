@@ -8,22 +8,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { getWorkerSessionFromReq, WORKER_COOKIE } from "@/app/worker/_lib/session";
+import { signaturePathFromStored } from "@/lib/signatureImage";
 
 const SUPABASE_URL        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const BUCKET = "signatures";
 
-function extractStoragePath(url: string): string | null {
-  // 구(공개 URL)·신(signed URL)·신포맷(경로) 모두 처리 — 서명 저장 포맷 전환 대응.
-  const pub = `/object/public/${BUCKET}/`;
-  let i = url.indexOf(pub);
-  if (i >= 0) return url.slice(i + pub.length).split("?")[0];
-  const signed = `/object/sign/${BUCKET}/`;
-  i = url.indexOf(signed);
-  if (i >= 0) return url.slice(i + signed.length).split("?")[0];
-  if (!/^https?:\/\//i.test(url) && !url.startsWith("data:")) return url.replace(/^\/+/, "");
-  return null;
-}
+// 서명 경로 파서는 단일 출처(lib/signatureImage) 사용 — 로컬 재구현은 decodeURIComponent 누락으로
+//  URL 인코딩된 경로 삭제가 조용히 실패해 스토리지에 PII(서명)가 고아로 남던 drift를 제거.
+const extractStoragePath = signaturePathFromStored;
 
 async function deleteStorageFile(path: string): Promise<void> {
   try {
@@ -77,6 +70,20 @@ export async function POST(request: NextRequest) {
         pendingLoginId: null,   // 변경 대기 중이던 이메일
         verifyCode:     null,
         verifyCodeExpiresAt: null,
+        // 급여 이체 계좌(민감정보) — 탈퇴 시 파기
+        bankName:       null,
+        accountNumber:  null,
+        accountHolder:  null,
+        bankCode:       null,
+        accountVerifiedAt:     null,
+        accountHolderVerified: null,
+        accountVerifyMethod:   null,
+        // 본인확인(신원) 결과 이력 — 탈퇴 시 파기
+        identityVerifiedAt: null,
+        identityMethod:     null,
+        identityVerifiedBy: null,
+        // 임금명세서 기재용 생년월일(PII)
+        birthDate:      null,
         // 거주지·자기소개 등 매칭용 PII 제거
         residenceAddress: null,
         residenceLat:     null,

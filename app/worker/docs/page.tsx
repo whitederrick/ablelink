@@ -118,8 +118,10 @@ function DocsContent() {
     }
   }, []);
 
-  // 멀티현장 선택 배정(스위처가 세팅한 쿠키). 문서 조회·생성이 이 현장 기준으로 동작하도록 서버에 전달.
-  const activeAssignmentId = typeof window !== "undefined" ? getActiveAssignmentCookie() : null;
+  // 멀티현장 선택 배정. C5: 수정요청 딥링크의 aid(원본 배정)가 있으면 그것을 우선(엉뚱한 현장 재제출 방지),
+  //  없으면 스위처가 세팅한 쿠키. 문서 조회·생성이 이 현장 기준으로 동작하도록 서버에 전달.
+  const linkAid = searchParams.get("aid");
+  const activeAssignmentId = linkAid || (typeof window !== "undefined" ? getActiveAssignmentCookie() : null);
 
   useEffect(() => {
     const q = activeAssignmentId ? `?assignmentId=${encodeURIComponent(activeAssignmentId)}` : "";

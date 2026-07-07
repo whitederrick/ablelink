@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { sendAlimtalk } from "@/lib/kakao";
 import { getAcknowledgement } from "@/lib/contractTemplates";
 import { imageToDataUri } from "@/lib/signatureImage";
+import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 
@@ -189,19 +190,42 @@ export async function POST(req: NextRequest) {
   if (contract.assignmentId) {
     const isFullDay = contract.workType === "FULL_DAY";
     const isCustom  = contract.workType === "CUSTOM";
-    await prisma.siteAssignment.updateMany({
-      where: { id: contract.assignmentId, status: { in: ["ASSIGNED", "CONFIRMED"] } },
-      data: {
-        workType: contract.workType ?? undefined,
-        commuteGuidanceIncluded: isFullDay ? false : contract.commuteGuidanceIncluded,
-        customWorkStart: isCustom ? contract.customWorkStart : null,
-        customWorkEnd:   isCustom ? contract.customWorkEnd   : null,
-        startDate: contract.contractStart,
-        endDate:   contract.contractEnd,
-        status:    "CONFIRMED",
-        confirmedAt: new Date(),
-      },
+    // E1-C(사용자 확정 2026-07-06): 겹침검사는 '계약 발행'(admin/contracts)에서 선차단하므로
+    //  서명 write-back은 원칙적으로 승격한다. (서명 시점에 막으면 '서명은 됐는데 배정 미활성=무급' 딜레마.)
+    //  ★R4-6 완화: 발행~서명 사이 다른 흐름(respond/offers/finalize)이 A의 '발행 당시 슬롯'(예 AM) 기준으로만
+    //   통과시켜 A의 여집합 슬롯(PM)에 B가 들어올 수 있다. 이때 계약 workType(FULL_DAY)으로 슬롯을 무조건
+    //   확장하면 B와 이중배정. → 서명 시 재검사: 계약 슬롯이 다른 점유 배정과 시간충돌하면 슬롯을 확장하지 않고
+    //   기존 슬롯을 유지한 채 상태만 CONFIRMED로 승격한다(무급 딜레마 회피 + 이중배정 방지).
+    const others = await prisma.siteAssignment.findMany({
+      where: { workerId: contract.workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { id: contract.assignmentId } },
+      select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
     });
+    const conflict = findTimeConflict(
+      { workType: contract.workType, customWorkStart: contract.customWorkStart, customWorkEnd: contract.customWorkEnd, startDate: contract.contractStart, endDate: contract.contractEnd },
+      others,
+    );
+    if (conflict) {
+      // 충돌: 슬롯 확장 금지 — 기존 슬롯/기간 유지, 상태만 승격. (계약↔배정 workType 불일치는 관리자 검토 대상)
+      console.warn(`[contracts sign] 서명 재검사 시간충돌 — 슬롯 확장 생략(상태만 승격). assignmentId=${contract.assignmentId}, contractWorkType=${contract.workType}`);
+      await prisma.siteAssignment.updateMany({
+        where: { id: contract.assignmentId, status: { in: ["ASSIGNED", "CONFIRMED"] } },
+        data: { status: "CONFIRMED", confirmedAt: new Date() },
+      });
+    } else {
+      await prisma.siteAssignment.updateMany({
+        where: { id: contract.assignmentId, status: { in: ["ASSIGNED", "CONFIRMED"] } },
+        data: {
+          workType: contract.workType ?? undefined,
+          commuteGuidanceIncluded: isFullDay ? false : contract.commuteGuidanceIncluded,
+          customWorkStart: isCustom ? contract.customWorkStart : null,
+          customWorkEnd:   isCustom ? contract.customWorkEnd   : null,
+          startDate: contract.contractStart,
+          endDate:   contract.contractEnd,
+          status:    "CONFIRMED",
+          confirmedAt: new Date(),
+        },
+      });
+    }
   }
 
   // ── 급여 기준 자동 생성 (1단계-②) ──
@@ -212,10 +236,12 @@ export async function POST(req: NextRequest) {
     if (contract.agencyId && contract.wageAmount != null && (wt === "HOURLY" || wt === "DAILY" || wt === "MONTHLY")) {
       const existingPay = await prisma.payContract.findFirst({
         where: {
-          agencyId: contract.agencyId, workerId: contract.workerId,
+          // 기관 기본 계약(siteId=null)만 존재확인 대상 — 현장 override만 있는 고아 상태에서
+          //  기본계약 시딩이 건너뛰어지지 않도록(A3). 시드 create는 siteId 미지정=null(기본).
+          agencyId: contract.agencyId, workerId: contract.workerId, siteId: null,
           effectiveFrom: { lte: contract.contractEnd },
           OR: [{ effectiveTo: null }, { effectiveTo: { gte: contract.contractStart } }],
-        },
+        } as any,
         select: { id: true },
       });
       if (!existingPay) {

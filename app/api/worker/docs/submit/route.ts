@@ -67,13 +67,10 @@ export async function POST(req: NextRequest) {
       const { payload, meta } = built;
       workerName = meta.workerName;
 
-      // ✅ 훈련생 소속 검증: 임의 traineeId로 문서 생성/이름노출 방지.
-      if (meta.traineeId != null) {
-        const t = await prisma.trainee.findUnique({ where: { id: meta.traineeId }, select: { currentSiteId: true } });
-        if (!t || t.currentSiteId !== meta.siteId) {
-          return NextResponse.json({ success: false, message: "선택한 훈련생이 현재 현장 소속이 아닙니다." }, { status: 403 });
-        }
-      }
+      // 훈련생 소속 검증은 buildDocPayload 내부 findTraineeAtSiteInPeriod(현장+문서기간 재적)로 이미 수행됨.
+      //  M11: 여기서 trainee.currentSiteId===meta.siteId(현재시점 스냅샷)를 재검사하면, 이달 타현장으로 이동한
+      //   훈련생의 '지난달' 문서가 generate/preview는 성공하는데 submit만 403나는 수정요청 재제출 데드엔드가 됐다.
+      //   (이 diff가 도입한 '과거 재적 인원 인정' 기간 의미론을 스스로 무효화하던 것) → 중복·모순 스냅샷 검사 제거.
 
       // PDF docType → Prisma DocumentType enum (vocabulary 다름)
       const prismaDocType = PDF_TO_PRISMA_DOCTYPE[docType];

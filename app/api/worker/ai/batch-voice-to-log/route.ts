@@ -128,6 +128,7 @@ export async function POST(request: NextRequest) {
 
     // ★서버 재검증(IDOR·PII): 클라가 보낸 훈련생 목록을 그대로 외부 AI(Groq·Gemini)에 넣지 않는다.
     //   워커가 배정된 현장(들)에 기간([dateFrom,dateTo]) 재적한 훈련생만 허용하고, 이름도 서버 값으로 강제.
+    let droppedTrainees: string[] = []; // C7: 소속 검증에서 제외된 훈련생(응답에 명시)
     {
       const workerSites = await prisma.siteAssignment.findMany({
         where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
@@ -150,6 +151,8 @@ export async function POST(request: NextRequest) {
         : [];
       const allowed = new Map<string, string>();
       for (const p of placements) allowed.set(String(p.trainee.id), p.trainee.name);
+      // C7: 소속 검증에서 제외된 훈련생은 조용히 버리지 않고 응답에 명시(워커가 일부 누락을 인지하도록).
+      droppedTrainees = trainees.filter(t => !allowed.has(String(t.id))).map(t => t.name || String(t.id));
       trainees = trainees
         .filter(t => allowed.has(String(t.id)))
         .map(t => ({ id: String(t.id), name: allowed.get(String(t.id))! }));
@@ -218,7 +221,7 @@ export async function POST(request: NextRequest) {
       const drafts = dates.flatMap(date =>
         trainees.map(t => ({ date, traineeId: t.id, traineeName: t.name, content: transcript }))
       );
-      return NextResponse.json({ success: true, drafts, transcript });
+      return NextResponse.json({ success: true, drafts, transcript, droppedTrainees });
     }
 
     const dateList  = dates.join(", ");
@@ -292,7 +295,7 @@ ${contextBlock}
       const drafts = dates.flatMap(date =>
         trainees.map(t => ({ date, traineeId: t.id, traineeName: t.name, content: transcript }))
       );
-      return NextResponse.json({ success: true, drafts, transcript });
+      return NextResponse.json({ success: true, drafts, transcript, droppedTrainees });
     }
 
     const geminiData = await geminiRes.json();
@@ -321,7 +324,7 @@ ${contextBlock}
     );
 
     void logApiCall(workerId, "GEMINI_BATCH", true);
-    return NextResponse.json({ success: true, drafts, transcript });
+    return NextResponse.json({ success: true, drafts, transcript, droppedTrainees });
   } catch (error: any) {
     console.error("[batch-voice-to-log] 서버 오류:", error);
     return NextResponse.json({ success: false, message: "AI 변환 중 오류가 발생했습니다." }, { status: 500 });

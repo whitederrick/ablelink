@@ -144,10 +144,15 @@ export async function POST(request: NextRequest) {
     });
     const existingSet = new Set(existingRows.map((r) => r.workDate));
 
+    // 배정 기간(startDate~endDate)으로 범위 제한 — 배정 시작 전/종료 후 날짜가 출근부·급여에 들어가지 않도록.
+    const asgStart = assignment.startDate ? getKstDateString(assignment.startDate) : null;
+    const asgEnd = assignment.endDate ? getKstDateString(assignment.endDate) : null;
+
     // 후보 산정
-    const skipped = { weekend: 0, krHoliday: 0, customHoliday: 0, existing: 0 };
+    const skipped = { weekend: 0, krHoliday: 0, customHoliday: 0, existing: 0, outOfRange: 0 };
     const targets: string[] = [];
     for (const date of allDates) {
+      if ((asgStart && date < asgStart) || (asgEnd && date > asgEnd)) { skipped.outOfRange++; continue; }
       const wd = weekdayOf(date);
       if (wd === 0 || wd === 6) { skipped.weekend++; continue; }
       if (krHolidaySet.has(date)) { skipped.krHoliday++; continue; }

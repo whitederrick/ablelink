@@ -9,11 +9,12 @@ import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
-import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
+import { resolveDocTrainee } from "@/lib/docs/traineeSiteGuard";
 import { sendEmailWithPdf } from "@/lib/email";
 import { sigRequirement } from "@/lib/docs/requiredSignatures";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { imageToDataUri } from "@/lib/signatureImage";
+import { logAccess } from "@/lib/accessLog";
 
 function fmtDot(s: string) { return s.replace(/-/g, "."); }
 function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`; }
@@ -33,14 +34,17 @@ export async function POST(request: NextRequest) {
   try {
     const scope = await requireManagerSession(request);
     const body = await request.json();
-    const { workerId: workerIdRaw, docType: rawDocType, periodStart, periodEnd, traineeId, toEmail } = body;
+    const { workerId: workerIdRaw, docType: rawDocType, periodStart, periodEnd, traineeId, toEmail, assignmentId: assignmentIdRaw } = body;
 
     const docType = normalizeDocType(rawDocType);
     if (!docType || !workerIdRaw || !periodStart || !periodEnd)
       return NextResponse.json({ success: false, message: "필수 파라미터 누락" }, { status: 400 });
+    if (!/^[0-9]+$/.test(String(workerIdRaw)))
+      return NextResponse.json({ success: false, message: "workerId 오류" }, { status: 400 });
 
     const workerId = BigInt(workerIdRaw);
     const start = periodStart, end = periodEnd;
+    const assignmentId = assignmentIdRaw && /^[0-9]+$/.test(String(assignmentIdRaw)) ? BigInt(assignmentIdRaw) : null;
 
     // 서명하는 관리자 본인의 서명 이미지 사용
     const admin = await prisma.manager.findUnique({
@@ -55,7 +59,8 @@ export async function POST(request: NextRequest) {
       select: { workerName: true, phoneNumber: true, signatureUrl: true, loginId: true },
     });
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, agencyId: scope.agencyId },
+      // C2: assignmentId 지정 시 그 배정(소유·기관 스코프 검증)으로 현장 결정, 미지정 시 최신 배정.
+      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(assignmentId ? { id: assignmentId } : {}), agencyId: scope.agencyId },
       include: { site: true },
       orderBy: { assignedAt: "desc" },
     });
@@ -79,6 +84,12 @@ export async function POST(request: NextRequest) {
     let payload: any;
     let fileName: string;
 
+    // C1: 훈련생 문서는 이 현장·기간 재적 훈련생일 때만 서명·발송(빈 공식 PDF의 공단 발송 방지).
+    const { required: traineeRequired, trainee: guardedTrainee } = await resolveDocTrainee(docType, traineeId, site.id, start, end);
+    if (traineeRequired && !guardedTrainee) {
+      return NextResponse.json({ success: false, message: "이 현장·기간에 배정된 훈련생이 아닙니다. 훈련생·현장·기간을 확인해주세요." }, { status: 400 });
+    }
+
     if (docType === "ATTENDANCE_SHEET") {
       ({ payload } = await buildAttendanceSheetPayload({
         workerId,
@@ -99,8 +110,7 @@ export async function POST(request: NextRequest) {
       fileName = `출근부_${site.companyName}_${start}_${end}_서명완료.pdf`;
 
     } else if (docType === "TRAINING_DAILY_LOG") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const logs = trainee ? await prisma.traineeLog.findMany({
         where: { writerId: workerId, traineeId: trainee.id, trainingType: { in: ["PRE", "FIELD"] }, attendance: { workDate: { gte: start, lte: end } } },
         include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
@@ -121,8 +131,7 @@ export async function POST(request: NextRequest) {
       fileName = `훈련일지_${trainee?.name || "훈련생"}_${start}_${end}_서명완료.pdf`;
 
     } else if (docType === "TRAINEE_FINAL_EVAL") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
         where: { traineeId: trainee.id, writerId: workerId, evalType: "TRAINING" }, orderBy: { updatedAt: "desc" },
       }) : null;
@@ -136,8 +145,7 @@ export async function POST(request: NextRequest) {
       fileName = `훈련생평가_${trainee?.name || "훈련생"}_${start}_${end}_서명완료.pdf`;
 
     } else if (docType === "ADAPTATION_DAILY_LOG") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const logs = trainee ? await prisma.traineeLog.findMany({
         where: { writerId: workerId, traineeId: trainee.id, trainingType: "ADAPTATION", attendance: { workDate: { gte: start, lte: end } } },
         include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
@@ -154,8 +162,7 @@ export async function POST(request: NextRequest) {
       fileName = `적응지도일지_${trainee?.name || "훈련생"}_${start}_${end}_서명완료.pdf`;
 
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
-      const tid = traineeId ? BigInt(traineeId) : null;
-      const trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null; // IDOR 방지: 배정 현장+기간 재적 훈련생만
+      const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
         where: { traineeId: trainee.id, writerId: workerId, evalType: "ADAPTATION" }, orderBy: { updatedAt: "desc" },
       }) : null;
@@ -199,6 +206,15 @@ export async function POST(request: NextRequest) {
       });
       emailSent = true;
     }
+
+    // M10: 개인정보 접속기록(제8조) — 서명·발송도 PII PDF 렌더·제공 지점이라 기록(generate엔 있으나 sign은 누락돼 있었다).
+    await logAccess(request, scope, {
+      subjectType: "Worker",
+      subjectId: workerId,
+      subjectLabel: user?.workerName ?? null,
+      resource: "official_document_sign",
+      action: emailSent ? "export" : "print",
+    });
 
     return NextResponse.json({
       success: true,

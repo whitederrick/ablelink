@@ -10,7 +10,14 @@
 export function escapeCsvCell(val: unknown): string {
   if (val == null) return "";
   let s = String(val);
-  if (/^[=+\-@\t\r]/.test(s) && !/^-?\d/.test(s)) s = `'${s}`;
+  // 수식 인젝션 예외는 '셀 전체가 순수 숫자/좌표'일 때만 — 과거엔 시작이 -숫자이기만 하면 예외라
+  //  `-1+cmd|'/C calc'!A0` 같은 페이로드가 그대로 통과했다(G1). 시작만 검사하지 않고 셀 전체를 검사.
+  //  · 숫자/좌표(-37.5, 12000)는 Excel에서 정상 숫자로 표시되므로 예외(이스케이프 안 함).
+  //  · R2-7 결정(2026-07-06, 사용자 확정): '+' 시작 국제전화(+8210…)는 **이스케이프한다**.
+  //    이 CSV들은 사람이 Excel로 여는 게 기본 — 예외로 두면 Excel이 '+'를 수식으로 먹어 전화번호가 깨진다.
+  //    작은따옴표('+8210…) 접두는 Excel 화면엔 안 보이고 텍스트로 정상 표시된다(프로그램 import 시엔 앞 ' 스트립).
+  const isSafeNumeric = /^-?\d+(\.\d+)?$/.test(s);
+  if (/^[=+\-@\t\r]/.test(s) && !isSafeNumeric) s = `'${s}`;
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }

@@ -37,10 +37,11 @@ export async function POST(req: NextRequest) {
       // 계약 기간과 겹치는 급여 기준이 이미 있으면 건너뜀
       const exists = await prisma.payContract.findFirst({
         where: {
-          agencyId, workerId: c.workerId,
+          // 기관 기본 계약(siteId=null)만 존재확인 — 현장 override만 있는 고아 상태에서 기본계약 시딩 누락 방지(A3).
+          agencyId, workerId: c.workerId, siteId: null,
           effectiveFrom: { lte: c.contractEnd },
           OR: [{ effectiveTo: null }, { effectiveTo: { gte: c.contractStart } }],
-        },
+        } as any,
         select: { id: true },
       });
       if (exists) { skipped++; continue; }

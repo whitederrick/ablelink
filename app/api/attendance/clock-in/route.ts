@@ -106,6 +106,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
     }
 
+    // [STEP 1-1] 배정 기간 가드 — M8(batch-save/cron/bulk-generate)과 동일 기준의 5번째 생성지점.
+    //   ENDED 자동전환이 없어 endDate 경과 후에도 status가 ACTIVE로 남으므로(수동취소 전까지),
+    //   오늘이 배정기간 [startDate,endDate] 밖이면 출근기록을 만들지 않는다(기간 밖 출근이 출근부·급여에 새는 것 방지).
+    const asgStart = assignment.startDate ? getKstDateString(assignment.startDate) : null;
+    const asgEnd = assignment.endDate ? getKstDateString(assignment.endDate) : null;
+    if ((asgStart && todayString < asgStart) || (asgEnd && todayString > asgEnd)) {
+      return NextResponse.json(
+        { success: false, code: "OUT_OF_PERIOD", message: "배정 근무기간이 아닙니다." },
+        { status: 409 }
+      );
+    }
+
     // [STEP 1-2] 오늘 이 배정에 이미 출근 기록이 있는지 — **배정별** 판정.
     //   (DB 유니크가 assignmentId+workDate이므로, 멀티 현장이면 오전 A현장/오후 B현장을 같은 날 각각 기록 가능.
     //    단일 배정이면 그 배정 하나로 하루 1건 — 기존 동작과 동일.)

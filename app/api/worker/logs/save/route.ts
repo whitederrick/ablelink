@@ -6,6 +6,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
 import { audit } from "@/lib/audit";
+import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
       logId,      // 수정 모드: 있으면 해당 일지를 logDate의 출근기록으로 이동(날짜 이동) 가능
     } = body;
 
-    if (!traineeId) {
+    if (!traineeId || !/^[0-9]+$/.test(String(traineeId))) {
       return NextResponse.json({ success: false, message: "traineeId는 필수입니다." }, { status: 400 });
     }
 
@@ -48,8 +49,25 @@ export async function POST(request: NextRequest) {
       if (!siteId || !assignmentIdFromBody) {
         throw new Error("VALIDATION:출근 기록이 없습니다. 출근 체크인 후 일지를 작성해주세요.");
       }
+      // IDOR 방지: body의 assignmentId/siteId를 그대로 신뢰하지 않고, 그 배정이 내 것이고 siteId가 일치하는지 검증.
+      if (!/^[0-9]+$/.test(String(assignmentIdFromBody)) || !/^[0-9]+$/.test(String(siteId))) {
+        throw new Error("VALIDATION:잘못된 배정 정보입니다.");
+      }
+      const asg = await prisma.siteAssignment.findUnique({
+        where: { id: BigInt(assignmentIdFromBody) },
+        select: { workerId: true, siteId: true, startDate: true, endDate: true },
+      });
+      if (!asg || asg.workerId !== writerId || asg.siteId !== BigInt(siteId)) {
+        throw new Error("VALIDATION:본인 배정이 아니거나 현장 정보가 일치하지 않습니다.");
+      }
+      // M8: 배정 기간 밖 날짜엔 출근기록 생성 금지(cron·bulk-generate와 동일 기준). 기간 밖 날짜가 출근부·급여에 새는 것 방지.
+      const asgStart = asg.startDate ? getKstDateString(asg.startDate) : null;
+      const asgEnd = asg.endDate ? getKstDateString(asg.endDate) : null;
+      if ((asgStart && workDate < asgStart) || (asgEnd && workDate > asgEnd)) {
+        throw new Error("VALIDATION:배정 기간 밖의 날짜에는 출근기록을 만들 수 없습니다.");
+      }
       const created = await prisma.dailyAttendance.create({
-        data: { workerId: writerId, siteId: BigInt(siteId), assignmentId: BigInt(assignmentIdFromBody), workDate },
+        data: { workerId: writerId, siteId: asg.siteId, assignmentId: BigInt(assignmentIdFromBody), workDate },
       });
       return created.id;
     }
@@ -63,6 +81,7 @@ export async function POST(request: NextRequest) {
       if (logId) {
         resolvedAttendanceId = await findOrCreateAttendance(workDate);
       } else if (attendanceId) {
+        if (!/^[0-9]+$/.test(String(attendanceId))) throw new Error("VALIDATION:잘못된 출근 기록입니다.");
         resolvedAttendanceId = BigInt(attendanceId);
       } else {
         resolvedAttendanceId = await findOrCreateAttendance(workDate);
@@ -71,6 +90,20 @@ export async function POST(request: NextRequest) {
       const msg = String(e?.message ?? "");
       if (msg.startsWith("VALIDATION:")) return NextResponse.json({ success: false, message: msg.slice(11) }, { status: 400 });
       throw e;
+    }
+
+    // IDOR 방지: 해석된 출근기록이 본인 것인지 확인(body attendanceId를 그대로 신뢰하지 않음).
+    const attRow = await prisma.dailyAttendance.findUnique({
+      where: { id: resolvedAttendanceId },
+      select: { workerId: true, siteId: true, workDate: true },
+    });
+    if (!attRow || attRow.workerId !== writerId) {
+      return NextResponse.json({ success: false, message: "본인 출근 기록이 아닙니다." }, { status: 403 });
+    }
+    // IDOR 방지: traineeId가 그 현장·그 날짜에 재적한 훈련생인지 검증(임의 훈련생 주입 차단).
+    const traineeOk = await findTraineeAtSiteInPeriod(BigInt(traineeId), attRow.siteId, attRow.workDate, attRow.workDate);
+    if (!traineeOk) {
+      return NextResponse.json({ success: false, message: "이 현장에 배정된 훈련생이 아닙니다." }, { status: 403 });
     }
 
     // 수정 모드: 소유권 + 날짜 이동 충돌 검사

@@ -22,11 +22,13 @@ export async function GET(req: NextRequest) {
     const lastDay = new Date(y, m, 0).getDate();
     const monthEnd = new Date(`${ym}-${String(lastDay).padStart(2, "0")}T23:59:59+09:00`);
 
-    // 그 달에 활성(기간 겹침)인 배정
+    // 그 달에 근무 중이거나 근무한(기간 겹침) 배정.
+    //  D1: ACTIVE만 보면 계약서명됐지만 아직 ACTIVE 아닌(CONFIRMED)·그 달 종료된(ENDED) 배정의 출근부 미제출이
+    //   후보에서 빠져 "모두 제출" 오신호가 났다 → 출근부 제출이 가능한/필요한 상태집합으로 확장.
     const assignments = await prisma.siteAssignment.findMany({
       where: {
         agencyId: scope.agencyId,
-        status: "ACTIVE",
+        status: { in: ["CONFIRMED", "ACTIVE", "ENDED"] },
         startDate: { lte: monthEnd },
         OR: [{ endDate: null }, { endDate: { gte: monthStart } }],
       },
@@ -44,7 +46,8 @@ export async function GET(req: NextRequest) {
       where: {
         agencyId: scope.agencyId,
         docType: "ATTENDANCE_SHEET",
-        signStage: { not: "DRAFT" },
+        // D2: 반려(CHANGES_REQUESTED)는 '제출됨'이 아니다 — 제출→반려→미재제출을 준수로 오카운트하지 않도록 제외.
+        signStage: { notIn: ["DRAFT", "CHANGES_REQUESTED"] },
         periodStart: { lte: monthEnd },
         periodEnd: { gte: monthStart },
       },
@@ -53,7 +56,22 @@ export async function GET(req: NextRequest) {
     const submittedByAssignment = new Map<string, string>();
     for (const r of submittedRuns) if (r.assignmentId != null) submittedByAssignment.set(r.assignmentId.toString(), r.signStage);
 
-    const rows = assignments.map(a => ({
+    // D1 정정: 그 달 '실제 출근기록이 있는' 배정만 출근부 제출 대상으로 본다.
+    //  (근무 0일 배정 — 예: 25일 시작 CONFIRMED, 계약취소 후 무근무 ENDED — 을 미제출로 잡아 매니저에게 불가능한
+    //   제출을 독촉하던 허위 미제출 방지. 출근부는 근무가 있어야 제출 의무가 생긴다.)
+    //  ★출근기록이 '존재'하면 근무한 것으로 본다 — startTime 유무로 거르지 않는다.
+    //   (소급 일지입력(batch-save/logs-save)으로 만든 출근기록은 clock-in이 없어 startTime=null이지만, 그래도
+    //    그 달 근무했고 출근부 제출 의무가 있다. startTime 조건을 걸면 이런 배정이 미제출 보드에서 숨겨진다.)
+    const periodStartStr = `${ym}-01`;
+    const periodEndStr = `${ym}-${String(lastDay).padStart(2, "0")}`;
+    const attended = assignments.length ? await prisma.dailyAttendance.findMany({
+      where: { assignmentId: { in: assignments.map(a => a.id) }, workDate: { gte: periodStartStr, lte: periodEndStr } },
+      select: { assignmentId: true },
+      distinct: ["assignmentId"],
+    }) : [];
+    const attendedSet = new Set(attended.map(a => a.assignmentId.toString()));
+
+    const rows = assignments.filter(a => attendedSet.has(a.id.toString())).map(a => ({
       assignmentId: a.id.toString(),
       workerName: a.user?.workerName ?? "",
       loginId: a.user?.loginId ?? "",

@@ -15,6 +15,7 @@ import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { injectManagerSignature } from "@/lib/docs/managerSig";
 import { missingSignatureLabels } from "@/lib/docs/requiredSignatures";
 import { sendEmailWithAttachments } from "@/lib/email";
+import { logAccess } from "@/lib/accessLog";
 
 const DOC_LABEL: Record<string, string> = {
   ATTENDANCE_SHEET:              "출근부",
@@ -188,6 +189,24 @@ export async function POST(req: NextRequest) {
         data: { govStatus: "SUBMITTED", govSubmittedAt: new Date(), govSubmitCount: { increment: 1 } },
       });
     }
+
+    // M10: 개인정보 접속기록(안전성확보조치 제8조) — 공단(제3자) 발송은 최다·최민감 PII 제공 지점인데
+    //  라우트별 수동 삽입 방식이라 여기가 통째로 누락돼 있었다. 발송 성공 문서의 정보주체(워커)별로 export 기록.
+    const sentSet = new Set(sentRunIds.map(id => id.toString()));
+    const sentWorkers = new Map<string, string | null>();
+    for (const r of runs) {
+      if (!sentSet.has(r.id.toString()) || !r.worker) continue;
+      sentWorkers.set(r.worker.id.toString(), r.worker.workerName ?? null);
+    }
+    await Promise.all([...sentWorkers].map(([wid, wname]) =>
+      logAccess(req, scope, {
+        subjectType: "Worker",
+        subjectId: BigInt(wid),
+        subjectLabel: wname,
+        resource: "official_document_gov_send",
+        action: "export",
+      }),
+    ));
 
     if (sent === 0) {
       return NextResponse.json({ success: false, message: `발송에 실패했습니다.${failures.length ? ` (${failures.join(", ")})` : ""}` }, { status: 502 });

@@ -9,16 +9,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
 import ExcelJS from "exceljs";
-import { escapeCsvCell } from "@/lib/csv";
+// G3: CSV 직렬화는 단일 출처(lib/csv.csvBody) — 로컬 복사본은 헤더 미이스케이프로 인젝션/일관성 drift.
+import { csvBody } from "@/lib/csv";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function fmtKst(d: Date | null | undefined): string {
   if (!d) return "";
   const k = new Date(d.getTime() + 9 * 3600 * 1000);
   return `${k.getUTCFullYear()}-${pad2(k.getUTCMonth() + 1)}-${pad2(k.getUTCDate())} ${pad2(k.getUTCHours())}:${pad2(k.getUTCMinutes())}`;
-}
-function csvBody(header: string[], rows: (string | number)[][]): string {
-  return "﻿" + [header.join(","), ...rows.map(r => r.map(escapeCsvCell).join(","))].join("\r\n");
 }
 async function xlsxBody(sheet: string, header: string[], rows: (string | number)[][]): Promise<Uint8Array> {
   const wb = new ExcelJS.Workbook();

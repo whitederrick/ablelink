@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
-import { findTimeConflict } from "@/lib/assignmentOverlap";
+import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -42,6 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // 단, "위탁기관 공고 + 좌표 보유"일 때만. 운영자(공단/플랫폼) 공고는 agencyId가 없어
     // 자동배정 대상이 아니고(운영 위탁기관 부재), ACCEPTED 표시 + 알림만 한다.
     let autoAssigned = false;
+    let conflictSkip = false; // 시간겹침으로 자동배정만 건너뛸지(수락 자체는 진행)
     const canAutoAssign =
       action === "accept" && app.post.agencyId != null && app.post.lat != null && app.post.lon != null;
 
@@ -64,15 +65,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (!wq.allowed) {
         return NextResponse.json({ success: false, message: `인력 한도(${wq.current}/${wq.max})를 초과했습니다. 플랜을 업그레이드해주세요.` }, { status: 409 });
       }
-      // ④ 시간겹침: 자동배정은 FULL_DAY라 다른 현장 진행중 배정과 기간이 겹치면 충돌 → 차단.
+      // ④ 시간겹침: 자동배정(FULL_DAY)이 다른 현장 진행중 배정과 겹치면 **자동배정만 건너뛴다**(수락 자체는 진행).
+      //  E2: 과거엔 409로 하드블록 → 이미 배정된 워커의 마켓 수락이 영구 불가·신청 PENDING 고착.
+      //   offers 경로와 동작 통일(soft-skip). E3: 겹침 스캔 status에 ACCEPTED 포함.
+      //   후보 기간은 공고 서비스기간(serviceStart~serviceEnd)으로 — today→∞로 잡아 미래시작 공고를 오탐하지 않도록.
       const others = await prisma.siteAssignment.findMany({
-        where: { workerId: app.workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(app.post.siteId != null ? { NOT: { siteId: app.post.siteId } } : {}) },
+        where: { workerId: app.workerId, status: { in: [...OCCUPYING_STATUSES] }, ...(app.post.siteId != null ? { NOT: { siteId: app.post.siteId } } : {}) },
         select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
       });
-      const tc = findTimeConflict({ workType: "FULL_DAY", startDate: new Date(), endDate: null }, others);
-      if (tc) {
-        return NextResponse.json({ success: false, message: `이미 다른 현장(${(tc as any).site?.companyName ?? "-"})에 근무시간이 겹치는 배정이 있습니다. 기존 배정을 종료한 뒤 다시 시도해주세요.` }, { status: 409 });
-      }
+      //  ★후보 endDate는 '실제로 생성될 배정'과 동일하게 null(개방)로 둔다 — 생성은 endDate:null(M6)인데
+      //   검사만 serviceEnd로 좁히면 serviceEnd 이후 겹침을 못 잡아 이중배정이 새어나간다(생성값=검사값 일치).
+      const tc = findTimeConflict({ workType: "FULL_DAY", startDate: app.post.serviceStart ?? new Date(), endDate: null }, others);
+      if (tc) conflictSkip = true; // 하드블록 대신 자동배정만 스킵
     }
 
     await prisma.$transaction(async (tx) => {
@@ -81,7 +85,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         data: { status: action === "accept" ? "ACCEPTED" : "REJECTED", decidedAt: new Date() },
       });
 
-      if (!canAutoAssign) return;
+      if (!canAutoAssign || conflictSkip) return; // 시간겹침이면 수락만 기록, 자동배정은 매니저 수동 처리
 
       // ① Site find-or-create (첫 수락 시 공고 정보로 생성, 이후 재사용 — headcount>1)
       let siteId = app.post.siteId;
@@ -121,7 +125,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           status: "ASSIGNED",
           isMainWorker: true,
           assignedAt: new Date(),
-          startDate: new Date(),
+          // M6: 시작일을 공고 서비스 시작일로(과거엔 startDate:new Date()라 미래시작 공고가 '오늘'부터 잡혔음).
+          //  ★endDate는 null(개방) 유지 — serviceEnd로 못박으면 M8 배정기간 가드와 겹쳐 서비스종료 후 연장근무 로그가
+          //   막힌다. 실제 근무가 연장되면 배정은 열려 있어야 하고, 종료는 배정 종료 액션으로 처리한다.
+          startDate: app.post.serviceStart ?? new Date(),
+          endDate: null,
           assignedByManagerId: app.post.createdByManagerId, // RecruitPost 생성 매니저(Manager.id)
           statusReason: "마켓플레이스 매칭 수락 자동 배정",
           workType: "FULL_DAY",

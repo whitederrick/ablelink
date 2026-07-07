@@ -129,3 +129,9 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ success: true, processed: results.length, results });
 }
+
+// Vercel Cron 은 GET 으로 호출한다(vercel.json crons). POST만 있으면 405로 월 자동결제·재시도·강등이 실행되지 않음.
+//  → 동일 헤더 시크릿 인증을 쓰는 POST 로 위임(GET 은 body를 읽지 않으므로 그대로 위임 가능).
+export async function GET(request: NextRequest) {
+  return POST(request);
+}
