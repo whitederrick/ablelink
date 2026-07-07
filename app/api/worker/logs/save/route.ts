@@ -142,7 +142,15 @@ export async function POST(request: NextRequest) {
     if (existing) {
       log = await prisma.traineeLog.update({ where: { id: existing.id }, data: logData });
     } else {
-      log = await prisma.traineeLog.create({ data: logData });
+      // DB 유니크(attendance_id, trainee_id)로 동시 저장/재시도 중복 방지 — 충돌 시 이미 생성된 행을 갱신.
+      try {
+        log = await prisma.traineeLog.create({ data: logData });
+      } catch (e: any) {
+        if (e?.code !== "P2002") throw e;
+        const dup = await prisma.traineeLog.findFirst({ where: { attendanceId: resolvedAttendanceId, traineeId: BigInt(traineeId) }, select: { id: true } });
+        if (!dup) throw e;
+        log = await prisma.traineeLog.update({ where: { id: dup.id }, data: logData });
+      }
     }
 
     // 과제 정보 저장

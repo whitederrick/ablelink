@@ -181,6 +181,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, submitted: submitted.length });
   } catch (e: any) {
+    // DB 유니크(문서 중복) 위반 = 동시 제출 레이스 → 중복 생성은 막혔고, 사용자에겐 재시도 안내.
+    if (e?.code === "P2002") {
+      return NextResponse.json({ success: false, message: "이미 제출 처리 중인 문서입니다. 잠시 후 다시 시도해주세요." }, { status: 409 });
+    }
     console.error("[worker/docs/submit]", e);
     return NextResponse.json({ success: false, message: "제출 처리 중 오류가 발생했습니다." }, { status: 500 });
   }

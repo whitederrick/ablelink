@@ -211,39 +211,41 @@ export async function POST(req: NextRequest) {
     // 소속 위탁기관 스코프 강제
     if (assignment.site.agencyId == null || assignment.site.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
 
-    const created = await prisma.documentRun.create({
-      data: {
-        agencyId: assignment.site.agencyId, // nullable 가능
-        assignment: { connect: { id: assignment.id } },
-        site: { connect: { id: assignment.siteId } },
-        worker: { connect: { id: assignment.workerId } },
+    const runSelect = {
+      id: true, agencyId: true, assignmentId: true, siteId: true, workerId: true,
+      docType: true, periodStart: true, periodEnd: true, openAt: true, dueAt: true, status: true,
+      currentVersionId: true, createdAt: true, updatedAt: true,
+      site: { select: { id: true, companyName: true, agencyId: true } },
+      worker: { select: { id: true, workerName: true, loginId: true } },
+    } satisfies Prisma.DocumentRunSelect;
 
-        docType: docTypeStr as any,
-        periodStart,
-        periodEnd,
-        openAt,
-        dueAt,
-        status: "OPEN",
-      },
-      select: {
-        id: true,
-        agencyId: true,
-        assignmentId: true,
-        siteId: true,
-        workerId: true,
-        docType: true,
-        periodStart: true,
-        periodEnd: true,
-        openAt: true,
-        dueAt: true,
-        status: true,
-        currentVersionId: true,
-        createdAt: true,
-        updatedAt: true,
-        site: { select: { id: true, companyName: true, agencyId: true } },
-        worker: { select: { id: true, workerName: true, loginId: true } },
-      },
-    });
+    let created;
+    try {
+      created = await prisma.documentRun.create({
+        data: {
+          agencyId: assignment.site.agencyId, // nullable 가능
+          assignment: { connect: { id: assignment.id } },
+          site: { connect: { id: assignment.siteId } },
+          worker: { connect: { id: assignment.workerId } },
+
+          docType: docTypeStr as any,
+          periodStart,
+          periodEnd,
+          openAt,
+          dueAt,
+          status: "OPEN",
+        },
+        select: runSelect,
+      });
+    } catch (e: any) {
+      // DB 유니크(문서 중복) 위반 = 동일 출근부류 문서런이 이미 존재 → 멱등하게 기존 것 반환(중복 생성 방지).
+      if (e?.code !== "P2002") throw e;
+      created = await prisma.documentRun.findFirst({
+        where: { assignmentId: assignment.id, docType: docTypeStr as any, periodStart, traineeId: null },
+        select: runSelect,
+      });
+      if (!created) throw e;
+    }
 
     await audit(scope, { entityType: "DocumentRun", entityId: created.id, action: "create", after: { assignmentId: String(created.assignmentId), siteId: String(created.siteId), workerId: String(created.workerId), docType: created.docType, status: created.status } });
     return NextResponse.json({ success: true, item: toItem(created) });

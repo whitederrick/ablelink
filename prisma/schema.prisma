@@ -456,6 +456,8 @@ model TraineeLog {
   trainee    Trainee          @relation(fields: [traineeId], references: [id])
   writer     Worker           @relation(fields: [writerId], references: [id])
 
+  // 한 출근기록(하루)·훈련생당 일지는 1건 — 동시저장/재시도 중복 방지(DB 레벨).
+  @@unique([attendanceId, traineeId])
   @@index([traineeId])
   @@index([writerId])
   @@map("trainee_logs")
