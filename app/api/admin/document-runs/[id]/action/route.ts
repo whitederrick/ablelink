@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { audit } from "@/lib/audit";
 import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
+import { getKstDateString } from "@/lib/time";
 
 const DOC_LABEL: Record<string, string> = {
   ATTENDANCE_SHEET:              "출근부",
@@ -45,9 +46,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // C4: periodStart/End 는 KST 자정으로 저장(예 2026-07-01T00:00+09:00 = UTC 06-30T15:00).
     //  .toISOString()은 UTC라 하루 빠른 날짜(06-30)를 줘 딥링크 기간이 어긋나고 재제출 시 원본 매칭 실패→중복 run.
     //  → KST 기준(+9h)으로 날짜 문자열 산출.
-    const kstDate = (d: Date) => new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-    const ps = kstDate(run.periodStart);
-    const pe = kstDate(run.periodEnd);
+    const ps = getKstDateString(run.periodStart);
+    const pe = getKstDateString(run.periodEnd);
     const docTitle = `${docLabel}${traineeName} · ${ps}~${pe}`;
 
     // 워커 알림 딥링크 — 해당 문서(종류·기간·훈련생·배정)로 정밀 이동. 워커 docs 페이지가 파라미터로 자동 선택.

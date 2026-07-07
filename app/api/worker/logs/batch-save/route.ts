@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { WorkStatus } from "@prisma/client";
 import { audit } from "@/lib/audit";
 import { traineeCountOnDate, type PlacementSpan } from "@/lib/traineePlacement";
+import { getKstDateString } from "@/lib/time";
 
 interface LogEntry {
   date: string;
@@ -49,9 +50,8 @@ export async function POST(request: NextRequest) {
 
     const { siteId } = assignment;
     // M8: 배정 기간 밖 날짜엔 출근기록 생성 금지(cron·bulk-generate와 동일 기준).
-    const toKstDate = (d: Date) => new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-    const asgStart = assignment.startDate ? toKstDate(assignment.startDate) : null;
-    const asgEnd = assignment.endDate ? toKstDate(assignment.endDate) : null;
+    const asgStart = assignment.startDate ? getKstDateString(assignment.startDate) : null;
+    const asgEnd = assignment.endDate ? getKstDateString(assignment.endDate) : null;
 
     // IDOR + 날짜정합: 현장·기간 재적 placement를 일괄 조회(N+1 제거)해 두 가지를 판정.
     //   (1) IDOR 하드차단 — 현장·봉투기간에 재적 이력이 전혀 없는 훈련생이 섞이면 거부(임의 주입 방지).
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
         //  ★조용히 버리지 않고 어떤 날짜가 제외됐는지 응답에 담는다(워커가 일부 누락을 인지하도록).
         if ((asgStart && date < asgStart) || (asgEnd && date > asgEnd)) { skippedOutOfRange.push(date); continue; }
         // 오늘 날짜는 clock-in 없이 생성 불가 — 스킵
-        const todayKST = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+        const todayKST = getKstDateString();
         if (date >= todayKST) continue;
 
         // 과거 날짜: 소급 일지 입력용 출근기록 생성. ★출퇴근 시각이 없으므로 최종확정하지 않는다(isFinalClosed:false).

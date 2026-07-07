@@ -82,7 +82,6 @@ export async function GET(request: NextRequest) {
     // 훈련생 수 — 날짜별로 '그 시점 현장 배치 인원'을 계산(TraineePlacement 이력 기반).
     // 과거일에 현재 인원을 적용하던 문제(#6.2) 해결: 명부가 바뀌어도 각 날의 실제 인원으로 판정.
     // 배치 [startDate, endDate] 가 그날을 덮으면 그날 재적(현재 상태 무관 — endDate가 이탈 시점을 이미 표현).
-    const kstDate = (d: Date) => new Date(d.getTime() + 9 * 3600000).toISOString().slice(0, 10);
     const placements = assignment
       ? await prisma.traineePlacement.findMany({
           where: {
@@ -93,7 +92,7 @@ export async function GET(request: NextRequest) {
           select: { startDate: true, endDate: true },
         })
       : [];
-    const placementRanges = placements.map(p => ({ s: kstDate(p.startDate), e: p.endDate ? kstDate(p.endDate) : null }));
+    const placementRanges = placements.map(p => ({ s: getKstDateString(p.startDate), e: p.endDate ? getKstDateString(p.endDate) : null }));
     const traineeCountOn = (dateStr: string): number =>
       placementRanges.filter(p => p.s <= dateStr && (p.e === null || p.e >= dateStr)).length;
     // 조회 월 말일 기준 인원(요약/응답 표시용 대표값)

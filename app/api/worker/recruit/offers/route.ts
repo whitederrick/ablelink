@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
-import { findTimeConflict } from "@/lib/assignmentOverlap";
+import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 
 export async function GET(req: NextRequest) {
   try {
@@ -78,7 +78,7 @@ export async function PATCH(req: NextRequest) {
         //  제안 자동배정은 FULL_DAY라 기존 활성 배정과 기간이 겹치면 무조건 충돌.
         const others = await prisma.siteAssignment.findMany({
           // E3: ACCEPTED(최종확정 대기)도 점유로 포함(respond/PATCH 경로와 통일).
-          where: { workerId, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { siteId: site.id } },
+          where: { workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { siteId: site.id } },
           select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
         });
         const timeConflict = findTimeConflict(

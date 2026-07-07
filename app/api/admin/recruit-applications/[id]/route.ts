@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
-import { findTimeConflict } from "@/lib/assignmentOverlap";
+import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -70,7 +70,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       //   offers 경로와 동작 통일(soft-skip). E3: 겹침 스캔 status에 ACCEPTED 포함.
       //   후보 기간은 공고 서비스기간(serviceStart~serviceEnd)으로 — today→∞로 잡아 미래시작 공고를 오탐하지 않도록.
       const others = await prisma.siteAssignment.findMany({
-        where: { workerId: app.workerId, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(app.post.siteId != null ? { NOT: { siteId: app.post.siteId } } : {}) },
+        where: { workerId: app.workerId, status: { in: [...OCCUPYING_STATUSES] }, ...(app.post.siteId != null ? { NOT: { siteId: app.post.siteId } } : {}) },
         select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
       });
       //  ★후보 endDate는 '실제로 생성될 배정'과 동일하게 null(개방)로 둔다 — 생성은 endDate:null(M6)인데

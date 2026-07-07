@@ -109,9 +109,8 @@ export async function POST(request: NextRequest) {
     // [STEP 1-1] 배정 기간 가드 — M8(batch-save/cron/bulk-generate)과 동일 기준의 5번째 생성지점.
     //   ENDED 자동전환이 없어 endDate 경과 후에도 status가 ACTIVE로 남으므로(수동취소 전까지),
     //   오늘이 배정기간 [startDate,endDate] 밖이면 출근기록을 만들지 않는다(기간 밖 출근이 출근부·급여에 새는 것 방지).
-    const toKstDate = (d: Date) => new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-    const asgStart = assignment.startDate ? toKstDate(assignment.startDate) : null;
-    const asgEnd = assignment.endDate ? toKstDate(assignment.endDate) : null;
+    const asgStart = assignment.startDate ? getKstDateString(assignment.startDate) : null;
+    const asgEnd = assignment.endDate ? getKstDateString(assignment.endDate) : null;
     if ((asgStart && todayString < asgStart) || (asgEnd && todayString > asgEnd)) {
       return NextResponse.json(
         { success: false, code: "OUT_OF_PERIOD", message: "배정 근무기간이 아닙니다." },

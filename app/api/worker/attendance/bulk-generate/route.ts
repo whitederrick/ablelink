@@ -145,9 +145,8 @@ export async function POST(request: NextRequest) {
     const existingSet = new Set(existingRows.map((r) => r.workDate));
 
     // 배정 기간(startDate~endDate)으로 범위 제한 — 배정 시작 전/종료 후 날짜가 출근부·급여에 들어가지 않도록.
-    const toKstDate = (d: Date) => new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-    const asgStart = assignment.startDate ? toKstDate(assignment.startDate) : null;
-    const asgEnd = assignment.endDate ? toKstDate(assignment.endDate) : null;
+    const asgStart = assignment.startDate ? getKstDateString(assignment.startDate) : null;
+    const asgEnd = assignment.endDate ? getKstDateString(assignment.endDate) : null;
 
     // 후보 산정
     const skipped = { weekend: 0, krHoliday: 0, customHoliday: 0, existing: 0, outOfRange: 0 };

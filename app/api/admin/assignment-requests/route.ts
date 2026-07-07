@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
-import { findTimeConflict } from "@/lib/assignmentOverlap";
+import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 
 async function expirePastDeadline(agencyId: bigint) {
   await prisma.siteAssignment.updateMany({
@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
       });
       for (const s of selDetails) {
         const others = await prisma.siteAssignment.findMany({
-          where: { workerId: s.workerId, agencyId, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { id: s.id }, siteId: { not: siteId } },
+          where: { workerId: s.workerId, agencyId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { id: s.id }, siteId: { not: siteId } },
           select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
         });
         const c = findTimeConflict(s, others);
