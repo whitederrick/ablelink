@@ -34,3 +34,25 @@ export async function findTraineeAtSiteInPeriod(
   });
   return placement?.trainee ?? null;
 }
+
+// 훈련생별 공식문서 종류(현장·기간 재적 훈련생 필수).
+export const TRAINEE_DOC_TYPES = ["TRAINING_DAILY_LOG", "TRAINEE_FINAL_EVAL", "ADAPTATION_DAILY_LOG", "ADAPTATION_FINAL_EVAL"];
+
+/**
+ * 문서 종류에 맞춰 훈련생을 resolve(admin docs generate/preview/sign 공용 가드).
+ *  · 비훈련생 문서 → { required:false, trainee:null } (검증 불요).
+ *  · 훈련생 문서 → traineeId 파싱 + 현장·기간 재적 검증(findTraineeAtSiteInPeriod).
+ *    미선택/비숫자/미재적이면 trainee:null → 호출측이 400 처리(응답 문구는 라우트 유지).
+ */
+export async function resolveDocTrainee(
+  docType: string,
+  traineeIdRaw: unknown,
+  siteId: bigint,
+  start: string,
+  end: string,
+): Promise<{ required: boolean; trainee: { id: bigint; name: string } | null }> {
+  if (!TRAINEE_DOC_TYPES.includes(docType)) return { required: false, trainee: null };
+  const tid = traineeIdRaw && /^[0-9]+$/.test(String(traineeIdRaw)) ? BigInt(String(traineeIdRaw)) : null;
+  const trainee = tid ? await findTraineeAtSiteInPeriod(tid, siteId, start, end) : null;
+  return { required: true, trainee };
+}

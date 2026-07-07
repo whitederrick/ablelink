@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
-import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
+import { resolveDocTrainee } from "@/lib/docs/traineeSiteGuard";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { logAccess } from "@/lib/accessLog";
 
@@ -88,14 +88,9 @@ export async function GET(request: NextRequest) {
     let payload: any;
 
     // C1: 훈련생 문서는 이 현장·기간 재적 훈련생일 때만 렌더(빈 공식문서 미리보기 방지).
-    const TRAINEE_DOCS = ["TRAINING_DAILY_LOG", "TRAINEE_FINAL_EVAL", "ADAPTATION_DAILY_LOG", "ADAPTATION_FINAL_EVAL"];
-    let guardedTrainee: { id: bigint; name: string } | null = null;
-    if (TRAINEE_DOCS.includes(docType)) {
-      const tid = traineeId && /^[0-9]+$/.test(String(traineeId)) ? BigInt(traineeId) : null;
-      guardedTrainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
-      if (!guardedTrainee) {
-        return NextResponse.json({ success:false, message:"이 현장·기간에 배정된 훈련생이 아닙니다. 훈련생·현장·기간을 확인해주세요." }, { status:400 });
-      }
+    const { required: traineeRequired, trainee: guardedTrainee } = await resolveDocTrainee(docType, traineeId, site.id, start, end);
+    if (traineeRequired && !guardedTrainee) {
+      return NextResponse.json({ success:false, message:"이 현장·기간에 배정된 훈련생이 아닙니다. 훈련생·현장·기간을 확인해주세요." }, { status:400 });
     }
 
     if (docType === "ATTENDANCE_SHEET") {

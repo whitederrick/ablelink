@@ -198,15 +198,15 @@ export async function POST(req: NextRequest) {
       if (!sentSet.has(r.id.toString()) || !r.worker) continue;
       sentWorkers.set(r.worker.id.toString(), r.worker.workerName ?? null);
     }
-    for (const [wid, wname] of sentWorkers) {
-      await logAccess(req, scope, {
+    await Promise.all([...sentWorkers].map(([wid, wname]) =>
+      logAccess(req, scope, {
         subjectType: "Worker",
         subjectId: BigInt(wid),
         subjectLabel: wname,
         resource: "official_document_gov_send",
         action: "export",
-      });
-    }
+      }),
+    ));
 
     if (sent === 0) {
       return NextResponse.json({ success: false, message: `발송에 실패했습니다.${failures.length ? ` (${failures.join(", ")})` : ""}` }, { status: 502 });

@@ -10,7 +10,7 @@ import { renderPdfToBuffer } from "@/lib/pdf";
 import { sendEmailWithPdf } from "@/lib/email";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
-import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
+import { resolveDocTrainee } from "@/lib/docs/traineeSiteGuard";
 import { sigRequirement } from "@/lib/docs/requiredSignatures";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { imageToDataUri } from "@/lib/signatureImage";
@@ -102,14 +102,9 @@ export async function POST(request: NextRequest) {
 
     // C1: 훈련생 문서는 traineeId가 이 현장·기간에 재적한 훈련생일 때만 생성한다.
     //  (가드 null인데도 traineeName=""·logs=[]로 진행하면 빈 공식 PDF가 공단으로 이메일 발송되던 심각 버그.)
-    const TRAINEE_DOCS = ["TRAINING_DAILY_LOG", "TRAINEE_FINAL_EVAL", "ADAPTATION_DAILY_LOG", "ADAPTATION_FINAL_EVAL"];
-    let guardedTrainee: { id: bigint; name: string } | null = null;
-    if (TRAINEE_DOCS.includes(docType)) {
-      const tid = traineeId && /^[0-9]+$/.test(String(traineeId)) ? BigInt(traineeId) : null;
-      guardedTrainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
-      if (!guardedTrainee) {
-        return NextResponse.json({ success:false, message:"이 현장·기간에 배정된 훈련생이 아닙니다. 훈련생·현장·기간을 확인해주세요." }, { status:400 });
-      }
+    const { required: traineeRequired, trainee: guardedTrainee } = await resolveDocTrainee(docType, traineeId, site.id, start, end);
+    if (traineeRequired && !guardedTrainee) {
+      return NextResponse.json({ success:false, message:"이 현장·기간에 배정된 훈련생이 아닙니다. 훈련생·현장·기간을 확인해주세요." }, { status:400 });
     }
 
     if (docType === "ATTENDANCE_SHEET") {
