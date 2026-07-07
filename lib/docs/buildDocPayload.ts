@@ -13,6 +13,7 @@ import { getKstDateString } from "@/lib/time";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
 import { trainingDailyLogPayload, traineeFinalEvalPayload, adaptationDailyLogPayload, adaptationFinalEvalPayload } from "@/lib/docs/traineeDocPayload";
+import { resolveDocAssignment } from "@/lib/docs/resolveDocAssignment";
 import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { sigRequirement } from "@/lib/docs/requiredSignatures";
@@ -85,20 +86,13 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
   //    ★단, '근무가 발생할 수 있는' 상태만 허용(ASSIGNED/CONFIRMED/ACTIVE/ENDED = computeRun과 동일).
   //     REQUESTED/ACCEPTED/REJECTED/DROPPED/EXPIRED(근무한 적 없는 배정)로는 공식문서 생성·공단제출 불가.
   //  · 명시가 없으면(핀 없음) 최신 활성 배정으로 결정.
-  let assignment;
-  if (selAssignmentId != null) {
-    assignment = await prisma.siteAssignment.findFirst({
-      where: { id: selAssignmentId, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } },
-      include: { site: true },
-    });
-  } else {
-    assignment = await prisma.siteAssignment.findFirst({
-      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
-      include: { site: true },
-      orderBy: { assignedAt: "desc" },
-    });
+  // 배정 결정은 단일 출처(resolveDocAssignment) — context/preview/generate와 통일.
+  //  명시배정 유효→사용(ENDED 포함)·활성1개→폴백·활성2개+→선택유도·활성0개→최근ENDED(마감서류).
+  const resolved = await resolveDocAssignment(workerId, selAssignmentId, { include: { site: true } });
+  if (resolved.status === "ambiguous") {
+    throw new DocPayloadError("여러 현장에 배정되어 있습니다. 현장을 선택한 뒤 다시 제출해주세요.", 409, { needsSiteSelection: true });
   }
-
+  const assignment = resolved.status === "resolved" ? resolved.assignment : null;
   if (!assignment?.site) throw new DocPayloadError("배정된 현장이 없습니다. (현장을 다시 선택해주세요)");
 
   const site = assignment.site;
@@ -286,6 +280,7 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
     payload = adaptationFinalEvalPayload({
       traineeName: trainee?.name || "", companyName: site.companyName,
       start, end, ev,
+      workedDays: await prisma.traineeLog.count({ where: { writerId: workerId, traineeId: traineeIdBig, trainingType: "ADAPTATION", attendance: { workDate: { gte: start, lte: end } } } }),
       signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
     });
     fileName = buildDocFileName("ADAPTATION_FINAL_EVAL", { traineeName: trainee?.name, companyName: site.companyName, start, end });

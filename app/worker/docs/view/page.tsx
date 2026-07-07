@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { getActiveAssignmentCookie } from "@/app/worker/_lib/activeAssignmentCookie";
+import { getActiveAssignmentCookie, setActiveAssignmentCookie } from "@/app/worker/_lib/activeAssignmentCookie";
 import {
   BarChart2,
   BookOpen,
@@ -94,6 +94,8 @@ function DocsViewInner() {
   const [loaded,          setLoaded]          = useState(false); // 서비스 단계 로드 완료(전엔 기본값 노출 방지)
   const [mode,            setMode]            = useState<"select" | "view">("select");
   const [iframeKey,       setIframeKey]       = useState(0);
+  // 활성 배정이 2개+인데 유효 선택이 없을 때(모호) — 서버가 현장 목록을 주면 선택 유도.
+  const [siteChoices,     setSiteChoices]     = useState<{ assignmentId: string; siteName: string }[] | null>(null);
 
   // 서비스 단계에 맞는 DOC_GROUPS
   const isAdaptation = trainingType === "ADAPTATION";
@@ -110,7 +112,9 @@ function DocsViewInner() {
     fetch(`/api/worker/docs/context${ctxQ}`, { cache: "no-store" })
       .then(async r => { try { return await r.json(); } catch { return null; } })
       .then(d => {
-        if (d?.success && d.data) {
+        if (d?.needsSiteSelection && Array.isArray(d.sites)) {
+          setSiteChoices(d.sites);  // 여러 현장 → 아래 선택 UI 노출
+        } else if (d?.success && d.data) {
           setTrainingType(d.data.trainingType || "FIELD");
           if (d.data.trainees)
             setTrainees(d.data.trainees.map((t: any) => ({ id: String(t.id), name: t.name, gender: t.gender || "M" })));
@@ -158,6 +162,29 @@ function DocsViewInner() {
     } finally {
       setDownloading(false);
     }
+  }
+
+  // ── 현장 선택 화면(활성 배정 2개+ · 유효 선택 없음) ─────────
+  if (siteChoices) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-slate-50 px-6">
+        <FileText className="h-10 w-10 text-slate-400" aria-hidden="true" />
+        <p className="text-center text-base font-black text-slate-900">문서를 조회할 현장을 선택해주세요</p>
+        <p className="-mt-2 text-center text-sm font-semibold text-slate-400">여러 현장에 배정되어 있어 현장을 먼저 선택해야 합니다.</p>
+        <div className="mt-2 flex w-full max-w-xs flex-col gap-2">
+          {siteChoices.map(s => (
+            <button
+              key={s.assignmentId}
+              onClick={() => { setActiveAssignmentCookie(s.assignmentId); window.location.reload(); }}
+              className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-left transition active:scale-[0.98]"
+            >
+              <span className="text-sm font-black text-slate-900">{s.siteName}</span>
+              <ChevronLeft className="h-4 w-4 rotate-180 text-slate-400" aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   // ── 뷰어 화면 ───────────────────────────────────────────

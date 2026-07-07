@@ -169,6 +169,7 @@ export async function POST(request: NextRequest) {
       payload = adaptationFinalEvalPayload({
         traineeName: trainee?.name || "", companyName: site.companyName,
         start, end, ev,
+        workedDays: await prisma.traineeLog.count({ where: { writerId: workerId, traineeId: trainee.id, trainingType: "ADAPTATION", attendance: { workDate: { gte: start, lte: end } } } }),
         signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
       });
       fileName = `적응지도평가_${trainee?.name||"훈련생"}_${start}_${end}.pdf`;

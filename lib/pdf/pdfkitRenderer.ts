@@ -154,19 +154,6 @@ function mdLabel(ymd: string): string {
 }
 type WeekCell = { ymd: string | null; e: any };
 
-// 주말 제외 평일 수 (적응지도 일지 (N)일 표기용)
-function countWeekdays(start: string, end: string): number | null {
-  if (!start || !end || start > end) return null;
-  let n = 0, cur = start;
-  while (cur <= end) {
-    const [y, m, d] = cur.split("-").map(Number);
-    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-    if (dow !== 0 && dow !== 6) n++;
-    cur = addDaysYmd(cur, 1);
-  }
-  return n;
-}
-
 // 훈련일지 일자 셀 표기: 2026/\n01/05
 function fmtTrainingDate(ymd: string): string {
   const [y, m, d] = ymd.split("-");
@@ -387,9 +374,9 @@ function dailyLog(kind: "TRAINING" | "ADAPTATION", p: any): Promise<Buffer> {
     cell(doc, x + c1, y, c2, hh, "사업체명", { bold: true, size: 9, fill: "#d9d9d9" });
     cell(doc, x + c1 + c2, y, c3, hh, "적응지도기간", { bold: true, size: 9, fill: "#d9d9d9" });
     y += hh;
-    // 적응지도기간 뒤 (N)일 = 전체기간 평일 수. 종합 평가기록부와 동일 기준(countWeekdays)으로 통일 — 내용 유무와 무관하게 표시.
-    const wd = countWeekdays(normYmd(p.periodStart), normYmd(p.periodEnd));
-    const days = wd != null ? ` (${wd})일` : "";
+    // 적응지도기간 뒤 (N)일 = 실제 지도(근무)한 날 수 = 작성된 일지 행수. 일 안 한 날(공휴일 등)은 로그가 없어 자연 제외.
+    const wd = Array.isArray(p.entries) ? p.entries.length : 0;
+    const days = wd > 0 ? ` (${wd})일` : "";
     cell(doc, x, y, c1, 24, p.traineeName ?? "", { size: 9 });
     cell(doc, x + c1, y, c2, 24, p.companyName ?? "", { size: 9 });
     cell(doc, x + c1 + c2, y, c3, 24, `${dot(p.periodStart) || ""} ~ ${dot(p.periodEnd) || ""}${days}`, { size: 8.5 });
@@ -548,8 +535,9 @@ function finalEval(kind: "TRAINEE" | "ADAPTATION", p: any): Promise<Buffer> {
     const valH = 36;
     cell(doc, x, y, A, valH, p.traineeName ?? "", { size: 9 });
     cell(doc, x + A, y, B - A, valH, p.companyName ?? "", { size: 9 });
-    const wd = countWeekdays(normYmd(p.periodStart), normYmd(p.periodEnd));
-    const days = wd != null ? ` (${wd})일` : "";
+    // (N)일 = 실제 지도(근무)한 날 수(적응지도 기간 내 작성된 일지 수) — 라우트가 workedDays로 넘겨준다.
+    const wd = typeof p.workedDays === "number" ? p.workedDays : null;
+    const days = wd != null && wd > 0 ? ` (${wd})일` : "";
     cell(doc, x + B, y, W - B, valH, `${dot(p.periodStart)} ~ ${dot(p.periodEnd)}${days}`, { size: 8.5 });
     y += valH;
   }

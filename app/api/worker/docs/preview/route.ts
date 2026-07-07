@@ -11,6 +11,7 @@ import { buildDocFileName, contentDisposition } from "@/lib/pdf/filename";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
 import { trainingDailyLogPayload, traineeFinalEvalPayload, adaptationDailyLogPayload, adaptationFinalEvalPayload } from "@/lib/docs/traineeDocPayload";
+import { resolveDocAssignment } from "@/lib/docs/resolveDocAssignment";
 import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 import { imageToDataUri } from "@/lib/signatureImage";
 
@@ -36,21 +37,15 @@ export async function GET(request: NextRequest) {
       where: { id: workerId },
       select: { workerName:true, phoneNumber:true, signatureUrl:true, loginId:true },
     });
-    // 딥링크가 배정을 '명시'하면 종료(ENDED)여도 그 배정으로(과거문서 미리보기·재제출) — generate/submit과 통일.
-    //  ★근무 발생 가능 상태(ASSIGNED/CONFIRMED/ACTIVE/ENDED)만 허용 — 미근무 배정(REQUESTED 등) 문서 차단.
-    const includeSel = { site:true, assignedByManager:{ select:{ signatureUrl:true, displayName:true } } } as const;
-    // 명시 배정(선택쿠키/딥링크)이 유효하면 그걸로. 유효하지 않으면(재시드로 사라진 id·남의 배정 등)
-    //  하드실패 대신 최신 활성 배정으로 폴백 — 낡은 선택 쿠키 하나가 문서화면 전체를 막지 않도록.
-    let assignment = selAssignmentId != null
-      ? await prisma.siteAssignment.findFirst({ where: { id: selAssignmentId, workerId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE","ENDED"] } }, include: includeSel })
-      : null;
-    if (!assignment) {
-      assignment = await prisma.siteAssignment.findFirst({
-        where: { workerId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] } },
-        include: includeSel,
-        orderBy: { assignedAt:"desc" },
-      });
+    // 배정 결정은 단일 출처(resolveDocAssignment)로 통일 — 명시배정 유효→사용(ENDED 포함),
+    //  없/무효면 활성1개→폴백·활성2개+→선택유도(409)·활성0개→최근ENDED(마감서류).
+    const resolved = await resolveDocAssignment(workerId, selAssignmentId, {
+      include: { site: true, assignedByManager: { select: { signatureUrl: true, displayName: true } } },
+    });
+    if (resolved.status === "ambiguous") {
+      return NextResponse.json({ success: false, code: "SELECT_SITE", message: "여러 현장에 배정되어 있습니다. 현장을 선택한 뒤 다시 시도해주세요." }, { status: 409 });
     }
+    const assignment = resolved.status === "resolved" ? resolved.assignment : null;
     if (!assignment?.site) return NextResponse.json({ success:false, message:"배정된 현장이 없습니다." }, { status:400 });
 
     let adminForSign: any = assignment.assignedByManager;
@@ -148,6 +143,7 @@ export async function GET(request: NextRequest) {
       payload = adaptationFinalEvalPayload({
         traineeName: trainee?.name || "", companyName: site.companyName,
         start, end, ev,
+        workedDays: await prisma.traineeLog.count({ where: { writerId: workerId, traineeId: trainee.id, trainingType: "ADAPTATION", attendance: { workDate: { gte: start, lte: end } } } }),
         signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
       });
     } else {

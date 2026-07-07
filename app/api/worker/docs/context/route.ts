@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getKstDateString } from "@/lib/time";
 import { effectiveTrainingType } from "@/lib/serviceStep";
+import { resolveDocAssignment } from "@/lib/docs/resolveDocAssignment";
 
 export async function GET(req: NextRequest) {
   const session = await getWorkerSessionFromReq(req);
@@ -16,7 +17,6 @@ export async function GET(req: NextRequest) {
 
   const workerId = BigInt(session.workerId);
   const todayStr = getKstDateString();
-  const today = new Date(`${todayStr}T00:00:00.000Z`);
 
   // 멀티현장: 클라가 선택 배정(assignmentId)을 주면 그 현장의 훈련생 목록(소유·활성·기간 검증). 없으면 최신 1건.
   let selAssignmentId: bigint | null = null;
@@ -40,30 +40,19 @@ export async function GET(req: NextRequest) {
       },
     },
   } satisfies Prisma.SiteAssignmentSelect;
-  const activeWhere = {
-    workerId,
-    status: "ACTIVE",
-    startDate: { lte: today },
-    OR: [{ endDate: null }, { endDate: { gte: today } }],
-  } satisfies Prisma.SiteAssignmentWhereInput;
-  // 명시 배정(선택쿠키/딥링크)이 유효하면 그걸로(ENDED 과거문서 포함). 유효하지 않으면(재시드로 사라진 id·남의 배정 등)
-  //  data:null로 죽지 말고 최신 활성 배정으로 폴백 — 낡은 선택 쿠키가 문서화면 세트/훈련생을 비우지 않도록.
-  let assignment = selAssignmentId != null
-    ? await prisma.siteAssignment.findFirst({
-        where: { id: selAssignmentId, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } },
-        select: selectCtx,
-        orderBy: { startDate: "desc" },
-      })
-    : null;
-  if (!assignment) {
-    assignment = await prisma.siteAssignment.findFirst({
-      where: activeWhere,
-      select: selectCtx,
-      orderBy: { startDate: "desc" },
-    });
-  }
-
+  // 배정 결정은 단일 출처(resolveDocAssignment)로 통일 — preview/generate/submit과 동일.
   const noStore = { headers: { "Cache-Control": "no-store" } };
+  const resolved = await resolveDocAssignment(workerId, selAssignmentId, { select: selectCtx });
+  if (resolved.status === "ambiguous") {
+    // 활성 배정이 여러 개 + 유효 선택 없음 → 조용히 한 곳 고르지 않고, 화면이 현장 선택을 띄우도록 목록 반환.
+    const sites = await prisma.siteAssignment.findMany({
+      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      orderBy: { assignedAt: "desc" },
+      select: { id: true, site: { select: { companyName: true } } },
+    });
+    return NextResponse.json({ success: true, data: null, needsSiteSelection: true, sites: sites.map(s => ({ assignmentId: String(s.id), siteName: s.site?.companyName ?? "현장" })) }, noStore);
+  }
+  const assignment = resolved.status === "resolved" ? resolved.assignment : null;
   if (!assignment?.site) return NextResponse.json({ success: true, data: null }, noStore);
 
   // 오늘 기준 단계(전환일 지나면 적응지도)
@@ -96,7 +85,7 @@ export async function GET(req: NextRequest) {
       businessContactName: assignment.site.businessContactName ?? "",
       siteContacts,
       trainingType,
-      trainees: assignment.site.trainees.map((t) => ({ id: t.id.toString(), name: t.name, gender: t.gender })),
+      trainees: assignment.site.trainees.map((t: any) => ({ id: t.id.toString(), name: t.name, gender: t.gender })),
     },
   }, noStore);
 }

@@ -134,14 +134,17 @@ export function adaptationFinalEvalPayload(args: {
   start: string;
   end: string;
   ev: EvalLike | null;
+  /** 적응지도 기간 내 실제 지도(근무)한 날 수 = 작성된 적응지도 일지 수. 헤더 '(N)일' 표기용. */
+  workedDays?: number;
   signatures: Record<string, { name: string; imageUrl?: string }>;
 }) {
-  const { traineeName, companyName, start, end, ev, signatures } = args;
+  const { traineeName, companyName, start, end, ev, workedDays, signatures } = args;
   return {
     traineeName,
     companyName,
     periodStart: start,
     periodEnd:   end,
+    ...(workedDays != null ? { workedDays } : {}),
     scores:   (ev?.scores as any)   || {},
     comments: (ev?.comments as any) || {},
     signatures,
