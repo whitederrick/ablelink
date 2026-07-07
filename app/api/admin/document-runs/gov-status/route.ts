@@ -31,7 +31,8 @@ export async function PATCH(req: NextRequest) {
     if (ids.length > 100) return NextResponse.json({ success: false, message: "한 번에 최대 100건까지 변경할 수 있습니다." }, { status: 400 });
 
     const r = await prisma.documentRun.updateMany({
-      where: { id: { in: ids }, agencyId: scope.agencyId, signStage: { not: "DRAFT" } },
+      // 공단 제출완료 표시 대상: DRAFT·CHANGES_REQUESTED(수정요청 중)는 제외 — 수정요청 문서를 제출완료로 표시 못 하게.
+      where: { id: { in: ids }, agencyId: scope.agencyId, signStage: { notIn: ["DRAFT", "CHANGES_REQUESTED"] } },
       data: {
         govStatus: status,
         // 제출완료로 표시할 때 제출시각 기록 + 발송 횟수 증가(앱 외 수동 제출도 n차로 누적).

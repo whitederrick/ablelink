@@ -56,7 +56,8 @@ export async function POST(req: NextRequest) {
     if (ids.length > 50) return NextResponse.json({ success: false, message: "한 번에 최대 50건까지 발송할 수 있습니다." }, { status: 400 });
 
     const runs = await prisma.documentRun.findMany({
-      where: { id: { in: ids }, agencyId: scope.agencyId, signStage: { not: "DRAFT" } },
+      // 공단 발송 대상: DRAFT(미제출)·CHANGES_REQUESTED(수정요청 중)는 제외 — 수정요청 문서가 그대로 발송되지 않도록.
+      where: { id: { in: ids }, agencyId: scope.agencyId, signStage: { notIn: ["DRAFT", "CHANGES_REQUESTED"] } },
       orderBy: [{ siteId: "asc" }, { workerId: "asc" }, { periodStart: "asc" }],
       select: {
         id: true, docType: true, traineeId: true, periodStart: true, periodEnd: true,
