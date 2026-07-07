@@ -5,7 +5,7 @@
 //  실행: npx tsx --env-file=C:/myProjects/ablelink/.env scripts/seed-doc-verify.mts
 import { prisma } from "../lib/prisma";
 import { computeWorkTimes, kstWallTimeToInstant } from "../lib/workSchedule";
-import { assertWritableDb } from "./_dbGuard";
+import { assertWritableDb } from "./_dbGuard.mts";
 
 // 대상 배정: 강도윤(1:1, placement1) · 서아린(1:多, placement2). loginId로 최신 배정 선택.
 const TARGET_LOGINIDS = ["01070000000", "01070000001"];
