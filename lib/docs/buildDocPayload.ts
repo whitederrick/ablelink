@@ -113,9 +113,13 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
   if (companyManagerSignToken) {
     const tokenRec = await prisma.siteSignToken.findUnique({
       where: { token: companyManagerSignToken },
-      select: { signatureUrl: true, usedAt: true, signRole: true, signerName: true },
+      select: { signatureUrl: true, usedAt: true, signRole: true, signerName: true, assignmentId: true, periodStart: true, periodEnd: true },
     });
-    if (tokenRec?.usedAt && tokenRec.signRole === "company_manager") {
+    // ★토큰이 '이 문서의 배정·기간'에 발급된 것인지 검증 — 다른 현장/기간 서명이 붙는 오귀속 방지(CD1).
+    //  (docType은 검사 안 함: 같은 기간의 출근부·훈련일지는 한 번 서명으로 함께 적용되는 게 정상.)
+    if (tokenRec?.usedAt && tokenRec.signRole === "company_manager"
+        && tokenRec.assignmentId === assignment.id
+        && tokenRec.periodStart === start && tokenRec.periodEnd === end) {
       companyManagerSignatureUrl = tokenRec.signatureUrl;
       companyManagerSignerName   = tokenRec.signerName || "";
     }

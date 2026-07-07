@@ -13,6 +13,7 @@ function ManagerSignContent() {
   const periodStart = params.get("ps") ?? "";
   const periodEnd   = params.get("pe") ?? "";
   const contactName = params.get("cn") ?? "";
+  const aid         = params.get("aid") ?? "";  // 선택 현장 배정 — 서명 귀속 현장
 
   const padRef = useRef<SignaturePadHandle>(null);
   const [empty,  setEmpty]  = useState(true);
@@ -31,6 +32,7 @@ function ManagerSignContent() {
       fd.append("periodStart", periodStart);
       fd.append("periodEnd", periodEnd);
       fd.append("signerName", signerName || "사업체 담당자");
+      if (aid) fd.append("assignmentId", aid);
 
       const res = await fetch("/api/worker/docs/inperson-sign", { method: "POST", body: fd });
       const data = await res.json();

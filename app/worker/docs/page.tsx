@@ -176,7 +176,9 @@ function DocsContent() {
     const firstSignDoc = DOC_TYPES.find(d => NEEDS_MANAGER_SIGN.has(d.id) && docStates[d.id].checked);
     const docType = firstSignDoc?.id || "ATTENDANCE_SHEET";
     const cn = siteInfo?.businessContactName ? `&cn=${encodeURIComponent(siteInfo.businessContactName)}` : "";
-    router.push(`/worker/docs/manager-sign?dt=${docType}&ps=${periodStart}&pe=${periodEnd}${cn}`);
+    // 선택 현장(aid)을 서명 화면으로 전달 — 사업체 서명이 그 현장 배정에 정확히 귀속되도록(다중현장 오귀속 방지).
+    const aidQ = activeAssignmentId ? `&aid=${encodeURIComponent(activeAssignmentId)}` : "";
+    router.push(`/worker/docs/manager-sign?dt=${docType}&ps=${periodStart}&pe=${periodEnd}${cn}${aidQ}`);
   }
 
   async function sendDoc(docId: string): Promise<void> {

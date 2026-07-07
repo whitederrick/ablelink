@@ -10,6 +10,7 @@ import { checkPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { validateSignatureImage } from "@/lib/imageValidation";
 import { signatureDisplayUrl } from "@/lib/signatureImage";
+import { resolveDocAssignment } from "@/lib/docs/resolveDocAssignment";
 import { randomUUID } from "crypto";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -42,11 +43,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "문서 정보가 누락되었습니다." }, { status: 400 });
     }
 
-    const assignment = await prisma.siteAssignment.findFirst({
-      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
-      orderBy: { assignedAt: "desc" },
-      include: { site: { select: { businessContactName: true } } },
-    });
+    // ★서명을 '선택 현장(assignmentId)'에 귀속 — 최신 배정을 임의로 고르면 다중현장 워커의 사업체 서명이
+    //  엉뚱한 현장 문서에 붙는다(CD1). 문서 생성/미리보기와 동일한 resolveDocAssignment로 통일.
+    let selAssignmentId: bigint | null = null;
+    try { const raw = (formData.get("assignmentId") as string || "").trim(); selAssignmentId = raw ? BigInt(raw) : null; } catch { selAssignmentId = null; }
+    const resolved = await resolveDocAssignment(workerId, selAssignmentId, { include: { site: { select: { businessContactName: true } } } });
+    if (resolved.status === "ambiguous") {
+      return NextResponse.json({ success: false, code: "SELECT_SITE", message: "여러 현장에 배정되어 있습니다. 현장을 선택한 뒤 서명해주세요." }, { status: 409 });
+    }
+    const assignment = resolved.status === "resolved" ? resolved.assignment : null;
     if (!assignment) {
       return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 404 });
     }
