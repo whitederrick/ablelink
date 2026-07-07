@@ -61,15 +61,22 @@ export interface AssignmentSlot {
   endDate?: Date | string | null;
 }
 
-/** 두 날짜범위가 하루라도 겹치는가(endDate=null=열린 배정). */
+/**
+ * 두 날짜범위가 하루라도 겹치는가(endDate=null=열린 배정).
+ * ★KST '일' 단위로 정규화해 비교한다. startDate가 `new Date()`(시각 포함)으로 저장되는 경로와
+ *  UTC 자정으로 저장되는 경로가 혼재하므로, 밀리초로 비교하면 경계일(예: A는 6/30까지·B는 6/30부터)의
+ *  하루 겹침을 놓쳐 이중배정이 새어나간다. 시각을 버리고 KST 캘린더 일수(정수)로 포함비교한다.
+ */
 export function dateRangesOverlap(a: AssignmentSlot, b: AssignmentSlot): boolean {
-  const toT = (v: Date | string | null | undefined, fallback: number): number => {
+  // KST 캘린더 일수(에폭 이후 일수). 어떤 시각이든 그 시각의 KST 날짜로 뭉갠다.
+  const toKstDay = (v: Date | string | null | undefined, fallback: number): number => {
     if (v == null) return fallback;
     const t = new Date(v).getTime();
-    return Number.isNaN(t) ? fallback : t;
+    if (Number.isNaN(t)) return fallback;
+    return Math.floor((t + 9 * 60 * 60 * 1000) / 86400000);
   };
-  const aStart = toT(a.startDate, -Infinity), aEnd = toT(a.endDate, Infinity);
-  const bStart = toT(b.startDate, -Infinity), bEnd = toT(b.endDate, Infinity);
+  const aStart = toKstDay(a.startDate, -Infinity), aEnd = toKstDay(a.endDate, Infinity);
+  const bStart = toKstDay(b.startDate, -Infinity), bEnd = toKstDay(b.endDate, Infinity);
   return aStart <= bEnd && bStart <= aEnd;
 }
 

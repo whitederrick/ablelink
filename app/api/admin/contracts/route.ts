@@ -9,7 +9,7 @@ import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/manag
 import { checkAgencyPlanAccess, checkQuota } from "@/lib/planGuard";
 import { isValidTemplateKey, DEFAULT_TEMPLATE_KEY, canUseTemplate, canUseTemplateForWage } from "@/lib/contractTemplates";
 import { sendAlimtalk } from "@/lib/kakao";
-import { findTimeConflict } from "@/lib/assignmentOverlap";
+import { findTimeConflict, isSameAgencyConflict } from "@/lib/assignmentOverlap";
 import { randomUUID } from "crypto";
 import { hash } from "bcryptjs";
 import { audit } from "@/lib/audit";
@@ -226,19 +226,21 @@ export async function POST(req: NextRequest) {
       const isCustom = workType === "CUSTOM";
       // R4-10: 겹침검사는 '다른 현장'만 대상(finalize=assignment-requests와 기준 통일). 같은 현장 배정은
       //  갱신/재계약(같은 현장 연속)일 수 있어 슬롯이 겹쳐도 이중배정이 아니다 → 같은 현장 신규행 발행시 오탐 409 방지.
+      // 이중배정 방지는 전역(크로스기관)으로 — 타 기관 배정과도 겹치면 발행 차단(서명계약↔배정 어긋남 방지).
+      //  단, 충돌이 타 기관이면 현장명 비노출(일반 문구). 같은 기관만 현장명 표시.
       const others = await prisma.siteAssignment.findMany({
-        where: { workerId: userIdBig, agencyId, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { id: assignmentIdBig }, siteId: { not: asgn.siteId } },
-        select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
+        where: { workerId: userIdBig, status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] }, NOT: { id: assignmentIdBig }, siteId: { not: asgn.siteId } },
+        select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, agencyId: true, site: { select: { companyName: true } } },
       });
       const conflict = findTimeConflict(
         { workType, customWorkStart: isCustom ? customWorkStart : null, customWorkEnd: isCustom ? customWorkEnd : null, startDate, endDate },
         others,
       );
       if (conflict) {
-        return NextResponse.json(
-          { success: false, code: "TIME_CONFLICT", message: `이 계약의 근무형태·기간이 '${(conflict as any).site?.companyName ?? "다른 현장"}' 배정과 같은 날 근무시간이 겹칩니다. 배정을 조정한 뒤 계약을 발행해주세요.` },
-          { status: 409 },
-        );
+        const msg = isSameAgencyConflict((conflict as any).agencyId, agencyId)
+          ? `이 계약의 근무형태·기간이 '${(conflict as any).site?.companyName ?? "다른 현장"}' 배정과 같은 날 근무시간이 겹칩니다. 배정을 조정한 뒤 계약을 발행해주세요.`
+          : `이 직무지도원은 이미 다른 일정이 있어 이 근무형태·기간으로 계약을 발행할 수 없습니다. 근무형태·기간을 조정해주세요.`;
+        return NextResponse.json({ success: false, code: "TIME_CONFLICT", message: msg }, { status: 409 });
       }
     }
 
