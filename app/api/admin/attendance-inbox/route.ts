@@ -8,6 +8,7 @@ import { getKstDateString } from "@/lib/time";
 import { isPayrollPending, lateMinutes, earlyLeaveMinutes, SERIOUS_LATE_MIN } from "@/lib/attendance/payrollGate";
 // 근태 이슈 도출은 대시보드와 공용(lib/attendance/issueDerivation)으로 통일
 import { deriveAttendanceIssues, expectedStartHHMM } from "@/lib/attendance/issueDerivation";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 // 타임라인 이벤트(AttendanceIssueEvent.type) → 한글 라벨
 const EVENT_LABEL: Record<string, string> = {
@@ -169,7 +170,9 @@ export async function GET(req: Request) {
 
     // 3) 신규 생성 / 변경된 OPEN 갱신만(병렬). 동일 issueTypes면 쓰기 스킵 → 반복 로딩 빨라짐.
     const sameTypes = (a: any[], b: any[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
-    await Promise.all(candidates.map(async (c) => {
+    // 콜드 인박스 최초 로드 시 후보 전량이 신규 create가 되어 write가 무제한 fan-out → 커넥션 풀 포화 위험.
+    //  동시성 상한으로 캡(각 후보는 서로 다른 dailyAttendanceId라 Map 갱신 경합 없음).
+    await mapWithConcurrency(candidates, 8, async (c) => {
       const key = c.r.id.toString();
       const ex = issueMap.get(key);
       if (!ex) {
@@ -192,7 +195,7 @@ export async function GET(req: Request) {
         const upd = await prisma.attendanceIssue.update({ where: { dailyAttendanceId: c.r.id }, data: { issueTypes: c.derived as any }, select: issueSelect });
         issueMap.set(key, upd);
       }
-    }));
+    });
 
     // 4) 필터 + 게이트 + items 구성
     const items: any[] = [];

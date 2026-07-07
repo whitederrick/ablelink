@@ -13,6 +13,7 @@ import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
 import JSZip from "jszip";
 import { imageToDataUri } from "@/lib/signatureImage";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import { logAccess } from "@/lib/accessLog";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -107,8 +108,8 @@ export async function GET(request: NextRequest) {
       zip.file("출근부.pdf", buf);
     }
 
-    // 2) 훈련생별 문서 — DB 쿼리를 모든 훈련생에 걸쳐 병렬 실행
-    await Promise.all(trainees.map(async (trainee) => {
+    // 2) 훈련생별 문서 — DB 쿼리·PDF 렌더를 병렬화하되 동시성 상한(무제한 fan-out 시 커넥션/메모리 폭주 방지)
+    await mapWithConcurrency(trainees, 4, async (trainee) => {
       const tid    = trainee.id;
       const folder = zip.folder(safeFilename(`훈련생_${trainee.name}`))!;
 
@@ -191,7 +192,7 @@ export async function GET(request: NextRequest) {
         const buf = await renderPdfToBuffer({ documentType: "ADAPTATION_FINAL_EVAL" as DocumentType, payload });
         folder.file("적응지도_종합평가.pdf", buf);
       }
-    }));
+    });
 
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 

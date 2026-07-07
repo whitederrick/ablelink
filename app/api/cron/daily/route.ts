@@ -63,40 +63,42 @@ export async function GET(req: NextRequest) {
         assignment: { select: { agencyId: true } },
       },
     });
-    for (const att of stale) {
-      if (att.status === "WORKING") {
-        // 퇴근 미실행 → 보정대기로 두고 1회만 플래그/알림
-        if (att.clockOutMissedAt) continue;
-        await prisma.dailyAttendance.update({
-          where: { id: att.id },
-          data: { clockOutMissedAt: now },
-        });
-        const noticeAgencyId = att.assignment?.agencyId;
-        if (noticeAgencyId) {
-          try {
-            await prisma.workerNotice.create({
-              data: {
-                workerId: att.workerId,
-                agencyId: noticeAgencyId,
-                title: "퇴근 미실행 안내",
-                body: `${yesterday} '${att.site?.companyName ?? "현장"}' 퇴근이 등록되지 않았습니다.\n앱에서 사유와 함께 퇴근을 처리해 주세요. (처리 전까지 출근부에 퇴근 시각이 비어 있습니다)`,
-                type: "WARN",
-                link: "/worker/home",
-              },
-            });
-          } catch (e: any) { errors.push(`미실행알림[${att.id}]: ${e.message}`); }
-        }
-        missedFlagged++;
-        detail.missedFlagged.push({ attId: String(att.id), workerId: String(att.workerId), site: att.site?.companyName ?? null, date: yesterday });
-      } else {
-        // status=DONE: endTime 있음 → 자동 확정
-        await prisma.dailyAttendance.update({
-          where: { id: att.id },
-          data: { isFinalClosed: true, finalizedAt: now, status: "DONE" },
-        });
-        autoConfirmed++;
-        detail.autoConfirmed.push({ attId: String(att.id), workerId: String(att.workerId), site: att.site?.companyName ?? null, date: yesterday });
-      }
+    // 순차 N update → 일괄 배치(대량일 때 함수 타임아웃 방지). 의미 동일.
+    //  · status=DONE(퇴근 눌렀으나 미확정): endTime 이미 채워짐 → 일괄 자동 확정.
+    //  · status=WORKING(퇴근 미실행): 18:00 자동 채움 금지. 보정대기로 두고 1회만 플래그(clockOutMissedAt)+알림.
+    const doneRows = stale.filter((a) => a.status !== "WORKING");
+    const workingRows = stale.filter((a) => a.status === "WORKING" && !a.clockOutMissedAt);
+
+    if (doneRows.length) {
+      await prisma.dailyAttendance.updateMany({
+        where: { id: { in: doneRows.map((a) => a.id) } },
+        data: { isFinalClosed: true, finalizedAt: now, status: "DONE" },
+      });
+      autoConfirmed = doneRows.length;
+      detail.autoConfirmed = doneRows.map((a) => ({ attId: String(a.id), workerId: String(a.workerId), site: a.site?.companyName ?? null, date: yesterday }));
+    }
+
+    if (workingRows.length) {
+      await prisma.dailyAttendance.updateMany({
+        where: { id: { in: workingRows.map((a) => a.id) } },
+        data: { clockOutMissedAt: now },
+      });
+      missedFlagged = workingRows.length;
+      detail.missedFlagged = workingRows.map((a) => ({ attId: String(a.id), workerId: String(a.workerId), site: a.site?.companyName ?? null, date: yesterday }));
+      // '퇴근 미실행' 앱 내 알림(무료) — agencyId 있는 행만 일괄 생성.
+      try {
+        const notices = workingRows
+          .filter((a) => a.assignment?.agencyId)
+          .map((a) => ({
+            workerId: a.workerId,
+            agencyId: a.assignment!.agencyId!,
+            title: "퇴근 미실행 안내",
+            body: `${yesterday} '${a.site?.companyName ?? "현장"}' 퇴근이 등록되지 않았습니다.\n앱에서 사유와 함께 퇴근을 처리해 주세요. (처리 전까지 출근부에 퇴근 시각이 비어 있습니다)`,
+            type: "WARN" as any,
+            link: "/worker/home",
+          }));
+        if (notices.length) await prisma.workerNotice.createMany({ data: notices });
+      } catch (e: any) { errors.push(`미실행알림: ${e.message}`); }
     }
   } catch (e: any) { errors.push(`자동확정: ${e.message}`); }
 
