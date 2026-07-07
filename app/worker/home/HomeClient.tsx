@@ -954,10 +954,10 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
           <div className="mb-5 flex items-baseline justify-center gap-1">
             {status === "BEFORE" && (
               <>
-                <span className="font-black tabular-nums text-[52px] leading-none tracking-tight text-slate-950">
+                <span suppressHydrationWarning className="font-black tabular-nums text-[52px] leading-none tracking-tight text-slate-950">
                   {timeStr}
                 </span>
-                <span className="text-2xl font-semibold text-slate-400">{secStr}</span>
+                <span suppressHydrationWarning className="text-2xl font-semibold text-slate-400">{secStr}</span>
               </>
             )}
             {status === "WORKING" && (
@@ -969,7 +969,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
                 <span className="text-xl font-light text-slate-300">/</span>
                 <div className="text-center">
                   <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">현재</p>
-                  <p className="text-3xl font-black tabular-nums tracking-tight text-emerald-600">{timeStr}</p>
+                  <p suppressHydrationWarning className="text-3xl font-black tabular-nums tracking-tight text-emerald-600">{timeStr}</p>
                 </div>
               </div>
             )}
