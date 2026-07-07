@@ -97,61 +97,88 @@ export async function computePayrollItems(
 
   const itemInputs: PayrollItemInput[] = [];
 
-  const userDataList = await Promise.all(userIds.map(async (workerId) => {
-    const userSiteIds = assignments.filter((a) => a.workerId === workerId).map((a) => a.siteId);
-    const [payContracts, attendances, placements, empContract, firstContract, customHolidays] = await Promise.all([
-      // 같은 기관 다시급: 유효한 계약 전부(기관 기본 siteId=null + 현장별 override). 금액만 현장별 적용.
-      prisma.payContract.findMany({
-        where: {
-          agencyId, workerId,
-          // 급여월과 '겹치는' 계약을 모두 포함(월중 단가 변경으로 구/신 계약이 월을 split 해도 누락 없음).
-          //  · 과거엔 effectiveFrom<=월초 AND effectiveTo>=월말만 잡아, 월중 split 시 양쪽 다 탈락→"계약 없음"이 됐다.
-          //  · 겹침 = effectiveFrom<=월말 AND (effectiveTo=null OR effectiveTo>=월초). 최신(effectiveFrom desc) 우선 적용.
-          effectiveFrom: { lte: new Date(periodEnd) },
-          OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date(periodStart) } }],
-        },
-        orderBy: { effectiveFrom: "desc" },
-      }),
-      prisma.dailyAttendance.findMany({
-        where: { workerId, workDate: { gte: periodStart, lte: periodEnd }, isFinalClosed: true, assignment: { agencyId } },
-        select: {
-          workDate: true, startTime: true, endTime: true,
-          actualStartTime: true, actualEndTime: true, payrollConfirmedAt: true,
-          assignment: { select: { siteId: true, workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true, site: { select: { lateThresholdMin: true } } } },
-          logs: { select: { extTime1on1: true, extTimeGroup: true } },
-        },
-      }),
-      // 1:多 배율용 훈련생 배치 이력(현장·기간). 그 기간 이 현장들에 걸친 placement를 그대로 가져와
-      //  **일자별 동시 재적 수**를 계산한다(아래 traineeCountOn).
-      // · status 필터 없음: 이탈 훈련생은 endDate로 표현 → 과거기간 재계산에서도 그때 재적이 정확.
-      // · 기간 전체 count(groupBy)는 월중 증감을 못 잡고, 비동시 재적(1명 이탈→1명 합류, 최대 1명)도 2로 세어
-      //   실제로 1:1인 날을 1:多로 잘못 올림 → 일자별 동시 재적으로 판정해야 정확.
-      prisma.traineePlacement.findMany({
-        where: {
-          siteId: { in: userSiteIds },
-          startDate: { lte: periodEndDate },
-          OR: [{ endDate: null }, { endDate: { gte: periodStartDate } }],
-        },
-        select: { siteId: true, startDate: true, endDate: true },
-      }),
-      prisma.employmentContract.findFirst({
-        where: { agencyId, workerId, contractStart: { lte: periodEndDate }, contractEnd: { gte: periodStartDate } },
-        orderBy: { contractStart: "desc" },
-        select: { workDaysPerWeek: true, weeklyHoliday: true, contractStart: true, contractEnd: true, workStartTime: true, workEndTime: true, breakStartTime: true, breakEndTime: true },
-      }),
-      prisma.employmentContract.findFirst({
-        where: { agencyId, workerId },
-        orderBy: { contractStart: "asc" },
-        select: { contractStart: true },
-      }),
-      // 커스텀휴무(현장 지정 휴무일, countAsWorkday=false) — 주휴 개근 판정에서 소정근로일 제외.
-      prisma.siteHoliday.findMany({
-        where: { assignment: { workerId, agencyId }, countAsWorkday: false, date: { gte: periodStart, lte: periodEnd } },
-        select: { date: true },
-      }),
-    ]);
-    return { workerId, payContracts, attendances, placements, empContract, firstContract, customHolidays };
-  }));
+  // ── 로딩부: 워커별 6쿼리(N+1) → 전체 6쿼리 배치 조회 + 인메모리 그룹핑 ──
+  //   과거엔 Promise.all(userIds.map(...))로 워커마다 6쿼리를 동시 발사 → 대형 기관(수십~100명)에서
+  //   커넥션 풀 포화(P2024)로 급여계산이 통째로 실패했다. 여기서 workerId 배치로 한 번에 읽고
+  //   메모리에서 워커별로 나눈다. **계산 로직·결과는 불변**(아래 for 루프에 넘기는 배열 모양 동일).
+  const idKey = (id: bigint) => id.toString();
+  const allSiteIds = [...new Set(assignments.map((a) => a.siteId))];
+
+  const [allPayContracts, allAttendances, allPlacements, allEmpLatest, allEmpFirst, allHolidays] = await Promise.all([
+    // 같은 기관 다시급: 유효한 계약 전부(기관 기본 siteId=null + 현장별 override). 금액만 현장별 적용.
+    //  급여월과 '겹치는' 계약(effectiveFrom<=월말 AND (effectiveTo=null OR >=월초)). 최신(effectiveFrom desc) 우선.
+    prisma.payContract.findMany({
+      where: {
+        agencyId, workerId: { in: userIds },
+        effectiveFrom: { lte: new Date(periodEnd) },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date(periodStart) } }],
+      },
+      orderBy: { effectiveFrom: "desc" },
+    }),
+    prisma.dailyAttendance.findMany({
+      where: { workerId: { in: userIds }, workDate: { gte: periodStart, lte: periodEnd }, isFinalClosed: true, assignment: { agencyId } },
+      select: {
+        workerId: true,
+        workDate: true, startTime: true, endTime: true,
+        actualStartTime: true, actualEndTime: true, payrollConfirmedAt: true,
+        assignment: { select: { siteId: true, workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true, site: { select: { lateThresholdMin: true } } } },
+        logs: { select: { extTime1on1: true, extTimeGroup: true } },
+      },
+    }),
+    // 1:多 배율용 훈련생 배치 이력 — 관련 현장 전체를 한 번에 조회 후, 워커별 소속 현장으로 인메모리 필터.
+    //  status 필터 없음(이탈은 endDate로 표현). 일자별 동시 재적 수로 1:1/1:多 판정(traineeCountOnDate).
+    prisma.traineePlacement.findMany({
+      where: {
+        siteId: { in: allSiteIds },
+        startDate: { lte: periodEndDate },
+        OR: [{ endDate: null }, { endDate: { gte: periodStartDate } }],
+      },
+      select: { siteId: true, startDate: true, endDate: true },
+    }),
+    // 근로계약: 급여월과 겹치는 것 중 최신(contractStart desc) = 워커별 첫 행.
+    prisma.employmentContract.findMany({
+      where: { agencyId, workerId: { in: userIds }, contractStart: { lte: periodEndDate }, contractEnd: { gte: periodStartDate } },
+      orderBy: { contractStart: "desc" },
+      select: { workerId: true, workDaysPerWeek: true, weeklyHoliday: true, contractStart: true, contractEnd: true, workStartTime: true, workEndTime: true, breakStartTime: true, breakEndTime: true },
+    }),
+    // 최초 근로계약(contractStart asc, 기간필터 없음) = 계속근로 산정 기준. 워커별 첫 행.
+    prisma.employmentContract.findMany({
+      where: { agencyId, workerId: { in: userIds } },
+      orderBy: { contractStart: "asc" },
+      select: { workerId: true, contractStart: true },
+    }),
+    // 커스텀휴무(현장 지정 휴무일, countAsWorkday=false) — 주휴 개근 판정에서 소정근로일 제외.
+    prisma.siteHoliday.findMany({
+      where: { assignment: { workerId: { in: userIds }, agencyId }, countAsWorkday: false, date: { gte: periodStart, lte: periodEnd } },
+      select: { date: true, assignment: { select: { workerId: true } } },
+    }),
+  ]);
+
+  // 워커별 그룹핑 — 쿼리의 정렬 순서를 보존하므로 기존 per-worker orderBy와 동일한 결과.
+  const payByW = new Map<string, typeof allPayContracts>();
+  for (const c of allPayContracts) { const k = idKey(c.workerId); (payByW.get(k) ?? (payByW.set(k, []), payByW.get(k)!)).push(c); }
+  const attByW = new Map<string, typeof allAttendances>();
+  for (const a of allAttendances) { const k = idKey(a.workerId); (attByW.get(k) ?? (attByW.set(k, []), attByW.get(k)!)).push(a); }
+  const holByW = new Map<string, { date: string }[]>();
+  for (const h of allHolidays) { const k = idKey(h.assignment.workerId); (holByW.get(k) ?? (holByW.set(k, []), holByW.get(k)!)).push({ date: h.date }); }
+  // desc/asc 정렬 → 워커별 '첫 행'이 각각 최신/최초(기존 findFirst와 동치).
+  const empLatestByW = new Map<string, (typeof allEmpLatest)[number]>();
+  for (const e of allEmpLatest) { if (!empLatestByW.has(idKey(e.workerId))) empLatestByW.set(idKey(e.workerId), e); }
+  const empFirstByW = new Map<string, (typeof allEmpFirst)[number]>();
+  for (const e of allEmpFirst) { if (!empFirstByW.has(idKey(e.workerId))) empFirstByW.set(idKey(e.workerId), e); }
+
+  const userDataList = userIds.map((workerId) => {
+    const siteSet = new Set(assignments.filter((a) => a.workerId === workerId).map((a) => idKey(a.siteId)));
+    return {
+      workerId,
+      payContracts: payByW.get(idKey(workerId)) ?? [],
+      attendances: attByW.get(idKey(workerId)) ?? [],
+      placements: allPlacements.filter((p) => siteSet.has(idKey(p.siteId))),
+      empContract: empLatestByW.get(idKey(workerId)) ?? null,
+      firstContract: empFirstByW.get(idKey(workerId)) ?? null,
+      customHolidays: holByW.get(idKey(workerId)) ?? [],
+    };
+  });
 
   for (const { workerId, payContracts, attendances, placements, empContract, firstContract, customHolidays } of userDataList) {
     // 기관 기본 계약(siteId=null) = 급여유형·소득유형·4대보험·기본금액의 기준.
