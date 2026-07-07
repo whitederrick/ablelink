@@ -10,14 +10,10 @@ import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { buildDocFileName, contentDisposition } from "@/lib/pdf/filename";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
+import { trainingDailyLogPayload, traineeFinalEvalPayload, adaptationDailyLogPayload, adaptationFinalEvalPayload } from "@/lib/docs/traineeDocPayload";
 import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 import { imageToDataUri } from "@/lib/signatureImage";
 
-function fmtDot(s: string) { return s.replace(/-/g, "."); }
-function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`; }
-function scoreLabel(n?: number|null) {
-  return n ? ({1:"매우못함",2:"못함",3:"보통",4:"잘함",5:"매우잘함"} as any)[n]||String(n) : "";
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -116,52 +112,44 @@ export async function GET(request: NextRequest) {
         where:{ writerId:workerId, traineeId:trainee.id, trainingType:{in:["PRE","FIELD"]}, attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
       }) : [];
-      payload = {
-        traineeName:trainee?.name||"", companyName:site.companyName,
-        periodPreText:fmtPeriod(assignment.stepStart?.toISOString().slice(0,10)||start,start),
-        periodFieldText:fmtPeriod(start,end),
-        rows:logs.map(l=>({ section:l.trainingType==="PRE"?"PRE":"FIELD", date:l.attendance.workDate,
-          attendanceStatus:l.evaluation||"출석", trainingTime:docTimes.trainingTimeH,
-          guidanceFlag:docTimes.guidanceYN, task:l.tasks[0]?.taskName||"",
-          taskLevelMeasured:`${scoreLabel(l.tasks[0]?.performanceScore)}\n(${docTimes.measTimeH})`, evalGuidance:l.content||"" })),
-        signatures:{ govAgent:sigs.govAgent, companyManager:{name:"",imageUrl:undefined}, worker:sigs.worker },
-      };
+      payload = trainingDailyLogPayload({
+        traineeName: trainee?.name || "", companyName: site.companyName,
+        preStartYmd: assignment.stepStart?.toISOString().slice(0, 10) || start,
+        start, end, logs, docTimes,
+        signatures: { govAgent: sigs.govAgent, companyManager: { name: "", imageUrl: undefined }, worker: sigs.worker },
+      });
     } else if (docType === "ADAPTATION_DAILY_LOG") {
       const trainee = previewTrainee!;
       const logs = trainee ? await prisma.traineeLog.findMany({
         where:{ writerId:workerId, traineeId:trainee.id, trainingType:"ADAPTATION", attendance:{workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
       }) : [];
-      payload = {
-        traineeName:trainee?.name||"", companyName:site.companyName, periodStart:start, periodEnd:end,
-        entries:logs.map(l=>({ dateISO:l.attendance.workDate, attendance:l.evaluation||"출석",
-          workTime:docTimes.workTimeRange, guidance:docTimes.guidanceYN, task:l.tasks[0]?.taskName||"",
-          performanceLabel:scoreLabel(l.tasks[0]?.performanceScore), performanceTime:docTimes.measTimeH, coaching:l.content||"" })),
-        signatures:{ worker:sigs.worker, govAgent:sigs.govAgent },
-      };
+      payload = adaptationDailyLogPayload({
+        traineeName: trainee?.name || "", companyName: site.companyName,
+        start, end, logs, docTimes,
+        signatures: { worker: sigs.worker, govAgent: sigs.govAgent },
+      });
     } else if (docType === "TRAINEE_FINAL_EVAL") {
       const trainee = previewTrainee!;
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
         where:{ traineeId:trainee.id, writerId:workerId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
       }) : null;
-      payload = {
-        traineeName:trainee?.name||"", companyName:site.companyName,
-        preTrainingStart:assignment.stepStart?.toISOString().slice(0,10)||start,
-        preTrainingEnd:start, fieldTrainingStart:start, fieldTrainingEnd:end,
-        scores:(ev?.scores as any)||{}, comments:(ev?.comments as any)||{},
-        signatures:{ worker:sigs.worker, agencyAgent:sigs.agencyAgent },
-      };
+      payload = traineeFinalEvalPayload({
+        traineeName: trainee?.name || "", companyName: site.companyName,
+        preStartYmd: assignment.stepStart?.toISOString().slice(0, 10) || start,
+        start, end, ev,
+        signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
+      });
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
       const trainee = previewTrainee!;
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
         where:{ traineeId:trainee.id, writerId:workerId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
       }) : null;
-      payload = {
-        traineeName:trainee?.name||"", companyName:site.companyName,
-        periodStart:start, periodEnd:end,
-        scores:(ev?.scores as any)||{}, comments:(ev?.comments as any)||{},
-        signatures:{ worker:sigs.worker, agencyAgent:sigs.agencyAgent },
-      };
+      payload = adaptationFinalEvalPayload({
+        traineeName: trainee?.name || "", companyName: site.companyName,
+        start, end, ev,
+        signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
+      });
     } else {
       payload = { traineeName:"", companyName:site.companyName, periodStart:start, periodEnd:end };
     }

@@ -12,6 +12,7 @@ import { getKrHolidayDates } from "@/lib/krHolidays";
 import { getKstDateString } from "@/lib/time";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
+import { trainingDailyLogPayload, traineeFinalEvalPayload, adaptationDailyLogPayload, adaptationFinalEvalPayload } from "@/lib/docs/traineeDocPayload";
 import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { sigRequirement } from "@/lib/docs/requiredSignatures";
@@ -27,14 +28,6 @@ export class DocPayloadError extends Error {
     this.status = status;
     this.extra = extra;
   }
-}
-
-// ── 유틸 ──────────────────────────────────────────────────────
-function fmtDot(s: string) { return s.replace(/-/g, "."); }
-function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`; }
-function scoreLabel(n?: number | null): string {
-  if (!n) return "";
-  return ({ 1: "매우못함", 2: "못함", 3: "보통", 4: "잘함", 5: "매우잘함" } as any)[n] || String(n);
 }
 
 export interface BuildDocOptions {
@@ -222,27 +215,12 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
     });
     const holidays = [...new Set([...getKrHolidayDates(preStart, end), ...siteHols.map(h => h.date)])];
 
-    payload = {
-      traineeName: trainee?.name || "",
-      companyName: site.companyName,
-      periodPreText:   fmtPeriod(assignment.stepStart?.toISOString().slice(0, 10) || start, start),
-      periodFieldText: fmtPeriod(start, end),
-      holidays,
-      rows: logs.map(l => {
-        const scoreText = scoreLabel(l.tasks[0]?.performanceScore as any);
-        return {
-          section: l.trainingType === "PRE" ? "PRE" : "FIELD",
-          date: l.attendance.workDate,
-          attendanceStatus: l.evaluation || "출석",
-          trainingTime: docTimes.trainingTimeH,
-          guidanceFlag: docTimes.guidanceYN,
-          task: l.tasks[0]?.taskName || "",
-          taskLevelMeasured: `${scoreText}\n(${docTimes.measTimeH})`,
-          evalGuidance: l.content || "",
-        };
-      }),
+    payload = trainingDailyLogPayload({
+      traineeName: trainee?.name || "", companyName: site.companyName,
+      preStartYmd: assignment.stepStart?.toISOString().slice(0, 10) || start,
+      start, end, logs, docTimes, holidays,
       signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
-    };
+    });
     fileName = buildDocFileName("TRAINING_DAILY_LOG", { traineeName: trainee?.name, companyName: site.companyName, start, end });
 
   } else if (docType === "TRAINEE_FINAL_EVAL") {
@@ -257,17 +235,12 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
     if (!ev) throw new DocPayloadError("종합평가를 먼저 작성해주세요.");
     if (!ev.isConfirmed) throw new DocPayloadError("종합평가를 최종 확정한 후 PDF를 생성할 수 있습니다.\n평가 페이지에서 '최종 확정' 버튼을 눌러주세요.", 400, { evalNotConfirmed: true });
 
-    payload = {
-      traineeName: trainee?.name || "",
-      companyName: site.companyName,
-      preTrainingStart:  assignment.stepStart?.toISOString().slice(0, 10) || start,
-      preTrainingEnd:    start,
-      fieldTrainingStart: start,
-      fieldTrainingEnd:   end,
-      scores:   (ev?.scores as any)   || {},
-      comments: (ev?.comments as any) || {},
+    payload = traineeFinalEvalPayload({
+      traineeName: trainee?.name || "", companyName: site.companyName,
+      preStartYmd: assignment.stepStart?.toISOString().slice(0, 10) || start,
+      start, end, ev,
       signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
-    };
+    });
     fileName = buildDocFileName("TRAINEE_FINAL_EVAL", { traineeName: trainee?.name, companyName: site.companyName, start, end });
 
   } else if (docType === "ADAPTATION_DAILY_LOG") {
@@ -291,24 +264,11 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
     });
     const holidays = [...new Set([...getKrHolidayDates(start, end), ...siteHols.map(h => h.date)])];
 
-    payload = {
-      traineeName: trainee?.name || "",
-      companyName: site.companyName,
-      periodStart: start,
-      periodEnd:   end,
-      holidays,
-      entries: logs.map(l => ({
-        dateISO: l.attendance.workDate,
-        attendance: l.evaluation || "출석",
-        workTime: docTimes.workTimeRange,
-        guidance: docTimes.guidanceYN,
-        task: l.tasks[0]?.taskName || "",
-        performanceLabel: scoreLabel(l.tasks[0]?.performanceScore as any),
-        performanceTime: docTimes.measTimeH,
-        coaching: l.content || "",
-      })),
+    payload = adaptationDailyLogPayload({
+      traineeName: trainee?.name || "", companyName: site.companyName,
+      start, end, logs, docTimes, holidays,
       signatures: { worker: sigs.worker, govAgent: sigs.govAgent },
-    };
+    });
     fileName = buildDocFileName("ADAPTATION_DAILY_LOG", { traineeName: trainee?.name, companyName: site.companyName, start, end });
 
   } else if (docType === "ADAPTATION_FINAL_EVAL") {
@@ -323,15 +283,11 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
     if (!ev) throw new DocPayloadError("종합평가를 먼저 작성해주세요.");
     if (!ev.isConfirmed) throw new DocPayloadError("종합평가를 최종 확정한 후 PDF를 생성할 수 있습니다.\n평가 페이지에서 '최종 확정' 버튼을 눌러주세요.", 400, { evalNotConfirmed: true });
 
-    payload = {
-      traineeName: trainee?.name || "",
-      companyName: site.companyName,
-      periodStart: start,
-      periodEnd:   end,
-      scores:   (ev?.scores as any)   || {},
-      comments: (ev?.comments as any) || {},
+    payload = adaptationFinalEvalPayload({
+      traineeName: trainee?.name || "", companyName: site.companyName,
+      start, end, ev,
       signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
-    };
+    });
     fileName = buildDocFileName("ADAPTATION_FINAL_EVAL", { traineeName: trainee?.name, companyName: site.companyName, start, end });
 
   } else {

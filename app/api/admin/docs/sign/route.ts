@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
+import { trainingDailyLogPayload, traineeFinalEvalPayload, adaptationDailyLogPayload, adaptationFinalEvalPayload } from "@/lib/docs/traineeDocPayload";
 import { resolveDocTrainee } from "@/lib/docs/traineeSiteGuard";
 import { sendEmailWithPdf } from "@/lib/email";
 import { sigRequirement } from "@/lib/docs/requiredSignatures";
@@ -16,11 +17,6 @@ import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { logAccess } from "@/lib/accessLog";
 
-function fmtDot(s: string) { return s.replace(/-/g, "."); }
-function fmtPeriod(s: string, e: string) { return `${fmtDot(s)} ~ ${fmtDot(e)}`; }
-function scoreLabel(n?: number | null) {
-  return n ? ({ 1: "매우못함", 2: "못함", 3: "보통", 4: "잘함", 5: "매우잘함" } as any)[n] || String(n) : "";
-}
 
 const DOC_LABELS: Record<string, string> = {
   ATTENDANCE_SHEET:      "직무지도원 출근부",
@@ -115,19 +111,12 @@ export async function POST(request: NextRequest) {
         where: { writerId: workerId, traineeId: trainee.id, trainingType: { in: ["PRE", "FIELD"] }, attendance: { workDate: { gte: start, lte: end } } },
         include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
       }) : [];
-      payload = {
+      payload = trainingDailyLogPayload({
         traineeName: trainee?.name || "", companyName: site.companyName,
-        periodPreText:   fmtPeriod(assignment.stepStart?.toISOString().slice(0, 10) || start, start),
-        periodFieldText: fmtPeriod(start, end),
-        rows: logs.map(l => ({
-          section: l.trainingType === "PRE" ? "PRE" : "FIELD",
-          date: l.attendance.workDate, attendanceStatus: l.evaluation || "출석",
-          trainingTime: docTimes.trainingTimeH, guidanceFlag: docTimes.guidanceYN,
-          task: l.tasks[0]?.taskName || "", taskLevelMeasured: `${scoreLabel(l.tasks[0]?.performanceScore)}\n(${docTimes.measTimeH})`,
-          evalGuidance: l.content || "",
-        })),
+        preStartYmd: assignment.stepStart?.toISOString().slice(0, 10) || start,
+        start, end, logs, docTimes,
         signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
-      };
+      });
       fileName = `훈련일지_${trainee?.name || "훈련생"}_${start}_${end}_서명완료.pdf`;
 
     } else if (docType === "TRAINEE_FINAL_EVAL") {
@@ -135,13 +124,12 @@ export async function POST(request: NextRequest) {
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
         where: { traineeId: trainee.id, writerId: workerId, evalType: "TRAINING" }, orderBy: { updatedAt: "desc" },
       }) : null;
-      payload = {
+      payload = traineeFinalEvalPayload({
         traineeName: trainee?.name || "", companyName: site.companyName,
-        preTrainingStart:  assignment.stepStart?.toISOString().slice(0, 10) || start,
-        preTrainingEnd:    start, fieldTrainingStart: start, fieldTrainingEnd: end,
-        scores: (ev?.scores as any) || {}, comments: (ev?.comments as any) || {},
+        preStartYmd: assignment.stepStart?.toISOString().slice(0, 10) || start,
+        start, end, ev,
         signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
-      };
+      });
       fileName = `훈련생평가_${trainee?.name || "훈련생"}_${start}_${end}_서명완료.pdf`;
 
     } else if (docType === "ADAPTATION_DAILY_LOG") {
@@ -150,15 +138,11 @@ export async function POST(request: NextRequest) {
         where: { writerId: workerId, traineeId: trainee.id, trainingType: "ADAPTATION", attendance: { workDate: { gte: start, lte: end } } },
         include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
       }) : [];
-      payload = {
-        traineeName: trainee?.name || "", companyName: site.companyName, periodStart: start, periodEnd: end,
-        entries: logs.map(l => ({
-          dateISO: l.attendance.workDate, attendance: l.evaluation || "출석",
-          workTime: docTimes.workTimeRange, guidance: docTimes.guidanceYN, task: l.tasks[0]?.taskName || "",
-          performanceLabel: scoreLabel(l.tasks[0]?.performanceScore), performanceTime: docTimes.measTimeH, coaching: l.content || "",
-        })),
+      payload = adaptationDailyLogPayload({
+        traineeName: trainee?.name || "", companyName: site.companyName,
+        start, end, logs, docTimes,
         signatures: { worker: sigs.worker, govAgent: sigs.govAgent },
-      };
+      });
       fileName = `적응지도일지_${trainee?.name || "훈련생"}_${start}_${end}_서명완료.pdf`;
 
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
@@ -166,11 +150,11 @@ export async function POST(request: NextRequest) {
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
         where: { traineeId: trainee.id, writerId: workerId, evalType: "ADAPTATION" }, orderBy: { updatedAt: "desc" },
       }) : null;
-      payload = {
-        traineeName: trainee?.name || "", companyName: site.companyName, periodStart: start, periodEnd: end,
-        scores: (ev?.scores as any) || {}, comments: (ev?.comments as any) || {},
+      payload = adaptationFinalEvalPayload({
+        traineeName: trainee?.name || "", companyName: site.companyName,
+        start, end, ev,
         signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
-      };
+      });
       fileName = `적응지도평가_${trainee?.name || "훈련생"}_${start}_${end}_서명완료.pdf`;
 
     } else {
