@@ -171,8 +171,11 @@ export async function POST(req: NextRequest) {
     select: { workerName: true, phoneNumber: true, isTemporary: true },
   });
 
-  await prisma.employmentContract.update({
-    where: { id: contract.id },
+  // ★원자적 서명 전이: PENDING→SIGNED를 updateMany 조건부로 실행해, 같은 링크 동시 POST 시
+  //  정확히 1건만 성공하게 한다. count=0(이미 다른 요청이 서명)이면 아래 부작용(배정 전이·급여계약·
+  //  임시비번/알림)을 재실행하지 않고 409로 종료 — 중복 부작용 방지.
+  const claimed = await prisma.employmentContract.updateMany({
+    where: { id: contract.id, status: "PENDING" },
     data: {
       status: "SIGNED",
       workerSignedAt: new Date(),
@@ -183,6 +186,9 @@ export async function POST(req: NextRequest) {
       ...(mergedTemplateData ? { templateData: mergedTemplateData } : {}),
     },
   });
+  if (claimed.count === 0) {
+    return NextResponse.json({ success: false, message: "이미 서명이 완료된 계약서입니다." }, { status: 409 });
+  }
 
   // ── 계약 ↔ 배정 write-back (assignment-pipeline-design.md §6) ──
   // 연결된 배정이 있으면 계약 근무정보를 배정으로 반영하고 ASSIGNED→CONFIRMED(연결 대기)로 전이.
