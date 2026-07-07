@@ -387,8 +387,8 @@ function dailyLog(kind: "TRAINING" | "ADAPTATION", p: any): Promise<Buffer> {
     cell(doc, x + c1, y, c2, hh, "사업체명", { bold: true, size: 9, fill: "#d9d9d9" });
     cell(doc, x + c1 + c2, y, c3, hh, "적응지도기간", { bold: true, size: 9, fill: "#d9d9d9" });
     y += hh;
-    // 지도일수 = 실제 작성된 일지 수(표에 보이는 행 수와 동일).
-    const wd = p.workingDays != null ? p.workingDays : ((Array.isArray(p.entries) ? p.entries.length : 0) || null);
+    // 적응지도기간 뒤 (N)일 = 전체기간 평일 수. 종합 평가기록부와 동일 기준(countWeekdays)으로 통일 — 내용 유무와 무관하게 표시.
+    const wd = countWeekdays(normYmd(p.periodStart), normYmd(p.periodEnd));
     const days = wd != null ? ` (${wd})일` : "";
     cell(doc, x, y, c1, 24, p.traineeName ?? "", { size: 9 });
     cell(doc, x + c1, y, c2, 24, p.companyName ?? "", { size: 9 });
@@ -409,9 +409,9 @@ function dailyLog(kind: "TRAINING" | "ADAPTATION", p: any): Promise<Buffer> {
     // 훈련기간 칸: 사전/현장 2행
     const sub = 28; // 라벨 칸 폭
     cell(doc, x + c1 + c2, y, sub, vh / 2, "사전", { size: 8.5 });
-    cell(doc, x + c1 + c2 + sub, y, c3 - sub, vh / 2, p.periodPreText ?? "", { align: "left", size: 8.5 });
+    cell(doc, x + c1 + c2 + sub, y, c3 - sub, vh / 2, p.periodPreText ?? "", { align: "center", size: 8.5 });
     cell(doc, x + c1 + c2, y + vh / 2, sub, vh / 2, "현장", { size: 8.5 });
-    cell(doc, x + c1 + c2 + sub, y + vh / 2, c3 - sub, vh / 2, p.periodFieldText ?? "", { align: "left", size: 8.5 });
+    cell(doc, x + c1 + c2 + sub, y + vh / 2, c3 - sub, vh / 2, p.periodFieldText ?? "", { align: "center", size: 8.5 });
     y += vh;
   }
   y += 12;
@@ -540,9 +540,9 @@ function finalEval(kind: "TRAINEE" | "ADAPTATION", p: any): Promise<Buffer> {
     cell(doc, x, y, A, valH, p.traineeName ?? "", { size: 9 });
     cell(doc, x + A, y, B - A, valH, p.companyName ?? "", { size: 9 });
     cell(doc, x + B, y, slw, subH, "사전", { vertical: true, size: 8.5 });
-    cell(doc, x + B + slw, y, W - B - slw, subH, rangeDot(p.preTrainingStart, p.preTrainingEnd), { align: "left", size: 8.5 });
+    cell(doc, x + B + slw, y, W - B - slw, subH, rangeDot(p.preTrainingStart, p.preTrainingEnd), { align: "center", size: 8.5 });
     cell(doc, x + B, y + subH, slw, subH, "현장", { vertical: true, size: 8.5 });
-    cell(doc, x + B + slw, y + subH, W - B - slw, subH, rangeDot(p.fieldTrainingStart, p.fieldTrainingEnd), { align: "left", size: 8.5 });
+    cell(doc, x + B + slw, y + subH, W - B - slw, subH, rangeDot(p.fieldTrainingStart, p.fieldTrainingEnd), { align: "center", size: 8.5 });
     y += valH;
   } else {
     const valH = 36;
