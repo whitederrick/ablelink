@@ -408,19 +408,20 @@ export async function GET(req: NextRequest) {
     }
   } catch (e: any) { errors.push(`진척독려: ${e.message}`); }
 
-  // ── 6. 만료 배정 자동 종료(ENDED) — endDate 경과한 ACTIVE 배정을 ENDED로 전환 ──
-  //   endDate가 어제까지인 배정은 오늘부터 '종료'. 상태 자체를 정리해 '현재 배정' 조회에서 빠지고,
-  //   과거문서 재제출은 ENDED 딥링크로만 열리게 한다(clock-in/문서 기간가드와 별개의 상태 정합).
+  // ── 6. 만료 배정 자동 종료(ENDED) — endDate 경과한 점유 배정(ACTIVE/CONFIRMED/ASSIGNED)을 ENDED로 전환 ──
+  //   endDate가 어제까지인 배정은 오늘부터 '종료'. 상태 자체를 정리해 '현재 배정' 조회·이중배정 점유에서 빠지고,
+  //   과거문서 재제출은 ENDED 딥링크/폴백으로 열린다. ASSIGNED/CONFIRMED로 만료된 좀비 배정도 함께 정리(W5).
   //   endDate=오늘(종료 당일)은 아직 근무 중이므로 제외 — cutoff=오늘 00:00 KST 미만만.
   try {
     const todayKstStart = new Date(`${kstDateStr()}T00:00:00+09:00`);
+    const EXPIRE_STATUSES = ["ACTIVE", "CONFIRMED", "ASSIGNED"] as const;
     const expired = await prisma.siteAssignment.findMany({
-      where: { status: "ACTIVE", endDate: { lt: todayKstStart } }, // null endDate는 lt에 매칭 안 됨(무기한 유지)
+      where: { status: { in: [...EXPIRE_STATUSES] }, endDate: { lt: todayKstStart } }, // null endDate는 lt에 매칭 안 됨(무기한 유지)
       select: { id: true, workerId: true, endDate: true, site: { select: { companyName: true } } },
     });
     if (expired.length) {
       const res = await prisma.siteAssignment.updateMany({
-        where: { id: { in: expired.map(a => a.id) }, status: "ACTIVE" },
+        where: { id: { in: expired.map(a => a.id) }, status: { in: [...EXPIRE_STATUSES] } },
         data: { status: "ENDED", endedAt: now, statusReason: "계약기간 종료(자동)" },
       });
       assignmentsEnded = res.count;

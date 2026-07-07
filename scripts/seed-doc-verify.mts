@@ -5,6 +5,7 @@
 //  실행: npx tsx --env-file=C:/myProjects/ablelink/.env scripts/seed-doc-verify.mts
 import { prisma } from "../lib/prisma";
 import { computeWorkTimes, kstWallTimeToInstant } from "../lib/workSchedule";
+import { assertWritableDb } from "./_dbGuard";
 
 // 대상 배정: 강도윤(1:1, placement1) · 서아린(1:多, placement2). loginId로 최신 배정 선택.
 const TARGET_LOGINIDS = ["01070000000", "01070000001"];
@@ -63,6 +64,7 @@ function evalScores() {
 }
 
 async function main() {
+  assertWritableDb("문서검증 시드(일지 삭제·배정 상태변경 포함)"); // 운영 DB 무프롬프트 실행 방지
   let totalAtt = 0, totalLog = 0, totalEval = 0;
   const recipe: string[] = [];
 
