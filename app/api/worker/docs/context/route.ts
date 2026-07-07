@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { getKstDateString } from "@/lib/time";
 import { effectiveTrainingType } from "@/lib/serviceStep";
 
@@ -25,31 +26,42 @@ export async function GET(req: NextRequest) {
   //  명시 배정(딥링크/쿠키)이면 종료(ENDED)여도 그 배정으로 — ACTIVE+오늘기간을 걸면 ENDED 딥링크가
   //  data:null이 돼 문서페이지 카드/제출버튼이 안 뜨는 데드엔드(generate/preview/site-current와 통일).
   //  소유(workerId)+근무발생상태만 검증. 미명시면 최신 활성.
-  const assignment = await prisma.siteAssignment.findFirst({
-    where: selAssignmentId != null
-      ? { id: selAssignmentId, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } }
-      : {
-          workerId,
-          status: "ACTIVE",
-          startDate: { lte: today },
-          OR: [{ endDate: null }, { endDate: { gte: today } }],
-        },
-    select: {
-      serviceStep: true,
-      adaptationStartDate: true,
-      site: {
-        select: {
-          companyName: true,
-          businessContactName: true,
-          businessContactPhone: true,
-          businessContactEmail: true,
-          contacts: { where: { isActive: true }, select: { name: true, phoneNumber: true, email: true, role: true }, orderBy: { id: "asc" } },
-          trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true, name: true, gender: true } },
-        },
+  const selectCtx = {
+    serviceStep: true,
+    adaptationStartDate: true,
+    site: {
+      select: {
+        companyName: true,
+        businessContactName: true,
+        businessContactPhone: true,
+        businessContactEmail: true,
+        contacts: { where: { isActive: true }, select: { name: true, phoneNumber: true, email: true, role: true }, orderBy: { id: "asc" } },
+        trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true, name: true, gender: true } },
       },
     },
-    orderBy: { startDate: "desc" },
-  });
+  } satisfies Prisma.SiteAssignmentSelect;
+  const activeWhere = {
+    workerId,
+    status: "ACTIVE",
+    startDate: { lte: today },
+    OR: [{ endDate: null }, { endDate: { gte: today } }],
+  } satisfies Prisma.SiteAssignmentWhereInput;
+  // 명시 배정(선택쿠키/딥링크)이 유효하면 그걸로(ENDED 과거문서 포함). 유효하지 않으면(재시드로 사라진 id·남의 배정 등)
+  //  data:null로 죽지 말고 최신 활성 배정으로 폴백 — 낡은 선택 쿠키가 문서화면 세트/훈련생을 비우지 않도록.
+  let assignment = selAssignmentId != null
+    ? await prisma.siteAssignment.findFirst({
+        where: { id: selAssignmentId, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } },
+        select: selectCtx,
+        orderBy: { startDate: "desc" },
+      })
+    : null;
+  if (!assignment) {
+    assignment = await prisma.siteAssignment.findFirst({
+      where: activeWhere,
+      select: selectCtx,
+      orderBy: { startDate: "desc" },
+    });
+  }
 
   const noStore = { headers: { "Cache-Control": "no-store" } };
   if (!assignment?.site) return NextResponse.json({ success: true, data: null }, noStore);

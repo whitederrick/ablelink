@@ -42,13 +42,19 @@ export async function GET(request: NextRequest) {
     });
     // 딥링크가 배정을 '명시'하면 종료(ENDED)여도 그 배정으로(과거문서 미리보기·재제출) — generate/submit과 통일.
     //  ★근무 발생 가능 상태(ASSIGNED/CONFIRMED/ACTIVE/ENDED)만 허용 — 미근무 배정(REQUESTED 등) 문서 차단.
-    const assignment = selAssignmentId != null
-      ? await prisma.siteAssignment.findFirst({ where: { id: selAssignmentId, workerId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE","ENDED"] } }, include: { site:true, assignedByManager:{ select:{ signatureUrl:true, displayName:true } } } })
-      : await prisma.siteAssignment.findFirst({
-          where: { workerId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] } },
-          include: { site:true, assignedByManager:{ select:{ signatureUrl:true, displayName:true } } },
-          orderBy: { assignedAt:"desc" },
-        });
+    const includeSel = { site:true, assignedByManager:{ select:{ signatureUrl:true, displayName:true } } } as const;
+    // 명시 배정(선택쿠키/딥링크)이 유효하면 그걸로. 유효하지 않으면(재시드로 사라진 id·남의 배정 등)
+    //  하드실패 대신 최신 활성 배정으로 폴백 — 낡은 선택 쿠키 하나가 문서화면 전체를 막지 않도록.
+    let assignment = selAssignmentId != null
+      ? await prisma.siteAssignment.findFirst({ where: { id: selAssignmentId, workerId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE","ENDED"] } }, include: includeSel })
+      : null;
+    if (!assignment) {
+      assignment = await prisma.siteAssignment.findFirst({
+        where: { workerId, status:{ in:["ASSIGNED","CONFIRMED","ACTIVE"] } },
+        include: includeSel,
+        orderBy: { assignedAt:"desc" },
+      });
+    }
     if (!assignment?.site) return NextResponse.json({ success:false, message:"배정된 현장이 없습니다." }, { status:400 });
 
     let adminForSign: any = assignment.assignedByManager;
