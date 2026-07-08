@@ -3,6 +3,7 @@
 
 export const runtime = "nodejs";
 
+import { getRateLimitIp } from "@/lib/clientIp";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createClient } from "@supabase/supabase-js";
@@ -59,7 +60,7 @@ async function ensureBucket(supabase: ReturnType<typeof getSupabaseAdmin>) {
 export async function POST(req: NextRequest) {
   try {
     // 미인증 공개 엔드포인트 — IP당 업로드 횟수 제한 (스토리지 남용/DoS 방어)
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const ip = getRateLimitIp(req) ?? "unknown";
     const rl = await checkRateLimit(`upload-business-doc:${ip}`);
     if (!rl.allowed) {
       const secs = Math.ceil((rl.retryAfterMs ?? 0) / 1000);

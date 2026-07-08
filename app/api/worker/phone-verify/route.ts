@@ -4,6 +4,7 @@
 
 export const runtime = "nodejs";
 
+import { getRateLimitIp } from "@/lib/clientIp";
 import { NextResponse } from "next/server";
 import { randomInt, createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     }
 
     // Rate limit: IP당 + 전화번호당 각각 제한
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const ip = getRateLimitIp(request) ?? "unknown";
     const rlIp    = await checkRateLimit(`otp:${ip}`);
     const rlPhone = await checkRateLimit(`otp-phone:${phone}`);
     if (!rlIp.allowed || !rlPhone.allowed) {

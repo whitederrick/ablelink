@@ -3,6 +3,7 @@
 
 export const runtime = "nodejs";
 
+import { getRateLimitIp } from "@/lib/clientIp";
 import { NextRequest, NextResponse } from "next/server";
 import { randomInt } from "crypto";
 import { prisma } from "@/lib/prisma";
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
   const session = await getWorkerSessionFromReq(req);
   if (!session) return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = getRateLimitIp(req) ?? "unknown";
   const rl = await checkRateLimit(`email-change:${ip}:${session.workerId}`);
   if (!rl.allowed) {
     return NextResponse.json({ success: false, message: "잠시 후 다시 시도해주세요." }, { status: 429 });

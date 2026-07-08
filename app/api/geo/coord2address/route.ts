@@ -3,6 +3,7 @@
 
 export const runtime = "nodejs";
 
+import { getRateLimitIp } from "@/lib/clientIp";
 import { NextResponse, NextRequest } from "next/server";
 import { checkRateLimit } from "@/lib/rateLimit";
 
@@ -47,7 +48,7 @@ function inRange(n: number, min: number, max: number) {
 
 export async function GET(request: NextRequest) {
   try {
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const ip = getRateLimitIp(request) ?? "unknown";
     const rl = await checkRateLimit(`geo-coord:${ip}`);
     if (!rl.allowed) {
       return NextResponse.json({ success: false, message: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });

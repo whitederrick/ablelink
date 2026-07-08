@@ -3,6 +3,7 @@
 
 export const runtime = "nodejs";
 
+import { getRateLimitIp } from "@/lib/clientIp";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
     if (action === "verify-email") {
       const { code } = body;
       // 브루트포스 방지: userId당 5분 내 5회 제한
-      const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+      const ip = getRateLimitIp(req) ?? "unknown";
       const rl = await checkRateLimit(`verify-email:${ip}:${session.workerId}`);
       if (!rl.allowed) {
         return NextResponse.json(

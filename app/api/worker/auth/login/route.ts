@@ -4,6 +4,7 @@
 
 export const runtime = "nodejs";
 
+import { getRateLimitIp } from "@/lib/clientIp";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     }
 
     // 🔐 Rate limiting: IP + loginId 조합으로 제한
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const ip = getRateLimitIp(request) ?? "unknown";
     const rateLimitKey = `login:${ip}:${loginId}`;
     const rl = await checkRateLimit(rateLimitKey);
 

@@ -1,6 +1,7 @@
 // 위탁기관 관리자 전용 로그인 (Manager 테이블 — managers)
 export const runtime = "nodejs";
 
+import { getRateLimitIp } from "@/lib/clientIp";
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
@@ -9,7 +10,7 @@ import { checkRateLimit } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const ip = getRateLimitIp(req) ?? "unknown";
     const rl = await checkRateLimit(`manager-login:${ip}`);
     if (!rl.allowed) {
       const secs = Math.ceil((rl.retryAfterMs ?? 0) / 1000);

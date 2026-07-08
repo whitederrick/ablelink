@@ -11,7 +11,7 @@ import { checkAgencyPlanAccess, isSelfManagedAgency } from "@/lib/planGuard";
 import { validateSignatureImage } from "@/lib/imageValidation";
 import { signatureDisplayUrl } from "@/lib/signatureImage";
 import { checkRateLimit } from "@/lib/rateLimit";
-import { getClientIp } from "@/lib/clientIp";
+import { getRateLimitIp } from "@/lib/clientIp";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // 공개 API(인증 없음) — IP 기준 rate limit(토큰 열거·스토리지 남용 방어).
   //  H1: 서명 페이지 진입(GET)은 정상 트래픽 — 공유 IP(사무실 NAT/모바일 CGNAT) 뒤 여러 담당자가 월말에
   //  링크를 열 수 있어 로그인용(10/15분·30분차단) 정책을 공유하면 오차단된다. 느슨한 예산 + 짧은 차단.
-  const rl = await checkRateLimit(`sign-get:${getClientIp(request)}`, { max: 60, windowSec: 15 * 60, blockSec: 5 * 60 });
+  const rl = await checkRateLimit(`sign-get:${getRateLimitIp(request)}`, { max: 60, windowSec: 15 * 60, blockSec: 5 * 60 });
   if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
 
   const { token } = await params;
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
   // 공개 API(인증 없음) — IP 기준 rate limit(스토리지 업로드 DoS·남용 방어).
   //  H1: 제출(POST)은 쓰기라 GET보다 타이트하게 유지하되, 공유 IP 다수 담당자 서명 감안해 로그인 정책보다는 완화.
-  const rl = await checkRateLimit(`sign-post:${getClientIp(request)}`, { max: 30, windowSec: 15 * 60, blockSec: 10 * 60 });
+  const rl = await checkRateLimit(`sign-post:${getRateLimitIp(request)}`, { max: 30, windowSec: 15 * 60, blockSec: 10 * 60 });
   if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
 
   const { token } = await params;
