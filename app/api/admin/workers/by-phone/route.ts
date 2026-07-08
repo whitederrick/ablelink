@@ -7,8 +7,9 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { AssignStatus } from "@prisma/client";
 
-const ENGAGED = ["ASSIGNED", "CONFIRMED", "ACTIVE"] as const;
+const ENGAGED: AssignStatus[] = ["ASSIGNED", "CONFIRMED", "ACTIVE"];
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
         phoneNumber: true,
         status: true,
         assignments: {
-          where: { agencyId, status: { in: ENGAGED as unknown as any[] } },
+          where: { agencyId, status: { in: ENGAGED } },
           select: { status: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
           orderBy: { startDate: "desc" },
           take: 1,

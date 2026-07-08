@@ -9,10 +9,11 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { AssignStatus } from "@prisma/client";
 
-const ENGAGED = ["ASSIGNED", "CONFIRMED", "ACTIVE"];
+const ENGAGED: AssignStatus[] = ["ASSIGNED", "CONFIRMED", "ACTIVE"];
 // '근무 이력'으로 인정하는 상태(요청/거절/탈락 제외)
-const HISTORY = ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"];
+const HISTORY: AssignStatus[] = ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"];
 const FAR = 8640000000000000;
 
 export async function GET(request: NextRequest) {
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
         phoneNumber: true,
         // 근무 이력 전체(현장·업종 포함) — 이 현장/유사 업종 경험 계산용
         assignments: {
-          where: { status: { in: HISTORY as any } },
+          where: { status: { in: HISTORY } },
           select: {
             siteId: true, status: true, startDate: true, endDate: true,
             site: { select: { companyName: true, businessType: true } },
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
     let items = workers.map((w) => {
       const all = w.assignments;
       // 현재 진행 중 배정(이 기관 한정 아님 — 가용성 판단용)
-      const engagedAsgn = all.find((a) => ENGAGED.includes(String(a.status))) ?? null;
+      const engagedAsgn = all.find((a) => ENGAGED.includes(a.status)) ?? null;
       const sameSite = targetSiteId ? all.some((a) => a.siteId.toString() === targetSiteId) : false;
       const sameBizType = targetBizType ? all.some((a) => a.site?.businessType === targetBizType) : false;
       return {

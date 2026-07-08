@@ -74,6 +74,8 @@ export interface AuditEntry {
   entityId?: string | number | bigint | null;
   action: string; // create | update | delete | …
   summary?: string | null;
+  // Prisma update input(스칼라 diff 대상)·중첩 구조 데이터를 캐스트 없이 받도록 완화.
+  //  내부에서 scalarKeysOf/maskSensitive가 스칼라만 추려 안전하게 처리한다.
   before?: Record<string, unknown> | null; // 변경 전 스칼라(auditSnapshot 결과)
   after?: Record<string, unknown> | null;  // 보통 args.data
   payload?: Prisma.InputJsonValue;         // 직접 지정(override)

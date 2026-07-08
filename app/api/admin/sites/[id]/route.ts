@@ -307,7 +307,7 @@ export async function PATCH(
       },
     });
 
-    await audit(session, { entityType: "Site", entityId: siteId, action: "update", before: auditBefore, after: data as any });
+    await audit(session, { entityType: "Site", entityId: siteId, action: "update", before: auditBefore, after: data });
     return NextResponse.json({ success: true, item: toRow(updated) });
   } catch (e: any) {
     if (e instanceof Response) return e;

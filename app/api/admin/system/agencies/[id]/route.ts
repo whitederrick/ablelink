@@ -63,7 +63,7 @@ export async function PATCH(
     await prisma.agency.update({ where: { id: agency.id }, data: updateData });
 
 
-    await audit(scope, { entityType: "Agency", entityId: agency.id, action: "update", before: auditBefore, after: updateData as any });
+    await audit(scope, { entityType: "Agency", entityId: agency.id, action: "update", before: auditBefore, after: updateData });
 
     return NextResponse.json({ success: true, message: "위탁기관 정보가 업데이트되었습니다." });
   } catch (e: any) {

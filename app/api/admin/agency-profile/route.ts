@@ -173,7 +173,7 @@ export async function PATCH(req: NextRequest) {
       throw e;
     }
 
-    await audit(scope, { entityType: "Agency", entityId: scope.agencyId, action: "update", before: auditBefore, after: auditData as any });
+    await audit(scope, { entityType: "Agency", entityId: scope.agencyId, action: "update", before: auditBefore, after: auditData });
     return NextResponse.json({ success: true, message: "사업주 정보가 저장되었습니다." });
   } catch (e: any) {
     if (e instanceof Response) return e;

@@ -52,7 +52,7 @@ export async function PATCH(
         await syncPlacementForStatus(tx, trainee.id, status, trainee.currentSiteId, now);
       }
     });
-    await audit(scope, { entityType: "Trainee", entityId: trainee.id, action: "update", before: auditBefore, after: updateData as any });
+    await audit(scope, { entityType: "Trainee", entityId: trainee.id, action: "update", before: auditBefore, after: updateData });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     if (e instanceof Response) return e;

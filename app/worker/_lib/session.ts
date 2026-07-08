@@ -49,11 +49,13 @@ export async function verifyWorkerToken(token: string): Promise<WorkerPayload | 
   const secret = getSecret();
   try {
     const { payload } = await jwtVerify(token, secret, { audience: WORKER_TOKEN_AUD });
-    if ((payload as any).role !== "WORKER") return null;
+    // jose JWTPayload는 커스텀 claim을 unknown으로 둔다 → 발급 시 넣은 claim 형태로 한 번만 좁힌다.
+    const claims = payload as { role?: unknown; workerId?: unknown; workerName?: unknown; isTemporary?: unknown };
+    if (claims.role !== "WORKER") return null;
     return {
-      workerId: String((payload as any).workerId),
-      workerName: String((payload as any).workerName),
-      isTemporary: Boolean((payload as any).isTemporary),
+      workerId: String(claims.workerId),
+      workerName: String(claims.workerName),
+      isTemporary: Boolean(claims.isTemporary),
     };
   } catch {
     return null;

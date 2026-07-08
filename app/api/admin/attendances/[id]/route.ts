@@ -55,7 +55,7 @@ export async function PATCH(
 
     const auditBefore = await auditSnapshot("DailyAttendance", { id: record.id }, updateData);
     await prisma.dailyAttendance.update({ where: { id: record.id }, data: updateData });
-    await audit(scope, { entityType: "DailyAttendance", entityId: record.id, action: "update", before: auditBefore, after: updateData as any });
+    await audit(scope, { entityType: "DailyAttendance", entityId: record.id, action: "update", before: auditBefore, after: updateData });
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

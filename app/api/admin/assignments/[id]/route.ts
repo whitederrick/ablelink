@@ -146,7 +146,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       },
     });
 
-    await audit(session, { entityType: "SiteAssignment", entityId: assignmentId, action: "update", before: auditBefore, after: updateData as any });
+    await audit(session, { entityType: "SiteAssignment", entityId: assignmentId, action: "update", before: auditBefore, after: updateData });
 
     const times = computeWorkTimes(workType, commuteGuidanceIncluded, customWorkStart, customWorkEnd);
 
