@@ -78,7 +78,14 @@ function cell(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: numbe
     return;
   }
   const tw = w - pad * 2;
-  const th = doc.heightOfString(t, { width: tw, align, lineGap });
+  // 셀 높이를 넘는 줄바꿈(오버플로)이면 폰트를 줄여 셀 안에 맞춘다. 넘지 않으면 기존과 동일(무변화).
+  let fs = size;
+  let th = doc.heightOfString(t, { width: tw, align, lineGap });
+  while (th > h - 1 && fs > 6) {
+    fs = Math.max(6, fs - 0.5);
+    doc.fontSize(fs);
+    th = doc.heightOfString(t, { width: tw, align, lineGap });
+  }
   const ty = y + Math.max(0, (h - th) / 2);
   doc.text(t, x + pad, ty, { width: tw, align, lineGap });
 }
@@ -668,6 +675,7 @@ function payslip(p: any): Promise<Buffer> {
     ["배치형태", p.placementType ?? ""],
     ["배치일", p.placementDate ?? ""],
   ];
+  if (p.payAccount) basic.push(["지급계좌", p.payAccount]);
   const rowH = mm(7.5);
   const bodyRows = Math.max(basic.length, payRows.length, deductRows.length);
   const bodyTop = y, bodyH = bodyRows * rowH;
@@ -703,11 +711,25 @@ function payslip(p: any): Promise<Buffer> {
   // ── 비고(본문 전체 높이 1셀) ──
   const notes: string[] = ["[지급내역]"];
   for (const r of payRows) if (r.method) notes.push(`○ ${r.name}: ${r.method}`);
-  notes.push("", "[공제내역]", "○ 소득세: 근로소득 간이세액표", "○ 주민세: 소득세의 10%", "○ 4대보험: 연도별 요율 적용");
-  if (Number(p.employerIndustrial) > 0) notes.push(`○ 산재보험: ${Math.round(Number(p.employerIndustrial)).toLocaleString("ko-KR")}원 (전액 사업주 부담, 급여 공제 아님)`);
+  // 가산시간 분해(산정 근거 투명화)
+  const tParts: string[] = [];
+  if (Number(p.overtimeHours) > 0) tParts.push(`연장 ${p.overtimeHours}h`);
+  if (Number(p.nightHours) > 0) tParts.push(`야간 ${p.nightHours}h`);
+  if (Number(p.holidayHours) > 0) tParts.push(`휴일 ${p.holidayHours}h`);
+  if (tParts.length) notes.push(`○ 가산시간: ${tParts.join(" · ")}`);
+  notes.push("", "[공제내역]");
+  notes.push(p.taxYear ? `○ 소득세: ${p.taxYear}년 간이세액표` : "○ 소득세: 근로소득 간이세액표");
+  notes.push("○ 주민세: 소득세의 10%");
+  notes.push(p.rateYear ? `○ 4대보험: ${p.rateYear}년 요율 적용` : "○ 4대보험: 연도별 요율 적용");
+  if (Number(p.pensionBase) > 0) notes.push(`○ 국민연금 기준소득월액: ${won(p.pensionBase)}원`);
+  if (Number(p.employerIndustrial) > 0) notes.push(`○ 산재보험: ${won(p.employerIndustrial)}원 (전액 사업주 부담, 급여 공제 아님)`);
   notes.push("", "※ 통상시급은 근로계약서에 따름");
   doc.lineWidth(0.6).rect(xD, bodyTop, dW, bodyH).stroke("#000");
-  doc.font("KR").fontSize(7.5).fillColor("#000").text(notes.join("\n"), xD + 4, bodyTop + 4, { width: dW - 8, align: "left", lineGap: 1.5 });
+  // 비고 줄 수가 많으면 박스 높이에 맞춰 폰트 자동 축소(박스 밖 오버플로 방지).
+  const noteStr = notes.join("\n");
+  let nfs = 7.5;
+  while (doc.font("KR").fontSize(nfs).heightOfString(noteStr, { width: dW - 8, lineGap: 1.5 }) > bodyH - 8 && nfs > 5) nfs -= 0.25;
+  doc.font("KR").fontSize(nfs).fillColor("#000").text(noteStr, xD + 4, bodyTop + 4, { width: dW - 8, align: "left", lineGap: 1.5 });
 
   y = bodyTop + bodyH;
 
@@ -729,9 +751,18 @@ function payslip(p: any): Promise<Buffer> {
   cell(doc, xD, y, dW, nh, "귀하의 노고에 감사드립니다.", { bold: true, size: 9 });
   y += nh;
 
-  // ── 기관명 ──
+  // ── 기관명 + 사업주 정보 ──
   y += mm(8);
   doc.font("KR-Bold").fontSize(13).fillColor("#000").text(p.agencyName ?? "", x, y, { width: W, align: "center" });
+  y += mm(6);
+  const empLine1: string[] = [];
+  if (p.employerRepName) empLine1.push(`대표 ${p.employerRepName}`);
+  if (p.employerBizNo) empLine1.push(`사업자등록번호 ${p.employerBizNo}`);
+  const empLine2: string[] = [];
+  if (p.employerAddress) empLine2.push(String(p.employerAddress));
+  if (p.employerPhone) empLine2.push(String(p.employerPhone));
+  if (empLine1.length) { doc.font("KR").fontSize(8.5).fillColor("#444").text(empLine1.join("   ·   "), x, y, { width: W, align: "center" }); y += mm(4.5); }
+  if (empLine2.length) { doc.font("KR").fontSize(8.5).fillColor("#444").text(empLine2.join("   ·   "), x, y, { width: W, align: "center" }); }
 
   return toBuffer(doc);
 }

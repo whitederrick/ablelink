@@ -10,6 +10,22 @@ export interface PayslipMeta {
   workerBirth?: string; // 생년월일
   yearMonth: string; // 귀속월 YYYY-MM
   payDate?: string; // 지급일 YYYY-MM-DD
+  // 사업주 정보(명세서 하단 표기) — Agency에서 주입
+  employerBizNo?: string | null;   // 사업자등록번호
+  employerRepName?: string | null; // 대표자명
+  employerAddress?: string | null;
+  employerPhone?: string | null;
+  // 지급계좌(마스킹) — Worker에서 주입
+  bankName?: string | null;
+  accountNumber?: string | null;
+  accountHolder?: string | null;
+}
+
+// 계좌번호 마스킹 — 끝 4자리만 노출(민감정보 최소화). 명세서에 원문 계좌 전체 미표기.
+function maskAccount(acc?: string | null): string {
+  const digits = String(acc ?? "").replace(/\D/g, "");
+  if (!digits) return "";
+  return digits.length <= 4 ? digits : `****${digits.slice(-4)}`;
 }
 
 export interface PayslipItemData {
@@ -73,5 +89,20 @@ export function buildPayslipPayload(meta: PayslipMeta, item: PayslipItemData) {
     netPay: Number(item.netPay),
     // 산재보험 — 전액 사업주 부담(워커 공제 아님). 비고 표기용.
     employerIndustrial: Number(b.insurance?.employerIndustrial ?? 0),
+    // 지급계좌(마스킹) — 은행 끝4자리(예금주)
+    payAccount: meta.bankName && (meta.accountNumber || meta.accountHolder)
+      ? `${meta.bankName} ${maskAccount(meta.accountNumber)}${meta.accountHolder ? ` (${meta.accountHolder})` : ""}`.trim()
+      : "",
+    // 사업주 정보(명세서 하단)
+    employerBizNo: meta.employerBizNo ?? "",
+    employerRepName: meta.employerRepName ?? "",
+    employerAddress: meta.employerAddress ?? "",
+    employerPhone: meta.employerPhone ?? "",
+    // 공제·산정 근거(투명화) — 비고 표기용
+    pensionBase: Number(b.pensionBase ?? 0),
+    rateYear: b.insurance?.rateYear ?? null,
+    taxYear: b.insurance?.taxYear ?? null,
+    nightHours: Number(b.nightHours ?? 0),
+    holidayHours: Number(b.holidayHours ?? 0),
   };
 }

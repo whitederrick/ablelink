@@ -18,8 +18,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ item
     const item = await prisma.payrollItem.findUnique({
       where: { id: BigInt(itemId) },
       include: {
-        user: { select: { workerName: true, birthDate: true } },
-        run: { select: { agencyId: true, yearMonth: true, finalizedAt: true, agency: { select: { name: true } } } },
+        user: { select: { workerName: true, birthDate: true, bankName: true, accountNumber: true, accountHolder: true } },
+        run: { select: { agencyId: true, yearMonth: true, finalizedAt: true, agency: { select: { name: true, businessNumber: true, representativeName: true, address: true, phoneNumber: true } } } },
       },
     });
 
@@ -38,6 +38,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ item
         workerBirth: item.user?.birthDate ?? "",
         yearMonth: item.run.yearMonth,
         payDate: item.run.finalizedAt ? item.run.finalizedAt.toISOString().slice(0, 10) : "",
+        employerBizNo: item.run.agency?.businessNumber ?? null,
+        employerRepName: item.run.agency?.representativeName ?? null,
+        employerAddress: item.run.agency?.address ?? null,
+        employerPhone: item.run.agency?.phoneNumber ?? null,
+        bankName: item.user?.bankName ?? null,
+        accountNumber: item.user?.accountNumber ?? null,
+        accountHolder: item.user?.accountHolder ?? null,
       },
       {
         grossPay: Number(item.grossPay),
