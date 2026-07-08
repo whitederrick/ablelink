@@ -136,86 +136,94 @@ export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: 
     ? todayAttendances.find((t) => t.assignmentId === activeAssignment.id)
     : todayAttendances[0];
 
-  const [premiumStatus, docAccessStatus] = await Promise.all([
-    getWorkerPremiumStatus(workerId),
-    getWorkerDocAccess(workerId),
-  ]);
-
-  // ── 알림 + 알람설정 ──
-  // 홈 알림 잔존 규칙: 미확인은 계속 노출, 확인(읽음)한 것은 5일까지만.
+  // ── 이하 섹션은 전부 workerId(+ 위에서 정해진 todayAttendance)에만 의존·상호 독립 →
+  //    순차 await(쿼리 ~12개 직렬)로 홈 TTFB가 늘어지던 것을 한 번에 병렬화.
   const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
-  const rawNotices: any[] = await (prisma as any).workerNotice.findMany({
-    where: { workerId, OR: [{ readAt: null }, { readAt: { gte: fiveDaysAgo } }] },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-    select: { id: true, title: true, body: true, type: true, kind: true, yearMonth: true, link: true, readAt: true, createdAt: true },
-  });
-  const notices = rawNotices.map((n: any) => ({
-    id: n.id.toString(), title: n.title, body: n.body, type: n.type, kind: n.kind ?? "NOTICE_INDIVIDUAL",
-    yearMonth: n.yearMonth, link: n.link ?? null, read: n.readAt !== null, createdAt: n.createdAt.toISOString(),
-  }));
-  // 벨 미확인 수는 take 20 목록이 아니라 전체 기준으로 정확히 산출(>20건일 때 과소표기 방지)
-  const unreadCount: number = await (prisma as any).workerNotice.count({ where: { workerId, readAt: null } });
-
-  const setting = await prisma.workerNotificationSetting.findUnique({
-    where: { workerId },
-    select: { clockInAlertMinutes: true, clockOutAlertMinutes: true },
-  });
-
-  // ── 미완료 일지 (최근 3개월 출근기록 중 '완료된' 본인 일지 0건) ──
-  // 캘린더(isCompleted 기준)·매니저 대시보드와 일치: 임시저장(draft)만 있는 날도 '놓친 업무'로 노출.
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
   const from = threeMonthsAgo.toISOString().slice(0, 10);
-  const missingAttendances = await prisma.dailyAttendance.findMany({
-    where: { workerId, workDate: { gte: from }, logs: { none: { writerId: workerId, isCompleted: true } } },
-    include: {
-      site: { select: { companyName: true, trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true, name: true, gender: true } } } },
-      assignment: { select: { serviceStep: true, adaptationStartDate: true } },
-    },
-    orderBy: { workDate: "desc" },
-    take: 30,
-  });
+
+  const [
+    premiumStatus, docAccessStatus,
+    rawNotices, unreadCount, setting,
+    missingAttendances, todayLogs, missedRows, requestRows,
+    msgBefore, msgWorking, msgDone, msgClosed,
+  ] = await Promise.all([
+    getWorkerPremiumStatus(workerId),
+    getWorkerDocAccess(workerId),
+    // 알림 — 홈 잔존 규칙: 미확인은 계속, 읽음은 5일까지.
+    prisma.workerNotice.findMany({
+      where: { workerId, OR: [{ readAt: null }, { readAt: { gte: fiveDaysAgo } }] },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: { id: true, title: true, body: true, type: true, kind: true, yearMonth: true, link: true, readAt: true, createdAt: true },
+    }),
+    // 벨 미확인 수는 take 20 목록이 아니라 전체 기준(>20건 과소표기 방지)
+    prisma.workerNotice.count({ where: { workerId, readAt: null } }),
+    prisma.workerNotificationSetting.findUnique({
+      where: { workerId },
+      select: { clockInAlertMinutes: true, clockOutAlertMinutes: true },
+    }),
+    // 미완료 일지(최근 3개월, 완료된 본인 일지 0건) — 캘린더·매니저 대시보드와 일치(draft=미완료).
+    prisma.dailyAttendance.findMany({
+      where: { workerId, workDate: { gte: from }, logs: { none: { writerId: workerId, isCompleted: true } } },
+      include: {
+        site: { select: { companyName: true, trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true, name: true, gender: true } } } },
+        assignment: { select: { serviceStep: true, adaptationStartDate: true } },
+      },
+      orderBy: { workDate: "desc" },
+      take: 30,
+    }),
+    // 오늘 일지 상태(완료된 일지의 훈련생) — todayAttendance 없으면 빈 배열.
+    todayAttendance
+      ? prisma.traineeLog.findMany({
+          where: { writerId: workerId, attendanceId: todayAttendance.id, isCompleted: true },
+          select: { traineeId: true },
+        })
+      : Promise.resolve([] as { traineeId: bigint }[]),
+    // 퇴근 미실행(과거 WORKING)
+    prisma.dailyAttendance.findMany({
+      where: { workerId, status: "WORKING", workDate: { lt: today }, isFinalClosed: false },
+      include: { site: { select: { companyName: true } } },
+      orderBy: { workDate: "desc" },
+      take: 30,
+    }),
+    // 배정 요청(REQUESTED, 기한 미초과)
+    prisma.siteAssignment.findMany({
+      where: { workerId, status: "REQUESTED", OR: [{ replyDeadline: null }, { replyDeadline: { gte: new Date() } }] },
+      include: { site: { select: { companyName: true } }, agency: { select: { name: true } } },
+      orderBy: { id: "desc" },
+    }),
+    // 출퇴근 카드 격려 문구(운영자 편집, 미설정 시 registry 기본값)
+    getConfig("HOME_MSG_BEFORE"),
+    getConfig("HOME_MSG_WORKING"),
+    getConfig("HOME_MSG_DONE"),
+    getConfig("HOME_MSG_CLOSED"),
+  ]);
+
+  const notices = rawNotices.map((n) => ({
+    id: n.id.toString(), title: n.title, body: n.body, type: n.type, kind: n.kind ?? "NOTICE_INDIVIDUAL",
+    yearMonth: n.yearMonth, link: n.link ?? null, read: n.readAt !== null, createdAt: n.createdAt.toISOString(),
+  }));
+
   const missingItems = missingAttendances.map(a => ({
     attendanceId: a.id.toString(),
     workDate: a.workDate,
     siteName: a.site.companyName,
     // 해당 출근일 기준으로 훈련/적응지도 판정(전환일 반영)
-    trainingType: effectiveTrainingType((a.assignment as any)?.serviceStep, (a.assignment as any)?.adaptationStartDate, a.workDate),
+    trainingType: effectiveTrainingType(a.assignment?.serviceStep, a.assignment?.adaptationStartDate, a.workDate),
     trainees: a.site.trainees.map(t => ({ id: t.id.toString(), name: t.name, gender: t.gender })),
   }));
 
-  // ── 오늘 일지 상태 (오늘 출근기록에 '완료된' 일지가 있는 훈련생) ──
-  // 임시저장(draft)은 미완료로 취급 → 캘린더(isCompleted)와 일치.
-  let loggedTraineeIds: string[] = [];
-  if (todayAttendance) {
-    const todayLogs = await prisma.traineeLog.findMany({
-      where: { writerId: workerId, attendanceId: todayAttendance.id, isCompleted: true },
-      select: { traineeId: true },
-    });
-    loggedTraineeIds = todayLogs.map(l => l.traineeId.toString());
-  }
+  const loggedTraineeIds: string[] = todayLogs.map(l => l.traineeId.toString());
   const missingTraineeCount = trainees.filter(t => !loggedTraineeIds.includes(t.id.toString())).length;
 
-  // ── 퇴근 미실행 (과거 날짜 + 아직 WORKING = 퇴근 안 누름) ──
-  const missedRows = await prisma.dailyAttendance.findMany({
-    where: { workerId, status: "WORKING", workDate: { lt: today }, isFinalClosed: false },
-    include: { site: { select: { companyName: true } } },
-    orderBy: { workDate: "desc" },
-    take: 30,
-  });
   const missedClockOuts = missedRows.map(a => ({
     attendanceId: a.id.toString(),
     workDate: a.workDate,
     siteName: a.site?.companyName ?? "현장",
   }));
 
-  // ── 배정 요청(REQUESTED) — 기한 미초과만 노출 ──
-  const requestRows = await prisma.siteAssignment.findMany({
-    where: { workerId, status: "REQUESTED", OR: [{ replyDeadline: null }, { replyDeadline: { gte: new Date() } }] },
-    include: { site: { select: { companyName: true } }, agency: { select: { name: true } } },
-    orderBy: { id: "desc" },
-  });
   const pendingRequests = requestRows.map(a => ({
     assignmentId: a.id.toString(),
     siteName: a.site?.companyName ?? "현장",
@@ -223,14 +231,6 @@ export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: 
     requestedWorkTypes: (a.requestedWorkTypes ?? "").split(",").filter(Boolean),
     replyDeadline: a.replyDeadline ? a.replyDeadline.toISOString() : null,
   }));
-
-  // 출퇴근 카드 격려 문구(운영자 편집 가능, 미설정 시 registry 기본값)
-  const [msgBefore, msgWorking, msgDone, msgClosed] = await Promise.all([
-    getConfig("HOME_MSG_BEFORE"),
-    getConfig("HOME_MSG_WORKING"),
-    getConfig("HOME_MSG_DONE"),
-    getConfig("HOME_MSG_CLOSED"),
-  ]);
 
   return {
     home: {

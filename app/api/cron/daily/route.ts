@@ -14,6 +14,8 @@ import { PREMIUM_FEATURE_PLANS } from "@/lib/plans";
 import { audit } from "@/lib/audit";
 
 export const runtime = "nodejs";
+// 일일 배치는 섹션 수·기관 수에 비례해 길어질 수 있음 — 기본(10s)보다 넉넉히(중간 실패 시 뒷 섹션 통째 누락 방지).
+export const maxDuration = 300;
 
 function kstDateStr(offsetDays = 0): string {
   const d = new Date();
@@ -179,38 +181,40 @@ export async function GET(req: NextRequest) {
         },
       });
 
-      for (const a of exemptAssignments) {
-        try {
-          // 현장 커스텀 휴무(근무 미인정)면 스킵
-          const customHol = await prisma.siteHoliday.findFirst({
-            where: { assignmentId: a.id, date: yesterday, countAsWorkday: false },
-            select: { id: true },
-          });
-          if (customHol) continue;
-          // 이미 출근부가 있으면 스킵
-          const exists = await prisma.dailyAttendance.findFirst({
-            where: { assignmentId: a.id, workDate: yesterday },
-            select: { id: true },
-          });
-          if (exists) continue;
-
-          const times = computeWorkTimes(a.workType, a.commuteGuidanceIncluded, a.customWorkStart, a.customWorkEnd);
-          await prisma.dailyAttendance.create({
-            data: {
+      // 배정별 3쿼리 순차(3N) → 일괄 조회 2회 + createMany 1회(함수 타임아웃 방지). 의미 동일.
+      const asgIds = exemptAssignments.map((a) => a.id);
+      const [holRows, existRows] = await Promise.all([
+        prisma.siteHoliday.findMany({
+          where: { assignmentId: { in: asgIds }, date: yesterday, countAsWorkday: false },
+          select: { assignmentId: true },
+        }),
+        prisma.dailyAttendance.findMany({
+          where: { assignmentId: { in: asgIds }, workDate: yesterday },
+          select: { assignmentId: true },
+        }),
+      ]);
+      const skipSet = new Set([...holRows, ...existRows].map((r) => r.assignmentId.toString()));
+      const toCreate = exemptAssignments.filter((a) => !skipSet.has(a.id.toString()));
+      if (toCreate.length) {
+        await prisma.dailyAttendance.createMany({
+          data: toCreate.map((a) => {
+            const times = computeWorkTimes(a.workType, a.commuteGuidanceIncluded, a.customWorkStart, a.customWorkEnd);
+            return {
               workerId: a.workerId,
               siteId: a.siteId,
               assignmentId: a.id,
               workDate: yesterday,
               startTime: kstWallTimeToInstant(yesterday, times.start),
               endTime: kstWallTimeToInstant(yesterday, times.end),
-              status: "DONE",
+              status: "DONE" as const,
               isFinalClosed: true,   // 면제 배정: 워커 확정 불필요 → 자동 확정
               finalizedAt: now,
-            },
-          });
-          exemptCreated++;
-          detail.exemptCreated.push({ assignmentId: String(a.id), workerId: String(a.workerId), siteId: String(a.siteId), date: yesterday });
-        } catch (e: any) { errors.push(`면제생성[${a.id}]: ${e.message}`); }
+            };
+          }),
+          skipDuplicates: true, // (assignmentId,workDate) unique — 동시 실행 안전
+        });
+        exemptCreated = toCreate.length;
+        detail.exemptCreated = toCreate.map((a) => ({ assignmentId: String(a.id), workerId: String(a.workerId), siteId: String(a.siteId), date: yesterday }));
       }
     }
   } catch (e: any) { errors.push(`면제출근부: ${e.message}`); }

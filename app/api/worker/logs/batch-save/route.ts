@@ -90,40 +90,58 @@ export async function POST(request: NextRequest) {
     // 고유 날짜 목록 추출
     const uniqueDates = [...new Set(logs.map(l => l.date))];
 
-    // 날짜별 attendanceId 확보 (없으면 생성)
+    // 날짜별 attendanceId 확보 (없으면 생성) — 날짜별 순차 2쿼리(N+1) → 일괄 조회+createMany(한 달 31일도 3쿼리).
     const dateToAttendanceId = new Map<string, bigint>();
     const skippedOutOfRange: string[] = []; // 배정 기간 밖이라 저장 못 한 날짜(응답에 명시)
-    for (const date of uniqueDates) {
-      const existing = await prisma.dailyAttendance.findUnique({
-        where: { assignmentId_workDate: { assignmentId: assignId, workDate: date } },
-        select: { id: true },
+    {
+      const existingRows = await prisma.dailyAttendance.findMany({
+        where: { assignmentId: assignId, workDate: { in: uniqueDates } },
+        select: { id: true, workDate: true },
       });
-      if (existing) {
-        dateToAttendanceId.set(date, existing.id);
-      } else {
+      for (const r of existingRows) dateToAttendanceId.set(r.workDate, r.id);
+
+      const todayKST = getKstDateString();
+      const toCreate: string[] = [];
+      for (const date of uniqueDates) {
+        if (dateToAttendanceId.has(date)) continue;
         // M8: 배정 기간 밖 날짜엔 출근기록 생성 금지(기간 밖 날짜가 출근부·급여에 새는 것 방지).
         //  ★조용히 버리지 않고 어떤 날짜가 제외됐는지 응답에 담는다(워커가 일부 누락을 인지하도록).
         if ((asgStart && date < asgStart) || (asgEnd && date > asgEnd)) { skippedOutOfRange.push(date); continue; }
         // 오늘 날짜는 clock-in 없이 생성 불가 — 스킵
-        const todayKST = getKstDateString();
         if (date >= todayKST) continue;
-
+        toCreate.push(date);
+      }
+      if (toCreate.length) {
         // 과거 날짜: 소급 일지 입력용 출근기록 생성. ★출퇴근 시각이 없으므로 최종확정하지 않는다(isFinalClosed:false).
         //  (시각 0분인 채 확정하면 급여 엔진이 DAILY/MONTHLY 근무일수로 세어 과지급됨 — 시각은 출퇴근 기록/보정으로 채워져야 함.)
-        const created = await prisma.dailyAttendance.create({
-          data: {
+        await prisma.dailyAttendance.createMany({
+          data: toCreate.map((date) => ({
             workerId: writerId,
             siteId,
             assignmentId: assignId,
             workDate: date,
             status: WorkStatus.DONE,
             isFinalClosed: false,
-          },
-          select: { id: true },
+          })),
+          skipDuplicates: true, // (assignmentId,workDate) unique — 동시 요청 안전
         });
-        dateToAttendanceId.set(date, created.id);
+        const createdRows = await prisma.dailyAttendance.findMany({
+          where: { assignmentId: assignId, workDate: { in: toCreate } },
+          select: { id: true, workDate: true },
+        });
+        for (const r of createdRows) dateToAttendanceId.set(r.workDate, r.id);
       }
     }
+
+    // 기존 로그 일괄 조회(attendance×trainee) — 로그별 findFirst(N+1) 제거. 쓰기는 행별(각기 다른 데이터)이지만
+    //  대부분의 재저장 시나리오에서 판정 쿼리가 사라져 한 달 66로그≈160+쿼리 → ~70쿼리.
+    const existingLogs = await prisma.traineeLog.findMany({
+      // writerId 필터 없음 — 기존 findFirst와 동일 판정((attendanceId,traineeId) unique 단위).
+      where: { attendanceId: { in: [...dateToAttendanceId.values()] } },
+      select: { id: true, attendanceId: true, traineeId: true },
+    });
+    const logKey = (att: bigint, tr: bigint) => `${att}_${tr}`;
+    const existingByKey = new Map(existingLogs.map((l) => [logKey(l.attendanceId, l.traineeId), l.id]));
 
     let saved = 0;
     const skippedNotEnrolled: string[] = []; // 그 날짜에 훈련생이 현장 재적이 아니라 건너뛴 로그(조용한 오염 방지)
@@ -150,10 +168,8 @@ export async function POST(request: NextRequest) {
         isCompleted:  true,
       };
 
-      const existing = await prisma.traineeLog.findFirst({
-        where: { traineeId, attendanceId },
-        select: { id: true },
-      });
+      const existingId = existingByKey.get(logKey(attendanceId, traineeId));
+      const existing = existingId != null ? { id: existingId } : null;
 
       if (existing) {
         await prisma.traineeLog.update({ where: { id: existing.id }, data: logData });
