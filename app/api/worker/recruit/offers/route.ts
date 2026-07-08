@@ -89,8 +89,14 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    let claimed = true;
     await prisma.$transaction(async (tx) => {
-      await tx.talentOffer.update({ where: { id }, data: { status: action === "accept" ? "ACCEPTED" : "DECLINED", decidedAt: new Date() } });
+      // 원자적 claim — PENDING일 때만 상태 전이. 더블탭(동시 요청) 중 하나만 성공, 나머지는 count=0.
+      const c = await tx.talentOffer.updateMany({
+        where: { id, status: "PENDING" },
+        data: { status: action === "accept" ? "ACCEPTED" : "DECLINED", decidedAt: new Date() },
+      });
+      if (c.count === 0) { claimed = false; return; }
       if (assignSiteId && assignAgencyId) {
         await tx.siteAssignment.create({
           data: {
@@ -113,6 +119,7 @@ export async function PATCH(req: NextRequest) {
         autoAssigned = true;
       }
     });
+    if (!claimed) return NextResponse.json({ success: false, message: "이미 처리된 제안입니다." }, { status: 409 });
 
     // 수락 결과 알림(WorkerNotice.agencyId 필수 → 위탁기관 연계일 때만, 무료 채널)
     const noticeAgencyId = assignAgencyId ?? offer.agencyId;

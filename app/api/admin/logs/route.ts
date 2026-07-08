@@ -28,10 +28,22 @@ export async function GET(req: NextRequest) {
       ? assignments.map(a => a.workerId)
       : undefined; // ADMIN은 전체
 
+    // writerId 필터 병합 — 같은 키를 두 번 스프레드하면 뒤 값이 이겨 기관 스코프가 사라진다(크로스테넌트 IDOR).
+    //  workerId가 오면 기관 허용범위 안일 때만 그 워커로 좁히고, 범위 밖이면 403.
+    let writerFilter: bigint | { in: bigint[] } | undefined = undefined;
+    if (workerId) {
+      const wid = BigInt(workerId);
+      if (allowedUserIds && !allowedUserIds.some(id => id === wid)) {
+        return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
+      }
+      writerFilter = wid;
+    } else if (allowedUserIds) {
+      writerFilter = { in: allowedUserIds };
+    }
+
     const logs = await prisma.traineeLog.findMany({
       where: {
-        ...(allowedUserIds ? { writerId: { in: allowedUserIds } } : {}),
-        ...(workerId   ? { writerId:  BigInt(workerId)   } : {}),
+        ...(writerFilter !== undefined ? { writerId: writerFilter } : {}),
         ...(traineeId ? { traineeId: BigInt(traineeId) } : {}),
         ...(completed === "true"  ? { isCompleted: true  } : {}),
         ...(completed === "false" ? { isCompleted: false } : {}),

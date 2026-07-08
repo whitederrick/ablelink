@@ -280,7 +280,7 @@ export default function BatchWorklogPage() {
     const end = new Date(to   + "T00:00:00");
     while (cur <= end) {
       const dow  = cur.getDay();
-      const date = cur.toISOString().slice(0, 10);
+      const date = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
       if (dow !== 0 && dow !== 6 && !holidays[date]) {
         result.push(date);
       }
@@ -306,7 +306,7 @@ export default function BatchWorklogPage() {
     const end = new Date(dateTo   + "T00:00:00");
     while (cur <= end) {
       const dow  = cur.getDay();
-      const date = cur.toISOString().slice(0, 10);
+      const date = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
       if (dow !== 0 && dow !== 6 && holidays[date]) cnt++;
       cur.setDate(cur.getDate() + 1);
     }

@@ -76,7 +76,8 @@ export async function proxy(req: NextRequest) {
 
   // ── /manager (에이전시 관리자 전용) ─────────────────────────
   if (pathname.startsWith("/manager")) {
-    if (pathname.startsWith("/manager/login")) return NextResponse.next();
+    // 로그인·초대 온보딩(신규 관리자, 세션 없음)은 공개.
+    if (pathname.startsWith("/manager/login") || pathname.startsWith("/manager/invite/")) return NextResponse.next();
 
     const token = req.cookies.get(MANAGER_COOKIE)?.value;
     if (!token) return redirectWithNext(req, "/manager/login");

@@ -128,8 +128,16 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Manager 생성 + ManagerInvite 업데이트 트랜잭션
+    // Manager 생성 + ManagerInvite 사용처리 트랜잭션.
+    //  invite를 원자적으로 선claim(usedAt:null·미만료일 때만) → 같은 링크 다중 POST 중 하나만 성공(여러 활성 Manager 방지).
+    const now = new Date();
     const manager = await prisma.$transaction(async (tx) => {
+      const claim = await tx.managerInvite.updateMany({
+        where: { id: invite.id, usedAt: null, expiresAt: { gt: now } },
+        data: { usedAt: now },
+      });
+      if (claim.count === 0) return null; // 경합 패배 — 이미 사용/만료
+
       const newManager = await tx.manager.create({
         data: {
           loginId,
@@ -143,14 +151,18 @@ export async function POST(req: NextRequest, { params }: Params) {
 
       await tx.managerInvite.update({
         where: { id: invite.id },
-        data: {
-          usedAt:    new Date(),
-          managerId: newManager.id,
-        },
+        data: { managerId: newManager.id },
       });
 
       return newManager;
     });
+
+    if (!manager) {
+      return NextResponse.json(
+        { success: false, message: "이미 사용된 초대 코드입니다." },
+        { status: 410 }
+      );
+    }
 
     const res = NextResponse.json({
       success:   true,
