@@ -4,6 +4,7 @@
 
 export const runtime = "nodejs";
 
+import { getKstDateString } from "@/lib/time";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
@@ -91,8 +92,8 @@ export async function GET(req: NextRequest) {
       workerLoginId: r.worker?.loginId ?? "",
       siteId: r.site?.id.toString() ?? "",
       siteName: r.site?.companyName ?? "-",
-      periodStart: r.periodStart.toISOString().slice(0, 10),
-      periodEnd: r.periodEnd.toISOString().slice(0, 10),
+      periodStart: getKstDateString(r.periodStart),
+      periodEnd: getKstDateString(r.periodEnd),
       signStage: r.signStage,
       govStatus: r.govStatus,
       govSubmittedAt: r.govSubmittedAt?.toISOString() ?? null,

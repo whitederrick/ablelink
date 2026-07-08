@@ -7,6 +7,7 @@
 
 export const runtime = "nodejs";
 
+import { getKstDateString } from "@/lib/time";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
@@ -87,8 +88,8 @@ export async function POST(req: NextRequest) {
     const sigBlockers: string[] = [];
     for (const r of runs) {
       const who = r.traineeId != null ? (traineeMap.get(r.traineeId.toString()) ?? "") : (r.worker?.workerName ?? "");
-      const ps = r.periodStart.toISOString().slice(0, 10);
-      const pe = r.periodEnd.toISOString().slice(0, 10);
+      const ps = getKstDateString(r.periodStart);
+      const pe = getKstDateString(r.periodEnd);
       const lacks = missingSignatureLabels(r.docType, r.currentVersion?.sourceData, r.managerSignatureUrl);
       if (lacks.length) {
         sigBlockers.push(`· ${DOC_LABEL[r.docType] ?? r.docType}${who ? `(${who})` : ""} ${ps}~${pe} — ${lacks.join("·")} 서명 누락`);
@@ -151,8 +152,8 @@ export async function POST(req: NextRequest) {
         if (!buf) continue;
         const docLabel = DOC_LABEL[r.docType] ?? r.docType;
         const who = r.traineeId != null ? (traineeMap.get(r.traineeId.toString()) ?? "") : safe(r.worker?.workerName ?? "");
-        const ps = r.periodStart.toISOString().slice(0, 10);
-        const pe = r.periodEnd.toISOString().slice(0, 10);
+        const ps = getKstDateString(r.periodStart);
+        const pe = getKstDateString(r.periodEnd);
         let name = `${safe(docLabel)}_${safe(who)}_${ps}_${pe}.pdf`;
         let i = 2;
         while (usedNames.has(name)) { name = `${safe(docLabel)}_${safe(who)}_${ps}_${pe}_${i++}.pdf`; }

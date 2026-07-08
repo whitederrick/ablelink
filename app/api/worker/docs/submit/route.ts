@@ -119,7 +119,14 @@ export async function POST(req: NextRequest) {
 
         await tx.documentRun.update({
           where: { id: run.id },
-          data: { currentVersion: { connect: { id: version.id } }, signStage: "SUBMITTED", workerSignedAt: now },
+          data: {
+            currentVersion: { connect: { id: version.id } },
+            signStage: "SUBMITTED",
+            workerSignedAt: now,
+            // 재제출 = 새 내용 버전 → 이전 매니저·기관 서명 무효화(매니저 재검토 전 구 서명이 공단 발송되는 것 방지).
+            managerSignatureUrl: null, managerSignedAt: null, managerSignerName: null,
+            agencySignatureUrl: null, agencySignedAt: null,
+          },
         });
 
         await tx.documentSubmissionLog.create({

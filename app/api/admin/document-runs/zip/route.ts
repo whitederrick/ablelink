@@ -3,6 +3,7 @@
 
 export const runtime = "nodejs";
 
+import { getKstDateString } from "@/lib/time";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
@@ -90,8 +91,8 @@ export async function GET(req: NextRequest) {
       if (!buf) continue;
       const label = DOC_LABEL[r.docType] ?? r.docType;
       const who = r.traineeId != null ? (traineeMap.get(r.traineeId.toString()) ?? "") : safe(r.worker?.workerName ?? "");
-      const ps = r.periodStart.toISOString().slice(0, 10);
-      const pe = r.periodEnd.toISOString().slice(0, 10);
+      const ps = getKstDateString(r.periodStart);
+      const pe = getKstDateString(r.periodEnd);
       let name = `${safe(label)}_${safe(who)}_${ps}_${pe}.pdf`;
       let i = 2;
       while (usedNames.has(name)) { name = `${safe(label)}_${safe(who)}_${ps}_${pe}_${i++}.pdf`; }
