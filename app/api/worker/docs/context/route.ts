@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
   if (!assignment?.site) return NextResponse.json({ success: true, data: null }, noStore);
 
   // 오늘 기준 단계(전환일 지나면 적응지도)
-  const trainingType = effectiveTrainingType(assignment.serviceStep, (assignment as any).adaptationStartDate, todayStr);
+  const trainingType = effectiveTrainingType(assignment.serviceStep, assignment.adaptationStartDate, todayStr);
 
   // 현장 담당자 전체(대표 사업체담당자 먼저, 이어서 활성 추가담당자) — 워커 표시용(읽기전용)
   const siteContacts = [

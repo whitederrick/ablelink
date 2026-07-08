@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     }
 
     const site  = assignment.site;
-    const docTimes = dailyDocTimes((assignment as any).workType, (assignment as any).commuteGuidanceIncluded, (assignment as any).customWorkStart, (assignment as any).customWorkEnd);
+    const docTimes = dailyDocTimes(assignment.workType, assignment.commuteGuidanceIncluded, assignment.customWorkStart, assignment.customWorkEnd);
     const start = periodStart;
     const end   = periodEnd;
 
@@ -96,11 +96,11 @@ export async function GET(request: NextRequest) {
         workerName: user?.workerName || "",
         workerPhone: user?.phoneNumber || user?.loginId || "",
         fallbackAssignment: {
-          workType: (assignment as any).workType ?? null,
-          commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? null,
-          customWorkStart: (assignment as any).customWorkStart ?? null,
-          customWorkEnd: (assignment as any).customWorkEnd ?? null,
-          attendanceButtonExempt: (assignment as any).attendanceButtonExempt ?? null,
+          workType: assignment.workType ?? null,
+          commuteGuidanceIncluded: assignment.commuteGuidanceIncluded ?? null,
+          customWorkStart: assignment.customWorkStart ?? null,
+          customWorkEnd: assignment.customWorkEnd ?? null,
+          attendanceButtonExempt: assignment.attendanceButtonExempt ?? null,
         },
         signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
       });

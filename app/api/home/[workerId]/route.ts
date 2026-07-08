@@ -142,7 +142,7 @@ export async function GET(
     ];
 
     const workType = activeAssignment?.workType || "";
-    const commuteGuidanceIncluded: boolean = (activeAssignment as any)?.commuteGuidanceIncluded ?? true;
+    const commuteGuidanceIncluded: boolean = activeAssignment?.commuteGuidanceIncluded ?? true;
 
     // 3. 출근 상태 판정
     const todayAttendance = userWithData.attendances[0];
@@ -184,15 +184,15 @@ export async function GET(
         siteContacts,
 
         // ✅ 훈련기간은 SiteAssignment.stepStart/stepEnd 기준
-        preTrainingStart: (activeAssignment as any)?.stepStart ?? null,
-        preTrainingEnd: (activeAssignment as any)?.stepEnd ?? null,
+        preTrainingStart: activeAssignment?.stepStart ?? null,
+        preTrainingEnd: activeAssignment?.stepEnd ?? null,
         fieldTrainingStart: activeAssignment?.startDate ?? null,
         fieldTrainingEnd: activeAssignment?.endDate ?? null,
 
         workType: workType || "FULL_DAY",
         commuteGuidanceIncluded,
-        customWorkStart: (activeAssignment as any)?.customWorkStart ?? null,
-        customWorkEnd: (activeAssignment as any)?.customWorkEnd ?? null,
+        customWorkStart: activeAssignment?.customWorkStart ?? null,
+        customWorkEnd: activeAssignment?.customWorkEnd ?? null,
 
         trainees: trainees.map((t: any) => ({
           id: t.id.toString(),
@@ -200,8 +200,8 @@ export async function GET(
           gender: t.gender,
           status: t.status,
         })),
-        serviceStep: effectiveServiceStep((activeAssignment as any)?.serviceStep, (activeAssignment as any)?.adaptationStartDate, today),
-        trainingType: serviceStepToTrainingType(effectiveServiceStep((activeAssignment as any)?.serviceStep, (activeAssignment as any)?.adaptationStartDate, today)),
+        serviceStep: effectiveServiceStep(activeAssignment?.serviceStep, activeAssignment?.adaptationStartDate, today),
+        trainingType: serviceStepToTrainingType(effectiveServiceStep(activeAssignment?.serviceStep, activeAssignment?.adaptationStartDate, today)),
         attendanceStatus: attendanceStatus,
         attendanceId: todayAttendance?.id ? todayAttendance.id.toString() : null,
         startTime: todayAttendance?.startTime ?? null,

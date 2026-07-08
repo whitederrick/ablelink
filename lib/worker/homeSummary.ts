@@ -243,21 +243,21 @@ export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: 
       allowanceRange: site?.allowanceRange ?? 100,
       // 파이프라인 게이트(assignment-pipeline-design.md): 출근 전 필요한 단계를 홈에서 사전 안내
       pipelineGate: !activeAssignment ? null
-        : (activeAssignment as any).status === "ASSIGNED" ? "AWAITING_CONTRACT"
-        : !(activeAssignment as any).connectedAt ? "NOT_CONNECTED"
+        : activeAssignment.status === "ASSIGNED" ? "AWAITING_CONTRACT"
+        : !activeAssignment.connectedAt ? "NOT_CONNECTED"
         // 출퇴근 버튼 미적용(자동 기록) 배정은 GPS 출근이 없어 기준점 확정이 의미 없음 → 위치 게이트 제외
-        : (!(activeAssignment as any).attendanceButtonExempt && !(activeAssignment as any).baseConfirmedAt) ? "LOCATION_NOT_CONFIRMED"
+        : (!activeAssignment.attendanceButtonExempt && !activeAssignment.baseConfirmedAt) ? "LOCATION_NOT_CONFIRMED"
         : null,
       workType: activeAssignment?.workType || "FULL_DAY",
-      commuteGuidanceIncluded: (activeAssignment as any)?.commuteGuidanceIncluded ?? true,
-      customWorkStart: (activeAssignment as any)?.customWorkStart ?? null,
-      customWorkEnd: (activeAssignment as any)?.customWorkEnd ?? null,
+      commuteGuidanceIncluded: activeAssignment?.commuteGuidanceIncluded ?? true,
+      customWorkStart: activeAssignment?.customWorkStart ?? null,
+      customWorkEnd: activeAssignment?.customWorkEnd ?? null,
       trainees: trainees.map((t: any) => ({ id: t.id.toString(), name: t.name, gender: t.gender, status: t.status })),
       // 오늘 기준 실효 단계(전환일 지나면 적응지도)
-      serviceStep: effectiveServiceStep((activeAssignment as any)?.serviceStep, (activeAssignment as any)?.adaptationStartDate, today),
-      trainingType: serviceStepToTrainingType(effectiveServiceStep((activeAssignment as any)?.serviceStep, (activeAssignment as any)?.adaptationStartDate, today)),
+      serviceStep: effectiveServiceStep(activeAssignment?.serviceStep, activeAssignment?.adaptationStartDate, today),
+      trainingType: serviceStepToTrainingType(effectiveServiceStep(activeAssignment?.serviceStep, activeAssignment?.adaptationStartDate, today)),
       attendanceStatus: todayAttendance?.status ?? "BEFORE",
-      attendanceButtonExempt: Boolean((activeAssignment as any)?.attendanceButtonExempt),
+      attendanceButtonExempt: Boolean(activeAssignment?.attendanceButtonExempt),
       attendanceId: todayAttendance?.id ? todayAttendance.id.toString() : null,
       startTime: todayAttendance?.startTime ? todayAttendance.startTime.toISOString() : null,
       endTime: todayAttendance?.endTime ? todayAttendance.endTime.toISOString() : null,

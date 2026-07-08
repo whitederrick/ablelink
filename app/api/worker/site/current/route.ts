@@ -103,10 +103,10 @@ export async function GET(request: NextRequest) {
         agencyId: agency?.id.toString() ?? null,
         companyName: site.companyName,
         workType: assignment.workType || "FULL_DAY",
-        commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? true,
-        customWorkStart: (assignment as any).customWorkStart ?? null,
-        customWorkEnd: (assignment as any).customWorkEnd ?? null,
-        attendanceButtonExempt: (assignment as any).attendanceButtonExempt ?? false,
+        commuteGuidanceIncluded: assignment.commuteGuidanceIncluded ?? true,
+        customWorkStart: assignment.customWorkStart ?? null,
+        customWorkEnd: assignment.customWorkEnd ?? null,
+        attendanceButtonExempt: assignment.attendanceButtonExempt ?? false,
         traineeCount: site.trainees.length,
         trainees: site.trainees.map(t => ({
           id: t.id.toString(),
@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
         fieldTrainingEnd: assignment.endDate?.toISOString() ?? null,
         attendanceId: todayAttendance?.id?.toString() ?? null,
         // 훈련 단계(오늘 기준 — 전환일 지나면 적응지도)
-        trainingType: effectiveTrainingType((assignment as any)?.serviceStep, (assignment as any)?.adaptationStartDate, todayStr),
+        trainingType: effectiveTrainingType(assignment?.serviceStep, assignment?.adaptationStartDate, todayStr),
       },
     }, {
       // 브라우저가 과거(전환 전) 값을 캐시로 먼저 반환해 화면이 잠깐 옛 단계로 보이는 것 방지

@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
 
     const site = assignment.site;
     const start = periodStart, end = periodEnd;
-    const docTimes = dailyDocTimes((assignment as any).workType, (assignment as any).commuteGuidanceIncluded, (assignment as any).customWorkStart, (assignment as any).customWorkEnd);
+    const docTimes = dailyDocTimes(assignment.workType, assignment.commuteGuidanceIncluded, assignment.customWorkStart, assignment.customWorkEnd);
     let payload: any;
 
     // 훈련생 문서는 유효한 훈련생 필수 — generate/submit과 동일하게 미선택/미재적이면 400.
@@ -92,11 +92,11 @@ export async function GET(request: NextRequest) {
         workerName: user?.workerName || "",
         workerPhone: user?.phoneNumber || user?.loginId || "",
         fallbackAssignment: {
-          workType: (assignment as any).workType ?? null,
-          commuteGuidanceIncluded: (assignment as any).commuteGuidanceIncluded ?? null,
-          customWorkStart: (assignment as any).customWorkStart ?? null,
-          customWorkEnd: (assignment as any).customWorkEnd ?? null,
-          attendanceButtonExempt: (assignment as any).attendanceButtonExempt ?? null,
+          workType: assignment.workType ?? null,
+          commuteGuidanceIncluded: assignment.commuteGuidanceIncluded ?? null,
+          customWorkStart: assignment.customWorkStart ?? null,
+          customWorkEnd: assignment.customWorkEnd ?? null,
+          attendanceButtonExempt: assignment.attendanceButtonExempt ?? null,
         },
         // 미리보기는 사업체 담당자 서명 자동 주입 안 함(제출 스냅샷에서만 표시).
         signatures: { govAgent: sigs.govAgent, companyManager: { name: "", imageUrl: undefined }, worker: sigs.worker },
