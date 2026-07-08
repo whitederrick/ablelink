@@ -433,6 +433,8 @@ model DailyAttendance {
   @@index([workerId, workDate])
   @@index([siteId, workDate])
   @@index([basePointId])
+  // cron 전일처리·CSV·운영자 조회가 workDate 단독 필터 → 풀스캔 방지 (2026-07-08)
+  @@index([workDate])
   @@map("daily_attendances")
 }
 
@@ -671,6 +673,8 @@ model DocumentRun {
   @@unique([assignmentId, docType, periodStart, traineeId])
   @@index([agencyId, docType, periodStart])
   @@index([assignmentId, docType])
+  // 문서함(inbox)·ZIP·대시보드가 agencyId + updatedAt desc 정렬로 조회 → 정렬용 복합 인덱스 (2026-07-08)
+  @@index([agencyId, updatedAt])
   @@map("document_runs")
 }
 
