@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { Decimal } from "@prisma/client/runtime/library";
 import { audit } from "@/lib/audit";
+import type { PayrollBreakdown } from "@/lib/payroll/breakdown";
 
 function itemDto(i: any) {
   return {
@@ -92,7 +93,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
     if (!existingItem || existingItem.runId !== run.id) {
       return NextResponse.json({ success: false, message: "접근 불가" }, { status: 403 });
     }
-    const prevBd = (existingItem.breakdown ?? {}) as any;
+    const prevBd = (existingItem.breakdown ?? {}) as PayrollBreakdown;
 
     let gp: number, td: number, breakdown: any;
 

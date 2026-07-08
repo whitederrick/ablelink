@@ -13,6 +13,7 @@ import { determineEligibility, isIllegalBusinessIncome, type IncomeType } from "
 import { standardMonthlyIncome } from "@/lib/payroll/pensionBase";
 import { traineeCountOnDate } from "@/lib/traineePlacement";
 import { Decimal } from "@prisma/client/runtime/library";
+import type { PayrollBreakdown } from "@/lib/payroll/breakdown";
 
 const SERVICE_STEP_LABEL: Record<string, string> = {
   PRE_TRAINING: "사전훈련", FIELD_TRAINING: "지원고용 현장훈련", ADAPTATION: "취업 후 적응지도",
@@ -273,7 +274,7 @@ export async function computePayrollItems(
 
     let grossPay = 0;
     const calcMethods: Record<string, string> = {};
-    let breakdown: Record<string, unknown> = { note: "급여 계약 없음", workedDays, workedMinutes, pendingDays };
+    let breakdown: PayrollBreakdown = { note: "급여 계약 없음", workedDays, workedMinutes, pendingDays };
 
     if (contract) {
       // 급여 기준 계약의 시급/일급/월급(baseRate)과 2인 이상 지원 시급(rate2).
@@ -330,8 +331,8 @@ export async function computePayrollItems(
       if (overtimeHours > 0 && ordinaryWage > 0) {
         const overtimePay = Math.round(overtimeHours * ordinaryWage * 1.5);
         grossPay += overtimePay;
-        (breakdown as any).overtimeHours = overtimeHours;
-        (breakdown as any).overtimePay = overtimePay;
+        breakdown.overtimeHours = overtimeHours;
+        breakdown.overtimePay = overtimePay;
         calcMethods["연장근로수당"] = `${overtimeHours}시간 × ${ordinaryWage.toLocaleString()}원 × 1.5`;
       }
 
@@ -373,7 +374,7 @@ export async function computePayrollItems(
           const nightHours = +(nightMin / 60).toFixed(2);
           const pay = Math.round(nightHours * ordinaryWage * 0.5);
           grossPay += pay;
-          (breakdown as any).nightHours = nightHours; (breakdown as any).nightPay = pay;
+          breakdown.nightHours = nightHours; breakdown.nightPay = pay;
           calcMethods["야간근로수당"] = `${nightHours}시간 × ${ordinaryWage.toLocaleString()}원 × 0.5`;
         }
         if (holidayLe8Min > 0 || holidayGt8Min > 0) {
@@ -381,9 +382,9 @@ export async function computePayrollItems(
           const hOver = +(holidayGt8Min / 60).toFixed(2);
           const pay = Math.round(h8 * ordinaryWage * 0.5 + hOver * ordinaryWage * 1.0);
           grossPay += pay;
-          (breakdown as any).holidayHours = +(h8 + hOver).toFixed(2);
-          (breakdown as any).holidayPay = pay;
-          if (hOver > 0) { (breakdown as any).holidayHours8 = h8; (breakdown as any).holidayHoursOver8 = hOver; }
+          breakdown.holidayHours = +(h8 + hOver).toFixed(2);
+          breakdown.holidayPay = pay;
+          if (hOver > 0) { breakdown.holidayHours8 = h8; breakdown.holidayHoursOver8 = hOver; }
           calcMethods["휴일근로수당"] = hOver > 0
             ? `8h이내 ${h8}h × 0.5 + 초과 ${hOver}h × 1.0 (× ${ordinaryWage.toLocaleString()}원)`
             : `${h8}시간 × ${ordinaryWage.toLocaleString()}원 × 0.5`;
@@ -411,18 +412,18 @@ export async function computePayrollItems(
         });
         if (wh.totalHolidayPay > 0) {
           grossPay += wh.totalHolidayPay;
-          (breakdown as any).weeklyHolidayPay = wh.totalHolidayPay;
-          (breakdown as any).weeklyHolidayDetail = { eligibleWeeks: wh.eligibleWeeks, avgWeeklyHours: +(wh.avgWeeklyMinutes / 60).toFixed(1), meets15h: wh.meets15h };
+          breakdown.weeklyHolidayPay = wh.totalHolidayPay;
+          breakdown.weeklyHolidayDetail = { eligibleWeeks: wh.eligibleWeeks, avgWeeklyHours: +(wh.avgWeeklyMinutes / 60).toFixed(1), meets15h: wh.meets15h };
           calcMethods["주휴수당"] = wh.calcMethod;
         }
       }
 
-      (breakdown as any).ordinaryWage = ordinaryWage;
-      (breakdown as any).calcMethods = calcMethods;
+      breakdown.ordinaryWage = ordinaryWage;
+      breakdown.calcMethods = calcMethods;
     }
 
     // ── 지급내역 라인아이템(시드) ──
-    const bd = breakdown as any;
+    const bd = breakdown;
     const owage = Number(bd.ordinaryWage ?? 0);
     const whPay = Number(bd.weeklyHolidayPay ?? 0);
     const whHours = owage > 0 ? +(whPay / owage).toFixed(1) : 0;
@@ -496,11 +497,11 @@ export async function computePayrollItems(
     const incomeType = elig.incomeType;
     // P2-5: 근로계약이 있는데 급여 기준이 사업소득(BUSINESS)으로 설정된 위법 소지 — 경고만(계산은 근로소득으로 자동 처리됨).
     if (contract?.incomeType && isIllegalBusinessIncome(!!empContract, contract.incomeType as IncomeType)) {
-      (breakdown as any).incomeWarn = "근로계약 존재 — 사업소득(3.3%) 설정은 위법 소지(근로소득으로 자동 계산됨)";
+      breakdown.incomeWarn = "근로계약 존재 — 사업소득(3.3%) 설정은 위법 소지(근로소득으로 자동 계산됨)";
     }
     // 국민연금 가입 검토 대상(계약 1개월 미만이나 월 8일↑/60h↑) — 자동 공제하지 않고 경고만. 노무사·공단 확인 필요.
     if (elig.needsPensionReview) {
-      (breakdown as any).insuranceReview =
+      breakdown.insuranceReview =
         "국민연금 가입 검토 필요 — 계약 1개월 미만이나 해당 월 근로일수 8일 이상 또는 60시간 이상. 국민연금공단 안내상 사업장가입 대상이 될 수 있어 공제·신고 전 노무사 또는 공단 확인 필요(현재 자동 공제 안 함).";
     }
     const pushDed = (key: string, name: string, amount: number) => {
@@ -527,8 +528,8 @@ export async function computePayrollItems(
           );
           const pensionBase = pBase ?? grossPay;
           pushDed("pension", "국민연금", Math.round(pensionBase * Number(insuranceRates.nationalPension)));
-          (breakdown as any).pensionBase = pensionBase;         // 명세 투명성(적용된 기준소득월액)
-          (breakdown as any).pensionBaseClamped = pBase != null; // 등급표 적용 여부(하한/상한)
+          breakdown.pensionBase = pensionBase;         // 명세 투명성(적용된 기준소득월액)
+          breakdown.pensionBaseClamped = pBase != null; // 등급표 적용 여부(하한/상한)
         }
         if (ded.has("health"))     pushDed("health", "건강보험", Math.round(grossPay * Number(insuranceRates.healthInsurance)));
         if (ded.has("ltc"))        pushDed("ltc", "장기요양보험", Math.round(grossPay * Number(insuranceRates.longTermCare)));

@@ -7,6 +7,7 @@ import ListToolbar, { type FilterChip } from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import StatusBadge, { type BadgeTone } from "../_components/StatusBadge";
 import { StatCardRow } from "../_components/StatCard";
+import type { PayrollBreakdown } from "@/lib/payroll/breakdown";
 
 function maskLoginId(id: string) {
   if (!id) return "";
@@ -902,7 +903,7 @@ export default function PayrollPage() {
 
           {/* 적용 기준(요율·세액표) 연도 배너 — run 내 전 항목 공통. 미설정 시 붉은 경고. */}
           {(() => {
-            const firstIns = selectedRun.items.map(it => (it.breakdown as any)?.insurance).find(Boolean);
+            const firstIns = selectedRun.items.map(it => (it.breakdown as PayrollBreakdown)?.insurance).find(Boolean);
             const rateYear: number | null = firstIns?.rateYear ?? null;
             const taxYear: number | null = firstIns?.taxYear ?? null;
             const runYear = Number(selectedRun.yearMonth.slice(0, 4));
@@ -922,7 +923,7 @@ export default function PayrollPage() {
 
           {/* 국민연금 가입 검토 대상 — 계약 1개월 미만이나 월 8일↑/60h↑. 자동 공제 안 함, 위탁기관 담당자가 노무사·공단 확인. */}
           {(() => {
-            const flagged = selectedRun.items.filter(it => (it.breakdown as any)?.insurance?.needsPensionReview);
+            const flagged = selectedRun.items.filter(it => (it.breakdown as PayrollBreakdown)?.insurance?.needsPensionReview);
             if (flagged.length === 0) return null;
             return (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">

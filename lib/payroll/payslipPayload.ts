@@ -2,6 +2,7 @@
 // PayrollItem(+breakdown) → 급여명세서 PDF payload 변환 단일 출처.
 // admin(발급)·worker(교부 다운로드) 라우트 공용.
 // 신양식(샘플): breakdown.payLines/deductLines/basicInfo 기반. 없으면 레거시(기본급/연장/주휴) 폴백.
+import type { PayrollBreakdown } from "@/lib/payroll/breakdown";
 
 export interface PayslipMeta {
   agencyName: string;
@@ -17,11 +18,11 @@ export interface PayslipItemData {
   netPay: number;
   workedDays: number | null;
   workedMinutes: number | null;
-  breakdown: any;
+  breakdown: unknown;
 }
 
 export function buildPayslipPayload(meta: PayslipMeta, item: PayslipItemData) {
-  const b = (item.breakdown ?? {}) as Record<string, any>;
+  const b = (item.breakdown ?? {}) as PayrollBreakdown;
   const calc = (b.calcMethods ?? {}) as Record<string, string>;
   const basic = (b.basicInfo ?? {}) as Record<string, any>;
 
