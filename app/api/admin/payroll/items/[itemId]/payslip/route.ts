@@ -9,6 +9,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { renderPdfToBuffer } from "@/lib/pdf";
 import { buildPayslipPayload } from "@/lib/payroll/payslipPayload";
 import { logAccess } from "@/lib/accessLog";
+import { getKstDateString } from "@/lib/time";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ itemId: string }> }) {
   try {
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ item
         workerName: item.user?.workerName ?? "",
         workerBirth: item.user?.birthDate ?? "",
         yearMonth: item.run.yearMonth,
-        payDate: item.run.finalizedAt ? item.run.finalizedAt.toISOString().slice(0, 10) : "",
+        payDate: item.run.finalizedAt ? getKstDateString(item.run.finalizedAt) : "",
         employerBizNo: item.run.agency?.businessNumber ?? null,
         employerRepName: item.run.agency?.representativeName ?? null,
         employerAddress: item.run.agency?.address ?? null,

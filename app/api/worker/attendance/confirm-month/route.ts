@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
         isFinalClosed:        false,
         isManagerFinalClosed: false,
         startTime:            { not: null },
+        // 퇴근 미실행(endTime null)·근무중(WORKING) 행은 확정 제외 — 급여 과지급·문서 불일치·clock-out 데드엔드 방지.
+        endTime:              { not: null },
       },
       data: { isFinalClosed: true, finalizedAt: now, status: "DONE" },
     });

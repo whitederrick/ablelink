@@ -537,9 +537,12 @@ export async function computePayrollItems(
       }
     }
 
-    for (const ded of agencyDeductions) {
-      const amount = ded.type === "PERCENTAGE" ? Math.round(grossPay * Number(ded.amount)) : Math.round(Number(ded.amount));
-      pushDed(`custom_${ded.id}`, ded.name, amount);
+    // 지급액이 0이면(급여계약 없음·무근무 등) 커스텀 공제(고정액 포함)를 부과하지 않는다 → 실지급 음수 방지.
+    if (grossPay > 0) {
+      for (const ded of agencyDeductions) {
+        const amount = ded.type === "PERCENTAGE" ? Math.round(grossPay * Number(ded.amount)) : Math.round(Number(ded.amount));
+        pushDed(`custom_${ded.id}`, ded.name, amount);
+      }
     }
 
     const netPay = grossPay - totalDeduction;

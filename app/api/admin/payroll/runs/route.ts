@@ -79,7 +79,13 @@ export async function POST(req: NextRequest) {
       if (cur?.status === "FINALIZED") {
         throw NextResponse.json({ success: false, message: "이미 확정된 급여입니다. 수정할 수 없습니다." }, { status: 409 });
       }
-      if (cur) await tx.payrollRun.delete({ where: { id: cur.id } });
+      if (cur) {
+        // 조건부 삭제 — 재확인(위)과 삭제 사이에 다른 요청이 FINALIZED로 만들면 0건 삭제→409(확정 급여 보호).
+        const del = await tx.payrollRun.deleteMany({ where: { id: cur.id, status: { not: "FINALIZED" } } });
+        if (del.count === 0) {
+          throw NextResponse.json({ success: false, message: "이미 확정된 급여입니다. 수정할 수 없습니다." }, { status: 409 });
+        }
+      }
       return tx.payrollRun.create({
         data: { agencyId, yearMonth, status: "DRAFT", items: { create: items } },
         include: { items: { include: { user: { select: { id: true, workerName: true } } } } },

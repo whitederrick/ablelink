@@ -47,6 +47,11 @@ export async function PATCH(
       if (t) updateData.endTime = t;
     }
 
+    // 퇴근 시각 없이 확정 금지(급여 과지급·문서 불일치 방지) — 보정으로 endTime을 제공하거나 이미 있어야 함.
+    if (!(updateData.endTime ?? record.endTime)) {
+      return NextResponse.json({ success: false, message: "퇴근 시각이 없어 확정할 수 없습니다. 퇴근 시각을 입력해주세요." }, { status: 400 });
+    }
+
     await prisma.dailyAttendance.update({ where: { id: record.id }, data: updateData });
 
     return NextResponse.json({ success: true });
