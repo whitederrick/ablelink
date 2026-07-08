@@ -21,6 +21,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 스크래치패드·스테일 워크트리 등 도구 산출물은 린트 대상 아님(위반 집계 오염 방지)
+    ".claude/**",
   ]),
 ]);
 

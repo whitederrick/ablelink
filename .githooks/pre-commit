@@ -1,0 +1,4 @@
+#!/bin/sh
+# 원천 차단 게이트: 변경한 라인의 ESLint 에러가 있으면 커밋 차단(레거시 라인은 통과).
+# 활성화: package.json prepare(npm install) 또는  git config core.hooksPath .githooks
+node scripts/precommit-lint.mjs
