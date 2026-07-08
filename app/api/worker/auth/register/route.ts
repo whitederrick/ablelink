@@ -6,12 +6,21 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/password";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { getRateLimitIp } from "@/lib/clientIp";
 
 const PHONE_RE = /^01[0-9]{8,9}$/;
 const MIN_PW_LEN = 8;
 
 export async function POST(request: Request) {
   try {
+    // 공개 엔드포인트 + 6자리 초대코드 검증 → 무제한 열거 방지(IP·전화번호 이중 제한).
+    const ip = getRateLimitIp(request) ?? "unknown";
+    const rlIp = await checkRateLimit(`register:${ip}`);
+    if (!rlIp.allowed) {
+      return NextResponse.json({ success: false, message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
+    }
+
     const body = await request.json();
     const loginId     = String(body?.loginId     ?? "").trim().replace(/-/g, "");
     const password    = String(body?.password    ?? "");
@@ -35,6 +44,11 @@ export async function POST(request: Request) {
     // 초대 코드 검증 (없으면 /api/worker/auth/signup 사용 필요)
     if (!inviteCode) {
       return NextResponse.json({ success: false, message: "초대 코드가 필요합니다." }, { status: 400 });
+    }
+    // 전화번호 기준 추가 제한(IP 우회 브루트포스 대비)
+    const rlPhone = await checkRateLimit(`register-phone:${phoneNumber}`);
+    if (!rlPhone.allowed) {
+      return NextResponse.json({ success: false, message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
     }
     const invite = await prisma.workerInvite.findFirst({
       where: { code: inviteCode, phoneNumber, usedAt: null },

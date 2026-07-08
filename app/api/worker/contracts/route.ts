@@ -333,14 +333,18 @@ async function sendSignedNotificationNew(workerId: bigint, phone: string, name: 
   }
 
   const tempPassword = generateTempPassword();
-  await prisma.worker.update({ where: { id: workerId }, data: { password: await hash(tempPassword, 12) } });
+  const tempHash = await hash(tempPassword, 12);
 
+  // ★발송 성공 후에 비번 교체 — 선저장 후 발송이 실패하면 새 비번 안내가 안 나가
+  //   신규 워커가 로그인 불가 상태로 조용히 남는다. 발송 실패 시 기존 비번 유지(재시도 가능).
   await sendAlimtalk({
     phone, name, templateCode,
     subject: "Able-Link 가입 안내",
     message: `안녕하세요 ${name}님,\n\n근로계약서 서명이 완료되었습니다.\nAble-Link 서비스를 이용하시려면 아래 정보로 로그인해 주세요.\n\n아이디: ${loginId} (전화번호)\n임시 비밀번호: ${tempPassword}\n\n첫 로그인 후 비밀번호를 변경해 주세요. (아이디는 전화번호이며, 원하면 이메일로 변경할 수 있습니다.)`,
     buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
   });
+
+  await prisma.worker.update({ where: { id: workerId }, data: { password: tempHash } });
 }
 
 // ─── 기존 직무지도원 배정 연결 인증코드 발송(assignment-pipeline-design.md §7) ──────────
