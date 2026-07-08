@@ -49,11 +49,8 @@ export async function GET(request: NextRequest) {
 
     const workerId = BigInt(workerIdRaw);
 
-    // 직무지도원 + 배정 조회
-    const user = await prisma.worker.findUnique({
-      where: { id: workerId },
-      select: { workerName: true, phoneNumber: true, signatureUrl: true, loginId: true },
-    });
+    // 에이전시 스코프 게이트 먼저 — 소속 기관 배정이 없으면 PII(성명·연락처·서명·계정)를 조회하기 전에 400.
+    //  (심층방어: 타 기관 워커 요청 시 개인정보를 아예 fetch하지 않는다.)
     const assignment = await prisma.siteAssignment.findFirst({
       where: { workerId, agencyId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
       include: { site: true },
@@ -62,6 +59,12 @@ export async function GET(request: NextRequest) {
     if (!assignment?.site) {
       return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 400 });
     }
+
+    // 게이트 통과 후 직무지도원 PII 조회
+    const user = await prisma.worker.findUnique({
+      where: { id: workerId },
+      select: { workerName: true, phoneNumber: true, signatureUrl: true, loginId: true },
+    });
 
     const site  = assignment.site;
     const docTimes = dailyDocTimes(assignment.workType, assignment.commuteGuidanceIncluded, assignment.customWorkStart, assignment.customWorkEnd);
