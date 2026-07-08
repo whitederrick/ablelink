@@ -87,6 +87,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ success: false, message: "모든 항목을 평가해 주세요." }, { status: 400 });
     }
     const { categoryScores, totalScore } = scoreSurvey(snap, answers);
+    // 원자적 claim — PENDING일 때만 응답 처리. 동시 POST 중 하나만 성공(중복 응답·알림 방지).
+    const claim = await prisma.satisfactionSurvey.updateMany({ where: { id: s.id, status: "PENDING" }, data: { status: "RESPONDED", respondedAt: new Date() } });
+    if (claim.count === 0) return NextResponse.json({ success: false, message: "이미 응답이 완료되었습니다." }, { status: 409 });
     await prisma.satisfactionSurvey.update({
       where: { id: s.id },
       data: { scores: answers, comment, categoryScores: categoryScores as any, totalScore, status: "RESPONDED", respondedAt: new Date() } as any,
@@ -109,6 +112,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ success: false, message: "종합 만족도를 평가해 주세요." }, { status: 400 });
   }
 
+  // 원자적 claim — PENDING일 때만 응답 처리. 동시 POST 중 하나만 성공(중복 응답·알림 방지).
+  const claim = await prisma.satisfactionSurvey.updateMany({ where: { id: s.id, status: "PENDING" }, data: { status: "RESPONDED", respondedAt: new Date() } });
+  if (claim.count === 0) return NextResponse.json({ success: false, message: "이미 응답이 완료되었습니다." }, { status: 409 });
   await prisma.satisfactionSurvey.update({
     where: { id: s.id },
     data: { scores, overallScore: overall, comment, status: "RESPONDED", respondedAt: new Date() },

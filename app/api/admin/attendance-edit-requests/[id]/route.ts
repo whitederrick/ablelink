@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { requireManagerSession } from "@/lib/managerScope";
 import { audit } from "@/lib/audit";
 import { kstWallTimeToInstant } from "@/lib/workSchedule";
@@ -44,16 +45,17 @@ export async function PATCH(
     const now = new Date();
 
     if (action === "approve") {
-      // 1. 수정 요청 승인
-      await prisma.attendanceEditRequest.update({
-        where: { id: request.id },
+      // 1. 원자적 claim — PENDING일 때만 승인. 동시 승인/반려 경합 시 하나만 성공(반려됐는데 출근부 반영되는 모순 방지).
+      const claim = await prisma.attendanceEditRequest.updateMany({
+        where: { id: request.id, status: "PENDING" },
         data: { status: "APPROVED", adminNote: adminNote?.trim() || null, reviewedAt: now },
       });
+      if (claim.count === 0) return NextResponse.json({ success: false, message: "이미 처리된 요청입니다." }, { status: 409 });
 
       // 2. 출근 기록에 제안된 시간 적용
       //    ⚠️ KST 벽시계 → UTC instant 보정(kstWallTimeToInstant). 다른 곳과 동일 출처를 써야 9시간 어긋남 방지.
       //    승인 = 위탁기관 컨펌 → payrollConfirmedAt 설정 → 출근부 급여 게이트 통과(보정대기 해제).
-      const updateData: any = { payrollConfirmedAt: now };
+      const updateData: Prisma.DailyAttendanceUpdateInput = { payrollConfirmedAt: now };
       if (request.proposedStart) {
         updateData.startTime = kstWallTimeToInstant(request.attendance.workDate, request.proposedStart);
       }
@@ -83,11 +85,12 @@ export async function PATCH(
       await audit(scope, { entityType: "AttendanceEditRequest", entityId: request.id, action: "update", before: { status: request.status }, after: { status: "APPROVED" } });
       return NextResponse.json({ success: true, message: "수정 요청이 승인되었습니다. 출근 기록이 업데이트되었습니다." });
     } else {
-      // 반려
-      await prisma.attendanceEditRequest.update({
-        where: { id: request.id },
+      // 반려 — 원자적 claim(PENDING일 때만). 경합 시 하나만 성공.
+      const claim = await prisma.attendanceEditRequest.updateMany({
+        where: { id: request.id, status: "PENDING" },
         data: { status: "REJECTED", adminNote: adminNote?.trim() || null, reviewedAt: now },
       });
+      if (claim.count === 0) return NextResponse.json({ success: false, message: "이미 처리된 요청입니다." }, { status: 409 });
 
       // 워커 알림: 반려 + 재제출 안내(반려 건은 새 수정요청으로 다시 제출 가능).
       try {

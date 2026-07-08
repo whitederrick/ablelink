@@ -74,10 +74,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "decline") {
-      await prisma.siteAssignment.updateMany({
+      const r = await prisma.siteAssignment.updateMany({
         where: { id: asgn.id, status: "REQUESTED" },
         data: { status: "REJECTED", rejectedAt: new Date(), statusReason: "후보 거절" },
       });
+      if (r.count === 0) return NextResponse.json({ success: false, message: "이미 처리된 요청입니다." }, { status: 409 });
       await audit(session, { entityType: "SiteAssignment", entityId: asgn.id, action: "update", summary: "배정 응답(거절)" });
       await notifyManagers("거절");
       return NextResponse.json({ success: true, status: "REJECTED", message: "배정 요청을 거절했습니다." });
@@ -124,10 +125,11 @@ export async function POST(req: NextRequest) {
 
     if (others === 0) {
       // 단일 후보 → 바로 계약 대기(ASSIGNED). 본인 계정에서 수락했으므로 연결(connectedAt)까지 처리.
-      await prisma.siteAssignment.updateMany({
+      const r = await prisma.siteAssignment.updateMany({
         where: { id: asgn.id, status: "REQUESTED" },
         data: { status: "ASSIGNED", workType, commuteGuidanceIncluded, connectedAt: new Date() },
       });
+      if (r.count === 0) return NextResponse.json({ success: false, message: "이미 처리된 요청입니다." }, { status: 409 });
       await audit(session, { entityType: "SiteAssignment", entityId: asgn.id, action: "update", summary: "배정 응답(수락·계약 대기)" });
       await notifyManagers("수락(계약 대기)");
       return NextResponse.json({
@@ -138,10 +140,11 @@ export async function POST(req: NextRequest) {
     }
 
     // 복수 후보 → 수락(ACCEPTED). 담당자 최종확정 대기.
-    await prisma.siteAssignment.updateMany({
+    const rAccept = await prisma.siteAssignment.updateMany({
       where: { id: asgn.id, status: "REQUESTED" },
       data: { status: "ACCEPTED", workType, commuteGuidanceIncluded, connectedAt: new Date() },
     });
+    if (rAccept.count === 0) return NextResponse.json({ success: false, message: "이미 처리된 요청입니다." }, { status: 409 });
     await audit(session, { entityType: "SiteAssignment", entityId: asgn.id, action: "update", summary: "배정 응답(수락·확정 대기)" });
     await notifyManagers("수락(확정 대기)");
     return NextResponse.json({
