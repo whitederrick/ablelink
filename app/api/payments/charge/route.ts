@@ -95,6 +95,14 @@ export async function POST(request: NextRequest) {
         });
         results.push({ agencyId: agency.id.toString(), status: "success", amount });
         console.log(`[charge] 결제 성공: ${agency.name} ${amount}원`);
+      } else if (data?.code === "ALREADY_PROCESSED_PAYMENT") {
+        // 이미 이 orderId로 결제 완료됨(직전 성공 후 크래시 재시도). 성공으로 간주 — 강등 금지.
+        await prisma.agency.updateMany({
+          where: { id: agency.id, nextBillingAt: currentBillingAt },
+          data: { nextBillingAt },
+        });
+        results.push({ agencyId: agency.id.toString(), status: "success", amount, reason: "already_processed" });
+        console.warn(`[charge] 중복 orderId=이미 결제됨, 성공 간주: ${agency.name}`);
       } else {
         // 일시 오류(토스 점검/혼잡 = 5xx·429)는 유예기간 내 재시도, 그 외(카드 거절 등)·유예 초과 시에만 강등
         const transient = res.status >= 500 || res.status === 429;

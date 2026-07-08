@@ -84,8 +84,12 @@ export async function POST(request: NextRequest) {
     }
 
     const billingKey = billingData.billingKey;
-    const orderId = `ablelink_${agencyId}_${Date.now()}`;
     const now = new Date();
+    // 결정적 orderId(agency×결제월 KST) — 과금 성공 후 DB 반영 실패로 재시도해도 Toss가 중복청구를 거부(멱등).
+    //  같은 orderId 재요청 = ALREADY_PROCESSED_PAYMENT(아래에서 성공 간주 후 DB 보정).
+    const kstNow = new Date(now.getTime() + 9 * 3600 * 1000);
+    const period = `${kstNow.getUTCFullYear()}${String(kstNow.getUTCMonth() + 1).padStart(2, "0")}`;
+    const orderId = `ablelink_${agencyId}_${period}`;
 
     // 2. 최초 결제
     const chargeRes = await fetch(`${TOSS_API}/billing/${billingKey}`, {
@@ -107,7 +111,9 @@ export async function POST(request: NextRequest) {
 
     const chargeData = await chargeRes.json();
 
-    if (!chargeRes.ok) {
+    // 이미 이 orderId로 결제 완료(직전 성공 후 DB 실패 재시도) = 성공 간주, 아래 DB 보정으로 진행.
+    const alreadyPaid = !chargeRes.ok && chargeData?.code === "ALREADY_PROCESSED_PAYMENT";
+    if (!chargeRes.ok && !alreadyPaid) {
       console.error("[payments/billing] 결제 실패:", chargeData);
       return NextResponse.json(
         { success: false, message: chargeData.message || "결제에 실패했습니다." },
@@ -126,7 +132,7 @@ export async function POST(request: NextRequest) {
         planType,
         tossBillingKey: billingKey,
         tossCustomerKey: customerKey,
-        subscriptionId: chargeData.orderId,
+        subscriptionId: chargeData.orderId ?? orderId,
         subscribedAt: now,
         nextBillingAt,
         subscriptionCanceledAt: null,
@@ -144,7 +150,7 @@ export async function POST(request: NextRequest) {
       planType,
       amount,
       nextBillingAt: nextBillingAt.toISOString(),
-      paymentKey: chargeData.paymentKey,
+      paymentKey: chargeData.paymentKey ?? null,
     });
   } catch (e: any) {
     if (e instanceof Response) return e;
