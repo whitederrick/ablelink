@@ -140,6 +140,7 @@ function WorklogForm() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [loadingLog, setLoadingLog] = useState(false);
+  const [loadError, setLoadError] = useState(false); // 수정모드 로드 실패 — 빈 폼으로 원본 덮어쓰기 방지
 
   const premium = siteInfo.premiumAccess ?? false;
   const isExempt = siteInfo.attendanceButtonExempt ?? false;
@@ -193,8 +194,13 @@ function WorklogForm() {
   useEffect(() => {
     if (!logId) return;
     setLoadingLog(true);
-    fetch(`/api/worker/logs/${logId}`).then(r => r.json()).then(d => {
-      if (d.success && d.log) {
+    setLoadError(false);
+    // ★res.ok/success 확인 — 로드 실패 시 빈 폼을 렌더하면(저장 시) 기존 일지가 빈값으로 덮어써져 원본 소실.
+    //  실패면 loadError로 표시하고 폼/저장을 막는다.
+    fetch(`/api/worker/logs/${logId}`)
+      .then(async r => { if (!r.ok) throw new Error("load failed"); return r.json(); })
+      .then(d => {
+        if (!d.success || !d.log) throw new Error("load failed");
         const l = d.log;
         setLogDate(l.workDate || todayStr);
         setAttendance((l.attendance as Attendance) || "출석");
@@ -206,8 +212,9 @@ function WorklogForm() {
         // 면제 배정 수동 연장값 복원(일반 배정은 자동이라 0).
         const ext = (Number(l.extTime1on1) || 0) + (Number(l.extTimeGroup) || 0);
         if (ext > 0) setExtraHours(String(ext));
-      }
-    }).catch(e => console.error("[worker/worklog] 일지 로드 실패", e)).finally(() => setLoadingLog(false));
+      })
+      .catch(e => { console.error("[worker/worklog] 일지 로드 실패", e); setLoadError(true); })
+      .finally(() => setLoadingLog(false));
   }, [logId]);
 
   // 임시 저장
@@ -310,6 +317,11 @@ function WorklogForm() {
 
   async function handleSave(isComplete: boolean) {
     setError("");
+    if (logId && loadError) {
+      // 원본 로드 실패 상태 — 저장하면 빈값으로 덮어쓰므로 차단.
+      setError("일지를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+      return;
+    }
     if (!traineeId) {
       setError("훈련생을 선택해주세요.");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -365,6 +377,17 @@ function WorklogForm() {
   if (loadingLog) {
     return <div className="flex min-h-dvh items-center justify-center bg-slate-50">
       <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
+    </div>;
+  }
+
+  // 수정모드 로드 실패 — 빈 폼 대신 오류 화면(원본 덮어쓰기 방지)
+  if (logId && loadError) {
+    return <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-slate-50 p-6 text-center">
+      <p className="text-sm font-semibold text-rose-500">일지를 불러오지 못했습니다.</p>
+      <div className="flex gap-2">
+        <button onClick={() => location.reload()} className="rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-black text-white active:scale-95">다시 시도</button>
+        <button onClick={() => router.back()} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-black text-slate-600 active:scale-95">돌아가기</button>
+      </div>
     </div>;
   }
 

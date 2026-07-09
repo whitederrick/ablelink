@@ -66,12 +66,11 @@ export async function POST(req: NextRequest) {
     }
 
     const tempPw = generateTempPassword();
-    await prisma.worker.update({
-      where: { id: user.id },
-      // P2-16: 비번 재설정 시 sessionVersion +1 → 기존 발급 토큰 전부 무효화(재설정=전 세션 로그아웃).
-      data: { password: await hash(tempPw, 12), isTemporary: true, sessionVersion: { increment: 1 } },
-    });
 
+    // ★임시비번을 '발송에 성공한 경우에만' 계정에 반영한다(P1). 과거엔 발송 전에 무조건 비번을 교체+세션
+    //  무효화해서, 알림톡 템플릿/RESEND 미설정·발송 실패 시 옛 비번 무효+새 비번 미전달 = 계정 완전 잠김이었다.
+    //  (존재 여부 비노출을 위해 응답 메시지는 성공/미발송 동일. 미발송 시엔 계정을 안 건드려 옛 비번 유지.)
+    let delivered = false;
     if (isEmail) {
       try {
         await sendSimpleEmail({
@@ -79,22 +78,36 @@ export async function POST(req: NextRequest) {
           subject: "[Able-Link] 임시 비밀번호 안내",
           text: `안녕하세요, ${user.workerName || ""}님.\n\n임시 비밀번호: ${tempPw}\n\n로그인 후 반드시 비밀번호를 변경해주세요.\n\n- Able-Link 팀`,
         });
+        delivered = true;
       } catch (e: any) {
         console.error("[reset-password] 이메일 발송 실패:", e?.message);
       }
     } else if (isAlimtalkReady(RESET_PW_TEMPLATE)) {
       const appUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";
-      await sendAlimtalk({
-        phone: user.phoneNumber,
-        name: user.workerName || "",
-        templateCode: process.env[RESET_PW_TEMPLATE]!,
-        subject: "Able-Link 임시 비밀번호 안내",
-        message: `안녕하세요 ${user.workerName || ""}님,\n\n요청하신 임시 비밀번호를 안내드립니다.\n\n임시 비밀번호: ${tempPw}\n\n로그인 후 반드시 비밀번호를 변경해주세요.\n\n${appUrl}/worker/login`,
-        buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
-      });
+      try {
+        await sendAlimtalk({
+          phone: user.phoneNumber,
+          name: user.workerName || "",
+          templateCode: process.env[RESET_PW_TEMPLATE]!,
+          subject: "Able-Link 임시 비밀번호 안내",
+          message: `안녕하세요 ${user.workerName || ""}님,\n\n요청하신 임시 비밀번호를 안내드립니다.\n\n임시 비밀번호: ${tempPw}\n\n로그인 후 반드시 비밀번호를 변경해주세요.\n\n${appUrl}/worker/login`,
+          buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
+        });
+        delivered = true;
+      } catch (e) {
+        console.error("[reset-password] 알림톡 발송 실패:", e);
+      }
     } else {
-      // 알림톡 미설정/이메일 없음 → 발송 보류. 소속 기관(매니저) 콘솔 초기화로 안내(무료 주 동선).
-      console.warn(`[reset-password] 알림톡 미설정 — workerId: ${user.id} 초기화 완료(발송 보류)`);
+      // 알림톡 미설정 → 발송 불가. 계정을 건드리지 않는다(옛 비번 유지 = 잠김 방지). 매니저 콘솔 초기화 동선.
+      console.warn(`[reset-password] 알림톡 미설정 — workerId: ${user.id} (발송 보류·계정 미변경)`);
+    }
+
+    if (delivered) {
+      await prisma.worker.update({
+        where: { id: user.id },
+        // P2-16: 재설정 시 sessionVersion +1 → 기존 발급 토큰 전부 무효화(재설정=전 세션 로그아웃).
+        data: { password: await hash(tempPw, 12), isTemporary: true, sessionVersion: { increment: 1 } },
+      });
     }
 
     return NextResponse.json({ success: true, message: successMsg });

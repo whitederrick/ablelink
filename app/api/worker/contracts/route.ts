@@ -335,24 +335,53 @@ async function sendSignedNotificationNew(workerId: bigint, phone: string, name: 
   const appUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://able-link.co.kr";
   const loginId = phone.replace(/-/g, "");
 
-  if (!templateCode) {
-    console.warn("[contracts sign] KAKAO_SIGNUP_TEMPLATE_CODE 미설정 — 임시 비밀번호 발급 건너뜀");
-    return;
-  }
-
   const tempPassword = generateTempPassword();
   const tempHash = await hash(tempPassword, 12);
 
-  // ★발송 성공 후에 비번 교체 — 선저장 후 발송이 실패하면 새 비번 안내가 안 나가
-  //   신규 워커가 로그인 불가 상태로 조용히 남는다. 발송 실패 시 기존 비번 유지(재시도 가능).
-  await sendAlimtalk({
-    phone, name, templateCode,
-    subject: "Able-Link 가입 안내",
-    message: `안녕하세요 ${name}님,\n\n근로계약서 서명이 완료되었습니다.\nAble-Link 서비스를 이용하시려면 아래 정보로 로그인해 주세요.\n\n아이디: ${loginId} (전화번호)\n임시 비밀번호: ${tempPassword}\n\n첫 로그인 후 비밀번호를 변경해 주세요. (아이디는 전화번호이며, 원하면 이메일로 변경할 수 있습니다.)`,
-    buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
-  });
-
+  // ★신규 워커의 임시비번을 '먼저' 저장한다. 신규 워커의 초기 비번은 무작위 해시(아무도 모름)라
+  //  유일한 로그인 수단이 이 임시비번이다. 과거처럼 '발송 후 저장'이면 카카오 다운/템플릿 미설정 시
+  //  저장이 안 돼(그리고 상위 catch가 삼켜) 신규 워커가 크리덴셜 없이 영구 로그인 불가로 조용히 남는다.
   await prisma.worker.update({ where: { id: workerId }, data: { password: tempHash } });
+
+  let delivered = false;
+  if (templateCode) {
+    try {
+      await sendAlimtalk({
+        phone, name, templateCode,
+        subject: "Able-Link 가입 안내",
+        message: `안녕하세요 ${name}님,\n\n근로계약서 서명이 완료되었습니다.\nAble-Link 서비스를 이용하시려면 아래 정보로 로그인해 주세요.\n\n아이디: ${loginId} (전화번호)\n임시 비밀번호: ${tempPassword}\n\n첫 로그인 후 비밀번호를 변경해 주세요. (아이디는 전화번호이며, 원하면 이메일로 변경할 수 있습니다.)`,
+        buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
+      });
+      delivered = true;
+    } catch (e) {
+      console.error("[contracts sign] 가입 알림톡 발송 실패:", e);
+    }
+  } else {
+    console.warn("[contracts sign] KAKAO_SIGNUP_TEMPLATE_CODE 미설정 — 임시비번 발송 불가");
+  }
+
+  // 발송 실패/미설정 → 신규 워커가 크리덴셜 없이 남지 않도록 담당 위탁기관 매니저에게 초기화 요청 알림.
+  if (!delivered) {
+    try {
+      const asg = await prisma.siteAssignment.findFirst({
+        where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+        orderBy: { assignedAt: "desc" }, select: { agencyId: true },
+      });
+      if (asg?.agencyId) {
+        const mgrs = await prisma.manager.findMany({ where: { agencyId: asg.agencyId, isActive: true }, select: { id: true } });
+        if (mgrs.length) {
+          await prisma.managerNotice.createMany({
+            data: mgrs.map((m) => ({
+              managerId: m.id,
+              title: `[조치 필요] ${name} 임시 비밀번호 발송 실패`,
+              body: `${name}(${loginId}) 신규 직무지도원의 가입 안내(임시 비밀번호) 발송이 실패했습니다. 비밀번호 초기화로 재발송해주세요.`,
+              link: "/manager/workers",
+            })),
+          });
+        }
+      }
+    } catch (e) { console.warn("[contracts sign] 매니저 알림 생성 실패:", e); }
+  }
 }
 
 // ─── 기존 직무지도원 배정 연결 인증코드 발송(assignment-pipeline-design.md §7) ──────────
