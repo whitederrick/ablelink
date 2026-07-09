@@ -265,7 +265,10 @@ export async function POST(req: NextRequest) {
           baseAmount: base,
           incomeType: "EMPLOYMENT",
           hourlyRate2Plus: wt === "HOURLY" ? Math.round(base * 1.2) : null,
-          weeklyHolidayPay: wt === "HOURLY" ? Math.round(base * 8) : null,
+          // P1-12: 주휴수당 고정액을 시급×8h로 시드하면 단시간(오전/오후 5.5h) 워커에 주40h값이 지급돼
+          //  ~45% 과지급된다. null로 두면 급여엔진이 주 소정근로시간 비례((소정÷40)×8×시급)로 자동 산정.
+          //  (수동 고정 오버라이드는 매니저 급여계약 폼에서 명시 입력 시에만 적용.)
+          weeklyHolidayPay: null,
           effectiveFrom: contract.contractStart,
           effectiveTo: contract.contractEnd,
         };

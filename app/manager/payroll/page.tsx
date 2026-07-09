@@ -85,12 +85,13 @@ const TIER_DESC: Record<string, string> = {
   NONE: "사업소득(3.3%) — 4대보험 비대상",
 };
 
-// 시급 입력 시 자동 계산 — 공단 기준 2명 이상 동시지도 시급은 120%, 주휴수당은 시급×8시간(주40시간 기준).
+// 시급 입력 시 2명 이상 동시지도 시급(120%)만 자동 계산한다. 주휴수당은 비워두면 급여엔진이
+//  주 소정근로시간 비례((소정÷40)×8×시급)로 자동 산정한다 — P1-12: 시급×8h 고정 시드는 단시간(오전/오후) 과지급.
 const RATE_2PLUS_MULTIPLIER = 1.2;
-const WEEKLY_HOLIDAY_HOURS = 8;
 const MIN_WAGE_2026 = 10320; // 2026 최저시급(원) — 급여 기준 등록 기본값
 function auto2Plus(base: number) { return base > 0 ? String(Math.round(base * RATE_2PLUS_MULTIPLIER)) : ""; }
-function autoWeeklyHoliday(base: number) { return base > 0 ? String(Math.round(base * WEEKLY_HOLIDAY_HOURS)) : ""; }
+// 주휴수당 기본값은 비움 — 급여엔진이 주 소정시간 비례로 자동 산정. 매니저가 명시 입력 시에만 고정 오버라이드.
+function autoWeeklyHoliday() { return ""; }
 
 const RUN_STATUS_BADGE: Record<string, { label: string; tone: BadgeTone }> = {
   DRAFT:     { label: "초안", tone: "amber" },
@@ -108,7 +109,7 @@ function makeInitialForm() {
   return {
     workerId: "", workerType: "EXTERNAL" as WorkerType, payType: "HOURLY" as PayType,
     baseAmount: String(MIN_WAGE_2026), incomeType: "BUSINESS" as IncomeType,
-    hourlyRate2Plus: auto2Plus(MIN_WAGE_2026), weeklyHolidayPay: autoWeeklyHoliday(MIN_WAGE_2026),
+    hourlyRate2Plus: auto2Plus(MIN_WAGE_2026), weeklyHolidayPay: autoWeeklyHoliday(),
     effectiveFrom: ymd(start), effectiveTo: ymd(end),
   };
 }
@@ -131,7 +132,8 @@ export default function PayrollPage() {
   const [confirmed, setConfirmed] = useState({ base: false, rate2: false, weekly: false });
   const pickSeqRef = useRef(0); // A10: onPickWorker 요청 순번(느린 stale 응답 폐기용)
   const needRate2 = form.payType === "HOURLY";
-  const needWeekly = form.payType !== "MONTHLY";
+  // P1-12: 주휴수당은 비워두면 급여엔진이 비례 자동산정하므로 확인 게이트에서 제외(명시 입력만 선택적 고정 오버라이드).
+  const needWeekly = false;
   const amountsConfirmed = confirmed.base && (!needRate2 || confirmed.rate2) && (!needWeekly || confirmed.weekly);
   const confirmChip = (k: "base" | "rate2" | "weekly") =>
     confirmed[k] ? (
@@ -229,7 +231,7 @@ export default function PayrollPage() {
           effectiveFrom: String(cand.contractStart).slice(0, 10),
           effectiveTo: String(cand.contractEnd).slice(0, 10),
           hourlyRate2Plus: isHourly ? auto2Plus(base) : f.hourlyRate2Plus,
-          weeklyHolidayPay: f.workerType === "EXTERNAL" ? autoWeeklyHoliday(base) : f.weeklyHolidayPay,
+          weeklyHolidayPay: f.workerType === "EXTERNAL" ? autoWeeklyHoliday() : f.weeklyHolidayPay,
         };
       });
     } catch { /* 프리필 실패 무시 — 수동 입력 가능 */ }
@@ -534,7 +536,7 @@ export default function PayrollPage() {
                             const base = Number(f.baseAmount) || 0;
                             const isHourly = pt === "HOURLY";
                             return isHourly
-                              ? { ...f, payType: pt, hourlyRate2Plus: auto2Plus(base), weeklyHolidayPay: autoWeeklyHoliday(base) }
+                              ? { ...f, payType: pt, hourlyRate2Plus: auto2Plus(base), weeklyHolidayPay: autoWeeklyHoliday() }
                               : { ...f, payType: pt, hourlyRate2Plus: "" };
                           })} className={`w-full ${T.select}`}>
                           <option value="HOURLY">시급</option>
@@ -573,7 +575,7 @@ export default function PayrollPage() {
                               const isHourly = form.payType === "HOURLY";
                               // 시급 직접 입력 시 2명+ 시급(120%)·주휴수당(시급×8) 자동 재계산
                               setForm(f => isHourly
-                                ? { ...f, baseAmount: v, hourlyRate2Plus: auto2Plus(base), weeklyHolidayPay: autoWeeklyHoliday(base) }
+                                ? { ...f, baseAmount: v, hourlyRate2Plus: auto2Plus(base), weeklyHolidayPay: autoWeeklyHoliday() }
                                 : { ...f, baseAmount: v });
                               setConfirmed(c => isHourly ? { base: true, rate2: false, weekly: false } : { ...c, base: true });
                             }}
@@ -602,15 +604,14 @@ export default function PayrollPage() {
 
                       {form.payType !== "MONTHLY" && (
                         <div className="space-y-1.5">
-                          <label className={T.label}>주휴수당 (원)</label>
+                          <label className={T.label}>주휴수당 (원, 선택)</label>
                           <div className="flex items-center gap-2">
                             <input type="text" inputMode="numeric" value={commaStr(form.weeklyHolidayPay)}
                               onChange={e => { const v = digitsOnly(e.target.value); setForm(f => ({ ...f, weeklyHolidayPay: v })); setConfirmed(c => ({ ...c, weekly: true })); }}
-                              placeholder="시급 입력 시 자동 계산"
+                              placeholder="비워두면 자동 비례계산"
                               className={`min-w-0 flex-1 ${T.input}`} />
-                            {confirmChip("weekly")}
                           </div>
-                          <p className="text-[11px] font-semibold text-slate-400">※ 시급 × 8시간 자동 계산 (주 40시간 기준, 수정 가능)</p>
+                          <p className="text-[11px] font-semibold text-slate-400">※ 비워두면 급여계산 시 주 소정근로시간 비례((소정÷40)×8×시급)로 자동 산정. 고정액이 필요하면 직접 입력.</p>
                         </div>
                       )}
                     </div>

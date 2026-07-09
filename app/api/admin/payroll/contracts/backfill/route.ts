@@ -56,7 +56,8 @@ export async function POST(req: NextRequest) {
         currency: "KRW",
         incomeType: "EMPLOYMENT",
         hourlyRate2Plus: wt === "HOURLY" ? Math.round(base * 1.2) : null,
-        weeklyHolidayPay: wt === "HOURLY" ? Math.round(base * 8) : null,
+        // P1-12: 시급×8h 고정 시드는 단시간 워커 과지급 → null(급여엔진 비례 자동산정).
+        weeklyHolidayPay: null,
         effectiveFrom: c.contractStart,
         effectiveTo: c.contractEnd,
       };

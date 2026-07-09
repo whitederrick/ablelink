@@ -41,6 +41,12 @@ export interface WeeklyHolidayInput {
    */
   periodStart?: string;
   periodEnd?: string;
+  /**
+   * P1-11: 월 경계 주(週) 귀속 정책 "YYYY-MM"(선택). 주면 "주가 끝나는(일요일이 속한) 달"이 이 값과
+   * 같은 주만 이 달에 귀속시켜 지급한다. days에는 인접 달(전월 말) 출근까지 넣어 경계주 만근을 온전히
+   * 판정하되, 지급·집계는 이 달에 끝나는 주로 한정한다. (미지정 시 종전대로 days에 담긴 모든 주 집계.)
+   */
+  payMonth?: string;
 }
 
 export interface WeekResult {
@@ -75,6 +81,15 @@ export function isoWeekKey(dateISO: string): string {
   return `${dt.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
+/** 그 날짜가 속한 ISO 주(월~일)의 일요일(주 끝) "YYYY-MM-DD". 주 귀속월 판정용. */
+export function isoWeekEndISO(dateISO: string): string {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay() || 7;          // 월=1..일=7
+  dt.setUTCDate(dt.getUTCDate() + (7 - dow)); // 그 주 일요일로 이동
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
 /** [startISO, endISO] 사이 모든 날짜를 "YYYY-MM-DD"(KST 날짜문자열)로 순회. */
 function* eachDateISO(startISO: string, endISO: string): Generator<string> {
   const [sy, sm, sd] = startISO.split("-").map(Number);
@@ -100,22 +115,27 @@ export function computeWeeklyHoliday(input: WeeklyHolidayInput): WeeklyHolidayRe
   const workingWeekdays = input.workingWeekdays ?? new Set([1, 2, 3, 4, 5]); // 기본 월~금
   const holidaySet = input.holidaySet ?? new Set<string>();
 
-  // 주차별 출근 집계
-  const byWeek = new Map<string, { workedDays: Set<string>; minutes: number }>();
+  const payMonth = input.payMonth;
+
+  // 주차별 출근 집계 (endISO = 그 주 일요일 = 귀속월 판정 기준)
+  const byWeek = new Map<string, { workedDays: Set<string>; minutes: number; endISO: string }>();
   for (const dw of days) {
     const key = isoWeekKey(dw.dateISO);
     let w = byWeek.get(key);
-    if (!w) { w = { workedDays: new Set(), minutes: 0 }; byWeek.set(key, w); }
+    if (!w) { w = { workedDays: new Set(), minutes: 0, endISO: isoWeekEndISO(dw.dateISO) }; byWeek.set(key, w); }
     w.workedDays.add(dw.dateISO);
     w.minutes += dw.scheduledMinutes;
   }
 
   // 결근주/무출근주 명시: 급여기간 내 모든 주를 seed → 출근 0인 주도 부적격 주로 남는다.
   // (기간이 주어지지 않으면 종전대로 출근한 주만 집계)
+  //  ★payMonth 지정 시엔 "주가 끝나는 달==payMonth"인 주만 seed/집계한다(P1-11 경계주 귀속).
   if (input.periodStart && input.periodEnd) {
     for (const ymd of eachDateISO(input.periodStart, input.periodEnd)) {
+      const endISO = isoWeekEndISO(ymd);
+      if (payMonth && endISO.slice(0, 7) !== payMonth) continue;
       const key = isoWeekKey(ymd);
-      if (!byWeek.has(key)) byWeek.set(key, { workedDays: new Set(), minutes: 0 });
+      if (!byWeek.has(key)) byWeek.set(key, { workedDays: new Set(), minutes: 0, endISO });
     }
   }
 
@@ -131,7 +151,10 @@ export function computeWeeklyHoliday(input: WeeklyHolidayInput): WeeklyHolidayRe
     holidayWorkdayByWeek.set(key, (holidayWorkdayByWeek.get(key) ?? 0) + 1);
   }
 
-  const weekKeys = [...byWeek.keys()].sort();
+  // payMonth 지정 시 "주가 끝나는 달==payMonth"인 주만 지급·집계 대상(경계주는 끝나는 달로 귀속).
+  const weekKeys = [...byWeek.keys()]
+    .filter((k) => !payMonth || byWeek.get(k)!.endISO.slice(0, 7) === payMonth)
+    .sort();
   const weekCount = weekKeys.length;
 
   // 1주 소정근로시간(초단시간 15h 판정·주휴수당액) = 평균 1일 소정 × 주 소정근로일수.

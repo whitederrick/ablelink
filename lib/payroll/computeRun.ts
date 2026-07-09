@@ -70,6 +70,13 @@ export async function computePayrollItems(
   const periodEnd = `${yearMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
   const periodStartDate = new Date(periodStart + "T00:00:00+09:00");
   const periodEndDate = new Date(periodEnd + "T23:59:59+09:00");
+  // P1-11: 월 경계 주(週)는 "주가 끝나는(일요일이 속한) 달"에 귀속·지급한다. 경계주 만근을 온전히
+  //  판정하려면 그 주의 전월 부분 출근이 필요하므로, 전월 말 ~7일치 출근을 함께 로드해 주휴 판정에만 쓴다.
+  //  (급여·근무일수 등 나머지 계산은 당월 confirmedAtt만 사용 — lookback은 주휴 산정 전용.)
+  const lookbackDate = new Date(Date.UTC(y, m - 1, 1) - 7 * 86400000);
+  const lookbackStartISO = `${lookbackDate.getUTCFullYear()}-${String(lookbackDate.getUTCMonth() + 1).padStart(2, "0")}-${String(lookbackDate.getUTCDate()).padStart(2, "0")}`;
+  const prevY = m === 1 ? y - 1 : y;
+  const prevM = m === 1 ? 12 : m - 1;
 
   const [insuranceRates, agencyRow, agencyDeductions, assignments, incomeTaxRow] = await Promise.all([
     prisma.insuranceRates.findFirst({ where: { year: { lte: y } }, orderBy: { year: "desc" } }),
@@ -105,7 +112,7 @@ export async function computePayrollItems(
   const idKey = (id: bigint) => id.toString();
   const allSiteIds = [...new Set(assignments.map((a) => a.siteId))];
 
-  const [allPayContracts, allAttendances, allPlacements, allEmpLatest, allEmpFirst, allHolidays] = await Promise.all([
+  const [allPayContracts, allAttendances, allPlacements, allEmpLatest, allEmpFirst, allHolidays, allLookbackAtt] = await Promise.all([
     // 같은 기관 다시급: 유효한 계약 전부(기관 기본 siteId=null + 현장별 override). 금액만 현장별 적용.
     //  급여월과 '겹치는' 계약(effectiveFrom<=월말 AND (effectiveTo=null OR >=월초)). 최신(effectiveFrom desc) 우선.
     prisma.payContract.findMany({
@@ -149,9 +156,20 @@ export async function computePayrollItems(
       select: { workerId: true, contractStart: true },
     }),
     // 커스텀휴무(현장 지정 휴무일, countAsWorkday=false) — 주휴 개근 판정에서 소정근로일 제외.
+    //  (P1-11 경계주 판정 위해 lookback 시작일부터 로드 — 전월 부분 주의 휴무도 반영.)
     prisma.siteHoliday.findMany({
-      where: { assignment: { workerId: { in: userIds }, agencyId }, countAsWorkday: false, date: { gte: periodStart, lte: periodEnd } },
+      where: { assignment: { workerId: { in: userIds }, agencyId }, countAsWorkday: false, date: { gte: lookbackStartISO, lte: periodEnd } },
       select: { date: true, assignment: { select: { workerId: true } } },
+    }),
+    // P1-11: 전월 말 lookback 출근(주휴 경계주 만근 판정 전용). 당월 계산엔 미사용.
+    prisma.dailyAttendance.findMany({
+      where: { workerId: { in: userIds }, workDate: { gte: lookbackStartISO, lt: periodStart }, isFinalClosed: true, assignment: { agencyId } },
+      select: {
+        workerId: true,
+        workDate: true, startTime: true, endTime: true,
+        actualStartTime: true, actualEndTime: true, payrollConfirmedAt: true,
+        assignment: { select: { siteId: true, workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true, site: { select: { lateThresholdMin: true } } } },
+      },
     }),
   ]);
 
@@ -160,6 +178,8 @@ export async function computePayrollItems(
   for (const c of allPayContracts) { const k = idKey(c.workerId); (payByW.get(k) ?? (payByW.set(k, []), payByW.get(k)!)).push(c); }
   const attByW = new Map<string, typeof allAttendances>();
   for (const a of allAttendances) { const k = idKey(a.workerId); (attByW.get(k) ?? (attByW.set(k, []), attByW.get(k)!)).push(a); }
+  const lookbackByW = new Map<string, typeof allLookbackAtt>();
+  for (const a of allLookbackAtt) { const k = idKey(a.workerId); (lookbackByW.get(k) ?? (lookbackByW.set(k, []), lookbackByW.get(k)!)).push(a); }
   const holByW = new Map<string, { date: string }[]>();
   for (const h of allHolidays) { const k = idKey(h.assignment.workerId); (holByW.get(k) ?? (holByW.set(k, []), holByW.get(k)!)).push({ date: h.date }); }
   // desc/asc 정렬 → 워커별 '첫 행'이 각각 최신/최초(기존 findFirst와 동치).
@@ -178,10 +198,11 @@ export async function computePayrollItems(
       empContract: empLatestByW.get(idKey(workerId)) ?? null,
       firstContract: empFirstByW.get(idKey(workerId)) ?? null,
       customHolidays: holByW.get(idKey(workerId)) ?? [],
+      lookbackAtt: lookbackByW.get(idKey(workerId)) ?? [],
     };
   });
 
-  for (const { workerId, payContracts, attendances, placements, empContract, firstContract, customHolidays } of userDataList) {
+  for (const { workerId, payContracts, attendances, placements, empContract, firstContract, customHolidays, lookbackAtt } of userDataList) {
     // 기관 기본 계약(siteId=null) = 급여유형·소득유형·4대보험·기본금액의 기준.
     //  (findMany는 effectiveFrom desc 정렬 → 각 그룹의 최신이 앞. 최신 기본계약 우선.)
     //  ★기본계약 없이 현장 override만 있으면(고아) '급여 계약 없음'으로 처리한다 —
@@ -221,7 +242,10 @@ export async function computePayrollItems(
     //  (기간 전체 총원이 아니라 실제 근무한 날들의 동시 재적 peak — 비동시 재적을 1:多로 오판하지 않음).
     const maxSiteCount = confirmedAtt.reduce((mx, a) => Math.max(mx, traineeCountOn(a.assignment?.siteId, a.workDate)), 0);
 
-    const workedDays = confirmedAtt.length;
+    // P1-14: 근무일수 = 캘린더 '일' 기준(같은 날 2배정=오전 A현장+오후 B현장이어도 1일).
+    //  명세서 (N)일·DAILY 일급·MONTHLY 일할·보험 8일판정이 같은 날을 2로 부풀리지 않도록 workDate로 dedup.
+    //  (근무시간·지급시간·가산수당은 실제 근무 행별로 합산하므로 아래 workedMinutes 등은 그대로 전 행 순회.)
+    const workedDays = new Set(confirmedAtt.map((a) => a.workDate)).size;
     const workedMinutes = confirmedAtt.reduce((s, a) => s + minutesBetween(a.startTime, a.endTime), 0);
     const workedHours = +(workedMinutes / 60).toFixed(2);
     // HOURLY 지급시간 = 출근 span에서 무급 휴게만 제외.
@@ -301,12 +325,15 @@ export async function computePayrollItems(
           : `${paidHours}시간 × ${(used2Plus ? (rate2 as number) : baseRate).toLocaleString()}원 (휴게 제외)`;
         breakdown = { payType: "HOURLY", hourlyRate: baseRate, hourlyRate2Plus: rate2, oneToOneHours: +oneToOneHours.toFixed(2), oneToManyHours: +oneToManyHours.toFixed(2), used2PlusRate: used2Plus, workedMinutes, workedHours, paidMinutes, paidHours, workedDays, pendingDays };
       } else if (contract.payType === "DAILY") {
-        // 각 근무일에 그날 1:多(2인+ 재적)면 rate2, 아니면 일급 baseRate 합산.
-        let base = 0;
+        // 각 '근무일'(캘린더 일)에 일급 1건 — P1-14: 같은 날 2배정(오전+오후)도 1일급.
+        //  그날 어느 배정이든 1:多(2인+ 재적)면 그날 일급은 rate2, 아니면 baseRate.
+        const dayMulti = new Map<string, boolean>();
         for (const a of confirmedAtt) {
           const isMulti = rate2 != null && traineeCountOn(a.assignment?.siteId, a.workDate) >= 2;
-          base += isMulti ? (rate2 as number) : baseRate;
+          dayMulti.set(a.workDate, (dayMulti.get(a.workDate) ?? false) || isMulti);
         }
+        let base = 0;
+        for (const isMulti of dayMulti.values()) base += isMulti ? (rate2 as number) : baseRate;
         grossPay = Math.round(base);
         // 통상시급 = 총 일급 ÷ 총 지급시간(무급휴게 제외). 연장·주휴 가산 기준.
         ordinaryWage = paidHours > 0 ? Math.round(grossPay / paidHours) : 0;
@@ -405,19 +432,34 @@ export async function computePayrollItems(
       if (gateIncomeType === "EMPLOYMENT" && contract.payType !== "MONTHLY" && ordinaryWage > 0) {
         // 소정근로시간 = 실질 약정 근로시간(출퇴근·휴게지도 포함, 무급휴게만 제외) = 지급시간과 동일.
         //  오전/오후 5.5h · 전일 8h. (주휴 = (1주 소정÷40)×8×시급)
-        const days = confirmedAtt.map((a) => {
+        // P1-11: 당월 확정 출근 + 전월 lookback 확정 출근을 합쳐 경계주 만근을 온전히 판정한다
+        //  (지급은 아래 payMonth로 "주가 끝나는 달==이 달"인 주만 집계 → 경계주는 끝나는 달에 1회 지급).
+        const lookbackConfirmed = lookbackAtt.filter((a) =>
+          !isPayrollPending({
+            actualStartTime: a.actualStartTime ?? null,
+            actualEndTime: a.actualEndTime ?? null,
+            payrollConfirmedAt: a.payrollConfirmedAt ?? null,
+            workType: a.assignment?.workType ?? null,
+            commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded ?? null,
+            customWorkStart: a.assignment?.customWorkStart ?? null,
+            customWorkEnd: a.assignment?.customWorkEnd ?? null,
+            exempt: a.assignment?.attendanceButtonExempt ?? false,
+          }, a.assignment?.site?.lateThresholdMin ?? lateThresholdMin));
+        const days = [...confirmedAtt, ...lookbackConfirmed].map((a) => {
           const span = minutesBetween(a.startTime, a.endTime);
           const fallback = Math.max(0, span - unpaidBreakMin(a.assignment?.workType, span));
           return { dateISO: a.workDate, scheduledMinutes: contractDailySojeMin ?? fallback };
         });
-        // 소정근로 요일·공휴일/커스텀휴무 집합은 위(payType 분기 전)에서 계산한 공용값 재사용.
+        // 경계주 소정근로일 판정용 공휴일 = 당월+커스텀(monthHolidaySet, lookback 커스텀 포함) + 전월 법정공휴일.
+        const whHolidaySet = new Set<string>([...monthHolidaySet, ...Object.keys(getKrHolidays(prevY, prevM))]);
         const wh = computeWeeklyHoliday({
           days, workDaysPerWeek: wpw, ordinaryWage,
           flatWeeklyHolidayPay: contract.weeklyHolidayPay ? Number(contract.weeklyHolidayPay) : null,
-          workingWeekdays, holidaySet: monthHolidaySet,
-          // 급여월 전체 주를 판정 대상에 포함 → 결근주/무출근주도 부적격 주로 명시.
+          workingWeekdays, holidaySet: whHolidaySet,
+          // 이 달에 끝나는 모든 주를 seed 하되(결근주도 명시), payMonth로 "주가 끝나는 달==이 달"인 주만 집계·지급.
           periodStart: `${yearMonth}-01`,
           periodEnd: `${yearMonth}-${String(daysInMonth).padStart(2, "0")}`,
+          payMonth: yearMonth,
         });
         if (wh.totalHolidayPay > 0) {
           grossPay += wh.totalHolidayPay;
