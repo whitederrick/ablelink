@@ -151,6 +151,8 @@ export async function POST(req: NextRequest) {
         data: {
           password: await hash(newPassword, 12),
           isTemporary: false,
+          // P2-16: 비번 설정 → 세션 버전 +1(구 임시비번 기반 토큰 무효화). 아래 재발급 토큰은 새 sv를 담아 현 세션은 유지.
+          sessionVersion: { increment: 1 },
         },
         select: { id: true, workerName: true, phoneNumber: true },
       });

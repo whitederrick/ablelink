@@ -38,6 +38,9 @@ model Worker {
   ciKey        String? @unique @map("ci_key")
   signatureUrl String? @map("signature_url") // PREMIUM에서만 사용(정책 레이어에서 강제)
   isTemporary  Boolean @default(false) @map("is_temporary")
+  // P2-16: 세션(JWT) 무효화 버전. 비밀번호 변경·재설정 시 +1 → 그 전 발급 토큰은 인증 시 대조 불일치로 무효.
+  //  (인증은 이미 매 요청 status 재검증으로 DB를 읽으므로 이 컬럼 대조는 추가 쿼리 없음.)
+  sessionVersion Int @default(0) @map("session_version")
 
   // 급여 이체용 계좌 정보(셀프 입력 + 관리자 조회·보완, 2026-06-10). PII: signatureUrl과 동일 취급.
   // 통장사본 이미지는 보관하지 않음(2026-06-18, 민감정보 비보관 원칙 — 계좌 검증은 예금주 조회로 대체 예정).

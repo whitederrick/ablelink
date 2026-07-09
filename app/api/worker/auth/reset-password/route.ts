@@ -68,7 +68,8 @@ export async function POST(req: NextRequest) {
     const tempPw = generateTempPassword();
     await prisma.worker.update({
       where: { id: user.id },
-      data: { password: await hash(tempPw, 12), isTemporary: true },
+      // P2-16: 비번 재설정 시 sessionVersion +1 → 기존 발급 토큰 전부 무효화(재설정=전 세션 로그아웃).
+      data: { password: await hash(tempPw, 12), isTemporary: true, sessionVersion: { increment: 1 } },
     });
 
     if (isEmail) {
