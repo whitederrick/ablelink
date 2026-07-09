@@ -13,19 +13,33 @@ export const runtime = "nodejs";
 import { imageToDataUri } from "@/lib/signatureImage";
 
 type ManagerSig = { managerSignatureUrl?: string | null; managerSignerName?: string | null };
+type SigSlot = { name?: string | null; imageUrl?: string | null } | null | undefined;
+type SigMap = Record<string, SigSlot>;
 
 /**
  * payload.signatures 의 govAgent / agencyAgent 슬롯에 매니저 서명을 주입한다.
  * - run 에 서명이 없으면 payload 를 그대로 반환(불변).
  * - 이미 서명 이미지가 채워진 슬롯은 덮어쓰지 않는다(스냅샷 우선).
  */
-export async function injectManagerSignature<T extends { signatures?: any }>(payload: T, run: ManagerSig): Promise<T> {
+export async function injectManagerSignature<T extends { signatures?: SigMap }>(
+  payload: T,
+  run: ManagerSig,
+  // PERF-8: 요청 스코프 캐시(url→dataUri). 발송/ZIP처럼 여러 run이 같은 매니저 서명을 공유할 때
+  //  같은 이미지를 run마다 재다운로드하지 않도록 호출부가 Map 하나를 만들어 넘긴다(선택).
+  cache?: Map<string, string | null>,
+): Promise<T> {
   const url = run?.managerSignatureUrl;
   if (!url) return payload;
-  const img = await imageToDataUri(url);
+  let img: string | null;
+  if (cache?.has(url)) {
+    img = cache.get(url) ?? null;
+  } else {
+    img = (await imageToDataUri(url)) ?? null;
+    cache?.set(url, img);
+  }
   if (!img) return payload;
   const name = run.managerSignerName || "";
-  const sigs = { ...(payload.signatures ?? {}) };
+  const sigs: SigMap = { ...(payload.signatures ?? {}) };
   for (const slot of ["govAgent", "agencyAgent"] as const) {
     const cur = sigs[slot];
     if (!cur?.imageUrl) sigs[slot] = { name: cur?.name || name, imageUrl: img };

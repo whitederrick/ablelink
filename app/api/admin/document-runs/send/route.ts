@@ -136,6 +136,7 @@ export async function POST(req: NextRequest) {
     let sent = 0;
     const failures: string[] = [];
     const sentRunIds: bigint[] = []; // 발송 성공한 문서 → 공단 제출완료 자동 기록
+    const sigCache = new Map<string, string | null>(); // PERF-8: 매니저 서명 요청스코프 캐시(url→dataUri)
 
     for (const { label, runs: grpRuns } of groups.values()) {
       const usedNames = new Set<string>();
@@ -152,7 +153,7 @@ export async function POST(req: NextRequest) {
         const payload = await injectManagerSignature(basePayload, {
           managerSignatureUrl: r.managerSignatureUrl,
           managerSignerName: r.managerSignerName,
-        });
+        }, sigCache);
         try {
           return await renderPdfToBuffer({ documentType: renderType, payload });
         } catch (e) {

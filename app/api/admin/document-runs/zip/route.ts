@@ -65,6 +65,7 @@ export async function GET(req: NextRequest) {
     let added = 0;
     const usedNames = new Set<string>();
     const subjectMap = new Map<string, string>(); // 포함된 직무지도원(workerId→성명) — 접속기록용
+    const sigCache = new Map<string, string | null>(); // PERF-8: 매니저 서명 요청스코프 캐시(url→dataUri)
 
     // 렌더는 무거우므로 동시성 상한(4)으로 병렬 — 순서 보존해 ZIP 내 파일명 번호 부여를 결정적으로 유지.
     const renderedBufs = await mapWithConcurrency(runs, 4, async (r) => {
@@ -77,7 +78,7 @@ export async function GET(req: NextRequest) {
       const payload = await injectManagerSignature(basePayload, {
         managerSignatureUrl: r.managerSignatureUrl,
         managerSignerName: r.managerSignerName,
-      });
+      }, sigCache);
       try {
         return await renderPdfToBuffer({ documentType: renderType, payload });
       } catch (e) {
