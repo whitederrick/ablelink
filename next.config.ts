@@ -12,10 +12,10 @@ const csp = [
   "default-src 'self'",
   // 지도/결제 SDK는 여러 벤더 서브도메인을 동적으로 로드·연결하므로 벤더 단위 와일드카드로 허용
   //  (*.kakao.com·*.daumcdn.net=카카오맵, *.tosspayments.com=토스 결제 위젯/이벤트/게이트웨이).
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.kakao.com https://*.daumcdn.net https://*.tosspayments.com https://unpkg.com https://va.vercel-scripts.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.kakao.com https://*.daumcdn.net https://*.daum.net https://*.kakaocdn.net https://*.tosspayments.com https://unpkg.com https://va.vercel-scripts.com",
   "style-src 'self' 'unsafe-inline' https://unpkg.com",
-  "img-src 'self' data: blob: https://*.supabase.co https://*.kakao.com https://*.daumcdn.net https://*.tile.openstreetmap.org",
-  "connect-src 'self' https://*.supabase.co https://*.kakao.com https://*.daumcdn.net https://*.tosspayments.com https://*.vercel-insights.com",
+  "img-src 'self' data: blob: https://*.supabase.co https://*.kakao.com https://*.daumcdn.net https://*.daum.net https://*.kakaocdn.net https://*.tile.openstreetmap.org",
+  "connect-src 'self' https://*.supabase.co https://*.kakao.com https://*.daumcdn.net https://*.daum.net https://*.kakaocdn.net https://*.tosspayments.com https://*.vercel-insights.com",
   "frame-src 'self' https://*.tosspayments.com https://*.kakao.com",
   "font-src 'self' data:",
   "media-src 'self' blob:",
