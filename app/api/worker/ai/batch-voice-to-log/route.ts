@@ -197,6 +197,8 @@ export async function POST(request: NextRequest) {
 
     const groqRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
       method: "POST",
+      signal: AbortSignal.timeout(20000), // 벤더 스톨 시 함수 예산 소진 대신 빠르게 실패→기존 폴백
+
       headers: { Authorization: `Bearer ${groqKey}` },
       body: groqForm,
     });
@@ -280,6 +282,7 @@ ${contextBlock}
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
       {
         method: "POST",
+        signal: AbortSignal.timeout(20000), // 벤더 스톨 시 빠르게 실패→기존 전사(transcript) 폴백
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],

@@ -72,6 +72,8 @@ export async function POST(request: NextRequest) {
 
       const res = await fetch(`${TOSS_API}/billing/${agency.tossBillingKey}`, {
         method: "POST",
+        // 벤더 스톨이 직렬 크론 루프 전체를 막아 이후 기관 청구를 굶기지 않도록 타임아웃(AbortError=transient 처리).
+        signal: AbortSignal.timeout(10000),
         headers: {
           Authorization: tossAuth(),
           "Content-Type": "application/json",
