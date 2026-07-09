@@ -9,7 +9,7 @@ import { overtimeMinutesForDay, workEndMinutesForDay } from "@/lib/attendance/ov
 import { computeWeeklyHoliday } from "@/lib/payroll/weeklyHoliday";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
-import { determineEligibility, isIllegalBusinessIncome, type IncomeType } from "@/lib/payroll/insuranceEligibility";
+import { determineEligibility, determineIncomeType, isIllegalBusinessIncome, type IncomeType } from "@/lib/payroll/insuranceEligibility";
 import { standardMonthlyIncome } from "@/lib/payroll/pensionBase";
 import { traineeCountOnDate } from "@/lib/traineePlacement";
 import { Decimal } from "@prisma/client/runtime/library";
@@ -393,7 +393,16 @@ export async function computePayrollItems(
 
       // 주휴수당: 근로소득(EMPLOYMENT) 단시간 — 2조건 자동 산식. PayContract.weeklyHolidayPay 고정 오버라이드.
       //  ※ MONTHLY(월급)는 월정액 209h에 주휴가 이미 포함 → 별도 가산 안 함(이중지급 방지).
-      if (contract.incomeType === "EMPLOYMENT" && contract.payType !== "MONTHLY" && ordinaryWage > 0) {
+      //  ★P1-15: 게이트를 계약 원본값(contract.incomeType) 대신 공제·보험과 동일한 '유효 소득유형'으로 판정한다.
+      //   근로계약이 있으면 급여기준이 BUSINESS로 오설정돼도 실제로는 근로소득(EMPLOYMENT)으로 계산되는데
+      //   (elig.incomeType), 주휴 게이트만 원본 BUSINESS를 봐서 주휴가 누락되던 불일치를 제거. 아래 elig와
+      //   동일 입력(determineIncomeType)이라 결과가 항상 일치한다. 정상 케이스는 결과 불변.
+      const gateIncomeType = determineIncomeType({
+        hasEmploymentContract: !!empContract,
+        hasAttendance: workedDays > 0,
+        freelancerOverride: contract?.incomeType === "BUSINESS" && !empContract,
+      });
+      if (gateIncomeType === "EMPLOYMENT" && contract.payType !== "MONTHLY" && ordinaryWage > 0) {
         // 소정근로시간 = 실질 약정 근로시간(출퇴근·휴게지도 포함, 무급휴게만 제외) = 지급시간과 동일.
         //  오전/오후 5.5h · 전일 8h. (주휴 = (1주 소정÷40)×8×시급)
         const days = confirmedAtt.map((a) => {
