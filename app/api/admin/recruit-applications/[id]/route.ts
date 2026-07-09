@@ -8,6 +8,7 @@ import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
+import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -42,11 +43,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // 단, "위탁기관 공고 + 좌표 보유"일 때만. 운영자(공단/플랫폼) 공고는 agencyId가 없어
     // 자동배정 대상이 아니고(운영 위탁기관 부재), ACCEPTED 표시 + 알림만 한다.
     let autoAssigned = false;
-    let conflictSkip = false; // 시간겹침으로 자동배정만 건너뛸지(수락 자체는 진행)
     const canAutoAssign =
       action === "accept" && app.post.agencyId != null && app.post.lat != null && app.post.lon != null;
 
-    // 자동 배정 전제조건 검증(차단형) — 통과 못 하면 수락 자체를 막아 신청은 PENDING 유지.
+    // 자동 배정 전제조건 검증(차단형·정적) — 통과 못 하면 수락 자체를 막아 신청은 PENDING 유지.
+    //  (비활성 인력·구독 한도는 워커 배정 상태와 무관하므로 락 밖에서 검사. 시간겹침 재검사·생성은 락 안에서.)
     if (canAutoAssign) {
       // ① 비활성 인력은 배정 불가 (수동 배정과 동일 가드)
       const w = await prisma.worker.findUnique({ where: { id: app.workerId }, select: { status: true } });
@@ -65,27 +66,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (!wq.allowed) {
         return NextResponse.json({ success: false, message: `인력 한도(${wq.current}/${wq.max})를 초과했습니다. 플랜을 업그레이드해주세요.` }, { status: 409 });
       }
-      // ④ 시간겹침: 자동배정(FULL_DAY)이 다른 현장 진행중 배정과 겹치면 **자동배정만 건너뛴다**(수락 자체는 진행).
-      //  E2: 과거엔 409로 하드블록 → 이미 배정된 워커의 마켓 수락이 영구 불가·신청 PENDING 고착.
-      //   offers 경로와 동작 통일(soft-skip). E3: 겹침 스캔 status에 ACCEPTED 포함.
-      //   후보 기간은 공고 서비스기간(serviceStart~serviceEnd)으로 — today→∞로 잡아 미래시작 공고를 오탐하지 않도록.
-      const others = await prisma.siteAssignment.findMany({
-        where: { workerId: app.workerId, status: { in: [...OCCUPYING_STATUSES] }, ...(app.post.siteId != null ? { NOT: { siteId: app.post.siteId } } : {}) },
-        select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
-      });
-      //  ★후보 endDate는 '실제로 생성될 배정'과 동일하게 null(개방)로 둔다 — 생성은 endDate:null(M6)인데
-      //   검사만 serviceEnd로 좁히면 serviceEnd 이후 겹침을 못 잡아 이중배정이 새어나간다(생성값=검사값 일치).
-      const tc = findTimeConflict({ workType: "FULL_DAY", startDate: app.post.serviceStart ?? new Date(), endDate: null }, others);
-      if (tc) conflictSkip = true; // 하드블록 대신 자동배정만 스킵
     }
 
-    await prisma.$transaction(async (tx) => {
+    // ★워커 단위 advisory lock으로 "겹침 재검사 → 배정 생성"을 원자화(P1-5).
+    await withWorkerAssignmentLock(app.workerId, async (tx) => {
       await tx.recruitApplication.update({
         where: { id: appId },
         data: { status: action === "accept" ? "ACCEPTED" : "REJECTED", decidedAt: new Date() },
       });
 
-      if (!canAutoAssign || conflictSkip) return; // 시간겹침이면 수락만 기록, 자동배정은 매니저 수동 처리
+      if (!canAutoAssign) return;
+
+      // ④ 시간겹침: 자동배정(FULL_DAY)이 다른 현장 진행중 배정과 겹치면 **자동배정만 건너뛴다**(수락 자체는 진행).
+      //  E2: 과거엔 409로 하드블록 → 이미 배정된 워커의 마켓 수락이 영구 불가·신청 PENDING 고착.
+      //   offers 경로와 동작 통일(soft-skip). E3: 겹침 스캔 status에 ACCEPTED 포함.
+      //  ★후보 endDate는 '실제로 생성될 배정'과 동일하게 null(개방)로 둔다 — 생성은 endDate:null(M6)인데
+      //   검사만 serviceEnd로 좁히면 serviceEnd 이후 겹침을 못 잡아 이중배정이 새어나간다(생성값=검사값 일치).
+      const others = await tx.siteAssignment.findMany({
+        where: { workerId: app.workerId, status: { in: [...OCCUPYING_STATUSES] }, ...(app.post.siteId != null ? { NOT: { siteId: app.post.siteId } } : {}) },
+        select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
+      });
+      const tc = findTimeConflict({ workType: "FULL_DAY", startDate: app.post.serviceStart ?? new Date(), endDate: null }, others);
+      if (tc) return; // 시간겹침이면 수락만 기록, 자동배정은 매니저 수동 처리
 
       // ① Site find-or-create (첫 수락 시 공고 정보로 생성, 이후 재사용 — headcount>1)
       let siteId = app.post.siteId;

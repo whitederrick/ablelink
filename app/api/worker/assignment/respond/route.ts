@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { audit } from "@/lib/audit";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
+import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
 
 const VALID_WT = ["AM", "PM", "FULL_DAY", "CUSTOM"];
 
@@ -95,41 +96,50 @@ export async function POST(req: NextRequest) {
     }
     const commuteGuidanceIncluded = workType === "FULL_DAY" ? false : true;
 
-    // ★멀티현장 시간겹침 방지: 선택한 근무형태가 같은 워커의 다른 현장 진행중 배정과
-    //   같은 날 반나절 슬롯(AM/PM)이 겹치면 수락 차단(예: 다른 현장 오전 + 이 요청 종일).
-    {
-      const others = await prisma.siteAssignment.findMany({
+    // ★워커 단위 advisory lock으로 "겹침검사 → 승격"을 직렬화(동시 수락 이중배정 방지, P1-5).
+    //   임계구역엔 겹침검사·경쟁후보수·승격만 두고, 알림/감사 부수효과는 락 밖에서 처리한다.
+    type Outcome =
+      | { kind: "conflict"; companyName: string }
+      | { kind: "already" }
+      | { kind: "ok"; newStatus: "ASSIGNED" | "ACCEPTED" };
+    const outcome = await withWorkerAssignmentLock<Outcome>(workerId, async (tx) => {
+      // ★멀티현장 시간겹침 방지: 선택한 근무형태가 같은 워커의 다른 현장 진행중 배정과
+      //   같은 날 반나절 슬롯(AM/PM)이 겹치면 수락 차단(예: 다른 현장 오전 + 이 요청 종일).
+      const conflictCandidates = await tx.siteAssignment.findMany({
         where: { workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { id: asgn.id } },
         select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
       });
       const conflict = findTimeConflict(
         { workType, startDate: asgn.startDate, endDate: asgn.endDate },
-        others,
+        conflictCandidates,
       );
-      if (conflict) {
-        return NextResponse.json(
-          { success: false, message: `다른 현장(${(conflict as any).site?.companyName ?? "-"}) 배정과 같은 날 근무시간이 겹칩니다. 겹치지 않는 근무형태(오전/오후)를 선택하거나 담당자에게 문의해주세요.` },
-          { status: 409 },
-        );
-      }
-    }
+      if (conflict) return { kind: "conflict", companyName: conflict.site?.companyName ?? "-" };
 
-    // 같은 현장에 경쟁 후보(요청 중 또는 이미 수락) 존재 여부 → 단일/복수 판정
-    const others = await prisma.siteAssignment.count({
-      where: {
-        siteId: asgn.siteId,
-        id: { not: asgn.id },
-        status: { in: ["REQUESTED", "ACCEPTED"] },
-      },
+      // 같은 현장에 경쟁 후보(요청 중 또는 이미 수락) 존재 여부 → 단일(ASSIGNED)/복수(ACCEPTED) 판정
+      const competitors = await tx.siteAssignment.count({
+        where: { siteId: asgn.siteId, id: { not: asgn.id }, status: { in: ["REQUESTED", "ACCEPTED"] } },
+      });
+      const newStatus: "ASSIGNED" | "ACCEPTED" = competitors === 0 ? "ASSIGNED" : "ACCEPTED";
+      const r = await tx.siteAssignment.updateMany({
+        where: { id: asgn.id, status: "REQUESTED" },
+        data: { status: newStatus, workType, commuteGuidanceIncluded, connectedAt: new Date() },
+      });
+      if (r.count === 0) return { kind: "already" };
+      return { kind: "ok", newStatus };
     });
 
-    if (others === 0) {
+    if (outcome.kind === "conflict") {
+      return NextResponse.json(
+        { success: false, message: `다른 현장(${outcome.companyName}) 배정과 같은 날 근무시간이 겹칩니다. 겹치지 않는 근무형태(오전/오후)를 선택하거나 담당자에게 문의해주세요.` },
+        { status: 409 },
+      );
+    }
+    if (outcome.kind === "already") {
+      return NextResponse.json({ success: false, message: "이미 처리된 요청입니다." }, { status: 409 });
+    }
+
+    if (outcome.newStatus === "ASSIGNED") {
       // 단일 후보 → 바로 계약 대기(ASSIGNED). 본인 계정에서 수락했으므로 연결(connectedAt)까지 처리.
-      const r = await prisma.siteAssignment.updateMany({
-        where: { id: asgn.id, status: "REQUESTED" },
-        data: { status: "ASSIGNED", workType, commuteGuidanceIncluded, connectedAt: new Date() },
-      });
-      if (r.count === 0) return NextResponse.json({ success: false, message: "이미 처리된 요청입니다." }, { status: 409 });
       await audit(session, { entityType: "SiteAssignment", entityId: asgn.id, action: "update", summary: "배정 응답(수락·계약 대기)" });
       await notifyManagers("수락(계약 대기)");
       return NextResponse.json({
@@ -140,11 +150,6 @@ export async function POST(req: NextRequest) {
     }
 
     // 복수 후보 → 수락(ACCEPTED). 담당자 최종확정 대기.
-    const rAccept = await prisma.siteAssignment.updateMany({
-      where: { id: asgn.id, status: "REQUESTED" },
-      data: { status: "ACCEPTED", workType, commuteGuidanceIncluded, connectedAt: new Date() },
-    });
-    if (rAccept.count === 0) return NextResponse.json({ success: false, message: "이미 처리된 요청입니다." }, { status: 409 });
     await audit(session, { entityType: "SiteAssignment", entityId: asgn.id, action: "update", summary: "배정 응답(수락·확정 대기)" });
     await notifyManagers("수락(확정 대기)");
     return NextResponse.json({

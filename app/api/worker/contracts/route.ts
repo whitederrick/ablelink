@@ -9,6 +9,7 @@ import { sendAlimtalk } from "@/lib/kakao";
 import { getAcknowledgement } from "@/lib/contractTemplates";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
+import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 
@@ -202,36 +203,40 @@ export async function POST(req: NextRequest) {
     //   통과시켜 A의 여집합 슬롯(PM)에 B가 들어올 수 있다. 이때 계약 workType(FULL_DAY)으로 슬롯을 무조건
     //   확장하면 B와 이중배정. → 서명 시 재검사: 계약 슬롯이 다른 점유 배정과 시간충돌하면 슬롯을 확장하지 않고
     //   기존 슬롯을 유지한 채 상태만 CONFIRMED로 승격한다(무급 딜레마 회피 + 이중배정 방지).
-    const others = await prisma.siteAssignment.findMany({
-      where: { workerId: contract.workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { id: contract.assignmentId } },
-      select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
+    // ★워커 단위 advisory lock으로 "겹침 재검사 → 슬롯확장/승격"을 원자화(발행~서명 사이 끼어든
+    //  다른 배정과의 이중배정 방지, P1-5). 승격은 항상 수행하되 슬롯 확장만 충돌 시 생략한다.
+    await withWorkerAssignmentLock(contract.workerId, async (tx) => {
+      const others = await tx.siteAssignment.findMany({
+        where: { workerId: contract.workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { id: contract.assignmentId! } },
+        select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
+      });
+      const conflict = findTimeConflict(
+        { workType: contract.workType, customWorkStart: contract.customWorkStart, customWorkEnd: contract.customWorkEnd, startDate: contract.contractStart, endDate: contract.contractEnd },
+        others,
+      );
+      if (conflict) {
+        // 충돌: 슬롯 확장 금지 — 기존 슬롯/기간 유지, 상태만 승격. (계약↔배정 workType 불일치는 관리자 검토 대상)
+        console.warn(`[contracts sign] 서명 재검사 시간충돌 — 슬롯 확장 생략(상태만 승격). assignmentId=${contract.assignmentId}, contractWorkType=${contract.workType}`);
+        await tx.siteAssignment.updateMany({
+          where: { id: contract.assignmentId!, status: { in: ["ASSIGNED", "CONFIRMED"] } },
+          data: { status: "CONFIRMED", confirmedAt: new Date() },
+        });
+      } else {
+        await tx.siteAssignment.updateMany({
+          where: { id: contract.assignmentId!, status: { in: ["ASSIGNED", "CONFIRMED"] } },
+          data: {
+            workType: contract.workType ?? undefined,
+            commuteGuidanceIncluded: isFullDay ? false : contract.commuteGuidanceIncluded,
+            customWorkStart: isCustom ? contract.customWorkStart : null,
+            customWorkEnd:   isCustom ? contract.customWorkEnd   : null,
+            startDate: contract.contractStart,
+            endDate:   contract.contractEnd,
+            status:    "CONFIRMED",
+            confirmedAt: new Date(),
+          },
+        });
+      }
     });
-    const conflict = findTimeConflict(
-      { workType: contract.workType, customWorkStart: contract.customWorkStart, customWorkEnd: contract.customWorkEnd, startDate: contract.contractStart, endDate: contract.contractEnd },
-      others,
-    );
-    if (conflict) {
-      // 충돌: 슬롯 확장 금지 — 기존 슬롯/기간 유지, 상태만 승격. (계약↔배정 workType 불일치는 관리자 검토 대상)
-      console.warn(`[contracts sign] 서명 재검사 시간충돌 — 슬롯 확장 생략(상태만 승격). assignmentId=${contract.assignmentId}, contractWorkType=${contract.workType}`);
-      await prisma.siteAssignment.updateMany({
-        where: { id: contract.assignmentId, status: { in: ["ASSIGNED", "CONFIRMED"] } },
-        data: { status: "CONFIRMED", confirmedAt: new Date() },
-      });
-    } else {
-      await prisma.siteAssignment.updateMany({
-        where: { id: contract.assignmentId, status: { in: ["ASSIGNED", "CONFIRMED"] } },
-        data: {
-          workType: contract.workType ?? undefined,
-          commuteGuidanceIncluded: isFullDay ? false : contract.commuteGuidanceIncluded,
-          customWorkStart: isCustom ? contract.customWorkStart : null,
-          customWorkEnd:   isCustom ? contract.customWorkEnd   : null,
-          startDate: contract.contractStart,
-          endDate:   contract.contractEnd,
-          status:    "CONFIRMED",
-          confirmedAt: new Date(),
-        },
-      });
-    }
   }
 
   // ── 급여 기준 자동 생성 (1단계-②) ──

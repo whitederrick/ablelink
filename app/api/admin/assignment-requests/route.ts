@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { findTimeConflict, OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
+import { withWorkersAssignmentLock } from "@/lib/assignmentLock";
 
 async function expirePastDeadline(agencyId: bigint) {
   await prisma.siteAssignment.updateMany({
@@ -182,30 +183,37 @@ export async function POST(req: NextRequest) {
         where: { id: { in: selectedIds } },
         select: { id: true, workerId: true, workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
       });
-      for (const s of selDetails) {
-        // 이중배정 방지는 전역(크로스기관)으로 검사 — 타 기관 배정과도 시간이 겹치면 안 됨.
-        //  단, 충돌이 타 기관이면 현장명 비노출(일반 문구). 같은 기관 충돌만 현장명 표시.
-        const others = await prisma.siteAssignment.findMany({
-          where: { workerId: s.workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { id: s.id }, siteId: { not: siteId } },
-          select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, agencyId: true, site: { select: { companyName: true } } },
-        });
-        const c = findTimeConflict(s, others);
-        if (c) {
-          const w = await prisma.worker.findUnique({ where: { id: s.workerId }, select: { workerName: true } });
-          const nm = w?.workerName ?? "직무지도원";
-          const msg = isSameAgencyConflict((c as any).agencyId, agencyId)
-            ? `${nm}님이 다른 현장(${(c as any).site?.companyName ?? "-"}) 배정과 같은 날 근무시간이 겹칩니다. 근무형태를 조정한 뒤 확정해주세요.`
-            : `${nm}님은 이미 다른 일정이 있어 이 기간·근무형태로 배정할 수 없습니다. 근무형태를 조정한 뒤 확정해주세요.`;
-          return NextResponse.json({ success: false, code: "TIME_CONFLICT", message: msg }, { status: 409 });
-        }
-      }
 
-      // 선정 → ASSIGNED(계약 대기). 선정하지 않은 수락/제외 후보 → DROPPED('제외', 부분 재요청 시 복원 가능).
-      // 회신 대기(REQUESTED)는 건드리지 않음(여전히 응답 대기). '제외 상태 저장'은 이 확정 시점에 일괄 반영.
-      await prisma.$transaction([
-        prisma.siteAssignment.updateMany({ where: { agencyId, siteId, id: { in: selectedIds }, status: { in: ["ACCEPTED", "DROPPED"] } }, data: { status: "ASSIGNED", rejectedAt: null, statusReason: null } }),
-        prisma.siteAssignment.updateMany({ where: { agencyId, siteId, id: { notIn: selectedIds }, status: { in: ["ACCEPTED", "DROPPED"] } }, data: { status: "DROPPED", rejectedAt: new Date(), statusReason: "제외" } }),
-      ]);
+      // ★선정 워커들을 워커 단위 advisory lock으로 잠근 뒤 "겹침검사 → 승격"을 원자적으로 수행(P1-5).
+      //  검사와 승격 사이에 다른 경로(respond·직접배정 등)가 끼어들어 이중배정이 새는 것을 방지.
+      const conflictOut = await withWorkersAssignmentLock(selDetails.map((s) => s.workerId), async (tx) => {
+        for (const s of selDetails) {
+          // 이중배정 방지는 전역(크로스기관)으로 검사 — 타 기관 배정과도 시간이 겹치면 안 됨.
+          //  단, 충돌이 타 기관이면 현장명 비노출(일반 문구). 같은 기관 충돌만 현장명 표시.
+          const others = await tx.siteAssignment.findMany({
+            where: { workerId: s.workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { id: s.id }, siteId: { not: siteId } },
+            select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, agencyId: true, site: { select: { companyName: true } } },
+          });
+          const c = findTimeConflict(s, others);
+          if (c) {
+            const w = await tx.worker.findUnique({ where: { id: s.workerId }, select: { workerName: true } });
+            const nm = w?.workerName ?? "직무지도원";
+            const msg = isSameAgencyConflict(c.agencyId, agencyId)
+              ? `${nm}님이 다른 현장(${c.site?.companyName ?? "-"}) 배정과 같은 날 근무시간이 겹칩니다. 근무형태를 조정한 뒤 확정해주세요.`
+              : `${nm}님은 이미 다른 일정이 있어 이 기간·근무형태로 배정할 수 없습니다. 근무형태를 조정한 뒤 확정해주세요.`;
+            return { conflict: true as const, msg };
+          }
+        }
+
+        // 선정 → ASSIGNED(계약 대기). 선정하지 않은 수락/제외 후보 → DROPPED('제외', 부분 재요청 시 복원 가능).
+        // 회신 대기(REQUESTED)는 건드리지 않음(여전히 응답 대기). '제외 상태 저장'은 이 확정 시점에 일괄 반영.
+        await tx.siteAssignment.updateMany({ where: { agencyId, siteId, id: { in: selectedIds }, status: { in: ["ACCEPTED", "DROPPED"] } }, data: { status: "ASSIGNED", rejectedAt: null, statusReason: null } });
+        await tx.siteAssignment.updateMany({ where: { agencyId, siteId, id: { notIn: selectedIds }, status: { in: ["ACCEPTED", "DROPPED"] } }, data: { status: "DROPPED", rejectedAt: new Date(), statusReason: "제외" } });
+        return { conflict: false as const };
+      });
+      if (conflictOut.conflict) {
+        return NextResponse.json({ success: false, code: "TIME_CONFLICT", message: conflictOut.msg }, { status: 409 });
+      }
 
       // 선정자에게 앱 내 알림(무료)
       const selectedSet = new Set(selectedIds.map(s => s.toString()));

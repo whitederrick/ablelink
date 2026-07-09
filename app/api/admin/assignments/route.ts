@@ -9,6 +9,7 @@ import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { getKstDateString } from "@/lib/time";
 import { audit } from "@/lib/audit";
 import { OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
+import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -185,13 +186,7 @@ export async function POST(req: NextRequest) {
     if (!user) throw new Error("NOT_FOUND");
     if (String(user.status) !== "ACTIVE") throw new Error("VALIDATION:userInactive");
 
-    // 동일 site/user에 진행 중 배정(요청·수락·계약대기·근무)이 이미 있으면 중복 방지(정책)
-    const dup = await prisma.siteAssignment.findFirst({
-      where: { siteId, workerId, status: { in: ["REQUESTED", "ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] } },
-      select: { id: true },
-    });
-    if (dup) return NextResponse.json({ success: false, message: "이미 해당 현장에 배정(또는 요청)된 직무지도원입니다." }, { status: 409 });
-
+    // (중복·이중배정 검사와 생성은 아래 워커 단위 advisory lock 트랜잭션에서 원자적으로 수행 — TOCTOU 방지, P1-4)
     const isMainWorker = body.isMainWorker === false ? false : true;
     const memo = body.memo != null ? String(body.memo).trim() : null;
 
@@ -220,23 +215,6 @@ export async function POST(req: NextRequest) {
     // 요청 근무형태(복수)·회신 기한을 저장하고, 후보 수락 시 workType이 확정된다.
     const isRequest = body.mode === "request";
 
-    // ✅ 직접 배정(요청 아님)은 동시에 한 현장만 — 다른 현장에 점유 배정(ACCEPTED/ASSIGNED/CONFIRMED/ACTIVE)이 있으면 차단.
-    //    (한 직무지도원이 여러 현장에 무분별하게 꽂히는 것 방지. 미수락 요청(REQUESTED)은 제외.)
-    //    ★ACCEPTED 포함(수락했으면 그 현장에 커밋) — 누락 시 A현장 수락 워커를 B현장에 직접배정하는 이중배정 우회.
-    if (!isRequest) {
-      const otherActive = await prisma.siteAssignment.findFirst({
-        where: { workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { siteId } },
-        select: { agencyId: true, site: { select: { companyName: true } } },
-      });
-      if (otherActive) {
-        // 크로스테넌트: 충돌이 '타 위탁기관' 배정이면 현장명을 노출하지 않는다(이중배정은 막되 타 기관 정보 비노출).
-        const msg = isSameAgencyConflict(otherActive.agencyId, effectiveAgencyId)
-          ? `이미 다른 현장(${otherActive.site?.companyName ?? "-"})에 배정되어 있습니다. 기존 배정을 종료한 뒤 다시 배정해주세요.`
-          : `이 직무지도원은 이미 다른 곳에 배정되어 있어 직접 배정할 수 없습니다. 기존 배정이 종료된 뒤 다시 시도해주세요.`;
-        return NextResponse.json({ success: false, message: msg }, { status: 409 });
-      }
-    }
-
     let requestedWorkTypesCsv: string | null = null;
     let replyDeadline: Date | null = null;
     if (isRequest) {
@@ -252,18 +230,6 @@ export async function POST(req: NextRequest) {
       if (String(body.replyDeadline).slice(0, 10) < getKstDateString()) throw new Error("VALIDATION:replyDeadlinePast");
       replyDeadline = d;
     }
-
-    // 닫힌 기록 처리: 워커가 거절(REJECTED)한 건은 다시 요청 불가. 탈락/기한초과(DROPPED/EXPIRED)는 행을 재사용(중복 방지).
-    let reuseId: bigint | null = null;
-    const closed = await prisma.siteAssignment.findFirst({
-      where: { siteId, workerId, status: { in: ["REJECTED", "DROPPED", "EXPIRED"] } },
-      orderBy: { id: "desc" },
-      select: { id: true, status: true },
-    });
-    if (closed?.status === "REJECTED") {
-      return NextResponse.json({ success: false, message: "직무지도원이 거절한 요청입니다. 다시 요청할 수 없습니다." }, { status: 409 });
-    }
-    if (closed) reuseId = closed.id;
 
     // 파이프라인(assignment-pipeline-design.md): 요청=REQUESTED(회신 대기) → 후보 수락 → 선정 ASSIGNED(계약 대기)
     // → 계약 서명 CONFIRMED → 연결+위치확정 ACTIVE. 과금/급여(ACTIVE만)는 정상근무 시점부터 집계된다.
@@ -307,9 +273,58 @@ export async function POST(req: NextRequest) {
       site: { select: { id: true, companyName: true, address: true, agencyId: true } },
       user: { select: { id: true, workerName: true, loginId: true, phoneNumber: true, role: true, status: true } },
     } as const;
-    const created = reuseId
-      ? await prisma.siteAssignment.update({ where: { id: reuseId }, data: dataObj, select: selectObj })
-      : await prisma.siteAssignment.create({ data: dataObj, select: selectObj });
+    // ★워커 단위 advisory lock으로 "중복·이중배정 검사 → 생성"을 원자화(동시 직접배정 이중배정 방지, P1-4).
+    type CreateOutcome =
+      | { kind: "dup" }
+      | { kind: "otherActive"; sameAgency: boolean; companyName: string }
+      | { kind: "rejected" }
+      | { kind: "ok"; created: Awaited<ReturnType<typeof prisma.siteAssignment.create<{ data: typeof dataObj; select: typeof selectObj }>>> };
+    const outcome = await withWorkerAssignmentLock<CreateOutcome>(workerId, async (tx) => {
+      // 동일 site/user에 진행 중 배정(요청·수락·계약대기·근무)이 이미 있으면 중복 방지(정책)
+      const dup = await tx.siteAssignment.findFirst({
+        where: { siteId, workerId, status: { in: ["REQUESTED", "ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+        select: { id: true },
+      });
+      if (dup) return { kind: "dup" };
+
+      // ✅ 직접 배정(요청 아님)은 동시에 한 현장만 — 다른 현장에 점유 배정(ACCEPTED/ASSIGNED/CONFIRMED/ACTIVE)이 있으면 차단.
+      //    (한 직무지도원이 여러 현장에 무분별하게 꽂히는 것 방지. 미수락 요청(REQUESTED)은 제외.)
+      //    ★ACCEPTED 포함(수락했으면 그 현장에 커밋) — 누락 시 A현장 수락 워커를 B현장에 직접배정하는 이중배정 우회.
+      if (!isRequest) {
+        const otherActive = await tx.siteAssignment.findFirst({
+          where: { workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { siteId } },
+          select: { agencyId: true, site: { select: { companyName: true } } },
+        });
+        if (otherActive) {
+          return { kind: "otherActive", sameAgency: isSameAgencyConflict(otherActive.agencyId, effectiveAgencyId), companyName: otherActive.site?.companyName ?? "-" };
+        }
+      }
+
+      // 닫힌 기록 처리: 거절(REJECTED)한 건은 재요청 불가. 탈락/기한초과(DROPPED/EXPIRED)는 행을 재사용(중복 방지).
+      const closed = await tx.siteAssignment.findFirst({
+        where: { siteId, workerId, status: { in: ["REJECTED", "DROPPED", "EXPIRED"] } },
+        orderBy: { id: "desc" },
+        select: { id: true, status: true },
+      });
+      if (closed?.status === "REJECTED") return { kind: "rejected" };
+      const reuseId = closed?.id ?? null;
+
+      const created = reuseId
+        ? await tx.siteAssignment.update({ where: { id: reuseId }, data: dataObj, select: selectObj })
+        : await tx.siteAssignment.create({ data: dataObj, select: selectObj });
+      return { kind: "ok", created };
+    });
+
+    if (outcome.kind === "dup") return NextResponse.json({ success: false, message: "이미 해당 현장에 배정(또는 요청)된 직무지도원입니다." }, { status: 409 });
+    if (outcome.kind === "otherActive") {
+      // 크로스테넌트: 충돌이 '타 위탁기관' 배정이면 현장명을 노출하지 않는다(이중배정은 막되 타 기관 정보 비노출).
+      const msg = outcome.sameAgency
+        ? `이미 다른 현장(${outcome.companyName})에 배정되어 있습니다. 기존 배정을 종료한 뒤 다시 배정해주세요.`
+        : `이 직무지도원은 이미 다른 곳에 배정되어 있어 직접 배정할 수 없습니다. 기존 배정이 종료된 뒤 다시 시도해주세요.`;
+      return NextResponse.json({ success: false, message: msg }, { status: 409 });
+    }
+    if (outcome.kind === "rejected") return NextResponse.json({ success: false, message: "직무지도원이 거절한 요청입니다. 다시 요청할 수 없습니다." }, { status: 409 });
+    const created = outcome.created;
 
     await audit(session, { entityType: "SiteAssignment", entityId: created.id, action: "create", after: { siteId: String(siteId), workerId: String(workerId), status: created.status, workType: isRequest ? null : workType } });
 

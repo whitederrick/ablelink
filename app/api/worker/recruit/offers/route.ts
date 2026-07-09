@@ -8,6 +8,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
+import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
 
 export async function GET(req: NextRequest) {
   try {
@@ -60,8 +61,10 @@ export async function PATCH(req: NextRequest) {
     // 수락 + 제안에 현장이 연결돼 있으면 → 해당 현장으로 자동 배정(방향 B). 좌표/agencyId는 site에서.
     // 가드(비활성 인력·구독 한도·중복)는 미충족 시 배정만 건너뛰고 수락 자체는 진행(위탁기관가 수동 처리).
     let autoAssigned = false;
-    let assignSiteId: bigint | null = null;
     let assignAgencyId: bigint | null = null;
+    // 자동배정 후보(현장·위탁기관) — 정적 가드(현장 활성·워커 활성·구독 한도)는 락 밖에서 판정하고,
+    //  중복·시간겹침(다른 배정과의 이중배정) 판정과 생성은 락 안에서 재수행한다(TOCTOU 방지, P1-5).
+    let candidate: { siteId: bigint; agencyId: bigint } | null = null;
     if (action === "accept" && offer.siteId != null) {
       // 독립 조회 병렬화(현장·워커 상태).
       const [site, w] = await Promise.all([
@@ -70,53 +73,56 @@ export async function PATCH(req: NextRequest) {
       ]);
       if (site && site.isActive && site.agencyId != null && w && String(w.status) === "ACTIVE") {
         const wq = await checkQuota(site.agencyId, "workers");
-        const dup = await prisma.siteAssignment.findFirst({
-          where: { siteId: site.id, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
-          select: { id: true },
-        });
-        // 시간겹침: 다른 현장 진행중 배정과 같은 날 반나절 슬롯이 겹치면 자동배정 스킵(수락 자체는 진행).
-        //  제안 자동배정은 FULL_DAY라 기존 활성 배정과 기간이 겹치면 무조건 충돌.
-        const others = await prisma.siteAssignment.findMany({
-          // E3: ACCEPTED(최종확정 대기)도 점유로 포함(respond/PATCH 경로와 통일).
-          where: { workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { siteId: site.id } },
-          select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
-        });
-        const timeConflict = findTimeConflict(
-          { workType: "FULL_DAY", startDate: offer.serviceStart ?? new Date(), endDate: offer.serviceEnd ?? null },
-          others,
-        );
-        if (wq.allowed && !dup && !timeConflict) { assignSiteId = site.id; assignAgencyId = site.agencyId; }
+        if (wq.allowed) candidate = { siteId: site.id, agencyId: site.agencyId };
       }
     }
 
     let claimed = true;
-    await prisma.$transaction(async (tx) => {
+    await withWorkerAssignmentLock(workerId, async (tx) => {
       // 원자적 claim — PENDING일 때만 상태 전이. 더블탭(동시 요청) 중 하나만 성공, 나머지는 count=0.
       const c = await tx.talentOffer.updateMany({
         where: { id, status: "PENDING" },
         data: { status: action === "accept" ? "ACCEPTED" : "DECLINED", decidedAt: new Date() },
       });
       if (c.count === 0) { claimed = false; return; }
-      if (assignSiteId && assignAgencyId) {
-        await tx.siteAssignment.create({
-          data: {
-            siteId: assignSiteId,
-            workerId,
-            agencyId: assignAgencyId,
-            // 파이프라인: 제안 수락=ASSIGNED(계약 대기). 계약 서명→CONFIRMED, 연결+위치확정→ACTIVE.
-            status: "ASSIGNED",
-            isMainWorker: true,
-            assignedAt: new Date(),
-            // 제안에 명시된 직무지도 기간을 배정 기간으로 승계(없으면 오늘 시작)
-            startDate: offer.serviceStart ?? new Date(),
-            endDate: offer.serviceEnd ?? null,
-            assignedByManagerId: offer.createdByManagerId,
-            statusReason: "마켓플레이스 제안 수락 자동 배정",
-            workType: "FULL_DAY",
-            commuteGuidanceIncluded: false,
-          },
+      if (candidate) {
+        // 락 안에서 중복·시간겹침 재검사 — 다른 경로가 방금 만든 배정까지 반영해 이중배정 차단(자동배정만 스킵, 수락은 유지).
+        //  제안 자동배정은 FULL_DAY라 기존 활성 배정과 기간이 겹치면 무조건 충돌.
+        const dup = await tx.siteAssignment.findFirst({
+          where: { siteId: candidate.siteId, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+          select: { id: true },
         });
-        autoAssigned = true;
+        const others = await tx.siteAssignment.findMany({
+          // E3: ACCEPTED(최종확정 대기)도 점유로 포함(respond/PATCH 경로와 통일).
+          where: { workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { siteId: candidate.siteId } },
+          select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
+        });
+        const timeConflict = findTimeConflict(
+          { workType: "FULL_DAY", startDate: offer.serviceStart ?? new Date(), endDate: offer.serviceEnd ?? null },
+          others,
+        );
+        if (!dup && !timeConflict) {
+          await tx.siteAssignment.create({
+            data: {
+              siteId: candidate.siteId,
+              workerId,
+              agencyId: candidate.agencyId,
+              // 파이프라인: 제안 수락=ASSIGNED(계약 대기). 계약 서명→CONFIRMED, 연결+위치확정→ACTIVE.
+              status: "ASSIGNED",
+              isMainWorker: true,
+              assignedAt: new Date(),
+              // 제안에 명시된 직무지도 기간을 배정 기간으로 승계(없으면 오늘 시작)
+              startDate: offer.serviceStart ?? new Date(),
+              endDate: offer.serviceEnd ?? null,
+              assignedByManagerId: offer.createdByManagerId,
+              statusReason: "마켓플레이스 제안 수락 자동 배정",
+              workType: "FULL_DAY",
+              commuteGuidanceIncluded: false,
+            },
+          });
+          autoAssigned = true;
+          assignAgencyId = candidate.agencyId;
+        }
       }
     });
     if (!claimed) return NextResponse.json({ success: false, message: "이미 처리된 제안입니다." }, { status: 409 });
