@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateSignatureImage } from "@/lib/imageValidation";
-import { getSelfSignToken, consumeSelfSignToken } from "@/lib/selfSignToken";
+import { getSelfSignToken, consumeSelfSignTokenAtomic } from "@/lib/selfSignToken";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -43,10 +43,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const imgCheck = await validateSignatureImage(imageBlob!);
     if (!imgCheck.valid) return NextResponse.json({ success: false, message: imgCheck.error }, { status: 400 });
 
+    // ★일회용 토큰을 저장 직전에 원자적으로 소비(GETDEL) — "조회 후 삭제" 레이스로 동시 제출이
+    //  둘 다 서명을 저장하던 것을 방지(P2-1). 이미지 검증까지는 소비 전이라 검증 실패 시 재시도 가능.
+    //  claim에 성공한(payload를 얻은) 요청만 이하 저장을 수행하고, 나머지는 410.
+    const claimed = await consumeSelfSignTokenAtomic(token);
+    if (!claimed) return NextResponse.json({ success: false, message: "이미 처리되었거나 만료된 링크입니다." }, { status: 410 });
+
     // 사업주(갑) 대표자 서명 — data URI로 agency.representativeSignatureUrl에 저장.
     // (계약서 PDF 렌더러가 data:image 만 임베드하므로 스토리지 URL이 아닌 data URI로 보관)
-    if (payload.scope === "agency-rep") {
-      if (!payload.agencyId) {
+    if (claimed.scope === "agency-rep") {
+      if (!claimed.agencyId) {
         return NextResponse.json({ success: false, message: "대상 위탁기관 정보가 없습니다." }, { status: 400 });
       }
       const buf = Buffer.from(await imageBlob!.arrayBuffer());
@@ -55,17 +61,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return NextResponse.json({ success: false, message: "서명 이미지가 너무 큽니다." }, { status: 400 });
       }
       await prisma.agency.update({
-        where: { id: BigInt(payload.agencyId) },
+        where: { id: BigInt(claimed.agencyId) },
         data: { representativeSignatureUrl: dataUrl },
       });
-      await consumeSelfSignToken(token); // 일회용
       return NextResponse.json({ success: true });
     }
 
-    if (payload.scope !== "manager") {
+    if (claimed.scope !== "manager") {
       return NextResponse.json({ success: false, message: "지원하지 않는 서명 유형입니다." }, { status: 400 });
     }
-    const managerId = BigInt(payload.id);
+    const managerId = BigInt(claimed.id);
 
     // 기존 서명 삭제
     const existing = await prisma.manager.findUnique({ where: { id: managerId }, select: { signatureUrl: true } });
@@ -91,7 +96,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
     await prisma.manager.update({ where: { id: managerId }, data: { signatureUrl: publicUrl } });
-    await consumeSelfSignToken(token); // 일회용
+    // (토큰은 위에서 원자적으로 소비됨 — 여기서 별도 삭제 불필요)
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

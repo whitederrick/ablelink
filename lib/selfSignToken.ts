@@ -48,3 +48,22 @@ export async function consumeSelfSignToken(token: string): Promise<void> {
   if (redis) await redis.del(`selfsign:${token}`);
   else mem.delete(token);
 }
+
+/**
+ * 원자적 소비 — 값을 반환하면서 동시에 삭제(Redis GETDEL). 일회용 토큰의 "조회 후 삭제" 사이
+ * 레이스(동시 제출로 서명 이중 저장)를 막는다. 반환값이 null이면 이미 소비됐거나 만료/무효.
+ * 저장 직전에 호출해 처음 성공한 요청만 payload를 얻게 한다.
+ */
+export async function consumeSelfSignTokenAtomic(token: string): Promise<SelfSignPayload | null> {
+  if (!token) return null;
+  if (redis) {
+    // GETDEL: 조회와 삭제를 원자적으로 수행(Redis 6.2+/Upstash 지원).
+    return (await redis.getdel<SelfSignPayload>(`selfsign:${token}`)) ?? null;
+  }
+  // 인메모리 폴백 — 단일 스레드라 get+delete가 곧 원자적.
+  const rec = mem.get(token);
+  if (!rec) return null;
+  mem.delete(token);
+  if (rec.exp < Date.now()) return null;
+  return rec.payload;
+}
