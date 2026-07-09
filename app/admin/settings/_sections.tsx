@@ -18,6 +18,7 @@ type TaxYear = { year: number; rowCount: number; updatedAt: string; childCredit:
 
 export function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => void }) {
   const [years, setYears] = useState<TaxYear[]>([]);
+  const [loaded, setLoaded] = useState(false); // 로드 성공 여부 — 실패를 '빈 목록(세액표 없음)'으로 위장 방지
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [busy, setBusy] = useState(false);
   const [verify, setVerify] = useState<{ ok: boolean; text: string } | null>(null);
@@ -41,8 +42,10 @@ export function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => voi
     setVerify({ ok: warns.length === 0, text: parts.join(" · ") + (warns.length ? ` ⚠ ${warns.join(", ")}` : "") });
   }
 
-  const load = () => fetch("/api/admin/payroll/income-tax").then(r => r.json())
-    .then(d => { if (d.success) setYears(d.data); }).catch(() => {});
+  const load = () => fetch("/api/admin/payroll/income-tax")
+    .then(async r => { if (!r.ok) throw new Error(); return r.json(); })
+    .then(d => { if (!d.success) throw new Error(); setYears(d.data); setLoaded(true); })
+    .catch(() => setLoaded(false));
   useEffect(() => { load(); }, []);
 
   async function uploadExcel(file: File) {
@@ -70,7 +73,11 @@ export function IncomeTaxTableManager({ onToast }: { onToast: (m: string) => voi
         자동으로 세액표 시트를 찾고 자녀공제(별표2)를 추출합니다. 급여계산 시 소득세 자동 조회(주민세=소득세 10%)에 사용됩니다.
       </p>
 
-      {years.length === 0 ? (
+      {!loaded ? (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
+          간이세액표를 불러오지 못했습니다. <button onClick={load} className="underline">다시 시도</button>
+        </div>
+      ) : years.length === 0 ? (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
           ⚠ 등록된 간이세액표가 없습니다 — <u>소득세·주민세가 0원으로 계산됩니다.</u> 아래에서 홈택스 엑셀을 업로드하세요.
         </div>

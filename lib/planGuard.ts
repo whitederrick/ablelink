@@ -163,7 +163,11 @@ export async function checkPlanAccess(
   });
 
   if (contract?.agency) {
-    return _checkAgency(contract.agency, feature);
+    const r = _checkAgency(contract.agency, feature);
+    if (r.allowed) return r;
+    // ★계약 기관이 플랜 부족(FREE 다운그레이드/TRIAL 만료)으로 거부해도 즉시 반환하지 않고, 아래 활성
+    //  배정(engagement) 기관으로 폴백한다. 멀티기관 워커가 다른 유료 기관에 실제 활성 배정 중이면 그 기관
+    //  플랜으로 허용될 수 있다(계약만 보고 오차단하던 문제 방지). 최종 거부는 아래 (2b)/(3)에서 결정.
   }
 
   // (2.5) 셀프등록(무소속 운영) 워커 — 기본 문서·서명(PDF·전자서명·사업체담당자 사인)은 무료 허용.

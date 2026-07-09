@@ -21,6 +21,14 @@ import { logCompletionStatus } from "@/lib/docs/logCompletion";
 import { computeAbsentDates } from "@/lib/attendance/absentDays";
 import { getKstDateString } from "@/lib/time";
 
+// "YYYY-MM" → 그 달의 실제 마지막 날 "YYYY-MM-DD". (과거 `${yearMonth}-31` 하드코딩은 2/4/6/9/11월에서
+//  다음 달로 넘쳐 결근 합성이 유령 ABSENT 행을 만들었다.)
+function monthEndStr(yearMonth: string): string {
+  const [y, m] = yearMonth.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate(); // day 0 = 그 달(m, 1-indexed)의 말일
+  return `${yearMonth}-${String(last).padStart(2, "0")}`;
+}
+
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
   if (msg === "FORBIDDEN") return 403;
@@ -171,7 +179,7 @@ export async function GET(req: NextRequest) {
       else if (to) where.workDate = { lte: to };
     } else if (yearMonth) {
       const start = `${yearMonth}-01`;
-      const end = `${yearMonth}-31`;
+      const end = monthEndStr(yearMonth);
       where.workDate = { gte: start, lte: end };
     }
 
@@ -227,7 +235,7 @@ export async function GET(req: NextRequest) {
     // 배정 근무일 중 출근기록 없는 평일을 ABSENT 항목으로 추가(워커 캘린더와 동일 규칙, lib/attendance/absentDays).
     // 월별현황 그리드에서 결근을 '미출근'(rose)으로 표시하기 위함. 목록/지도 뷰는 클라에서 synthetic 제외.
     const period = (from && to) ? { from, to }
-      : yearMonth ? { from: `${yearMonth}-01`, to: `${yearMonth}-31` } : null;
+      : yearMonth ? { from: `${yearMonth}-01`, to: monthEndStr(yearMonth) } : null;
     const absentItems: any[] = [];
     if (period) {
       const todayStr = getKstDateString();

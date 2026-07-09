@@ -52,9 +52,11 @@ export async function GET(request: NextRequest) {
     // 에이전시 스코프 게이트 먼저 — 소속 기관 배정이 없으면 PII(성명·연락처·서명·계정)를 조회하기 전에 400.
     //  (심층방어: 타 기관 워커 요청 시 개인정보를 아예 fetch하지 않는다.)
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { workerId, agencyId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      // ENDED(종료) 포함 — 감사(공단 실사)는 통상 근무 종료 후 발생하므로 종료 배정도 감사서류 생성 대상.
+      //  (agencyId 스코프는 유지 → 타 기관 워커 PII는 여전히 차단.)
+      where: { workerId, agencyId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } },
       include: { site: true },
-      orderBy: { assignedAt: "desc" },
+      orderBy: [{ endedAt: "desc" }, { assignedAt: "desc" }],
     });
     if (!assignment?.site) {
       return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 400 });
