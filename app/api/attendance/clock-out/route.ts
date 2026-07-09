@@ -102,6 +102,9 @@ export async function POST(request: NextRequest) {
         workerId: userIdBig,
         workDate: todayString,
         status: action === "CLOCK_OUT" ? "WORKING" : "DONE",
+        // ★퇴근은 '실제 출근(actualStartTime)한 행'만 대상 — 일지 작성이 만든 placeholder(시각 없는 WORKING 행)는
+        //  출근한 적이 없으므로 퇴근 대상이 아니다(출근 안 했는데 퇴근되는 것 방지).
+        ...(action === "CLOCK_OUT" ? { actualStartTime: { not: null } } : {}),
         ...(outAssignmentId != null ? { assignmentId: outAssignmentId } : {}),
       },
       include: {

@@ -123,10 +123,12 @@ export async function POST(request: NextRequest) {
     //    단일 배정이면 그 배정 하나로 하루 1건 — 기존 동작과 동일.)
     const existingRecord = await prisma.dailyAttendance.findFirst({
       where: { assignmentId: assignment.id, workDate: todayString },
-      select: { id: true },
+      select: { id: true, actualStartTime: true },
     });
-    if (existingRecord) {
-      // 안정성: 클라이언트가 "이미 처리됨"으로 자가치유하도록 식별 코드 부여(중복요청/유실응답 대비).
+    // ★'출근함'은 실제 출근 버튼 시각(actualStartTime)으로 판정한다. 일지 작성이 만든 placeholder(시각 없는
+    //  출근기록 행)는 출근으로 보지 않고, 아래 STEP 5에서 그 행을 채워 출근 처리한다(중복 생성 없이 update).
+    //  실제로 이미 출근한 경우(actualStartTime 존재)만 자가치유 코드로 차단한다.
+    if (existingRecord?.actualStartTime) {
       return NextResponse.json(
         { success: false, code: "ALREADY_CLOCKED_IN", message: "이미 오늘 이 현장 출근 기록이 있습니다." },
         { status: 400 }
@@ -240,29 +242,32 @@ export async function POST(request: NextRequest) {
     );
     const fixedStart = kstWallTimeToInstant(todayString, workTimes.start);
 
-    // [STEP 5] 출근 기록 저장 (증빙 필드 포함)
-    const newAttendance = await prisma.dailyAttendance.create({
-      data: {
-        workerId: userIdBig,
-        siteId: site.id,
-        assignmentId: assignment.id,              // ✅ 증빙
-        basePointId: decidedBasePointId,          // ✅ 증빙(없을 수 있음)
-        workDate: todayString,
-
-        startTime: fixedStart,                    // 출근부(공단)용 근무형태 고정시각
-        actualStartTime: new Date(),              // 실제 출근 버튼 시각(정상 출근 여부 확인용)
-        startLocLat: Number(latitude),
-        startLocLon: Number(longitude),
-
-        startDistanceM: distanceMeters,           // ✅ 증빙
-        withinRange: withinRange,                 // ✅ 증빙
-        rangeM: allowedRangeMeters,               // ✅ 증빙
-
-        isGpsModified: forceGpsModified,
-        status: "WORKING",
-        // accuracyM를 DB에 별도 저장하는 필드가 없다면 여기선 보관하지 않음
-      },
-    });
+    // [STEP 5] 출근 기록 저장 (증빙 필드 포함).
+    //  일지 작성이 만든 placeholder 행(existingRecord, actualStartTime 없음)이 있으면 그 행을 채워 출근 처리하고,
+    //  없으면 새로 생성한다(@@unique(assignmentId,workDate) — 중복 생성 방지).
+    const clockInData = {
+      basePointId: decidedBasePointId,          // ✅ 증빙(없을 수 있음)
+      startTime: fixedStart,                    // 출근부(공단)용 근무형태 고정시각
+      actualStartTime: new Date(),              // 실제 출근 버튼 시각(정상 출근 여부 확인용)
+      startLocLat: Number(latitude),
+      startLocLon: Number(longitude),
+      startDistanceM: distanceMeters,           // ✅ 증빙
+      withinRange: withinRange,                 // ✅ 증빙
+      rangeM: allowedRangeMeters,               // ✅ 증빙
+      isGpsModified: forceGpsModified,
+      status: "WORKING" as const,
+    };
+    const newAttendance = existingRecord
+      ? await prisma.dailyAttendance.update({ where: { id: existingRecord.id }, data: clockInData })
+      : await prisma.dailyAttendance.create({
+          data: {
+            workerId: userIdBig,
+            siteId: site.id,
+            assignmentId: assignment.id,          // ✅ 증빙
+            workDate: todayString,
+            ...clockInData,
+          },
+        });
 
     await audit(session, { entityType: "DailyAttendance", entityId: newAttendance.id, action: "create", summary: "출근", after: { workDate: todayString, siteId: String(site.id), status: "WORKING" } });
 

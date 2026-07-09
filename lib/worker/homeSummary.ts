@@ -181,9 +181,10 @@ export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: 
           select: { traineeId: true },
         })
       : Promise.resolve([] as { traineeId: bigint }[]),
-    // 퇴근 미실행(과거 WORKING)
+    // 퇴근 미실행(과거 WORKING) — ★실제 출근(actualStartTime)한 행만. 일지 placeholder(시각 없는 WORKING)는
+    //  출근한 적이 없으므로 '퇴근 미실행 보정대기'로 노출하지 않는다.
     prisma.dailyAttendance.findMany({
-      where: { workerId, status: "WORKING", workDate: { lt: today }, isFinalClosed: false },
+      where: { workerId, status: "WORKING", workDate: { lt: today }, isFinalClosed: false, actualStartTime: { not: null } },
       include: { site: { select: { companyName: true } } },
       orderBy: { workDate: "desc" },
       take: 30,
@@ -256,7 +257,11 @@ export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: 
       // 오늘 기준 실효 단계(전환일 지나면 적응지도)
       serviceStep: effectiveServiceStep(activeAssignment?.serviceStep, activeAssignment?.adaptationStartDate, today),
       trainingType: serviceStepToTrainingType(effectiveServiceStep(activeAssignment?.serviceStep, activeAssignment?.adaptationStartDate, today)),
-      attendanceStatus: todayAttendance?.status ?? "BEFORE",
+      // ★'출근함'은 실제 출근 시각(actualStartTime)으로 판정. 일지 작성이 만든 placeholder(시각 없는 행)는
+      //  non-exempt면 '출근 전(BEFORE)'로 표시해 출근하기 버튼을 유지(면제 배정은 버튼 미사용이라 status 그대로).
+      attendanceStatus: (todayAttendance && !todayAttendance.actualStartTime && !activeAssignment?.attendanceButtonExempt)
+        ? "BEFORE"
+        : (todayAttendance?.status ?? "BEFORE"),
       attendanceButtonExempt: Boolean(activeAssignment?.attendanceButtonExempt),
       attendanceId: todayAttendance?.id ? todayAttendance.id.toString() : null,
       startTime: todayAttendance?.startTime ? todayAttendance.startTime.toISOString() : null,
