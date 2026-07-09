@@ -82,12 +82,14 @@ export default function BatchWorklogPage() {
         setAssignmentId(d.assignmentId);
         setTrainingType(d.trainingType ?? "FIELD");
         setTrainees(d.trainees ?? []);
-        // AI 일지는 STANDARD 이상(2026-06-06 재배치). TRIAL은 전기능 허용.
-        const ok = ["STANDARD", "PRO"].includes(d.agencyPlanType ?? "") ||
-          (d.agencyPlanType === "TRIAL" && d.trialEndsAt && new Date(d.trialEndsAt) > new Date());
-        setPlanOk(ok);
+        // AI 일지는 STANDARD 이상(AI_VOICE 피처). 게이트는 서버의 premiumAccess로 판정한다
+        //  ─ premiumAccess = checkPlanAccess(AI_VOICE) 로, ①운영자 개인부여(worker.planType)
+        //    ②기관 구독(서명계약/활성배정 기반) ③체험(TRIAL)을 모두 올바르게 반영한다.
+        //  (과거엔 agency.planType 원본 필드만 봐서 개인부여·엔게이지먼트 기반 접근이 무시돼
+        //   PRO 기관·개인권한 부여 워커도 "STANDARD 이상만 가능"으로 잘못 막히던 버그.)
+        setPlanOk(!!d.premiumAccess);
         // 이번 달 AI 일괄 사용 여부(개인당 월 1회) — 녹음 전 사전 안내
-        if (ok) {
+        if (d.premiumAccess) {
           try {
             const u = await fetch("/api/worker/ai/batch-voice-to-log", { cache: "no-store" }).then(r => r.json());
             if (u?.success) {
@@ -355,7 +357,7 @@ export default function BatchWorklogPage() {
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
         <p className="text-lg font-black text-slate-900">스탠다드(STANDARD) 플랜 이상에서만 사용 가능합니다.</p>
         <p className="text-sm text-slate-500">위탁기관 담당자에게 구독 업그레이드를 요청해주세요.</p>
-        <button onClick={() => router.back()} className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white">
+        <button onClick={() => router.push("/worker/home")} className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white">
           돌아가기
         </button>
       </div>
@@ -371,7 +373,7 @@ export default function BatchWorklogPage() {
           단일 음성 일지는 횟수 제한 없이 계속 사용할 수 있어요.
         </p>
         <div className="flex gap-2">
-          <button onClick={() => router.back()} className="rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-600">
+          <button onClick={() => router.push("/worker/home")} className="rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-600">
             돌아가기
           </button>
           <button onClick={() => router.push("/worker/worklog")} className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white">
