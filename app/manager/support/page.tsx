@@ -88,7 +88,7 @@ const TEMPLATES: Record<string, string> = {
 };
 const TEMPLATE_SET = new Set(Object.values(TEMPLATES));
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 10;
 const MAX_FILES = 5;
 const MAX_SIZE = 10 * 1024 * 1024;
 

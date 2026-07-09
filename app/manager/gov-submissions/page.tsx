@@ -10,7 +10,7 @@ import ListToolbar from "../_components/ListToolbar";
 import Pagination from "../_components/Pagination";
 import { workerLabel } from "../_format";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 type Item = {
   id: string;

@@ -12,7 +12,7 @@ import { StatCardRow } from "../_components/StatCard";
 import { workerLabel } from "../_format";
 import { docSubmitStatus, DOC_SUBMIT_BADGE } from "../_docStatus";
 
-const DOC_PAGE_SIZE = 12;
+const DOC_PAGE_SIZE = 10;
 
 type Item = {
   id: string;
