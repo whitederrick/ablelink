@@ -78,6 +78,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: `지원하지 않는 문서: ${docType}` }, { status: 400 });
 
       const res = await prisma.$transaction(async (tx) => {
+        // ★출근부 등 traineeId=null 문서는 @@unique([assignmentId,docType,periodStart,traineeId])가 NULL을
+        //  distinct로 취급(Postgres NULLS DISTINCT)해 findFirst→create 레이스를 못 막는다(동시 제출 시 중복
+        //  DocumentRun → 공단 이중 이메일 발송). 문서 정체성으로 advisory 트랜잭션 락을 걸어 동시 제출을 직렬화.
+        const lockKey = `docsubmit:${meta.assignmentId}:${prismaDocType}:${periodStart}:${meta.traineeId ?? 0}`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+
         const site = await tx.site.findUnique({ where: { id: meta.siteId }, select: { agencyId: true, ownerManagerId: true } });
 
         // DocumentRun upsert(현장×문서종류×기간×훈련생) — nullable traineeId 때문에 findFirst+create.

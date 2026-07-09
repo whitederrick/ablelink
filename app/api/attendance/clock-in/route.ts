@@ -278,6 +278,14 @@ export async function POST(request: NextRequest) {
       data: newAttendance,
     });
   } catch (error) {
+    // 동시 더블탭 레이스: 사전 existingRecord 체크를 둘 다 통과한 뒤 @@unique(assignmentId,workDate) 위반(P2002)이
+    //  나면, 일반 500 대신 설계된 자가치유 응답(ALREADY_CLOCKED_IN)으로 매핑 — 클라가 '이미 처리됨'으로 부드럽게 넘김.
+    if (error && typeof error === "object" && (error as { code?: string }).code === "P2002") {
+      return NextResponse.json(
+        { success: false, code: "ALREADY_CLOCKED_IN", message: "이미 오늘 이 현장 출근 기록이 있습니다." },
+        { status: 400 }
+      );
+    }
     console.error("출근 처리 에러:", error);
     return NextResponse.json(
       { success: false, message: "서버 오류" },

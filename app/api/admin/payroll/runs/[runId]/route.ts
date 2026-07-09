@@ -152,10 +152,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ run
       return NextResponse.json({ success: false, message: "이미 확정되었습니다." }, { status: 409 });
     }
 
-    const finalized = await prisma.payrollRun.update({
-      where: { id: run.id },
-      data: { status: "FINALIZED", finalizedAt: new Date() },
+    // ★원자적 전이(C6): 더블탭 동시 확정 시 둘 다 DRAFT를 읽고 위 가드를 통과한 뒤 각각 update+알림+감사를
+    //  실행해 명세서 발급 알림·감사로그가 중복 생성되던 것 방지. FINALIZED가 아닐 때만 전이, count=0이면 진 요청.
+    const finalizedAt = new Date();
+    const upd = await prisma.payrollRun.updateMany({
+      where: { id: run.id, status: { not: "FINALIZED" } },
+      data: { status: "FINALIZED", finalizedAt },
     });
+    if (upd.count === 0) {
+      return NextResponse.json({ success: false, message: "이미 확정되었습니다." }, { status: 409 });
+    }
 
     // 전자교부 알림: 대상 직무지도원에게 앱 내 알림(WorkerNotice) 생성. (알림톡·이메일 미사용 — 앱내 무료)
     try {
@@ -181,8 +187,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ run
     await audit(scope, { entityType: "PayrollRun", entityId: run.id, action: "update", summary: "급여 확정", after: { status: "FINALIZED", yearMonth: run.yearMonth } });
     return NextResponse.json({
       success: true,
-      status: finalized.status,
-      finalizedAt: finalized.finalizedAt?.toISOString(),
+      status: "FINALIZED",
+      finalizedAt: finalizedAt.toISOString(),
     });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;
