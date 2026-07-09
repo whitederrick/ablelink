@@ -167,7 +167,8 @@ export async function POST(req: NextRequest) {
     if (ownerManagerId) {
       targetManagerIds = [ownerManagerId];
     } else if (agencyIdForNotice) {
-      const mgrs = await prisma.manager.findMany({ where: { agencyId: agencyIdForNotice }, select: { id: true } });
+      // P3: 비활성 매니저에게는 제출 알림을 보내지 않는다(isActive 필터 누락 보정).
+      const mgrs = await prisma.manager.findMany({ where: { agencyId: agencyIdForNotice, isActive: true }, select: { id: true } });
       targetManagerIds = mgrs.map(m => m.id);
     }
     if (targetManagerIds.length > 0) {

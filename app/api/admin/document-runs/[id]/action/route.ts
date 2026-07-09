@@ -111,17 +111,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const upd = await prisma.documentRun.updateMany({ where: { id: runId, signStage: { in: ["SUBMITTED", "CONFIRMED"] } }, data: { signStage: "CHANGES_REQUESTED" } });
       if (upd.count === 0) return stageErr("이미 처리된 문서입니다. 목록을 새로고침해주세요.");
 
-      await prisma.workerNotice.create({
-        data: {
-          workerId: run.workerId,
-          agencyId: run.agencyId,
-          title: `[수정요청] ${docTitle}`,
-          body: `다음 문서의 수정이 필요합니다.\n\n■ 문서: ${docTitle}\n■ 사유: ${reason || "(사유 미입력)"}\n\n해당 문서를 수정 후 다시 제출해주세요.`,
-          type: "WARN",
-          kind: "NOTICE_INDIVIDUAL",
-          link: workerDocLink,
-        },
-      });
+      // P3: 상태전이(위 updateMany)는 이미 커밋됐으므로 알림 생성 실패가 요청 전체를 실패로 만들지
+      //  않도록 try/catch로 감싼다(문서는 CHANGES_REQUESTED인데 500 반환되던 불일치 방지).
+      try {
+        await prisma.workerNotice.create({
+          data: {
+            workerId: run.workerId,
+            agencyId: run.agencyId,
+            title: `[수정요청] ${docTitle}`,
+            body: `다음 문서의 수정이 필요합니다.\n\n■ 문서: ${docTitle}\n■ 사유: ${reason || "(사유 미입력)"}\n\n해당 문서를 수정 후 다시 제출해주세요.`,
+            type: "WARN",
+            kind: "NOTICE_INDIVIDUAL",
+            link: workerDocLink,
+          },
+        });
+      } catch (e) { console.warn("[document-runs action] 수정요청 알림 생성 실패:", e); }
       await audit(scope, { entityType: "DocumentRun", entityId: runId, action: "update", before: { signStage: run.signStage }, after: { signStage: "CHANGES_REQUESTED" } });
       return NextResponse.json({ success: true, signStage: "CHANGES_REQUESTED" });
     }

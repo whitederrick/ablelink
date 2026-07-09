@@ -71,7 +71,9 @@ const ASSIGN_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 // 근무 종료 = 배정 종료일(현장 근무 종료)이 지난 경우. 평가는 배정(현장) 단위.
 function isWorkEnded(a: { endDate?: string | null } | null | undefined): boolean {
   if (!a || !a.endDate) return false;
-  return a.endDate.slice(0, 10) < new Date().toISOString().slice(0, 10);
+  // P3: '오늘'은 KST 기준(UTC로 비교하면 KST 00~09시에 하루 어긋나 종료 판정이 밀림).
+  const kstToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  return a.endDate.slice(0, 10) < kstToday;
 }
 // 근무형태 짧은 라벨(요청 근무형태 목록 표기용)
 const WT_TINY: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "전일", CUSTOM: "직접" };

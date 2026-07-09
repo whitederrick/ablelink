@@ -139,6 +139,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "비밀번호가 일치하지 않습니다." }, { status: 400 });
       }
 
+      // P3: set-password는 온보딩(임시비번) 단계 전용. 이미 온보딩을 마친 계정이 현재 비밀번호 확인 없이
+      //  이 경로로 비밀번호를 바꾸지 못하도록 isTemporary 게이트(세션 탈취 시 조용한 비번 교체 방지).
+      const cur = await prisma.worker.findUnique({ where: { id: workerId }, select: { isTemporary: true } });
+      if (!cur?.isTemporary) {
+        return NextResponse.json({ success: false, message: "이미 온보딩이 완료된 계정입니다. 비밀번호 변경은 비밀번호 재설정을 이용해주세요." }, { status: 409 });
+      }
+
       const updated = await prisma.worker.update({
         where: { id: workerId },
         data: {
