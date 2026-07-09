@@ -11,6 +11,25 @@ import { escapeCsvCell } from "@/lib/csv";
 const ACTOR_TYPES = ["ADMIN", "MANAGER"] as const;
 const PAGE_SIZES = [10, 20, 50];
 
+// PERF-3: 필터 드롭다운 어휘(resource/action)는 필터와 무관한 전역 값인데 매 페이지 요청마다
+//  DISTINCT 전체스캔 2회를 돌렸다. 거의 변하지 않으므로 인스턴스 메모리에 60초 캐시한다.
+const VOCAB_TTL_MS = 60_000;
+let vocabCache: { at: number; resources: string[]; actions: string[] } | null = null;
+
+async function getVocab(): Promise<{ resources: string[]; actions: string[] }> {
+  if (vocabCache && Date.now() - vocabCache.at < VOCAB_TTL_MS) {
+    return { resources: vocabCache.resources, actions: vocabCache.actions };
+  }
+  const [resourcesRaw, actionsRaw] = await Promise.all([
+    prisma.accessLog.findMany({ select: { resource: true }, distinct: ["resource"], orderBy: { resource: "asc" }, take: 100 }),
+    prisma.accessLog.findMany({ select: { action: true }, distinct: ["action"], orderBy: { action: "asc" }, take: 50 }),
+  ]);
+  const resources = resourcesRaw.map(r => r.resource).filter(Boolean);
+  const actions = actionsRaw.map(a => a.action).filter(Boolean);
+  vocabCache = { at: Date.now(), resources, actions };
+  return { resources, actions };
+}
+
 function toDate(v: string | null): Date | null {
   if (!v) return null;
   const d = new Date(v);
@@ -89,7 +108,7 @@ export async function GET(req: Request) {
       });
     }
 
-    const [items, total, resourcesRaw, actionsRaw] = await Promise.all([
+    const [items, total, vocab] = await Promise.all([
       prisma.accessLog.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -97,8 +116,7 @@ export async function GET(req: Request) {
         take: pageSize,
       }),
       prisma.accessLog.count({ where }),
-      prisma.accessLog.findMany({ select: { resource: true }, distinct: ["resource"], orderBy: { resource: "asc" }, take: 100 }),
-      prisma.accessLog.findMany({ select: { action: true }, distinct: ["action"], orderBy: { action: "asc" }, take: 50 }),
+      getVocab(),
     ]);
 
     return NextResponse.json({
@@ -106,8 +124,8 @@ export async function GET(req: Request) {
       total,
       page,
       pageSize,
-      resourceOptions: resourcesRaw.map(r => r.resource).filter(Boolean),
-      actionOptions: actionsRaw.map(a => a.action).filter(Boolean),
+      resourceOptions: vocab.resources,
+      actionOptions: vocab.actions,
       items: items.map(e => ({
         id: e.id.toString(),
         agencyId: e.agencyId?.toString() ?? null,
