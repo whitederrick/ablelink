@@ -27,15 +27,18 @@ export default function WorkerPayrollPage() {
   const router = useRouter();
   const [items, setItems] = useState<PayItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false); // P3: 로드 실패를 '빈 상태'로 위장하지 않고 재시도 안내
   const [openId, setOpenId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const runFetch = () => {
     fetch("/api/worker/payroll")
-      .then(r => r.json())
-      .then(d => { if (d.success) setItems(d.items); })
-      .catch(() => {})
+      .then(async r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => { if (d.success) setItems(d.items); else throw new Error(); })
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, []);
+  };
+  const load = () => { setLoading(true); setError(false); runFetch(); }; // 재시도(사용자 이벤트)
+  useEffect(() => { runFetch(); }, []); // 초기 로드 — loading/error는 이미 초기값이라 동기 setState 불필요
 
   // 최근 6개월 실지급 추이(오래된→최근, 좌→우 읽기). items는 최신순.
   const trend = [...items].slice(0, 6).reverse();
@@ -53,6 +56,11 @@ export default function WorkerPayrollPage() {
       <div className="mx-auto max-w-lg space-y-3 px-4 py-5">
         {loading ? (
           <p className="py-10 text-center text-sm font-semibold text-slate-400">불러오는 중...</p>
+        ) : error ? (
+          <div className="rounded-2xl border border-rose-100 bg-white py-12 text-center">
+            <p className="text-sm font-semibold text-rose-500">급여명세서를 불러오지 못했습니다.</p>
+            <button onClick={load} className="mt-3 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white active:scale-95">다시 시도</button>
+          </div>
         ) : items.length === 0 ? (
           <div className="rounded-2xl border border-slate-100 bg-white py-12 text-center">
             <Wallet className="mx-auto h-10 w-10 text-slate-200" />

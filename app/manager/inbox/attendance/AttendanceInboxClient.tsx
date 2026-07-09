@@ -498,17 +498,15 @@ export default function AttendanceInboxClient() {
   async function actionResolve() {
     if (!selected) return;
 
-    // ✅ 서버 엔드포인트가 있으면 호출, 없으면 로컬만 업데이트
-    const { ok } = await postJson<{ success: boolean }>(`/api/admin/attendance-inbox/${selected.id}/resolve`).catch(
-      () => ({ ok: false, status: 0, json: null })
-    );
+    // P3: 서버 성공(ok) 시에만 종결 반영 — 과거엔 실패해도 로컬을 ADMIN_RESOLVED로 바꿔 '가짜 성공'을
+    //  보였다(새로고침 시 되돌아감). 실패하면 알림만 띄우고 상태는 그대로 둔다.
+    const { ok, json } = await postJson<{ success: boolean; message?: string }>(
+      `/api/admin/attendance-inbox/${selected.id}/resolve`,
+    ).catch(() => ({ ok: false, status: 0, json: null as { success: boolean; message?: string } | null }));
+    if (!ok) { alert(json?.message || "종결 처리에 실패했습니다. 잠시 후 다시 시도해주세요."); return; }
 
     updateSelected((it) =>
-      pushTimeline(
-        { ...it, status: "ADMIN_RESOLVED" },
-        "담당자 종결 처리 완료",
-        ok ? "종결 처리(서버 반영)" : "종결 처리(로컬 반영)"
-      )
+      pushTimeline({ ...it, status: "ADMIN_RESOLVED" }, "담당자 종결 처리 완료", "종결 처리")
     );
   }
 
