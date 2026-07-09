@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
   const session = await getWorkerSessionFromReq(req);
@@ -16,6 +17,12 @@ export async function POST(req: NextRequest) {
 
   if (!code) {
     return NextResponse.json({ success: false, message: "인증 코드를 입력해주세요." }, { status: 400 });
+  }
+
+  // P3: 인증코드 브루트포스 방어 — 워커당 코드 검증 시도 제한(레이트리밋 부재 보정).
+  const rl = await checkRateLimit(`email-change-confirm:${session.workerId}`, { max: 5, windowSec: 900, blockSec: 900 });
+  if (!rl.allowed) {
+    return NextResponse.json({ success: false, message: "인증 시도가 너무 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
   }
 
   const user = await prisma.worker.findUnique({

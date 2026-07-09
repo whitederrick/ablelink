@@ -12,6 +12,7 @@ import { validateSignatureImage } from "@/lib/imageValidation";
 import { signatureDisplayUrl } from "@/lib/signatureImage";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { getRateLimitIp } from "@/lib/clientIp";
+import { randomUUID } from "crypto";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -89,7 +90,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!imgCheck.valid)
     return NextResponse.json({ success: false, message: imgCheck.error }, { status: 400 });
 
-  const fileName = `sign-tokens/${token}/signature_${Date.now()}.png`;
+  // 요청별 고유 파일명 — 동시 제출 경합 시 각 업로드가 별개 객체가 되어, 진 요청의 고아 정리가
+  //  이긴 요청의 파일을 지우지 않는다(같은 ms Date.now() 충돌로 인한 오삭제 방지).
+  const fileName = `sign-tokens/${token}/signature_${Date.now()}_${randomUUID().slice(0, 8)}.png`;
 
   const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${fileName}`, {
     method: "POST",
@@ -116,6 +119,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     data: { signatureUrl: storedPath, usedAt: new Date() },
   });
   if (claim.count === 0) {
+    // P3: 경합에서 진 요청이 방금 올린 서명 PNG(서명=개인정보)를 스토리지에 고아로 남기지 않도록 삭제.
+    try {
+      await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${fileName}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+      });
+    } catch (e) { console.warn("[sign/token] 고아 서명 정리 실패:", e); }
     return NextResponse.json({ success: false, message: "이미 서명이 완료되었습니다." }, { status: 409 });
   }
 
