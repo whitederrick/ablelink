@@ -44,11 +44,20 @@ export async function GET(request: NextRequest) {
     let selAssignmentId: bigint | null = null;
     try { const raw = searchParams.get("assignmentId"); selAssignmentId = raw ? BigInt(raw) : null; } catch { selAssignmentId = null; }
 
-    const assignment = await prisma.siteAssignment.findFirst({
+    let assignment = await prisma.siteAssignment.findFirst({
       where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, ...(selAssignmentId != null ? { id: selAssignmentId } : {}) },
       include: { site: true },
       orderBy: { assignedAt: "desc" },
     });
+    // ★낡은 wk_active_assignment 쿠키(재시드로 사라진 id 등)가 가리키는 배정이 무효면 최신 활성 배정으로 폴백.
+    //  (폴백 없으면 낡은 쿠키 하나가 문서조회를 '배정 없음'으로 막음.)
+    if (!assignment && selAssignmentId != null) {
+      assignment = await prisma.siteAssignment.findFirst({
+        where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+        include: { site: true },
+        orderBy: { assignedAt: "desc" },
+      });
+    }
     if (!assignment) return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 404 });
 
     const siteId = assignment.siteId;

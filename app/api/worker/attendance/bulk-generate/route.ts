@@ -87,14 +87,20 @@ export async function POST(request: NextRequest) {
 
     // 배정 결정: 입력된 assignmentId(내 것) 우선, 없으면 최신 유효 배정
     const inputAssignmentId = toBigIntOrNull(body?.assignmentId);
-    const assignment = inputAssignmentId
+    const latestActive = () => prisma.siteAssignment.findFirst({
+      where: { workerId: workerIdBig, status: { in: [...validStatuses] } },
+      orderBy: [{ startDate: "desc" }, { id: "desc" }],
+    });
+    let assignment = inputAssignmentId
       ? await prisma.siteAssignment.findFirst({
           where: { id: inputAssignmentId, workerId: workerIdBig, status: { in: [...validStatuses] } },
         })
-      : await prisma.siteAssignment.findFirst({
-          where: { workerId: workerIdBig, status: { in: [...validStatuses] } },
-          orderBy: [{ startDate: "desc" }, { id: "desc" }],
-        });
+      : await latestActive();
+
+    // ★낡은 wk_active_assignment 쿠키(무효 id)면 최신 활성 배정으로 폴백 — 쿠키 하나가 일괄생성을 막지 않도록.
+    if (!assignment && inputAssignmentId) {
+      assignment = await latestActive();
+    }
 
     if (!assignment) {
       return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 404 });

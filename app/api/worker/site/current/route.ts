@@ -4,6 +4,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { getWorkerPremiumStatus, getWorkerDocAccess } from "@/lib/planGuard";
@@ -31,26 +32,41 @@ export async function GET(request: NextRequest) {
     // 명시 배정(딥링크/쿠키)이면 종료(ENDED)여도 그 배정으로 — 과거문서 재제출·수정요청 딥링크가
     //  ENDED를 가리키므로 ACTIVE+오늘기간 필터를 걸면 siteInfo=null → 문서 카드/제출버튼이 안 뜨는 데드엔드.
     //  소유(workerId)+근무발생상태(generate/preview/buildDocPayload와 동일)만 검증. 미명시면 최신 활성.
-    const assignment = await prisma.siteAssignment.findFirst({
+    const assignmentInclude = {
+      site: {
+        include: {
+          trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } } },
+          contacts: { where: { isActive: true }, select: { name: true, phoneNumber: true, email: true, role: true }, orderBy: { id: "asc" } },
+        },
+      },
+      agency: true,
+    } satisfies Prisma.SiteAssignmentInclude;
+    // 미명시(쿠키 없음)일 때의 최신 활성 배정 조건.
+    const latestActiveWhere = {
+      workerId,
+      status: "ACTIVE",
+      startDate: { lte: today },
+      OR: [{ endDate: null }, { endDate: { gte: today } }],
+    } satisfies Prisma.SiteAssignmentWhereInput;
+
+    let assignment = await prisma.siteAssignment.findFirst({
       where: selAssignmentId != null
         ? { id: selAssignmentId, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } }
-        : {
-            workerId,
-            status: "ACTIVE",
-            startDate: { lte: today },
-            OR: [{ endDate: null }, { endDate: { gte: today } }],
-          },
-      include: {
-        site: {
-          include: {
-            trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } } },
-            contacts: { where: { isActive: true }, select: { name: true, phoneNumber: true, email: true, role: true }, orderBy: { id: "asc" } },
-          },
-        },
-        agency: true,
-      },
+        : latestActiveWhere,
+      include: assignmentInclude,
       orderBy: { startDate: "desc" },
     });
+
+    // ★선택 배정(쿠키/딥링크 assignmentId)이 무효면(재시드로 삭제·타 워커·미소유 등) 최신 활성 배정으로 폴백.
+    //  낡은 wk_active_assignment 쿠키(사라진 id)가 site/current를 '배정 없음'으로 만들어 워커 앱 전체
+    //  (홈·문서·AI일지 등)를 막던 문제 방지. preview/context 라우트와 동일한 폴백을 여기에도 적용.
+    if (!assignment?.site && selAssignmentId != null) {
+      assignment = await prisma.siteAssignment.findFirst({
+        where: latestActiveWhere,
+        include: assignmentInclude,
+        orderBy: { startDate: "desc" },
+      });
+    }
 
     if (!assignment?.site) {
       return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." });
