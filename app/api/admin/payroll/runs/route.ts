@@ -3,6 +3,9 @@
 // 계산 로직은 lib/payroll/computeRun.ts(computePayrollItems)로 추출 — 매월 자동 크론과 공유.
 
 export const runtime = "nodejs";
+// PERF-6: 급여 계산은 동기 처리라 기관 규모↑ 시 기본 타임아웃에 걸릴 수 있다. 상한을 늘려 타임아웃을
+//  방어하고(아래 계측 로그로 임계 관찰), 향후 규모가 더 커지면 작업테이블/큐로 전환한다.
+export const maxDuration = 60;
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -64,7 +67,13 @@ export async function POST(req: NextRequest) {
     }
 
     // 급여 계산(소득유형·4대보험 자동 판정 포함) — 크론과 동일 로직.
+    const _t0 = Date.now();
     const { items, userCount } = await computePayrollItems(agencyId, yearMonth);
+    const _durMs = Date.now() - _t0;
+    // PERF-6 관찰성: 계산이 느려지면(대형 기관) 임계를 로그로 남겨 큐 전환 시점을 판단한다.
+    if (_durMs > 5000 || userCount > 80) {
+      console.warn(`[payroll/runs] 대형 급여계산 — agency=${agencyId} ym=${yearMonth} users=${userCount} ${_durMs}ms`);
+    }
     if (userCount === 0) {
       return NextResponse.json({ success: false, message: "해당 월에 활성 직무지도원이 없습니다." }, { status: 400 });
     }
