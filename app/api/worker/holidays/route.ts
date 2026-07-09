@@ -13,7 +13,18 @@ import { prisma } from "@/lib/prisma";
 
 function isDateOnly(s: string) { return /^\d{4}-\d{2}-\d{2}$/.test(s); }
 
-async function getAssignment(workerId: bigint) {
+function parseSel(sp: URLSearchParams): bigint | null {
+  const raw = sp.get("assignmentId");
+  try { return raw ? BigInt(raw) : null; } catch { return null; }
+}
+
+// ★멀티현장: 선택 배정(쿠키/파라미터 assignmentId)이 유효(소유+ACTIVE)하면 그 현장에 휴무를 쓰고,
+//  아니면 최신 활성 배정으로 폴백. 과거엔 항상 최신 배정에 써서 선택한 현장이 아닌 다른 현장에 휴무가 기록됐다.
+async function getAssignment(workerId: bigint, selId: bigint | null) {
+  if (selId != null) {
+    const sel = await prisma.siteAssignment.findFirst({ where: { id: selId, workerId, status: "ACTIVE" } });
+    if (sel) return sel;
+  }
   return prisma.siteAssignment.findFirst({
     where: { workerId, status: "ACTIVE" },
     orderBy: { startDate: "desc" },
@@ -29,7 +40,7 @@ export async function GET(request: NextRequest) {
     const year  = Number(searchParams.get("year")  ?? new Date().getFullYear());
     const month = Number(searchParams.get("month") ?? new Date().getMonth() + 1);
 
-    const assignment = await getAssignment(BigInt(session.workerId));
+    const assignment = await getAssignment(BigInt(session.workerId), parseSel(searchParams));
 
     // national: { date → name }, custom: { date → { reason, countAsWorkday } }
     const customHolidays: Record<string, string> = {};
@@ -68,7 +79,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "올바른 날짜를 입력해주세요." }, { status: 400 });
     }
 
-    const assignment = await getAssignment(BigInt(session.workerId));
+    const assignment = await getAssignment(BigInt(session.workerId), parseSel(new URL(request.url).searchParams));
     if (!assignment) return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." }, { status: 404 });
 
     // 근무 인정(countAsWorkday)은 직무지도원이 정하지 않음 — 관리자가 최종 확인 시 결정.
@@ -93,10 +104,11 @@ export async function DELETE(request: NextRequest) {
     const session = await getWorkerSessionFromReq(request);
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
-    const date = new URL(request.url).searchParams.get("date") ?? "";
+    const sp = new URL(request.url).searchParams;
+    const date = sp.get("date") ?? "";
     if (!isDateOnly(date)) return NextResponse.json({ success: false, message: "올바른 날짜를 입력해주세요." }, { status: 400 });
 
-    const assignment = await getAssignment(BigInt(session.workerId));
+    const assignment = await getAssignment(BigInt(session.workerId), parseSel(sp));
     if (!assignment) return NextResponse.json({ success: false, message: "배정 없음" }, { status: 404 });
 
     await prisma.siteHoliday.deleteMany({ where: { assignmentId: assignment.id, date } });

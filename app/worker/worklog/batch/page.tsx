@@ -122,8 +122,9 @@ export default function BatchWorklogPage() {
           cur.setMonth(cur.getMonth() + 1);
         }
         const merged: Record<string, string> = {};
+        const _selH = getActiveAssignmentCookie();
         for (const { year, month } of months) {
-          const res = await fetch(`/api/worker/holidays?year=${year}&month=${month}`);
+          const res = await fetch(`/api/worker/holidays?year=${year}&month=${month}${_selH ? `&assignmentId=${_selH}` : ""}`);
           const data = await res.json();
           if (data.success) {
             // 국가공휴일은 항상 제외

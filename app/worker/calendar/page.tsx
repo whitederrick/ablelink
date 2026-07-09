@@ -183,7 +183,8 @@ export default function CalendarPage() {
     if (!newHolidayDate) return;
     setSavingHoliday(true);
     try {
-      const res = await fetch("/api/worker/holidays", {
+      const _sel = getActiveAssignmentCookie();
+      const res = await fetch(`/api/worker/holidays${_sel ? `?assignmentId=${_sel}` : ""}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: newHolidayDate, reason: newHolidayReason.trim() || undefined }),
@@ -206,7 +207,8 @@ export default function CalendarPage() {
   async function deleteHoliday(date: string) {
     if (!confirm(`${date} 휴무일을 삭제할까요?`)) return;
     try {
-      const res = await fetch(`/api/worker/holidays?date=${date}`, { method: "DELETE" });
+      const _sel = getActiveAssignmentCookie();
+      const res = await fetch(`/api/worker/holidays?date=${date}${_sel ? `&assignmentId=${_sel}` : ""}`, { method: "DELETE" });
       const d = await res.json();
       if (d.success) fetchCalendar();
       else alert(d.message || "삭제 실패");

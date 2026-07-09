@@ -41,10 +41,13 @@ export async function POST(request: NextRequest) {
 
     // 날짜 기준 출근기록 조회/생성 (없으면 현장 배정 기반 생성)
     async function findOrCreateAttendance(workDate: string): Promise<bigint> {
-      const ex = await prisma.dailyAttendance.findFirst({
-        where: { workerId: writerId, workDate },
-        orderBy: { id: "desc" },
-      });
+      // ★멀티현장: assignmentId가 주어지면 그 배정으로 스코프해 조회한다(@@unique(assignmentId,workDate)).
+      //  과거엔 {workerId, workDate}로 아무 현장 기록이나 집어와, 같은 날 다른 현장에 배정된 워커의 일지가
+      //  엉뚱한 현장 출근기록에 붙거나 훈련생 가드에 오차단됐다. (소유 검증은 아래 create 경로 + 하단 attRow 검증.)
+      const scoped = assignmentIdFromBody && /^[0-9]+$/.test(String(assignmentIdFromBody));
+      const ex = scoped
+        ? await prisma.dailyAttendance.findFirst({ where: { assignmentId: BigInt(assignmentIdFromBody), workDate } })
+        : await prisma.dailyAttendance.findFirst({ where: { workerId: writerId, workDate }, orderBy: { id: "desc" } });
       if (ex) return ex.id;
       if (!siteId || !assignmentIdFromBody) {
         throw new Error("VALIDATION:출근 기록이 없습니다. 출근 체크인 후 일지를 작성해주세요.");
