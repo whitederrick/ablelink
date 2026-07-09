@@ -54,16 +54,26 @@ export async function GET(request: NextRequest) {
     const endDay    = new Date(year, month, 0).getDate();
     const endDate   = `${year}-${pad2(month)}-${pad2(endDay)}`;
 
-    // 현재 활성 배정 조회
-    const assignment = await prisma.siteAssignment.findFirst({
-      where: { workerId, status: "ACTIVE" },
-      include: { site: true },
-      orderBy: { startDate: "desc" },
-    });
+    // ★멀티현장: 선택 배정(쿠키/파라미터 assignmentId, 소유+ACTIVE)으로 스코프하고, 무효/미지정이면 최신 활성으로
+    //  폴백. 과거엔 항상 최신 ACTIVE 1개로 잡아 선택한 현장과 다른 현장 기준으로 렌더됐다.
+    const rawSel = searchParams.get("assignmentId");
+    let selId: bigint | null = null;
+    try { selId = rawSel ? BigInt(rawSel) : null; } catch { selId = null; }
+    let assignment = selId != null
+      ? await prisma.siteAssignment.findFirst({ where: { id: selId, workerId, status: "ACTIVE" }, include: { site: true } })
+      : null;
+    if (!assignment) {
+      assignment = await prisma.siteAssignment.findFirst({
+        where: { workerId, status: "ACTIVE" }, include: { site: true }, orderBy: { startDate: "desc" },
+      });
+    }
 
-    // 해당 월 출근 기록 조회
+    // 해당 월 출근 기록 조회 — ★선택 배정으로 스코프(멀티현장 같은 날 다른 현장 기록이 dayMap에서 덮어써지는
+    //  것 방지). 활성 배정이 없으면 종전대로 워커 전체(회귀 방지).
     const attendances = await prisma.dailyAttendance.findMany({
-      where: { workerId, workDate: { gte: startDate, lte: endDate } },
+      where: assignment
+        ? { assignmentId: assignment.id, workDate: { gte: startDate, lte: endDate } }
+        : { workerId, workDate: { gte: startDate, lte: endDate } },
       include: { logs: { select: { id: true, isCompleted: true } } },
       orderBy: { workDate: "asc" },
     });
@@ -172,9 +182,10 @@ export async function GET(request: NextRequest) {
 
     // 배정 기간 내 + 오늘 이전 날짜 중 출근 기록 없는 날 → RED (주말·휴무는 위에서 dayMap에 있어 제외됨)
     if (assignment) {
-      const assignStart = assignment.startDate.toISOString().slice(0, 10);
+      // ★KST 기준(월간 라우트·absentDays와 동일). UTC 변환은 시각값 저장 배정에서 하루 어긋나 RED가 밀렸다.
+      const assignStart = getKstDateString(assignment.startDate);
       const assignEnd   = assignment.endDate
-        ? assignment.endDate.toISOString().slice(0, 10)
+        ? getKstDateString(assignment.endDate)
         : todayStr;
 
       // 이 월에서 실제로 RED 처리할 범위

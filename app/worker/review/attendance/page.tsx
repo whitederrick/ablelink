@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { getActiveAssignmentCookie } from "../../_lib/activeAssignmentCookie";
 import {
   ChevronLeft, CheckCircle2, Clock, AlertTriangle,
   ChevronLeft as ChevronLeftSm, ChevronRight,
@@ -83,8 +84,9 @@ export default function AttendanceReviewPage() {
 
   const load = useCallback(() => {
     setLoading(true);
+    const _sel = getActiveAssignmentCookie();
     Promise.all([
-      fetch(`/api/worker/attendance/monthly?yearMonth=${yearMonth}`).then(r => r.json()),
+      fetch(`/api/worker/attendance/monthly?yearMonth=${yearMonth}${_sel ? `&assignmentId=${_sel}` : ""}`).then(r => r.json()),
       fetch(`/api/worker/attendance/edit-request`).then(r => r.json()),
       fetch(`/api/worker/attendance/issues`).then(r => r.json()),
     ]).then(([attRes, reqRes, issueRes]) => {

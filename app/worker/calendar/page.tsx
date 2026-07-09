@@ -144,7 +144,8 @@ export default function CalendarPage() {
   const fetchCalendar = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/worker/calendar?year=${year}&month=${month}`);
+      const _sel = getActiveAssignmentCookie();
+      const res = await fetch(`/api/worker/calendar?year=${year}&month=${month}${_sel ? `&assignmentId=${_sel}` : ""}`);
       const json = await res.json();
       if (json.success) setData(json.data);
     } catch {
