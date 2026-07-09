@@ -18,6 +18,8 @@ import { missingSignatureLabels } from "@/lib/docs/requiredSignatures";
 import { sendEmailWithAttachments } from "@/lib/email";
 import { logAccess } from "@/lib/accessLog";
 import { mapWithConcurrency } from "@/lib/concurrency";
+import { checkRateLimit, resetRateLimit } from "@/lib/rateLimit";
+import { createHash } from "crypto";
 
 const DOC_LABEL: Record<string, string> = {
   ATTENDANCE_SHEET:              "출근부",
@@ -104,6 +106,19 @@ export async function POST(req: NextRequest) {
         },
         { status: 400 },
       );
+    }
+
+    // ── P2-6 소프트 클레임(이중 발송 방지) ──
+    //  동시 클릭/더블탭이 같은 문서 세트를 공단에 두 번 이메일 발송하던 것을 막는다. 발송 요청의 지문
+    //  (기관·묶음·문서 id·수신자)으로 짧은 창 내 1회만 허용. 의도적 재발송은 창(60초) 이후 다시 허용.
+    //  Redis INCR 원자성으로 동시 요청 중 하나만 통과(나머지 409). 완전 실패 시 아래에서 클레임 해제.
+    const claimFingerprint = createHash("sha1")
+      .update(`${groupBy}|${useSiteContacts}|${[...ids].map(String).sort().join(",")}|${[...toList].sort().join(",")}`)
+      .digest("hex");
+    const claimKey = `docsend:${scope.agencyId}:${claimFingerprint}`;
+    const claim = await checkRateLimit(claimKey, { max: 1, windowSec: 60, blockSec: 60 });
+    if (!claim.allowed) {
+      return NextResponse.json({ success: false, message: "동일한 문서 발송이 방금 처리되었거나 진행 중입니다. 잠시 후 다시 시도해주세요." }, { status: 409 });
     }
 
     // 묶음 그룹핑
@@ -218,6 +233,8 @@ export async function POST(req: NextRequest) {
     ));
 
     if (sent === 0) {
+      // 한 건도 발송되지 않았으면 이메일이 안 나갔으므로 클레임을 즉시 해제해 재시도를 막지 않는다.
+      await resetRateLimit(claimKey);
       return NextResponse.json({ success: false, message: `발송에 실패했습니다.${failures.length ? ` (${failures.join(", ")})` : ""}` }, { status: 502 });
     }
     return NextResponse.json({
