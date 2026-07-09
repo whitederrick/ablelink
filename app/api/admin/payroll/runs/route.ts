@@ -3,9 +3,9 @@
 // 계산 로직은 lib/payroll/computeRun.ts(computePayrollItems)로 추출 — 매월 자동 크론과 공유.
 
 export const runtime = "nodejs";
-// PERF-6: 급여 계산은 동기 처리라 기관 규모↑ 시 기본 타임아웃에 걸릴 수 있다. 상한을 늘려 타임아웃을
-//  방어하고(아래 계측 로그로 임계 관찰), 향후 규모가 더 커지면 작업테이블/큐로 전환한다.
-export const maxDuration = 60;
+// PERF-6: 급여 계산은 동기 처리라 기관 규모↑ 시 타임아웃 위험. 상한을 300초로 늘려 크래시를 막고
+//  (300초는 기대치가 아니라 안전 천장), 60초 초과 시 운영자 콘솔(감사)에 하루 1회 알림 → 큐 전환 신호.
+export const maxDuration = 300;
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -13,6 +13,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { computePayrollItems } from "@/lib/payroll/computeRun";
 import { audit } from "@/lib/audit";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 export async function GET(req: NextRequest) {
   try {
@@ -70,9 +71,20 @@ export async function POST(req: NextRequest) {
     const _t0 = Date.now();
     const { items, userCount } = await computePayrollItems(agencyId, yearMonth);
     const _durMs = Date.now() - _t0;
-    // PERF-6 관찰성: 계산이 느려지면(대형 기관) 임계를 로그로 남겨 큐 전환 시점을 판단한다.
-    if (_durMs > 5000 || userCount > 80) {
-      console.warn(`[payroll/runs] 대형 급여계산 — agency=${agencyId} ym=${yearMonth} users=${userCount} ${_durMs}ms`);
+    // PERF-6 관찰: 20초↑ 로그. 60초↑(타임아웃 근접 = 큐 전환 신호)면 운영자 콘솔(감사)에 하루 1회 알림.
+    if (_durMs > 20000) {
+      console.warn(`[payroll/runs] 급여계산 지연 — agency=${agencyId} ym=${yearMonth} users=${userCount} ${_durMs}ms`);
+    }
+    if (_durMs > 60000) {
+      const throttle = await checkRateLimit(`payroll-slow-alert:${agencyId}`, { max: 1, windowSec: 86400, blockSec: 86400 });
+      if (throttle.allowed) {
+        await audit(null, {
+          entityType: "PayrollPerf",
+          entityId: agencyId,
+          action: "alert",
+          summary: `급여 계산이 ${Math.round(_durMs / 1000)}초 소요(${userCount}명·${yearMonth}) — 타임아웃 임박. 급여 계산 큐/작업테이블 전환 검토 필요.`,
+        });
+      }
     }
     if (userCount === 0) {
       return NextResponse.json({ success: false, message: "해당 월에 활성 직무지도원이 없습니다." }, { status: 400 });
