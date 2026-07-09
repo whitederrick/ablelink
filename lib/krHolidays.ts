@@ -30,7 +30,26 @@ const KR_HOLIDAYS: Record<string, string> = {
   "2027-12-25": "성탄절",
 };
 
+// 데이터가 커버하는 연도 범위(정적 데이터에서 자동 도출 — 데이터 추가 시 자동 확장).
+const COVERAGE_YEARS = Object.keys(KR_HOLIDAYS).map((d) => Number(d.slice(0, 4)));
+const COVERAGE_MIN = Math.min(...COVERAGE_YEARS);
+const COVERAGE_MAX = Math.max(...COVERAGE_YEARS);
+
+// 범위 밖 연도가 조회되면 조용히 '공휴일 0'을 반환하는 대신 연도별 1회 경고.
+// (급여 분모·휴일가산·주휴·결근 판정이 조용히 틀어지는 시한폭탄 방지)
+const warnedYears = new Set<number>();
+function assertYearCovered(year: number): void {
+  if (year >= COVERAGE_MIN && year <= COVERAGE_MAX) return;
+  if (warnedYears.has(year)) return;
+  warnedYears.add(year);
+  console.warn(
+    `[krHolidays] ${year}년 공휴일 데이터 없음(커버 ${COVERAGE_MIN}~${COVERAGE_MAX}). ` +
+      `공휴일이 0으로 처리되어 급여·결근·문서 계산이 어긋날 수 있음 — lib/krHolidays.ts에 해당 연도 데이터 추가 필요.`,
+  );
+}
+
 export function getKrHolidays(year: number, month: number): Record<string, string> {
+  assertYearCovered(year);
   const prefix = `${year}-${String(month).padStart(2, "0")}`;
   const result: Record<string, string> = {};
   for (const [date, name] of Object.entries(KR_HOLIDAYS)) {
@@ -41,9 +60,13 @@ export function getKrHolidays(year: number, month: number): Record<string, strin
 
 /** [startYmd, endYmd] 범위 내 공휴일 날짜(YYYY-MM-DD) 목록 */
 export function getKrHolidayDates(startYmd: string, endYmd: string): string[] {
+  const startYear = Number(startYmd.slice(0, 4));
+  const endYear = Number(endYmd.slice(0, 4));
+  for (let y = startYear; y <= endYear; y++) assertYearCovered(y);
   return Object.keys(KR_HOLIDAYS).filter((d) => d >= startYmd && d <= endYmd).sort();
 }
 
 export function isKrHoliday(ymd: string): boolean {
+  assertYearCovered(Number(ymd.slice(0, 4)));
   return ymd in KR_HOLIDAYS;
 }
