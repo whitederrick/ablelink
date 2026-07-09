@@ -13,7 +13,8 @@ import { signWorkerToken, WORKER_COOKIE, workerCookieOptions } from "@/app/worke
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    // 빈/비정상 본문(프리페치·중복요청 등)에도 JSON.parse가 throw하지 않도록 방어 — 이후 필수값 검사로 400 처리.
+    const body = await request.json().catch(() => ({}));
     const loginId = String(body?.loginId ?? "").trim();
     const password = String(body?.password ?? "");
 
