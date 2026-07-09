@@ -35,6 +35,26 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
   const { traineeId, evalType, periodStart, periodEnd, scores, comments } = await req.json();
   if (!traineeId || !evalType || !periodStart || !periodEnd) return NextResponse.json({ success: false, message: "필수값 누락" }, { status: 400 });
+  if (!/^\d+$/.test(String(traineeId))) return NextResponse.json({ success: false, message: "잘못된 요청입니다." }, { status: 400 });
+
+  // P3(IDOR): traineeId가 이 워커의 배정 현장에 해당 기간 재적한 훈련생인지 검증한다.
+  //  (기존엔 traineeId+writerId만 봐서 타 현장 훈련생 ID 주입 시 평가가 섞일 여지가 있었다.)
+  const engagements = await prisma.siteAssignment.findMany({
+    where: { workerId: BigInt(session.workerId), status: { in: ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } },
+    select: { siteId: true },
+  });
+  const siteIds = [...new Set(engagements.map((a) => a.siteId))];
+  const enrolled = siteIds.length > 0 && await prisma.traineePlacement.findFirst({
+    where: {
+      traineeId: BigInt(traineeId),
+      siteId: { in: siteIds },
+      startDate: { lte: new Date(periodEnd + "T23:59:59+09:00") },
+      OR: [{ endDate: null }, { endDate: { gte: new Date(periodStart + "T00:00:00+09:00") } }],
+    },
+    select: { id: true },
+  });
+  if (!enrolled) return NextResponse.json({ success: false, message: "평가 대상 훈련생을 찾을 수 없습니다." }, { status: 403 });
+
   const existing = await prisma.traineeEvaluation.findFirst({
     where: { traineeId: BigInt(traineeId), writerId: BigInt(session.workerId), evalType, periodStart, periodEnd },
   });

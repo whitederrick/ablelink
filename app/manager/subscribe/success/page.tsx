@@ -24,6 +24,9 @@ function SuccessContent() {
       return;
     }
 
+    // P3: 처리 전 URL에서 결제 쿼리(single-use authKey 등)를 제거 — 새로고침 시 빌링 재요청/중복 방지.
+    if (typeof window !== "undefined") window.history.replaceState(null, "", "/manager/subscribe/success");
+
     fetch("/api/payments/billing", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

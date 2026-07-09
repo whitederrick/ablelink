@@ -123,6 +123,9 @@ export async function POST(req: NextRequest) {
             currentVersion: { connect: { id: version.id } },
             signStage: "SUBMITTED",
             workerSignedAt: now,
+            // P3: 재제출 시 기간종료(periodEnd)도 갱신 — run은 periodStart로만 매칭하므로 기간 연장
+            //  재제출 시 구 periodEnd가 남아 문서 기간이 어긋나던 것 보정. (periodStart는 매칭키라 동일.)
+            periodEnd: pEnd,
             // 재제출 = 새 내용 버전 → 이전 매니저·기관 서명 무효화(매니저 재검토 전 구 서명이 공단 발송되는 것 방지).
             managerSignatureUrl: null, managerSignedAt: null, managerSignerName: null,
             agencySignatureUrl: null, agencySignedAt: null,

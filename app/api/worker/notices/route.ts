@@ -11,13 +11,18 @@ export async function GET(req: NextRequest) {
     const session = await getWorkerSessionFromReq(req);
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
+    const workerId = BigInt(session.workerId);
+    // P3: unreadCount는 최근 50개 창이 아니라 전체 미확인 수를 별도 count로 집계(50개 초과 시 배지 누락 방지).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const notices: any[] = await prisma.workerNotice.findMany({
-      where: { workerId: BigInt(session.workerId) },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      select: { id: true, title: true, body: true, type: true, kind: true, yearMonth: true, link: true, readAt: true, createdAt: true },
-    });
+    const [notices, unreadCount]: [any[], number] = await Promise.all([
+      prisma.workerNotice.findMany({
+        where: { workerId },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: { id: true, title: true, body: true, type: true, kind: true, yearMonth: true, link: true, readAt: true, createdAt: true },
+      }),
+      prisma.workerNotice.count({ where: { workerId, readAt: null } }),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -33,7 +38,7 @@ export async function GET(req: NextRequest) {
         readAt:    n.readAt ? n.readAt.toISOString() : null,
         createdAt: n.createdAt.toISOString(),
       })),
-      unreadCount: notices.filter((n: any) => !n.readAt).length,
+      unreadCount,
     });
   } catch (e: any) {
     console.error("[worker/notices GET]", e);
