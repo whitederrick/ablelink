@@ -88,6 +88,29 @@ describe("computeWeeklyHoliday — 2조건 판정", () => {
   });
 });
 
+describe("computeWeeklyHoliday — payMonth 전월 lookback 오염 방지(#3)", () => {
+  // 전월 말(6월 W26, FULL_DAY 480분) lookback + 7월(W28, AM 330분) 개근.
+  // payMonth=2026-07 → 6월 480분이 7월 평균/주휴액에 섞이면 안 됨(월경계 근무형태 변경).
+  const jul = (d: number) => `2026-07-${String(d).padStart(2, "0")}`;
+  const days = [
+    { dateISO: "2026-06-22", scheduledMinutes: 480 }, // W26(6/22~6/28, 6월귀속) — 제외돼야
+    { dateISO: "2026-06-23", scheduledMinutes: 480 },
+    { dateISO: "2026-06-24", scheduledMinutes: 480 },
+    { dateISO: "2026-06-25", scheduledMinutes: 480 },
+    { dateISO: "2026-06-26", scheduledMinutes: 480 },
+    ...[6, 7, 8, 9, 10].map((d) => ({ dateISO: jul(d), scheduledMinutes: 330 })), // W28(7/6~7/12, 7월) 개근
+  ];
+
+  it("7월 주휴액은 7월 소정시간(330분)만 반영 — 6월 480분에 오염 안 됨", () => {
+    const r = computeWeeklyHoliday({ days, workDaysPerWeek: 5, ordinaryWage: 10000, payMonth: "2026-07" });
+    // 7월 귀속 주(W28)만 지급 대상
+    const paid = r.weeks.filter((w) => w.eligible);
+    expect(paid.length).toBe(1);
+    // 깨끗한 값: 27.5h÷40×8×10000 = 55,000원 (오염 시 405분→67,500원이 됐을 것)
+    expect(paid[0].holidayPay).toBe(55000);
+  });
+});
+
 describe("computeWeeklyHoliday — 무출근/결근주 명시(periodStart/End)", () => {
   it("periodStart/End 주면 출근 0인 주도 부적격 주로 남는다(사라지지 않음)", () => {
     // 6월 전체 기간인데 W24만 출근 → 나머지 주(W23·W25·W26·W27)는 무출근 주로 부적격 명시.

@@ -82,11 +82,20 @@ export async function GET(request: NextRequest) {
       companyManager: { name: "", imageUrl: undefined },
     };
 
-    // 이 현장의 훈련생
-    const trainees = await prisma.trainee.findMany({
-      where: { currentSiteId: site.id },
-      select: { id: true, name: true },
+    // 이 현장에 '조회 기간 내' 배치됐던 훈련생 — #10: currentSiteId(현재 재직)로 뽑으면
+    //  기간 중 있었으나 이후 이동/이탈한 훈련생이 누락되고, 기간엔 없던 현재 재적자는 빈 문서가 만들어진다.
+    //  TraineePlacement 기간겹침(startDate<=끝 && (endDate null||endDate>=시작))으로 정확히 산정.
+    const startBound = new Date(periodStart + "T00:00:00+09:00");
+    const endBound   = new Date(periodEnd + "T23:59:59+09:00");
+    const placements = await prisma.traineePlacement.findMany({
+      where: {
+        siteId: site.id,
+        startDate: { lte: endBound },
+        OR: [{ endDate: null }, { endDate: { gte: startBound } }],
+      },
+      select: { trainee: { select: { id: true, name: true } } },
     });
+    const trainees = [...new Map(placements.map((p) => [String(p.trainee.id), p.trainee])).values()];
 
     // ZIP 생성
     const zip = new JSZip();

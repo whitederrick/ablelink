@@ -8,10 +8,25 @@ import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/password";
 import { signWorkerToken, WORKER_COOKIE } from "@/app/worker/_lib/session";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { getRateLimitIp } from "@/lib/clientIp";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+// 표시용 전화번호 마스킹 — 비인증 GET이 순차 id 열거로 실전화번호를 수집당하지 않도록.
+function maskPhone(p: string): string {
+  const d = p.replace(/\D/g, "");
+  if (d.length < 7) return "***";
+  return `${d.slice(0, 3)}-****-${d.slice(-4)}`;
+}
+
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
+    // 무차별 열거 방어: 신뢰 IP(조작 불가) 기준 레이트리밋. IP 없으면 id별로라도 제한.
+    const rl = await checkRateLimit(`invite-view:${getRateLimitIp(req) ?? id}`);
+    if (!rl.allowed) {
+      const mins = Math.ceil((rl.retryAfterMs ?? 0) / 60000);
+      return NextResponse.json({ success: false, message: `요청이 너무 많습니다. ${mins}분 후 다시 시도해주세요.` }, { status: 429 });
+    }
+
     const invite = await prisma.workerInvite.findUnique({
       where: { id: BigInt(id) },
       include: { agency: { select: { name: true } }, site: { select: { companyName: true } } },
@@ -26,7 +41,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       invite: {
         agencyName:  invite.agency.name,
         siteName:    invite.site?.companyName ?? null,
-        phoneNumber: invite.phoneNumber,
+        phoneNumber: maskPhone(invite.phoneNumber), // 마스킹 표시(가입은 서버측 실번호 사용)
         workerName:  invite.workerName ?? null,
         expiresAt:   invite.expiresAt.toISOString(),
       },

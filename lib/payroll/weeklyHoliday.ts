@@ -159,7 +159,13 @@ export function computeWeeklyHoliday(input: WeeklyHolidayInput): WeeklyHolidayRe
 
   // 1주 소정근로시간(초단시간 15h 판정·주휴수당액) = 평균 1일 소정 × 주 소정근로일수.
   // 통상적인 1주 기준이며 공휴일·부분주로 줄지 않는다(주휴는 공휴일 있는 주에도 1일분 지급).
-  const dailyMinsList = days.map(d => d.scheduledMinutes).filter(m => m > 0);
+  // #3: payMonth 지정 시 '이 달에 귀속되는 주'의 날만 평균에 사용 — days엔 경계주 만근 판정용으로
+  //  전월 말(lookback) 출근도 들어오는데, 그 전월 소정시간까지 평균에 섞으면 근무형태가 월 경계에서
+  //  바뀐 경우 이 달 주휴액·15h 판정이 전월 시간에 오염된다. (contractDailySojeMin 있으면 값이 균일해 무영향)
+  const dailyMinsList = days
+    .filter(d => !payMonth || isoWeekEndISO(d.dateISO).slice(0, 7) === payMonth)
+    .map(d => d.scheduledMinutes)
+    .filter(m => m > 0);
   const avgDailyMin = dailyMinsList.length ? Math.round(dailyMinsList.reduce((s, m) => s + m, 0) / dailyMinsList.length) : 0;
   const wpw = Math.max(1, workDaysPerWeek || 5);
   const typicalWeeklyMinutes = avgDailyMin * wpw;

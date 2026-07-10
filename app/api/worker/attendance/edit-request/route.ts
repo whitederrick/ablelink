@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { audit } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
@@ -71,16 +72,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: "수정 요청이 업데이트되었습니다." });
     }
 
-    const createdReq = await prisma.attendanceEditRequest.create({
-      data: {
-        attendanceId: attId,
-        workerId,
-        reason:        reason.trim(),
-        proposedStart: proposedStart || null,
-        proposedEnd:   proposedEnd   || null,
-        status: "PENDING",
-      },
-    });
+    let createdReq;
+    try {
+      createdReq = await prisma.attendanceEditRequest.create({
+        data: {
+          attendanceId: attId,
+          workerId,
+          reason:        reason.trim(),
+          proposedStart: proposedStart || null,
+          proposedEnd:   proposedEnd   || null,
+          status: "PENDING",
+        },
+      });
+    } catch (e) {
+      // #8: 동시 제출 경합 — 방금 다른 요청이 PENDING을 만들었다(부분 unique index 위반 P2002).
+      //  중복 생성 대신 그 행을 최신 값으로 갱신(=재제출과 동일 처리).
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        const dup = await prisma.attendanceEditRequest.findFirst({ where: { attendanceId: attId, status: "PENDING" } });
+        if (dup) {
+          await prisma.attendanceEditRequest.update({
+            where: { id: dup.id },
+            data: { reason: reason.trim(), proposedStart: proposedStart || null, proposedEnd: proposedEnd || null },
+          });
+          await audit(session, { entityType: "AttendanceEditRequest", entityId: dup.id, action: "update", summary: "출근부 수정요청(동시 제출 병합)" });
+          await notifyManagers("업데이트(재제출)");
+          return NextResponse.json({ success: true, message: "수정 요청이 업데이트되었습니다." });
+        }
+      }
+      throw e;
+    }
 
     await audit(session, { entityType: "AttendanceEditRequest", entityId: createdReq.id, action: "create", summary: "출근부 수정요청" });
     await notifyManagers("제출");

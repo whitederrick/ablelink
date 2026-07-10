@@ -8,7 +8,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
 import { requireManagerSession } from "@/lib/managerScope";
-import { PLAN_PRICES, PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel } from "@/lib/billing";
+import { PLAN_PRICES, PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel, buildBillingOrderId } from "@/lib/billing";
 import { outboundAllowed } from "@/lib/outboundGuard";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
@@ -85,11 +85,9 @@ export async function POST(request: NextRequest) {
 
     const billingKey = billingData.billingKey;
     const now = new Date();
-    // 결정적 orderId(agency×결제월 KST) — 과금 성공 후 DB 반영 실패로 재시도해도 Toss가 중복청구를 거부(멱등).
-    //  같은 orderId 재요청 = ALREADY_PROCESSED_PAYMENT(아래에서 성공 간주 후 DB 보정).
-    const kstNow = new Date(now.getTime() + 9 * 3600 * 1000);
-    const period = `${kstNow.getUTCFullYear()}${String(kstNow.getUTCMonth() + 1).padStart(2, "0")}`;
-    const orderId = `ablelink_${agencyId}_${period}`;
+    // 결정적 orderId(agency×결제월 KST×plan) — 과금 성공 후 DB 반영 실패로 재시도해도 Toss가 중복청구를 거부(멱등).
+    //  plan 포함: 같은 달 플랜 변경 시 새 orderId로 실제 결제 유발(무료 상향 방지, #4).
+    const orderId = buildBillingOrderId(agencyId, now, planType);
 
     // 2. 최초 결제
     const chargeRes = await fetch(`${TOSS_API}/billing/${billingKey}`, {

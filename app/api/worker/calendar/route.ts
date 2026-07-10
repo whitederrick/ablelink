@@ -25,7 +25,10 @@ function calcStatus(opts: {
 }): DayStatus {
   const { hasStart, isFinalClosed, completedLogs, traineeCount, isGpsModified } = opts;
 
-  if (!hasStart) return "RED";
+  // #13: 출근 기록은 있으나 출근시각 없음(일지만 작성한 placeholder) = '미확정'(ORANGE).
+  //  월별 화면은 이런 날을 출근 기록으로 표시하므로, 캘린더도 RED(미출근/결근) 대신 미확정으로 맞춘다.
+  //  (기록이 아예 없는 날의 결근 RED는 아래 합성 루프가 담당 — calcStatus는 기록 있는 날만 호출.)
+  if (!hasStart) return "ORANGE";
 
   if (traineeCount > 0) {
     // 훈련생 있음: 모든 훈련생 일지 완료 + 종료되면 GREEN
@@ -100,9 +103,11 @@ export async function GET(request: NextRequest) {
     // 휴무일 조회 (공휴일 + 사이트별 커스텀)
     const nationalHolidays = getKrHolidays(year, month);
     // 활성 배정 커스텀 휴무 — RED 결근 제외·표시 기준(선택현장 결근 판정에 영향).
+    // #12: countAsWorkday=true(근무 인정 대체일)는 급여가 소정근로일로 집계(computeRun)하므로
+    //  캘린더에서도 '휴무'로 취급하면 안 된다 — 그날 결근이 RED로 합성돼 급여 차감과 대조 가능해야 한다.
     const customHolidayRows = assignment
       ? await prisma.siteHoliday.findMany({
-          where: { assignmentId: assignment.id, date: { gte: startDate, lte: endDate } },
+          where: { assignmentId: assignment.id, date: { gte: startDate, lte: endDate }, countAsWorkday: false },
           select: { date: true, reason: true },
         })
       : [];
@@ -234,7 +239,15 @@ export async function GET(request: NextRequest) {
 
       // 이 월에서 실제로 RED 처리할 범위
       const redFrom = assignStart > startDate ? assignStart : startDate;
-      const redTo   = assignEnd   < todayStr  ? assignEnd   : todayStr; // 오늘 포함, 미래 제외
+      // #14: 출퇴근 면제 배정은 당일 자동기록이 '다음날' 크론으로 생성되므로 오늘은 아직 결근 판정 불가 →
+      //  오늘을 RED에서 제외(전날까지만). 일반 배정은 종전대로 오늘 포함(당일 출근 시 자동 해소).
+      let redCap = todayStr;
+      if (assignment.attendanceButtonExempt) {
+        const y = new Date(todayStr + "T00:00:00Z");
+        y.setUTCDate(y.getUTCDate() - 1);
+        redCap = y.toISOString().slice(0, 10);
+      }
+      const redTo = assignEnd < redCap ? assignEnd : redCap; // 오늘(면제는 전날) 포함, 미래 제외
 
       // ★결근 억제 기준 = '선택(활성) 배정'의 출근기록일자만. 표시는 workerId 전체지만, 같은날 타현장(동시활성)
       //  기록이 선택현장의 실제 결근을 가리지 않도록 활성 배정 기록만으로 판정하고, 결근일이면 RED로 덮어쓴다.

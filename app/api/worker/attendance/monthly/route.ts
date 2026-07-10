@@ -82,8 +82,10 @@ export async function GET(req: NextRequest) {
     const active = resolved.assignmentId ? lite.find((a) => a.id === resolved.assignmentId) ?? null : null;
 
     if (active) {
+      // #12: countAsWorkday=true(근무 인정 대체일)는 급여가 소정근로일로 집계하므로 결근 제외 대상이 아니다.
+      //  이 필터가 없으면 그날 미출근이 ABSENT로 합성되지 않아 급여 차감과 화면이 어긋난다.
       const customRows = await prisma.siteHoliday.findMany({
-        where: { assignmentId: BigInt(active.id), date: { gte: dateFrom, lte: dateTo } },
+        where: { assignmentId: BigInt(active.id), date: { gte: dateFrom, lte: dateTo }, countAsWorkday: false },
         select: { date: true },
       });
       const absents = computeAbsentDates({

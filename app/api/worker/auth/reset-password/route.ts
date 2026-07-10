@@ -11,6 +11,7 @@ import { randomInt } from "crypto";
 import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
 import { sendSimpleEmail } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { getRateLimitIp } from "@/lib/clientIp";
 import { outboundAllowed } from "@/lib/outboundGuard";
 
 const RESET_PW_TEMPLATE = "KAKAO_RESET_PW_TEMPLATE_CODE";
@@ -22,7 +23,8 @@ function generateTempPassword(): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    // 신뢰 IP(클라 조작 불가) 기준 레이트리밋. XFF 첫 홉은 스푸핑 가능하므로 쓰지 않는다.
+    const ip = getRateLimitIp(req) ?? "unknown";
     const rl = await checkRateLimit(`reset-pw:${ip}`);
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil((rl.retryAfterMs ?? 0) / 1000);
@@ -45,6 +47,18 @@ export async function POST(req: NextRequest) {
     }
     if (isEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
       return NextResponse.json({ success: false, message: "올바른 이메일 주소를 입력해주세요." }, { status: 400 });
+    }
+
+    // 식별자별 스로틀 — IP를 바꿔가며 특정 대상(전화/이메일)의 비번 초기화를 반복 유발해
+    //  계정 잠금·유료 발송 남용하는 것을 IP와 무관하게 차단.
+    const idKey = isEmail ? raw.toLowerCase() : phone;
+    const idRl = await checkRateLimit(`reset-pw-id:${idKey}`);
+    if (!idRl.allowed) {
+      const retryAfterSec = Math.ceil((idRl.retryAfterMs ?? 0) / 1000);
+      return NextResponse.json(
+        { success: false, message: `잠시 후 다시 시도해주세요. (${retryAfterSec}초 후)` },
+        { status: 429 },
+      );
     }
 
     const user = isEmail

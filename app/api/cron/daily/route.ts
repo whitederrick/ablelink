@@ -112,6 +112,8 @@ export async function GET(req: NextRequest) {
   } catch (e: any) { errors.push(`토큰삭제: ${e.message}`); }
 
   // ── 3. 계약 만료 안내 (D-30 / D-7 / D-1) — 앱 내 알림(무료, 비용 절감) ──
+  // #9: 재진입(재시도·수동 재트리거) 시 같은 날 중복 알림 방지용 오늘(KST) 시작 시각.
+  const startOfTodayKst = new Date(`${kstDateStr(0)}T00:00:00+09:00`);
   for (const offsetDays of [30, 7, 1]) {
     const targetDate = kstDateStr(offsetDays); // 오늘로부터 N일 후 날짜
     try {
@@ -135,13 +137,21 @@ export async function GET(req: NextRequest) {
 
         const contractEndStr = contract.contractEnd.toISOString().slice(0, 10);
         const siteName = contract.siteName || contract.workerFilledSiteName || "-";
+        const title = `근로계약 만료 D-${offsetDays} 안내`;
 
         try {
+          // #9: 오늘 이미 같은 만료 알림을 보냈으면 건너뜀(재진입 중복 방지, 섹션 5/7과 동일 존재검사).
+          const dup = await prisma.workerNotice.findFirst({
+            where: { workerId: contract.workerId, title, createdAt: { gte: startOfTodayKst } },
+            select: { id: true },
+          });
+          if (dup) continue;
+
           await prisma.workerNotice.create({
             data: {
               workerId: contract.workerId,
               agencyId: contract.agencyId,
-              title: `근로계약 만료 D-${offsetDays} 안내`,
+              title,
               body: `사업장: ${siteName}\n계약 종료일: ${contractEndStr}\n재계약이 필요하면 담당 위탁기관로 연락해 주세요.`,
               type: "WARN",
               link: "/worker/contracts",

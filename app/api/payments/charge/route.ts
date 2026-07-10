@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel } from "@/lib/billing";
+import { PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel, buildBillingOrderId } from "@/lib/billing";
 import { outboundAllowed } from "@/lib/outboundGuard";
 import { PAID_AGENCY_PLANS } from "@/lib/plans";
 import { decideChargeOutcome, type ChargeOutcome } from "@/lib/payments/chargeDecision";
@@ -68,10 +68,8 @@ export async function POST(request: NextRequest) {
     const nextBillingAt = advanceBilling(currentBillingAt, cycle);
     const daysOverdue = Math.floor((today.getTime() - currentBillingAt.getTime()) / MS_DAY);
 
-    // 결제 대상 월(KST) 기준 결정적 orderId — 같은 달 재시도 시 Toss가 중복청구를 거부(멱등성)
-    const kst = new Date(currentBillingAt.getTime() + 9 * 3600 * 1000);
-    const period = `${kst.getUTCFullYear()}${String(kst.getUTCMonth() + 1).padStart(2, "0")}`;
-    const orderId = `ablelink_${agency.id}_${period}`;
+    // 결제 대상 월(KST)×plan 기준 결정적 orderId — 같은 달 재시도 시 Toss가 중복청구를 거부(멱등성)
+    const orderId = buildBillingOrderId(agency.id, currentBillingAt, agency.planType);
 
     // 시도 결과를 불확정(예외)/확정(HTTP)으로 분류. 타임아웃·네트워크 예외는 '결제 여부 모름'이므로
     //  절대 강등/빌링키 삭제하지 않는다(decideChargeOutcome). 카드 거절 등 4xx 응답만 확정 실패로 강등.

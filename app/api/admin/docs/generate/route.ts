@@ -187,6 +187,10 @@ export async function POST(request: NextRequest) {
       const lacks: string[] = [];
       if (reqS.worker && !sigs.worker?.imageUrl) lacks.push("직무지도원");
       if (reqS.companyManager && !(payload?.signatures?.companyManager?.imageUrl)) lacks.push("사업체 담당자");
+      // #11: 매니저 서명 요건 검사 — 이 라우트는 매니저 서명을 주입하지 않으므로(payload에 부재)
+      //  매니저 필수 문서(최종평가·적응지도 등)는 여기서 차단되고 '일지 관리' 서명→발송 동선으로 유도된다.
+      //  (공식 send 라우트 missingSignatureLabels와 동일 정책)
+      if (reqS.manager && !(payload?.signatures?.manager?.imageUrl)) lacks.push("매니저");
       if (lacks.length) {
         return NextResponse.json(
           {

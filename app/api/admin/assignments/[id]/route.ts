@@ -9,6 +9,7 @@ import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/manag
 import { VALID_WORK_TYPES, type WorkType, computeWorkTimes } from "@/lib/workSchedule";
 import { audit, auditSnapshot } from "@/lib/audit";
 import { findTimeConflict, assignmentsTimeConflict, OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
+import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
 
 // 배정 취소(종료) — 위탁기관 담당자(매니저)·시스템 운영자 공통.
 // 진행 중(REQUESTED/ACCEPTED/ASSIGNED/CONFIRMED/ACTIVE) 배정을 ENDED로 종료 → 재배정 가능.
@@ -106,45 +107,50 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // ★멀티현장 시간겹침 방지: 변경 후 근무형태/기간이 같은 워커의 다른 진행중 배정과
     //   같은 날 반나절 슬롯(AM/PM)이 겹치면 차단(예: 한 현장 오전 + 다른 현장 종일).
-    {
+    // #7: 겹침 재검사 → update를 워커 advisory 락 트랜잭션으로 직렬화(다른 6개 승격 경로와 통일).
+    //  락이 없으면 이 PATCH의 검사~쓰기 사이에 respond/finalize 등 동시 승격을 놓쳐 이중배정이 샌다(TOCTOU).
+    const auditBefore = await auditSnapshot("SiteAssignment", { id: assignmentId }, updateData);
+    const lockResult = await withWorkerAssignmentLock(existing.workerId, async (tx) => {
       const candidate = {
         workType, customWorkStart, customWorkEnd,
         startDate: updateData.startDate ?? existing.startDate,
         endDate: "endDate" in updateData ? updateData.endDate : existing.endDate,
       };
       // 이중배정 방지는 전역(크로스기관)으로 검사 — 타 기관 배정과도 시간이 겹치면 안 됨.
-      //  (구 W#2는 같은 기관으로 좁혔으나, 크로스기관 이중배정 방지 요구로 전역 확장. 대신 타 기관 충돌은
-      //   현장명 비노출·일반 문구로 차단해 크로스테넌트 정보를 드러내지 않는다.)
+      //  타 기관 충돌은 현장명 비노출·일반 문구로 차단해 크로스테넌트 정보를 드러내지 않는다.
       // E3: ACCEPTED(최종확정 대기)도 점유로 포함(respond 경로와 통일).
-      const others = await prisma.siteAssignment.findMany({
+      const others = await tx.siteAssignment.findMany({
         where: { workerId: existing.workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { id: assignmentId } },
         select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true, agencyId: true, site: { select: { companyName: true } } },
       });
       // W#6: '새로 생기는' 충돌만 차단 — 편집 전부터 겹치던 레거시 배정은 무관 필드(serviceStep·면제 등) 편집을 막지 않는다.
-      //  (편집 전 상태가 이미 그 배정과 겹쳤다면 grandfather. 편집이 새 충돌을 만들 때만 409.)
       const preEdit = { workType: existing.workType, customWorkStart: existing.customWorkStart, customWorkEnd: existing.customWorkEnd, startDate: existing.startDate, endDate: existing.endDate };
       const newConflict = others.find(o => assignmentsTimeConflict(candidate, o) && !assignmentsTimeConflict(preEdit, o));
       if (newConflict) {
         const msg = isSameAgencyConflict((newConflict as any).agencyId, existing.agencyId)
           ? `다른 현장(${(newConflict as any).site?.companyName ?? "-"}) 배정과 같은 날 근무시간이 겹칩니다. 근무형태(오전/오후/종일)를 조정해주세요.`
           : `이 직무지도원은 이미 다른 일정이 있어 해당 기간·근무형태로 변경할 수 없습니다. 근무형태(오전/오후/종일)를 조정해주세요.`;
-        return NextResponse.json({ success: false, message: msg }, { status: 409 });
+        return { conflict: msg } as const;
       }
-    }
-
-    const auditBefore = await auditSnapshot("SiteAssignment", { id: assignmentId }, updateData);
-    const updated = await prisma.siteAssignment.update({
-      where: { id: assignmentId },
-      data: updateData,
-      select: {
-        id: true,
-        workType: true,
-        commuteGuidanceIncluded: true,
-        customWorkStart: true,
-        customWorkEnd: true,
-        serviceStep: true,
-      },
+      const row = await tx.siteAssignment.update({
+        where: { id: assignmentId },
+        data: updateData,
+        select: {
+          id: true,
+          workType: true,
+          commuteGuidanceIncluded: true,
+          customWorkStart: true,
+          customWorkEnd: true,
+          serviceStep: true,
+        },
+      });
+      return { row } as const;
     });
+
+    if ("conflict" in lockResult) {
+      return NextResponse.json({ success: false, message: lockResult.conflict }, { status: 409 });
+    }
+    const updated = lockResult.row;
 
     await audit(session, { entityType: "SiteAssignment", entityId: assignmentId, action: "update", before: auditBefore, after: updateData });
 
