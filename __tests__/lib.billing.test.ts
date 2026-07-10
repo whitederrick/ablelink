@@ -92,6 +92,15 @@ describe("buildSubscribeOrderId — 수동 구독 이벤트 키(4차 회귀 근�
   it("plan 변경 → 다른 orderId (#4)", () => {
     expect(buildSubscribeOrderId(5, 0, "STARTER")).not.toBe(buildSubscribeOrderId(5, 0, "PRO"));
   });
+  it("plan 왕복 A→B→A은 활성화마다 epoch 소비로 3개 모두 다른 orderId (무료 재사용 차단·5차)", () => {
+    // 라우트가 성공 활성화마다 billingEpoch를 +1 → PRO(e0)·STARTER(e1)·PRO(e2)
+    const ids = [
+      buildSubscribeOrderId(5, 0, "PRO"),
+      buildSubscribeOrderId(5, 1, "STARTER"),
+      buildSubscribeOrderId(5, 2, "PRO"),
+    ];
+    expect(new Set(ids).size).toBe(3); // e2_PRO ≠ e0_PRO → 되돌아온 PRO도 실결제
+  });
 });
 
 describe("advanceBilling — ANNUAL", () => {

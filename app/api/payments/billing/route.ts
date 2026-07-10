@@ -136,6 +136,10 @@ export async function POST(request: NextRequest) {
         subscriptionCanceledAt: null,
         // trialStartedAt은 지우지 않는다 — '트라이얼 1회 소진' 이력을 영구 보존해 취소→재트라이얼 남용 방지.
         trialEndsAt: null,
+        // ★성공한 활성화마다 이벤트 키 소비(+1) — 이후 어떤 재구독/plan 복귀도 새 orderId가 되어 무결제
+        //  재사용(A→B→A 왕복·다른 강등경로 후 재구독)이 원천 차단된다. 이 증가는 활성화 update와 원자적이라
+        //  결제 성공+DB실패 재시도 시엔 epoch가 소비되지 않아 같은 orderId로 멱등 복구된다(이중청구 없음).
+        billingEpoch: { increment: 1 },
         maxWorkers: limits.maxWorkers,
         maxSites: limits.maxSites,
       },

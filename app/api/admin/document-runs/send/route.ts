@@ -238,10 +238,15 @@ export async function POST(req: NextRequest) {
       await resetRateLimit(claimKey);
       return NextResponse.json({ success: false, message: `발송에 실패했습니다.${failures.length ? ` (${failures.join(", ")})` : ""}` }, { status: 502 });
     }
+    // ② 선택했으나 제출 안 된 문서(개별 렌더 실패 등) — 조용히 성공 보고하지 않고 명시적으로 알린다.
+    //  (해당 run은 sentRunIds에 없어 govStatus SUBMITTED로도 기록되지 않는다.)
+    const notSent = runs.length - sentRunIds.length;
     return NextResponse.json({
       success: true,
       sent,
-      message: `${sent}건의 메일을 발송했습니다.${failures.length ? ` (실패: ${failures.join(", ")})` : ""}`,
+      notSent,
+      message: `${sent}건의 메일을 발송했습니다.${failures.length ? ` (실패: ${failures.join(", ")})` : ""}`
+        + (notSent > 0 ? ` — ⚠️ 선택한 문서 중 ${notSent}건이 제외됐습니다(렌더 실패 등). 공단 제출완료로 기록되지 않았으니 확인 후 재발송해주세요.` : ""),
     });
   } catch (e: any) {
     if (e instanceof Response) return e;

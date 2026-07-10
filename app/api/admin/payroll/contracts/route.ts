@@ -90,7 +90,9 @@ export async function POST(req: NextRequest) {
     const resolvedWorkerType: "INTERNAL" | "EXTERNAL" = workerType ?? "EXTERNAL";
     const resolvedPayType     = resolvedWorkerType === "INTERNAL" ? "DAILY" : payType;
     const resolvedIncomeType  = resolvedWorkerType === "INTERNAL" ? "BUSINESS" : (incomeType ?? "BUSINESS");
-    const resolvedRate2Plus   = resolvedWorkerType === "INTERNAL" ? null : (hourlyRate2Plus != null ? hourlyRate2Plus : null);
+    // rate2(2명+ 시급)는 스키마상 HOURLY 전용(schema.prisma:1038). write 경계에서 강제 —
+    //  非HOURLY에 rate2가 남으면 computeRun이 MONTHLY 월급을 시급값으로 재산정(급여 파탄). (③)
+    const resolvedRate2Plus   = resolvedPayType === "HOURLY" ? (hourlyRate2Plus != null ? hourlyRate2Plus : null) : null;
     const resolvedHolidayPay  = resolvedWorkerType === "INTERNAL" ? null : (weeklyHolidayPay != null ? weeklyHolidayPay : null);
 
     if (resolvedIncomeType && !["BUSINESS", "EMPLOYMENT"].includes(resolvedIncomeType)) {
