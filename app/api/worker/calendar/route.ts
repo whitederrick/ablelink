@@ -238,6 +238,13 @@ export async function GET(request: NextRequest) {
 
       // ★결근 억제 기준 = '선택(활성) 배정'의 출근기록일자만. 표시는 workerId 전체지만, 같은날 타현장(동시활성)
       //  기록이 선택현장의 실제 결근을 가리지 않도록 활성 배정 기록만으로 판정하고, 결근일이면 RED로 덮어쓴다.
+      //
+      // ⓘ [의도된 동작 — 캘린더 스코프 정책] 캘린더는 '선택(활성) 현장' 기준의 월 개요로, 셀이 날짜당 1개다.
+      //   동시활성(오전A/오후B) 상태에서 어느 날 B만 출근·A는 결근이면, 캘린더는 그 셀을 RED(선택현장 A 결근)로
+      //   덮어써 B의 출근 흔적을 캘린더에선 보이지 않게 한다. 이는 '선택현장 결근을 가리지 않는다'는 정책의 결과다.
+      //   → 같은날 두 사실(B 출근 + A 결근)을 모두 봐야 하면 '출근부 검토(월별 리스트)' 화면을 쓴다(거기선 두 행 다 표시).
+      //   두 화면의 결근 '판정' 로직은 동일(같은 활성배정·범위·휴무·existingDates); 표시 형태만 셀(1) vs 리스트(N)로 다르다.
+      //   급여는 isFinalClosed 기록을 직접 집계하므로 이 표시 차이와 무관. (재감사 확정 P3, 사용자 확정=현상유지)
       const activeRecordDates = new Set(
         activeAsgId ? attendances.filter(a => a.assignmentId.toString() === activeAsgId).map(a => a.workDate) : [],
       );
