@@ -68,12 +68,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 해당 월 출근 기록 조회 — ★선택 배정으로 스코프(멀티현장 같은 날 다른 현장 기록이 dayMap에서 덮어써지는
-    //  것 방지). 활성 배정이 없으면 종전대로 워커 전체(회귀 방지).
+    // ★해당 월 출근 기록 = workerId 전체(그 달 모든 배정, ENDED 포함) — 월중 현장전환 시 이전(종료) 배정
+    //  기록이 캘린더에서 사라지던 회귀 방지. 같은 날 다중현장 충돌은 아래 dayMap에서 활성 배정 우선으로 해소.
     const attendances = await prisma.dailyAttendance.findMany({
-      where: assignment
-        ? { assignmentId: assignment.id, workDate: { gte: startDate, lte: endDate } }
-        : { workerId, workDate: { gte: startDate, lte: endDate } },
+      where: { workerId, workDate: { gte: startDate, lte: endDate } },
       include: { logs: { select: { id: true, isCompleted: true } } },
       orderBy: { workDate: "asc" },
     });
@@ -125,8 +123,16 @@ export async function GET(request: NextRequest) {
     };
     const dayMap: Record<string, DayEntry> = {};
 
-    // 출근 기록이 있는 날 처리 — 그날 기준 인원으로 판정
-    for (const att of attendances) {
+    // 출근 기록이 있는 날 처리 — 그날 기준 인원으로 판정.
+    //  같은 날 다중현장(AM/PM) 충돌 시 활성(선택) 배정 기록이 이기도록, 활성 배정 기록을 뒤에 써서 우선.
+    const activeAsgId = assignment?.id?.toString() ?? null;
+    const orderedAtt = [...attendances].sort((a, b) => {
+      if (a.workDate !== b.workDate) return a.workDate.localeCompare(b.workDate);
+      const aActive = activeAsgId && a.assignmentId.toString() === activeAsgId ? 1 : 0;
+      const bActive = activeAsgId && b.assignmentId.toString() === activeAsgId ? 1 : 0;
+      return aActive - bActive;
+    });
+    for (const att of orderedAtt) {
       const completedLogs = att.logs.filter(l => l.isCompleted).length;
       const dayTraineeCount = traineeCountOn(att.workDate);
       dayMap[att.workDate] = {

@@ -124,7 +124,9 @@ function DocsContent() {
   const activeAssignmentId = linkAid || (typeof window !== "undefined" ? getActiveAssignmentCookie() : null);
 
   useEffect(() => {
-    const q = activeAssignmentId ? `?assignmentId=${encodeURIComponent(activeAssignmentId)}` : "";
+    // allowEnded=1: 문서 화면은 과거(ENDED) 배정 문서의 재제출·수정요청 딥링크를 다루므로 종료 배정도 허용.
+    //  (일지류는 이 플래그 없이 호출해 오늘 활성 배정으로 강제 — ENDED 고착 데드엔드 방지)
+    const q = activeAssignmentId ? `?assignmentId=${encodeURIComponent(activeAssignmentId)}&allowEnded=1` : "?allowEnded=1";
     fetch(`/api/worker/site/current${q}`, { cache: "no-store" }).then(r => r.json()).then(d => {
       if (d.success && d.data) {
         setSiteInfo({

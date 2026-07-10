@@ -5,6 +5,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { computeAbsentDates } from "@/lib/attendance/absentDays";
 import { getKstDateString } from "@/lib/time";
+import { resolveWorkerAssignment } from "@/lib/worker/assignmentResolve";
 
 function fmtKST(d: Date | null): string {
   if (!d) return "";
@@ -38,22 +39,10 @@ export async function GET(req: NextRequest) {
     const dateTo   = `${yearMonth}-${new Date(y, m, 0).getDate().toString().padStart(2, "0")}`;
     const workerId = BigInt(session.workerId);
 
-    // ★멀티현장: 선택 배정(쿠키/파라미터 assignmentId, 소유+ACTIVE)으로 스코프, 무효/미지정이면 최신 활성 폴백.
-    //  과거엔 출근기록은 workerId 전체·결근 합성은 임의 배정 기준이라 멀티현장에서 잘못된 결근/기록이 섞였다.
-    const rawSel = new URL(req.url).searchParams.get("assignmentId");
-    let selId: bigint | null = null;
-    try { selId = rawSel ? BigInt(rawSel) : null; } catch { selId = null; }
-    let assignment = selId != null
-      ? await prisma.siteAssignment.findFirst({ where: { id: selId, workerId, status: "ACTIVE" } })
-      : null;
-    if (!assignment) {
-      assignment = await prisma.siteAssignment.findFirst({ where: { workerId, status: "ACTIVE" }, orderBy: { startDate: "desc" } });
-    }
-
+    // ★표시용 출근기록 = workerId 전체(그 달 모든 배정, ENDED 포함) — 월중 현장전환 시 이전(종료) 배정
+    //  기록이 화면에서 사라지던 회귀 방지. 결근 합성만 오늘 활성 배정으로 스코프(아래).
     const rows = await prisma.dailyAttendance.findMany({
-      where: assignment
-        ? { assignmentId: assignment.id, workDate: { gte: dateFrom, lte: dateTo } }
-        : { workerId, workDate: { gte: dateFrom, lte: dateTo } },
+      where: { workerId, workDate: { gte: dateFrom, lte: dateTo } },
       orderBy: { workDate: "asc" },
     });
 
@@ -72,17 +61,31 @@ export async function GET(req: NextRequest) {
     }));
 
     // ── 결근일 합성 (캘린더 RED와 동일 규칙, 공용 lib/attendance/absentDays) ──
-    // 위에서 선택 배정(assignment)으로 스코프한 records 기준. ACTIVE 배정 범위 내 · 오늘 이하 · 휴무 제외 · 평일 · 출근기록 없는 날.
-    if (assignment) {
+    // 결근은 '오늘 활성 배정'의 근무기간 내에서만 합성. 낡은 쿠키가 ENDED를 가리키면 최신 활성으로 폴백.
+    //  존재기록(existingDates)은 workerId 전체라, 다른 배정에 기록이 있는 날은 결근으로 잡히지 않음(오결근 방지).
+    const rawSel = new URL(req.url).searchParams.get("assignmentId");
+    const candidates = await prisma.siteAssignment.findMany({
+      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } },
+      select: { id: true, status: true, startDate: true, endDate: true },
+    });
+    const lite = candidates.map((c) => ({
+      id: c.id.toString(),
+      status: c.status,
+      startDate: getKstDateString(c.startDate),
+      endDate: c.endDate ? getKstDateString(c.endDate) : null,
+    }));
+    const resolved = resolveWorkerAssignment({ requestedId: rawSel, allowEnded: false, assignments: lite, todayStr: getKstDateString() });
+    const active = resolved.assignmentId ? lite.find((a) => a.id === resolved.assignmentId) ?? null : null;
+
+    if (active) {
       const customRows = await prisma.siteHoliday.findMany({
-        where: { assignmentId: assignment.id, date: { gte: dateFrom, lte: dateTo } },
+        where: { assignmentId: BigInt(active.id), date: { gte: dateFrom, lte: dateTo } },
         select: { date: true },
       });
-      const kstDateStr = (d: Date) => new Date(d).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
       const absents = computeAbsentDates({
         from: dateFrom, to: dateTo,
-        assignStart: kstDateStr(assignment.startDate),
-        assignEnd: assignment.endDate ? kstDateStr(assignment.endDate) : null,
+        assignStart: active.startDate,
+        assignEnd: active.endDate,
         todayStr: getKstDateString(),
         existingDates: new Set(records.map(r => r.workDate)),
         customHolidays: new Set(customRows.map(r => r.date)),

@@ -5,11 +5,23 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
-import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { getWorkerSessionFromReq, WK_ACTIVE_ASSIGNMENT_COOKIE } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { getWorkerPremiumStatus, getWorkerDocAccess } from "@/lib/planGuard";
 import { getKstDateString } from "@/lib/time";
 import { effectiveTrainingType } from "@/lib/serviceStep";
+import { resolveWorkerAssignment } from "@/lib/worker/assignmentResolve";
+
+// 응답 헤더 조립. rewriteCookieId가 있으면 낡은 선택배정 쿠키를 해석된 활성 배정으로 되써
+//  모든 쿠키 소비처(일지·홈·캘린더·근태)가 같은 배정으로 수렴하게 한다(ENDED 고착 근본 차단).
+function buildHeaders(rewriteCookieId: string | null): Record<string, string> {
+  const headers: Record<string, string> = { "Cache-Control": "no-store, must-revalidate" };
+  if (rewriteCookieId) {
+    const maxAge = 60 * 60 * 24 * 90; // 쿠키 수명 = 세션과 동일(90일)
+    headers["Set-Cookie"] = `${WK_ACTIVE_ASSIGNMENT_COOKIE}=${rewriteCookieId}; path=/; max-age=${maxAge}; samesite=lax`;
+  }
+  return headers;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,16 +34,14 @@ export async function GET(request: NextRequest) {
     // ⚠️ 서버는 UTC라 new Date()로 비교하면 KST 자정~09시 사이 하루 빠르게 잡혀
     //    "오늘 시작한 배정"이 미시작으로 제외됨(현장·훈련생 전부 빈값). KST 오늘로 비교.
     const todayStr = getKstDateString();
-    const today = new Date(`${todayStr}T00:00:00.000Z`);
 
-    // 멀티 현장: 클라가 선택 배정(assignmentId)을 주면 그걸 우선(소유·활성·기간 검증). 없으면 최신 1건.
+    // 멀티 현장: 쿠키/딥링크로 온 assignmentId를 컨텍스트에 맞게 해석(lib/worker/assignmentResolve).
+    //  - 일지류(worklog/logs/signature/batch, allowEnded 미전달): 오늘 활성만. 낡은 쿠키가 ENDED/미래를
+    //    가리키면 최신 활성으로 폴백(종료 현장 고착 데드엔드·오귀속 방지) 후 쿠키를 되써 수렴시킨다.
+    //  - 과거문서(docs, allowEnded=1): 명시 id면 ENDED 허용(과거 출근부/일지 재제출·수정요청 딥링크).
     const reqAssignmentId = request.nextUrl.searchParams.get("assignmentId");
-    let selAssignmentId: bigint | null = null;
-    try { selAssignmentId = reqAssignmentId ? BigInt(reqAssignmentId) : null; } catch { selAssignmentId = null; }
+    const allowEnded = request.nextUrl.searchParams.get("allowEnded") === "1";
 
-    // 명시 배정(딥링크/쿠키)이면 종료(ENDED)여도 그 배정으로 — 과거문서 재제출·수정요청 딥링크가
-    //  ENDED를 가리키므로 ACTIVE+오늘기간 필터를 걸면 siteInfo=null → 문서 카드/제출버튼이 안 뜨는 데드엔드.
-    //  소유(workerId)+근무발생상태(generate/preview/buildDocPayload와 동일)만 검증. 미명시면 최신 활성.
     const assignmentInclude = {
       site: {
         include: {
@@ -41,32 +51,32 @@ export async function GET(request: NextRequest) {
       },
       agency: true,
     } satisfies Prisma.SiteAssignmentInclude;
-    // 미명시(쿠키 없음)일 때의 최신 활성 배정 조건.
-    const latestActiveWhere = {
-      workerId,
-      status: "ACTIVE",
-      startDate: { lte: today },
-      OR: [{ endDate: null }, { endDate: { gte: today } }],
-    } satisfies Prisma.SiteAssignmentWhereInput;
 
-    let assignment = await prisma.siteAssignment.findFirst({
-      where: selAssignmentId != null
-        ? { id: selAssignmentId, workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } }
-        : latestActiveWhere,
-      include: assignmentInclude,
-      orderBy: { startDate: "desc" },
+    // 워커 소유 배정 후보(라이트) — 해석용. KST 문자열로 정규화해 순수 로직에 위임.
+    const candidates = await prisma.siteAssignment.findMany({
+      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } },
+      select: { id: true, status: true, startDate: true, endDate: true },
+    });
+    const resolved = resolveWorkerAssignment({
+      requestedId: reqAssignmentId,
+      allowEnded,
+      assignments: candidates.map((c) => ({
+        id: c.id.toString(),
+        status: c.status,
+        startDate: getKstDateString(c.startDate),
+        endDate: c.endDate ? getKstDateString(c.endDate) : null,
+      })),
+      todayStr,
     });
 
-    // ★선택 배정(쿠키/딥링크 assignmentId)이 무효면(재시드로 삭제·타 워커·미소유 등) 최신 활성 배정으로 폴백.
-    //  낡은 wk_active_assignment 쿠키(사라진 id)가 site/current를 '배정 없음'으로 만들어 워커 앱 전체
-    //  (홈·문서·AI일지 등)를 막던 문제 방지. preview/context 라우트와 동일한 폴백을 여기에도 적용.
-    if (!assignment?.site && selAssignmentId != null) {
-      assignment = await prisma.siteAssignment.findFirst({
-        where: latestActiveWhere,
-        include: assignmentInclude,
-        orderBy: { startDate: "desc" },
-      });
+    if (!resolved.assignmentId) {
+      return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." });
     }
+
+    const assignment = await prisma.siteAssignment.findFirst({
+      where: { id: BigInt(resolved.assignmentId), workerId },
+      include: assignmentInclude,
+    });
 
     if (!assignment?.site) {
       return NextResponse.json({ success: false, message: "배정된 현장이 없습니다." });
@@ -158,7 +168,7 @@ export async function GET(request: NextRequest) {
       },
     }, {
       // 브라우저가 과거(전환 전) 값을 캐시로 먼저 반환해 화면이 잠깐 옛 단계로 보이는 것 방지
-      headers: { "Cache-Control": "no-store, must-revalidate" },
+      headers: buildHeaders(resolved.usedFallback ? resolved.assignmentId : null),
     });
   } catch (error: any) {
     console.error("[worker/site/current]", error);
