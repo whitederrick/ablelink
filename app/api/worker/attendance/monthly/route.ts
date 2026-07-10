@@ -69,13 +69,14 @@ export async function GET(req: NextRequest) {
     const rawSel = new URL(req.url).searchParams.get("assignmentId");
     const candidates = await prisma.siteAssignment.findMany({
       where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } },
-      select: { id: true, status: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
+      select: { id: true, status: true, startDate: true, endDate: true, attendanceButtonExempt: true, site: { select: { companyName: true } } },
     });
     const lite = candidates.map((c) => ({
       id: c.id.toString(),
       status: c.status,
       startDate: getKstDateString(c.startDate),
       endDate: c.endDate ? getKstDateString(c.endDate) : null,
+      attendanceButtonExempt: c.attendanceButtonExempt,
       siteName: c.site?.companyName ?? null,
     }));
     const resolved = resolveWorkerAssignment({ requestedId: rawSel, allowEnded: false, assignments: lite, todayStr: getKstDateString() });
@@ -97,6 +98,8 @@ export async function GET(req: NextRequest) {
         //  선택현장의 실제 결근을 가리지 않도록 활성 배정 rows로만 existingDates 구성.
         existingDates: new Set(rows.filter(r => r.assignmentId?.toString() === active.id).map(r => r.workDate)),
         customHolidays: new Set(customRows.map(r => r.date)),
+        // D(#14): 면제 배정은 오늘 결근 판정 제외(캘린더와 통일).
+        exemptToday: active.attendanceButtonExempt,
       });
       for (const key of absents) {
         records.push({

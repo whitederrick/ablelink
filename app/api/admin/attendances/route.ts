@@ -249,7 +249,7 @@ export async function GET(req: NextRequest) {
           OR: [{ endDate: null }, { endDate: { gte: new Date(period.from + "T00:00:00+09:00") } }],
         },
         select: {
-          id: true, workerId: true, siteId: true, startDate: true, endDate: true,
+          id: true, workerId: true, siteId: true, startDate: true, endDate: true, attendanceButtonExempt: true,
           user: { select: { workerName: true } }, site: { select: { companyName: true } },
         },
       });
@@ -280,6 +280,8 @@ export async function GET(req: NextRequest) {
             todayStr,
             existingDates: existByWorker.get(String(a.workerId)) ?? new Set(),
             customHolidays: custByAssign.get(String(a.id)),
+            // D(#14): 면제 배정은 오늘 결근 판정 제외(워커 캘린더·월별과 통일).
+            exemptToday: a.attendanceButtonExempt,
           });
           for (const d of absents) {
             const dedup = `${a.workerId}|${d}`;

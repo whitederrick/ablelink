@@ -65,7 +65,9 @@ export async function POST(request: NextRequest) {
     if (!amount) continue;
 
     const currentBillingAt = new Date(agency.nextBillingAt!);
-    const nextBillingAt = advanceBilling(currentBillingAt, cycle);
+    // G: clamp 기준 = 가입 원일(subscribedAt). 저장된 결제일의 day를 쓰면 짧은 달 뒤 28일로 영구 고착됨.
+    const anchorDay = agency.subscribedAt ? new Date(agency.subscribedAt).getDate() : undefined;
+    const nextBillingAt = advanceBilling(currentBillingAt, cycle, anchorDay);
     const daysOverdue = Math.floor((today.getTime() - currentBillingAt.getTime()) / MS_DAY);
 
     // 결제 대상 월(KST)×plan 기준 결정적 orderId — 같은 달 재시도 시 Toss가 중복청구를 거부(멱등성)

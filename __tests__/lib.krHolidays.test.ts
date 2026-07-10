@@ -59,6 +59,18 @@ describe("krHolidays — 2027 대체공휴일 정합", () => {
   });
 });
 
+describe("krHolidays — 2024/2025 대체·임시공휴일(2차 감사 E·F·I)", () => {
+  it("2024-02-12 설날 대체공휴일 존재(2/11 일요일→대체 월요일)", () => {
+    expect(isKrHoliday("2024-02-12")).toBe(true);
+  });
+  it("2025-01-27 임시공휴일 존재(설날 연휴 브릿지)", () => {
+    expect(isKrHoliday("2025-01-27")).toBe(true);
+  });
+  it("2025-10-08 라벨은 '추석 연휴(대체)'(한글날 대체 아님 — 한글날 10/9는 평일)", () => {
+    expect(getKrHolidays(2025, 10)["2025-10-08"]).toContain("추석");
+  });
+});
+
 describe("krHolidays — 범위 조회", () => {
   it("getKrHolidayDates는 정렬된 범위 내 공휴일만 반환", () => {
     const dates = getKrHolidayDates("2026-02-01", "2026-02-28");

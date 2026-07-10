@@ -20,6 +20,11 @@ export interface AbsentDaysOpts {
   existingDates: Set<string>;
   /** 현장 커스텀 휴무 날짜 집합(옵션) */
   customHolidays?: Set<string>;
+  /**
+   * 출퇴근 면제 배정(#14): 당일 출근기록은 '다음날' 크론이 생성하므로 오늘은 아직 결근 판정 불가.
+   * true면 오늘을 결근에서 제외(어제까지만 판정) — 캘린더 route와 동일 규칙으로 두 화면 결근을 일치시킨다.
+   */
+  exemptToday?: boolean;
 }
 
 /** 결근일 목록("YYYY-MM-DD") 반환. */
@@ -27,7 +32,9 @@ export function computeAbsentDates(opts: AbsentDaysOpts): string[] {
   const publicHolidays = new Set(getKrHolidayDates(opts.from, opts.to));
   const custom = opts.customHolidays ?? new Set<string>();
   const redFrom = opts.assignStart > opts.from ? opts.assignStart : opts.from;
-  const endBase = opts.assignEnd && opts.assignEnd < opts.todayStr ? opts.assignEnd : opts.todayStr;
+  // 면제 배정은 '오늘'을 아직 결근으로 볼 수 없으므로 판정 상한을 어제로 당긴다.
+  const effectiveToday = opts.exemptToday ? prevDayStr(opts.todayStr) : opts.todayStr;
+  const endBase = opts.assignEnd && opts.assignEnd < effectiveToday ? opts.assignEnd : effectiveToday;
   const redTo = endBase < opts.to ? endBase : opts.to;
   const out: string[] = [];
   if (redFrom > redTo) return out;
@@ -43,4 +50,11 @@ export function computeAbsentDates(opts: AbsentDaysOpts): string[] {
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return out;
+}
+
+/** "YYYY-MM-DD"의 전날(UTC Z-date 기준 — computeAbsentDates 순회와 동일 프레임). */
+function prevDayStr(ymd: string): string {
+  const d = new Date(ymd + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
 }

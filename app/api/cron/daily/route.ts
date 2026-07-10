@@ -138,11 +138,14 @@ export async function GET(req: NextRequest) {
         const contractEndStr = contract.contractEnd.toISOString().slice(0, 10);
         const siteName = contract.siteName || contract.workerFilledSiteName || "-";
         const title = `근로계약 만료 D-${offsetDays} 안내`;
+        // C(회귀#9 수정): dedup 키를 '계약별'로 — link에 contractId를 넣어 같은 워커가 같은 날 복수 계약이
+        //  만료돼도 각 계약 알림이 서로 덮이지 않게 한다. (title만으로 dedup하면 둘째 현장 알림이 누락됐음)
+        const link = `/worker/contracts?c=${contract.id}`;
 
         try {
-          // #9: 오늘 이미 같은 만료 알림을 보냈으면 건너뜀(재진입 중복 방지, 섹션 5/7과 동일 존재검사).
+          // #9: 오늘 이미 '이 계약' 만료 알림을 보냈으면 건너뜀(재진입 중복 방지, 섹션 5/7과 동일 존재검사).
           const dup = await prisma.workerNotice.findFirst({
-            where: { workerId: contract.workerId, title, createdAt: { gte: startOfTodayKst } },
+            where: { workerId: contract.workerId, link, createdAt: { gte: startOfTodayKst } },
             select: { id: true },
           });
           if (dup) continue;
@@ -154,7 +157,7 @@ export async function GET(req: NextRequest) {
               title,
               body: `사업장: ${siteName}\n계약 종료일: ${contractEndStr}\n재계약이 필요하면 담당 위탁기관로 연락해 주세요.`,
               type: "WARN",
-              link: "/worker/contracts",
+              link,
             },
           });
           expiryNotified++;

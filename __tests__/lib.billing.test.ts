@@ -37,23 +37,47 @@ describe("advanceBilling — MONTHLY 말일 오버플로우 방지(#5)", () => {
   });
 });
 
-describe("buildBillingOrderId — 같은 달 플랜변경=새 결제, 같은 plan 재시도=멱등(#4)", () => {
-  // 2026-07-20 KST (UTC 11:20 → +9h = 20:20 KST, 같은 날)
-  const t1 = new Date("2026-07-20T11:20:00Z");
-  const t2 = new Date("2026-07-25T02:00:00Z"); // 같은 달 다른 날
+describe("advanceBilling — anchorDay 원일 복원(#G 회귀)", () => {
+  // 저장된 직전 결제일 day를 쓰면 31→28→28…로 영구 고착. 가입 원일(anchorDay)로 복원해야 함.
+  it("2/28에서 원일31 → 3/31 복원 (28로 고착 안 됨)", () => {
+    expect(ymd(advanceBilling(new Date(2026, 1, 28), "MONTHLY", 31))).toBe("2026-03-31");
+  });
+  it("4/30에서 원일31 → 5/31 복원", () => {
+    expect(ymd(advanceBilling(new Date(2026, 3, 30), "MONTHLY", 31))).toBe("2026-05-31");
+  });
+  it("2/28에서 원일31 → (다음달) 3/31, 그 다음도 4/30→5/31 유지(연쇄)", () => {
+    const mar = advanceBilling(new Date(2026, 1, 28), "MONTHLY", 31); // 3/31
+    const apr = advanceBilling(mar, "MONTHLY", 31);                    // 4/30
+    const may = advanceBilling(apr, "MONTHLY", 31);                    // 5/31
+    expect(ymd(mar)).toBe("2026-03-31");
+    expect(ymd(apr)).toBe("2026-04-30");
+    expect(ymd(may)).toBe("2026-05-31");
+  });
+  it("anchorDay 미지정 시 종전 동작(from의 day)", () => {
+    expect(ymd(advanceBilling(new Date(2026, 0, 31), "MONTHLY"))).toBe("2026-02-28");
+  });
+});
 
-  it("같은 달 다른 plan → 다른 orderId (무료 상향 차단)", () => {
+describe("buildBillingOrderId — 날짜 기준(#4 plan + #B 월충돌 방지)", () => {
+  const t1 = new Date("2026-07-20T11:20:00Z"); // KST 2026-07-20 20:20
+
+  it("같은 날 다른 plan → 다른 orderId (무료 상향 차단, #4)", () => {
     expect(buildBillingOrderId(5, t1, "STARTER")).not.toBe(buildBillingOrderId(5, t1, "PRO"));
   });
-  it("같은 달·같은 plan → 동일 orderId (멱등 재시도 보존)", () => {
-    expect(buildBillingOrderId(5, t1, "PRO")).toBe(buildBillingOrderId(5, t2, "PRO"));
+  it("같은 결제일·같은 plan 재시도 → 동일 orderId (멱등 복구 보존)", () => {
+    // 재시도는 같은 인스턴트(=같은 결제일)를 다시 씀
+    expect(buildBillingOrderId(5, t1, "PRO")).toBe(buildBillingOrderId(5, new Date("2026-07-20T11:20:00Z"), "PRO"));
   });
-  it("KST 결제월·plan 포함 포맷", () => {
-    expect(buildBillingOrderId(5, t1, "PRO")).toBe("ablelink_5_202607_PRO");
+  it("KST 결제일(yyyymmdd)·plan 포함 포맷", () => {
+    expect(buildBillingOrderId(5, t1, "PRO")).toBe("ablelink_5_20260720_PRO");
   });
-  it("UTC 자정 직전이라도 KST 기준 월로 산출(경계)", () => {
-    // 2026-06-30T20:00Z → +9h = 2026-07-01 05:00 KST → 202607
-    expect(buildBillingOrderId(5, new Date("2026-06-30T20:00:00Z"), "PRO")).toBe("ablelink_5_202607_PRO");
+  it("★#B: 연속 두 주기(말일 30일 달, UTC 15-24시 창)가 다른 orderId — 월충돌 없음", () => {
+    // 초기 결제 now=Apr30 21:00Z(KST May 1) / 다음 주기 currentBillingAt=May30 21:00Z(KST May 31)
+    const initial = buildBillingOrderId(5, new Date("2026-04-30T21:00:00Z"), "PRO"); // 20260501
+    const recur   = buildBillingOrderId(5, new Date("2026-05-30T21:00:00Z"), "PRO"); // 20260531
+    expect(initial).toBe("ablelink_5_20260501_PRO");
+    expect(recur).toBe("ablelink_5_20260531_PRO");
+    expect(initial).not.toBe(recur); // (월 기준이었으면 둘 다 202605로 충돌 → 한 주기 무료였음)
   });
 });
 

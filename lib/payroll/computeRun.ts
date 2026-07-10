@@ -372,7 +372,10 @@ export async function computePayrollItems(
         const DOW: Record<string, number> = { "일": 0, "월": 1, "화": 2, "수": 3, "목": 4, "금": 5, "토": 6 };
         const whDow = empContract?.weeklyHoliday ? (DOW[empContract.weeklyHoliday] ?? 0) : 0; // 주휴일 요일(기본 일)
         const holidaySet = new Set(Object.keys(getKrHolidays(y, m)));
-        let nightMin = 0, holidayLe8Min = 0, holidayGt8Min = 0;
+        let nightMin = 0;
+        // H: 휴일근로 8h 경계는 '일별 합계'에 적용해야 한다. 행 단위로 나누면 같은 날 2배정(AM+PM)
+        //  합계가 8h를 넘어도 각 행이 8h 미만이면 초과분이 0.5배로 과소지급된다. → 날짜별로 모은 뒤 1회 판정.
+        const holidayMinByDate = new Map<string, number>();
         for (const a of confirmedAtt) {
           if (!a.startTime || !a.endTime) continue;
           const s = kstMin(a.startTime), e = kstMin(a.endTime);
@@ -393,9 +396,14 @@ export async function computePayrollItems(
           if (holidaySet.has(a.workDate) || dow === whDow) {
             const span = Math.max(0, e - s);
             const workedMin = Math.max(0, span - unpaidBreakMin(a.assignment?.workType, span));
-            holidayLe8Min += Math.min(workedMin, 480);
-            holidayGt8Min += Math.max(0, workedMin - 480);
+            holidayMinByDate.set(a.workDate, (holidayMinByDate.get(a.workDate) ?? 0) + workedMin);
           }
+        }
+        // 날짜별 합계에 8h 경계 적용(8h이내 0.5배 + 초과 1.0배).
+        let holidayLe8Min = 0, holidayGt8Min = 0;
+        for (const dayMin of holidayMinByDate.values()) {
+          holidayLe8Min += Math.min(dayMin, 480);
+          holidayGt8Min += Math.max(0, dayMin - 480);
         }
         if (nightMin > 0) {
           const nightHours = +(nightMin / 60).toFixed(2);
