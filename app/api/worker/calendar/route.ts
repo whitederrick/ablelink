@@ -242,12 +242,13 @@ export async function GET(request: NextRequest) {
         activeAsgId ? attendances.filter(a => a.assignmentId.toString() === activeAsgId).map(a => a.workDate) : [],
       );
 
-      // 날짜 순회
-      const cur = new Date(redFrom + "T00:00:00");
-      const end = new Date(redTo   + "T00:00:00");
+      // 날짜 순회 — ★UTC 고정("Z"·getUTCDay·setUTCDate)으로 호스트 타임존 무관하게(lib/attendance/absentDays와 동일).
+      //  로컬 파싱+toISOString 혼용 시 KST 호스트(로컬 dev)에서 key가 하루 밀려 RED가 엉뚱한 날에 찍히던 문제 방지.
+      const cur = new Date(redFrom + "T00:00:00Z");
+      const end = new Date(redTo   + "T00:00:00Z");
       while (cur <= end) {
         const key = cur.toISOString().slice(0, 10);
-        const dow = cur.getDay();
+        const dow = cur.getUTCDay();
         const isWeekend = dow === 0 || dow === 6;
         // 활성 배정 기간 내 · 평일 · 휴무 아님 · 활성 배정 출근기록 없는 날 → RED(선택현장 결근).
         if (key >= startDate && key <= endDate && !isWeekend && !allHolidays[key] && !activeRecordDates.has(key)) {
@@ -261,7 +262,7 @@ export async function GET(request: NextRequest) {
             traineeCount,
           };
         }
-        cur.setDate(cur.getDate() + 1);
+        cur.setUTCDate(cur.getUTCDate() + 1);
       }
     }
 
