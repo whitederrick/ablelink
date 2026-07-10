@@ -268,7 +268,8 @@ export async function GET(request: NextRequest) {
     // ★월중 전환 시 '타 배정(ENDED 포함)' 커스텀 휴무 라벨을 빈 날에만 채운다(표시 전용).
     //  RED 합성 이후 실행 + dayMap 미존재 날에만 → 결근/기록을 덮지 않아 오억제·오귀속 없음.
     for (const r of otherHolidayRows) {
-      if (r.date >= startDate && r.date <= endDate && !dayMap[r.date]) {
+      // r.date<=todayStr: 미래 날짜엔 안 칠함 — 활성배정의 미래 근무일이 종료된 타현장 휴무로 오라벨링되는 것 방지.
+      if (r.date >= startDate && r.date <= endDate && r.date <= todayStr && !dayMap[r.date]) {
         dayMap[r.date] = {
           status: "HOLIDAY", attendanceId: "", startTime: null, endTime: null,
           isFinalClosed: false, logCount: 0, traineeCount, holidayName: r.reason ?? "휴무",

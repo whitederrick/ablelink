@@ -196,6 +196,9 @@ export default function AttendanceReviewPage() {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   }
 
+  // 현장명 라벨은 '이 달에 현장이 2곳 이상'일 때만 노출 — 단일현장 워커에게 매 행 회사명 반복 노이즈 방지.
+  const isMultiSite = new Set(records.map(r => r.siteName).filter(Boolean)).size > 1;
+
   // 매니저 최종확정(잠금)도 '확정'으로 취급 — 미확정 오표기·확정불가 방지
   const isConfirmed = (r: AttRec) => r.isFinalClosed || r.isManagerFinalClosed;
   const confirmed   = records.filter(r => isConfirmed(r)).length;
@@ -344,8 +347,8 @@ export default function AttendanceReviewPage() {
                       ) : (
                         <span className="text-sm font-semibold text-slate-400">미출근</span>
                       )}
-                      {/* 멀티현장 구분 — 같은날 오전/오후 다른 현장을 식별(현장명 있을 때만) */}
-                      {rec.siteName && (
+                      {/* 멀티현장 구분 — 이 달에 현장이 2곳 이상일 때만 표시(단일현장 노이즈 방지) */}
+                      {isMultiSite && rec.siteName && (
                         <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">{rec.siteName}</p>
                       )}
                       {rec.isGpsModified && (
