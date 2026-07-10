@@ -8,7 +8,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
 import { requireManagerSession } from "@/lib/managerScope";
-import { PLAN_PRICES, PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel, buildBillingOrderId } from "@/lib/billing";
+import { PLAN_PRICES, PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel, buildSubscribeOrderId } from "@/lib/billing";
 import { outboundAllowed } from "@/lib/outboundGuard";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     // 운영자 딜(주기·협상가) 반영을 위해 위탁기관 조회
     const agencyRow = await prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
-      select: { planType: true, billingCycle: true, customAmount: true },
+      select: { planType: true, billingCycle: true, customAmount: true, billingEpoch: true },
     });
     if (!agencyRow) {
       return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
@@ -85,9 +85,9 @@ export async function POST(request: NextRequest) {
 
     const billingKey = billingData.billingKey;
     const now = new Date();
-    // 결정적 orderId(agency×결제월 KST×plan) — 과금 성공 후 DB 반영 실패로 재시도해도 Toss가 중복청구를 거부(멱등).
-    //  plan 포함: 같은 달 플랜 변경 시 새 orderId로 실제 결제 유발(무료 상향 방지, #4).
-    const orderId = buildBillingOrderId(agencyId, now, planType);
+    // 이벤트 키(billingEpoch×plan) orderId — 시간 미포함이라 재시도(자정/월경계 무관)는 같은 orderId로 멱등
+    //  복구되고, 해지→재구독은 epoch가 올라 새 orderId로 실결제된다(이중청구·무료사이클 딜레마 근본 제거).
+    const orderId = buildSubscribeOrderId(agencyId, agencyRow.billingEpoch, planType);
 
     // 2. 최초 결제
     const chargeRes = await fetch(`${TOSS_API}/billing/${billingKey}`, {

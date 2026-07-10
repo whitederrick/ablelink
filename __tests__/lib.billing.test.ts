@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { advanceBilling, buildBillingOrderId } from "@/lib/billing";
+import { advanceBilling, buildBillingOrderId, buildSubscribeOrderId } from "@/lib/billing";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 테스트 그물: advanceBilling 말일 오버플로우(#5).
@@ -58,38 +58,39 @@ describe("advanceBilling — anchorDay 원일 복원(#G 회귀)", () => {
   });
 });
 
-describe("buildBillingOrderId — granularity 분리(#4 plan · #B cron 월충돌 · 3차 수동 멱등)", () => {
+describe("buildBillingOrderId — cron 반복결제(결제일 yyyymmdd·#B 월충돌 방지)", () => {
   const t1 = new Date("2026-07-20T11:20:00Z"); // KST 2026-07-20 20:20
-  const t2 = new Date("2026-07-25T02:00:00Z"); // 같은 달 다른 날
 
-  it("plan 다르면 orderId 다름 (무료 상향 차단, #4)", () => {
+  it("plan 다르면 orderId 다름 (#4)", () => {
     expect(buildBillingOrderId(5, t1, "STARTER")).not.toBe(buildBillingOrderId(5, t1, "PRO"));
   });
-
-  // 수동 초기구독(month=기본): 같은 달 재시도는 자정을 넘겨도 동일 orderId → Toss 멱등(이중청구 방지)
-  it("month(수동): 같은 달 다른 날 재시도 → 동일 orderId (자정 크로싱 이중청구 방지·3차 회귀 수정)", () => {
-    expect(buildBillingOrderId(5, t1, "PRO")).toBe(buildBillingOrderId(5, t2, "PRO"));
+  it("결제일 yyyymmdd 포맷", () => {
+    expect(buildBillingOrderId(5, t1, "PRO")).toBe("ablelink_5_20260720_PRO");
   });
-  it("month 포맷 yyyymm", () => {
-    expect(buildBillingOrderId(5, t1, "PRO")).toBe("ablelink_5_202607_PRO");
+  it("같은 결제일(안정 nextBillingAt) 재시도 → 동일 orderId (멱등)", () => {
+    expect(buildBillingOrderId(5, t1, "PRO")).toBe(buildBillingOrderId(5, new Date("2026-07-20T11:20:00Z"), "PRO"));
   });
-
-  // cron 반복결제(day): 재시도는 같은 결제일→동일, 연속 두 주기는 날짜가 달라 월충돌 없음(bug B)
-  it("day(cron): 같은 결제일 재시도 → 동일 orderId (멱등)", () => {
-    expect(buildBillingOrderId(5, t1, "PRO", "day")).toBe(buildBillingOrderId(5, new Date("2026-07-20T11:20:00Z"), "PRO", "day"));
-  });
-  it("day 포맷 yyyymmdd", () => {
-    expect(buildBillingOrderId(5, t1, "PRO", "day")).toBe("ablelink_5_20260720_PRO");
-  });
-  it("★#B: day 기준 연속 두 주기(말일 30일 달·UTC 15-24시 창) → 다른 orderId(월충돌 없음)", () => {
-    const initial = buildBillingOrderId(5, new Date("2026-04-30T21:00:00Z"), "PRO", "day"); // 20260501
-    const recur   = buildBillingOrderId(5, new Date("2026-05-30T21:00:00Z"), "PRO", "day"); // 20260531
+  it("★#B: 연속 두 주기(말일 30일 달·UTC 15-24시 창) → 다른 orderId(월충돌 없음)", () => {
+    const initial = buildBillingOrderId(5, new Date("2026-04-30T21:00:00Z"), "PRO"); // 20260501
+    const recur   = buildBillingOrderId(5, new Date("2026-05-30T21:00:00Z"), "PRO"); // 20260531
     expect(initial).not.toBe(recur);
   });
-  it("★대조: 같은 두 주기를 month로 하면 충돌(202605)—그래서 cron은 day를 쓴다", () => {
-    const a = buildBillingOrderId(5, new Date("2026-04-30T21:00:00Z"), "PRO"); // month → 202605
-    const b = buildBillingOrderId(5, new Date("2026-05-30T21:00:00Z"), "PRO"); // month → 202605
-    expect(a).toBe(b);
+});
+
+describe("buildSubscribeOrderId — 수동 구독 이벤트 키(4차 회귀 근본수정)", () => {
+  it("epoch·plan 포맷(시간 미포함)", () => {
+    expect(buildSubscribeOrderId(5, 0, "PRO")).toBe("ablelink_5_e0_PRO");
+    expect(buildSubscribeOrderId(5, 3, "STARTER")).toBe("ablelink_5_e3_STARTER");
+  });
+  it("같은 epoch·plan 재시도 → 동일 orderId (자정/월경계 무관 멱등 — 이중청구 방지)", () => {
+    // 시간 인자가 없으므로 언제 재시도해도 동일
+    expect(buildSubscribeOrderId(5, 0, "PRO")).toBe(buildSubscribeOrderId(5, 0, "PRO"));
+  });
+  it("해지→재구독(epoch 증가) → 다른 orderId (실결제 — 같은 달이어도 무료사이클 없음)", () => {
+    expect(buildSubscribeOrderId(5, 0, "PRO")).not.toBe(buildSubscribeOrderId(5, 1, "PRO"));
+  });
+  it("plan 변경 → 다른 orderId (#4)", () => {
+    expect(buildSubscribeOrderId(5, 0, "STARTER")).not.toBe(buildSubscribeOrderId(5, 0, "PRO"));
   });
 });
 

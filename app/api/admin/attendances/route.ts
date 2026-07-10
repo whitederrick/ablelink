@@ -261,8 +261,10 @@ export async function GET(req: NextRequest) {
           const k = String(e.workerId);
           (existByWorker.get(k) ?? existByWorker.set(k, new Set()).get(k)!).add(e.workDate);
         }
+        // #12(3번째 호출부): countAsWorkday=true(근무 인정 대체일)는 급여가 소정근로일로 집계하므로
+        //  결근 제외 대상이 아니다 — 필터 없으면 매니저 근태 그리드가 그날 미출근을 은폐(캘린더/월별/급여와 불일치).
         const custRows = await prisma.siteHoliday.findMany({
-          where: { assignmentId: { in: activeAssigns.map(a => a.id) }, date: { gte: period.from, lte: period.to } },
+          where: { assignmentId: { in: activeAssigns.map(a => a.id) }, date: { gte: period.from, lte: period.to }, countAsWorkday: false },
           select: { assignmentId: true, date: true },
         });
         const custByAssign = new Map<string, Set<string>>();

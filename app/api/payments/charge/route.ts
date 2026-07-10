@@ -70,9 +70,9 @@ export async function POST(request: NextRequest) {
     const nextBillingAt = advanceBilling(currentBillingAt, cycle, anchorDay);
     const daysOverdue = Math.floor((today.getTime() - currentBillingAt.getTime()) / MS_DAY);
 
-    // cron 반복결제: 결제일(KST yyyymmdd)×plan 기준 orderId("day") — 안정된 nextBillingAt 기준이라 재시도
+    // cron 반복결제: 결제일(KST yyyymmdd)×plan 기준 orderId — 안정된 nextBillingAt 기준이라 재시도
     //  멱등 유지 + 연속 두 주기가 같은 달로 접혀도 날짜가 달라 월충돌(bug B) 없음.
-    const orderId = buildBillingOrderId(agency.id, currentBillingAt, agency.planType, "day");
+    const orderId = buildBillingOrderId(agency.id, currentBillingAt, agency.planType);
 
     // 시도 결과를 불확정(예외)/확정(HTTP)으로 분류. 타임아웃·네트워크 예외는 '결제 여부 모름'이므로
     //  절대 강등/빌링키 삭제하지 않는다(decideChargeOutcome). 카드 거절 등 4xx 응답만 확정 실패로 강등.

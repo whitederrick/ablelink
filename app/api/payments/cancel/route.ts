@@ -24,6 +24,8 @@ export async function POST(request: NextRequest) {
         nextBillingAt: null,
         subscriptionId: null,
         subscriptionCanceledAt: new Date(),
+        // 재구독이 새 orderId로 실결제되도록 이벤트 키를 올린다(같은 달 취소→재구독 무료사이클 방지).
+        billingEpoch: { increment: 1 },
         maxWorkers: free.maxWorkers,
         maxSites: free.maxSites,
       },

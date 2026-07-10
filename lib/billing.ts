@@ -36,21 +36,22 @@ export function effectiveBilling(agency: {
   return { amount, cycle };
 }
 
-// 결제 orderId = agency × 결제기간(KST) × plan.  plan 포함: 같은 기간 플랜 변경도 새 orderId(무료 상향 방지, #4).
-//  granularity — 공유 함수의 두 사용처가 멱등 요구가 다르다:
-//   · "month"(수동 초기구독): anchor가 재시도 wall-clock(now)이라 같은 '달' 재시도는 동일 orderId여야
-//     Toss 멱등으로 이중청구가 막힌다(초기구독은 1회성이라 '연속 두 주기' 월충돌이 없음).
-//     ★일(day) 기준으로 하면 재시도가 자정을 넘길 때 orderId가 바뀌어 카드 이중청구됨(3차 감사 회귀).
-//   · "day"(cron 반복결제): anchor가 안정된 nextBillingAt이라 재시도는 같은 날→동일 orderId(멱등 유지)이고,
-//     연속 두 주기는 ~한 달 차이라 날짜가 달라 월충돌(bug B)이 없다.
-export function buildBillingOrderId(
-  agencyId: string | number | bigint, at: Date, planType: string, granularity: "month" | "day" = "month",
-): string {
+// cron 반복결제 orderId = agency × 결제일(KST yyyymmdd) × plan.
+//  anchor가 안정된 nextBillingAt이라 재시도는 같은 날→동일 orderId(멱등 복구)이고, 연속 두 주기는
+//  ~한 달 차이라 날짜가 달라 월충돌(bug B) 없음. (수동 구독은 buildSubscribeOrderId — 이벤트 키 사용.)
+export function buildBillingOrderId(agencyId: string | number | bigint, at: Date, planType: string): string {
   const kst = new Date(at.getTime() + 9 * 3600 * 1000);
-  const y = kst.getUTCFullYear();
-  const mo = String(kst.getUTCMonth() + 1).padStart(2, "0");
-  const period = granularity === "day" ? `${y}${mo}${String(kst.getUTCDate()).padStart(2, "0")}` : `${y}${mo}`;
+  const period = `${kst.getUTCFullYear()}${String(kst.getUTCMonth() + 1).padStart(2, "0")}${String(kst.getUTCDate()).padStart(2, "0")}`;
   return `ablelink_${agencyId}_${period}_${planType}`;
+}
+
+// 수동 초기구독 orderId = agency × billingEpoch(이벤트 키) × plan. ★시간 미포함 — 근본 해결.
+//  · 같은 구독 이벤트의 DB반영 실패 재시도: epoch 불변 → 같은 orderId → Toss ALREADY_PROCESSED 멱등 복구
+//    (자정/월경계 무관 — 시간 기준 orderId의 이중청구 문제 제거).
+//  · 해지→재구독: 해지 때 epoch +1 → 새 orderId → 실결제(같은 달이어도 무료사이클 없음 — 3차 감사 회귀 제거).
+//  · plan 변경(무해지): plan 성분이 달라 새 orderId → 실결제(#4).
+export function buildSubscribeOrderId(agencyId: string | number | bigint, billingEpoch: number, planType: string): string {
+  return `ablelink_${agencyId}_e${billingEpoch}_${planType}`;
 }
 
 // 다음 결제일 = 현재 결제일 + 1주기.
