@@ -85,8 +85,21 @@ export async function GET(request: NextRequest) {
       orderBy: { workDate: "asc" },
     });
 
+    // 월내 기록에 등장한 현장·배정 집합(멀티현장·월중 전환 포함). 활성 배정 현장도 포함.
+    const monthSiteIds = [...new Set(attendances.map(a => a.siteId.toString()))];
+    if (assignment?.siteId && !monthSiteIds.includes(assignment.siteId.toString())) monthSiteIds.push(assignment.siteId.toString());
+    const monthSiteIdBig = monthSiteIds.map(s => BigInt(s));
+    const monthAsgIds = [...new Set(attendances.map(a => a.assignmentId?.toString()).filter((x): x is string => !!x))];
+
+    // 현장명(라벨용) — 같은날 다중현장 기록을 시각적으로 구분하기 위해.
+    const sites = monthSiteIdBig.length
+      ? await prisma.site.findMany({ where: { id: { in: monthSiteIdBig } }, select: { id: true, companyName: true } })
+      : [];
+    const siteNameById = new Map(sites.map(s => [s.id.toString(), s.companyName]));
+
     // 휴무일 조회 (공휴일 + 사이트별 커스텀)
     const nationalHolidays = getKrHolidays(year, month);
+    // 활성 배정 커스텀 휴무 — RED 결근 제외·표시 기준(선택현장 결근 판정에 영향).
     const customHolidayRows = assignment
       ? await prisma.siteHoliday.findMany({
           where: { assignmentId: assignment.id, date: { gte: startDate, lte: endDate } },
@@ -95,25 +108,38 @@ export async function GET(request: NextRequest) {
       : [];
     const customHolidays: Record<string, string> = {};
     for (const r of customHolidayRows) customHolidays[r.date] = r.reason ?? "휴무";
+    // 월내 등장한 '타 배정' 커스텀 휴무 — 표시 라벨용(RED 이후 빈 날에만 채움 → 결근 판정에 영향 없음).
+    const otherAsgIds = monthAsgIds.filter(id => id !== assignment?.id?.toString()).map(id => BigInt(id));
+    const otherHolidayRows = otherAsgIds.length
+      ? await prisma.siteHoliday.findMany({
+          where: { assignmentId: { in: otherAsgIds }, date: { gte: startDate, lte: endDate } },
+          select: { date: true, reason: true },
+        })
+      : [];
 
-    // 훈련생 수 — 날짜별로 '그 시점 현장 배치 인원'을 계산(TraineePlacement 이력 기반).
-    // 과거일에 현재 인원을 적용하던 문제(#6.2) 해결: 명부가 바뀌어도 각 날의 실제 인원으로 판정.
+    // 훈련생 수 — ★기록의 실제 현장별로 그날 배치 인원을 계산(타현장 기록을 활성현장 인원으로 오판정하던 문제 수정).
     // 배치 [startDate, endDate] 가 그날을 덮으면 그날 재적(현재 상태 무관 — endDate가 이탈 시점을 이미 표현).
-    const placements = assignment
+    const placementsAll = monthSiteIdBig.length
       ? await prisma.traineePlacement.findMany({
           where: {
-            siteId: assignment.siteId,
+            siteId: { in: monthSiteIdBig },
             startDate: { lte: new Date(endDate + "T23:59:59+09:00") },
             OR: [{ endDate: null }, { endDate: { gte: new Date(startDate + "T00:00:00+09:00") } }],
           },
-          select: { startDate: true, endDate: true },
+          select: { siteId: true, startDate: true, endDate: true },
         })
       : [];
-    const placementRanges = placements.map(p => ({ s: getKstDateString(p.startDate), e: p.endDate ? getKstDateString(p.endDate) : null }));
-    const traineeCountOn = (dateStr: string): number =>
-      placementRanges.filter(p => p.s <= dateStr && (p.e === null || p.e >= dateStr)).length;
-    // 조회 월 말일 기준 인원(요약/응답 표시용 대표값)
-    const traineeCount = traineeCountOn(endDate);
+    const rangesBySite = new Map<string, { s: string; e: string | null }[]>();
+    for (const p of placementsAll) {
+      const k = p.siteId.toString();
+      const arr = rangesBySite.get(k) ?? [];
+      arr.push({ s: getKstDateString(p.startDate), e: p.endDate ? getKstDateString(p.endDate) : null });
+      rangesBySite.set(k, arr);
+    }
+    const traineeCountOnSite = (siteId: string, dateStr: string): number =>
+      (rangesBySite.get(siteId) ?? []).filter(p => p.s <= dateStr && (p.e === null || p.e >= dateStr)).length;
+    // 조회 월 말일 기준 인원(요약/응답 표시용 대표값) — 활성 현장 기준.
+    const traineeCount = assignment?.siteId ? traineeCountOnSite(assignment.siteId.toString(), endDate) : 0;
 
     // 오늘 날짜 문자열 (KST)
     const nowKst   = new Date(Date.now() + 9 * 3600000);
@@ -129,6 +155,7 @@ export async function GET(request: NextRequest) {
       logCount: number;
       traineeCount: number;
       holidayName?: string;
+      siteName?: string | null; // 그날 표시된 기록의 현장명(멀티현장 구분용)
     };
     const dayMap: Record<string, DayEntry> = {};
 
@@ -143,7 +170,8 @@ export async function GET(request: NextRequest) {
     });
     for (const att of orderedAtt) {
       const completedLogs = att.logs.filter(l => l.isCompleted).length;
-      const dayTraineeCount = traineeCountOn(att.workDate);
+      // ★그 기록의 실제 현장 인원으로 색상 판정(활성현장 인원으로 타현장 기록을 오판정하던 문제 수정).
+      const dayTraineeCount = traineeCountOnSite(att.siteId.toString(), att.workDate);
       dayMap[att.workDate] = {
         status: calcStatus({
           hasStart:       !!att.startTime,
@@ -159,6 +187,7 @@ export async function GET(request: NextRequest) {
         isFinalClosed: att.isFinalClosed,
         logCount:     completedLogs,
         traineeCount: dayTraineeCount,
+        siteName:     siteNameById.get(att.siteId.toString()) ?? null,
       };
     }
 
@@ -233,6 +262,17 @@ export async function GET(request: NextRequest) {
           };
         }
         cur.setDate(cur.getDate() + 1);
+      }
+    }
+
+    // ★월중 전환 시 '타 배정(ENDED 포함)' 커스텀 휴무 라벨을 빈 날에만 채운다(표시 전용).
+    //  RED 합성 이후 실행 + dayMap 미존재 날에만 → 결근/기록을 덮지 않아 오억제·오귀속 없음.
+    for (const r of otherHolidayRows) {
+      if (r.date >= startDate && r.date <= endDate && !dayMap[r.date]) {
+        dayMap[r.date] = {
+          status: "HOLIDAY", attendanceId: "", startTime: null, endTime: null,
+          isFinalClosed: false, logCount: 0, traineeCount, holidayName: r.reason ?? "휴무",
+        };
       }
     }
 

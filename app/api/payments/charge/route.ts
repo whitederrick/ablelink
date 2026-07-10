@@ -57,6 +57,9 @@ export async function POST(request: NextRequest) {
   const results = [];
 
   for (const agency of agencies) {
+   // 기관 단위 예외 격리 — 계산·DB 등 예상 못한 예외가 직렬 크론 루프 전체를 죽여 이후 기관 청구를
+   //  굶기지 않도록(fetch 예외는 내부에서 이미 처리). 예외 기관만 건너뛰고 다음으로.
+   try {
     // 운영자 딜(협상가·주기) 반영. 표준 월정액은 customAmount 없을 때만.
     const { amount, cycle } = effectiveBilling(agency);
     if (!amount) continue;
@@ -131,6 +134,12 @@ export async function POST(request: NextRequest) {
       results.push({ agencyId: agency.id.toString(), status: "failed", reason: reasonMsg });
       console.error(`[charge] 결제 실패 강등: ${agency.name}`, reasonMsg);
     }
+   } catch (err) {
+      // 이 기관 처리 중 예상 못한 예외 → 격리하고 다음 기관 계속(결제일 미변경 = 다음 cron 재시도).
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[charge] 기관 처리 예외(건너뜀): ${agency.name}`, msg);
+      results.push({ agencyId: agency.id.toString(), status: "error", reason: msg });
+   }
   }
 
   return NextResponse.json({ success: true, processed: results.length, results });

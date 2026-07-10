@@ -19,6 +19,7 @@ type AttRec = {
   isGpsModified: boolean;
   status: string;
   correctionRequested?: boolean; // 관리자가 이 날 시각 보정을 요청함
+  siteName?: string | null;      // 멀티현장 구분용 현장명
 };
 
 type EditReq = {
@@ -342,6 +343,10 @@ export default function AttendanceReviewPage() {
                         </div>
                       ) : (
                         <span className="text-sm font-semibold text-slate-400">미출근</span>
+                      )}
+                      {/* 멀티현장 구분 — 같은날 오전/오후 다른 현장을 식별(현장명 있을 때만) */}
+                      {rec.siteName && (
+                        <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">{rec.siteName}</p>
                       )}
                       {rec.isGpsModified && (
                         <div className="mt-1 flex items-center gap-1">

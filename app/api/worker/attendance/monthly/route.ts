@@ -23,6 +23,7 @@ type Rec = {
   isGpsModified: boolean;
   status: string;
   correctionRequested: boolean;
+  siteName: string | null; // 멀티현장 구분용(같은날 오전/오후 다른 현장 식별)
 };
 
 export async function GET(req: NextRequest) {
@@ -43,6 +44,7 @@ export async function GET(req: NextRequest) {
     //  기록이 화면에서 사라지던 회귀 방지. 결근 합성만 오늘 활성 배정으로 스코프(아래).
     const rows = await prisma.dailyAttendance.findMany({
       where: { workerId, workDate: { gte: dateFrom, lte: dateTo } },
+      include: { site: { select: { companyName: true } } },
       orderBy: { workDate: "asc" },
     });
 
@@ -58,6 +60,7 @@ export async function GET(req: NextRequest) {
       status:        r.status,
       // 관리자가 이 날 시각 보정을 요청했는지(미확정 상태에서만 의미). 워커 검토 화면 강조용.
       correctionRequested: !!r.correctionRequestedAt && !r.payrollConfirmedAt,
+      siteName:      r.site?.companyName ?? null,
     }));
 
     // ── 결근일 합성 (캘린더 RED와 동일 규칙, 공용 lib/attendance/absentDays) ──
@@ -66,13 +69,14 @@ export async function GET(req: NextRequest) {
     const rawSel = new URL(req.url).searchParams.get("assignmentId");
     const candidates = await prisma.siteAssignment.findMany({
       where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } },
-      select: { id: true, status: true, startDate: true, endDate: true },
+      select: { id: true, status: true, startDate: true, endDate: true, site: { select: { companyName: true } } },
     });
     const lite = candidates.map((c) => ({
       id: c.id.toString(),
       status: c.status,
       startDate: getKstDateString(c.startDate),
       endDate: c.endDate ? getKstDateString(c.endDate) : null,
+      siteName: c.site?.companyName ?? null,
     }));
     const resolved = resolveWorkerAssignment({ requestedId: rawSel, allowEnded: false, assignments: lite, todayStr: getKstDateString() });
     const active = resolved.assignmentId ? lite.find((a) => a.id === resolved.assignmentId) ?? null : null;
@@ -96,7 +100,7 @@ export async function GET(req: NextRequest) {
         records.push({
           id: `absent-${key}`, workDate: key, startTime: "", endTime: "",
           isFinalClosed: false, isManagerFinalClosed: false, isGpsModified: false,
-          status: "ABSENT", correctionRequested: false,
+          status: "ABSENT", correctionRequested: false, siteName: active.siteName,
         });
       }
       records.sort((a, b) => a.workDate.localeCompare(b.workDate));
