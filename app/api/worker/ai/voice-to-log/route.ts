@@ -171,18 +171,27 @@ ${contextBlock}- 위 '현장 주요 활동'·'자주 수행한 과제'를 반영
 
     console.log("[voice-to-log] Gemini 변환 시작");
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
-      {
-        method: "POST",
-        signal: AbortSignal.timeout(20000), // 벤더 스톨 시 빠르게 실패→기존 전사(transcript) 폴백
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 400 },
-        }),
-      }
-    );
+    let geminiRes: Response;
+    try {
+      geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+        {
+          method: "POST",
+          signal: AbortSignal.timeout(20000), // 벤더 스톨 시 빠르게 실패→기존 전사(transcript) 폴백
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.4, maxOutputTokens: 400 },
+          }),
+        }
+      );
+    } catch (e) {
+      // ★타임아웃/네트워크 예외는 fetch가 throw → 아래 !ok 폴백을 건너뛰어 500이 나가던 회귀.
+      //  이미 확보한 전사(transcript)로 폴백해 재녹음 강요를 막는다(STT는 이미 성공).
+      console.error("[voice-to-log] Gemini 요청 실패(타임아웃/네트워크):", e instanceof Error ? e.name : String(e));
+      void logApiCall(workerId, "GEMINI_LOG", false);
+      return NextResponse.json({ success: true, content: transcript });
+    }
 
     if (!geminiRes.ok) {
       // 제공자 오류 body는 프롬프트(발화·훈련생명 포함) 일부를 되돌려줄 수 있어 로그에 남기지 않는다(상태코드만).

@@ -257,17 +257,37 @@ export async function POST(request: NextRequest) {
       isGpsModified: forceGpsModified,
       status: "WORKING" as const,
     };
-    const newAttendance = existingRecord
-      ? await prisma.dailyAttendance.update({ where: { id: existingRecord.id }, data: clockInData })
-      : await prisma.dailyAttendance.create({
-          data: {
-            workerId: userIdBig,
-            siteId: site.id,
-            assignmentId: assignment.id,          // ✅ 증빙
-            workDate: todayString,
-            ...clockInData,
-          },
-        });
+    let newAttendance;
+    if (existingRecord) {
+      // placeholder(일지 작성이 만든 시각 없는 행)만 채워 출근 처리. 원자 클레임으로 두 위험을 동시 차단:
+      //  ① 동시 더블탭 유령 이중성공(둘 다 update→감사 2건): actualStartTime=null 조건으로 '한 요청만' 승리.
+      //  ② 면제배정에 cron/일괄생성이 만든 DONE·확정 행 덮어쓰기(회귀): status≠DONE·미확정 조건으로 제외.
+      const claim = await prisma.dailyAttendance.updateMany({
+        where: { id: existingRecord.id, actualStartTime: null, status: { not: "DONE" }, isFinalClosed: false },
+        data: clockInData,
+      });
+      if (claim.count === 0) {
+        // 이미 다른 요청이 처리했거나(더블탭) 확정/완료된 행 → 자가치유 응답(감사 미기록).
+        return NextResponse.json(
+          { success: false, code: "ALREADY_CLOCKED_IN", message: "이미 오늘 이 현장 출근 기록이 있습니다." },
+          { status: 400 }
+        );
+      }
+      newAttendance = await prisma.dailyAttendance.findUnique({ where: { id: existingRecord.id } });
+    } else {
+      newAttendance = await prisma.dailyAttendance.create({
+        data: {
+          workerId: userIdBig,
+          siteId: site.id,
+          assignmentId: assignment.id,          // ✅ 증빙
+          workDate: todayString,
+          ...clockInData,
+        },
+      });
+    }
+    if (!newAttendance) {
+      return NextResponse.json({ success: false, message: "출근 처리 중 오류가 발생했습니다." }, { status: 500 });
+    }
 
     await audit(session, { entityType: "DailyAttendance", entityId: newAttendance.id, action: "create", summary: "출근", after: { workDate: todayString, siteId: String(site.id), status: "WORKING" } });
 

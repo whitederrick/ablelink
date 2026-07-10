@@ -11,6 +11,7 @@ import { randomInt } from "crypto";
 import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
 import { sendSimpleEmail } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { outboundAllowed } from "@/lib/outboundGuard";
 
 const RESET_PW_TEMPLATE = "KAKAO_RESET_PW_TEMPLATE_CODE";
 
@@ -70,6 +71,10 @@ export async function POST(req: NextRequest) {
     // ★임시비번을 '발송에 성공한 경우에만' 계정에 반영한다(P1). 과거엔 발송 전에 무조건 비번을 교체+세션
     //  무효화해서, 알림톡 템플릿/RESEND 미설정·발송 실패 시 옛 비번 무효+새 비번 미전달 = 계정 완전 잠김이었다.
     //  (존재 여부 비노출을 위해 응답 메시지는 성공/미발송 동일. 미발송 시엔 계정을 안 건드려 옛 비번 유지.)
+    // ★outboundGuard가 차단(dev/preview)하면 send*가 미발송인데도 예외 없이 반환한다. 그 경우 delivered=true로
+    //  계정을 바꾸면 사용자가 미전달 임시비번으로 잠긴다(이 라우트가 막으려던 바로 그 상황). 발송이 실제로
+    //  나가는 환경일 때만 delivered를 세워 '진짜 발송 성공'과 '조용한 억제'를 구분한다.
+    const canDeliver = outboundAllowed();
     let delivered = false;
     if (isEmail) {
       try {
@@ -78,7 +83,7 @@ export async function POST(req: NextRequest) {
           subject: "[Able-Link] 임시 비밀번호 안내",
           text: `안녕하세요, ${user.workerName || ""}님.\n\n임시 비밀번호: ${tempPw}\n\n로그인 후 반드시 비밀번호를 변경해주세요.\n\n- Able-Link 팀`,
         });
-        delivered = true;
+        delivered = canDeliver;
       } catch (e: any) {
         console.error("[reset-password] 이메일 발송 실패:", e?.message);
       }
@@ -93,7 +98,7 @@ export async function POST(req: NextRequest) {
           message: `안녕하세요 ${user.workerName || ""}님,\n\n요청하신 임시 비밀번호를 안내드립니다.\n\n임시 비밀번호: ${tempPw}\n\n로그인 후 반드시 비밀번호를 변경해주세요.\n\n${appUrl}/worker/login`,
           buttons: [{ name: "로그인하기", linkType: "WL", linkMo: `${appUrl}/worker/login`, linkPc: `${appUrl}/worker/login` }],
         });
-        delivered = true;
+        delivered = canDeliver;
       } catch (e) {
         console.error("[reset-password] 알림톡 발송 실패:", e);
       }

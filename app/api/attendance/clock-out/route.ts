@@ -330,10 +330,27 @@ export async function POST(request: NextRequest) {
         isGpsModified: attendance.isGpsModified || forceGpsModified,
       };
 
-      updatedAttendance = await prisma.dailyAttendance.update({
-        where: { id: attendance.id },
-        data: baseUpdateData as any,
-      });
+      if (action === "CLOCK_OUT") {
+        // ★원자 전이 WORKING→DONE: 동시 더블탭 시 두 요청이 둘 다 update→감사 '퇴근' 2건 나던 유령 이중성공 방지.
+        //  status=WORKING 조건부 updateMany로 한 요청만 승리시키고, 0건이면 이미 퇴근됨→자가치유 응답(감사 미기록).
+        const claim = await prisma.dailyAttendance.updateMany({
+          where: { id: attendance.id, status: "WORKING" },
+          data: baseUpdateData,
+        });
+        if (claim.count === 0) {
+          return NextResponse.json(
+            { success: false, code: "NO_ACTIVE_ATTENDANCE", message: "진행 중인 출근 기록을 찾을 수 없습니다. (이미 퇴근 처리되었을 수 있어요)" },
+            { status: 404 }
+          );
+        }
+        updatedAttendance = await prisma.dailyAttendance.findUnique({ where: { id: attendance.id } });
+      } else {
+        // RECONFIRM: DONE 유지 + endTime/endLoc 재기록(멱등적 재작성)
+        updatedAttendance = await prisma.dailyAttendance.update({
+          where: { id: attendance.id },
+          data: baseUpdateData,
+        });
+      }
     }
 
     const message =

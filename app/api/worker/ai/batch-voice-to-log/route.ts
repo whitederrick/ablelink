@@ -278,27 +278,41 @@ ${contextBlock}
 발화:
 "${transcript}"`;
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
-      {
-        method: "POST",
-        signal: AbortSignal.timeout(20000), // 벤더 스톨 시 빠르게 실패→기존 전사(transcript) 폴백
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 4000 },
-        }),
-      }
-    );
+    // 타임아웃/네트워크 예외 또는 !ok 시 공통으로 쓸 전사(transcript) 폴백 응답.
+    const transcriptFallback = () => {
+      const drafts = dates.flatMap(date =>
+        trainees.map(t => ({ date, traineeId: t.id, traineeName: t.name, content: transcript }))
+      );
+      return NextResponse.json({ success: true, drafts, transcript, droppedTrainees });
+    };
+
+    let geminiRes: Response;
+    try {
+      geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+        {
+          method: "POST",
+          signal: AbortSignal.timeout(20000), // 벤더 스톨 시 빠르게 실패→기존 전사(transcript) 폴백
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.4, maxOutputTokens: 4000 },
+          }),
+        }
+      );
+    } catch (e) {
+      // ★타임아웃/네트워크 예외는 fetch가 throw → 아래 !ok 폴백을 건너뛰어 500이 나가던 회귀.
+      //  이미 확보한 전사(transcript)로 각 훈련생 초안을 채워 반환(재작업 강요 방지).
+      console.error("[batch-voice-to-log] Gemini 요청 실패(타임아웃/네트워크):", e instanceof Error ? e.name : String(e));
+      void logApiCall(workerId, "GEMINI_BATCH", false);
+      return transcriptFallback();
+    }
 
     if (!geminiRes.ok) {
       // 제공자 오류 body는 프롬프트(발화·훈련생명 포함) 일부를 되돌려줄 수 있어 로그에 남기지 않는다(상태코드만).
       console.error("[batch-voice-to-log] Gemini 오류:", geminiRes.status);
       void logApiCall(workerId, "GEMINI_BATCH", false);
-      const drafts = dates.flatMap(date =>
-        trainees.map(t => ({ date, traineeId: t.id, traineeName: t.name, content: transcript }))
-      );
-      return NextResponse.json({ success: true, drafts, transcript, droppedTrainees });
+      return transcriptFallback();
     }
 
     const geminiData = await geminiRes.json();
