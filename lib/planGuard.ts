@@ -313,7 +313,9 @@ function _checkAgency(
 
 export async function startTrialIfNeeded(agencyId: bigint): Promise<void> {
   const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
-  if (!agency || agency.planType !== "FREE") return;
+  // 트라이얼은 기관당 1회만. trialStartedAt이 있으면 이미 소진 → 재발급 금지(무한 무료 PRO 방지).
+  //  (유료 전환 시에도 trialStartedAt을 지우지 않아 소진 이력이 영구 보존됨 — payments/billing 참조)
+  if (!agency || agency.planType !== "FREE" || agency.trialStartedAt) return;
 
   const now = new Date();
   const trialDays = await getConfigNumber("TRIAL_DAYS");

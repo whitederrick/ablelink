@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
         subscribedAt: now,
         nextBillingAt,
         subscriptionCanceledAt: null,
-        trialStartedAt: null,
+        // trialStartedAt은 지우지 않는다 — '트라이얼 1회 소진' 이력을 영구 보존해 취소→재트라이얼 남용 방지.
         trialEndsAt: null,
         maxWorkers: limits.maxWorkers,
         maxSites: limits.maxSites,

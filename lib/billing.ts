@@ -36,14 +36,20 @@ export function effectiveBilling(agency: {
   return { amount, cycle };
 }
 
-// 결제 orderId = agency × 결제일(KST yyyymmdd) × plan.
-//  plan 포함: 같은 날 플랜을 바꿔도 새 orderId로 실제 결제(무료 상향 방지, #4).
-//  ★날짜(월 아님) 기준: 월 기준이면 결제일 KST(UTC+9h) 변환이 말일±UTC창에서 연속 두 주기를 같은 달로
-//   접어 orderId가 충돌 → 둘째 청구가 ALREADY_PROCESSED로 스킵돼 한 주기 무료가 됨(B). 결제일은 주기마다
-//   ~한 달 차이라 날짜 기준이면 절대 충돌 안 함. 같은 결제일 재시도는 여전히 동일 orderId → Toss 멱등 복구.
-export function buildBillingOrderId(agencyId: string | number | bigint, at: Date, planType: string): string {
+// 결제 orderId = agency × 결제기간(KST) × plan.  plan 포함: 같은 기간 플랜 변경도 새 orderId(무료 상향 방지, #4).
+//  granularity — 공유 함수의 두 사용처가 멱등 요구가 다르다:
+//   · "month"(수동 초기구독): anchor가 재시도 wall-clock(now)이라 같은 '달' 재시도는 동일 orderId여야
+//     Toss 멱등으로 이중청구가 막힌다(초기구독은 1회성이라 '연속 두 주기' 월충돌이 없음).
+//     ★일(day) 기준으로 하면 재시도가 자정을 넘길 때 orderId가 바뀌어 카드 이중청구됨(3차 감사 회귀).
+//   · "day"(cron 반복결제): anchor가 안정된 nextBillingAt이라 재시도는 같은 날→동일 orderId(멱등 유지)이고,
+//     연속 두 주기는 ~한 달 차이라 날짜가 달라 월충돌(bug B)이 없다.
+export function buildBillingOrderId(
+  agencyId: string | number | bigint, at: Date, planType: string, granularity: "month" | "day" = "month",
+): string {
   const kst = new Date(at.getTime() + 9 * 3600 * 1000);
-  const period = `${kst.getUTCFullYear()}${String(kst.getUTCMonth() + 1).padStart(2, "0")}${String(kst.getUTCDate()).padStart(2, "0")}`;
+  const y = kst.getUTCFullYear();
+  const mo = String(kst.getUTCMonth() + 1).padStart(2, "0");
+  const period = granularity === "day" ? `${y}${mo}${String(kst.getUTCDate()).padStart(2, "0")}` : `${y}${mo}`;
   return `ablelink_${agencyId}_${period}_${planType}`;
 }
 

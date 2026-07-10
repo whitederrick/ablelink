@@ -7,7 +7,6 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
 import { requireManagerSession } from "@/lib/managerScope";
-import { getConfigNumber } from "@/lib/systemConfig";
 
 export async function PATCH(
   request: NextRequest,
@@ -19,13 +18,13 @@ export async function PATCH(
     const { planType } = await request.json();
     const { agencyId: agencyIdStr } = await params;
 
-    // A(P1): 매니저 자기스코프 라우트에서 유료 티어 승격 금지 — 유료 전환은 반드시 결제 경로
-    //  (/api/payments/billing, Toss 실결제 후에만 planType 상향)로만. 이 라우트는 무료 전환(FREE 다운그레이드·
-    //  TRIAL 시작)만 허용한다. (STARTER/STANDARD/PRO를 여기서 허용하면 매니저가 무결제로 자기 기관을 승격 가능)
-    const VALID_PLAN_TYPES = ["FREE", "TRIAL"];
-    if (!planType || !VALID_PLAN_TYPES.includes(planType)) {
+    // A(P1)+3차: 매니저 자기스코프 라우트는 무료 다운그레이드(FREE)만 허용.
+    //  · 유료 티어 승격 = 반드시 결제 경로(/api/payments/billing, Toss 실결제 후에만 상향).
+    //  · TRIAL 시작도 여기서 금지 — 트라이얼은 startTrialIfNeeded(FREE·미소진 1회 가드)만 부여한다.
+    //    (여기서 TRIAL을 허용하면 매니저가 자기 기관 트라이얼을 무한 갱신해 무결제 PRO 남용 가능)
+    if (planType !== "FREE") {
       return NextResponse.json(
-        { success: false, message: "유료 플랜 변경은 결제(구독)를 통해서만 가능합니다." },
+        { success: false, message: "유료 플랜·트라이얼 변경은 결제/자동 트라이얼을 통해서만 가능합니다." },
         { status: 400 },
       );
     }
@@ -35,25 +34,11 @@ export async function PATCH(
     if (scope.agencyId !== agencyId) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
-    const limits = PLAN_LIMITS[planType] || { maxWorkers: 0, maxSites: 0 };
-    const now = new Date();
-
-    const updateData: any = {
-      planType,
-      maxWorkers: limits.maxWorkers,
-      maxSites: limits.maxSites,
-    };
-
-    // TRIAL 시작 처리
-    if (planType === "TRIAL") {
-      const trialDays = await getConfigNumber("TRIAL_DAYS");
-      updateData.trialStartedAt = now;
-      updateData.trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
-    }
+    const limits = PLAN_LIMITS.FREE || { maxWorkers: 0, maxSites: 0 };
 
     await prisma.agency.update({
       where: { id: agencyId },
-      data: updateData,
+      data: { planType: "FREE", maxWorkers: limits.maxWorkers, maxSites: limits.maxSites },
     });
 
     return NextResponse.json({ success: true });
