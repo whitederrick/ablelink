@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel } from "@/lib/billing";
 import { outboundAllowed } from "@/lib/outboundGuard";
 import { PAID_AGENCY_PLANS } from "@/lib/plans";
+import { decideChargeOutcome, type ChargeOutcome } from "@/lib/payments/chargeDecision";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const CRON_SECRET = process.env.CRON_SECRET || "";
@@ -56,23 +57,27 @@ export async function POST(request: NextRequest) {
   const results = [];
 
   for (const agency of agencies) {
+    // 운영자 딜(협상가·주기) 반영. 표준 월정액은 customAmount 없을 때만.
+    const { amount, cycle } = effectiveBilling(agency);
+    if (!amount) continue;
+
+    const currentBillingAt = new Date(agency.nextBillingAt!);
+    const nextBillingAt = advanceBilling(currentBillingAt, cycle);
+    const daysOverdue = Math.floor((today.getTime() - currentBillingAt.getTime()) / MS_DAY);
+
+    // 결제 대상 월(KST) 기준 결정적 orderId — 같은 달 재시도 시 Toss가 중복청구를 거부(멱등성)
+    const kst = new Date(currentBillingAt.getTime() + 9 * 3600 * 1000);
+    const period = `${kst.getUTCFullYear()}${String(kst.getUTCMonth() + 1).padStart(2, "0")}`;
+    const orderId = `ablelink_${agency.id}_${period}`;
+
+    // 시도 결과를 불확정(예외)/확정(HTTP)으로 분류. 타임아웃·네트워크 예외는 '결제 여부 모름'이므로
+    //  절대 강등/빌링키 삭제하지 않는다(decideChargeOutcome). 카드 거절 등 4xx 응답만 확정 실패로 강등.
+    let outcome: ChargeOutcome;
+    let reasonMsg = "";
     try {
-      // 운영자 딜(협상가·주기) 반영. 표준 월정액은 customAmount 없을 때만.
-      const { amount, cycle } = effectiveBilling(agency);
-      if (!amount) continue;
-
-      const currentBillingAt = new Date(agency.nextBillingAt!);
-      const nextBillingAt = advanceBilling(currentBillingAt, cycle);
-      const daysOverdue = Math.floor((today.getTime() - currentBillingAt.getTime()) / MS_DAY);
-
-      // 결제 대상 월(KST) 기준 결정적 orderId — 같은 달 재시도 시 Toss가 중복청구를 거부(멱등성)
-      const kst = new Date(currentBillingAt.getTime() + 9 * 3600 * 1000);
-      const period = `${kst.getUTCFullYear()}${String(kst.getUTCMonth() + 1).padStart(2, "0")}`;
-      const orderId = `ablelink_${agency.id}_${period}`;
-
       const res = await fetch(`${TOSS_API}/billing/${agency.tossBillingKey}`, {
         method: "POST",
-        // 벤더 스톨이 직렬 크론 루프 전체를 막아 이후 기관 청구를 굶기지 않도록 타임아웃(AbortError=transient 처리).
+        // 벤더 스톨이 직렬 크론 루프 전체를 막아 이후 기관 청구를 굶기지 않도록 타임아웃(예외=불확정 처리).
         signal: AbortSignal.timeout(10000),
         headers: {
           Authorization: tossAuth(),
@@ -86,54 +91,43 @@ export async function POST(request: NextRequest) {
           taxFreeAmount: 0,
         }),
       });
-
-      const data = await res.json();
-
+      const data: { code?: string; message?: string } = await res.json().catch(() => ({}));
       if (res.ok) {
-        // 결제 성공 → 다음 결제일 업데이트 (현재 결제일이 그대로일 때만 = 동시 실행 경합 방지)
-        await prisma.agency.updateMany({
-          where: { id: agency.id, nextBillingAt: currentBillingAt },
-          data: { nextBillingAt },
-        });
-        results.push({ agencyId: agency.id.toString(), status: "success", amount });
-        console.log(`[charge] 결제 성공: ${agency.name} ${amount}원`);
+        outcome = { kind: "success" };
       } else if (data?.code === "ALREADY_PROCESSED_PAYMENT") {
-        // 이미 이 orderId로 결제 완료됨(직전 성공 후 크래시 재시도). 성공으로 간주 — 강등 금지.
-        await prisma.agency.updateMany({
-          where: { id: agency.id, nextBillingAt: currentBillingAt },
-          data: { nextBillingAt },
-        });
-        results.push({ agencyId: agency.id.toString(), status: "success", amount, reason: "already_processed" });
-        console.warn(`[charge] 중복 orderId=이미 결제됨, 성공 간주: ${agency.name}`);
+        outcome = { kind: "already_processed" };
       } else {
-        // 일시 오류(토스 점검/혼잡 = 5xx·429)는 유예기간 내 재시도, 그 외(카드 거절 등)·유예 초과 시에만 강등
-        const transient = res.status >= 500 || res.status === 429;
-        if (transient && daysOverdue < GRACE_DAYS) {
-          // nextBillingAt 유지 → 다음 cron(내일)에 자동 재시도
-          results.push({ agencyId: agency.id.toString(), status: "retry", reason: data.message });
-          console.warn(`[charge] 일시 오류, 재시도(${daysOverdue + 1}/${GRACE_DAYS}일): ${agency.name}`, data.message);
-        } else {
-          await prisma.agency.updateMany({
-            where: { id: agency.id, nextBillingAt: currentBillingAt },
-            data: { planType: "FREE", tossBillingKey: null, nextBillingAt: null },
-          });
-          results.push({ agencyId: agency.id.toString(), status: "failed", reason: data.message });
-          console.error(`[charge] 결제 실패 강등: ${agency.name}`, data.message);
-        }
+        outcome = { kind: "http_error", status: res.status };
+        reasonMsg = data?.message ?? `HTTP ${res.status}`;
       }
     } catch (err: any) {
-      // 네트워크/예외 = 일시 오류로 간주 → 유예 초과 시에만 강등, 아니면 다음 cron 재시도
-      const billingAt = new Date(agency.nextBillingAt!);
-      const overdue = Math.floor((today.getTime() - billingAt.getTime()) / MS_DAY);
-      if (overdue >= GRACE_DAYS) {
-        await prisma.agency.updateMany({
-          where: { id: agency.id, nextBillingAt: billingAt },
-          data: { planType: "FREE", tossBillingKey: null, nextBillingAt: null },
-        });
-        results.push({ agencyId: agency.id.toString(), status: "failed", reason: `유예초과: ${err.message}` });
-      } else {
-        results.push({ agencyId: agency.id.toString(), status: "retry", reason: err.message });
-      }
+      const isTimeout = err?.name === "TimeoutError" || err?.name === "AbortError";
+      outcome = { kind: "exception", isTimeout };
+      reasonMsg = `${isTimeout ? "타임아웃(불확정)" : "네트워크 오류"}: ${err?.message ?? err}`;
+    }
+
+    const decision = decideChargeOutcome(outcome, daysOverdue, GRACE_DAYS);
+    if (decision.action === "advance") {
+      // 결제 성공/멱등 → 다음 결제일로 진행(현재 결제일 그대로일 때만 = 동시 실행 경합 방지)
+      await prisma.agency.updateMany({
+        where: { id: agency.id, nextBillingAt: currentBillingAt },
+        data: { nextBillingAt },
+      });
+      const already = outcome.kind === "already_processed";
+      results.push({ agencyId: agency.id.toString(), status: "success", amount, ...(already ? { reason: "already_processed" } : {}) });
+      console.log(`[charge] 결제 ${already ? "중복=성공간주" : "성공"}: ${agency.name} ${amount}원`);
+    } else if (decision.action === "retry") {
+      // nextBillingAt 유지 → 다음 cron 재시도(빌링키 보존 → 멱등 복구 경로 유지)
+      results.push({ agencyId: agency.id.toString(), status: "retry", reason: reasonMsg });
+      console.warn(`[charge] 재시도(연체 ${daysOverdue}일/유예 ${GRACE_DAYS}·또는 불확정): ${agency.name}`, reasonMsg);
+    } else {
+      // 확정 실패(카드 거절 등)·유예 초과 → 강등. wipeBillingKey일 때만 키 삭제(재등록 유도).
+      await prisma.agency.updateMany({
+        where: { id: agency.id, nextBillingAt: currentBillingAt },
+        data: { planType: "FREE", nextBillingAt: null, ...(decision.wipeBillingKey ? { tossBillingKey: null } : {}) },
+      });
+      results.push({ agencyId: agency.id.toString(), status: "failed", reason: reasonMsg });
+      console.error(`[charge] 결제 실패 강등: ${agency.name}`, reasonMsg);
     }
   }
 
