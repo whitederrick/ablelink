@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { effectiveTrainingType } from "@/lib/serviceStep";
 import { getKstDateString } from "@/lib/time";
+import { resolveWorkerAssignment } from "@/lib/worker/assignmentResolve";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
@@ -54,19 +55,27 @@ export async function GET(request: NextRequest) {
     const endDay    = new Date(year, month, 0).getDate();
     const endDate   = `${year}-${pad2(month)}-${pad2(endDay)}`;
 
-    // ★멀티현장: 선택 배정(쿠키/파라미터 assignmentId, 소유+ACTIVE)으로 스코프하고, 무효/미지정이면 최신 활성으로
-    //  폴백. 과거엔 항상 최신 ACTIVE 1개로 잡아 선택한 현장과 다른 현장 기준으로 렌더됐다.
+    // ★멀티현장: 선택 배정을 monthly와 동일한 규칙(resolveWorkerAssignment, 오늘 활성만·낡은 쿠키면 최신 활성
+    //  폴백)으로 해석 — 두 근태 화면이 같은 쿠키로 서로 다른 배정 기준 결근을 그리던 불일치 제거.
     const rawSel = searchParams.get("assignmentId");
-    let selId: bigint | null = null;
-    try { selId = rawSel ? BigInt(rawSel) : null; } catch { selId = null; }
-    let assignment = selId != null
-      ? await prisma.siteAssignment.findFirst({ where: { id: selId, workerId, status: "ACTIVE" }, include: { site: true } })
+    const candidates = await prisma.siteAssignment.findMany({
+      where: { workerId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] } },
+      select: { id: true, status: true, startDate: true, endDate: true },
+    });
+    const resolvedSel = resolveWorkerAssignment({
+      requestedId: rawSel,
+      allowEnded: false,
+      assignments: candidates.map((c) => ({
+        id: c.id.toString(),
+        status: c.status,
+        startDate: getKstDateString(c.startDate),
+        endDate: c.endDate ? getKstDateString(c.endDate) : null,
+      })),
+      todayStr: getKstDateString(),
+    });
+    const assignment = resolvedSel.assignmentId
+      ? await prisma.siteAssignment.findFirst({ where: { id: BigInt(resolvedSel.assignmentId), workerId }, include: { site: true } })
       : null;
-    if (!assignment) {
-      assignment = await prisma.siteAssignment.findFirst({
-        where: { workerId, status: "ACTIVE" }, include: { site: true }, orderBy: { startDate: "desc" },
-      });
-    }
 
     // ★해당 월 출근 기록 = workerId 전체(그 달 모든 배정, ENDED 포함) — 월중 현장전환 시 이전(종료) 배정
     //  기록이 캘린더에서 사라지던 회귀 방지. 같은 날 다중현장 충돌은 아래 dayMap에서 활성 배정 우선으로 해소.
@@ -198,13 +207,21 @@ export async function GET(request: NextRequest) {
       const redFrom = assignStart > startDate ? assignStart : startDate;
       const redTo   = assignEnd   < todayStr  ? assignEnd   : todayStr; // 오늘 포함, 미래 제외
 
+      // ★결근 억제 기준 = '선택(활성) 배정'의 출근기록일자만. 표시는 workerId 전체지만, 같은날 타현장(동시활성)
+      //  기록이 선택현장의 실제 결근을 가리지 않도록 활성 배정 기록만으로 판정하고, 결근일이면 RED로 덮어쓴다.
+      const activeRecordDates = new Set(
+        activeAsgId ? attendances.filter(a => a.assignmentId.toString() === activeAsgId).map(a => a.workDate) : [],
+      );
+
       // 날짜 순회
       const cur = new Date(redFrom + "T00:00:00");
       const end = new Date(redTo   + "T00:00:00");
       while (cur <= end) {
         const key = cur.toISOString().slice(0, 10);
-        // 해당 월 범위 내이고 아직 dayMap에 없는 날짜만 RED로 (휴무일 제외)
-        if (key >= startDate && key <= endDate && !dayMap[key] && !allHolidays[key]) {
+        const dow = cur.getDay();
+        const isWeekend = dow === 0 || dow === 6;
+        // 활성 배정 기간 내 · 평일 · 휴무 아님 · 활성 배정 출근기록 없는 날 → RED(선택현장 결근).
+        if (key >= startDate && key <= endDate && !isWeekend && !allHolidays[key] && !activeRecordDates.has(key)) {
           dayMap[key] = {
             status:        "RED",
             attendanceId:  "",

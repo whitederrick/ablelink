@@ -97,8 +97,10 @@ export async function POST(request: NextRequest) {
       } else if (data?.code === "ALREADY_PROCESSED_PAYMENT") {
         outcome = { kind: "already_processed" };
       } else {
-        outcome = { kind: "http_error", status: res.status };
-        reasonMsg = data?.message ?? `HTTP ${res.status}`;
+        // parsed = Toss 에러 본문(code)이 실제로 왔는가. 비-JSON/빈 본문(프록시·WAF 4xx)이면 false →
+        //  확정 실패 아님(불확정)으로 취급해 즉시 강등+키삭제를 피한다.
+        outcome = { kind: "http_error", status: res.status, parsed: !!data?.code };
+        reasonMsg = data?.message ?? `HTTP ${res.status}${data?.code ? "" : "(본문 없음)"}`;
       }
     } catch (err: any) {
       const isTimeout = err?.name === "TimeoutError" || err?.name === "AbortError";

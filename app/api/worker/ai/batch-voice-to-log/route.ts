@@ -315,7 +315,16 @@ ${contextBlock}
       return transcriptFallback();
     }
 
-    const geminiData = await geminiRes.json();
+    // 본문 읽기(json)도 폴백 범위 — 200 후 스트림 중단/타임아웃으로 .json()이 throw해도 하드 500 대신
+    //  transcript 폴백(초안 통째 손실 방지).
+    let geminiData: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    try {
+      geminiData = await geminiRes.json();
+    } catch (e) {
+      console.error("[batch-voice-to-log] Gemini 본문 읽기 실패:", e instanceof Error ? e.name : String(e));
+      void logApiCall(workerId, "GEMINI_BATCH", false);
+      return transcriptFallback();
+    }
     const rawText: string = geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
 
     // JSON 파싱 (마크다운 코드블록 제거)

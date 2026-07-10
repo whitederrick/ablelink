@@ -200,7 +200,16 @@ ${contextBlock}- 위 '현장 주요 활동'·'자주 수행한 과제'를 반영
       return NextResponse.json({ success: true, content: transcript });
     }
 
-    const geminiData = await geminiRes.json();
+    // 본문 읽기(json)도 폴백 범위에 포함 — 200 후 스트림 중단/타임아웃으로 .json()이 throw해도
+    //  하드 500 대신 이미 확보한 전사(transcript)로 폴백(재녹음 강요 방지).
+    let geminiData: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    try {
+      geminiData = await geminiRes.json();
+    } catch (e) {
+      console.error("[voice-to-log] Gemini 본문 읽기 실패:", e instanceof Error ? e.name : String(e));
+      void logApiCall(workerId, "GEMINI_LOG", false);
+      return NextResponse.json({ success: true, content: transcript });
+    }
     const aiContent =
       geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || transcript;
 

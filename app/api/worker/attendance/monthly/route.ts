@@ -87,7 +87,9 @@ export async function GET(req: NextRequest) {
         assignStart: active.startDate,
         assignEnd: active.endDate,
         todayStr: getKstDateString(),
-        existingDates: new Set(records.map(r => r.workDate)),
+        // ★결근 억제 기준 = '활성 배정'의 출근기록일자만(표시는 workerId 전체). 같은날 타현장(동시활성) 기록이
+        //  선택현장의 실제 결근을 가리지 않도록 활성 배정 rows로만 existingDates 구성.
+        existingDates: new Set(rows.filter(r => r.assignmentId?.toString() === active.id).map(r => r.workDate)),
         customHolidays: new Set(customRows.map(r => r.date)),
       });
       for (const key of absents) {

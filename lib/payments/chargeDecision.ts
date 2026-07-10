@@ -11,7 +11,9 @@
 export type ChargeOutcome =
   | { kind: "success" } // res.ok
   | { kind: "already_processed" } // 중복 orderId=이미 결제됨(직전 성공 후 크래시 재시도)
-  | { kind: "http_error"; status: number } // Toss가 응답은 줬으나 실패(4xx/5xx)
+  // Toss가 응답은 줬으나 실패(4xx/5xx). parsed=Toss 에러 본문(code)이 실제로 파싱됐는가.
+  //  parsed=false(비-JSON/빈 본문)면 프록시/WAF발 응답일 수 있어 '확정 실패' 아님(불확정 취급).
+  | { kind: "http_error"; status: number; parsed: boolean }
   | { kind: "exception"; isTimeout: boolean }; // fetch 예외(타임아웃/네트워크) — 결과 불확정
 
 export interface ChargeDecision {
@@ -36,11 +38,16 @@ export function decideChargeOutcome(
       return { action: "retry", wipeBillingKey: false };
 
     case "http_error": {
-      // 5xx·429 = 일시 오류 → 유예 내 재시도. 그 외(카드 거절 등)·유예 초과 → 확정 강등.
+      // 5xx·429 = 일시 오류 → 유예 내 재시도, 초과 시 강등.
       const transient = outcome.status >= 500 || outcome.status === 429;
-      if (transient && daysOverdue < graceDays) {
-        return { action: "retry", wipeBillingKey: false };
+      if (transient) {
+        return daysOverdue < graceDays
+          ? { action: "retry", wipeBillingKey: false }
+          : { action: "downgrade", wipeBillingKey: true };
       }
+      // 4xx(비-transient): Toss 에러 본문(code)이 파싱된 '확정 실패(카드 거절 등)'만 즉시 강등+키삭제.
+      //  비-JSON/빈 본문 4xx(프록시/WAF 등)는 결제 도달 여부 불확정 → 재시도(키 보존).
+      if (!outcome.parsed) return { action: "retry", wipeBillingKey: false };
       return { action: "downgrade", wipeBillingKey: true };
     }
   }
