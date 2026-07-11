@@ -28,7 +28,8 @@ export async function PATCH(
         return NextResponse.json({ success: false, message: "비밀번호는 8자 이상이어야 합니다." }, { status: 400 });
       }
       const hashedPassword = await bcrypt.hash(newPassword, 12);
-      await prisma.worker.update({ where: { id: user.id }, data: { password: hashedPassword } });
+      // ★비밀번호 초기화 = 전 세션 로그아웃(sv+1). 셀프 재설정(reset-password)과 동일 정책(P2-16).
+      await prisma.worker.update({ where: { id: user.id }, data: { password: hashedPassword, sessionVersion: { increment: 1 } } });
       await audit(scope, { entityType: "Worker", entityId: user.id, action: "update", summary: "비밀번호 초기화" });
       return NextResponse.json({ success: true, message: "비밀번호가 초기화되었습니다." });
     }

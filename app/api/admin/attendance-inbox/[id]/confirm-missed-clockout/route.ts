@@ -33,7 +33,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ success: false, message: "이미 확정된 출근 기록입니다." }, { status: 409 });
     }
     const today = getKstDateString();
-    if (att.status !== "WORKING" || att.workDate >= today) {
+    // ★실제 출근(actualStartTime)한 기록만 확정 가능. 워커 late-clockout(38e1afd)과 동일 불변식:
+    //  출근 없이 일지만 쓴 placeholder(actualStartTime=null)를 확정하면 startTime=null인 채 급여에
+    //  '유령 근무일'로 집계된다(workedDays +1 → 과지급). 팀 설계상 '시각 없는 행은 isFinalClosed 금지'.
+    if (att.status !== "WORKING" || att.workDate >= today || !att.actualStartTime) {
       return NextResponse.json({ success: false, message: "퇴근 미실행 상태의 기록이 아닙니다." }, { status: 409 });
     }
 

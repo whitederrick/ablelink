@@ -120,6 +120,9 @@ export async function PATCH(
       tempPassword         = generateTempPassword();
       updates.password     = await hash(tempPassword, 12);
       updates.isTemporary  = true;
+      // ★비밀번호 초기화 = 전 세션 로그아웃(셀프 재설정 reset-password와 동일 정책, P2-16).
+      //  sv를 올리지 않으면 기존 발급 JWT(sv 일치)가 계속 통과 → 초기화해도 세션 회수 안 됨.
+      updates.sessionVersion = { increment: 1 };
     }
 
     if (Object.keys(updates).length === 0) {

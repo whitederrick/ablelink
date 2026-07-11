@@ -256,9 +256,10 @@ export async function GET(req: Request) {
         hasPendingEdit: (r.editRequests?.length ?? 0) > 0,
         payrollConfirmedAt: r.payrollConfirmedAt ? r.payrollConfirmedAt.toISOString() : null,
         correctionRequestedAt: r.correctionRequestedAt ? r.correctionRequestedAt.toISOString() : null,
-        // 퇴근 미실행(보정대기): 과거 날짜 + 아직 WORKING(퇴근 안 누름) + 미확정.
+        // 퇴근 미실행(보정대기): 과거 날짜 + 아직 WORKING(퇴근 안 누름) + 미확정 + 실제 출근함.
         // 직무지도원이 끝내 처리 안 하면 매니저가 표준시각으로 확정 가능.
-        missedClockOut: r.status === "WORKING" && r.workDate < today && !r.isFinalClosed,
+        // ★actualStartTime 필수: 출근 없이 일지만 쓴 placeholder는 '확정' 버튼 노출 금지(유령 근무일 방지).
+        missedClockOut: r.status === "WORKING" && r.workDate < today && !r.isFinalClosed && !!r.actualStartTime,
         seriousLateMin: itemThreshold,
         updatedAt: (upserted.updatedAt ?? upserted.createdAt).toISOString(),
         timeline: (((upserted as any).events ?? []) as any[]).map((e) => ({

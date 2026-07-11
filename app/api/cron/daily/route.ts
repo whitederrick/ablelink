@@ -203,11 +203,19 @@ export async function GET(req: NextRequest) {
         }),
         prisma.dailyAttendance.findMany({
           where: { assignmentId: { in: asgIds }, workDate: yesterday },
-          select: { assignmentId: true },
+          select: { id: true, assignmentId: true, startTime: true, isFinalClosed: true },
         }),
       ]);
-      const skipSet = new Set([...holRows, ...existRows].map((r) => r.assignmentId.toString()));
-      const toCreate = exemptAssignments.filter((a) => !skipSet.has(a.id.toString()));
+      const asgById = new Map(exemptAssignments.map((a) => [a.id.toString(), a]));
+      const holSet = new Set(holRows.map((r) => r.assignmentId.toString()));
+      const existSet = new Set(existRows.map((r) => r.assignmentId.toString()));
+      // ★시각 없는 placeholder(워커가 clock-in 없이 일지만 써서 생긴 행: startTime=null·미확정)는
+      //  스킵하지 말고 '채택'한다. 스킵하면 확정행이 영영 안 생겨 그 날이 급여에서 조용히 누락된다
+      //  (면제 워커 과소지급). 공휴일/커스텀휴무(holSet)면 채택 안 함=미지급 유지. 이미 확정됐거나
+      //  시각 있는 행은 손대지 않는다(실제 clock-in 등).
+      const toAdopt = existRows.filter((r) => !r.isFinalClosed && !r.startTime && !holSet.has(r.assignmentId.toString()));
+      // 아예 출근행이 없는 배정 = 신규 생성(휴무 제외).
+      const toCreate = exemptAssignments.filter((a) => !holSet.has(a.id.toString()) && !existSet.has(a.id.toString()));
       if (toCreate.length) {
         await prisma.dailyAttendance.createMany({
           data: toCreate.map((a) => {
@@ -226,8 +234,32 @@ export async function GET(req: NextRequest) {
           }),
           skipDuplicates: true, // (assignmentId,workDate) unique — 동시 실행 안전
         });
-        exemptCreated = toCreate.length;
-        detail.exemptCreated = toCreate.map((a) => ({ assignmentId: String(a.id), workerId: String(a.workerId), siteId: String(a.siteId), date: yesterday }));
+      }
+      // placeholder 채택: 시각을 채워 확정(면제 표준시각). 건수 적음(당일 일지 먼저 쓴 면제 워커만).
+      for (const r of toAdopt) {
+        const a = asgById.get(r.assignmentId.toString());
+        if (!a) continue;
+        const times = computeWorkTimes(a.workType, a.commuteGuidanceIncluded, a.customWorkStart, a.customWorkEnd);
+        await prisma.dailyAttendance.update({
+          where: { id: r.id },
+          data: {
+            startTime: kstWallTimeToInstant(yesterday, times.start),
+            endTime: kstWallTimeToInstant(yesterday, times.end),
+            status: "DONE",
+            isFinalClosed: true,
+            finalizedAt: now,
+          },
+        });
+      }
+      if (toCreate.length || toAdopt.length) {
+        exemptCreated = toCreate.length + toAdopt.length;
+        detail.exemptCreated = [
+          ...toCreate.map((a) => ({ assignmentId: String(a.id), workerId: String(a.workerId), siteId: String(a.siteId), date: yesterday })),
+          ...toAdopt.map((r) => {
+            const a = asgById.get(r.assignmentId.toString());
+            return { assignmentId: String(r.assignmentId), workerId: String(a?.workerId ?? ""), siteId: String(a?.siteId ?? ""), date: yesterday, adopted: true };
+          }),
+        ];
       }
     }
   } catch (e: any) { errors.push(`면제출근부: ${e.message}`); }
