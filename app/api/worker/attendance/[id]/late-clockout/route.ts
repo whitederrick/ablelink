@@ -59,9 +59,12 @@ export async function POST(
         { status: 409 },
       );
     }
-    // 퇴근 미실행 = 과거 날짜 + 아직 WORKING(퇴근 안 누름)
+    // 퇴근 미실행 = 과거 날짜 + 아직 WORKING(퇴근 안 누름) + 실제 출근(actualStartTime)한 기록만.
+    //  ★일지 작성이 만든 placeholder(actualStartTime=null)는 출근한 적이 없으므로 퇴근 처리 대상 아님.
+    //   이를 확정(DONE·isFinalClosed)하면 startTime=null인 채 급여에 '유령 근무일'로 집계된다
+    //   (workedDays +1 → DAILY/MONTHLY 과지급·4대보험 일수 부풀림). homeSummary missedRows와 동일 불변식.
     const today = getKstDateString();
-    if (attendance.status !== "WORKING" || attendance.workDate >= today) {
+    if (attendance.status !== "WORKING" || attendance.workDate >= today || !attendance.actualStartTime) {
       return NextResponse.json(
         { success: false, message: "퇴근 미실행 상태의 기록이 아닙니다." },
         { status: 409 },

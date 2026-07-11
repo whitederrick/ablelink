@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
     } else if (docType === "TRAINING_DAILY_LOG") {
       const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const logs = trainee ? await prisma.traineeLog.findMany({
-        where:{ writerId:workerId, traineeId:trainee.id, trainingType:{in:["PRE","FIELD"]}, attendance:{workDate:{gte:start,lte:end}} },
+        where:{ writerId:workerId, traineeId:trainee.id, trainingType:{in:["PRE","FIELD"]}, attendance:{siteId:site.id,workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
       }) : [];
       payload = trainingDailyLogPayload({
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
     } else if (docType === "ADAPTATION_DAILY_LOG") {
       const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const logs = trainee ? await prisma.traineeLog.findMany({
-        where:{ writerId:workerId, traineeId:trainee.id, trainingType:"ADAPTATION", attendance:{workDate:{gte:start,lte:end}} },
+        where:{ writerId:workerId, traineeId:trainee.id, trainingType:"ADAPTATION", attendance:{siteId:site.id,workDate:{gte:start,lte:end}} },
         include:{ attendance:true, tasks:true }, orderBy:{ attendance:{workDate:"asc"} },
       }) : [];
       payload = adaptationDailyLogPayload({
@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
       payload = adaptationFinalEvalPayload({
         traineeName: trainee?.name || "", companyName: site.companyName,
         start, end, ev,
-        workedDays: await prisma.traineeLog.count({ where: { writerId: workerId, traineeId: trainee.id, trainingType: "ADAPTATION", attendance: { workDate: { gte: start, lte: end } } } }),
+        workedDays: await prisma.traineeLog.count({ where: { writerId: workerId, traineeId: trainee.id, trainingType: "ADAPTATION", attendance: { siteId: site.id, workDate: { gte: start, lte: end } } } }),
         signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
       });
     } else {
