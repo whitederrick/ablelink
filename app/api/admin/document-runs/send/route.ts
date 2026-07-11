@@ -17,6 +17,7 @@ import { injectManagerSignature } from "@/lib/docs/managerSig";
 import { missingSignatureLabels } from "@/lib/docs/requiredSignatures";
 import { sendEmailWithAttachments } from "@/lib/email";
 import { logAccess } from "@/lib/accessLog";
+import { audit } from "@/lib/audit";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { checkRateLimit, resetRateLimit } from "@/lib/rateLimit";
 import { createHash } from "crypto";
@@ -213,6 +214,9 @@ export async function POST(req: NextRequest) {
         where: { id: { in: sentRunIds }, agencyId: scope.agencyId },
         data: { govStatus: "SUBMITTED", govSubmittedAt: new Date(), govSubmitCount: { increment: 1 } },
       });
+      // ★자동 공단제출(SUBMITTED) 전이도 AuditEvent 기록 — 수동 gov-status 경로와 통일(8차).
+      //  가장 민감한 PII 제3자 제공 상태전이라 감사추적 일관성 필요(AccessLog는 아래에서 별도 기록).
+      await audit(scope, { entityType: "DocumentRun", action: "update", summary: `공단 발송(제출완료): ${sentRunIds.length}건` });
     }
 
     // M10: 개인정보 접속기록(안전성확보조치 제8조) — 공단(제3자) 발송은 최다·최민감 PII 제공 지점인데

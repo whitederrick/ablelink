@@ -124,7 +124,13 @@ export async function computePayrollItems(
       orderBy: { effectiveFrom: "desc" },
     }),
     prisma.dailyAttendance.findMany({
-      where: { workerId: { in: userIds }, workDate: { gte: periodStart, lte: periodEnd }, isFinalClosed: true, assignment: { agencyId } },
+      // ★근본 chokepoint(placeholder 유령 근무일 차단): isFinalClosed:true여도 startTime 없는 행은
+      //  '출근한 적 없는' placeholder(logs/save 생성)다. 6~8차 감사서 여러 finalize 경로(late-clockout·
+      //  매니저확정·home자동마감·worker confirm·admin PATCH)가 이를 확정시켜 workedDays를 부풀렸다(과지급).
+      //  write측 가드는 경로마다 새어 whack-a-mole → 여기서 단일 차단. 정상 근무일은 startTime이 항상 있음
+      //  (clock-in·cron면제·bulk·confirm-month 전부). ※actualStartTime 아닌 startTime 기준 —
+      //  면제/일괄 정상행(actualStartTime=null·startTime有)은 유지(2026-07-06 가드제거 사유 회피).
+      where: { workerId: { in: userIds }, workDate: { gte: periodStart, lte: periodEnd }, isFinalClosed: true, startTime: { not: null }, assignment: { agencyId } },
       select: {
         workerId: true,
         workDate: true, startTime: true, endTime: true,
@@ -163,7 +169,8 @@ export async function computePayrollItems(
     }),
     // P1-11: 전월 말 lookback 출근(주휴 경계주 만근 판정 전용). 당월 계산엔 미사용.
     prisma.dailyAttendance.findMany({
-      where: { workerId: { in: userIds }, workDate: { gte: lookbackStartISO, lt: periodStart }, isFinalClosed: true, assignment: { agencyId } },
+      // ★chokepoint 동일 적용: startTime 없는 placeholder는 경계주 만근 판정(주휴)에서도 유령일로 제외.
+      where: { workerId: { in: userIds }, workDate: { gte: lookbackStartISO, lt: periodStart }, isFinalClosed: true, startTime: { not: null }, assignment: { agencyId } },
       select: {
         workerId: true,
         workDate: true, startTime: true, endTime: true,

@@ -60,6 +60,8 @@ export async function GET(
         isFinalClosed: false,
         // ★시각 없는 소급행(batch-save DONE·endTime/actualEndTime null)은 자동마감 대상에서 제외 —
         //  R4-1 불변식(homeSummary와 동일). 없으면 날짜변경만으로 마감돼 급여 과지급.
+        // ★8차: startTime 없는 placeholder(출근한 적 없는 행)도 확정 금지 — 형제 finalize 경로와 통일.
+        startTime: { not: null },
         OR: [{ actualEndTime: { not: null } }, { endTime: { not: null } }],
       },
       orderBy: [

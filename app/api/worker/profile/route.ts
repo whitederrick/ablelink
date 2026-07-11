@@ -69,6 +69,9 @@ export async function PATCH(req: NextRequest) {
       }
       updates.password    = await hash(newPassword, 12);
       updates.isTemporary = false;
+      // ★비밀번호 변경 = 전 세션 로그아웃(sv+1). 셀프 재설정·onboarding·admin 초기화와 동일 정책(P2-16).
+      //  누락 시 탈취 토큰이 sv 대조를 계속 통과 → 비번 바꿔도 도용 세션 미종료.
+      updates.sessionVersion = { increment: 1 };
     }
 
     // 급여 계좌(셀프 입력) — 빈 문자열은 null 처리

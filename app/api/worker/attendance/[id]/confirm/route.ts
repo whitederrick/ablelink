@@ -51,6 +51,10 @@ export async function PATCH(
     if (!(updateData.endTime ?? record.endTime)) {
       return NextResponse.json({ success: false, message: "퇴근 시각이 없어 확정할 수 없습니다. 퇴근 시각을 입력해주세요." }, { status: 400 });
     }
+    // ★출근 시각 없이 확정 금지(startTime=null placeholder = 유령 근무일). 형제 finalize 경로와 통일(8차).
+    if (!(updateData.startTime ?? record.startTime)) {
+      return NextResponse.json({ success: false, message: "출근 시각이 없어 확정할 수 없습니다. 출근 시각을 입력해주세요." }, { status: 400 });
+    }
 
     await prisma.dailyAttendance.update({ where: { id: record.id }, data: updateData });
 

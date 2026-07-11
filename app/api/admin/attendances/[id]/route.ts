@@ -49,6 +49,15 @@ export async function PATCH(
       if (t) updateData.endTime = t;
     }
     if (typeof body.isFinalClosed === "boolean") {
+      // ★확정 시 시각 필수(startTime·endTime): 시각 없는 placeholder를 확정하면 급여에 유령 근무일이 잡힘.
+      //  형제 finalize 경로와 통일(8차). computeRun chokepoint(startTime not null)와 이중 방어.
+      if (body.isFinalClosed) {
+        const finalStart = updateData.startTime ?? record.startTime;
+        const finalEnd = updateData.endTime ?? record.endTime;
+        if (!finalStart || !finalEnd) {
+          return NextResponse.json({ success: false, message: "출근·퇴근 시각이 모두 있어야 확정할 수 있습니다." }, { status: 400 });
+        }
+      }
       updateData.isFinalClosed = body.isFinalClosed;
       if (body.isFinalClosed) updateData.finalizedAt = new Date();
     }
