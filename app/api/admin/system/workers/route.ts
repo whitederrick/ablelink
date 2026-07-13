@@ -110,7 +110,7 @@ export async function POST(req: Request) {
         role:        "WORKER",
         status:      "ACTIVE",
         planType:    planType as any,
-        isTemporary: false,
+        isTemporary: true, // 관리자가 부여한 임시 비밀번호 → 최초 로그인 시 온보딩(비번 변경) 강제
       },
       select: { id: true, loginId: true, workerName: true },
     });

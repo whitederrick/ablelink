@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest) {
 
     const user = await prisma.worker.findUnique({
       where:  { id: BigInt(session.workerId) },
-      select: { id: true, password: true, workerName: true, phoneNumber: true },
+      select: { id: true, password: true, workerName: true, phoneNumber: true, isTemporary: true },
     });
     if (!user) return NextResponse.json({ success: false, message: "사용자를 찾을 수 없습니다." }, { status: 404 });
 
@@ -103,7 +103,9 @@ export async function PATCH(req: NextRequest) {
     const newToken = await signWorkerToken({
       workerId:      updated.id.toString(),
       workerName:    updated.workerName,
-      isTemporary: false,
+      // 9차#6: 비번을 실제로 바꿨을 때만 온보딩 해제. 비번 외 필드(이름·전화·계좌)만 PATCH한
+      //  isTemporary 워커가 false 토큰을 받아 온보딩(강제 비번변경)을 영구 우회하던 것 차단.
+      isTemporary: newPassword ? false : user.isTemporary,
     });
     res.cookies.set({
       name:     WORKER_COOKIE,

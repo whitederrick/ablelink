@@ -38,6 +38,10 @@ model Worker {
   ciKey        String? @unique @map("ci_key")
   signatureUrl String? @map("signature_url") // PREMIUM에서만 사용(정책 레이어에서 강제)
   isTemporary  Boolean @default(false) @map("is_temporary")
+  // 9차#3: '알려진 비밀번호 보유' 여부. true=관리자 지정/셀프설정/재설정 등 워커가 아는 비번 보유(계약 서명 시 덮어쓰기 금지).
+  //  false=admin/contracts 초대(랜덤 UUID 비번, 아무도 모름)만 → 서명 완료 시 임시비번 발급으로 교체 필요.
+  //  기본값 true(안전): 비번 덮어쓰기는 명시적 false일 때만 발생하므로 경로 누락 시에도 '덮어쓰기 안 함'으로 수렴.
+  hasKnownPassword Boolean @default(true) @map("has_known_password")
   // P2-16: 세션(JWT) 무효화 버전. 비밀번호 변경·재설정 시 +1 → 그 전 발급 토큰은 인증 시 대조 불일치로 무효.
   //  (인증은 이미 매 요청 status 재검증으로 DB를 읽으므로 이 컬럼 대조는 추가 쿼리 없음.)
   sessionVersion Int @default(0) @map("session_version")

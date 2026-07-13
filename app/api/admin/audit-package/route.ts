@@ -130,14 +130,14 @@ export async function GET(request: NextRequest) {
       // 4개 쿼리 병렬
       const [trainingLogs, trainingEv, adaptLogs, adaptEv] = await Promise.all([
         prisma.traineeLog.findMany({
-          where: { writerId: workerId, traineeId: tid, trainingType: { in: ["PRE", "FIELD"] }, attendance: { workDate: { gte: start, lte: end } } },
+          where: { writerId: workerId, traineeId: tid, trainingType: { in: ["PRE", "FIELD"] }, attendance: { siteId: site.id, workDate: { gte: start, lte: end } } },
           include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
         }),
         prisma.traineeEvaluation.findFirst({
           where: { traineeId: tid, writerId: workerId, evalType: "TRAINING" }, orderBy: { updatedAt: "desc" },
         }),
         prisma.traineeLog.findMany({
-          where: { writerId: workerId, traineeId: tid, trainingType: "ADAPTATION", attendance: { workDate: { gte: start, lte: end } } },
+          where: { writerId: workerId, traineeId: tid, trainingType: "ADAPTATION", attendance: { siteId: site.id, workDate: { gte: start, lte: end } } },
           include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
         }),
         prisma.traineeEvaluation.findFirst({

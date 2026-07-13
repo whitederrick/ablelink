@@ -190,7 +190,8 @@ export async function POST(req: NextRequest) {
               phoneNumber: phone,
               role: "WORKER",
               status: "ACTIVE",
-              isTemporary: true, // 최초 로그인 시 온보딩 플로우 강제
+              isTemporary: true,      // 최초 로그인 시 온보딩 플로우 강제
+              hasKnownPassword: false, // 9차#3: 랜덤 비번(아무도 모름) → 서명 시 임시비번 발급 대상
             },
           });
         } catch (e: any) {
@@ -205,6 +206,7 @@ export async function POST(req: NextRequest) {
                 role: "WORKER",
                 status: "ACTIVE",
                 isTemporary: true,
+                hasKnownPassword: false, // 9차#3: 랜덤 비번 → 서명 시 임시비번 발급 대상
               },
             });
           } else {

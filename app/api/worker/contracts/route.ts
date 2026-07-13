@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
 
   const user = await prisma.worker.findUnique({
     where: { id: contract.workerId },
-    select: { workerName: true, phoneNumber: true, isTemporary: true },
+    select: { workerName: true, phoneNumber: true, isTemporary: true, hasKnownPassword: true },
   });
 
   // ★원자적 서명 전이: PENDING→SIGNED를 updateMany 조건부로 실행해, 같은 링크 동시 POST 시
@@ -281,8 +281,10 @@ export async function POST(req: NextRequest) {
 
   // 서명 완료 후 연결(assignment-pipeline-design.md §7) — 신규/기존 분기. 실패해도 서명엔 영향 없음.
   try {
-    if (user?.isTemporary) {
-      // 신규 가입자: 임시 비밀번호 발급 → 알림톡(자격증명 전달). 로그인=연결이므로 배정 connectedAt 기록.
+    if (user?.isTemporary && !user.hasKnownPassword) {
+      // 신규 초대(admin/contracts, 랜덤 비번): 임시 비밀번호 발급 → 알림톡(자격증명 전달). 로그인=연결이므로 배정 connectedAt 기록.
+      //  ★hasKnownPassword=false인 이 경로만 비번을 덮어쓴다. 관리자 지정/재설정 워커(known 비번, isTemporary=true)는
+      //   아래 기존회원 분기로 라우팅돼 비번이 보존됨(9차#3: 관리자 지정 비번 조용한 폐기·락아웃 회귀 방지).
       await sendSignedNotificationNew(contract.workerId, user.phoneNumber, user.workerName);
       if (contract.assignmentId) {
         const asg = await prisma.siteAssignment.findUnique({ where: { id: contract.assignmentId }, select: { attendanceButtonExempt: true } });
