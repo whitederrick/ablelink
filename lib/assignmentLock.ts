@@ -33,10 +33,41 @@ export async function withWorkersAssignmentLock<T>(
   workerIds: bigint[],
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  const ordered = [...new Set(workerIds.map((w) => w.toString()))]
+  const ordered = orderWorkerIds(workerIds);
+  return prisma.$transaction(async (tx) => {
+    for (const wid of ordered) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${wid}::bigint)`;
+    }
+    return fn(tx);
+  });
+}
+
+function orderWorkerIds(workerIds: bigint[]): bigint[] {
+  return [...new Set(workerIds.map((w) => w.toString()))]
     .map((s) => BigInt(s))
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
+// 현장 단위 락 네임스페이스(두-키 advisory 락). PostgreSQL은 단일키 락(pg_advisory_xact_lock(bigint))과
+//  두-키 락(pg_advisory_xact_lock(int,int))을 서로 다른 lock space로 관리 → 현장 락은 workerId 단일키 락과
+//  절대 충돌하지 않는다.
+const SITE_LOCK_NS = 1;
+
+/**
+ * 현장 락 + 여러 워커 락을 한 트랜잭션에서 획득(finalize 정원검사 TOCTOU + 이중배정 동시 방어, #4/P1-5).
+ * 획득 순서 = '현장 → 워커(오름차순)'로 항상 고정한다. finalize만 두 락을 잡고 다른 경로(respond·직접배정 등)는
+ * 워커 락만 잡으므로, 순서 역전이 없어 교착이 불가능하다. 임계구역 안에서 filledCnt 재조회→가드→승격을
+ * 원자적으로 수행하면, 같은 현장에 다른 워커들로 동시 finalize가 각자 정원검사를 통과해 정원을 초과하는
+ * 경쟁을 막는다.
+ */
+export async function withSiteAndWorkersAssignmentLock<T>(
+  siteId: bigint,
+  workerIds: bigint[],
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  const ordered = orderWorkerIds(workerIds);
   return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SITE_LOCK_NS}::int, ${siteId}::int)`;
     for (const wid of ordered) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${wid}::bigint)`;
     }

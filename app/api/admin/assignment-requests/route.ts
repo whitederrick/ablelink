@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { findTimeConflict, OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
-import { withWorkersAssignmentLock } from "@/lib/assignmentLock";
+import { withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
 
 async function expirePastDeadline(agencyId: bigint) {
   await prisma.siteAssignment.updateMany({
@@ -158,9 +158,6 @@ export async function POST(req: NextRequest) {
       });
       if (!site) return NextResponse.json({ success: false, message: "현장을 찾을 수 없습니다." }, { status: 404 });
       const cap = (site.amCapacity ?? 0) + (site.pmCapacity ?? 0) + (site.fullDayCapacity ?? 0);
-      // 이미 채워진(계약대기/연결/근무 중) 인원 → 남은 모집
-      const filledCnt = await prisma.siteAssignment.count({ where: { agencyId, siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } } });
-      const remaining = Math.max(0, cap - filledCnt);
 
       // 선정 대상 = 이 현장의 수락(ACCEPTED) 또는 제외(DROPPED) 후보. (제외 후보 재선정 허용)
       // 기한 초과(EXPIRED)·거절(REJECTED)·회신 대기(REQUESTED)는 선정 불가.
@@ -169,13 +166,6 @@ export async function POST(req: NextRequest) {
       for (const sid of selectedIds) {
         if (!eligibleIds.has(sid.toString())) return NextResponse.json({ success: false, message: "선정 대상이 올바르지 않습니다." }, { status: 400 });
       }
-      // 초과 가드: 선정 수 > 남은 모집.
-      //  M7: 조건을 `cap > 0`로 — 과거 `remaining > 0`은 정원이 이미 꽉 찬(remaining=0) 상태에서 초과선정을 통과시켰다.
-      //   cap=0(정원 미설정=무제한)일 때만 가드를 건너뛰고, 정원이 있으면 remaining=0에서도 1명 이상 선정을 막는다.
-      if (cap > 0 && selectedIds.length > remaining) {
-        return NextResponse.json({ success: false, code: "OVER_CAPACITY", message: `선정 인원이 모집 인원을 초과하였습니다. 최종 선정을 재확인해주십시오. (선정 ${selectedIds.length}명 / 모집 ${remaining}명)` }, { status: 409 });
-      }
-      const isFull = filledCnt + selectedIds.length >= cap; // 이번 확정으로 정원이 다 차는가
 
       // E3: ASSIGNED 승격 전 시간겹침 검사 — 선정자가 다른 현장 진행중 배정과 같은 날 슬롯이 겹치면 이중배정.
       //  (finalize·restore가 겹침가드 없이 상태를 올려 respond/PATCH의 409를 우회하던 경로 차단.)
@@ -184,9 +174,19 @@ export async function POST(req: NextRequest) {
         select: { id: true, workerId: true, workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
       });
 
-      // ★선정 워커들을 워커 단위 advisory lock으로 잠근 뒤 "겹침검사 → 승격"을 원자적으로 수행(P1-5).
-      //  검사와 승격 사이에 다른 경로(respond·직접배정 등)가 끼어들어 이중배정이 새는 것을 방지.
-      const conflictOut = await withWorkersAssignmentLock(selDetails.map((s) => s.workerId), async (tx) => {
+      // ★현장 락 + 선정 워커 락으로 "정원 재조회 → 초과가드 → 겹침검사 → 승격"을 원자적으로 수행(#4/P1-5).
+      //  현장 락: 같은 현장에 다른 워커들로 동시 finalize가 각자 정원검사를 통과해 정원을 넘기는 TOCTOU 차단
+      //         (filledCnt 조회를 반드시 락 안에서 → 승격과 원자적).
+      //  워커 락: 검사와 승격 사이 다른 경로(respond·직접배정)가 끼어드는 이중배정 차단.
+      const conflictOut = await withSiteAndWorkersAssignmentLock(siteId, selDetails.map((s) => s.workerId), async (tx) => {
+        // 이미 채워진(계약대기/연결/근무 중) 인원 → 남은 모집. ★반드시 락 안에서 재조회(TOCTOU 방지).
+        const filledCnt = await tx.siteAssignment.count({ where: { agencyId, siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } } });
+        const remaining = Math.max(0, cap - filledCnt);
+        // 초과 가드: 선정 수 > 남은 모집. cap=0(정원 미설정=무제한)이면 건너뜀(M7).
+        if (cap > 0 && selectedIds.length > remaining) {
+          return { overCapacity: true as const, selectedCnt: selectedIds.length, remaining };
+        }
+        const isFull = filledCnt + selectedIds.length >= cap; // 이번 확정으로 정원이 다 차는가
         for (const s of selDetails) {
           // 이중배정 방지는 전역(크로스기관)으로 검사 — 타 기관 배정과도 시간이 겹치면 안 됨.
           //  단, 충돌이 타 기관이면 현장명 비노출(일반 문구). 같은 기관 충돌만 현장명 표시.
@@ -209,8 +209,12 @@ export async function POST(req: NextRequest) {
         // 회신 대기(REQUESTED)는 건드리지 않음(여전히 응답 대기). '제외 상태 저장'은 이 확정 시점에 일괄 반영.
         await tx.siteAssignment.updateMany({ where: { agencyId, siteId, id: { in: selectedIds }, status: { in: ["ACCEPTED", "DROPPED"] } }, data: { status: "ASSIGNED", rejectedAt: null, statusReason: null } });
         await tx.siteAssignment.updateMany({ where: { agencyId, siteId, id: { notIn: selectedIds }, status: { in: ["ACCEPTED", "DROPPED"] } }, data: { status: "DROPPED", rejectedAt: new Date(), statusReason: "제외" } });
-        return { conflict: false as const };
+        return { conflict: false as const, isFull };
       });
+      // 초과(락 안 재조회 기준) → 409. 동시 finalize가 정원을 넘기려 하면 여기서 차단(TOCTOU 종결).
+      if ("overCapacity" in conflictOut) {
+        return NextResponse.json({ success: false, code: "OVER_CAPACITY", message: `선정 인원이 모집 인원을 초과하였습니다. 최종 선정을 재확인해주십시오. (선정 ${conflictOut.selectedCnt}명 / 모집 ${conflictOut.remaining}명)` }, { status: 409 });
+      }
       if (conflictOut.conflict) {
         return NextResponse.json({ success: false, code: "TIME_CONFLICT", message: conflictOut.msg }, { status: 409 });
       }
@@ -225,7 +229,7 @@ export async function POST(req: NextRequest) {
           });
         } catch { /* 알림 실패 무시 */ }
       }
-      return NextResponse.json({ success: true, assigned: selectedIds.length, full: isFull });
+      return NextResponse.json({ success: true, assigned: selectedIds.length, full: conflictOut.isFull });
     }
 
     return NextResponse.json({ success: false, message: "잘못된 동작입니다." }, { status: 400 });

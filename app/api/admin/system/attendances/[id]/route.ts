@@ -5,6 +5,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
 import { audit } from "@/lib/audit";
+import { kstWallTimeToInstant } from "@/lib/workSchedule";
+
+const HHMM_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
 export async function PATCH(
   req: NextRequest,
@@ -28,17 +31,16 @@ export async function PATCH(
     if (!attendance) return NextResponse.json({ success: false, message: "출근 기록을 찾을 수 없습니다." }, { status: 404 });
 
     const updateData: any = {};
+    // #5: 운영자가 입력한 HH:MM은 KST 벽시계 → kstWallTimeToInstant로 -9h 보정한 instant 저장.
+    //  과거 `new Date(workDate+"T00:00:00")+setHours`는 서버 로컬(UTC) 기준이라 운영에서 9시간 어긋난
+    //  시각이 저장됐다(정상 출퇴근 저장 경로 workSchedule과 동일 헬퍼로 통일).
     if (startTime) {
-      const [h, m] = startTime.split(":").map(Number);
-      const dt = new Date(attendance.workDate + "T00:00:00");
-      dt.setHours(h, m, 0, 0);
-      updateData.startTime = dt;
+      if (!HHMM_RE.test(String(startTime))) return NextResponse.json({ success: false, message: "출근 시각 형식이 올바르지 않습니다. (HH:MM)" }, { status: 400 });
+      updateData.startTime = kstWallTimeToInstant(attendance.workDate, startTime);
     }
     if (endTime) {
-      const [h, m] = endTime.split(":").map(Number);
-      const dt = new Date(attendance.workDate + "T00:00:00");
-      dt.setHours(h, m, 0, 0);
-      updateData.endTime = dt;
+      if (!HHMM_RE.test(String(endTime))) return NextResponse.json({ success: false, message: "퇴근 시각 형식이 올바르지 않습니다. (HH:MM)" }, { status: 400 });
+      updateData.endTime = kstWallTimeToInstant(attendance.workDate, endTime);
       updateData.status  = "DONE";
     }
 
