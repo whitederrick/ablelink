@@ -53,6 +53,7 @@ function toRow(r: any) {
     amCapacity: r.amCapacity ?? 0,
     pmCapacity: r.pmCapacity ?? 0,
     fullDayCapacity: r.fullDayCapacity ?? 0,
+    customCapacity: r.customCapacity ?? 0,
 
     basePointConfirmed: r.basePointConfirmed,
     basePointAuthority: r.basePointAuthority,
@@ -93,6 +94,7 @@ export async function GET(
         amCapacity: true,
         pmCapacity: true,
         fullDayCapacity: true,
+        customCapacity: true,
         gpsLon: true,
         agencyId: true,
         ownerManagerId: true,
@@ -164,6 +166,7 @@ export async function PATCH(
     const amCapacity = parseCap(body.amCapacity);
     const pmCapacity = parseCap(body.pmCapacity);
     const fullDayCapacity = parseCap(body.fullDayCapacity);
+    const customCapacity = parseCap(body.customCapacity);
     const businessContactName =
       body.businessContactName == null ? undefined : String(body.businessContactName).trim();
     const businessContactPhone =
@@ -247,6 +250,7 @@ export async function PATCH(
     if (amCapacity !== undefined) data.amCapacity = amCapacity;
     if (pmCapacity !== undefined) data.pmCapacity = pmCapacity;
     if (fullDayCapacity !== undefined) data.fullDayCapacity = fullDayCapacity;
+    if (customCapacity !== undefined) data.customCapacity = customCapacity;
 
     // 활성/비활성 전환(재활성화 포함)
     if (body.isActive !== undefined) {
@@ -289,6 +293,7 @@ export async function PATCH(
         amCapacity: true,
         pmCapacity: true,
         fullDayCapacity: true,
+        customCapacity: true,
         agencyId: true,
         ownerManagerId: true,
         businessContactName: true,

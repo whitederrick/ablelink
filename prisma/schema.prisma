@@ -198,9 +198,11 @@ model Site {
   neededActivities   String[]    @default([]) @map("needed_activities") // 주요 필요 활동 태그
 
   // ✅ 근무형태별 필요 직무지도원 정원(충원 관리/배정 요청 필터·배지용). 0 = 해당 형태 불필요.
+  //  #7: finalize는 슬롯별로 정원을 강제한다(AM→am, PM→pm, FULL_DAY→full, CUSTOM→custom).
   amCapacity      Int @default(0) @map("am_capacity")
   pmCapacity      Int @default(0) @map("pm_capacity")
   fullDayCapacity Int @default(0) @map("full_day_capacity")
+  customCapacity  Int @default(0) @map("custom_capacity")
 
   // ✅ (구멍 #4 해결) Site에 박혀있던 훈련기간/근무형태 정보 제거
   // - 기간/근무형태는 배정(SiteAssignment) 또는 Placement에 귀속하는 것이 정확함

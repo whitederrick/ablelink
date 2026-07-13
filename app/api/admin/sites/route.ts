@@ -52,6 +52,7 @@ function toRow(r: any) {
     amCapacity: r.amCapacity ?? 0,
     pmCapacity: r.pmCapacity ?? 0,
     fullDayCapacity: r.fullDayCapacity ?? 0,
+    customCapacity: r.customCapacity ?? 0,
 
     basePointConfirmed: r.basePointConfirmed,
     basePointAuthority: r.basePointAuthority,
@@ -142,6 +143,7 @@ export async function GET(req: NextRequest) {
           amCapacity: true,
           pmCapacity: true,
           fullDayCapacity: true,
+          customCapacity: true,
 
           basePointConfirmed: true,
           basePointAuthority: true,
@@ -200,6 +202,7 @@ export async function POST(req: NextRequest) {
     const amCapacity = parseCap(body.amCapacity);
     const pmCapacity = parseCap(body.pmCapacity);
     const fullDayCapacity = parseCap(body.fullDayCapacity);
+    const customCapacity = parseCap(body.customCapacity);
 
     // ✅ 사업체 담당자(현장 연락 담당자) — 이름·연락처 필수, 이메일 선택
     const businessContactName = String(body.businessContactName ?? "").trim();
@@ -284,6 +287,7 @@ export async function POST(req: NextRequest) {
         amCapacity,
         pmCapacity,
         fullDayCapacity,
+        customCapacity,
         ...(allowanceRange !== undefined ? { allowanceRange } : {}),
         ...(lateThresholdMin !== null ? { lateThresholdMin } : {}),
         ...(additionalContacts.length ? { contacts: { create: additionalContacts } } : {}),

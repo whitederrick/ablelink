@@ -104,7 +104,7 @@ const WORK_TYPE_DEFAULTS: Record<WorkType, { start: string; end: string }> = {
 // ── 배정 요청 모달 ───────────────────────────────────────────────────
 // 신규/기존 현장에 직무지도원을 배정 요청. 후보는 ①위탁기관과 계약 이력 있는 직무지도원
 // (상태·계약기간 표시) 선택 또는 ②신규 전화번호 직접 추가. 현장 선택 필수.
-interface Site { id: string; companyName: string; assignedCount?: number; amCapacity?: number; pmCapacity?: number; fullDayCapacity?: number; }
+interface Site { id: string; companyName: string; assignedCount?: number; amCapacity?: number; pmCapacity?: number; fullDayCapacity?: number; customCapacity?: number; }
 interface Candidate {
   id: string; name: string; phone: string;
   engaged: boolean; currentStatus: string | null; currentSiteName: string | null;
@@ -195,7 +195,7 @@ function InviteModal({ onClose, initialSiteId, initialWorkTypes, initialDeadline
   }, [siteId]);
 
   // 정원(근무형태별 합) 대비 배정수로 충원 여부 판정. 정원 미설정(0)이면 배정 0=충원필요.
-  const siteCap = (s: Site) => (s.amCapacity ?? 0) + (s.pmCapacity ?? 0) + (s.fullDayCapacity ?? 0);
+  const siteCap = (s: Site) => (s.amCapacity ?? 0) + (s.pmCapacity ?? 0) + (s.fullDayCapacity ?? 0) + (s.customCapacity ?? 0);
   const isUnderstaffed = (s: Site) => {
     const cap = siteCap(s);
     const n = s.assignedCount ?? 0;

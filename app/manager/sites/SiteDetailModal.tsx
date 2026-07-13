@@ -9,7 +9,7 @@ import AddressMapPicker from "@/components/AddressMapPicker";
 type SiteDetail = {
   id: string; companyName: string; address: string; detailAddress: string | null;
   gpsLat: string; gpsLon: string; allowanceRange: number; lateThresholdMin?: number | null; agencyName: string;
-  amCapacity?: number; pmCapacity?: number; fullDayCapacity?: number;
+  amCapacity?: number; pmCapacity?: number; fullDayCapacity?: number; customCapacity?: number;
   businessContactName: string | null; businessContactPhone: string | null; businessContactEmail: string | null;
   govContacts?: { name: string; email: string; phone?: string | null }[];
   additionalContacts?: { id?: string; name: string; phone: string | null; email: string | null }[];
@@ -49,6 +49,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
   const [amCapacity, setAmCapacity] = useState(0);
   const [pmCapacity, setPmCapacity] = useState(0);
   const [fullDayCapacity, setFullDayCapacity] = useState(0);
+  const [customCapacity, setCustomCapacity] = useState(0);
 
   const [businessContactName, setBusinessContactName] = useState("");
   const [businessContactPhone, setBusinessContactPhone] = useState("");
@@ -118,6 +119,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
         setAmCapacity(it.amCapacity ?? 0);
         setPmCapacity(it.pmCapacity ?? 0);
         setFullDayCapacity(it.fullDayCapacity ?? 0);
+        setCustomCapacity(it.customCapacity ?? 0);
         setBusinessContactName(it.businessContactName || "");
         setBusinessContactPhone(it.businessContactPhone || "");
         setBusinessContactEmail(it.businessContactEmail || "");
@@ -190,7 +192,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
         detailAddress: detailAddress.trim() || null,
         gpsLat: Number(gpsLat), gpsLon: Number(gpsLon), allowanceRange,
         lateThresholdMin: lateThresholdMin.trim() === "" ? null : Number(lateThresholdMin),
-        amCapacity, pmCapacity, fullDayCapacity,
+        amCapacity, pmCapacity, fullDayCapacity, customCapacity,
         businessContactName: businessContactName.trim(),
         businessContactPhone: businessContactPhone.trim(),
         businessContactEmail: businessContactEmail.trim() || null,
@@ -438,7 +440,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                 <h3 className="mb-1 text-sm font-black text-slate-900">👥 필요 직무지도원 정원</h3>
                 <p className="mb-3 text-xs font-semibold text-slate-400">근무형태별로 이 현장에 필요한 직무지도원 수입니다. 배정 요청 화면의 충원 현황·필터에 사용됩니다. (0 = 해당 형태 불필요)</p>
                 <div className="flex flex-wrap items-center gap-4">
-                  {([["오전", amCapacity, setAmCapacity], ["오후", pmCapacity, setPmCapacity], ["전일", fullDayCapacity, setFullDayCapacity]] as const).map(([label, val, setter]) => (
+                  {([["오전", amCapacity, setAmCapacity], ["오후", pmCapacity, setPmCapacity], ["전일", fullDayCapacity, setFullDayCapacity], ["맞춤", customCapacity, setCustomCapacity]] as const).map(([label, val, setter]) => (
                     <div key={label} className="flex items-center gap-2">
                       <span className="text-sm font-bold text-slate-600">{label}</span>
                       <input type="number" min={0} max={99} value={val}
@@ -447,7 +449,7 @@ export default function SiteDetailModal({ siteId, onClose, onSaved }: {
                       <span className="text-sm font-semibold text-slate-500">명</span>
                     </div>
                   ))}
-                  <span className="ml-auto text-sm font-bold text-slate-600">총 정원 : <span className="text-base font-black text-sky-600">{amCapacity + pmCapacity + fullDayCapacity}명</span></span>
+                  <span className="ml-auto text-sm font-bold text-slate-600">총 정원 : <span className="text-base font-black text-sky-600">{amCapacity + pmCapacity + fullDayCapacity + customCapacity}명</span></span>
                 </div>
               </div>
 

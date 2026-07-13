@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { findTimeConflict, OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
 import { withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
+import { findCapacityOverflow, CAPACITY_SLOTS, type CapacitySlot } from "@/lib/assignmentCapacity";
 
 async function expirePastDeadline(agencyId: bigint) {
   await prisma.siteAssignment.updateMany({
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
         ],
       },
       include: {
-        site: { select: { id: true, companyName: true, address: true, amCapacity: true, pmCapacity: true, fullDayCapacity: true } },
+        site: { select: { id: true, companyName: true, address: true, amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true } },
         user: { select: { id: true, workerName: true, loginId: true, phoneNumber: true } },
       },
       orderBy: [{ siteId: "asc" }, { id: "asc" }],
@@ -49,8 +50,8 @@ export async function GET(req: NextRequest) {
     for (const a of rows) {
       const key = a.siteId.toString();
       if (!groupsMap.has(key)) {
-        const capAm = a.site?.amCapacity ?? 0, capPm = a.site?.pmCapacity ?? 0, capFull = a.site?.fullDayCapacity ?? 0;
-        groupsMap.set(key, { siteId: key, siteName: a.site?.companyName ?? "현장", siteAddress: a.site?.address ?? "", capacity: capAm + capPm + capFull, capAm, capPm, capFull, candidates: [] });
+        const capAm = a.site?.amCapacity ?? 0, capPm = a.site?.pmCapacity ?? 0, capFull = a.site?.fullDayCapacity ?? 0, capCustom = a.site?.customCapacity ?? 0;
+        groupsMap.set(key, { siteId: key, siteName: a.site?.companyName ?? "현장", siteAddress: a.site?.address ?? "", capacity: capAm + capPm + capFull + capCustom, capAm, capPm, capFull, capCustom, candidates: [] });
       }
       groupsMap.get(key).candidates.push({
         assignmentId: a.id.toString(),
@@ -154,10 +155,14 @@ export async function POST(req: NextRequest) {
 
       const site = await prisma.site.findFirst({
         where: { id: siteId, agencyId },
-        select: { companyName: true, amCapacity: true, pmCapacity: true, fullDayCapacity: true },
+        select: { companyName: true, amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true },
       });
       if (!site) return NextResponse.json({ success: false, message: "현장을 찾을 수 없습니다." }, { status: 404 });
-      const cap = (site.amCapacity ?? 0) + (site.pmCapacity ?? 0) + (site.fullDayCapacity ?? 0);
+      // #7: 정원은 슬롯별로 강제한다(근무형태별 버킷). 판정 로직은 lib/assignmentCapacity(순수·테스트그물).
+      const capBySlot: Record<CapacitySlot, number> = {
+        AM: site.amCapacity ?? 0, PM: site.pmCapacity ?? 0, FULL_DAY: site.fullDayCapacity ?? 0, CUSTOM: site.customCapacity ?? 0,
+      };
+      const totalCap = CAPACITY_SLOTS.reduce((t, s) => t + capBySlot[s], 0);
 
       // 선정 대상 = 이 현장의 수락(ACCEPTED) 또는 제외(DROPPED) 후보. (제외 후보 재선정 허용)
       // 기한 초과(EXPIRED)·거절(REJECTED)·회신 대기(REQUESTED)는 선정 불가.
@@ -179,14 +184,23 @@ export async function POST(req: NextRequest) {
       //         (filledCnt 조회를 반드시 락 안에서 → 승격과 원자적).
       //  워커 락: 검사와 승격 사이 다른 경로(respond·직접배정)가 끼어드는 이중배정 차단.
       const conflictOut = await withSiteAndWorkersAssignmentLock(siteId, selDetails.map((s) => s.workerId), async (tx) => {
-        // 이미 채워진(계약대기/연결/근무 중) 인원 → 남은 모집. ★반드시 락 안에서 재조회(TOCTOU 방지).
-        const filledCnt = await tx.siteAssignment.count({ where: { agencyId, siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } } });
-        const remaining = Math.max(0, cap - filledCnt);
-        // 초과 가드: 선정 수 > 남은 모집. cap=0(정원 미설정=무제한)이면 건너뜀(M7).
-        if (cap > 0 && selectedIds.length > remaining) {
-          return { overCapacity: true as const, selectedCnt: selectedIds.length, remaining };
+        // 슬롯별 이미 채워진(계약대기/연결/근무 중) 인원. ★반드시 락 안에서 재조회(TOCTOU 방지).
+        const filledGroups = await tx.siteAssignment.groupBy({
+          by: ["workType"], where: { agencyId, siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } }, _count: { _all: true },
+        });
+        const filledBySlot: Record<string, number> = {};
+        for (const g of filledGroups) if (g.workType) filledBySlot[g.workType] = g._count._all;
+        // 선정 인원 슬롯별 집계
+        const selBySlot: Record<string, number> = {};
+        for (const s of selDetails) if (s.workType) selBySlot[s.workType] = (selBySlot[s.workType] ?? 0) + 1;
+        // 슬롯별 초과 가드(순수 로직). 정원 미설정 현장은 무제한, 설정 현장은 슬롯별 엄격.
+        const overflow = findCapacityOverflow(capBySlot, filledBySlot, selBySlot);
+        if (overflow) {
+          return { kind: "over" as const, ...overflow };
         }
-        const isFull = filledCnt + selectedIds.length >= cap; // 이번 확정으로 정원이 다 차는가
+        // 정원 충족 여부(표시용): 정원이 설정된 전체 슬롯 합계 기준.
+        const totalFilledAfter = Object.values(filledBySlot).reduce((a, b) => a + b, 0) + selectedIds.length;
+        const isFull = totalCap > 0 && totalFilledAfter >= totalCap;
         for (const s of selDetails) {
           // 이중배정 방지는 전역(크로스기관)으로 검사 — 타 기관 배정과도 시간이 겹치면 안 됨.
           //  단, 충돌이 타 기관이면 현장명 비노출(일반 문구). 같은 기관 충돌만 현장명 표시.
@@ -201,7 +215,7 @@ export async function POST(req: NextRequest) {
             const msg = isSameAgencyConflict(c.agencyId, agencyId)
               ? `${nm}님이 다른 현장(${c.site?.companyName ?? "-"}) 배정과 같은 날 근무시간이 겹칩니다. 근무형태를 조정한 뒤 확정해주세요.`
               : `${nm}님은 이미 다른 일정이 있어 이 기간·근무형태로 배정할 수 없습니다. 근무형태를 조정한 뒤 확정해주세요.`;
-            return { conflict: true as const, msg };
+            return { kind: "conflict" as const, msg };
           }
         }
 
@@ -209,13 +223,15 @@ export async function POST(req: NextRequest) {
         // 회신 대기(REQUESTED)는 건드리지 않음(여전히 응답 대기). '제외 상태 저장'은 이 확정 시점에 일괄 반영.
         await tx.siteAssignment.updateMany({ where: { agencyId, siteId, id: { in: selectedIds }, status: { in: ["ACCEPTED", "DROPPED"] } }, data: { status: "ASSIGNED", rejectedAt: null, statusReason: null } });
         await tx.siteAssignment.updateMany({ where: { agencyId, siteId, id: { notIn: selectedIds }, status: { in: ["ACCEPTED", "DROPPED"] } }, data: { status: "DROPPED", rejectedAt: new Date(), statusReason: "제외" } });
-        return { conflict: false as const, isFull };
+        return { kind: "ok" as const, isFull };
       });
-      // 초과(락 안 재조회 기준) → 409. 동시 finalize가 정원을 넘기려 하면 여기서 차단(TOCTOU 종결).
-      if ("overCapacity" in conflictOut) {
-        return NextResponse.json({ success: false, code: "OVER_CAPACITY", message: `선정 인원이 모집 인원을 초과하였습니다. 최종 선정을 재확인해주십시오. (선정 ${conflictOut.selectedCnt}명 / 모집 ${conflictOut.remaining}명)` }, { status: 409 });
+      // 슬롯별 초과(락 안 재조회 기준) → 409. 동시 finalize가 정원을 넘기려 해도 여기서 차단(TOCTOU 종결).
+      if (conflictOut.kind === "over") {
+        const slotLabel: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "전일", CUSTOM: "맞춤" };
+        const lbl = slotLabel[conflictOut.slot] ?? conflictOut.slot;
+        return NextResponse.json({ success: false, code: "OVER_CAPACITY", message: `${lbl} 정원을 초과하였습니다. 최종 선정을 재확인해주십시오. (${lbl} 선정 ${conflictOut.sel}명 / 모집 ${conflictOut.remaining}명)` }, { status: 409 });
       }
-      if (conflictOut.conflict) {
+      if (conflictOut.kind === "conflict") {
         return NextResponse.json({ success: false, code: "TIME_CONFLICT", message: conflictOut.msg }, { status: 409 });
       }
 
