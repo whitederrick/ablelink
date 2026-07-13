@@ -22,7 +22,13 @@ function errToStatus(msg: string) {
   return 500;
 }
 
-// 워커가 이 기관과 기존 관계(계약 이력 또는 배정)를 갖는가 — 크로스테넌트 부착 차단 공용 판정.
+// 워커가 이 기관과 '실제 관계'를 맺은 배정 상태 — 동의(수락)/근무/과거근무만 인정.
+//  ★12차: REQUESTED(매니저 일방 요청, 워커 미수락)·REJECTED(거절)·EXPIRED(무응답)·DROPPED(탈락)은 관계로
+//  치지 않는다. 이들을 인정하면 매니저가 타 기관 워커에게 일방 REQUESTED만 생성하거나 과거 거절/만료 행만
+//  있어도 동의 게이트를 통과해 계약을 강제 발행할 수 있다(동의 없는 크로스테넌트 부착).
+const CONSENTED_ASSIGN_STATUSES = ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] as const;
+
+// 워커가 이 기관과 기존 관계(계약 이력 또는 '수락/근무한' 배정)를 갖는가 — 크로스테넌트 부착 차단 공용 판정.
 //  workerId(이력검색) 경로와 manualPhone(기존 워커) 경로가 동일 불변식을 쓰도록 단일화한다.
 async function workerBelongsToAgency(workerId: bigint, agencyId: bigint): Promise<boolean> {
   const hit = await prisma.worker.findFirst({
@@ -30,7 +36,7 @@ async function workerBelongsToAgency(workerId: bigint, agencyId: bigint): Promis
       id: workerId,
       OR: [
         { employmentContracts: { some: { agencyId } } },
-        { assignments: { some: { agencyId } } },
+        { assignments: { some: { agencyId, status: { in: [...CONSENTED_ASSIGN_STATUSES] } } } },
       ],
     },
     select: { id: true },
@@ -260,9 +266,14 @@ export async function POST(req: NextRequest) {
       catch { throw new Error("VALIDATION:잘못된 assignmentId입니다."); }
       const asgn = await prisma.siteAssignment.findFirst({
         where: { id: assignmentIdBig, workerId: userIdBig, agencyId },
-        select: { id: true, siteId: true },
+        select: { id: true, siteId: true, status: true },
       });
       if (!asgn) throw new Error("VALIDATION:연결할 배정을 찾을 수 없습니다. (직무지도원/기관 불일치)");
+      // ★12차: 연결 배정은 워커가 수락(ACCEPTED/ASSIGNED)했거나 진행/종료된 상태여야 계약 발행 가능. 미수락
+      //  REQUESTED를 일방 생성해 그 assignmentId로 계약을 강제 발행하던 크로스테넌트 우회 차단(동의 게이트 정합).
+      if (!(CONSENTED_ASSIGN_STATUSES as readonly string[]).includes(asgn.status)) {
+        throw new Error("VALIDATION:직무지도원이 아직 배정 요청을 수락하지 않았습니다. 수락 후 계약을 발행해주세요.");
+      }
 
       // ★E1-C(사용자 확정 2026-07-06): 겹침검사를 '서명' 시점이 아니라 '계약 발행' 시점에 둔다.
       //  서명 write-back(worker/contracts)이 이 배정의 workType·기간을 계약값으로 덮어써 CONFIRMED로 승격하는데,

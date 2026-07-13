@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 import { audit, auditSnapshot } from "@/lib/audit";
 import { RESTRICTED_TEMPLATES } from "@/lib/contractTemplates";
+import { isPaidAgencyPlan } from "@/lib/plans";
 
 const RESTRICTED_KEYS = new Set(RESTRICTED_TEMPLATES.map(t => t.key));
 
@@ -47,11 +48,12 @@ export async function PATCH(
       }
       updateData.customAmount = n;
     }
-    // ★11차#2 반쪽수정 보강: 이 경로로 FREE 강등 시 협상가(customAmount) 소멸(1회성 딜 — cancel·charge·
+    // ★11차#2+12차: 무료 등급(FREE·TRIAL)으로 강등 시 협상가(customAmount) 소멸(1회성 딜 — cancel·charge·
     //  admin/subscription과 정합). 운영자 플랜 폼(savePlan)은 customAmount를 안 보내므로 명시 클리어가 필요하다.
-    //  (남겨두면 재구독 시 resolveActivationPlan이 FREE를 반환해 billing 백스톱이 정당한 재구독을 400으로 막음.)
+    //  (남겨두면 재구독 시 resolveActivationPlan이 무료등급을 반환해 billing 백스톱이 정당한 재구독을 400으로 막음.
+    //   FREE만 처리하면 TRIAL 강등에서 같은 잠금이 재발 → isPaidAgencyPlan로 무료등급 전체를 종결.)
     //  단 같은 요청에서 customAmount를 명시 전달했다면(딜 재설정) 그 값을 존중한다.
-    if (updateData.planType === "FREE" && customAmount === undefined) {
+    if (updateData.planType !== undefined && !isPaidAgencyPlan(updateData.planType) && customAmount === undefined) {
       updateData.customAmount = null;
     }
     if (billingNote !== undefined)  updateData.billingNote = billingNote ? String(billingNote).slice(0, 500) : null;
