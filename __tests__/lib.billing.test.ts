@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { advanceBilling, buildBillingOrderId, buildSubscribeOrderId } from "@/lib/billing";
+import { advanceBilling, buildBillingOrderId, buildSubscribeOrderId, resolveActivationPlan } from "@/lib/billing";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 테스트 그물: advanceBilling 말일 오버플로우(#5).
@@ -109,5 +109,27 @@ describe("advanceBilling — ANNUAL", () => {
   });
   it("일반일은 +1년 동일 날짜", () => {
     expect(ymd(advanceBilling(new Date(2026, 6, 15), "ANNUAL"))).toBe("2027-07-15");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 테스트 그물: resolveActivationPlan — #2 권한상승 차단.
+// 협상가(customAmount>0) 설정 기관은 매니저 요청 등급을 무시하고 운영자 저장 등급으로 고정.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("resolveActivationPlan — 협상가 설정 시 운영자 등급 고정(#2)", () => {
+  it("협상가 있음 + 매니저가 상위등급(PRO) 요청 → 운영자 등급(STARTER)으로 고정", () => {
+    expect(resolveActivationPlan("PRO", "STARTER", 30000)).toBe("STARTER");
+  });
+  it("협상가 있음 + 요청=저장 동일 → 그대로", () => {
+    expect(resolveActivationPlan("STANDARD", "STANDARD", 50000)).toBe("STANDARD");
+  });
+  it("협상가 없음(null) → 매니저 요청 등급 그대로(표준가 결제)", () => {
+    expect(resolveActivationPlan("PRO", "FREE", null)).toBe("PRO");
+  });
+  it("협상가 0(미설정 취급) → 요청 등급 그대로", () => {
+    expect(resolveActivationPlan("STANDARD", "STARTER", 0)).toBe("STANDARD");
+  });
+  it("협상가 음수(방어) → 요청 등급 그대로", () => {
+    expect(resolveActivationPlan("PRO", "STARTER", -1)).toBe("PRO");
   });
 });

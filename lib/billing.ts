@@ -36,6 +36,19 @@ export function effectiveBilling(agency: {
   return { amount, cycle };
 }
 
+// #2(권한상승 차단): 활성화 시 실제 부여·청구 등급 결정.
+//  운영자가 협상가(customAmount>0)를 설정한 기관은 운영자가 저장한 등급(operatorPlan)으로 고정한다.
+//  → 매니저가 요청 body로 임의 상위등급(PRO 등)을 골라 '협상가만 내고 상위 한도·기능 사용'하는 권한상승 차단.
+//  협상가가 없으면(표준 월정액 결제) 매니저가 고른 요청 등급을 그대로 쓴다. cron(agency.planType)과 일원화.
+export function resolveActivationPlan<T extends string>(
+  requestedPlan: T,
+  operatorPlan: T,
+  customAmount?: number | null,
+): T {
+  const hasNegotiatedPrice = customAmount != null && customAmount > 0;
+  return hasNegotiatedPrice ? operatorPlan : requestedPlan;
+}
+
 // cron 반복결제 orderId = agency × 결제일(KST yyyymmdd) × plan.
 //  anchor가 안정된 nextBillingAt이라 재시도는 같은 날→동일 orderId(멱등 복구)이고, 연속 두 주기는
 //  ~한 달 차이라 날짜가 달라 월충돌(bug B) 없음. (수동 구독은 buildSubscribeOrderId — 이벤트 키 사용.)

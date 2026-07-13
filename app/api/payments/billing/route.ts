@@ -8,7 +8,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
 import { requireManagerSession } from "@/lib/managerScope";
-import { PLAN_PRICES, PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel, buildSubscribeOrderId } from "@/lib/billing";
+import { PLAN_PRICES, PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel, buildSubscribeOrderId, resolveActivationPlan } from "@/lib/billing";
 import { outboundAllowed } from "@/lib/outboundGuard";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
@@ -60,8 +60,14 @@ export async function POST(request: NextRequest) {
     if (!agencyRow) {
       return NextResponse.json({ success: false, message: "위탁기관를 찾을 수 없습니다." }, { status: 404 });
     }
-    // 청구 금액·주기 = 운영자 협상가 우선, 없으면 표준 월정액. (선택한 planType 기준으로 표준가 산출)
-    const { amount, cycle } = effectiveBilling({ planType, billingCycle: agencyRow.billingCycle, customAmount: agencyRow.customAmount });
+    // #2(권한상승 차단): 운영자 협상가(customAmount)가 설정된 기관은 운영자가 합의한 등급(agencyRow.planType)으로
+    //  고정한다. 협상가만 청구하면서 매니저가 body.planType으로 임의 상위등급(PRO 등)을 고르면 '협상가로 상위 한도·
+    //  기능 사용'이라는 권한상승이 되므로. 표준가 결제(customAmount 없음)는 매니저가 고른 planType 그대로.
+    //  → cron 자동결제(agencyRow.planType 사용)와 등급 결정 일원화.
+    const effectivePlanType = resolveActivationPlan(planType, agencyRow.planType, agencyRow.customAmount);
+
+    // 청구 금액·주기 = 운영자 협상가 우선, 없으면 표준 월정액. (확정 등급 기준으로 표준가 산출)
+    const { amount, cycle } = effectiveBilling({ planType: effectivePlanType, billingCycle: agencyRow.billingCycle, customAmount: agencyRow.customAmount });
 
     // 1. 빌링키 발급 (토스 빌링키 발급 엔드포인트는 /issue. 과거 /confirm은 404)
     const billingRes = await fetch(`${TOSS_API}/billing/authorizations/issue`, {
@@ -87,7 +93,7 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     // 이벤트 키(billingEpoch×plan) orderId — 시간 미포함이라 재시도(자정/월경계 무관)는 같은 orderId로 멱등
     //  복구되고, 해지→재구독은 epoch가 올라 새 orderId로 실결제된다(이중청구·무료사이클 딜레마 근본 제거).
-    const orderId = buildSubscribeOrderId(agencyId, agencyRow.billingEpoch, planType);
+    const orderId = buildSubscribeOrderId(agencyId, agencyRow.billingEpoch, effectivePlanType);
 
     // 2. 최초 결제
     const chargeRes = await fetch(`${TOSS_API}/billing/${billingKey}`, {
@@ -100,7 +106,7 @@ export async function POST(request: NextRequest) {
         customerKey,
         amount,
         orderId,
-        orderName: `${PLAN_NAMES[planType]} ${cycleLabel(cycle)} 구독`,
+        orderName: `${PLAN_NAMES[effectivePlanType]} ${cycleLabel(cycle)} 구독`,
         customerEmail: billingData.customerEmail || null,
         customerName: billingData.customerName || null,
         taxFreeAmount: 0,
@@ -122,12 +128,12 @@ export async function POST(request: NextRequest) {
     // 3. DB 업데이트 — 다음 결제일은 딜 주기(월/연)로 가산
     const nextBillingAt = advanceBilling(now, cycle);
 
-    const limits = PLAN_LIMITS[planType] || { maxWorkers: 0, maxSites: 0 };
+    const limits = PLAN_LIMITS[effectivePlanType] || { maxWorkers: 0, maxSites: 0 };
 
     await prisma.agency.update({
       where: { id: BigInt(agencyId) },
       data: {
-        planType,
+        planType: effectivePlanType,
         tossBillingKey: billingKey,
         tossCustomerKey: customerKey,
         subscriptionId: chargeData.orderId ?? orderId,
@@ -145,11 +151,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`[payments/billing] 구독 완료: agencyId=${agencyId}, plan=${planType}, amount=${amount}`);
+    console.log(`[payments/billing] 구독 완료: agencyId=${agencyId}, plan=${effectivePlanType}, amount=${amount}`);
 
     return NextResponse.json({
       success: true,
-      planType,
+      planType: effectivePlanType,
       amount,
       nextBillingAt: nextBillingAt.toISOString(),
       paymentKey: chargeData.paymentKey ?? null,
