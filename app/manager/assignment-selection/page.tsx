@@ -35,7 +35,7 @@ type Candidate = {
   chosenWorkType: string | null; requestedWorkTypes: string[]; replyDeadline: string | null;
   requestedAt: string | null; // 요청 발송일(assignedAt)
 };
-type Group = { siteId: string; siteName: string; siteAddress: string; capacity: number; capAm?: number; capPm?: number; capFull?: number; candidates: Candidate[] };
+type Group = { siteId: string; siteName: string; siteAddress: string; capacity: number; capAm?: number; capPm?: number; capFull?: number; capCustom?: number; candidates: Candidate[] };
 
 // 근무 형태 표기(오전 / 오후 / 전일 / 오전·오후)
 function workTypeText(c: Candidate): string {
@@ -162,6 +162,7 @@ export default function AssignmentSelectionPage() {
         if ((g.capAm ?? 0) - cnt("AM") > 0) remWts.push("AM");
         if ((g.capPm ?? 0) - cnt("PM") > 0) remWts.push("PM");
         if ((g.capFull ?? 0) - cnt("FULL_DAY") > 0) remWts.push("FULL_DAY");
+        if ((g.capCustom ?? 0) - cnt("CUSTOM") > 0) remWts.push("CUSTOM");
         const dl = g.candidates.find(c => c.replyDeadline)?.replyDeadline?.slice(0, 10) ?? "";
         const params = new URLSearchParams({ requestSite: g.siteId });
         if (remWts.length) params.set("wt", remWts.join(","));
@@ -279,7 +280,7 @@ export default function AssignmentSelectionPage() {
                     <p className="truncate text-lg font-black text-slate-900" title={sel.siteName}>{sel.siteName}</p>
                     <p className="mt-1 text-[15px] font-black text-slate-600">
                       요청 인원 수: {reqTotal} / 수락 인원 수: {acceptedTotal} / 모집 인원 수: {sel.capacity}
-                      <span className="ml-1 font-semibold text-slate-400">(오전 {sel.capAm ?? 0} · 오후 {sel.capPm ?? 0} · 전일 {sel.capFull ?? 0})</span>
+                      <span className="ml-1 font-semibold text-slate-400">(오전 {sel.capAm ?? 0} · 오후 {sel.capPm ?? 0} · 전일 {sel.capFull ?? 0}{(sel.capCustom ?? 0) > 0 ? ` · 직접 ${sel.capCustom}` : ""})</span>
                     </p>
                   </div>
                   <button type="button" disabled={!canFinalize || busy} onClick={() => finalize(sel)}

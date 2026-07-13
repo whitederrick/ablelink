@@ -13,6 +13,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { audit } from "@/lib/audit";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
+import { findCapacityOverflow, type CapacitySlot } from "@/lib/assignmentCapacity";
 
 const VALID_WT = ["AM", "PM", "FULL_DAY", "CUSTOM"];
 
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     const asgn = await prisma.siteAssignment.findFirst({
       where: { id: BigInt(assignmentId), workerId, status: "REQUESTED" },
-      select: { id: true, siteId: true, startDate: true, endDate: true, replyDeadline: true, requestedWorkTypes: true, site: { select: { companyName: true, ownerManagerId: true, agencyId: true } } },
+      select: { id: true, siteId: true, startDate: true, endDate: true, replyDeadline: true, requestedWorkTypes: true, site: { select: { companyName: true, ownerManagerId: true, agencyId: true, amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true } } },
     });
     if (!asgn) {
       return NextResponse.json({ success: false, message: "회신할 배정 요청을 찾을 수 없습니다." }, { status: 404 });
@@ -119,7 +120,27 @@ export async function POST(req: NextRequest) {
       const competitors = await tx.siteAssignment.count({
         where: { siteId: asgn.siteId, id: { not: asgn.id }, status: { in: ["REQUESTED", "ACCEPTED"] } },
       });
-      const newStatus: "ASSIGNED" | "ACCEPTED" = competitors === 0 ? "ASSIGNED" : "ACCEPTED";
+      let newStatus: "ASSIGNED" | "ACCEPTED" = competitors === 0 ? "ASSIGNED" : "ACCEPTED";
+      // ★10차#5: 단일 후보 자동배정(ASSIGNED)이 슬롯 정원을 넘기지 않도록 한다. 정원 설정 현장에서 이 워커의
+      //  선택 슬롯이 이미 차 있으면(예: amCapacity=1인데 이미 1명 ASSIGNED) 자동승격 대신 ACCEPTED로 두어 매니저
+      //  finalize(현장락+정원검사)로 넘긴다. finalize만 강제하던 슬롯 정원(#7)을 respond 자동배정 경로에도 적용.
+      //  (정원 미설정=무제한 현장이면 findCapacityOverflow가 null → 종전대로 ASSIGNED.)
+      if (newStatus === "ASSIGNED") {
+        const s = asgn.site;
+        const capBySlot: Record<CapacitySlot, number> = {
+          AM: s?.amCapacity ?? 0, PM: s?.pmCapacity ?? 0, FULL_DAY: s?.fullDayCapacity ?? 0, CUSTOM: s?.customCapacity ?? 0,
+        };
+        const filledGroups = await tx.siteAssignment.groupBy({
+          by: ["workType"],
+          where: { siteId: asgn.siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+          _count: { _all: true },
+        });
+        const filledBySlot: Record<string, number> = {};
+        for (const g of filledGroups) if (g.workType) filledBySlot[g.workType] = g._count._all;
+        if (findCapacityOverflow(capBySlot, filledBySlot, { [workType]: 1 })) {
+          newStatus = "ACCEPTED"; // 슬롯 정원 초과 → 자동배정 보류, 매니저 확정 대기
+        }
+      }
       const r = await tx.siteAssignment.updateMany({
         where: { id: asgn.id, status: "REQUESTED" },
         data: { status: newStatus, workType, commuteGuidanceIncluded, connectedAt: new Date() },

@@ -75,19 +75,22 @@ export async function GET(req: NextRequest) {
         where: { agencyId, siteId: { in: siteIdList }, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
         _count: { _all: true },
       });
-      const filledMap = new Map<string, { AM: number; PM: number; FULL_DAY: number }>();
+      const filledMap = new Map<string, { AM: number; PM: number; FULL_DAY: number; CUSTOM: number }>();
       for (const f of filled) {
         const k = f.siteId.toString();
-        if (!filledMap.has(k)) filledMap.set(k, { AM: 0, PM: 0, FULL_DAY: 0 });
+        if (!filledMap.has(k)) filledMap.set(k, { AM: 0, PM: 0, FULL_DAY: 0, CUSTOM: 0 });
         const wt = String(f.workType ?? "");
-        if (wt === "AM" || wt === "PM" || wt === "FULL_DAY") filledMap.get(k)![wt] += f._count._all;
+        if (wt === "AM" || wt === "PM" || wt === "FULL_DAY" || wt === "CUSTOM") filledMap.get(k)![wt] += f._count._all;
       }
       for (const [k, g] of groupsMap) {
-        const fm = filledMap.get(k) ?? { AM: 0, PM: 0, FULL_DAY: 0 };
+        const fm = filledMap.get(k) ?? { AM: 0, PM: 0, FULL_DAY: 0, CUSTOM: 0 };
         g.capAm = Math.max(0, g.capAm - fm.AM);
         g.capPm = Math.max(0, g.capPm - fm.PM);
         g.capFull = Math.max(0, g.capFull - fm.FULL_DAY);
-        g.capacity = g.capAm + g.capPm + g.capFull;
+        g.capCustom = Math.max(0, g.capCustom - fm.CUSTOM);
+        // ★#7 회귀 수정: 총 남은 정원에 CUSTOM(맞춤) 슬롯 포함. 누락 시 customCapacity 현장이 capacity=0으로
+        //  잡혀 UI(page.tsx: g.capacity<=0)가 '정원 미설정'으로 오판해 finalize를 차단했다.
+        g.capacity = g.capAm + g.capPm + g.capFull + g.capCustom;
       }
     }
 
