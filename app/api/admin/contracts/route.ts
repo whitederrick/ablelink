@@ -154,6 +154,21 @@ export async function POST(req: NextRequest) {
       // 이력 검색에서 선택한 기존 유저
       try { userIdBig = BigInt(workerId); }
       catch { throw new Error("VALIDATION:잘못된 userId입니다."); }
+      // ★크로스테넌트 IDOR 차단: workerId(이력검색 선택) 경로는 본 기관과 기존 관계(계약 이력 또는 배정)가 있는
+      //  워커만 허용한다. worker-search가 employmentContracts:{some:{agencyId}}로 스코프하는 UI 불변식과 일치.
+      //  (임의 workerId 열거로 타 기관 워커 PII 조회 + 무단 알림톡 발송을 차단. 신규 워커 최초 계약은 아래
+      //   수동입력 경로로 생성하고, assignmentId 경로는 하단에서 별도로 소속을 검증한다.)
+      const belongs = await prisma.worker.findFirst({
+        where: {
+          id: userIdBig,
+          OR: [
+            { employmentContracts: { some: { agencyId: scope.agencyId } } },
+            { assignments: { some: { agencyId: scope.agencyId } } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (!belongs) throw new Error("FORBIDDEN");
     } else {
       // 수동 입력: 이름 + 전화번호 필수
       const name  = (manualName  ?? "").trim();
