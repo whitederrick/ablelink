@@ -113,10 +113,12 @@ function formatHHMM(val: string | null | Date): string {
   }
 }
 
-function nowDateStr(): string {
-  const d = new Date();
+function nowDateStr(now: Date): string {
+  // ★10차#7: KST 고정(+9h, 서머타임 없음) — SSR(서버 UTC)에서 getMonth/getDate/getDay가 전날 날짜로
+  //  렌더되던 문제 차단(시계 getKstHms와 동일 패턴·동일 시간 소스). getUTC*로 읽어 렌더 위치 무관 동일 출력.
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${weekdays[d.getDay()]})`;
+  return `${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일 (${weekdays[kst.getUTCDay()]})`;
 }
 
 function getWorkTimes(
@@ -831,7 +833,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
           {/* 날짜 + 현장·서비스단계 + 상태 — 모바일 1줄 고정(현장명 말줄임, 상태뱃지 줄바꿈 방지) */}
           <div className="flex flex-nowrap items-center justify-between gap-2 pb-1">
             <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
-              <span className="shrink-0 text-base font-bold text-slate-300">{nowDateStr()}</span>
+              <span className="shrink-0 text-base font-bold text-slate-300">{nowDateStr(currentTime)}</span>
               {homeData?.siteName && (
                 <>
                   {activeAssignments.length >= 2 ? (
