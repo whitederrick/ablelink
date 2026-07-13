@@ -173,3 +173,39 @@ describe("computeWeeklyHoliday — 공휴일 낀 주 개근 인정", () => {
     expect(w24.eligible).toBe(true);
   });
 });
+
+// ★14차: 개근(조건①)은 '소정근로일' 출근만 카운트. 비소정일(주말)·공휴일 출근이 소정일 결근을 상쇄하면 안 됨.
+describe("computeWeeklyHoliday — 소정근로일만 개근 카운트(비소정일/공휴일 출근 상쇄 방지)", () => {
+  const base = { workDaysPerWeek: 5, ordinaryWage: 12000 } as const;
+  it("월~금 워커가 수요일 결근 + 토요일 출근 → 개근 아님(비적격)", () => {
+    // W24: Mon8,Tue9 출근, Wed10 결근, Thu11,Fri12 출근, Sat13(비소정) 출근
+    const days = [8, 9, 11, 12, 13].map(d => ({ dateISO: mon(d), scheduledMinutes: 240 }));
+    const r = computeWeeklyHoliday({ ...base, days });
+    const w24 = r.weeks.find(w => w.weekKey === "2026-W24")!;
+    expect(w24.workedDays).toBe(4);      // 토요일 제외
+    expect(w24.fullAttendance).toBe(false);
+    expect(w24.eligible).toBe(false);
+  });
+  it("월~금 정상 출근 → 개근(적격)", () => {
+    const days = [8, 9, 10, 11, 12].map(d => ({ dateISO: mon(d), scheduledMinutes: 240 }));
+    const r = computeWeeklyHoliday({ ...base, days });
+    const w24 = r.weeks.find(w => w.weekKey === "2026-W24")!;
+    expect(w24.workedDays).toBe(5);
+    expect(w24.eligible).toBe(true);
+  });
+  it("수요일 공휴일: 목요일 결근 + 공휴일(수) 출근 → 개근 아님(공휴일 출근 상쇄 방지)", () => {
+    // requiredDays = 5 - 1(수 공휴일) = 4. Mon8,Tue9,Fri12 출근 + Wed10(공휴일) 출근, Thu11 결근
+    const days = [8, 9, 10, 12].map(d => ({ dateISO: mon(d), scheduledMinutes: 240 }));
+    const r = computeWeeklyHoliday({ ...base, days, holidaySet: new Set(["2026-06-10"]) });
+    const w24 = r.weeks.find(w => w.weekKey === "2026-W24")!;
+    expect(w24.workedDays).toBe(3);      // 공휴일(수) 제외 → 8,9,12
+    expect(w24.eligible).toBe(false);
+  });
+  it("수요일 공휴일: 나머지 소정일(월화목금) 개근 → 적격", () => {
+    const days = [8, 9, 11, 12].map(d => ({ dateISO: mon(d), scheduledMinutes: 240 }));
+    const r = computeWeeklyHoliday({ ...base, days, holidaySet: new Set(["2026-06-10"]) });
+    const w24 = r.weeks.find(w => w.weekKey === "2026-W24")!;
+    expect(w24.workedDays).toBe(4);
+    expect(w24.eligible).toBe(true);
+  });
+});

@@ -123,7 +123,14 @@ export function computeWeeklyHoliday(input: WeeklyHolidayInput): WeeklyHolidayRe
     const key = isoWeekKey(dw.dateISO);
     let w = byWeek.get(key);
     if (!w) { w = { workedDays: new Set(), minutes: 0, endISO: isoWeekEndISO(dw.dateISO) }; byWeek.set(key, w); }
-    w.workedDays.add(dw.dateISO);
+    // ★14차: 개근(조건①)은 '소정근로일' 출근만 카운트한다. 비소정일(주말 등) 출근이나 소정일에 걸린 공휴일
+    //  출근은 소정근로일이 아니므로(requiredDays에서도 이미 제외됨) 개근 카운트에 넣지 않는다. 넣으면 비소정일/
+    //  공휴일 출근이 다른 소정일 결근을 상쇄해 주휴수당이 과지급된다. (소정요일 집합은 계약 파생 authoritative.)
+    const [dy, dm, dd] = dw.dateISO.split("-").map(Number);
+    const dow = new Date(Date.UTC(dy, dm - 1, dd)).getUTCDay();
+    if (workingWeekdays.has(dow) && !holidaySet.has(dw.dateISO)) {
+      w.workedDays.add(dw.dateISO);
+    }
     w.minutes += dw.scheduledMinutes;
   }
 

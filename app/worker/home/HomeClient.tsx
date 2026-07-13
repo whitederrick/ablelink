@@ -35,6 +35,7 @@ const WORKTYPE_SHORT: Record<string, string> = { AM: "오전", PM: "오후", FUL
 import { LATE_CLOCK_OUT_REASONS } from "@/lib/attendance/lateClockOut";
 import { setActiveAssignmentCookie } from "../_lib/activeAssignmentCookie";
 import { getKstHms } from "@/lib/time";
+import { computeWorkTimes } from "@/lib/workSchedule";
 
 type MissedClockOut = { attendanceId: string; workDate: string; siteName: string };
 
@@ -123,15 +124,17 @@ function nowDateStr(now: Date): string {
 
 function getWorkTimes(
   workType: string | null,
+  commuteGuidanceIncluded: boolean,
   customStart?: string | null,
   customEnd?: string | null,
 ): { clockIn: string; clockOut: string } | null {
-  if (workType === "AM")       return { clockIn: "09:00", clockOut: "12:00" };
-  if (workType === "PM")       return { clockIn: "13:00", clockOut: "17:00" };
-  if (workType === "FULL_DAY") return { clockIn: "09:00", clockOut: "18:00" };
-  if (workType === "CUSTOM" && customStart && customEnd)
-    return { clockIn: customStart, clockOut: customEnd };
-  return null;
+  // ★14차: 알람 표준시각을 lib/workSchedule.computeWorkTimes 단일소스(clock-in/out 저장·출근부와 동일)로 통일.
+  //  기존 하드코딩(AM 09:00~12:00 등)은 2026-06-10 정책개정·commuteGuidanceIncluded를 반영 못해 퇴근 알람이
+  //  실제 시각보다 최대 2시간 이르게 발동했음(워커 조기 퇴근버튼 유발).
+  if (workType !== "AM" && workType !== "PM" && workType !== "FULL_DAY" && workType !== "CUSTOM") return null;
+  if (workType === "CUSTOM" && !(customStart && customEnd)) return null;
+  const t = computeWorkTimes(workType, commuteGuidanceIncluded, customStart, customEnd);
+  return { clockIn: t.start, clockOut: t.end };
 }
 
 function scheduleAlarm(
@@ -382,7 +385,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
   useEffect(() => {
     if (!homeData) return;
     if (homeData.attendanceButtonExempt) return; // 면제 배정: 출퇴근 버튼 미사용 → 알람 불필요
-    const times = getWorkTimes(homeData.workType, homeData.customWorkStart, homeData.customWorkEnd);
+    const times = getWorkTimes(homeData.workType, homeData.commuteGuidanceIncluded, homeData.customWorkStart, homeData.customWorkEnd);
     if (!times) return;
     scheduleAlarm(times.clockIn,  clockInAlert,  `출근 ${clockInAlert}분 전입니다. 출근 버튼을 눌러주세요.`,  alarmFiredRef.current);
     scheduleAlarm(times.clockOut, clockOutAlert, `퇴근 ${clockOutAlert}분 전입니다. 퇴근 버튼을 눌러주세요.`, alarmFiredRef.current);
