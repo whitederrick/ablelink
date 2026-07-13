@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
+import { getKstHms } from "@/lib/time";
 
 export async function GET(req: NextRequest) {
   try {
@@ -34,10 +35,12 @@ export async function GET(req: NextRequest) {
       take: 100,
     });
 
+    // ★13차: 시각은 KST 고정(getKstHms). startTime/endTime은 UTC instant로 저장돼(kstWallTimeToInstant),
+    //  서버(UTC) getHours()로 포맷하면 9시간 이르게 표시(08:30→23:30)돼 운영자 교정 오판을 유발했음.
     function hhMM(dt: Date | null) {
       if (!dt) return null;
-      const h = String(dt.getHours()).padStart(2,"0"), m = String(dt.getMinutes()).padStart(2,"0");
-      return `${h}:${m}`;
+      const { hh, mm } = getKstHms(dt);
+      return `${hh}:${mm}`;
     }
 
     return NextResponse.json({

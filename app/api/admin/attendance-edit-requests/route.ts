@@ -4,6 +4,15 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { getKstHms } from "@/lib/time";
+
+// ★13차: 시각은 KST 고정. startTime/endTime은 UTC instant 저장이라 서버(UTC) getHours()로 포맷하면 9시간
+//  이르게 표시(08:30→23:30)돼, 매니저가 워커 요청값(KST)과 다른 현재값을 대조해 승인/반려를 오판했음.
+function hhmmKst(dt: Date | null): string | null {
+  if (!dt) return null;
+  const { hh, mm } = getKstHms(dt);
+  return `${hh}:${mm}`;
+}
 
 export async function GET(req: Request) {
   try {
@@ -42,12 +51,8 @@ export async function GET(req: Request) {
         userPhone:    r.user.phoneNumber ?? "",
         workDate:     r.attendance.workDate,
         siteName:     r.attendance.site?.companyName ?? "",
-        currentStart: r.attendance.startTime
-          ? `${String(r.attendance.startTime.getHours()).padStart(2,"0")}:${String(r.attendance.startTime.getMinutes()).padStart(2,"0")}`
-          : null,
-        currentEnd: r.attendance.endTime
-          ? `${String(r.attendance.endTime.getHours()).padStart(2,"0")}:${String(r.attendance.endTime.getMinutes()).padStart(2,"0")}`
-          : null,
+        currentStart: hhmmKst(r.attendance.startTime),
+        currentEnd:   hhmmKst(r.attendance.endTime),
         isFinalClosed: r.attendance.isFinalClosed,
         isGpsModified: r.attendance.isGpsModified,
         reason:        r.reason,

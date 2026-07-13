@@ -135,11 +135,20 @@ export async function GET(request: NextRequest) {
         select: { trainee: { select: { id: true, name: true } } },
       });
       const trainees = [...new Map(placements.map((p) => [String(p.trainee.id), p.trainee])).values()];
+      // ★13차: 동명이인 훈련생은 폴더명(훈련생_{이름})이 같아 같은 폴더로 병합돼 먼저 쓴 훈련생의 서류가
+      //  덮어써진다(공단 감사서류 조용한 누락). 같은 이름이 2명 이상일 때만 폴더명에 trainee.id를 붙여 구분한다
+      //  (단일이면 이름 그대로 — 무회귀). 현장 폴더 순번(#11차)과 같은 클래스의 하위 폴더 버전.
+      const dupTraineeNames = new Set<string>();
+      {
+        const seen = new Set<string>();
+        for (const t of trainees) { if (seen.has(t.name)) dupTraineeNames.add(t.name); else seen.add(t.name); }
+      }
 
       // 2) 훈련생별 문서 — DB 쿼리·PDF 렌더를 병렬화하되 동시성 상한(무제한 fan-out 시 커넥션/메모리 폭주 방지)
       await mapWithConcurrency(trainees, 4, async (trainee) => {
         const tid    = trainee.id;
-        const folder = target.folder(safeFilename(`훈련생_${trainee.name}`))!;
+        const folderName = dupTraineeNames.has(trainee.name) ? `훈련생_${trainee.name}_${trainee.id}` : `훈련생_${trainee.name}`;
+        const folder = target.folder(safeFilename(folderName))!;
 
         // 4개 쿼리 병렬
         const [trainingLogs, trainingEv, adaptLogs, adaptEv] = await Promise.all([
