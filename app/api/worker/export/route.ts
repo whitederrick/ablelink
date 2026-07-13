@@ -12,6 +12,7 @@ import { checkPlanAccess } from "@/lib/planGuard";
 import ExcelJS from "exceljs";
 // G3: CSV 직렬화는 단일 출처(lib/csv.csvBody) — 로컬 복사본은 헤더를 이스케이프하지 않아 인젝션/일관성 drift.
 import { csvBody } from "@/lib/csv";
+import { getKstDateString } from "@/lib/time";
 
 function isDateOnly(s: string) { return /^\d{4}-\d{2}-\d{2}$/.test(s); }
 function pad2(n: number) { return String(n).padStart(2, "0"); }
@@ -82,12 +83,12 @@ export async function GET(req: NextRequest) {
     if (fromStr && !isDateOnly(fromStr)) return NextResponse.json({ success: false, message: "from 형식 오류" }, { status: 400 });
     if (toStr   && !isDateOnly(toStr))   return NextResponse.json({ success: false, message: "to 형식 오류" }, { status: 400 });
 
-    const today = new Date();
-    // 보관 1년: 1년 전 이전은 제외
-    const earliestD = new Date(today); earliestD.setFullYear(earliestD.getFullYear() - 1);
-    const earliest = `${earliestD.getFullYear()}-${pad2(earliestD.getMonth() + 1)}-${pad2(earliestD.getDate())}`;
-    const monthFirst = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-01`;
-    const todayStr = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
+    // ★15차: 날짜 경계는 KST 고정. 서버 UTC getDate로 계산하면 KST 자정~오전9시에 기본 내보내기 시 오늘/이번달
+    //  데이터(workDate는 KST 문자열)가 to 경계 밖으로 누락됐다.
+    const todayStr = getKstDateString();                 // KST 오늘
+    const monthFirst = `${todayStr.slice(0, 7)}-01`;     // KST 이번달 1일
+    const [_ey, _em, _ed] = todayStr.split("-").map(Number);
+    const earliest = `${_ey - 1}-${pad2(_em)}-${pad2(_ed)}`; // 보관 1년: KST 1년 전
 
     const from = (fromStr && fromStr > earliest ? fromStr : (fromStr ? earliest : monthFirst));
     const to   = toStr || todayStr;

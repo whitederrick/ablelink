@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
 import { escapeCsvCell } from "@/lib/csv";
 import { logAccess } from "@/lib/accessLog";
+import { getKstDateString } from "@/lib/time";
 
 function errStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -87,7 +88,9 @@ export async function GET(req: NextRequest) {
     const effectiveFrom = earliest
       ? (fromStr && fromStr > earliest ? fromStr : earliest)
       : (fromStr || undefined);
-    const effectiveTo = toStr || `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
+    // ★15차: 기본 to는 KST 오늘. 서버 UTC getDate로 계산하면 KST 자정~오전9시에 to 없이 CSV 내보낼 때 당일
+    //  근태/일지(workDate=KST 문자열)가 lte 경계 밖으로 누락됐다.
+    const effectiveTo = toStr || getKstDateString();
 
     // 개인정보 접속기록: 취급자의 근태/일지 원자료 CSV 대량 내보내기(정보주체 다수 → 라벨로 범위 기록).
     await logAccess(req, session, {
