@@ -180,10 +180,10 @@ export async function POST(req: NextRequest) {
     if (session.kind === "manager" && site.agencyId !== session.agencyId) throw new Error("FORBIDDEN");
     const effectiveAgencyId = site.agencyId;
 
-    // 배정 대상 user 존재 확인
+    // 배정 대상 user 존재 확인 (phoneNumber/loginId는 아래 미소속 요청의 전화 확인용)
     const user = await prisma.worker.findUnique({
       where: { id: workerId },
-      select: { status: true },
+      select: { status: true, phoneNumber: true, loginId: true },
     });
     if (!user) throw new Error("NOT_FOUND");
     if (String(user.status) !== "ACTIVE") throw new Error("VALIDATION:userInactive");
@@ -226,6 +226,18 @@ export async function POST(req: NextRequest) {
       : true;
     if (!isRequest && session.kind === "manager" && !workerBelongs) {
       throw new Error("VALIDATION:직무지도원이 이 기관 소속이 아닙니다. 배정 요청을 보내 수락받은 뒤 배정해주세요.");
+    }
+    // ★15차(B·근본): 배정 요청(mode=request)은 정책상 미소속·타기관 워커에게도 보낼 수 있으나(전화로 소개받은
+    //  채용), 임의 workerId(순차)로 REQUESTED 소속행을 무제한 주입해 하류 목록/상세/export에서 그 워커 연락처·
+    //  실명을 열거 수집하던 오라클의 근본 enabler였다. 미소속 워커 요청은 '그 워커의 전화번호 제시'(by-phone
+    //  정규경로)를 요구해 id 열거를 원천 차단한다(전화를 알아야만 요청 가능 → 순차 열거 불가). 소속 워커는 불필요.
+    if (isRequest && session.kind === "manager" && !workerBelongs) {
+      const provided = String(body.phone ?? "").replace(/[^0-9]/g, "");
+      const actual = String(user.phoneNumber ?? "").replace(/[^0-9]/g, "");
+      const actualLogin = String(user.loginId ?? "").replace(/[^0-9]/g, "");
+      if (!provided || (provided !== actual && provided !== actualLogin)) {
+        throw new Error("VALIDATION:이 직무지도원에게는 전화번호로 조회해 배정 요청을 보낼 수 있습니다.");
+      }
     }
 
     let requestedWorkTypesCsv: string | null = null;

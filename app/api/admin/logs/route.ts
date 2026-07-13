@@ -41,15 +41,20 @@ export async function GET(req: NextRequest) {
       writerFilter = { in: allowedUserIds };
     }
 
+    // ★15차: 훈련일지의 '근무 현장'이 이 기관인 것만. writerId(현재 배정 워커)만 스코프하면, 멀티기관 배정 워커가
+    //  타 기관(B) 현장에서 작성한 훈련일지가 A 매니저에게 유출된다(로그 내용=크로스테넌트). attendance.site.agencyId로
+    //  스코프해 차단(attendanceId는 non-null이라 정당 로그 배제 없음). 운영자(agencyId 없음)는 전체.
+    const attendanceWhere: { site?: { agencyId: bigint }; workDate?: { gte: string; lte: string } } = {};
+    if (scope.agencyId) attendanceWhere.site = { agencyId: scope.agencyId };
+    if (dateFrom && dateTo) attendanceWhere.workDate = { gte: dateFrom, lte: dateTo };
+
     const logs = await prisma.traineeLog.findMany({
       where: {
         ...(writerFilter !== undefined ? { writerId: writerFilter } : {}),
         ...(traineeId ? { traineeId: BigInt(traineeId) } : {}),
         ...(completed === "true"  ? { isCompleted: true  } : {}),
         ...(completed === "false" ? { isCompleted: false } : {}),
-        attendance: dateFrom && dateTo
-          ? { workDate: { gte: dateFrom, lte: dateTo } }
-          : undefined,
+        ...(Object.keys(attendanceWhere).length ? { attendance: attendanceWhere } : {}),
       },
       include: {
         trainee:    { select: { id: true, name: true, gender: true } },

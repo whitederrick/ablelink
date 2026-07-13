@@ -297,7 +297,9 @@ function InviteModal({ onClose, initialSiteId, initialWorkTypes, initialDeadline
           // 기존 워커: 배정 요청(REQUESTED) 생성 — 후보 회신(수락) 후 계약 대기로 진행.
           const res = await fetch("/api/admin/assignments", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ workerId: r.workerId, siteId, mode: "request", requestedWorkTypes: reqWorkTypes, replyDeadline }),
+            // ★15차(B): 미소속 워커 요청은 서버가 전화번호 확인(by-phone 정규경로 강제, id 열거 차단). 후보/직접추가
+            //  모두 r.phone 보유하므로 함께 전송(소속 워커는 서버에서 전화 불요).
+            body: JSON.stringify({ workerId: r.workerId, phone: r.phone, siteId, mode: "request", requestedWorkTypes: reqWorkTypes, replyDeadline }),
           });
           const data = await res.json();
           if (data.success) out.push({ name: r.name, phone: r.phone, ok: true, kind: "worker" });
