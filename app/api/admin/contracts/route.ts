@@ -13,6 +13,9 @@ import { findTimeConflict, isSameAgencyConflict } from "@/lib/assignmentOverlap"
 import { randomUUID } from "crypto";
 import { hash } from "bcryptjs";
 import { audit } from "@/lib/audit";
+// ★13차: 워커 소속 판정을 단일 소스(lib/worker/agencyScope)로 통일. workers/[id]·worker-accounts·verify-*·
+//  직접배정과 같은 정의를 공유해 '한 곳만 조이고 형제 라우트 누락'(P0 근본원인)을 구조적으로 차단한다.
+import { workerBelongsToAgency, CONSENTED_ASSIGN_STATUSES } from "@/lib/worker/agencyScope";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -20,28 +23,6 @@ function errToStatus(msg: string) {
   if (msg === "NOT_FOUND")    return 404;
   if (msg.startsWith("VALIDATION:")) return 400;
   return 500;
-}
-
-// 워커가 이 기관과 '실제 관계'를 맺은 배정 상태 — 동의(수락)/근무/과거근무만 인정.
-//  ★12차: REQUESTED(매니저 일방 요청, 워커 미수락)·REJECTED(거절)·EXPIRED(무응답)·DROPPED(탈락)은 관계로
-//  치지 않는다. 이들을 인정하면 매니저가 타 기관 워커에게 일방 REQUESTED만 생성하거나 과거 거절/만료 행만
-//  있어도 동의 게이트를 통과해 계약을 강제 발행할 수 있다(동의 없는 크로스테넌트 부착).
-const CONSENTED_ASSIGN_STATUSES = ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE", "ENDED"] as const;
-
-// 워커가 이 기관과 기존 관계(계약 이력 또는 '수락/근무한' 배정)를 갖는가 — 크로스테넌트 부착 차단 공용 판정.
-//  workerId(이력검색) 경로와 manualPhone(기존 워커) 경로가 동일 불변식을 쓰도록 단일화한다.
-async function workerBelongsToAgency(workerId: bigint, agencyId: bigint): Promise<boolean> {
-  const hit = await prisma.worker.findFirst({
-    where: {
-      id: workerId,
-      OR: [
-        { employmentContracts: { some: { agencyId } } },
-        { assignments: { some: { agencyId, status: { in: [...CONSENTED_ASSIGN_STATUSES] } } } },
-      ],
-    },
-    select: { id: true },
-  });
-  return !!hit;
 }
 
 // GET: 계약서 목록

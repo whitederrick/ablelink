@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { verifyIdentityToken } from "@/lib/verify/identity";
+import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -18,11 +19,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     let workerId: bigint;
     try { workerId = BigInt(id); } catch { return NextResponse.json({ success: false, message: "잘못된 ID" }, { status: 400 }); }
 
-    const owned = await prisma.worker.findFirst({
-      where: { id: workerId, assignments: { some: { site: { agencyId: scope.agencyId } } } },
-      select: { id: true },
-    });
-    if (!owned) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    // ★13차: 공용 소속 판정(CONSENTED 배정/계약). 미동의 REQUESTED 위장으로 타 기관 워커 본인인증 플래그를
+    //  조작하던 우회 차단.
+    if (!(await workerBelongsToAgency(workerId, scope.agencyId))) {
+      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    }
 
     const body = await req.json().catch(() => ({}));
     const mode = body?.mode === "digital" ? "digital" : "inperson";

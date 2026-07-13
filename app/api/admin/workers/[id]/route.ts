@@ -10,19 +10,17 @@ import { audit, auditSnapshot } from "@/lib/audit";
 import { logAccess } from "@/lib/accessLog";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
+import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
 
 function generateTempPassword(): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
   return Array.from({ length: 8 }, () => chars[randomInt(chars.length)]).join("");
 }
 
-// 자기 위탁기관 소속 직무지도원인지 확인(스코프 가드)
+// 자기 위탁기관 소속 직무지도원인지 확인(스코프 가드) — ★13차: 공용 판정(수락/근무한 배정 또는 계약이력)으로 위임.
+//  status 없는 assignments.some({site:{agencyId}})는 미동의 REQUESTED 위장 계정탈취(P0)에 뚫렸음.
 async function assertAgencyWorker(workerId: bigint, agencyId: bigint) {
-  const worker = await prisma.worker.findFirst({
-    where: { id: workerId, assignments: { some: { site: { agencyId } } } },
-    select: { id: true },
-  });
-  return !!worker;
+  return workerBelongsToAgency(workerId, agencyId);
 }
 
 // GET: 직무지도원 상세(급여 계좌)
@@ -68,15 +66,8 @@ export async function PATCH(
     const { id } = await params;
     const workerId = BigInt(id);
 
-    // 자기 위탁기관 소속 직무지도원만 수정 가능
-    const worker = await prisma.worker.findFirst({
-      where: {
-        id: workerId,
-        assignments: { some: { site: { agencyId: scope.agencyId } } },
-      },
-      select: { id: true },
-    });
-    if (!worker) {
+    // 자기 위탁기관 소속 직무지도원만 수정 가능 — ★13차: 공용 판정(CONSENTED 상태/계약)으로 통일.
+    if (!(await assertAgencyWorker(workerId, scope.agencyId))) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
 

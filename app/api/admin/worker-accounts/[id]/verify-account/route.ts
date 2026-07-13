@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { verifyAccountHolder } from "@/lib/verify/account";
+import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -17,12 +18,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     let workerId: bigint;
     try { workerId = BigInt(id); } catch { return NextResponse.json({ success: false, message: "잘못된 ID" }, { status: 400 }); }
 
-    // 자기 위탁기관 소속 직무지도원만
-    const owned = await prisma.worker.findFirst({
-      where: { id: workerId, assignments: { some: { site: { agencyId: scope.agencyId } } } },
+    // 자기 위탁기관 소속 직무지도원만 — ★13차: 공용 소속 판정(CONSENTED 배정/계약). 미동의 REQUESTED 위장으로
+    //  타 기관 워커 계좌정보 열람·인증플래그 조작하던 우회 차단.
+    if (!(await workerBelongsToAgency(workerId, scope.agencyId))) {
+      return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    }
+    const owned = await prisma.worker.findUnique({
+      where: { id: workerId },
       select: { bankName: true, accountNumber: true, accountHolder: true },
     });
-    if (!owned) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
 
     // 구독 연계: 계좌 인증은 PRO 기능(벤더 종량 과금)
     const plan = await checkAgencyPlanAccess(scope.agencyId, "VERIFICATION");
@@ -31,9 +35,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const body = await req.json().catch(() => ({}));
-    const bankName = String(body?.bankName ?? owned.bankName ?? "").trim();
-    const accountNumber = String(body?.accountNumber ?? owned.accountNumber ?? "").trim();
-    const expectedHolder = String(body?.accountHolder ?? owned.accountHolder ?? "").trim();
+    const bankName = String(body?.bankName ?? owned?.bankName ?? "").trim();
+    const accountNumber = String(body?.accountNumber ?? owned?.accountNumber ?? "").trim();
+    const expectedHolder = String(body?.accountHolder ?? owned?.accountHolder ?? "").trim();
     const bankCode = body?.bankCode ? String(body.bankCode).trim() : null;
     if (!accountNumber) return NextResponse.json({ success: false, message: "계좌번호가 없습니다." }, { status: 400 });
 

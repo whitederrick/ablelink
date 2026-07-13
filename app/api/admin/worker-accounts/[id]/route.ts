@@ -8,16 +8,14 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { logAccess } from "@/lib/accessLog";
 import { AssignStatus } from "@prisma/client";
+import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
 
 const ACTIVE_ASSIGN: AssignStatus[] = [AssignStatus.ACTIVE, AssignStatus.ASSIGNED, AssignStatus.CONFIRMED];
 
-// 자기 위탁기관 소속(배정 이력) 직무지도원인지 확인
+// 자기 위탁기관 소속(수락/근무한 배정 또는 계약이력) 직무지도원인지 확인 — ★13차: 공용 판정으로 통일.
+//  status 없는 assignments.some({site:{agencyId}})는 미동의 REQUESTED 위장으로 타 기관 PII·계좌가 유출됐음(P1).
 async function assertAgencyWorker(workerId: bigint, agencyId: bigint) {
-  const worker = await prisma.worker.findFirst({
-    where: { id: workerId, assignments: { some: { site: { agencyId } } } },
-    select: { id: true },
-  });
-  return !!worker;
+  return workerBelongsToAgency(workerId, agencyId);
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

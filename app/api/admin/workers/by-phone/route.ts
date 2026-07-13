@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { logAccess } from "@/lib/accessLog";
 import { AssignStatus } from "@prisma/client";
 
 const ENGAGED: AssignStatus[] = ["ASSIGNED", "CONFIRMED", "ACTIVE"];
@@ -42,6 +43,19 @@ export async function GET(request: NextRequest) {
     if (!worker) return NextResponse.json({ success: true, exists: false });
 
     const a = worker.assignments[0];
+    // ★13차: 전화번호를 알면 타(또는 미관계) 기관 워커도 조회 가능(정책상 배정요청 유도용으로 유지). 본 기관과
+    //  관계(진행 중 배정)없는 워커의 조회는 접속기록에 남긴다(크로스기관 PII 조회 추적). 실패해도 조회는 진행.
+    if (!a) {
+      try {
+        await logAccess(request, scope, {
+          subjectType: "Worker",
+          subjectId: worker.id,
+          subjectLabel: worker.workerName,
+          resource: "worker_by_phone",
+          action: "view",
+        });
+      } catch (e) { console.warn("[by-phone] logAccess 실패:", e); }
+    }
     return NextResponse.json({
       success: true,
       exists: true,
