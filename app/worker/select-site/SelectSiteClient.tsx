@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { MapPin, Users, ChevronRight } from "lucide-react";
 import { setActiveAssignmentCookie } from "../_lib/activeAssignmentCookie";
 import type { ActiveAssignmentItem } from "@/lib/worker/activeAssignments";
+import { getKstHms } from "@/lib/time";
 
 const WORKTYPE_LABEL: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "종일", CUSTOM: "맞춤" };
 const WORKTYPE_CLS: Record<string, string> = {
@@ -18,8 +19,10 @@ export default function SelectSiteClient({ items }: { items: ActiveAssignmentIte
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
 
-  // 스마트 기본값: 현재 시각(브라우저=KST) 기준 12:30 이전=오전, 이후=오후 추천. 추천 배정을 앞으로 정렬.
-  const nowMin = (() => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); })();
+  // 스마트 기본값: 현재 KST 기준 12:30 이전=오전, 이후=오후 추천. 추천 배정을 앞으로 정렬.
+  //  getKstHms로 KST 고정(SSR 서버 UTC 렌더 시 9시간 어긋난 추천 방지).
+  const { hh, mm } = getKstHms();
+  const nowMin = Number(hh) * 60 + Number(mm);
   const recWt = nowMin < 12 * 60 + 30 ? "AM" : "PM";
   const sorted = [...items].sort((a, b) => (a.workType === recWt ? 0 : 1) - (b.workType === recWt ? 0 : 1));
 

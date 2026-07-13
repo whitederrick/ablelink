@@ -34,6 +34,7 @@ const REQ_WT_LABEL: Record<string, string> = { AM: "오전", PM: "오후", FULL_
 const WORKTYPE_SHORT: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "종일", CUSTOM: "맞춤" };
 import { LATE_CLOCK_OUT_REASONS } from "@/lib/attendance/lateClockOut";
 import { setActiveAssignmentCookie } from "../_lib/activeAssignmentCookie";
+import { getKstHms } from "@/lib/time";
 
 type MissedClockOut = { attendanceId: string; workDate: string; siteName: string };
 
@@ -104,7 +105,9 @@ function formatHHMM(val: string | null | Date): string {
   try {
     const d = val instanceof Date ? val : new Date(val);
     if (isNaN(d.getTime())) return "--:--";
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    // 저장된 시각(UTC ISO)도 KST로 표시 — SSR(서버 UTC) 직접 접속 시 9시간 어긋남 방지.
+    const { hh, mm } = getKstHms(d);
+    return `${hh}:${mm}`;
   } catch {
     return "--:--";
   }
@@ -677,9 +680,10 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
     );
   }
 
-  const pad2 = (n: number) => String(n).padStart(2, "0");
-  const timeStr = `${pad2(currentTime.getHours())}:${pad2(currentTime.getMinutes())}`;
-  const secStr  = pad2(currentTime.getSeconds());
+  // 시계는 항상 KST로 표시(서버 UTC 렌더 시 9시간 어긋나던 문제 차단 — lib/time.getKstHms).
+  const { hh: _khh, mm: _kmm, ss: _kss } = getKstHms(currentTime);
+  const timeStr = `${_khh}:${_kmm}`;
+  const secStr  = _kss;
 
   const cfg = STATUS_CONFIG[status];
   // 화면에는 실제 버튼 시각을 우선 표시(없으면 일괄생성 등 → 고정시각). 출근부 PDF만 고정시각 사용.
