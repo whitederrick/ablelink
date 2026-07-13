@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { AssignStatus, WorkerRole, Prisma } from "@prisma/client";
+import { CONSENTED_ASSIGN_STATUSES } from "@/lib/worker/agencyScope";
 
 // '진행 중' 판정 기준 — 현재 유효한 배정 상태(미종료 계약/배정)
 const ACTIVE_ASSIGN: AssignStatus[] = [AssignStatus.ACTIVE, AssignStatus.ASSIGNED, AssignStatus.CONFIRMED];
@@ -34,16 +35,20 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(parseIntSafe(searchParams.get("pageSize"), 10), 100);
     const engagement = (searchParams.get("engagement") || "all").trim(); // all | active | ended
 
-    // 본 위탁기관 현장에 배정 이력이 있는 직무지도원(현재/과거 무관)
-    const baseAssign: Prisma.SiteAssignmentWhereInput = { site: { agencyId } };
+    // 본 위탁기관 현장에 '수락/근무한' 배정 이력이 있는 직무지도원(현재/과거 무관).
+    // ★16차: status 필터(CONSENTED) 필수 — 없으면 매니저가 전화로 보낸 미동의 REQUESTED나 거절(REJECTED)·
+    //  만료(EXPIRED)행만 있어도 미소속 워커가 목록에 노출돼 계정 메타(loginId·전화·hasBankAccount·lastLoginAt)가
+    //  샌다(worker-accounts/[id] 상세는 workerBelongsToAgency로 이미 403). 상세와 동일 불변식으로 통일.
+    const siteScope: Prisma.SiteAssignmentWhereInput = { site: { agencyId } };
+    const consented: Prisma.SiteAssignmentWhereInput = { site: { agencyId }, status: { in: [...CONSENTED_ASSIGN_STATUSES] } };
     let assignmentsFilter: Prisma.WorkerWhereInput["assignments"];
     if (engagement === "active") {
-      assignmentsFilter = { some: { ...baseAssign, status: { in: ACTIVE_ASSIGN } } };
+      assignmentsFilter = { some: { ...siteScope, status: { in: ACTIVE_ASSIGN } } };
     } else if (engagement === "ended") {
-      // 이력은 있으나(some) 현재 유효한 배정이 없는(none) 자 = 계약 종료
-      assignmentsFilter = { some: baseAssign, none: { ...baseAssign, status: { in: ACTIVE_ASSIGN } } };
+      // 소속(수락/근무한 이력)은 있으나(some) 현재 유효한 배정이 없는(none) 자 = 계약 종료
+      assignmentsFilter = { some: consented, none: { ...siteScope, status: { in: ACTIVE_ASSIGN } } };
     } else {
-      assignmentsFilter = { some: baseAssign };
+      assignmentsFilter = { some: consented };
     }
 
     const where: Prisma.WorkerWhereInput = {
@@ -78,7 +83,7 @@ export async function GET(req: NextRequest) {
           bankName: true,
           accountNumber: true,
           // 진행 중 판정용 — 본 위탁기관 배정의 상태만
-          assignments: { where: baseAssign, select: { status: true } },
+          assignments: { where: siteScope, select: { status: true } },
         },
       }),
     ]);

@@ -7,6 +7,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { audit } from "@/lib/audit";
+import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
 
 export async function GET(req: NextRequest) {
   try {
@@ -83,6 +84,11 @@ export async function POST(req: NextRequest) {
     const workerIdVal = parseId(workerId);
     if (workerIdVal == null) {
       return NextResponse.json({ success: false, message: "workerId 오류" }, { status: 400 });
+    }
+    // ★16차: 이 워커가 본 기관 소속(수락/근무한 배정 또는 계약)인지 검증. 없으면 임의 workerId에 급여계약을 주입해
+    //  GET에서 미소속 워커 실명·전화를 수집하는 enabler가 된다(assignments·contracts와 동일 CONSENTED 불변식).
+    if (!(await workerBelongsToAgency(workerIdVal, agencyId))) {
+      return NextResponse.json({ success: false, message: "이 직무지도원은 본 기관 소속이 아닙니다. 배정 후 급여 기준을 설정해주세요." }, { status: 403 });
     }
 
     // ★현장별 다시급(siteId override) 제거(2026-07-06, 사용자 확정: 실무 미사용) — 워커당 급여 기준은 하나.
