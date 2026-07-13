@@ -30,7 +30,10 @@ export async function PATCH(
       const hashedPassword = await bcrypt.hash(newPassword, 12);
       // ★비밀번호 초기화 = 전 세션 로그아웃(sv+1). 셀프 재설정(reset-password)과 동일 정책(P2-16).
       // ★10차#3: 관리자가 지정한 known 비번 → hasKnownPassword=true(서명 분기가 덮어쓰지 않도록).
-      await prisma.worker.update({ where: { id: user.id }, data: { password: hashedPassword, hasKnownPassword: true, sessionVersion: { increment: 1 } } });
+      // ★14차: isTemporary=true 누락 보강 — 형제 초기화 경로(매니저재설정·셀프재설정·생성)는 전부 설정하는데
+      //  이 운영자 재설정만 빠져, 이미 온보딩한 워커를 초기화해도 강제 비번교체(온보딩)가 안 돼 운영자가 아는
+      //  임시비번이 무기한 유효한 로그인 크리덴셜로 남았음(다중/퇴사 운영자 잔존 백도어).
+      await prisma.worker.update({ where: { id: user.id }, data: { password: hashedPassword, isTemporary: true, hasKnownPassword: true, sessionVersion: { increment: 1 } } });
       await audit(scope, { entityType: "Worker", entityId: user.id, action: "update", summary: "비밀번호 초기화" });
       return NextResponse.json({ success: true, message: "비밀번호가 초기화되었습니다." });
     }

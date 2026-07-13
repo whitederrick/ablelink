@@ -177,16 +177,22 @@ export async function POST(req: NextRequest) {
 
       // E3: ASSIGNED 승격 전 시간겹침 검사 — 선정자가 다른 현장 진행중 배정과 같은 날 슬롯이 겹치면 이중배정.
       //  (finalize·restore가 겹침가드 없이 상태를 올려 respond/PATCH의 409를 우회하던 경로 차단.)
-      const selDetails = await prisma.siteAssignment.findMany({
+      // 워커 락 대상 = 선정 후보의 워커. workerId는 배정행에 고정(PATCH가 못 바꿈)이라 락 밖 조회로 안전.
+      const selWorkers = await prisma.siteAssignment.findMany({
         where: { id: { in: selectedIds } },
-        select: { id: true, workerId: true, workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
+        select: { workerId: true },
       });
 
-      // ★현장 락 + 선정 워커 락으로 "정원 재조회 → 초과가드 → 겹침검사 → 승격"을 원자적으로 수행(#4/P1-5).
-      //  현장 락: 같은 현장에 다른 워커들로 동시 finalize가 각자 정원검사를 통과해 정원을 넘기는 TOCTOU 차단
-      //         (filledCnt 조회를 반드시 락 안에서 → 승격과 원자적).
-      //  워커 락: 검사와 승격 사이 다른 경로(respond·직접배정)가 끼어드는 이중배정 차단.
-      const conflictOut = await withSiteAndWorkersAssignmentLock(siteId, selDetails.map((s) => s.workerId), async (tx) => {
+      // ★현장 락 + 선정 워커 락으로 "선정후보 재조회 → 정원 재조회 → 초과가드 → 겹침검사 → 승격"을 원자 수행(#4/P1-5).
+      //  현장 락: 같은 현장 동시 finalize 정원초과 TOCTOU 차단. 워커 락: 검사~승격 사이 이중배정 차단.
+      const conflictOut = await withSiteAndWorkersAssignmentLock(siteId, selWorkers.map((s) => s.workerId), async (tx) => {
+        // ★14차 TOCTOU: 선정 후보의 workType/기간(selDetails)을 반드시 락 안에서 재조회한다. 락 밖 스냅샷을 쓰면
+        //  락 획득 전 다른 매니저의 PATCH(workType AM→FULL_DAY 등, 정원검사 없음)가 반영 안 돼 정원·겹침 검사가
+        //  옛 값으로 통과하고, 승격(updateMany)은 workType을 안 건드려 실제 저장값으로 정원초과/이중배정이 된다.
+        const selDetails = await tx.siteAssignment.findMany({
+          where: { id: { in: selectedIds } },
+          select: { id: true, workerId: true, workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
+        });
         // 슬롯별 이미 채워진(계약대기/연결/근무 중) 인원. ★반드시 락 안에서 재조회(TOCTOU 방지).
         const filledGroups = await tx.siteAssignment.groupBy({
           by: ["workType"], where: { agencyId, siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } }, _count: { _all: true },

@@ -11,6 +11,7 @@ import { audit } from "@/lib/audit";
 import { OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
 import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
 import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
+import { logAccess } from "@/lib/accessLog";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -219,8 +220,11 @@ export async function POST(req: NextRequest) {
     // ★13차: 직접 배정(mode≠request, 워커 동의 없이 즉시 ASSIGNED)은 이미 이 기관 소속(수락/근무한 배정 또는
     //  계약)인 워커에게만 허용한다. 타 기관/신규 워커는 배정 요청(mode=request)을 보내 워커가 수락해야 소속이 된다.
     //  (미동의 워커에 ASSIGNED를 위조 생성해 계약 동의 게이트를 우회하던 크로스테넌트 부착 차단. 운영자(admin)는
-    //   오버사이트 권한이므로 매니저에만 적용 — site 소유 검사와 동일 스코프.)
-    if (!isRequest && session.kind === "manager" && !(await workerBelongsToAgency(workerId, effectiveAgencyId))) {
+    //   오버사이트 권한이므로 매니저에만 적용 — site 소유 검사와 동일 스코프.) belongs는 응답 PII 마스킹에도 재사용.
+    const workerBelongs = session.kind === "manager"
+      ? await workerBelongsToAgency(workerId, effectiveAgencyId)
+      : true;
+    if (!isRequest && session.kind === "manager" && !workerBelongs) {
       throw new Error("VALIDATION:직무지도원이 이 기관 소속이 아닙니다. 배정 요청을 보내 수락받은 뒤 배정해주세요.");
     }
 
@@ -361,7 +365,22 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, item: toItem(created) });
+    const item = toItem(created);
+    // ★14차: 배정요청(mode=request)은 정책상 타 기관 워커에게도 보낼 수 있으나(전화로 소개받은 채용), 응답이
+    //  workerId 하나로 연락처(loginId=전화·phoneNumber)를 그대로 돌려줘 임의 workerId(순차) 열거로 전 워커
+    //  전화번호를 수집하는 무로그 오라클이 됐다. 미관계(비소속) 워커면 연락처를 마스킹하고 접속기록을 남긴다.
+    //  (정당 채용은 by-phone 조회에서 이름·전화를 이미 확인·기록하므로 UI 무영향. 소속 워커는 그대로.)
+    if (item.user && session.kind === "manager" && !workerBelongs) {
+      item.user = { ...item.user, loginId: "", phoneNumber: "" };
+      await logAccess(req, session, {
+        subjectType: "Worker",
+        subjectId: workerId,
+        subjectLabel: item.user.workerName,
+        resource: "assignment_request",
+        action: "view",
+      });
+    }
+    return NextResponse.json({ success: true, item });
   } catch (e: any) {
     if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
