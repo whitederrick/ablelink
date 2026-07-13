@@ -125,7 +125,9 @@ export async function POST(req: NextRequest) {
       await prisma.worker.update({
         where: { id: user.id },
         // P2-16: 재설정 시 sessionVersion +1 → 기존 발급 토큰 전부 무효화(재설정=전 세션 로그아웃).
-        data: { password: await hash(tempPw, 12), isTemporary: true, sessionVersion: { increment: 1 } },
+        // ★10차#3: 셀프 재설정 임시비번은 워커에게 발송(알림톡/이메일)되는 known 비번 → hasKnownPassword=true 전이
+        //  (초대출신 워커가 재설정 후 계약 서명 시 이 비번이 폐기·락아웃되던 회귀 차단).
+        data: { password: await hash(tempPw, 12), isTemporary: true, hasKnownPassword: true, sessionVersion: { increment: 1 } },
       });
     }
 

@@ -151,6 +151,9 @@ export async function POST(req: NextRequest) {
         data: {
           password: await hash(newPassword, 12),
           isTemporary: false,
+          // ★10차#3: 워커가 자기 비번을 설정 = known 비번. 계약 서명 분기(worker/contracts:284)가 덮어쓰지
+          //  않도록 hasKnownPassword=true로 전이(초대출신 워커가 이후 재설정→서명 시 비번 폐기·락아웃 방지).
+          hasKnownPassword: true,
           // P2-16: 비번 설정 → 세션 버전 +1(구 임시비번 기반 토큰 무효화). 아래 재발급 토큰은 새 sv를 담아 현 세션은 유지.
           sessionVersion: { increment: 1 },
         },

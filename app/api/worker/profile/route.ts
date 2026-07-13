@@ -69,6 +69,8 @@ export async function PATCH(req: NextRequest) {
       }
       updates.password    = await hash(newPassword, 12);
       updates.isTemporary = false;
+      // ★10차#3: 워커가 현재 비번 확인 후 새로 설정 = known 비번 → hasKnownPassword=true(서명 분기 덮어쓰기 방지).
+      updates.hasKnownPassword = true;
       // ★비밀번호 변경 = 전 세션 로그아웃(sv+1). 셀프 재설정·onboarding·admin 초기화와 동일 정책(P2-16).
       //  누락 시 탈취 토큰이 sv 대조를 계속 통과 → 비번 바꿔도 도용 세션 미종료.
       updates.sessionVersion = { increment: 1 };
