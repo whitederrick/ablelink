@@ -38,7 +38,8 @@ export async function PATCH(
 
     await prisma.agency.update({
       where: { id: agencyId },
-      data: { planType: "FREE", maxWorkers: limits.maxWorkers, maxSites: limits.maxSites },
+      // ★10차#2: FREE 강등 시 협상가(customAmount) 소멸(1회성 딜) — 다른 강등경로(cancel·cron)와 정합.
+      data: { planType: "FREE", customAmount: null, maxWorkers: limits.maxWorkers, maxSites: limits.maxSites },
     });
 
     return NextResponse.json({ success: true });

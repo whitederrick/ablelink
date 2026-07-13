@@ -130,7 +130,8 @@ export async function POST(request: NextRequest) {
       // 확정 실패(카드 거절 등)·유예 초과 → 강등. wipeBillingKey일 때만 키 삭제(재등록 유도).
       await prisma.agency.updateMany({
         where: { id: agency.id, nextBillingAt: currentBillingAt },
-        data: { planType: "FREE", nextBillingAt: null, ...(decision.wipeBillingKey ? { tossBillingKey: null } : {}) },
+        // ★10차#2: 카드거절 강등도 협상가(customAmount) 소멸(1회성 딜). 재구독 시 무결제-FREE 방지.
+        data: { planType: "FREE", customAmount: null, nextBillingAt: null, ...(decision.wipeBillingKey ? { tossBillingKey: null } : {}) },
       });
       results.push({ agencyId: agency.id.toString(), status: "failed", reason: reasonMsg });
       console.error(`[charge] 결제 실패 강등: ${agency.name}`, reasonMsg);

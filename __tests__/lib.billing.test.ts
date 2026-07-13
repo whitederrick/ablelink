@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { advanceBilling, buildBillingOrderId, buildSubscribeOrderId, resolveActivationPlan } from "@/lib/billing";
+import { isPaidAgencyPlan } from "@/lib/plans";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 테스트 그물: advanceBilling 말일 오버플로우(#5).
@@ -131,5 +132,29 @@ describe("resolveActivationPlan — 협상가 설정 시 운영자 등급 고정
   });
   it("협상가 음수(방어) → 요청 등급 그대로", () => {
     expect(resolveActivationPlan("PRO", "STARTER", -1)).toBe("PRO");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 테스트 그물: #2 백스톱 불변식(10차) — 결제 활성화 등급은 반드시 유료.
+//  해지·강등으로 운영자 저장등급이 FREE가 됐는데 협상가(customAmount)가 남으면 resolveActivationPlan이
+//  FREE를 반환 → billing 라우트가 isPaidAgencyPlan로 400 거부(무결제-FREE 방지). 정상 재구독은 해지 시
+//  customAmount가 클리어돼 요청 유료등급으로 통과한다.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("결제 활성화 백스톱 — 유료 등급만 활성화(10차#2)", () => {
+  it("협상가 잔존 + 저장등급 FREE → 확정등급 FREE = 유료 아님 → 결제 거부 대상", () => {
+    const eff = resolveActivationPlan("PRO", "FREE", 30000);
+    expect(eff).toBe("FREE");
+    expect(isPaidAgencyPlan(eff)).toBe(false);
+  });
+  it("정상 재구독(협상가 클리어=null) → 요청 유료등급으로 통과", () => {
+    const eff = resolveActivationPlan("PRO", "FREE", null);
+    expect(eff).toBe("PRO");
+    expect(isPaidAgencyPlan(eff)).toBe(true);
+  });
+  it("정상 협상가(저장등급 유료) → 유료 통과", () => {
+    const eff = resolveActivationPlan("PRO", "STARTER", 30000);
+    expect(eff).toBe("STARTER");
+    expect(isPaidAgencyPlan(eff)).toBe(true);
   });
 });

@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
 import { requireManagerSession } from "@/lib/managerScope";
 import { PLAN_PRICES, PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel, buildSubscribeOrderId, resolveActivationPlan } from "@/lib/billing";
+import { isPaidAgencyPlan } from "@/lib/plans";
 import { outboundAllowed } from "@/lib/outboundGuard";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
@@ -65,6 +66,17 @@ export async function POST(request: NextRequest) {
     //  기능 사용'이라는 권한상승이 되므로. 표준가 결제(customAmount 없음)는 매니저가 고른 planType 그대로.
     //  → cron 자동결제(agencyRow.planType 사용)와 등급 결정 일원화.
     const effectivePlanType = resolveActivationPlan(planType, agencyRow.planType, agencyRow.customAmount);
+
+    // ★10차#2 백스톱(단일 chokepoint): 결제로 활성화되는 등급은 반드시 유료여야 한다. 협상가(customAmount)가
+    //  남아있는데 운영자 저장등급이 무료(FREE/TRIAL)로 강등된 상태(해지 잔여·설정 오류)면 effectivePlanType이
+    //  FREE로 잡혀 '협상가 청구 + FREE 등급 부여 + cron 재청구 없음(자가회복 불가)'가 된다. 여기서 원천 차단.
+    //  (정상 재구독은 해지 시 customAmount가 클리어돼 requestedPlan[유료]로 통과. cron은 유료기관만 청구.)
+    if (!isPaidAgencyPlan(effectivePlanType)) {
+      return NextResponse.json(
+        { success: false, message: "협상가 설정이 구독 등급과 일치하지 않습니다. 운영자에게 문의해 주세요." },
+        { status: 400 },
+      );
+    }
 
     // 청구 금액·주기 = 운영자 협상가 우선, 없으면 표준 월정액. (확정 등급 기준으로 표준가 산출)
     const { amount, cycle } = effectiveBilling({ planType: effectivePlanType, billingCycle: agencyRow.billingCycle, customAmount: agencyRow.customAmount });
