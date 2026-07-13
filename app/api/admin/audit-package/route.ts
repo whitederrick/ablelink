@@ -224,8 +224,11 @@ export async function GET(request: NextRequest) {
     };
 
     // 단일현장이면 기존과 동일하게 루트에 담고(무회귀), 멀티현장이면 현장별 폴더로 분리한다.
-    for (const { site, assignment } of siteEntries) {
-      const target = multiSite ? zip.folder(safeFilename(`현장_${site.companyName}`))! : zip;
+    // ★11차#6: 폴더명에 순번(i+1)을 접두 — companyName은 @unique가 아니라 같은 이름 두 현장(프랜차이즈 지점 등)이
+    //  같은 폴더로 병합돼 한 현장 서류가 조용히 덮어써지던 회귀 차단(순번은 항상 고유 → 충돌 불가).
+    for (let i = 0; i < siteEntries.length; i++) {
+      const { site, assignment } = siteEntries[i];
+      const target = multiSite ? zip.folder(safeFilename(`현장${i + 1}_${site.companyName}`))! : zip;
       await buildForSite(target, site, assignment);
     }
 

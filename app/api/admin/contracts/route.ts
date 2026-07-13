@@ -22,6 +22,22 @@ function errToStatus(msg: string) {
   return 500;
 }
 
+// 워커가 이 기관과 기존 관계(계약 이력 또는 배정)를 갖는가 — 크로스테넌트 부착 차단 공용 판정.
+//  workerId(이력검색) 경로와 manualPhone(기존 워커) 경로가 동일 불변식을 쓰도록 단일화한다.
+async function workerBelongsToAgency(workerId: bigint, agencyId: bigint): Promise<boolean> {
+  const hit = await prisma.worker.findFirst({
+    where: {
+      id: workerId,
+      OR: [
+        { employmentContracts: { some: { agencyId } } },
+        { assignments: { some: { agencyId } } },
+      ],
+    },
+    select: { id: true },
+  });
+  return !!hit;
+}
+
 // GET: 계약서 목록
 export async function GET(req: NextRequest) {
   try {
@@ -158,17 +174,7 @@ export async function POST(req: NextRequest) {
       //  워커만 허용한다. worker-search가 employmentContracts:{some:{agencyId}}로 스코프하는 UI 불변식과 일치.
       //  (임의 workerId 열거로 타 기관 워커 PII 조회 + 무단 알림톡 발송을 차단. 신규 워커 최초 계약은 아래
       //   수동입력 경로로 생성하고, assignmentId 경로는 하단에서 별도로 소속을 검증한다.)
-      const belongs = await prisma.worker.findFirst({
-        where: {
-          id: userIdBig,
-          OR: [
-            { employmentContracts: { some: { agencyId: scope.agencyId } } },
-            { assignments: { some: { agencyId: scope.agencyId } } },
-          ],
-        },
-        select: { id: true },
-      });
-      if (!belongs) throw new Error("FORBIDDEN");
+      if (!(await workerBelongsToAgency(userIdBig, scope.agencyId))) throw new Error("FORBIDDEN");
     } else {
       // 수동 입력: 이름 + 전화번호 필수
       const name  = (manualName  ?? "").trim();
@@ -187,7 +193,17 @@ export async function POST(req: NextRequest) {
       });
 
       if (existing) {
-        // 이미 등록된 유저
+        // 이미 등록된 유저 — ★11차#1 크로스테넌트 동의 게이트: 본 기관과 기존 관계(계약/배정)가 없는 타 기관
+        //  워커는 수동입력으로 직접 계약을 발행할 수 없다(무단 부착·알림톡 방지, workerId 경로와 동일 불변식).
+        //  대신 배정 요청(REQUESTED)을 보내 직무지도원이 앱에서 수락(동의)하면 본 기관 관계가 생겨 계약 발행이
+        //  가능해진다(정규 동의 경로). 신규(미가입) 전화번호는 아래에서 새 계정으로 생성 — 크로스테넌트 아님.
+        if (!(await workerBelongsToAgency(existing.id, scope.agencyId))) {
+          return NextResponse.json({
+            success: false,
+            message: "이미 다른 기관에 가입된 직무지도원입니다. 배정 요청을 보내 직무지도원이 수락하면 계약을 발행할 수 있습니다.",
+            reason: "CROSS_AGENCY_CONSENT_REQUIRED",
+          }, { status: 409 });
+        }
         userIdBig = existing.id;
       } else {
         // 신규 직무지도원 생성 — loginId는 항상 전화번호(하이픈 제거)

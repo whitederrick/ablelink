@@ -47,6 +47,13 @@ export async function PATCH(
       }
       updateData.customAmount = n;
     }
+    // ★11차#2 반쪽수정 보강: 이 경로로 FREE 강등 시 협상가(customAmount) 소멸(1회성 딜 — cancel·charge·
+    //  admin/subscription과 정합). 운영자 플랜 폼(savePlan)은 customAmount를 안 보내므로 명시 클리어가 필요하다.
+    //  (남겨두면 재구독 시 resolveActivationPlan이 FREE를 반환해 billing 백스톱이 정당한 재구독을 400으로 막음.)
+    //  단 같은 요청에서 customAmount를 명시 전달했다면(딜 재설정) 그 값을 존중한다.
+    if (updateData.planType === "FREE" && customAmount === undefined) {
+      updateData.customAmount = null;
+    }
     if (billingNote !== undefined)  updateData.billingNote = billingNote ? String(billingNote).slice(0, 500) : null;
     // 위탁기관 전용 계약서 양식 부여(운영자만). 알려진 전용 양식 키만 허용.
     if (allowedContractTemplates !== undefined) {
