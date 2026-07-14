@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
     } else if (docType === "TRAINEE_FINAL_EVAL") {
       const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
-        where:{ traineeId:trainee.id, writerId:workerId, evalType:"TRAINING" }, orderBy:{ updatedAt:"desc" },
+        where:{ traineeId:trainee.id, writerId:workerId, evalType:"TRAINING", periodStart:{ lte:end }, periodEnd:{ gte:start } }, orderBy:{ updatedAt:"desc" }, // P2: 문서 기간 겹침
       }) : null;
       payload = traineeFinalEvalPayload({
         traineeName: trainee?.name || "", companyName: site.companyName,
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
     } else if (docType === "ADAPTATION_FINAL_EVAL") {
       const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)
       const ev = trainee ? await prisma.traineeEvaluation.findFirst({
-        where:{ traineeId:trainee.id, writerId:workerId, evalType:"ADAPTATION" }, orderBy:{ updatedAt:"desc" },
+        where:{ traineeId:trainee.id, writerId:workerId, evalType:"ADAPTATION", periodStart:{ lte:end }, periodEnd:{ gte:start } }, orderBy:{ updatedAt:"desc" }, // P2: 문서 기간 겹침
       }) : null;
       payload = adaptationFinalEvalPayload({
         traineeName: trainee?.name || "", companyName: site.companyName,

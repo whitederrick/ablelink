@@ -62,6 +62,13 @@ export async function POST(request: NextRequest) {
     if (latitude === undefined || longitude === undefined) {
       return NextResponse.json({ success: false, message: "VALIDATION:location" }, { status: 400 });
     }
+    // ★좌표 수치·범위 검증(NaN이 Decimal 컬럼에 들어가 500나는 것 방지). basepoint/propose와 동일.
+    {
+      const lat = Number(latitude), lon = Number(longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        return NextResponse.json({ success: false, message: "VALIDATION:location" }, { status: 400 });
+      }
+    }
 
     const userIdBig = BigInt(userIdStr);
     const assignmentIdBig = toBigIntOrNull(inputAssignmentId);

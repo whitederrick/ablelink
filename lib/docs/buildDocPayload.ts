@@ -227,7 +227,8 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
     if (!trainee) throw new DocPayloadError("해당 기간에 이 현장 소속이 아닌 훈련생입니다.");
     traineeName = trainee?.name || "";
     const ev = await prisma.traineeEvaluation.findFirst({
-      where: { traineeId: traineeIdBig, writerId: workerId, evalType: "TRAINING" },
+      // ★P2: 문서 기간과 겹치는 평가만(비겹침 타 기간 평가가 문서에 혼입되던 것 차단). period는 "YYYY-MM-DD" 문자열.
+      where: { traineeId: traineeIdBig, writerId: workerId, evalType: "TRAINING", periodStart: { lte: end }, periodEnd: { gte: start } },
       orderBy: { updatedAt: "desc" },
     });
     if (!ev) throw new DocPayloadError("종합평가를 먼저 작성해주세요.");
@@ -275,7 +276,8 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
     if (!trainee) throw new DocPayloadError("해당 기간에 이 현장 소속이 아닌 훈련생입니다.");
     traineeName = trainee?.name || "";
     const ev = await prisma.traineeEvaluation.findFirst({
-      where: { traineeId: traineeIdBig, writerId: workerId, evalType: "ADAPTATION" },
+      // ★P2: 문서 기간과 겹치는 평가만(비겹침 타 기간 평가 혼입 차단).
+      where: { traineeId: traineeIdBig, writerId: workerId, evalType: "ADAPTATION", periodStart: { lte: end }, periodEnd: { gte: start } },
       orderBy: { updatedAt: "desc" },
     });
     if (!ev) throw new DocPayloadError("종합평가를 먼저 작성해주세요.");

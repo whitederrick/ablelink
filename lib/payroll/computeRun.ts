@@ -611,13 +611,14 @@ export async function computePayrollItems(
             insuranceRates.pensionBaseMax != null ? Number(insuranceRates.pensionBaseMax) : null,
           );
           const pensionBase = pBase ?? grossPay;
-          pushDed("pension", "국민연금", Math.round(pensionBase * Number(insuranceRates.nationalPension)));
+          // ★4대보험 근로자부담금은 법정 원단위 절사(버림). Math.round는 소수부≥0.5에서 1원 과다공제(주민세 floor와 정합).
+          pushDed("pension", "국민연금", Math.floor(pensionBase * Number(insuranceRates.nationalPension)));
           breakdown.pensionBase = pensionBase;         // 명세 투명성(적용된 기준소득월액)
           breakdown.pensionBaseClamped = pBase != null; // 등급표 적용 여부(하한/상한)
         }
-        if (ded.has("health"))     pushDed("health", "건강보험", Math.round(grossPay * Number(insuranceRates.healthInsurance)));
-        if (ded.has("ltc"))        pushDed("ltc", "장기요양보험", Math.round(grossPay * Number(insuranceRates.longTermCare)));
-        if (ded.has("employment")) pushDed("employment", "고용보험", Math.round(grossPay * Number(insuranceRates.employmentInsurance)));
+        if (ded.has("health"))     pushDed("health", "건강보험", Math.floor(grossPay * Number(insuranceRates.healthInsurance)));
+        if (ded.has("ltc"))        pushDed("ltc", "장기요양보험", Math.floor(grossPay * Number(insuranceRates.longTermCare)));
+        if (ded.has("employment")) pushDed("employment", "고용보험", Math.floor(grossPay * Number(insuranceRates.employmentInsurance)));
       }
     }
 

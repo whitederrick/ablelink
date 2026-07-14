@@ -27,6 +27,9 @@ export async function POST(request: NextRequest) {
         // ★10차#2: 협상가(customAmount)는 1회성 딜 → 해지 시 소멸시킨다. 남겨두면 재구독 때 운영자 저장등급이
         //  FREE인 상태와 결합해 '협상가 청구 + FREE 부여'가 된다. 재협상 시 운영자가 다시 설정.
         customAmount: null,
+        // ★20차 형제갭: 딜 소멸 시 주기도 표준(MONTHLY)으로 복원(admin PATCH 강등과 정합). ANNUAL 잔존 시
+        //  운영자가 딜 재설정 폼에서 잔존 ANNUAL 기본값을 못 보고 월 협상가만 입력하면 연 1회 청구(언더차지) 소지.
+        billingCycle: "MONTHLY",
         // 재구독이 새 orderId로 실결제되도록 이벤트 키를 올린다(같은 달 취소→재구독 무료사이클 방지).
         billingEpoch: { increment: 1 },
         maxWorkers: free.maxWorkers,

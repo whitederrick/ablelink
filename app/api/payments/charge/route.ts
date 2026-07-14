@@ -66,7 +66,8 @@ export async function POST(request: NextRequest) {
 
     const currentBillingAt = new Date(agency.nextBillingAt!);
     // G: clamp 기준 = 가입 원일(subscribedAt). 저장된 결제일의 day를 쓰면 짧은 달 뒤 28일로 영구 고착됨.
-    const anchorDay = agency.subscribedAt ? new Date(agency.subscribedAt).getDate() : undefined;
+    // ★20차 P3: 청구 기준일은 KST 벽시계일. raw getDate()는 UTC일이라 KST 새벽 구독 기관이 -1일 드리프트.
+    const anchorDay = agency.subscribedAt ? new Date(new Date(agency.subscribedAt).getTime() + 9 * 3600 * 1000).getUTCDate() : undefined;
     const nextBillingAt = advanceBilling(currentBillingAt, cycle, anchorDay);
     const daysOverdue = Math.floor((today.getTime() - currentBillingAt.getTime()) / MS_DAY);
 
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
       await prisma.agency.updateMany({
         where: { id: agency.id, nextBillingAt: currentBillingAt },
         // ★10차#2: 카드거절 강등도 협상가(customAmount) 소멸(1회성 딜). 재구독 시 무결제-FREE 방지.
-        data: { planType: "FREE", customAmount: null, nextBillingAt: null, ...(decision.wipeBillingKey ? { tossBillingKey: null } : {}) },
+        data: { planType: "FREE", customAmount: null, billingCycle: "MONTHLY", nextBillingAt: null, ...(decision.wipeBillingKey ? { tossBillingKey: null } : {}) },
       });
       results.push({ agencyId: agency.id.toString(), status: "failed", reason: reasonMsg });
       console.error(`[charge] 결제 실패 강등: ${agency.name}`, reasonMsg);

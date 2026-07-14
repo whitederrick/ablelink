@@ -134,7 +134,18 @@ export async function GET(request: NextRequest) {
         },
         select: { trainee: { select: { id: true, name: true } } },
       });
-      const trainees = [...new Map(placements.map((p) => [String(p.trainee.id), p.trainee])).values()];
+      // ★P2(크로스테넌트): placements는 siteId로만 조회돼 공유현장(같은 물리 placeId, 두 기관)에서 타 기관
+      //  훈련생까지 잡힌다(훈련생 성명=장애인 PII 노출·빈 PDF). 이 감사패키지의 주체 워커(belongs 확인됨)가
+      //  '실제로 지도일지를 쓴' 훈련생으로 한정한다 — writerId=workerId는 요청 기관 소속이라 크로스테넌트 자동 배제,
+      //  로그 0건 훈련생의 빈 서식도 동시 해소(현장 전체 커버리지 의도는 '이 워커가 지도한 훈련생' 범위로 정합).
+      const loggedTraineeIds = new Set(
+        (await prisma.traineeLog.findMany({
+          where: { writerId: workerId, attendance: { siteId: site.id, workDate: { gte: start, lte: end } } },
+          select: { traineeId: true }, distinct: ["traineeId"],
+        })).map((l) => String(l.traineeId)),
+      );
+      const trainees = [...new Map(placements.map((p) => [String(p.trainee.id), p.trainee])).values()]
+        .filter((t) => loggedTraineeIds.has(String(t.id)));
       // ★13차: 동명이인 훈련생은 폴더명(훈련생_{이름})이 같아 같은 폴더로 병합돼 먼저 쓴 훈련생의 서류가
       //  덮어써진다(공단 감사서류 조용한 누락). 같은 이름이 2명 이상일 때만 폴더명에 trainee.id를 붙여 구분한다
       //  (단일이면 이름 그대로 — 무회귀). 현장 폴더 순번(#11차)과 같은 클래스의 하위 폴더 버전.
@@ -157,14 +168,14 @@ export async function GET(request: NextRequest) {
             include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
           }),
           prisma.traineeEvaluation.findFirst({
-            where: { traineeId: tid, writerId: workerId, evalType: "TRAINING", isConfirmed: true }, orderBy: { updatedAt: "desc" },
+            where: { traineeId: tid, writerId: workerId, evalType: "TRAINING", isConfirmed: true, periodStart: { lte: end }, periodEnd: { gte: start } }, orderBy: { updatedAt: "desc" },
           }),
           prisma.traineeLog.findMany({
             where: { writerId: workerId, traineeId: tid, trainingType: "ADAPTATION", attendance: { siteId: site.id, workDate: { gte: start, lte: end } } },
             include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
           }),
           prisma.traineeEvaluation.findFirst({
-            where: { traineeId: tid, writerId: workerId, evalType: "ADAPTATION", isConfirmed: true }, orderBy: { updatedAt: "desc" },
+            where: { traineeId: tid, writerId: workerId, evalType: "ADAPTATION", isConfirmed: true, periodStart: { lte: end }, periodEnd: { gte: start } }, orderBy: { updatedAt: "desc" },
           }),
         ]);
 

@@ -281,8 +281,9 @@ function attendanceSheet(p: any): Promise<Buffer> {
 
   y += mm(6);
   doc.font("KR").fontSize(11).fillColor("#000").text("위와 같이 근무(출근) 하였음을 확인함", x, y, { width: W, align: "center" }); y += mm(6);
-  const today = new Date();
-  doc.text(`${today.getFullYear()}년     ${today.getMonth() + 1}월     ${today.getDate()}일`, x, y, { width: W, align: "center" }); y += mm(13);
+  // ★KST 벽시계일. 서버(UTC)에서 raw getFullYear/Month/Date는 KST 00~09시 생성 시 하루 밀림(공단 제출 문서).
+  const today = new Date(Date.now() + 9 * 3600 * 1000);
+  doc.text(`${today.getUTCFullYear()}년     ${today.getUTCMonth() + 1}월     ${today.getUTCDate()}일`, x, y, { width: W, align: "center" }); y += mm(13);
 
   const s = p.signatures ?? {};
   signatures(doc, y, [

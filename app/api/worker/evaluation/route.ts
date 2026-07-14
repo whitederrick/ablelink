@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
   const periodStart = searchParams.get("periodStart");
   const periodEnd   = searchParams.get("periodEnd");
   if (!traineeId || !evalType) return NextResponse.json({ success: false, message: "traineeId, evalType 필요" }, { status: 400 });
+  if (!/^\d+$/.test(String(traineeId))) return NextResponse.json({ success: false, message: "잘못된 요청입니다." }, { status: 400 }); // 미검증 BigInt() → 500 방지
   const existing = await prisma.traineeEvaluation.findFirst({
     where: { traineeId: BigInt(traineeId), writerId: BigInt(session.workerId), evalType, ...(periodStart ? { periodStart } : {}), ...(periodEnd ? { periodEnd } : {}) },
     orderBy: { createdAt: "desc" },
@@ -36,6 +37,11 @@ export async function POST(req: NextRequest) {
   const { traineeId, evalType, periodStart, periodEnd, scores, comments } = await req.json();
   if (!traineeId || !evalType || !periodStart || !periodEnd) return NextResponse.json({ success: false, message: "필수값 누락" }, { status: 400 });
   if (!/^\d+$/.test(String(traineeId))) return NextResponse.json({ success: false, message: "잘못된 요청입니다." }, { status: 400 });
+  // ★입력 검증: evalType enum·기간 형식·JSON 크기 상한(임의 문자열/거대 payload 저장 방지, placement 쿼리 Invalid Date 방지)
+  if (!["TRAINING", "ADAPTATION"].includes(String(evalType))) return NextResponse.json({ success: false, message: "잘못된 평가 유형입니다." }, { status: 400 });
+  const YMD = /^\d{4}-\d{2}-\d{2}$/;
+  if (!YMD.test(String(periodStart)) || !YMD.test(String(periodEnd))) return NextResponse.json({ success: false, message: "기간 형식이 올바르지 않습니다." }, { status: 400 });
+  if (JSON.stringify(scores ?? {}).length > 20000 || JSON.stringify(comments ?? {}).length > 20000) return NextResponse.json({ success: false, message: "평가 내용이 너무 큽니다." }, { status: 400 });
 
   // P3(IDOR): traineeId가 이 워커의 배정 현장에 해당 기간 재적한 훈련생인지 검증한다.
   //  (기존엔 traineeId+writerId만 봐서 타 현장 훈련생 ID 주입 시 평가가 섞일 여지가 있었다.)

@@ -9,7 +9,7 @@ import { getKrHolidays } from "@/lib/krHolidays";
 import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
 import { computePayrollItems } from "@/lib/payroll/computeRun";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
-import { randomUUID } from "crypto";
+import { randomUUID, timingSafeEqual } from "crypto";
 import { PREMIUM_FEATURE_PLANS } from "@/lib/plans";
 import { audit } from "@/lib/audit";
 
@@ -29,7 +29,12 @@ export async function GET(req: NextRequest) {
   const secret =
     req.headers.get("x-cron-secret") ||
     (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+  // ★상수시간 비교(타이밍 사이드채널 제거). 길이 다르면 timingSafeEqual이 throw하므로 선체크.
+  const expectedSecret = process.env.CRON_SECRET || "";
+  const secretOk = expectedSecret.length > 0
+    && secret.length === expectedSecret.length
+    && timingSafeEqual(Buffer.from(secret), Buffer.from(expectedSecret));
+  if (!secretOk) {
     return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
   }
 
@@ -78,7 +83,9 @@ export async function GET(req: NextRequest) {
     // 순차 N update → 일괄 배치(대량일 때 함수 타임아웃 방지). 의미 동일.
     //  · status=DONE(퇴근 눌렀으나 미확정): endTime 이미 채워짐 → 일괄 자동 확정.
     //  · status=WORKING(퇴근 미실행): 18:00 자동 채움 금지. 보정대기로 두고 1회만 플래그(clockOutMissedAt)+알림.
-    const doneRows = stale.filter((a) => a.status !== "WORKING");
+    // ★DONE만 자동확정. 비-WORKING 전체(status!=="WORKING")로 잡으면 startTime 있는 ABSENT행까지 DONE으로
+    //  덮어 결근이 조용히 근무일화될 수 있다(현재 ABSENT는 시각과 함께 persist 안 되나 방어적 명시).
+    const doneRows = stale.filter((a) => a.status === "DONE");
     const workingRows = stale.filter((a) => a.status === "WORKING" && !a.clockOutMissedAt);
 
     if (doneRows.length) {

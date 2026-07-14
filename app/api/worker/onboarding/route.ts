@@ -52,6 +52,11 @@ export async function POST(req: NextRequest) {
 
     // ── 이메일로 loginId 변경 요청 → 인증 코드 발송 ───────────────────
     if (action === "request-email") {
+      // ★형제갭: 이메일 인증코드 발송에 레이트리밋(email-change/request와 동일) — 무제한 반복 시 이메일 폭탄·SES 비용.
+      const ip = getRateLimitIp(req) ?? "unknown";
+      const rl = await checkRateLimit(`onboarding-email:${ip}:${workerId}`);
+      if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
+
       const { email } = body;
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return NextResponse.json({ success: false, message: "올바른 이메일 주소를 입력하세요." }, { status: 400 });

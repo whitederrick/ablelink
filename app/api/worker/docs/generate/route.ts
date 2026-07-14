@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
       const trainee = await findTraineeAtSiteInPeriod(BigInt(traineeId), site.id, start, end); // IDOR 방지: 배정 현장+기간 재적 훈련생만
       if (!trainee) return NextResponse.json({ success: false, message: "해당 기간에 이 현장 소속이 아닌 훈련생입니다." }, { status: 400 });
       const ev = await prisma.traineeEvaluation.findFirst({
-        where: { traineeId: BigInt(traineeId), writerId: workerId, evalType: "TRAINING" },
+        where: { traineeId: BigInt(traineeId), writerId: workerId, evalType: "TRAINING", periodStart: { lte: end }, periodEnd: { gte: start } }, // P2: 문서 기간 겹침
         orderBy: { updatedAt: "desc" },
       });
       if (!ev) return NextResponse.json({ success: false, message: "종합평가를 먼저 작성해주세요." }, { status: 400 });
@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
       const trainee = await findTraineeAtSiteInPeriod(BigInt(traineeId), site.id, start, end); // IDOR 방지: 배정 현장+기간 재적 훈련생만
       if (!trainee) return NextResponse.json({ success: false, message: "해당 기간에 이 현장 소속이 아닌 훈련생입니다." }, { status: 400 });
       const ev = await prisma.traineeEvaluation.findFirst({
-        where: { traineeId: BigInt(traineeId), writerId: workerId, evalType: "ADAPTATION" },
+        where: { traineeId: BigInt(traineeId), writerId: workerId, evalType: "ADAPTATION", periodStart: { lte: end }, periodEnd: { gte: start } }, // P2: 문서 기간 겹침
         orderBy: { updatedAt: "desc" },
       });
       if (!ev) return NextResponse.json({ success: false, message: "종합평가를 먼저 작성해주세요." }, { status: 400 });

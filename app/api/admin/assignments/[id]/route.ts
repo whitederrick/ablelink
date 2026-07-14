@@ -36,9 +36,18 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     let reason = "배정 취소";
     try { const b = await req.json(); if (b?.reason) reason = String(b.reason).trim() || reason; } catch { /* body 없음 */ }
 
+    // ★P1(동의우회 차단): ENDED는 CONSENTED_ASSIGN_STATUSES에 속해 workerBelongsToAgency=true를 만든다.
+    //  워커 동의를 거친 상태(ACCEPTED+)의 취소만 ENDED로 남기고, 미동의 REQUESTED의 취소는 EXPIRED(비-CONSENTED·
+    //  비-finalize대상)로 보낸다. 안 그러면 매니저가 타 기관 워커에 REQUESTED 심고→DELETE→ENDED로 세탁해
+    //  belongs를 위조하고 계좌·PII 열람/계약 조작이 가능(REQUESTED→ENDED 세탁 경로 차단). cron 자동종료가
+    //  점유상태(ACTIVE/CONFIRMED/ASSIGNED)만 ENDED로 돌리는 불변식과 정합.
+    const CONSENTED_CANCEL = ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"];
+    const isConsented = CONSENTED_CANCEL.includes(existing.status);
     await prisma.siteAssignment.update({
       where: { id: assignmentId },
-      data: { status: "ENDED", endedAt: new Date(), statusReason: reason },
+      data: isConsented
+        ? { status: "ENDED", endedAt: new Date(), statusReason: reason }
+        : { status: "EXPIRED", statusReason: reason },
     });
     await audit(session, { entityType: "SiteAssignment", entityId: assignmentId, action: "delete", summary: `배정 취소(종료): ${reason}` });
     return NextResponse.json({ success: true, message: "배정이 취소(종료)되었습니다." });
