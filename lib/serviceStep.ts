@@ -25,7 +25,9 @@ export function effectiveServiceStep(
   if (!split) return base;
   const ref = toKstDateStr(refDate);
   if (!ref) return base;
-  return ref >= split ? "ADAPTATION" : "FIELD_TRAINING";
+  // 전환일 전에는 배정의 기존 serviceStep(base)을 그대로 반영한다. FIELD_TRAINING을 하드코딩하면
+  //  serviceStep=PRE_TRAINING(또는 ADAPTATION)인 배정이 전환일 전 구간에 FIELD로 오분류된다(일지·문서 분류 오염).
+  return ref >= split ? "ADAPTATION" : base;
 }
 
 export function serviceStepToTrainingType(step: string | null | undefined): TrainingType {

@@ -88,6 +88,27 @@ describe("computeWeeklyHoliday — 2조건 판정", () => {
   });
 });
 
+// ★17차: 주휴수당 1일분은 법정 상한 8h. 주 소정이 40h를 넘어도 (주소정÷40)×8이 8h를 못 넘게 클램프.
+describe("computeWeeklyHoliday — 주휴 1일분 8h 상한(주40h 초과 클램프)", () => {
+  it("주6일×8h=48h 개근 → 주휴는 8h분(9.6h 아님)으로 상한", () => {
+    // wpw=6 → 소정근로일 월~토. W24: 6/8(월)~6/13(토) 6일 × 480분(8h) 개근.
+    const days = [8, 9, 10, 11, 12, 13].map(d => ({ dateISO: mon(d), scheduledMinutes: 480 }));
+    // 소정요일 월~토(계약 파생 authoritative) — computeRun이 넘기는 값과 동일.
+    const r = computeWeeklyHoliday({ days, workDaysPerWeek: 6, ordinaryWage: 10000, workingWeekdays: new Set([1, 2, 3, 4, 5, 6]) });
+    const w24 = r.weeks.find(w => w.weekKey === "2026-W24")!;
+    expect(w24.fullAttendance).toBe(true);
+    expect(w24.eligible).toBe(true);
+    // 상한 적용: 8h × 10,000 = 80,000원 (미적용 시 48÷40×8×10000 = 96,000원이 됐을 것)
+    expect(w24.holidayPay).toBe(80000);
+  });
+  it("주5일×8h=40h(정확히 상한) → 8h분 그대로", () => {
+    const days = [8, 9, 10, 11, 12].map(d => ({ dateISO: mon(d), scheduledMinutes: 480 }));
+    const r = computeWeeklyHoliday({ days, workDaysPerWeek: 5, ordinaryWage: 10000 });
+    const w24 = r.weeks.find(w => w.weekKey === "2026-W24")!;
+    expect(w24.holidayPay).toBe(80000); // 40÷40×8×10000
+  });
+});
+
 describe("computeWeeklyHoliday — payMonth 전월 lookback 오염 방지(#3)", () => {
   // 전월 말(6월 W26, FULL_DAY 480분) lookback + 7월(W28, AM 330분) 개근.
   // payMonth=2026-07 → 6월 480분이 7월 평균/주휴액에 섞이면 안 됨(월경계 근무형태 변경).

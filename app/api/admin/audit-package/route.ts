@@ -157,14 +157,14 @@ export async function GET(request: NextRequest) {
             include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
           }),
           prisma.traineeEvaluation.findFirst({
-            where: { traineeId: tid, writerId: workerId, evalType: "TRAINING" }, orderBy: { updatedAt: "desc" },
+            where: { traineeId: tid, writerId: workerId, evalType: "TRAINING", isConfirmed: true }, orderBy: { updatedAt: "desc" },
           }),
           prisma.traineeLog.findMany({
             where: { writerId: workerId, traineeId: tid, trainingType: "ADAPTATION", attendance: { siteId: site.id, workDate: { gte: start, lte: end } } },
             include: { attendance: true, tasks: true }, orderBy: { attendance: { workDate: "asc" } },
           }),
           prisma.traineeEvaluation.findFirst({
-            where: { traineeId: tid, writerId: workerId, evalType: "ADAPTATION" }, orderBy: { updatedAt: "desc" },
+            where: { traineeId: tid, writerId: workerId, evalType: "ADAPTATION", isConfirmed: true }, orderBy: { updatedAt: "desc" },
           }),
         ]);
 
@@ -189,13 +189,14 @@ export async function GET(request: NextRequest) {
           folder.file("훈련일지.pdf", buf);
         }
 
-        // 훈련생 종합평가
-        {
+        // 훈련생 종합평가 — 확정(isConfirmed)된 평가만 공식 서식으로 포함.
+        //  미확정/미작성이면 빈 공식 기록부를 공단 감사 ZIP에 넣지 않는다(타 문서생성 경로의 isConfirmed 게이트와 통일).
+        if (trainingEv) {
           const payload = {
             traineeName: trainee.name, companyName: site.companyName,
             preTrainingStart: assignment.stepStart?.toISOString().slice(0, 10) || start,
             preTrainingEnd: start, fieldTrainingStart: start, fieldTrainingEnd: end,
-            scores: (trainingEv?.scores as Record<string, unknown>) || {}, comments: (trainingEv?.comments as Record<string, unknown>) || {},
+            scores: (trainingEv.scores as Record<string, unknown>) || {}, comments: (trainingEv.comments as Record<string, unknown>) || {},
             signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
           };
           const buf = await renderPdfToBuffer({ documentType: "TRAINEE_FINAL_EVAL" as DocumentType, payload });
@@ -218,12 +219,12 @@ export async function GET(request: NextRequest) {
           folder.file("적응지도_일지.pdf", buf);
         }
 
-        // 적응지도 종합평가
-        {
+        // 적응지도 종합평가 — 확정(isConfirmed)된 평가만 포함(위 훈련생 종합평가와 동일 원칙).
+        if (adaptEv) {
           const payload = {
             traineeName: trainee.name, companyName: site.companyName,
             periodStart: start, periodEnd: end,
-            scores: (adaptEv?.scores as Record<string, unknown>) || {}, comments: (adaptEv?.comments as Record<string, unknown>) || {},
+            scores: (adaptEv.scores as Record<string, unknown>) || {}, comments: (adaptEv.comments as Record<string, unknown>) || {},
             signatures: { worker: sigs.worker, agencyAgent: sigs.agencyAgent },
           };
           const buf = await renderPdfToBuffer({ documentType: "ADAPTATION_FINAL_EVAL" as DocumentType, payload });

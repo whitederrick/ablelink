@@ -68,6 +68,7 @@ export interface PayrollBreakdown {
   // MONTHLY
   monthlyRate?: number;
   scheduledWorkdays?: number;
+  prorateWorkdays?: number; // 일할 분자(소정근로일 출근 dedup, schedDays 상한)
   prorated?: boolean;
   // 가산수당
   overtimeHours?: number;

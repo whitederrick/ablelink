@@ -353,13 +353,26 @@ export async function computePayrollItems(
         //  · 완전월·개근이면 workedDays == 소정근로일 → 월정액 전액. (유급휴일 몫은 월급에 포함돼 비례로 함께 반영)
         //  · 통상시급(연장·야간·휴일 가산 기준)은 비례하지 않는다(209h 기준 그대로).
         const schedDays = scheduledWorkdaysInMonth;
-        const prorate = schedDays > 0 && workedDays < schedDays;
-        grossPay = prorate ? Math.round((rate * workedDays) / schedDays) : rate;
+        // #1(17차): 일할 분자는 '소정근로일 출근'만 센다. workedDays(달력 전체 출근일)를 쓰면 비소정일(주말)·
+        //  공휴일 출근이 소정일 결근을 상쇄해 결근공제가 무력화된다(예: 수·목 결근 + 토 2일 출근 → 전액).
+        //  → workingWeekdays∩비공휴일 출근일만 dedup·집계하고 소정근로일수(schedDays)로 상한.
+        //  (14차 주휴 개근 판정에서 고친 것과 같은 클래스의 MONTHLY 일할 형제 갭.)
+        const proRateDaySet = new Set<string>();
+        for (const a of confirmedAtt) {
+          const [dy, dm, dd] = a.workDate.split("-").map(Number);
+          const dow = new Date(Date.UTC(dy, dm - 1, dd)).getUTCDay();
+          if (!workingWeekdays.has(dow)) continue;
+          if (monthHolidaySet.has(a.workDate)) continue;
+          proRateDaySet.add(a.workDate);
+        }
+        const proRateDays = Math.min(proRateDaySet.size, schedDays);
+        const prorate = schedDays > 0 && proRateDays < schedDays;
+        grossPay = prorate ? Math.round((rate * proRateDays) / schedDays) : rate;
         ordinaryWage = Math.round(rate / 209); // 월 소정근로시간 209h 기준
         calcMethods["기본급"] = prorate
-          ? `월 ${rate.toLocaleString()}원 × ${workedDays}/${schedDays}일 (일할)`
+          ? `월 ${rate.toLocaleString()}원 × ${proRateDays}/${schedDays}일 (일할)`
           : `월 ${rate.toLocaleString()}원`;
-        breakdown = { payType: "MONTHLY", monthlyRate: rate, scheduledWorkdays: schedDays, workedDays, prorated: prorate, workedMinutes, pendingDays };
+        breakdown = { payType: "MONTHLY", monthlyRate: rate, scheduledWorkdays: schedDays, workedDays, prorateWorkdays: proRateDays, prorated: prorate, workedMinutes, pendingDays };
       }
 
       if (overtimeHours > 0 && ordinaryWage > 0) {

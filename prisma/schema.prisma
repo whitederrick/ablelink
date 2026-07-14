@@ -584,6 +584,9 @@ model Admin {
   phone        String?
   note         String?   // 운영자 메모(담당 업무·비고 등)
   isActive     Boolean   @default(true) @map("is_active")
+  // 세션 무효화 버전 — 비밀번호 초기화 시 +1하여 발급된 모든 기존 JWT를 무효화(탈취 세션 회수).
+  //  워커(Worker.sessionVersion)와 동일 패턴. @default(0)으로 sv 미포함 구 토큰(=0)과 하위호환.
+  sessionVersion Int     @default(0) @map("session_version")
   lastLoginAt  DateTime? @map("last_login_at")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
@@ -605,6 +608,9 @@ model Manager {
   agencyId     BigInt    @map("agency_id")
   signatureUrl String?   @map("signature_url")
   isActive     Boolean   @default(true) @map("is_active")
+  // 세션 무효화 버전 — 비밀번호 초기화 시 +1하여 발급된 모든 기존 JWT를 무효화(탈취 세션 회수).
+  //  워커(Worker.sessionVersion)와 동일 패턴. @default(0)으로 sv 미포함 구 토큰(=0)과 하위호환.
+  sessionVersion Int     @default(0) @map("session_version")
   lastLoginAt  DateTime? @map("last_login_at")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")

@@ -31,9 +31,10 @@ export async function requireAdminSession(req: Request): Promise<AdminScope> {
 
   const admin = await prisma.admin.findUnique({
     where: { id: adminId },
-    select: { isActive: true },
+    select: { isActive: true, sessionVersion: true },
   });
   if (!admin || !admin.isActive) throw jsonError(401, "ACCOUNT_DISABLED");
+  if (admin.sessionVersion !== (s.sv ?? 0)) throw jsonError(401, "SESSION_EXPIRED");
 
   return { adminId, loginId: String(s.loginId ?? "") };
 }

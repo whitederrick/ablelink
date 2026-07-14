@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
     await attachAdminSessionCookieToResponse(res, {
       sub:     admin.id.toString(),
       loginId: admin.loginId,
+      sv:      admin.sessionVersion,
     });
     return res;
   } catch (e: any) {

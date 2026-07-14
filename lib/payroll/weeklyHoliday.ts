@@ -178,7 +178,9 @@ export function computeWeeklyHoliday(input: WeeklyHolidayInput): WeeklyHolidayRe
   const typicalWeeklyMinutes = avgDailyMin * wpw;
   const meets15h = weekCount > 0 && typicalWeeklyMinutes >= WEEKLY_THRESHOLD_MIN;
 
-  const autoWeeklyPay = Math.round((typicalWeeklyMinutes / 60 / 40) * 8 * ordinaryWage);
+  // 주휴수당 1일분은 법정 상한 8h(주 소정 40h 기준). 주 소정이 40h를 넘어도 1일분이 8h를
+  //  초과하지 않도록 분자 주간분을 2400분(40h)으로 클램프한다(15h 판정엔 클램프 미적용).
+  const autoWeeklyPay = Math.round((Math.min(typicalWeeklyMinutes, 2400) / 60 / 40) * 8 * ordinaryWage);
   const perWeekPay = flatWeeklyHolidayPay != null && flatWeeklyHolidayPay > 0
     ? Math.round(flatWeeklyHolidayPay)
     : autoWeeklyPay;

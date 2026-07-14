@@ -56,6 +56,21 @@ export async function PATCH(
     if (updateData.planType !== undefined && !isPaidAgencyPlan(updateData.planType) && customAmount === undefined) {
       updateData.customAmount = null;
     }
+    // #7(17차): ANNUAL 주기는 표준가(PLAN_PRICES)가 월정액뿐이라, 협상가(customAmount) 없이 ANNUAL로 두면
+    //  effectiveBilling이 월정액을 반환하고 결제일만 +1년 → 월정액이 연 1회만 청구돼 ≈92% 미과금된다.
+    //  유료 등급 + ANNUAL은 협상가(연 청구액)를 반드시 요구(운영자 오설정 차단). billingCycle/customAmount는
+    //  이 라우트가 유일한 설정 경로라 여기서 게이트하면 충분.
+    {
+      const effCycle = billingCycle !== undefined ? billingCycle : agency.billingCycle;
+      const effAmount = "customAmount" in updateData ? updateData.customAmount : agency.customAmount;
+      const effPlan   = updateData.planType !== undefined ? updateData.planType : agency.planType;
+      if (isPaidAgencyPlan(effPlan) && effCycle === "ANNUAL" && !(effAmount != null && effAmount > 0)) {
+        return NextResponse.json(
+          { success: false, message: "연 결제(ANNUAL)는 협상가(연 청구액)를 함께 설정해야 합니다. 협상가 없이 연 결제는 월정액이 연 1회만 청구되어 미과금됩니다." },
+          { status: 400 },
+        );
+      }
+    }
     if (billingNote !== undefined)  updateData.billingNote = billingNote ? String(billingNote).slice(0, 500) : null;
     // 위탁기관 전용 계약서 양식 부여(운영자만). 알려진 전용 양식 키만 허용.
     if (allowedContractTemplates !== undefined) {

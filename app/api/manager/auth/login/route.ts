@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
       sub:      manager.id.toString(),
       agencyId: manager.agencyId.toString(),
       loginId:  manager.loginId,
+      sv:       manager.sessionVersion,
     });
     return res;
   } catch (e: any) {

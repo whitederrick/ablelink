@@ -9,7 +9,8 @@ import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { getKstDateString } from "@/lib/time";
 import { audit } from "@/lib/audit";
 import { OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
-import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
+import { withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
+import { findCapacityOverflow, CAPACITY_SLOTS, type CapacitySlot } from "@/lib/assignmentCapacity";
 import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
 import { logAccess } from "@/lib/accessLog";
 
@@ -302,9 +303,12 @@ export async function POST(req: NextRequest) {
     type CreateOutcome =
       | { kind: "dup" }
       | { kind: "otherActive"; sameAgency: boolean; companyName: string }
+      | { kind: "over"; slot: string; sel: number; remaining: number }
       | { kind: "rejected" }
       | { kind: "ok"; created: Awaited<ReturnType<typeof prisma.siteAssignment.create<{ data: typeof dataObj; select: typeof selectObj }>>> };
-    const outcome = await withWorkerAssignmentLock<CreateOutcome>(workerId, async (tx) => {
+    // ★17차#2: 현장 락 + 워커 락(finalize와 동일한 site→worker 순서, 무교착)으로 "정원 재조회 → 초과가드 →
+    //  생성"을 원자화한다. 워커 락만으로는 같은 현장 동시 직접배정이 각자 정원검사를 통과해 슬롯 정원을 넘길 수 있다.
+    const outcome = await withSiteAndWorkersAssignmentLock<CreateOutcome>(siteId, [workerId], async (tx) => {
       // 동일 site/user에 진행 중 배정(요청·수락·계약대기·근무)이 이미 있으면 중복 방지(정책)
       const dup = await tx.siteAssignment.findFirst({
         where: { siteId, workerId, status: { in: ["REQUESTED", "ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"] } },
@@ -323,6 +327,22 @@ export async function POST(req: NextRequest) {
         if (otherActive) {
           return { kind: "otherActive", sameAgency: isSameAgencyConflict(otherActive.agencyId, effectiveAgencyId), companyName: otherActive.site?.companyName ?? "-" };
         }
+
+        // ★17차#2: 직접 배정(즉시 ASSIGNED)은 슬롯별 정원을 강제한다. finalize·respond는 검사하는데 직접배정만
+        //  누락돼(형제 갭) amCap=1 현장에 워커 A·B를 각각 직접배정하면 오전 2명이 통과했다. 정원 미설정 현장=무제한.
+        const site = await tx.site.findFirst({
+          where: { id: siteId }, select: { amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true },
+        });
+        const capBySlot: Record<CapacitySlot, number> = {
+          AM: site?.amCapacity ?? 0, PM: site?.pmCapacity ?? 0, FULL_DAY: site?.fullDayCapacity ?? 0, CUSTOM: site?.customCapacity ?? 0,
+        };
+        const filledGroups = await tx.siteAssignment.groupBy({
+          by: ["workType"], where: { siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } }, _count: { _all: true },
+        });
+        const filledBySlot: Record<string, number> = {};
+        for (const g of filledGroups) if (g.workType) filledBySlot[g.workType] = g._count._all;
+        const overflow = findCapacityOverflow(capBySlot, filledBySlot, { [String(workType)]: 1 });
+        if (overflow) return { kind: "over", slot: overflow.slot, sel: overflow.sel, remaining: overflow.remaining };
       }
 
       // 닫힌 기록 처리: 거절(REJECTED)한 건은 재요청 불가. 탈락/기한초과(DROPPED/EXPIRED)는 행을 재사용(중복 방지).
@@ -347,6 +367,11 @@ export async function POST(req: NextRequest) {
         ? `이미 다른 현장(${outcome.companyName})에 배정되어 있습니다. 기존 배정을 종료한 뒤 다시 배정해주세요.`
         : `이 직무지도원은 이미 다른 곳에 배정되어 있어 직접 배정할 수 없습니다. 기존 배정이 종료된 뒤 다시 시도해주세요.`;
       return NextResponse.json({ success: false, message: msg }, { status: 409 });
+    }
+    if (outcome.kind === "over") {
+      const slotLabel: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "전일", CUSTOM: "맞춤" };
+      const lbl = slotLabel[outcome.slot] ?? outcome.slot;
+      return NextResponse.json({ success: false, code: "OVER_CAPACITY", message: `${lbl} 정원을 초과하였습니다. (모집 ${outcome.remaining}명)` }, { status: 409 });
     }
     if (outcome.kind === "rejected") return NextResponse.json({ success: false, message: "직무지도원이 거절한 요청입니다. 다시 요청할 수 없습니다." }, { status: 409 });
     const created = outcome.created;

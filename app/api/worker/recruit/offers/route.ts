@@ -9,6 +9,7 @@ import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
+import { findCapacityOverflow, type CapacitySlot } from "@/lib/assignmentCapacity";
 
 export async function GET(req: NextRequest) {
   try {
@@ -101,7 +102,21 @@ export async function PATCH(req: NextRequest) {
           { workType: "FULL_DAY", startDate: offer.serviceStart ?? new Date(), endDate: offer.serviceEnd ?? null },
           others,
         );
-        if (!dup && !timeConflict) {
+        // ★17차(정원 클래스): 자동배정(FULL_DAY)도 슬롯 정원을 확인 — 꽉 찬 현장이면 배정만 스킵(수락은 유지,
+        //  위탁기관가 수동 처리). finalize·직접배정·PATCH와 동일 판정(findCapacityOverflow). 정원 미설정=무제한.
+        const capSite = await tx.site.findFirst({
+          where: { id: candidate.siteId }, select: { amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true },
+        });
+        const capBySlot: Record<CapacitySlot, number> = {
+          AM: capSite?.amCapacity ?? 0, PM: capSite?.pmCapacity ?? 0, FULL_DAY: capSite?.fullDayCapacity ?? 0, CUSTOM: capSite?.customCapacity ?? 0,
+        };
+        const filledGroups = await tx.siteAssignment.groupBy({
+          by: ["workType"], where: { siteId: candidate.siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } }, _count: { _all: true },
+        });
+        const filledBySlot: Record<string, number> = {};
+        for (const g of filledGroups) if (g.workType) filledBySlot[g.workType] = g._count._all;
+        const overCapacity = findCapacityOverflow(capBySlot, filledBySlot, { FULL_DAY: 1 });
+        if (!dup && !timeConflict && !overCapacity) {
           await tx.siteAssignment.create({
             data: {
               siteId: candidate.siteId,

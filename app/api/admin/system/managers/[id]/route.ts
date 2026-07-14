@@ -38,7 +38,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (newPassword.length < 8) {
         return NextResponse.json({ success: false, message: "비밀번호는 8자 이상이어야 합니다." }, { status: 400 });
       }
-      await prisma.manager.update({ where: { id: managerId }, data: { passwordHash: await bcrypt.hash(newPassword, 12) } });
+      // #5(17차): 비번 초기화 시 sessionVersion +1 → 발급된 모든 기존 JWT 무효화(탈취 세션 회수). 워커와 동일.
+      await prisma.manager.update({ where: { id: managerId }, data: { passwordHash: await bcrypt.hash(newPassword, 12), sessionVersion: { increment: 1 } } });
       return NextResponse.json({ success: true, message: "비밀번호가 초기화되었습니다." });
     }
 

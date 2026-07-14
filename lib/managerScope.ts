@@ -27,13 +27,14 @@ export async function requireManagerSession(req: Request): Promise<ManagerScope>
 
   if (!managerId || !agencyId) throw jsonError(401, "UNAUTHORIZED");
 
-  // 토큰이 유효해도 계정 비활성/소속변경 시 무효화 (Admin과 동일하게 매 요청 DB 재검증)
+  // 토큰이 유효해도 계정 비활성/소속변경/비번초기화(sessionVersion) 시 무효화 (매 요청 DB 재검증, 추가 쿼리 0)
   const manager = await prisma.manager.findUnique({
     where: { id: managerId },
-    select: { isActive: true, agencyId: true },
+    select: { isActive: true, agencyId: true, sessionVersion: true },
   });
   if (!manager || !manager.isActive) throw jsonError(401, "ACCOUNT_DISABLED");
   if (manager.agencyId !== agencyId) throw jsonError(401, "UNAUTHORIZED");
+  if (manager.sessionVersion !== (session.sv ?? 0)) throw jsonError(401, "SESSION_EXPIRED");
 
   return { managerId, agencyId, loginId: session.loginId };
 }
@@ -56,8 +57,8 @@ export async function requireAdminOrManagerSession(req: Request): Promise<DualSe
   if (adm && preferAdmin) {
     const adminId = parseBigInt(adm.sub);
     if (adminId) {
-      const admin = await prisma.admin.findUnique({ where: { id: adminId }, select: { isActive: true } });
-      if (admin && admin.isActive)
+      const admin = await prisma.admin.findUnique({ where: { id: adminId }, select: { isActive: true, sessionVersion: true } });
+      if (admin && admin.isActive && admin.sessionVersion === (adm.sv ?? 0))
         return { kind: "admin", adminId, loginId: String(adm.loginId) };
     }
   }
@@ -68,9 +69,9 @@ export async function requireAdminOrManagerSession(req: Request): Promise<DualSe
     if (managerId && agencyId) {
       const manager = await prisma.manager.findUnique({
         where: { id: managerId },
-        select: { isActive: true, agencyId: true },
+        select: { isActive: true, agencyId: true, sessionVersion: true },
       });
-      if (manager && manager.isActive && manager.agencyId === agencyId)
+      if (manager && manager.isActive && manager.agencyId === agencyId && manager.sessionVersion === (mgr.sv ?? 0))
         return { kind: "manager", managerId, agencyId, loginId: mgr.loginId };
     }
   }
@@ -78,8 +79,8 @@ export async function requireAdminOrManagerSession(req: Request): Promise<DualSe
   if (adm) {
     const adminId = parseBigInt(adm.sub);
     if (adminId) {
-      const admin = await prisma.admin.findUnique({ where: { id: adminId }, select: { isActive: true } });
-      if (admin && admin.isActive)
+      const admin = await prisma.admin.findUnique({ where: { id: adminId }, select: { isActive: true, sessionVersion: true } });
+      if (admin && admin.isActive && admin.sessionVersion === (adm.sv ?? 0))
         return { kind: "admin", adminId, loginId: String(adm.loginId) };
     }
   }

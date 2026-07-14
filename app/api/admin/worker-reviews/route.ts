@@ -38,10 +38,15 @@ async function recomputeAggregate(workerId: bigint) {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAdminOrManagerSession(req);
+    const session = await requireAdminOrManagerSession(req);
     const { searchParams } = new URL(req.url);
     const workerId = parseBigInt(searchParams.get("workerId"));
     if (!workerId) return NextResponse.json({ success: false, message: "workerId 필요" }, { status: 400 });
+
+    // 후기 열람도 작성과 동일하게 매칭(수락) 이력 게이트 — 무관계 매니저가 임의 workerId로
+    //  타 기관 후기 원문·작성기관을 열람(순차 열거)하는 것을 차단(POST hasEngagement와 대칭).
+    if (!(await hasEngagement(session, workerId)))
+      return NextResponse.json({ success: false, message: "매칭(수락) 이력이 있는 인력만 조회할 수 있습니다." }, { status: 403 });
 
     const reviews = await prisma.workerReview.findMany({
       where: { workerId },

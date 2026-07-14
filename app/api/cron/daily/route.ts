@@ -36,6 +36,14 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const yesterday = kstDateStr(-1);
 
+  // #9(17차): 배치가 1회라도 실패/미실행하면 그 날짜의 자동확정·면제 출근부·급여 초안이 영구 누락됐다(캐치업 없음).
+  //  최근 N일을 되돌아보며 재처리한다 — 각 섹션의 멱등 장치(자동확정=isFinalClosed:false 필터, 면제생성=
+  //  existSet+skipDuplicates, 급여=run 존재검사)가 이미 처리된 날은 자연히 건너뛰므로 중복 없이 자가 치유된다.
+  const LOOKBACK_DAYS = 7;
+  const lookbackDates: string[] = []; // [어제, 그제, … N일 전]
+  for (let i = 1; i <= LOOKBACK_DAYS; i++) lookbackDates.push(kstDateStr(-i));
+  const lookbackStart = lookbackDates[lookbackDates.length - 1];
+
   let autoConfirmed  = 0;
   let missedFlagged  = 0;
   let tokensCleared  = 0;
@@ -58,9 +66,11 @@ export async function GET(req: NextRequest) {
   //   → 직무지도원이 사유와 함께 늦게 퇴근 처리하거나, 매니저가 표준시각으로 확정해야 채워진다.
   try {
     const stale = await prisma.dailyAttendance.findMany({
-      where: { workDate: yesterday, startTime: { not: null }, isFinalClosed: false },
+      // #9: 어제 하루가 아니라 최근 N일 미확정을 함께 처리(미실행 캐치업). isFinalClosed:false 필터가
+      //  이미 확정된 날을 제외하므로 중복 없음.
+      where: { workDate: { gte: lookbackStart, lte: yesterday }, startTime: { not: null }, isFinalClosed: false },
       select: {
-        id: true, status: true, workerId: true, clockOutMissedAt: true,
+        id: true, status: true, workerId: true, workDate: true, clockOutMissedAt: true,
         site: { select: { companyName: true } },
         assignment: { select: { agencyId: true } },
       },
@@ -77,7 +87,7 @@ export async function GET(req: NextRequest) {
         data: { isFinalClosed: true, finalizedAt: now, status: "DONE" },
       });
       autoConfirmed = doneRows.length;
-      detail.autoConfirmed = doneRows.map((a) => ({ attId: String(a.id), workerId: String(a.workerId), site: a.site?.companyName ?? null, date: yesterday }));
+      detail.autoConfirmed = doneRows.map((a) => ({ attId: String(a.id), workerId: String(a.workerId), site: a.site?.companyName ?? null, date: a.workDate }));
     }
 
     if (workingRows.length) {
@@ -86,7 +96,7 @@ export async function GET(req: NextRequest) {
         data: { clockOutMissedAt: now },
       });
       missedFlagged = workingRows.length;
-      detail.missedFlagged = workingRows.map((a) => ({ attId: String(a.id), workerId: String(a.workerId), site: a.site?.companyName ?? null, date: yesterday }));
+      detail.missedFlagged = workingRows.map((a) => ({ attId: String(a.id), workerId: String(a.workerId), site: a.site?.companyName ?? null, date: a.workDate }));
       // '퇴근 미실행' 앱 내 알림(무료) — agencyId 있는 행만 일괄 생성.
       try {
         const notices = workingRows
@@ -95,7 +105,7 @@ export async function GET(req: NextRequest) {
             workerId: a.workerId,
             agencyId: a.assignment!.agencyId!,
             title: "퇴근 미실행 안내",
-            body: `${yesterday} '${a.site?.companyName ?? "현장"}' 퇴근이 등록되지 않았습니다.\n앱에서 사유와 함께 퇴근을 처리해 주세요. (처리 전까지 출근부에 퇴근 시각이 비어 있습니다)`,
+            body: `${a.workDate} '${a.site?.companyName ?? "현장"}' 퇴근이 등록되지 않았습니다.\n앱에서 사유와 함께 퇴근을 처리해 주세요. (처리 전까지 출근부에 퇴근 시각이 비어 있습니다)`,
             type: "WARN" as any,
             link: "/worker/home",
           }));
@@ -171,16 +181,18 @@ export async function GET(req: NextRequest) {
   }
 
   // ── 4. 출퇴근 버튼 면제 배정: 전일 출근부 자동 생성 (시프티 병행) ──
-  try {
-    const [yy, mm, dd] = yesterday.split("-").map(Number);
-    const dow = new Date(Date.UTC(yy, mm - 1, dd)).getUTCDay(); // 0=일, 6=토
-    const isWeekend = dow === 0 || dow === 6;
-    const isKrHoliday = Object.prototype.hasOwnProperty.call(getKrHolidays(yy, mm), yesterday);
+  // #9: 최근 N일 각각에 대해 면제 출근부를 보정 생성(미실행 캐치업). 각 날짜는 existSet/skipDuplicates로 멱등.
+  for (const dayStr of lookbackDates) {
+    try {
+      const [yy, mm, dd] = dayStr.split("-").map(Number);
+      const dow = new Date(Date.UTC(yy, mm - 1, dd)).getUTCDay(); // 0=일, 6=토
+      const isWeekend = dow === 0 || dow === 6;
+      const isKrHoliday = Object.prototype.hasOwnProperty.call(getKrHolidays(yy, mm), dayStr);
+      if (isWeekend || isKrHoliday) continue;
 
-    if (!isWeekend && !isKrHoliday) {
-      // ★배정 기간(startDate~endDate)이 전일을 포함하는 배정만 — 시작 전/종료 후 날짜가 출근부·급여에 들어가던 버그 차단.
-      const yStart = new Date(`${yesterday}T00:00:00+09:00`);
-      const yEnd = new Date(`${yesterday}T23:59:59+09:00`);
+      // ★배정 기간(startDate~endDate)이 그날을 포함하는 배정만 — 시작 전/종료 후 날짜가 출근부·급여에 들어가던 버그 차단.
+      const yStart = new Date(`${dayStr}T00:00:00+09:00`);
+      const yEnd = new Date(`${dayStr}T23:59:59+09:00`);
       const exemptAssignments = await prisma.siteAssignment.findMany({
         where: {
           attendanceButtonExempt: true,
@@ -198,11 +210,11 @@ export async function GET(req: NextRequest) {
       const asgIds = exemptAssignments.map((a) => a.id);
       const [holRows, existRows] = await Promise.all([
         prisma.siteHoliday.findMany({
-          where: { assignmentId: { in: asgIds }, date: yesterday, countAsWorkday: false },
+          where: { assignmentId: { in: asgIds }, date: dayStr, countAsWorkday: false },
           select: { assignmentId: true },
         }),
         prisma.dailyAttendance.findMany({
-          where: { assignmentId: { in: asgIds }, workDate: yesterday },
+          where: { assignmentId: { in: asgIds }, workDate: dayStr },
           select: { id: true, assignmentId: true, startTime: true, isFinalClosed: true },
         }),
       ]);
@@ -224,9 +236,9 @@ export async function GET(req: NextRequest) {
               workerId: a.workerId,
               siteId: a.siteId,
               assignmentId: a.id,
-              workDate: yesterday,
-              startTime: kstWallTimeToInstant(yesterday, times.start),
-              endTime: kstWallTimeToInstant(yesterday, times.end),
+              workDate: dayStr,
+              startTime: kstWallTimeToInstant(dayStr, times.start),
+              endTime: kstWallTimeToInstant(dayStr, times.end),
               status: "DONE" as const,
               isFinalClosed: true,   // 면제 배정: 워커 확정 불필요 → 자동 확정
               finalizedAt: now,
@@ -243,8 +255,8 @@ export async function GET(req: NextRequest) {
         await prisma.dailyAttendance.update({
           where: { id: r.id },
           data: {
-            startTime: kstWallTimeToInstant(yesterday, times.start),
-            endTime: kstWallTimeToInstant(yesterday, times.end),
+            startTime: kstWallTimeToInstant(dayStr, times.start),
+            endTime: kstWallTimeToInstant(dayStr, times.end),
             status: "DONE",
             isFinalClosed: true,
             finalizedAt: now,
@@ -252,17 +264,17 @@ export async function GET(req: NextRequest) {
         });
       }
       if (toCreate.length || toAdopt.length) {
-        exemptCreated = toCreate.length + toAdopt.length;
-        detail.exemptCreated = [
-          ...toCreate.map((a) => ({ assignmentId: String(a.id), workerId: String(a.workerId), siteId: String(a.siteId), date: yesterday })),
+        exemptCreated += toCreate.length + toAdopt.length;
+        detail.exemptCreated.push(
+          ...toCreate.map((a) => ({ assignmentId: String(a.id), workerId: String(a.workerId), siteId: String(a.siteId), date: dayStr })),
           ...toAdopt.map((r) => {
             const a = asgById.get(r.assignmentId.toString());
-            return { assignmentId: String(r.assignmentId), workerId: String(a?.workerId ?? ""), siteId: String(a?.siteId ?? ""), date: yesterday, adopted: true };
+            return { assignmentId: String(r.assignmentId), workerId: String(a?.workerId ?? ""), siteId: String(a?.siteId ?? ""), date: dayStr, adopted: true };
           }),
-        ];
+        );
       }
-    }
-  } catch (e: any) { errors.push(`면제출근부: ${e.message}`); }
+    } catch (e) { errors.push(`면제출근부[${dayStr}]: ${e instanceof Error ? e.message : String(e)}`); }
+  }
 
   // ── 5. 계약 종료 자동 만족도 조사 (기본 OFF: SURVEY_AUTO_SEND=true + 알림톡 설정 시) ──
   // 전일 계약 종료(SIGNED/COMPLETED) 직무지도원에 대해, 사업체 담당자(현장 businessContact)에게 자동 발송.
@@ -369,11 +381,13 @@ export async function GET(req: NextRequest) {
     const daysInMonth = new Date(ky, km, 0).getDate();        // 이번 달 일수
     const isLastDay = todayDay === daysInMonth;
 
-    // 오늘 == 설정일, 또는 설정일이 이번 달 일수보다 커서 말일로 보정되는 기관(말일 대응)
+    // #9(17차): 설정일 '당일'만 매칭하면 그날 배치가 실패/미실행 시 그 달 급여 초안이 통째로 누락됐다.
+    //  설정일 '이상'(payrollAutoDay <= todayDay)으로 넓혀, 설정일 이후 첫 실행에서 전월분을 보정 생성한다.
+    //  이미 있으면 run 존재검사로 건너뛰므로(멱등) 중복 생성 없음. (설정일 > 이번달 일수는 말일에 대응.)
     const agencies = await prisma.agency.findMany({
       where: {
         isActive: true,
-        OR: [{ payrollAutoDay: todayDay }, ...(isLastDay ? [{ payrollAutoDay: { gt: daysInMonth } }] : [])],
+        OR: [{ payrollAutoDay: { lte: todayDay } }, ...(isLastDay ? [{ payrollAutoDay: { gt: daysInMonth } }] : [])],
       },
       select: { id: true },
     });

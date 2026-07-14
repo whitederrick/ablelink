@@ -9,7 +9,8 @@ import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/manag
 import { VALID_WORK_TYPES, type WorkType, computeWorkTimes } from "@/lib/workSchedule";
 import { audit, auditSnapshot } from "@/lib/audit";
 import { findTimeConflict, assignmentsTimeConflict, OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
-import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
+import { withWorkerAssignmentLock, withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
+import { findCapacityOverflow, type CapacitySlot } from "@/lib/assignmentCapacity";
 
 // 배정 취소(종료) — 위탁기관 담당자(매니저)·시스템 운영자 공통.
 // 진행 중(REQUESTED/ACCEPTED/ASSIGNED/CONFIRMED/ACTIVE) 배정을 ENDED로 종료 → 재배정 가능.
@@ -81,7 +82,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // 매니저는 본 기관 배정만, 운영자는 전체
     const existing = await prisma.siteAssignment.findUnique({
       where: { id: assignmentId },
-      select: { agencyId: true, workerId: true, startDate: true, endDate: true, workType: true, customWorkStart: true, customWorkEnd: true },
+      select: { agencyId: true, siteId: true, workerId: true, status: true, startDate: true, endDate: true, workType: true, customWorkStart: true, customWorkEnd: true },
     });
     if (!existing) return NextResponse.json({ success: false, message: "NOT_FOUND" }, { status: 404 });
     if (session.kind === "manager" && existing.agencyId !== session.agencyId) return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
@@ -110,7 +111,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // #7: 겹침 재검사 → update를 워커 advisory 락 트랜잭션으로 직렬화(다른 6개 승격 경로와 통일).
     //  락이 없으면 이 PATCH의 검사~쓰기 사이에 respond/finalize 등 동시 승격을 놓쳐 이중배정이 샌다(TOCTOU).
     const auditBefore = await auditSnapshot("SiteAssignment", { id: assignmentId }, updateData);
-    const lockResult = await withWorkerAssignmentLock(existing.workerId, async (tx) => {
+    const lockResult = await withSiteAndWorkersAssignmentLock(existing.siteId, [existing.workerId], async (tx) => {
       const candidate = {
         workType, customWorkStart, customWorkEnd,
         startDate: updateData.startDate ?? existing.startDate,
@@ -131,6 +132,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           ? `다른 현장(${(newConflict as any).site?.companyName ?? "-"}) 배정과 같은 날 근무시간이 겹칩니다. 근무형태(오전/오후/종일)를 조정해주세요.`
           : `이 직무지도원은 이미 다른 일정이 있어 해당 기간·근무형태로 변경할 수 없습니다. 근무형태(오전/오후/종일)를 조정해주세요.`;
         return { conflict: msg } as const;
+      }
+      // ★17차#3: 근무형태(workType) 변경 시 슬롯 정원을 재검사(finalize·respond·직접배정과 통일). 점유 상태
+      //  (ASSIGNED/CONFIRMED/ACTIVE) 배정을 꽉 찬 슬롯으로 바꾸면 정원 초과가 됐다(주석 190의 미가드 경로 종결).
+      //  미점유(REQUESTED/ACCEPTED)는 아직 슬롯을 소비하지 않으므로 제외(finalize 시점에 검사). 현장 락 안에서 원자.
+      const isOccupying = (["ASSIGNED", "CONFIRMED", "ACTIVE"] as string[]).includes(existing.status);
+      if (isOccupying && workType !== existing.workType) {
+        const site = await tx.site.findFirst({
+          where: { id: existing.siteId }, select: { amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true },
+        });
+        const capBySlot: Record<CapacitySlot, number> = {
+          AM: site?.amCapacity ?? 0, PM: site?.pmCapacity ?? 0, FULL_DAY: site?.fullDayCapacity ?? 0, CUSTOM: site?.customCapacity ?? 0,
+        };
+        const filledGroups = await tx.siteAssignment.groupBy({
+          by: ["workType"], where: { siteId: existing.siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, id: { not: assignmentId } }, _count: { _all: true },
+        });
+        const filledBySlot: Record<string, number> = {};
+        for (const g of filledGroups) if (g.workType) filledBySlot[g.workType] = g._count._all;
+        const overflow = findCapacityOverflow(capBySlot, filledBySlot, { [workType]: 1 });
+        if (overflow) {
+          const slotLabel: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "전일", CUSTOM: "맞춤" };
+          return { conflict: `${slotLabel[overflow.slot] ?? overflow.slot} 정원을 초과하여 근무형태를 변경할 수 없습니다. (모집 ${overflow.remaining}명)` } as const;
+        }
       }
       const row = await tx.siteAssignment.update({
         where: { id: assignmentId },
