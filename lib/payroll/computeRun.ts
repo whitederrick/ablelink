@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { overtimeMinutesForDay, workEndMinutesForDay, manualExtHoursFromLogs } from "@/lib/attendance/overtime";
 import { computeWeeklyHoliday } from "@/lib/payroll/weeklyHoliday";
+import { resolveWorkingWeekdaySet } from "@/lib/payroll/weekdays";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
 import { determineEligibility, determineIncomeType, isIllegalBusinessIncome, type IncomeType } from "@/lib/payroll/insuranceEligibility";
@@ -152,7 +153,7 @@ export async function computePayrollItems(
     prisma.employmentContract.findMany({
       where: { agencyId, workerId: { in: userIds }, contractStart: { lte: periodEndDate }, contractEnd: { gte: periodStartDate } },
       orderBy: { contractStart: "desc" },
-      select: { workerId: true, workDaysPerWeek: true, weeklyHoliday: true, contractStart: true, contractEnd: true, workStartTime: true, workEndTime: true, breakStartTime: true, breakEndTime: true },
+      select: { workerId: true, workDaysPerWeek: true, weeklyHoliday: true, workingWeekdays: true, contractStart: true, contractEnd: true, workStartTime: true, workEndTime: true, breakStartTime: true, breakEndTime: true },
     }),
     // 최초 근로계약(contractStart asc, 기간필터 없음) = 계속근로 산정 기준. 워커별 첫 행.
     prisma.employmentContract.findMany({
@@ -273,11 +274,11 @@ export async function computePayrollItems(
       : null;
     // 소정근로 요일 집합 + 그 달 소정근로일수(공휴일·커스텀휴무 제외). 월급 일할계산·주휴 개근 판정 공용.
     //  · 소정근로 요일 = 월~ 순으로 주휴일(weeklyHoliday) 제외하고 workDaysPerWeek개(5일=월~금, 6일=월~토).
-    const DOW_LABEL: Record<string, number> = { "일": 0, "월": 1, "화": 2, "수": 3, "목": 4, "금": 5, "토": 6 };
-    const wpw = empContract?.workDaysPerWeek ?? 5;
-    const restDow = empContract?.weeklyHoliday ? (DOW_LABEL[empContract.weeklyHoliday] ?? 0) : 0;
-    const workingWeekdays = new Set<number>();
-    for (const d of [1, 2, 3, 4, 5, 6, 0]) { if (d === restDow) continue; workingWeekdays.add(d); if (workingWeekdays.size >= wpw) break; }
+    // ★근무요일 집합 = 계약 workingWeekdays(명시) 우선, 없으면 workDaysPerWeek+weeklyHoliday에서 파생(하위호환·동치).
+    //  단일 소스 lib/payroll/weekdays(0=일..6=토). 소정일수·MONTHLY 일할·주휴 개근이 이 Set을 공유해 자동 정합.
+    //  wpw(주 소정근로일수)=근무요일 수 — 파생 계약은 workDaysPerWeek와 동일하므로 기존 출력 불변(무회귀).
+    const workingWeekdays = resolveWorkingWeekdaySet(empContract?.workingWeekdays, empContract?.workDaysPerWeek, empContract?.weeklyHoliday);
+    const wpw = workingWeekdays.size;
     // 공휴일(법정)+커스텀휴무 → 소정근로일에서 제외. 둘 다 KST "YYYY-MM-DD".
     const monthHolidaySet = new Set<string>([...Object.keys(getKrHolidays(y, m)), ...customHolidays.map((h) => h.date)]);
     const daysInMonth = new Date(y, m, 0).getDate();

@@ -876,6 +876,9 @@ model EmploymentContract {
   breakEndTime    String? @map("break_end_time")     // 4. 휴게 종료
   workDaysPerWeek Int?    @map("work_days_per_week")  // 5. 주 N일 근무
   weeklyHoliday   String? @map("weekly_holiday")     // 5. 주휴일 요일(예: "일")
+  // 5-1. 실제 근무요일 집합(CSV, 0=일..6=토, getUTCDay 기준. 예 "1,3,5"=월수금). null=미설정→workDaysPerWeek+weeklyHoliday에서 파생.
+  //  비연속 근무(월수금·화목)의 주휴·MONTHLY 일할 정확 계산용. lib/payroll/weekdays 단일 소스.
+  workingWeekdays String? @map("working_weekdays")
   wageType        String? @map("wage_type")          // 6. HOURLY|DAILY|MONTHLY
   wageAmount      Int?    @map("wage_amount")         // 6. 임금액(원)
   bonusExists     Boolean @default(false) @map("bonus_exists")     // 6. 상여금 유무
