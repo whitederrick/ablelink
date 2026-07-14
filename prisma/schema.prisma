@@ -1054,6 +1054,10 @@ model PayContract {
   hourlyRate2Plus  Decimal? @map("hourly_rate_2plus")
   // EXTERNAL에서만 사용 (주 5일 계속 근로 시)
   weeklyHolidayPay Decimal? @map("weekly_holiday_pay")
+  // 프리랜서(EXTERNAL+BUSINESS) 야간작업 단가(원/시간) — 수기 참조값. 노무사 지침: 프리랜서에 법정 야간가산(×0.5)을
+  //  자동 적용하면 근로자성 인정 증거가 되므로 금지. 야간 보상은 계약 시 이 단가로 약정하고 급여 확정 시 수기 반영한다.
+  //  급여엔진은 이 값을 자동 계산에 쓰지 않는다(참조·기록 전용).
+  nightRate Decimal? @map("night_rate")
 
   effectiveFrom DateTime  @map("effective_from")
   effectiveTo   DateTime? @map("effective_to")

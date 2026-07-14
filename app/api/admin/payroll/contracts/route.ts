@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
         incomeType: c.incomeType,
         hourlyRate2Plus: c.hourlyRate2Plus != null ? Number(c.hourlyRate2Plus) : null,
         weeklyHolidayPay: c.weeklyHolidayPay != null ? Number(c.weeklyHolidayPay) : null,
+        nightRate: c.nightRate != null ? Number(c.nightRate) : null,
         currency: c.currency,
         effectiveFrom: c.effectiveFrom.toISOString().slice(0, 10),
         effectiveTo: c.effectiveTo ? c.effectiveTo.toISOString().slice(0, 10) : null,
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { workerId, workerType, payType, baseAmount, effectiveFrom, effectiveTo, incomeType, hourlyRate2Plus, weeklyHolidayPay } = body;
+    const { workerId, workerType, payType, baseAmount, effectiveFrom, effectiveTo, incomeType, hourlyRate2Plus, weeklyHolidayPay, nightRate } = body;
 
     if (!workerId || !payType || !baseAmount || !effectiveFrom) {
       return NextResponse.json({ success: false, message: "필수 항목 누락" }, { status: 400 });
@@ -100,6 +101,8 @@ export async function POST(req: NextRequest) {
     //  非HOURLY에 rate2가 남으면 computeRun이 MONTHLY 월급을 시급값으로 재산정(급여 파탄). (③)
     const resolvedRate2Plus   = resolvedPayType === "HOURLY" ? (hourlyRate2Plus != null ? hourlyRate2Plus : null) : null;
     const resolvedHolidayPay  = resolvedWorkerType === "INTERNAL" ? null : (weeklyHolidayPay != null ? weeklyHolidayPay : null);
+    // 야간작업 단가: 프리랜서(EXTERNAL+BUSINESS)에만 유효(수기 참조값). 그 외엔 null(근로소득은 법정 야간가산 자동).
+    const resolvedNightRate   = (resolvedWorkerType === "EXTERNAL" && resolvedIncomeType === "BUSINESS" && nightRate != null && nightRate !== "") ? nightRate : null;
 
     if (resolvedIncomeType && !["BUSINESS", "EMPLOYMENT"].includes(resolvedIncomeType)) {
       return NextResponse.json({ success: false, message: "incomeType 오류" }, { status: 400 });
@@ -127,6 +130,7 @@ export async function POST(req: NextRequest) {
           incomeType: resolvedIncomeType,
           hourlyRate2Plus: resolvedRate2Plus,
           weeklyHolidayPay: resolvedHolidayPay,
+          nightRate: resolvedNightRate,
           effectiveFrom: new Date(effectiveFrom),
           effectiveTo: effectiveTo ? new Date(effectiveTo) : null,
         } as any,

@@ -31,7 +31,7 @@ type DeductionType = "FIXED" | "PERCENTAGE";
 interface Contract {
   id: string; workerId: string; workerName: string; loginId: string;
   workerType: WorkerType; payType: PayType; baseAmount: number; incomeType: IncomeType;
-  hourlyRate2Plus: number | null; weeklyHolidayPay: number | null;
+  hourlyRate2Plus: number | null; weeklyHolidayPay: number | null; nightRate: number | null;
   effectiveFrom: string; effectiveTo: string | null;
 }
 
@@ -110,6 +110,7 @@ function makeInitialForm() {
     workerId: "", workerType: "EXTERNAL" as WorkerType, payType: "HOURLY" as PayType,
     baseAmount: String(MIN_WAGE_2026), incomeType: "BUSINESS" as IncomeType,
     hourlyRate2Plus: auto2Plus(MIN_WAGE_2026), weeklyHolidayPay: autoWeeklyHoliday(),
+    nightRate: "", // 프리랜서 야간작업 단가(원/시간) — 수기 참조값
     effectiveFrom: ymd(start), effectiveTo: ymd(end),
   };
 }
@@ -279,6 +280,8 @@ export default function PayrollPage() {
         body.hourlyRate2Plus = Number(form.hourlyRate2Plus);
       }
       if (form.weeklyHolidayPay) body.weeklyHolidayPay = Number(form.weeklyHolidayPay);
+      // 야간작업 단가는 프리랜서(사업소득)에만 전송(라우트에서도 EXTERNAL+BUSINESS만 저장)
+      if (form.incomeType === "BUSINESS" && form.nightRate) body.nightRate = Number(form.nightRate);
 
       const res = await fetch("/api/admin/payroll/contracts", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -614,6 +617,19 @@ export default function PayrollPage() {
                           <p className="text-[11px] font-semibold text-slate-400">※ 비워두면 급여계산 시 주 소정근로시간 비례((소정÷40)×8×시급)로 자동 산정. 고정액이 필요하면 직접 입력.</p>
                         </div>
                       )}
+
+                      {form.incomeType === "BUSINESS" && (
+                        <div className="space-y-1.5">
+                          <label className={T.label}>야간작업 단가 (원/시간, 선택)</label>
+                          <div className="flex items-center gap-2">
+                            <input type="text" inputMode="numeric" value={commaStr(form.nightRate)}
+                              onChange={e => { const v = digitsOnly(e.target.value); setForm(f => ({ ...f, nightRate: v })); }}
+                              placeholder="예: 15,000 (야간 약정 단가)"
+                              className={`min-w-0 flex-1 ${T.input}`} />
+                          </div>
+                          <p className="text-[11px] font-semibold text-slate-400">※ 프리랜서 전용. 법정 야간가산(×0.5)을 자동 적용하지 않고(근로자성 오인 방지), 계약 시 약정한 야간 단가를 기록합니다. 급여 확정 시 지급내역에 수기 반영.</p>
+                        </div>
+                      )}
                     </div>
                   </section>
 
@@ -686,6 +702,9 @@ export default function PayrollPage() {
                           )}
                           {c.weeklyHolidayPay != null && (
                             <span className="text-[13px] text-slate-500">주휴 +{comma(c.weeklyHolidayPay)}원</span>
+                          )}
+                          {c.nightRate != null && (
+                            <span className="text-[13px] text-slate-500">야간 {comma(c.nightRate)}원/h</span>
                           )}
                         </div>
                       </td>
