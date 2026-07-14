@@ -59,16 +59,14 @@ export interface InsuranceResult {
   needsPensionReview?: boolean;
 }
 
-// 일반 단시간/상용: 워커가 부담하는 4대보험(산재 제외)
-const REGULAR_WORKER_DED: InsuranceKind[] = ["pension", "health", "ltc", "employment"];
-
 /**
- * 4대보험 가입 판정 (월별).
+ * 4대보험 가입 판정 (월별). 계약 1개월 이상은 보험별 법정 기준을 **개별** 적용한다.
  *  · 사업소득       → 가입 없음(3.3% 원천만)
- *  · 일용(<1개월)   → 고용 + 산재
- *  · 일반(월60h↑ 또는 월8일↑) → 국민연금 + 건강(+장기요양) + 고용 + 산재
- *  · 초단시간(그 외) → 산재 (+ 계속근로 3개월↑이면 고용)
- *  산재는 전액 사업주 부담 → workerDeductible에서 제외.
+ *  · 일용(<1개월)   → 고용 + 산재 (국민연금은 8일↑/60h↑ 시 검토 플래그만)
+ *  · 국민연금       → 월 60시간 이상 OR 월 8일 이상
+ *  · 건강·장기요양  → 월 60시간 이상만 (월 8일 기준 없음 — 단시간 건강보험 과다부과 방지)
+ *  · 고용보험       → 월 60시간 이상, 또는 3개월 이상 계속근로
+ *  · 산재           → 항상(전액 사업주 부담 → workerDeductible에서 제외)
  */
 export function determineInsurances(incomeType: IncomeType, x: InsuranceInput): InsuranceResult {
   if (incomeType === "BUSINESS") {
@@ -83,15 +81,21 @@ export function determineInsurances(incomeType: IncomeType, x: InsuranceInput): 
     const needsPensionReview = x.monthlyDays >= 8 || x.monthlyHours >= 60;
     return { tier: "DAILY_WORKER", insurances: ["employment", "industrial"], workerDeductible: ["employment"], needsPensionReview };
   }
-  // 일반 단시간/상용: 월 소정근로 60시간 이상 또는 월 8일 이상
-  if (x.monthlyHours >= 60 || x.monthlyDays >= 8) {
-    return { tier: "REGULAR", insurances: [...REGULAR_WORKER_DED, "industrial"], workerDeductible: [...REGULAR_WORKER_DED] };
-  }
-  // 초단시간: 월 60시간 미만 & 월 8일 미만 → 산재. 3개월 이상 계속근로면 고용보험 추가.
-  const insurances: InsuranceKind[] = ["industrial"];
+  // 계약 1개월 이상 — 보험별 법정 기준을 개별 적용(단일 tier로 뭉쳐 과다부과하지 않음).
+  const hours60 = x.monthlyHours >= 60;
+  const days8 = x.monthlyDays >= 8;
+  const insurances: InsuranceKind[] = [];
   const workerDeductible: InsuranceKind[] = [];
-  if (x.continuousMonths >= 3) { insurances.push("employment"); workerDeductible.push("employment"); }
-  return { tier: "ULTRA_SHORT", insurances, workerDeductible };
+  // 국민연금: 월 60시간 이상 OR 월 8일 이상
+  if (hours60 || days8) { insurances.push("pension"); workerDeductible.push("pension"); }
+  // 건강·장기요양: 월 60시간 이상만(8일 트랙 없음)
+  if (hours60) { insurances.push("health", "ltc"); workerDeductible.push("health", "ltc"); }
+  // 고용보험: 월 60시간 이상, 또는 3개월 이상 계속근로(초단시간이어도)
+  if (hours60 || x.continuousMonths >= 3) { insurances.push("employment"); workerDeductible.push("employment"); }
+  insurances.push("industrial"); // 산재 항상
+  // tier: 국민연금/건강 대상(60h||8일)이면 일반, 그 외 초단시간(산재 중심)
+  const tier: WorkerTier = (hours60 || days8) ? "REGULAR" : "ULTRA_SHORT";
+  return { tier, insurances, workerDeductible };
 }
 
 /** 소득유형 + 보험 판정을 한 번에. */

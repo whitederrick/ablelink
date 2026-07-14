@@ -51,9 +51,23 @@ describe("determineInsurances (4대보험 차등)", () => {
     expect(r.workerDeductible.sort()).toEqual(["employment", "health", "ltc", "pension"]);
   });
 
-  it("일반(월 8일↑, 시간은 적어도) → 4대보험 전부", () => {
-    const r = determineInsurances("EMPLOYMENT", { ...base, monthlyHours: 40, monthlyDays: 10 });
+  it("월 8일↑이나 60h 미만 → 국민연금만(건강·장기요양 제외 — 단시간 과다부과 방지)", () => {
+    // continuousMonths<3 로 고용보험 3개월 예외도 배제 → 순수 8일 트랙만 검증
+    const r = determineInsurances("EMPLOYMENT", { ...base, monthlyHours: 40, monthlyDays: 10, continuousMonths: 1 });
     expect(r.tier).toBe("REGULAR");
+    expect(r.insurances).toContain("pension");
+    expect(r.insurances).toContain("industrial");
+    expect(r.insurances).not.toContain("health"); // ★8일 트랙에서 건강보험 제거
+    expect(r.insurances).not.toContain("ltc");
+    expect(r.insurances).not.toContain("employment"); // 60h 미만 & 계속근로<3개월
+    expect(r.workerDeductible.sort()).toEqual(["pension"]);
+  });
+
+  it("월 8일↑ & 60h 미만 & 계속근로 3개월↑ → 국민연금+고용(건강·장기요양은 여전히 제외)", () => {
+    const r = determineInsurances("EMPLOYMENT", { ...base, monthlyHours: 40, monthlyDays: 10, continuousMonths: 6 });
+    expect(r.tier).toBe("REGULAR");
+    expect(r.workerDeductible.sort()).toEqual(["employment", "pension"]);
+    expect(r.insurances).not.toContain("health");
   });
 
   it("초단시간(월60h·8일 미만, 계속근로<3개월) → 산재만, 워커공제 없음", () => {

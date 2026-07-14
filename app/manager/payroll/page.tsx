@@ -81,7 +81,7 @@ const TIER_LABEL: Record<string, string> = {
 const TIER_DESC: Record<string, string> = {
   DAILY_WORKER: "1개월 미만 고용 — 고용보험·산재 가입",
   ULTRA_SHORT: "월 60시간·8일 미만 — 산재만(계속근로 3개월↑ 시 고용보험)",
-  REGULAR: "월 60시간 이상 또는 8일 이상 — 4대보험 전부 가입",
+  REGULAR: "월 60시간 이상 → 4대보험 전부 / 월 8일 이상(60h 미만) → 국민연금 대상(건강보험 제외)",
   NONE: "사업소득(3.3%) — 4대보험 비대상",
 };
 
