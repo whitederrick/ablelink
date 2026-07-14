@@ -131,6 +131,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
       include: { user: { select: { id: true, workerName: true, loginId: true } } },
     });
 
+    // 증빙: 급여 항목 수동 편집(연차미사용수당 등 1회성 수당·당월 예외 공제 0 포함)을 감사로그에 기록.
+    //  노동청 분쟁 시 지급/공제 조정 이력 증빙. audit 실패가 저장 응답을 깨지 않도록 방어.
+    try {
+      const earlyLeaveExempt = !!(breakdown?.basicInfo?.earlyLeaveExempt);
+      await audit(scope, {
+        entityType: "PayrollItem",
+        entityId: itemIdBig,
+        action: "update",
+        summary: `급여 항목 수동 수정 (${run.yearMonth})${earlyLeaveExempt ? " · 당월 예외(조기퇴사): 국민연금·건강·장기요양 공제 0" : ""}`,
+        after: { grossPay: gp, totalDeduction: td, netPay: gp - td, workerId: updated.workerId.toString() },
+      });
+    } catch (e) { console.error("[payroll item PATCH audit]", e); }
+
     return NextResponse.json({ success: true, item: itemDto(updated) });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;

@@ -1085,6 +1085,8 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
   }));
   const [saving, setSaving] = useState(false);
   const [taxNote, setTaxNote] = useState("");
+  // #1(노무사): 조기퇴사 등 '당월 예외' — 국민연금·건강·장기요양 공제를 0으로. 확정 저장 시 basicInfo에 보존·감사로그 기록.
+  const [earlyLeaveExempt, setEarlyLeaveExempt] = useState<boolean>(() => !!bd.basicInfo?.earlyLeaveExempt);
   const [bonusAmount, setBonusAmount] = useState(0);
   const [bonusMonths, setBonusMonths] = useState(1);
   const [bonusNote, setBonusNote] = useState("");
@@ -1146,12 +1148,21 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
     } catch { setBonusNote("계산 실패"); }
   }
 
+  // #1: 당월 예외(조기퇴사) — 국민연금·건강보험·장기요양보험 공제 라인을 0으로. (고용·산재는 유지)
+  //  노무사 지침: 하드코딩 금지, 관리자 판단으로 당월 공제만 예외 처리. 사후정산은 공단 EDI 결과로 통제.
+  function applyEarlyLeaveException() {
+    const keys = new Set(["pension", "health", "ltc"]);
+    const names = new Set(["국민연금", "건강보험", "장기요양보험"]);
+    setDeductLines(prev => prev.map(l => (keys.has(l.key) || names.has(l.name)) ? { ...l, amount: 0 } : l));
+    setEarlyLeaveExempt(true);
+  }
+
   async function save() {
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/payroll/runs/${runId}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: item.id, payLines, deductLines, basicInfo: basic }),
+        body: JSON.stringify({ itemId: item.id, payLines, deductLines, basicInfo: { ...basic, earlyLeaveExempt } }),
       });
       const d = await res.json();
       if (d.success) onSaved(d.item); else alert(d.message);
@@ -1239,9 +1250,17 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
           <div>
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-black text-slate-900">공제내역</h3>
-              <button onClick={() => setDeductLines(p => [...p, { key: `c${Date.now()}`, name: "", amount: 0 }])}
-                className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-50">+ 항목</button>
+              <div className="flex items-center gap-1.5">
+                <button onClick={applyEarlyLeaveException}
+                  title="조기퇴사 등 당월 예외 — 국민연금·건강·장기요양 공제를 0으로 처리(고용·산재 유지). 저장 시 감사로그 기록."
+                  className={`rounded-lg border px-2 py-1 text-xs font-bold ${earlyLeaveExempt ? "border-amber-300 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                  당월 예외{earlyLeaveExempt ? " ✓" : ""}
+                </button>
+                <button onClick={() => setDeductLines(p => [...p, { key: `c${Date.now()}`, name: "", amount: 0 }])}
+                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-50">+ 항목</button>
+              </div>
             </div>
+            {earlyLeaveExempt && <p className="mb-1.5 text-[11px] font-semibold text-amber-700">당월 예외(조기퇴사) — 국민연금·건강·장기요양 공제 0 처리(고용·산재 유지). 저장 시 이력 기록.</p>}
             <div className="overflow-hidden rounded-xl border border-slate-200">
               <div className="grid grid-cols-[1fr_100px_28px] gap-1 bg-slate-50 px-2 py-1.5 text-[11px] font-black text-slate-400">
                 <span>공제항목</span><span className="text-right">금액</span><span></span>
