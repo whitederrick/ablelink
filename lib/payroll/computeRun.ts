@@ -18,7 +18,6 @@ import type { PayrollBreakdown } from "@/lib/payroll/breakdown";
 const SERVICE_STEP_LABEL: Record<string, string> = {
   PRE_TRAINING: "사전훈련", FIELD_TRAINING: "지원고용 현장훈련", ADAPTATION: "취업 후 적응지도",
 };
-const BUSINESS_DEDUCTION_RATE = 0.033; // 사업소득세 3.3%
 const DAY_MS = 86400000;
 
 function minutesBetween(start: Date | null, end: Date | null): number {
@@ -595,7 +594,12 @@ export async function computePayrollItems(
     };
 
     if (incomeType === "BUSINESS") {
-      pushDed("bizTax", "사업소득세(3.3%)", Math.round(grossPay * BUSINESS_DEDUCTION_RATE));
+      // 프리랜서 3.3% = 사업소득세 3%(국세) + 지방소득세 0.3%(소득세의 10%). 홈택스/위택스 분리신고 검증 정합을 위해
+      //  단순 ×3.3%가 아니라 2단계 절사: floor(총액×3%) → floor(소득세×10%). 각 원단위 버림(지급명세서 1원 오차 방지).
+      const bizIncomeTax = Math.floor(grossPay * 0.03);
+      const bizLocalTax = Math.floor(bizIncomeTax * 0.1);
+      pushDed("bizTax", "사업소득세(3%)", bizIncomeTax);
+      pushDed("bizLocalTax", "지방소득세(0.3%)", bizLocalTax);
     } else {
       const taxR = computeIncomeTax(taxBrackets, grossPay, dependents, { childUnder20, rate: withholdingRate, childCredit: taxChildCredit });
       pushDed("incomeTax", "소득세", taxR.tax);

@@ -4,14 +4,6 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 
-// KST "HH:MM" + workDate "YYYY-MM-DD" → UTC Date
-function kstHHMMtoUTC(hhMM: string, workDate: string): Date | null {
-  if (!hhMM || !/^\d{2}:\d{2}$/.test(hhMM)) return null;
-  const [h, m] = hhMM.split(":").map(Number);
-  const utcMs = new Date(`${workDate}T00:00:00Z`).getTime() + (h * 60 + m - 9 * 60) * 60000;
-  return new Date(utcMs);
-}
-
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -35,25 +27,17 @@ export async function PATCH(
     if (record.isFinalClosed)
       return NextResponse.json({ success: false, message: "이미 확정된 기록입니다." }, { status: 409 });
 
-    const body = await req.json().catch(() => ({}));
+    // ★self-confirm은 '저장된 시각으로만' 확정한다. 워커가 본문으로 임의 startTime/endTime을 넣어 기본급을
+    //  부풀리는(급여는 startTime~endTime 구간 기준) 것을 차단 — 시각 변경은 매니저 승인(수정요청) 경로로 강제.
+    //  현재 UI는 빈 본문을 보내므로 정상 동작에는 영향이 없다.
     const updateData: any = { isFinalClosed: true, finalizedAt: new Date(), status: "DONE" };
 
-    if (body.startTime) {
-      const t = kstHHMMtoUTC(body.startTime, record.workDate);
-      if (t) updateData.startTime = t;
+    // 퇴근/출근 시각 없이 확정 금지(급여 과지급·유령 근무일 방지). 시각 보정이 필요하면 수정요청→매니저 승인.
+    if (!record.endTime) {
+      return NextResponse.json({ success: false, message: "퇴근 시각이 없어 확정할 수 없습니다. 시각 보정은 수정요청으로 담당자 승인을 받아주세요." }, { status: 400 });
     }
-    if (body.endTime) {
-      const t = kstHHMMtoUTC(body.endTime, record.workDate);
-      if (t) updateData.endTime = t;
-    }
-
-    // 퇴근 시각 없이 확정 금지(급여 과지급·문서 불일치 방지) — 보정으로 endTime을 제공하거나 이미 있어야 함.
-    if (!(updateData.endTime ?? record.endTime)) {
-      return NextResponse.json({ success: false, message: "퇴근 시각이 없어 확정할 수 없습니다. 퇴근 시각을 입력해주세요." }, { status: 400 });
-    }
-    // ★출근 시각 없이 확정 금지(startTime=null placeholder = 유령 근무일). 형제 finalize 경로와 통일(8차).
-    if (!(updateData.startTime ?? record.startTime)) {
-      return NextResponse.json({ success: false, message: "출근 시각이 없어 확정할 수 없습니다. 출근 시각을 입력해주세요." }, { status: 400 });
+    if (!record.startTime) {
+      return NextResponse.json({ success: false, message: "출근 시각이 없어 확정할 수 없습니다. 시각 보정은 수정요청으로 담당자 승인을 받아주세요." }, { status: 400 });
     }
 
     await prisma.dailyAttendance.update({ where: { id: record.id }, data: updateData });
