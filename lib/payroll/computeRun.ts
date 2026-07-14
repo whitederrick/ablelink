@@ -12,6 +12,7 @@ import { getKrHolidays } from "@/lib/krHolidays";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
 import { determineEligibility, determineIncomeType, isIllegalBusinessIncome, type IncomeType } from "@/lib/payroll/insuranceEligibility";
 import { standardMonthlyIncome } from "@/lib/payroll/pensionBase";
+import { monthlyStandardHours } from "@/lib/payroll/ordinaryHours";
 import { traineeCountOnDate } from "@/lib/traineePlacement";
 import { Decimal } from "@prisma/client/runtime/library";
 import type { PayrollBreakdown } from "@/lib/payroll/breakdown";
@@ -312,6 +313,15 @@ export async function computePayrollItems(
       const baseRate = Number(contract.baseAmount);
       const rate2 = contract.hourlyRate2Plus != null ? Number(contract.hourlyRate2Plus) : null;
 
+      // 유효 소득유형(공제·보험과 동일 입력). 프리랜서(사업소득)는 근로기준법 가산(연장/야간/휴일/주휴)을
+      //  자동 적용하지 않는다 — 자동 가산은 근로자성 인정의 증거가 되어 분쟁 리스크(노무사 확인). 야간 등
+      //  보상은 계약 시 별도 단가로 수기 반영해야 한다. 근로계약 있으면 항상 EMPLOYMENT라 정상 케이스 불변.
+      const gateIncomeType = determineIncomeType({
+        hasEmploymentContract: !!empContract,
+        hasAttendance: workedDays > 0,
+        freelancerOverride: contract?.incomeType === "BUSINESS" && !empContract,
+      });
+
       let ordinaryWage = 0;
       if (contract.payType === "HOURLY") {
         // 지급시간을 1:1(일반)/1:多(그날 2인+ 재적) 로 나눠 합산. 단일 계약 시급(baseRate)·2인시급(rate2) 사용.
@@ -373,14 +383,19 @@ export async function computePayrollItems(
           : Math.min(proRateDaySet.size, schedDays);
         const prorate = schedDays > 0 && proRateDays < schedDays;
         grossPay = prorate ? Math.round((rate * proRateDays) / schedDays) : rate;
-        ordinaryWage = Math.round(rate / 209); // 월 소정근로시간 209h 기준
+        // 통상시급 = 월정액 ÷ 월 소정근로시간. 월 소정 = (주 소정 + 주휴) × 4.345주(monthlyStandardHours).
+        //  주40h→209(관행값 정확 일치·무회귀), 단시간(주20h 등)→비례 축소. 209 고정은 단시간에 위법
+        //  (통상시급 과대→가산 과소지급). 계약 시각 없으면 주40h 폴백 → 종전 209 유지.
+        const weeklySojeHours = contractDailySojeMin != null ? (contractDailySojeMin / 60) * wpw : 40;
+        const stdHours = monthlyStandardHours(weeklySojeHours);
+        ordinaryWage = stdHours > 0 ? Math.round(rate / stdHours) : Math.round(rate / 209);
         calcMethods["기본급"] = prorate
           ? `월 ${rate.toLocaleString()}원 × ${proRateDays}/${schedDays}일 (일할)`
           : `월 ${rate.toLocaleString()}원`;
         breakdown = { payType: "MONTHLY", monthlyRate: rate, scheduledWorkdays: schedDays, workedDays, prorateWorkdays: proRateDays, prorated: prorate, workedMinutes, pendingDays };
       }
 
-      if (overtimeHours > 0 && ordinaryWage > 0) {
+      if (gateIncomeType === "EMPLOYMENT" && overtimeHours > 0 && ordinaryWage > 0) {
         const overtimePay = Math.round(overtimeHours * ordinaryWage * 1.5);
         grossPay += overtimePay;
         breakdown.overtimeHours = overtimeHours;
@@ -390,7 +405,8 @@ export async function computePayrollItems(
 
       // 야간(22:00~06:00)·휴일(공휴일/주휴일) 근로 자동검출 → 0.5 가산수당. (평일·주간 근무는 0)
       //  ※ 출근부 실제 시각 기준 자동 산정 — 검출 규칙은 사용자 검토 대상.
-      if (ordinaryWage > 0) {
+      //  프리랜서(사업소득)는 근로기준법 가산 미적용(위 연장과 동일 게이트).
+      if (gateIncomeType === "EMPLOYMENT" && ordinaryWage > 0) {
         const KST = 9 * 3600 * 1000;
         const kstMin = (d: Date) => Math.floor(((d.getTime() + KST) % 86400000) / 60000);
         const ovl = (s: number, e: number, a: number, b: number) => Math.max(0, Math.min(e, b) - Math.max(s, a));
@@ -455,13 +471,8 @@ export async function computePayrollItems(
       //  ※ MONTHLY(월급)는 월정액 209h에 주휴가 이미 포함 → 별도 가산 안 함(이중지급 방지).
       //  ★P1-15: 게이트를 계약 원본값(contract.incomeType) 대신 공제·보험과 동일한 '유효 소득유형'으로 판정한다.
       //   근로계약이 있으면 급여기준이 BUSINESS로 오설정돼도 실제로는 근로소득(EMPLOYMENT)으로 계산되는데
-      //   (elig.incomeType), 주휴 게이트만 원본 BUSINESS를 봐서 주휴가 누락되던 불일치를 제거. 아래 elig와
-      //   동일 입력(determineIncomeType)이라 결과가 항상 일치한다. 정상 케이스는 결과 불변.
-      const gateIncomeType = determineIncomeType({
-        hasEmploymentContract: !!empContract,
-        hasAttendance: workedDays > 0,
-        freelancerOverride: contract?.incomeType === "BUSINESS" && !empContract,
-      });
+      //   (elig.incomeType), 주휴 게이트만 원본 BUSINESS를 봐서 주휴가 누락되던 불일치를 제거. 위에서 이미
+      //   동일 입력으로 계산한 gateIncomeType(연장·야간·휴일 게이트와 공유)을 재사용한다.
       if (gateIncomeType === "EMPLOYMENT" && contract.payType !== "MONTHLY" && ordinaryWage > 0) {
         // 소정근로시간 = 실질 약정 근로시간(출퇴근·휴게지도 포함, 무급휴게만 제외) = 지급시간과 동일.
         //  오전/오후 5.5h · 전일 8h. (주휴 = (1주 소정÷40)×8×시급)
