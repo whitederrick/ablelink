@@ -10,6 +10,7 @@ import { PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel, buildBillingO
 import { outboundAllowed } from "@/lib/outboundGuard";
 import { PAID_AGENCY_PLANS } from "@/lib/plans";
 import { decideChargeOutcome, type ChargeOutcome } from "@/lib/payments/chargeDecision";
+import { timingSafeEqual } from "crypto";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const CRON_SECRET = process.env.CRON_SECRET || "";
@@ -29,7 +30,11 @@ export async function POST(request: NextRequest) {
   const secret =
     request.headers.get("x-cron-secret") ||
     (request.headers.get("Authorization") || "").replace("Bearer ", "");
-  if (!CRON_SECRET || secret !== CRON_SECRET) {
+  // ★형제갭: cron/daily와 동일하게 상수시간 비교(타이밍 사이드채널 제거). 길이 다르면 timingSafeEqual throw → 선체크.
+  const secretOk = CRON_SECRET.length > 0
+    && secret.length === CRON_SECRET.length
+    && timingSafeEqual(Buffer.from(secret), Buffer.from(CRON_SECRET));
+  if (!secretOk) {
     return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
   }
 

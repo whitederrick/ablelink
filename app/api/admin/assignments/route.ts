@@ -91,8 +91,10 @@ export async function GET(req: NextRequest) {
     }
     if (status) where.status = status;
 
-    // manager: 본인 agency의 site 배정만 / admin(운영자): 전체
-    if (session.kind === "manager") where.site = { agencyId: session.agencyId };
+    // manager: 본인 기관 배정만 / admin(운영자): 전체.
+    // ★소유권은 assignment.agencyId(실귀속·non-null)로 스코프한다 — site.agencyId(참고용·nullable·공유현장)로
+    //  하면 형제 라우트·ownership 불변식과 어긋나고, 응답에 워커 실명·전화가 있어 향후 divergence 시 크로스테넌트 열거로 승격.
+    if (session.kind === "manager") where.agencyId = session.agencyId;
 
     const rows = await prisma.siteAssignment.findMany({
       where,
@@ -134,6 +136,8 @@ export async function GET(req: NextRequest) {
       ? await prisma.employmentContract.findMany({
           where: {
             status: { in: ["SIGNED", "COMPLETED"] },
+            // 매니저는 본 기관 계약만(타 기관 계약 존재 여부 오라클 방지). 운영자는 전체.
+            ...(session.kind === "manager" ? { agencyId: session.agencyId } : {}),
             OR: [{ assignmentId: { in: asgnIds } }, { workerId: { in: workerIds } }],
           },
           select: { assignmentId: true, workerId: true },

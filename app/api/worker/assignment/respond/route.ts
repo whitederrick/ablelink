@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     const asgn = await prisma.siteAssignment.findFirst({
       where: { id: BigInt(assignmentId), workerId, status: "REQUESTED" },
-      select: { id: true, siteId: true, startDate: true, endDate: true, replyDeadline: true, requestedWorkTypes: true, site: { select: { companyName: true, ownerManagerId: true, agencyId: true, amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true } } },
+      select: { id: true, siteId: true, agencyId: true, startDate: true, endDate: true, replyDeadline: true, requestedWorkTypes: true, site: { select: { companyName: true, amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true } } },
     });
     if (!asgn) {
       return NextResponse.json({ success: false, message: "회신할 배정 요청을 찾을 수 없습니다." }, { status: 404 });
@@ -46,12 +46,10 @@ export async function POST(req: NextRequest) {
     async function notifyManagers(statusText: string) {
       try {
         const site = asgn!.site;
-        let managerIds: bigint[] = [];
-        if (site?.ownerManagerId) managerIds = [site.ownerManagerId];
-        else if (site?.agencyId) {
-          const mgrs = await prisma.manager.findMany({ where: { agencyId: site.agencyId, isActive: true }, select: { id: true } });
-          managerIds = mgrs.map(m => m.id);
-        }
+        // ★알림 라우팅은 assignment.agencyId(실귀속) 기준 — site.agencyId/ownerManagerId(참고용·공유현장)면 타 기관
+        //  매니저에게 가고 실소속은 누락(인박스 스코프와 불일치). edit-request(20차)와 동일 정합.
+        const mgrs = await prisma.manager.findMany({ where: { agencyId: asgn!.agencyId ?? undefined, isActive: true }, select: { id: true } });
+        const managerIds = asgn!.agencyId ? mgrs.map(m => m.id) : [];
         if (managerIds.length === 0) return;
         const w = await prisma.worker.findUnique({ where: { id: workerId }, select: { workerName: true } });
         const name = w?.workerName ?? "직무지도원";

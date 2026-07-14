@@ -48,7 +48,6 @@ export async function POST(req: NextRequest) {
 
     const submitted: { docType: string; traineeName: string | null; versionNo: number }[] = [];
     let workerName = "";
-    let ownerManagerId: bigint | null = null;
     let agencyIdForNotice: bigint | null = null;
     const runIds: bigint[] = [];
 
@@ -84,7 +83,9 @@ export async function POST(req: NextRequest) {
         const lockKey = `docsubmit:${meta.assignmentId}:${prismaDocType}:${periodStart}:${meta.traineeId ?? 0}`;
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
-        const site = await tx.site.findUnique({ where: { id: meta.siteId }, select: { agencyId: true, ownerManagerId: true } });
+        // ★소유권·알림은 assignment.agencyId(실귀속) 기준 — site.agencyId(참고용·공유현장)면 run 인박스 스코프와
+        //  알림이 타 기관으로 갈라진다. edit-request/respond와 동일 정합(ownership 불변식).
+        const asg = await tx.siteAssignment.findUnique({ where: { id: meta.assignmentId }, select: { agencyId: true } });
 
         // DocumentRun upsert(현장×문서종류×기간×훈련생) — nullable traineeId 때문에 findFirst+create.
         let run = await tx.documentRun.findFirst({
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
         if (!run) {
           run = await tx.documentRun.create({
             data: {
-              agencyId: site?.agencyId ?? null,
+              agencyId: asg?.agencyId ?? null,
               assignment: { connect: { id: meta.assignmentId } },
               site: { connect: { id: meta.siteId } },
               worker: { connect: { id: workerId } },
@@ -147,10 +148,9 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        return { runId: run.id, versionNo: version.versionNo, ownerManagerId: site?.ownerManagerId ?? null, agencyId: site?.agencyId ?? null };
+        return { runId: run.id, versionNo: version.versionNo, agencyId: asg?.agencyId ?? null };
       });
 
-      ownerManagerId = res.ownerManagerId;
       agencyIdForNotice = res.agencyId;
       runIds.push(res.runId);
       submitted.push({ docType, traineeName: meta.traineeName, versionNo: res.versionNo });
@@ -171,12 +171,9 @@ export async function POST(req: NextRequest) {
       } catch (e) { console.error("[submit version prune]", e); }
     }
 
-    // 알림 대상: 담당 매니저(있으면) → 없으면 소속 위탁기관 매니저 전체.
+    // 알림 대상: 실소속 기관(assignment.agencyId) 활성 매니저 전체(인박스 스코프와 일치·비활성 제외).
     let targetManagerIds: bigint[] = [];
-    if (ownerManagerId) {
-      targetManagerIds = [ownerManagerId];
-    } else if (agencyIdForNotice) {
-      // P3: 비활성 매니저에게는 제출 알림을 보내지 않는다(isActive 필터 누락 보정).
+    if (agencyIdForNotice) {
       const mgrs = await prisma.manager.findMany({ where: { agencyId: agencyIdForNotice, isActive: true }, select: { id: true } });
       targetManagerIds = mgrs.map(m => m.id);
     }

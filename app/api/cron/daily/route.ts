@@ -203,7 +203,10 @@ export async function GET(req: NextRequest) {
       const exemptAssignments = await prisma.siteAssignment.findMany({
         where: {
           attendanceButtonExempt: true,
-          status: { in: ["ACTIVE", "CONFIRMED", "ASSIGNED"] },
+          // ★ENDED 포함: §6 자동종료로 ENDED된 면제배정도 배정기간 내 날짜는 출근부 생성/채택돼야 한다(급여는
+          //  computeRun이 ENDED 포함 집계). 제외하면 종료된 면제워커의 마지막날이 lookback 자가치유서 영구 누락(과소지급).
+          //  날짜범위 필터(startDate<=day<=endDate)가 기간 밖 날짜를 이미 배제하므로 안전.
+          status: { in: ["ACTIVE", "CONFIRMED", "ASSIGNED", "ENDED"] },
           startDate: { lte: yEnd },
           OR: [{ endDate: null }, { endDate: { gte: yStart } }],
         },

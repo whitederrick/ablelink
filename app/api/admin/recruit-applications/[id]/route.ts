@@ -8,7 +8,7 @@ import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
-import { withWorkerAssignmentLock, withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
+import { withWorkerAssignmentLock, withSiteAndWorkersAssignmentLock, withPostAndWorkerLock } from "@/lib/assignmentLock";
 import { checkSiteCapacity } from "@/lib/assignmentCapacity";
 import type { Prisma } from "@prisma/client";
 
@@ -93,7 +93,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (tc) return; // 시간겹침이면 수락만 기록, 자동배정은 매니저 수동 처리
 
       // ① Site find-or-create (첫 수락 시 공고 정보로 생성, 이후 재사용 — headcount>1)
+      // ★P2: 신규 현장 케이스는 post 락 안에서 실행되므로 siteId를 락 안에서 재조회한다 — 동시 첫 수락 중 먼저 커밋한
+      //  쪽이 만든 현장을 재사용해 물리 Site 중복 생성(로스터 분리·정원검사 무력화)을 막는다.
       let siteId = app.post.siteId;
+      if (!siteId) {
+        const fresh = await tx.recruitPost.findUnique({ where: { id: app.post.id }, select: { siteId: true } });
+        siteId = fresh?.siteId ?? null;
+      }
       if (!siteId) {
         const site = await tx.site.create({
           data: {
@@ -147,7 +153,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       });
       autoAssigned = true;
     };
+    // ★P2: 자동배정 대상이고 신규 현장(siteId 미정)이면 post 락으로 첫 생성을 직렬화(동시 수락 Site 중복 방지),
+    //  재사용 현장이면 현장 락(정원 TOCTOU), 그 외(자동배정 아님)는 워커 락만.
     if (canAutoAssign && app.post.siteId != null) await withSiteAndWorkersAssignmentLock(app.post.siteId, [app.workerId], acceptTxn);
+    else if (canAutoAssign) await withPostAndWorkerLock(app.post.id, app.workerId, acceptTxn);
     else await withWorkerAssignmentLock(app.workerId, acceptTxn);
 
     // 직무지도원에게 알림(매칭 결과) — WorkerNotice.agencyId 필수라 위탁기관 공고일 때만

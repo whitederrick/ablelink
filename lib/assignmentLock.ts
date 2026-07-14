@@ -52,6 +52,26 @@ function orderWorkerIds(workerIds: bigint[]): bigint[] {
 //  두-키 락(pg_advisory_xact_lock(int,int))을 서로 다른 lock space로 관리 → 현장 락은 workerId 단일키 락과
 //  절대 충돌하지 않는다.
 const SITE_LOCK_NS = 1;
+// 공고(RecruitPost) 락 네임스페이스 — 마켓 신청 동시 수락 시 '아직 없는 현장'의 최초 생성 경합을 직렬화.
+//  (site 락은 siteId를 알아야 잡는데, find-or-create 이전엔 siteId가 없어 못 잡음 → postId로 잠근다.)
+const POST_LOCK_NS = 2;
+
+/**
+ * 공고 락 + 워커 락(post→worker, 무교착). 마켓 신청 수락에서 신규 현장 find-or-create를 postId로 직렬화한다.
+ * 임계구역 안에서 recruitPost.siteId를 재조회하면, 동시 수락 중 먼저 커밋한 쪽이 만든 현장을 재사용(중복 생성 방지).
+ * 단일 tx는 site 락(NS=1)과 post 락(NS=2)을 동시에 잡지 않으므로([site|post]→worker 순서 일관) 교착 불가.
+ */
+export async function withPostAndWorkerLock<T>(
+  postId: bigint,
+  workerId: bigint,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${POST_LOCK_NS}::int, hashtext(${postId.toString()}))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${workerId}::bigint)`;
+    return fn(tx);
+  });
+}
 
 /**
  * 현장 락 + 여러 워커 락을 한 트랜잭션에서 획득(finalize 정원검사 TOCTOU + 이중배정 동시 방어, #4/P1-5).

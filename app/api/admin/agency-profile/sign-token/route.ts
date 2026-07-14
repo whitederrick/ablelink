@@ -8,6 +8,8 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { prisma } from "@/lib/prisma";
 import { createSelfSignToken } from "@/lib/selfSignToken";
 import { sendSms, isSmsReady } from "@/lib/sms";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { getRateLimitIp } from "@/lib/clientIp";
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,6 +40,13 @@ export async function POST(request: NextRequest) {
       const phone = rawPhone.replace(/-/g, "").trim();
       if (!/^01[0-9]{8,9}$/.test(phone)) {
         return NextResponse.json({ success: false, message: "휴대전화번호 형식이 올바르지 않습니다." }, { status: 400 });
+      }
+      // ★P2: 실제 SMS 발송 경로엔 rate-limit 필수(형제 phone-verify·notices와 동일) — 임의 번호 SMS 폭탄·비용 남용 차단.
+      const ip = getRateLimitIp(request) ?? "unknown";
+      const rlMgr = await checkRateLimit(`sign-sms:${scope.managerId}`);
+      const rlPhone = await checkRateLimit(`sign-sms-phone:${ip}:${phone}`);
+      if (!rlMgr.allowed || !rlPhone.allowed) {
+        return NextResponse.json({ success: false, message: "문자 발송 요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
       }
       const msg = `[${agency.name}] 근로계약서 대표자 서명 요청\n아래 링크에서 서명해주세요(10분 유효).\n${url}`;
       try {

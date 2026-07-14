@@ -20,8 +20,10 @@ export async function GET(req: NextRequest) {
     }
 
     // 기간 겹침: run.periodStart <= 선택끝 && run.periodEnd >= 선택시작
-    const startBound = new Date(`${periodStart}T00:00:00.000Z`);
-    const endBound = new Date(`${periodEnd}T23:59:59.999Z`);
+    // ★P2: DocumentRun.periodStart/End는 KST(+09:00)로 저장(worker/docs/submit)되므로 경계도 KST로 비교해야 한다.
+    //  UTC 경계면 9h 스큐로 '다음 기간' run까지 겹침에 걸려, 미제출 출근부가 '제출됨'으로 가려지고 공단 제출이 누락된다.
+    const startBound = new Date(`${periodStart}T00:00:00.000+09:00`);
+    const endBound = new Date(`${periodEnd}T23:59:59.999+09:00`);
 
     const runs = await prisma.documentRun.findMany({
       where: {

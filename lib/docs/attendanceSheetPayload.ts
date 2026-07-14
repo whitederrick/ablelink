@@ -72,7 +72,9 @@ export async function buildAttendanceSheetPayload(
   //   siteId 필터가 없을 경우 이 현장(siteId=A) 출근부에 B현장 행이 섞인다(공단 문서 오염).
   //   DailyAttendance.siteId는 non-null(모든 생성경로 필수)이라 필터로 정상 행 누락 없음.
   const attendances = await prisma.dailyAttendance.findMany({
-    where: { workerId, siteId, workDate: { gte: start, lte: end } },
+    // ★P2: placeholder(startTime=null·소급일지용 batch-save 행)는 공단 출근부에서 제외 — computeRun:133 chokepoint와
+    //  동일 논리(startTime 기준). placeholder가 남으면 면제 유령 8h·문서(8h)↔급여(0h) 불일치. 정상 미퇴근행(startTime有)은 유지.
+    where: { workerId, siteId, startTime: { not: null }, workDate: { gte: start, lte: end } },
     include: {
       logs: { select: { extTime1on1: true, extTimeGroup: true } },
       assignment: {
