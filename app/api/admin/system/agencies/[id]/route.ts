@@ -55,6 +55,11 @@ export async function PATCH(
     //  단 같은 요청에서 customAmount를 명시 전달했다면(딜 재설정) 그 값을 존중한다.
     if (updateData.planType !== undefined && !isPaidAgencyPlan(updateData.planType) && customAmount === undefined) {
       updateData.customAmount = null;
+      // ★18차: 딜 소멸(무료 강등) 시 협상가뿐 아니라 주기도 표준(MONTHLY)으로 되돌린다. ANNUAL이 잔존하면
+      //  강등→재구독 시 effectiveBilling이 협상가 없는 ANNUAL 상태가 되는데(소비측에서 MONTHLY로 방어하나),
+      //  상태 자체를 딜 이전으로 정리해 '유료+ANNUAL+협상가없음' 조합이 애초에 남지 않게 한다. billingCycle을
+      //  같은 요청에서 명시 전달했으면 그 값을 존중.
+      if (billingCycle === undefined) updateData.billingCycle = "MONTHLY";
     }
     // #7(17차): ANNUAL 주기는 표준가(PLAN_PRICES)가 월정액뿐이라, 협상가(customAmount) 없이 ANNUAL로 두면
     //  effectiveBilling이 월정액을 반환하고 결제일만 +1년 → 월정액이 연 1회만 청구돼 ≈92% 미과금된다.

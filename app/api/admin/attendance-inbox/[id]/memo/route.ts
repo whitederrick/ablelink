@@ -15,7 +15,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const dailyAttendanceId = BigInt(id);
 
     const att = await prisma.dailyAttendance.findFirst({
-      where: { id: dailyAttendanceId, site: { agencyId: scope.agencyId } },
+      // ★18차(P1): 소유권 = assignment.agencyId(실귀속·non-null), site.agencyId 아님(공유현장 크로스테넌트 방지).
+      where: { id: dailyAttendanceId, assignment: { agencyId: scope.agencyId } },
       select: { id: true },
     });
     if (!att) return NextResponse.json({ success: false, message: "NOT_FOUND" }, { status: 404 });

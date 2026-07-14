@@ -16,7 +16,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const dailyAttendanceId = BigInt(id);
 
     const att = await prisma.dailyAttendance.findFirst({
-      where: { id: dailyAttendanceId, site: { agencyId: scope.agencyId } },
+      // ★18차(P1): 소유권은 site.agencyId(참고용·nullable·공유현장)가 아니라 assignment.agencyId(실귀속·non-null).
+      //  site로 게이트하면 공유현장에서 타 기관 근태를 조작·확정할 수 있다(읽기 라우트와 통일).
+      where: { id: dailyAttendanceId, assignment: { agencyId: scope.agencyId } },
       select: { id: true },
     });
     if (!att) return NextResponse.json({ success: false, message: "NOT_FOUND" }, { status: 404 });

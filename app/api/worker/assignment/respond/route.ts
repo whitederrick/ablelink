@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { audit } from "@/lib/audit";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
-import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
+import { withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
 import { findCapacityOverflow, type CapacitySlot } from "@/lib/assignmentCapacity";
 
 const VALID_WT = ["AM", "PM", "FULL_DAY", "CUSTOM"];
@@ -103,7 +103,9 @@ export async function POST(req: NextRequest) {
       | { kind: "conflict"; companyName: string }
       | { kind: "already" }
       | { kind: "ok"; newStatus: "ASSIGNED" | "ACCEPTED" };
-    const outcome = await withWorkerAssignmentLock<Outcome>(workerId, async (tx) => {
+    // ★18차(P2): 현장 락 + 워커 락(site→worker, 무교착)으로 정원검사~승격을 직렬화한다. 워커 락만으로는
+    //  같은 현장에 동시 직접배정/finalize(둘 다 현장 락)와 각자 정원0을 읽어 슬롯 정원을 초과할 수 있다(TOCTOU).
+    const outcome = await withSiteAndWorkersAssignmentLock<Outcome>(asgn.siteId, [workerId], async (tx) => {
       // ★멀티현장 시간겹침 방지: 선택한 근무형태가 같은 워커의 다른 현장 진행중 배정과
       //   같은 날 반나절 슬롯(AM/PM)이 겹치면 수락 차단(예: 다른 현장 오전 + 이 요청 종일).
       const conflictCandidates = await tx.siteAssignment.findMany({

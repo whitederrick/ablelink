@@ -67,7 +67,10 @@ export async function withSiteAndWorkersAssignmentLock<T>(
 ): Promise<T> {
   const ordered = orderWorkerIds(workerIds);
   return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SITE_LOCK_NS}::int, ${siteId}::int)`;
+    // ★18차(P3): siteId(BigInt)를 ::int로 캐스팅하면 2^31 초과 id에서 'integer out of range'로 트랜잭션이
+    //  실패한다. hashtext(int4 반환)로 32비트 키를 결정적으로 파생한다(worker/docs/submit 락과 동일 패턴).
+    //  드문 해시 충돌은 서로 다른 두 현장이 같은 락을 공유해 잠깐 직렬화될 뿐(과-잠금)이라 정합성은 안전.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SITE_LOCK_NS}::int, hashtext(${siteId.toString()}))`;
     for (const wid of ordered) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${wid}::bigint)`;
     }

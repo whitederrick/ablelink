@@ -9,6 +9,7 @@ import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
+import { findCapacityOverflow, type CapacitySlot } from "@/lib/assignmentCapacity";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -117,6 +118,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         select: { id: true },
       });
       if (dup) return;
+
+      // ★18차(정원 클래스 형제갭): 자동배정(FULL_DAY)도 슬롯 정원을 확인한다. offers 경로의 완전한 쌍둥이인데
+      //  17차가 offers만 고치고 이 형제를 놓쳤다. 재사용 현장(headcount>1, 기존 정원 설정 가능)에서 정원 초과가
+      //  통과하던 갭. over면 배정만 스킵하고 수락은 유지(offers·시간겹침과 동일 soft-skip). 신규 현장=정원 미설정=무제한.
+      const capSite = await tx.site.findFirst({
+        where: { id: siteId }, select: { amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true },
+      });
+      const capBySlot: Record<CapacitySlot, number> = {
+        AM: capSite?.amCapacity ?? 0, PM: capSite?.pmCapacity ?? 0, FULL_DAY: capSite?.fullDayCapacity ?? 0, CUSTOM: capSite?.customCapacity ?? 0,
+      };
+      const filledGroups = await tx.siteAssignment.groupBy({
+        by: ["workType"], where: { siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } }, _count: { _all: true },
+      });
+      const filledBySlot: Record<string, number> = {};
+      for (const g of filledGroups) if (g.workType) filledBySlot[g.workType] = g._count._all;
+      if (findCapacityOverflow(capBySlot, filledBySlot, { FULL_DAY: 1 })) return; // 정원 초과 → 자동배정 스킵(수락 유지)
 
       // ③ SiteAssignment 생성 — 파이프라인: 선정=ASSIGNED(계약 대기). 계약 서명→CONFIRMED, 연결+위치확정→ACTIVE.
       await tx.siteAssignment.create({

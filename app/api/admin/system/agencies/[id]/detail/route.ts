@@ -29,10 +29,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         orderBy: { startDate: "desc" },
       }),
       prisma.traineeLog.count({
-        where: { attendance: { site: { agencyId } } },
+        // ★18차(P1 클래스): 근태 귀속은 assignment.agencyId(실귀속). site.agencyId(참고용·공유현장)로 집계하면
+        //  이 기관의 공유현장 근태가 빠지고 타 기관 근태가 섞여 운영자 통계가 틀어진다.
+        where: { attendance: { assignment: { agencyId } } },
       }),
       prisma.dailyAttendance.count({
-        where: { site: { agencyId } },
+        where: { assignment: { agencyId } },
       }),
       prisma.apiCallLog.groupBy({
         by: ["service"],

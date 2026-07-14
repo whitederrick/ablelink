@@ -31,8 +31,14 @@ export function effectiveBilling(agency: {
   customAmount?: number | null;
 }): { amount: number; cycle: BillingCycle } {
   const standard = PLAN_PRICES[agency.planType] ?? 0;
-  const cycle = normalizeCycle(agency.billingCycle);
-  const amount = agency.customAmount != null && agency.customAmount > 0 ? agency.customAmount : standard;
+  const hasNegotiated = agency.customAmount != null && agency.customAmount > 0;
+  const amount = hasNegotiated ? agency.customAmount! : standard;
+  // ★18차(근본·소비 chokepoint): 표준가(PLAN_PRICES)는 월정액뿐이다. 협상가(customAmount) 없이 ANNUAL이면
+  //  월정액을 1년에 한 번만 청구(≈92% 미과금)하게 되므로, 협상가가 없으면 주기를 무조건 MONTHLY로 강제한다.
+  //  연 청구는 반드시 협상가(연 청구액)를 통해서만 성립. 이 함수는 수동구독(payments/billing)·cron(charge)이 모두
+  //  거치는 유일한 금액·주기 결정점이라, 강등→재구독으로 ANNUAL이 잔존하는 어떤 상태에서도 미과금이 불가능하다.
+  //  (agencies PATCH 게이트=설정 시점 차단, 여기=소비 시점 방어. 이중.)
+  const cycle: BillingCycle = hasNegotiated ? normalizeCycle(agency.billingCycle) : "MONTHLY";
   return { amount, cycle };
 }
 

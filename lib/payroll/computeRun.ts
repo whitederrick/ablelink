@@ -365,7 +365,12 @@ export async function computePayrollItems(
           if (monthHolidaySet.has(a.workDate)) continue;
           proRateDaySet.add(a.workDate);
         }
-        const proRateDays = Math.min(proRateDaySet.size, schedDays);
+        // 방어(18차): 소정요일 출근이 0인데 실제 출근은 있는 경우(MONTHLY인데 근로계약 미설정→workingWeekdays가
+        //  월~금 기본 폴백이거나, 계약 소정요일이 실제 근무요일과 어긋난 오설정)에는 17차 이전처럼 달력 출근일
+        //  (workedDays)로 폴백한다. 소정요일 오설정 때문에 개근자가 0원/과소 처리되는 파국을 막는다(계약 있으면 무영향).
+        const proRateDays = proRateDaySet.size === 0 && workedDays > 0
+          ? Math.min(workedDays, schedDays)
+          : Math.min(proRateDaySet.size, schedDays);
         const prorate = schedDays > 0 && proRateDays < schedDays;
         grossPay = prorate ? Math.round((rate * proRateDays) / schedDays) : rate;
         ordinaryWage = Math.round(rate / 209); // 월 소정근로시간 209h 기준

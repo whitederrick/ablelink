@@ -180,7 +180,8 @@ export function computeWeeklyHoliday(input: WeeklyHolidayInput): WeeklyHolidayRe
 
   // 주휴수당 1일분은 법정 상한 8h(주 소정 40h 기준). 주 소정이 40h를 넘어도 1일분이 8h를
   //  초과하지 않도록 분자 주간분을 2400분(40h)으로 클램프한다(15h 판정엔 클램프 미적용).
-  const autoWeeklyPay = Math.round((Math.min(typicalWeeklyMinutes, 2400) / 60 / 40) * 8 * ordinaryWage);
+  const cappedWeeklyMinutes = Math.min(typicalWeeklyMinutes, 2400);
+  const autoWeeklyPay = Math.round((cappedWeeklyMinutes / 60 / 40) * 8 * ordinaryWage);
   const perWeekPay = flatWeeklyHolidayPay != null && flatWeeklyHolidayPay > 0
     ? Math.round(flatWeeklyHolidayPay)
     : autoWeeklyPay;
@@ -202,7 +203,7 @@ export function computeWeeklyHoliday(input: WeeklyHolidayInput): WeeklyHolidayRe
   if (eligibleWeeks > 0) {
     calcMethod = flatWeeklyHolidayPay != null && flatWeeklyHolidayPay > 0
       ? `${eligibleWeeks}주 적격 × ${won(flatWeeklyHolidayPay)}`
-      : `${eligibleWeeks}주 적격 · 주 소정 ${hStr(typicalWeeklyMinutes)}: (소정÷40×8×${won(ordinaryWage)})`;
+      : `${eligibleWeeks}주 적격 · 주 소정 ${hStr(cappedWeeklyMinutes)}${typicalWeeklyMinutes > 2400 ? "(40h 상한)" : ""}: (소정÷40×8×${won(ordinaryWage)})`;
   }
 
   return { weeks, avgWeeklyMinutes: typicalWeeklyMinutes, meets15h, eligibleWeeks, totalHolidayPay, calcMethod };

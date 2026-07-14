@@ -134,6 +134,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             startDate: now,
             // 파이프라인: 초대 수락=ASSIGNED(계약 대기). 계약 서명→CONFIRMED, 연결+위치확정→ACTIVE.
             status:    "ASSIGNED",
+            // ★18차(P3): workType 미설정(null)이면 슬롯 정원 집계(if g.workType)에서 안 보이는 '유령 배정'이 된다.
+            //  기본 FULL_DAY로 두어 정원에 잡히게 한다(매니저가 배정 수정 PATCH로 슬롯 변경 가능·그 경로엔 정원검사 有).
+            workType:  "FULL_DAY",
+            commuteGuidanceIncluded: false,
           },
         });
       }

@@ -35,6 +35,9 @@ export async function GET(req: NextRequest) {
       },
       include: {
         employmentContracts: {
+          // ★18차(P2): 표시용 '최신 계약'도 매니저 기관으로 스코프한다. where가 없으면 latest가 전 기관 통틀어
+          //  최신이라, 워커의 타 기관 계약(현장명·기간=타 기관 취업 사실)이 노출된다. 운영자는 전체(where undefined).
+          where: agencyId ? { agencyId } : undefined,
           orderBy: { createdAt: "desc" },
           take: 1,
           select: {

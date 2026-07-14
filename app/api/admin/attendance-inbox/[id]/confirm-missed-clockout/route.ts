@@ -21,7 +21,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const attendanceId = BigInt(id);
 
     const att = await prisma.dailyAttendance.findFirst({
-      where: { id: attendanceId, site: { agencyId: scope.agencyId } },
+      // ★18차(P1): 소유권 = assignment.agencyId(실귀속·non-null), site.agencyId 아님(공유현장 크로스테넌트 방지).
+      where: { id: attendanceId, assignment: { agencyId: scope.agencyId } },
       include: {
         assignment: {
           select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true },

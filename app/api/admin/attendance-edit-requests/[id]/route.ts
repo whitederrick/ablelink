@@ -26,7 +26,9 @@ export async function PATCH(
       where: { id: BigInt(id) },
       include: {
         attendance: {
-          include: { site: { select: { agencyId: true } } },
+          // ★18차(P1): 소유권은 assignment.agencyId(실귀속·non-null). site.agencyId(참고용·nullable·공유현장)로
+          //  판정하면 공유현장에서 타 기관 근태교정을 승인·반영할 수 있다.
+          include: { assignment: { select: { agencyId: true } } },
         },
       },
     });
@@ -37,8 +39,8 @@ export async function PATCH(
     }
 
     // 소속 위탁기관 소속인지 확인
-    const siteAgencyId = request.attendance.site?.agencyId;
-    if (!siteAgencyId || siteAgencyId !== scope.agencyId) {
+    const ownerAgencyId = request.attendance.assignment?.agencyId;
+    if (!ownerAgencyId || ownerAgencyId !== scope.agencyId) {
       return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
     }
 
@@ -73,7 +75,7 @@ export async function PATCH(
         await prisma.workerNotice.create({
           data: {
             workerId: request.workerId,
-            agencyId: siteAgencyId,
+            agencyId: ownerAgencyId,
             title: `[수정 승인] ${request.attendance.workDate} 출근부`,
             body: `${request.attendance.workDate} 출근부 시각 수정요청이 승인되어 반영되었습니다.`,
             type: "INFO",
@@ -97,7 +99,7 @@ export async function PATCH(
         await prisma.workerNotice.create({
           data: {
             workerId: request.workerId,
-            agencyId: siteAgencyId,
+            agencyId: ownerAgencyId,
             title: `[수정 반려] ${request.attendance.workDate} 출근부`,
             body: `${request.attendance.workDate} 출근부 시각 수정요청이 반려되었습니다.` +
               (adminNote?.trim() ? `\n사유: ${adminNote.trim()}` : "") +

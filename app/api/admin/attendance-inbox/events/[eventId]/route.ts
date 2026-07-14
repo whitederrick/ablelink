@@ -12,10 +12,11 @@ type Params = { params: Promise<{ eventId: string }> };
 async function loadOwnedMemoEvent(eventId: bigint, agencyId: bigint) {
   const ev = await prisma.attendanceIssueEvent.findUnique({
     where: { id: eventId },
-    select: { id: true, type: true, issue: { select: { dailyAttendance: { select: { site: { select: { agencyId: true } } } } } } },
+    // ★18차(P1): 소유권 = assignment.agencyId(실귀속·non-null), site.agencyId 아님(공유현장 크로스테넌트 방지).
+    select: { id: true, type: true, issue: { select: { dailyAttendance: { select: { assignment: { select: { agencyId: true } } } } } } },
   });
   if (!ev) return { error: NextResponse.json({ success: false, message: "이벤트를 찾을 수 없습니다." }, { status: 404 }) };
-  if (ev.issue?.dailyAttendance?.site?.agencyId !== agencyId)
+  if (ev.issue?.dailyAttendance?.assignment?.agencyId !== agencyId)
     return { error: NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 }) };
   if (ev.type !== "MEMO_UPDATED")
     return { error: NextResponse.json({ success: false, message: "운영 메모만 수정/삭제할 수 있습니다." }, { status: 400 }) };
