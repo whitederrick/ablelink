@@ -476,20 +476,14 @@ export async function computePayrollItems(
       if (gateIncomeType === "EMPLOYMENT" && contract.payType !== "MONTHLY" && ordinaryWage > 0) {
         // 소정근로시간 = 실질 약정 근로시간(출퇴근·휴게지도 포함, 무급휴게만 제외) = 지급시간과 동일.
         //  오전/오후 5.5h · 전일 8h. (주휴 = (1주 소정÷40)×8×시급)
-        // P1-11: 당월 확정 출근 + 전월 lookback 확정 출근을 합쳐 경계주 만근을 온전히 판정한다
+        // P1-11: 당월 출근 + 전월 lookback 출근을 합쳐 경계주 만근을 온전히 판정한다
         //  (지급은 아래 payMonth로 "주가 끝나는 달==이 달"인 주만 집계 → 경계주는 끝나는 달에 1회 지급).
-        const lookbackConfirmed = lookbackAtt.filter((a) =>
-          !isPayrollPending({
-            actualStartTime: a.actualStartTime ?? null,
-            actualEndTime: a.actualEndTime ?? null,
-            payrollConfirmedAt: a.payrollConfirmedAt ?? null,
-            workType: a.assignment?.workType ?? null,
-            commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded ?? null,
-            customWorkStart: a.assignment?.customWorkStart ?? null,
-            customWorkEnd: a.assignment?.customWorkEnd ?? null,
-            exempt: a.assignment?.attendanceButtonExempt ?? false,
-          }, a.assignment?.site?.lateThresholdMin ?? lateThresholdMin));
-        const days = [...confirmedAtt, ...lookbackConfirmed].map((a) => {
+        // ★노무사 #3: 주휴 '개근'은 결근하지 않은 것(출근 기록 존재)으로 판정한다. 지각·조퇴는 결근이 아니므로
+        //  (심한 지각/조퇴로 '보정 대기'인 날 포함) 주휴를 박탈하지 않는다 — 임금체불 리스크 방지.
+        //  급여 '금액'은 여전히 confirmedAtt(과지급 방지 게이트) 기준이고, 여기서는 주휴 개근 판정에만 쓰는
+        //  출근일 집합이므로 지급 게이트를 우회하지 않는다. 주휴액은 계약 소정근로시간(contractDailySojeMin)
+        //  기반이라 지각일의 짧은 실근로시간에 오염되지 않는다. (attendances/lookbackAtt는 쿼리상 모두 startTime 존재.)
+        const days = [...attendances, ...lookbackAtt].map((a) => {
           const span = minutesBetween(a.startTime, a.endTime);
           const fallback = Math.max(0, span - unpaidBreakMin(a.assignment?.workType, span));
           return { dateISO: a.workDate, scheduledMinutes: contractDailySojeMin ?? fallback };

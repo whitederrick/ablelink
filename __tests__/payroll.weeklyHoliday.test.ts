@@ -109,6 +109,30 @@ describe("computeWeeklyHoliday — 주휴 1일분 8h 상한(주40h 초과 클램
   });
 });
 
+// ★노무사 #4: 같은 날 여러 배정(AM+PM 다른 현장)은 하루 소정으로 합산 후 평균 — 1주 총 소정 기준.
+describe("computeWeeklyHoliday — 같은 날 2배정 소정 합산(#4)", () => {
+  it("AM+PM 같은 날 2행(240+240)은 하루 480으로 합산 → 주휴 8h분(행별 평균의 절반 아님)", () => {
+    const days: { dateISO: string; scheduledMinutes: number }[] = [];
+    for (const d of [8, 9, 10, 11, 12]) {
+      days.push({ dateISO: mon(d), scheduledMinutes: 240 }); // AM
+      days.push({ dateISO: mon(d), scheduledMinutes: 240 }); // PM(같은 날 다른 배정)
+    }
+    const r = computeWeeklyHoliday({ days, workDaysPerWeek: 5, ordinaryWage: 10000 });
+    const w24 = r.weeks.find(w => w.weekKey === "2026-W24")!;
+    expect(w24.workedDays).toBe(5);   // 달력일 기준 5일(중복 카운트 아님)
+    expect(w24.eligible).toBe(true);
+    // 합산 1주 소정 = 480×5 = 2400분(40h) → 주휴 8h × 10,000 = 80,000원.
+    //  (버그였다면 행별 평균 240×5=1200분(20h) → 40,000원으로 절반 과소지급)
+    expect(w24.holidayPay).toBe(80000);
+  });
+
+  it("단일 배정(1행/일)은 종전과 동일(무회귀)", () => {
+    const days = [8, 9, 10, 11, 12].map(d => ({ dateISO: mon(d), scheduledMinutes: 240 }));
+    const r = computeWeeklyHoliday({ days, workDaysPerWeek: 5, ordinaryWage: 12000 });
+    expect(r.weeks[0].holidayPay).toBe(48000); // 20h÷40×8×12000
+  });
+});
+
 describe("computeWeeklyHoliday — payMonth 전월 lookback 오염 방지(#3)", () => {
   // 전월 말(6월 W26, FULL_DAY 480분) lookback + 7월(W28, AM 330분) 개근.
   // payMonth=2026-07 → 6월 480분이 7월 평균/주휴액에 섞이면 안 됨(월경계 근무형태 변경).

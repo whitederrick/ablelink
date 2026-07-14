@@ -169,10 +169,16 @@ export function computeWeeklyHoliday(input: WeeklyHolidayInput): WeeklyHolidayRe
   // #3: payMonth 지정 시 '이 달에 귀속되는 주'의 날만 평균에 사용 — days엔 경계주 만근 판정용으로
   //  전월 말(lookback) 출근도 들어오는데, 그 전월 소정시간까지 평균에 섞으면 근무형태가 월 경계에서
   //  바뀐 경우 이 달 주휴액·15h 판정이 전월 시간에 오염된다. (contractDailySojeMin 있으면 값이 균일해 무영향)
-  const dailyMinsList = days
-    .filter(d => !payMonth || isoWeekEndISO(d.dateISO).slice(0, 7) === payMonth)
-    .map(d => d.scheduledMinutes)
-    .filter(m => m > 0);
+  // #4(노무사): 같은 날 여러 배정(예: AM+PM 다른 현장)은 '하루 소정근로시간'으로 먼저 합산한 뒤 평균낸다.
+  //  행 단위로 평균내면 하루 2배정 워커의 1주 소정근로시간이 절반으로 과소산정돼 주휴가 과소지급된다.
+  //  (동일 사업장 아래 현장이 여럿이어도 근기법상 하나의 근로계약 → 1주 총 소정 기준.) 단일배정=동일값(무회귀).
+  //  1주 소정 상한(40h=2400분)은 아래 cappedWeeklyMinutes에서 이미 적용되어 합산 과다는 8h로 클램프된다.
+  const dailyByDate = new Map<string, number>();
+  for (const d of days) {
+    if (payMonth && isoWeekEndISO(d.dateISO).slice(0, 7) !== payMonth) continue;
+    if (d.scheduledMinutes > 0) dailyByDate.set(d.dateISO, (dailyByDate.get(d.dateISO) ?? 0) + d.scheduledMinutes);
+  }
+  const dailyMinsList = [...dailyByDate.values()];
   const avgDailyMin = dailyMinsList.length ? Math.round(dailyMinsList.reduce((s, m) => s + m, 0) / dailyMinsList.length) : 0;
   const wpw = Math.max(1, workDaysPerWeek || 5);
   const typicalWeeklyMinutes = avgDailyMin * wpw;
