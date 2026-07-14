@@ -376,6 +376,8 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
   }
   const [workDaysPerWeek, setWorkDaysPerWeek] = useState("5");
   const [weeklyHoliday, setWeeklyHoliday] = useState("일");
+  // 비연속 근무요일(월수금 등) 직접 지정 — 빈 배열=미지정(백엔드가 주 근무일수+주휴일로 파생). 0=일..6=토.
+  const [workingWeekdays, setWorkingWeekdays] = useState<number[]>([]);
   const [wageType, setWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("MONTHLY");
   const [wageAmount, setWageAmount] = useState("");
   // 노출 양식 = (공용+부여) 중 현재 임금유형으로 쓸 수 있는 것만. 기관 전용 시급제 양식은 시급 선택 시에만 노출.
@@ -491,7 +493,7 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
           customWorkStart: workType === "CUSTOM" ? workStartTime : undefined,
           customWorkEnd: workType === "CUSTOM" ? workEndTime : undefined,
           workStartTime, workEndTime, breakStartTime, breakEndTime,
-          workDaysPerWeek, weeklyHoliday,
+          workDaysPerWeek, weeklyHoliday, workingWeekdays,
           wageType, wageAmount: wageAmount || null,
           bonusExists, bonusAmount: bonusExists ? bonusAmount : null,
           extraPayExists, extraPayDesc: extraPayExists ? extraPayDesc : null,
@@ -603,6 +605,30 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
             <section className="grid grid-cols-2 gap-2">
               <Field label="5. 주 근무일수"><div className="flex items-center gap-2"><input type="number" min={1} max={7} value={workDaysPerWeek} onChange={e => setWorkDaysPerWeek(e.target.value)} className={`w-full ${T.input}`} /><span className="text-sm text-slate-400">일</span></div></Field>
               <Field label="주휴일"><select value={weeklyHoliday} onChange={e => setWeeklyHoliday(e.target.value)} className={`w-full ${T.input}`}>{WEEKDAYS.map(d => <option key={d} value={d}>{d}요일</option>)}</select></Field>
+            </section>
+            {/* 5-1. 실제 근무요일(비연속 근무 지정) — opt-in. 미선택 시 위 '주 근무일수'로 자동 파생. */}
+            <section className="mt-2">
+              <Field label="실제 근무요일 (비연속 근무 시 선택 · 미선택 시 '주 근무일수'로 자동)">
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 2, 3, 4, 5, 6, 0].map(dow => {
+                    const on = workingWeekdays.includes(dow);
+                    return (
+                      <button
+                        type="button"
+                        key={dow}
+                        onClick={() => {
+                          const next = on ? workingWeekdays.filter(d => d !== dow) : [...workingWeekdays, dow].sort((a, b) => a - b);
+                          setWorkingWeekdays(next);
+                          if (next.length > 0) setWorkDaysPerWeek(String(next.length)); // 주 근무일수 = 선택 요일 수(정합)
+                        }}
+                        className={`px-3 py-1.5 rounded border text-sm ${on ? "bg-emerald-600 text-white border-emerald-600" : "border-slate-300 text-slate-600 hover:border-emerald-400"}`}
+                      >
+                        {["일", "월", "화", "수", "목", "금", "토"][dow]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
             </section>
 
             {/* 6. 임금 */}

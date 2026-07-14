@@ -9,6 +9,7 @@ import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/manag
 import { renderContractPdf } from "@/lib/contractPdf";
 import { audit } from "@/lib/audit";
 import { logAccess } from "@/lib/accessLog";
+import { resolveWorkingWeekdaySet } from "@/lib/payroll/weekdays";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -27,6 +28,9 @@ function serialize(c: any) {
     workStartTime: c.workStartTime, workEndTime: c.workEndTime,
     breakStartTime: c.breakStartTime, breakEndTime: c.breakEndTime,
     workDaysPerWeek: c.workDaysPerWeek, weeklyHoliday: c.weeklyHoliday,
+    workingWeekdays: c.workingWeekdays ?? null, // 원본(명시값, null=미설정)
+    // 폼 프리셀렉트용 — null이면 파생값(현재 유효 근무요일). 편집 후 재저장 시 정보손실 방지(파생==명시라 무회귀).
+    workingWeekdaysResolved: [...resolveWorkingWeekdaySet(c.workingWeekdays, c.workDaysPerWeek, c.weeklyHoliday)].sort((a, b) => a - b),
     wageType: c.wageType, wageAmount: c.wageAmount,
     bonusExists: c.bonusExists, bonusAmount: c.bonusAmount,
     extraPayExists: c.extraPayExists, extraPayDesc: c.extraPayDesc,

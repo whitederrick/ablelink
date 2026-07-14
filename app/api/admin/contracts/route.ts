@@ -16,6 +16,7 @@ import { audit } from "@/lib/audit";
 // ★13차: 워커 소속 판정을 단일 소스(lib/worker/agencyScope)로 통일. workers/[id]·worker-accounts·verify-*·
 //  직접배정과 같은 정의를 공유해 '한 곳만 조이고 형제 라우트 누락'(P0 근본원인)을 구조적으로 차단한다.
 import { workerBelongsToAgency, CONSENTED_ASSIGN_STATUSES } from "@/lib/worker/agencyScope";
+import { parseWorkingWeekdays, serializeWorkingWeekdays, validateWorkingWeekdays } from "@/lib/payroll/weekdays";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
       // ── 표준양식 항목 ──
       workLocation, jobDescription,
       workStartTime, workEndTime, breakStartTime, breakEndTime,
-      workDaysPerWeek, weeklyHoliday,
+      workDaysPerWeek, weeklyHoliday, workingWeekdays,
       wageType, wageAmount, bonusExists, bonusAmount,
       extraPayExists, extraPayDesc, overtimeRate, wagePayday, wagePayMethod,
       employerBizName, employerPhone, employerAddress, employerRepName,
@@ -311,6 +312,20 @@ export async function POST(req: NextRequest) {
     };
     const str = (v: any): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
+    // ★근무요일(명시) 정규화·검증. 배열([1,3,5]) 또는 CSV 수용. 있으면 저장 + workDaysPerWeek를 집합 크기로 정합
+    //  (이중관리 방지 — 집합이 authoritative). 없으면 null(파생 폴백). 주휴일이 근무요일에 포함되면 400.
+    const wwInput: number[] = Array.isArray(workingWeekdays)
+      ? workingWeekdays.map((n: unknown) => Number(n))
+      : (parseWorkingWeekdays(typeof workingWeekdays === "string" ? workingWeekdays : null) ?? []);
+    let workingWeekdaysCsv: string | null = null;
+    let effWorkDays = toInt(workDaysPerWeek);
+    if (wwInput.length > 0) {
+      const v = validateWorkingWeekdays(wwInput, { weeklyHolidayLabel: str(weeklyHoliday) });
+      if (!v.ok) throw new Error(`VALIDATION:${v.error}`);
+      workingWeekdaysCsv = serializeWorkingWeekdays(wwInput);
+      effWorkDays = new Set(wwInput).size; // 소정근로일수 = 근무요일 수(집합 authoritative)
+    }
+
     // ─── 계약서 생성 ────────────────────────────────────────────
     const signToken = randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7일
@@ -341,8 +356,9 @@ export async function POST(req: NextRequest) {
         workEndTime:    str(workEndTime),
         breakStartTime: str(breakStartTime),
         breakEndTime:   str(breakEndTime),
-        workDaysPerWeek: toInt(workDaysPerWeek),
+        workDaysPerWeek: effWorkDays,
         weeklyHoliday:  str(weeklyHoliday),
+        workingWeekdays: workingWeekdaysCsv,
         wageType:       str(wageType),
         wageAmount:     toInt(wageAmount),
         bonusExists:    bonusExists === true,
