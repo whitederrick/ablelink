@@ -1103,29 +1103,38 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
   const setDed = (i: number, f: keyof DeductLine, v: any) =>
     setDeductLines(prev => prev.map((l, idx) => idx === i ? { ...l, [f]: f === "name" ? v : Number(v) || 0 } : l));
 
+  // 간이세액표 조회(순수) — 과세급여 grossVal로 소득세·주민세 산출. 버튼·저장 자동재계산 공용.
+  async function lookupTax(grossVal: number): Promise<{ hasTable: boolean; incomeTax: number; localTax: number; note: string }> {
+    const qs = `pay=${grossVal}&dependents=${basic.dependents}&childUnder20=${basic.childUnder20}&rate=${basic.withholdingRate}&year=${year}`;
+    const res = await fetch(`/api/admin/payroll/income-tax/lookup?${qs}`);
+    const d = await res.json();
+    if (d.success && d.hasTable) {
+      const creditNote = d.childCredit ? ` − 자녀공제 ${comma(d.childCredit)}` : "";
+      const rateNote = d.rate !== 100 ? ` × ${d.rate}%` : "";
+      return { hasTable: true, incomeTax: d.incomeTax, localTax: d.localTax,
+        note: `${d.year}년 간이세액표 (과세급여 ${comma(grossVal)}원·가족 ${basic.dependents}명): 표 ${comma(d.base)}${creditNote}${rateNote} → 소득세 ${comma(d.incomeTax)}원 / 주민세 ${comma(d.localTax)}원` };
+    }
+    return { hasTable: false, incomeTax: 0, localTax: 0,
+      note: "등록된 간이세액표가 없습니다. 시스템 관리자가 [시스템 설정 > 근로소득 간이세액표]에 등록해야 자동 조회됩니다. (소득세 수동 입력 가능)" };
+  }
+  // 소득세·주민세 라인을 공제내역에 반영(있으면 갱신, 없으면 맨 앞에 추가).
+  function applyTaxLines(prev: DeductLine[], incomeTax: number, localTax: number): DeductLine[] {
+    let next = [...prev];
+    const setOrAdd = (key: string, name: string, amount: number) => {
+      const idx = next.findIndex(l => l.key === key);
+      if (idx >= 0) next[idx] = { ...next[idx], amount };
+      else next = [{ key, name, amount }, ...next];
+    };
+    setOrAdd("localTax", "주민세", localTax);
+    setOrAdd("incomeTax", "소득세", incomeTax);
+    return next;
+  }
+
   async function refetchTax() {
     try {
-      const qs = `pay=${gross}&dependents=${basic.dependents}&childUnder20=${basic.childUnder20}&rate=${basic.withholdingRate}&year=${year}`;
-      const res = await fetch(`/api/admin/payroll/income-tax/lookup?${qs}`);
-      const d = await res.json();
-      if (d.success && d.hasTable) {
-        setDeductLines(prev => {
-          let next = [...prev];
-          const setOrAdd = (key: string, name: string, amount: number) => {
-            const idx = next.findIndex(l => l.key === key);
-            if (idx >= 0) next[idx] = { ...next[idx], amount };
-            else next = [{ key, name, amount }, ...next];
-          };
-          setOrAdd("localTax", "주민세", d.localTax);
-          setOrAdd("incomeTax", "소득세", d.incomeTax);
-          return next;
-        });
-        const creditNote = d.childCredit ? ` − 자녀공제 ${comma(d.childCredit)}` : "";
-        const rateNote = d.rate !== 100 ? ` × ${d.rate}%` : "";
-        setTaxNote(`${d.year}년 간이세액표 (과세급여 ${comma(gross)}원·가족 ${basic.dependents}명): 표 ${comma(d.base)}${creditNote}${rateNote} → 소득세 ${comma(d.incomeTax)}원 / 주민세 ${comma(d.localTax)}원`);
-      } else {
-        setTaxNote("등록된 간이세액표가 없습니다. 시스템 관리자가 [시스템 설정 > 근로소득 간이세액표]에 등록해야 자동 조회됩니다. (소득세 수동 입력 가능)");
-      }
+      const t = await lookupTax(gross);
+      if (t.hasTable) setDeductLines(prev => applyTaxLines(prev, t.incomeTax, t.localTax));
+      setTaxNote(t.note);
     } catch { setTaxNote("조회 실패"); }
   }
 
@@ -1160,9 +1169,21 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
   async function save() {
     setSaving(true);
     try {
+      // 리스크 제거(#5): 지급내역 변경(연차미사용수당 등 과세 지급 추가)으로 소득세가 과세총액과
+      //  어긋난 채 저장되는 것을 막는다 — 저장 시 현재 과세급여로 소득세·주민세를 항상 재계산.
+      //  단, 상여 라인이 있으면 상여 세액을 별도 산출하는 흐름이므로 자동 재계산을 건너뛰고 관리자 계산 존중.
+      //  간이세액표 미등록 시엔 재계산 불가 → 관리자가 입력한 소득세 그대로 저장(설정 경고는 상단 노출).
+      let dl = deductLines;
+      const hasBonus = payLines.some((l) => l.key === "bonus");
+      if (!hasBonus) {
+        try {
+          const t = await lookupTax(gross);
+          if (t.hasTable) { dl = applyTaxLines(deductLines, t.incomeTax, t.localTax); setDeductLines(dl); setTaxNote(t.note); }
+        } catch { /* 조회 실패 시 기존 공제 라인 유지 */ }
+      }
       const res = await fetch(`/api/admin/payroll/runs/${runId}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: item.id, payLines, deductLines, basicInfo: { ...basic, earlyLeaveExempt } }),
+        body: JSON.stringify({ itemId: item.id, payLines, deductLines: dl, basicInfo: { ...basic, earlyLeaveExempt } }),
       });
       const d = await res.json();
       if (d.success) onSaved(d.item); else alert(d.message);
@@ -1202,7 +1223,8 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
           </div>
         </div>
         {taxNote && <p className="mb-4 rounded-xl bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700">{taxNote}</p>}
-        {!taxNote && <p className="mb-4 text-[11px] font-semibold text-slate-400">※ 공제대상가족수=본인+배우자+자녀 등. 8~20세 자녀는 추가공제(1명 12,500·2명 29,160·3명↑ +25,000/명). 비율 80/100/120% 선택.</p>}
+        {!taxNote && <p className="mb-1 text-[11px] font-semibold text-slate-400">※ 공제대상가족수=본인+배우자+자녀 등. 8~20세 자녀는 추가공제(1명 12,500·2명 29,160·3명↑ +25,000/명). 비율 80/100/120% 선택.</p>}
+        <p className="mb-4 text-[11px] font-semibold text-slate-400">※ 저장 시 소득세·주민세는 과세총액(연차미사용수당 등 포함)으로 자동 재계산됩니다(상여 입력 시 제외). 국민연금·건강·장기요양은 기준소득월액·연말정산 기준이라 일시 수당으로 월 보험료가 바뀌지 않고, 고용보험만 실보수 기준입니다.</p>
 
         {/* 상여 (지급대상기간 원천징수) */}
         <div className="mb-5 rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
