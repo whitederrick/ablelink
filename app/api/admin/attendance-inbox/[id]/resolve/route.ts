@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { ownedAttendanceWhere } from "@/lib/attendance/ownership";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -16,9 +17,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const dailyAttendanceId = BigInt(id);
 
     const att = await prisma.dailyAttendance.findFirst({
-      // ★18차(P1): 소유권은 site.agencyId(참고용·nullable·공유현장)가 아니라 assignment.agencyId(실귀속·non-null).
-      //  site로 게이트하면 공유현장에서 타 기관 근태를 조작·확정할 수 있다(읽기 라우트와 통일).
-      where: { id: dailyAttendanceId, assignment: { agencyId: scope.agencyId } },
+      // ★소유권은 단일 소스(ownedAttendanceWhere = assignment.agencyId)로 판정 — site.agencyId 금지(공유현장 크로스테넌트).
+      where: { id: dailyAttendanceId, ...ownedAttendanceWhere(scope.agencyId) },
       select: { id: true },
     });
     if (!att) return NextResponse.json({ success: false, message: "NOT_FOUND" }, { status: 404 });

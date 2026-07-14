@@ -25,22 +25,21 @@ export async function POST(req: NextRequest) {
     // 본인 기록인지 확인
     const attendance = await prisma.dailyAttendance.findUnique({
       where: { id: attId },
-      select: { id: true, workerId: true, workDate: true, site: { select: { agencyId: true, ownerManagerId: true } } },
+      // ★소유권·알림 라우팅 모두 assignment.agencyId(실귀속) 기준. site.agencyId(참고용·공유현장)로 라우팅하면
+      //  공유현장에서 알림이 타 기관 매니저에게 가고(그는 목록에서 못 봄=댕글링), 실소속 매니저는 누락된다.
+      select: { id: true, workerId: true, workDate: true, assignment: { select: { agencyId: true } } },
     });
     if (!attendance || attendance.workerId !== workerId) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
 
-    // 수정요청 제출/재제출을 담당 매니저(없으면 기관 활성 매니저)에게 알림 — 회신 도달성.
+    // 수정요청 제출/재제출을 실소속 기관(assignment.agencyId) 활성 매니저에게 알림 — 인박스 스코프와 일치(회신 도달성).
     async function notifyManagers(kind: string) {
       try {
-        const site: any = (attendance as any).site;
-        let managerIds: bigint[] = [];
-        if (site?.ownerManagerId) managerIds = [site.ownerManagerId];
-        else if (site?.agencyId) {
-          const mgrs = await prisma.manager.findMany({ where: { agencyId: site.agencyId, isActive: true }, select: { id: true } });
-          managerIds = mgrs.map(m => m.id);
-        }
+        const ownerAgencyId = attendance!.assignment?.agencyId;
+        if (!ownerAgencyId) return;
+        const mgrs = await prisma.manager.findMany({ where: { agencyId: ownerAgencyId, isActive: true }, select: { id: true } });
+        const managerIds = mgrs.map(m => m.id);
         if (managerIds.length === 0) return;
         await prisma.managerNotice.createMany({
           data: managerIds.map(mid => ({

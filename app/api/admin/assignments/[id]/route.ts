@@ -10,7 +10,7 @@ import { VALID_WORK_TYPES, type WorkType, computeWorkTimes } from "@/lib/workSch
 import { audit, auditSnapshot } from "@/lib/audit";
 import { findTimeConflict, assignmentsTimeConflict, OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
 import { withWorkerAssignmentLock, withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
-import { findCapacityOverflow, type CapacitySlot } from "@/lib/assignmentCapacity";
+import { checkSiteCapacity } from "@/lib/assignmentCapacity";
 
 // 배정 취소(종료) — 위탁기관 담당자(매니저)·시스템 운영자 공통.
 // 진행 중(REQUESTED/ACCEPTED/ASSIGNED/CONFIRMED/ACTIVE) 배정을 ENDED로 종료 → 재배정 가능.
@@ -138,18 +138,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       //  미점유(REQUESTED/ACCEPTED)는 아직 슬롯을 소비하지 않으므로 제외(finalize 시점에 검사). 현장 락 안에서 원자.
       const isOccupying = (["ASSIGNED", "CONFIRMED", "ACTIVE"] as string[]).includes(existing.status);
       if (isOccupying && workType !== existing.workType) {
-        const site = await tx.site.findFirst({
-          where: { id: existing.siteId }, select: { amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true },
-        });
-        const capBySlot: Record<CapacitySlot, number> = {
-          AM: site?.amCapacity ?? 0, PM: site?.pmCapacity ?? 0, FULL_DAY: site?.fullDayCapacity ?? 0, CUSTOM: site?.customCapacity ?? 0,
-        };
-        const filledGroups = await tx.siteAssignment.groupBy({
-          by: ["workType"], where: { siteId: existing.siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] }, id: { not: assignmentId } }, _count: { _all: true },
-        });
-        const filledBySlot: Record<string, number> = {};
-        for (const g of filledGroups) if (g.workType) filledBySlot[g.workType] = g._count._all;
-        const overflow = findCapacityOverflow(capBySlot, filledBySlot, { [workType]: 1 });
+        // ★구조적 종결: 정원 재검사를 단일 chokepoint에 위임(자기 행 제외). 미점유·형태무변경은 검사 안 함(불필요 409 방지).
+        const overflow = await checkSiteCapacity(tx, existing.siteId, { [workType]: 1 }, { excludeAssignmentId: assignmentId });
         if (overflow) {
           const slotLabel: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "전일", CUSTOM: "맞춤" };
           return { conflict: `${slotLabel[overflow.slot] ?? overflow.slot} 정원을 초과하여 근무형태를 변경할 수 없습니다. (모집 ${overflow.remaining}명)` } as const;

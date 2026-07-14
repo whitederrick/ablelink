@@ -12,6 +12,24 @@ import { computeWorkTimes } from "@/lib/workSchedule";
 
 const FULL_DAY_DINNER_MIN = 60; // 전일 연장 시 저녁식사(무급) 1시간
 
+/**
+ * 면제 배정의 하루 수동 연장시간(시간) — 훈련생 일지(TraineeLog)들에서 산출.
+ * ★그룹 연장(extTimeGroup)은 워커 1인의 '공유 세션' 연장이라 훈련생 N명 일지에 같은 값이 들어간다.
+ *   이를 합산하면 N배 과지급되므로 max(중복 제거)로 계상한다. 개별 지도 연장(extTime1on1)만 sum.
+ *   (1:多 날 = 훈련생 수만큼 일지 행; @@unique([attendanceId, traineeId]).)
+ * 단일 출처 — computeRun(연장·야간)·출근부 PDF가 모두 이 함수를 쓴다(경로별 재작성 금지).
+ */
+export function manualExtHoursFromLogs(
+  logs: ReadonlyArray<{ extTime1on1: unknown; extTimeGroup: unknown }>,
+): number {
+  let oneOnOne = 0, group = 0;
+  for (const l of logs) {
+    oneOnOne += Number(l.extTime1on1) || 0;
+    group = Math.max(group, Number(l.extTimeGroup) || 0);
+  }
+  return oneOnOne + group;
+}
+
 function hhmmToMin(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
   return h * 60 + m;

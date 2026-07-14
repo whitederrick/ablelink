@@ -3,10 +3,34 @@ import {
   computeOvertimeMinutes,
   overtimeMinutesForDay,
   workEndMinutesForDay,
+  manualExtHoursFromLogs,
 } from "@/lib/attendance/overtime";
 
 // KST 벽시계 시:분 → 저장 instant(UTC). kstMinutes(d) = (utc+9h)의 시:분 이므로 UTC = h-9.
 const kst = (h: number, m = 0) => new Date(Date.UTC(2026, 5, 18, h - 9, m));
+
+// ★19차: 면제 1:多 연장 — 그룹 연장(extTimeGroup)은 공유 세션이라 훈련생 N명 일지에 같은 값. 합산하면 N배 과지급.
+describe("manualExtHoursFromLogs — 그룹 연장 중복 합산 방지", () => {
+  it("1:多 2명, 그룹연장 2h가 각 일지에 → 합산 아닌 2h(max)", () => {
+    const logs = [{ extTime1on1: 0, extTimeGroup: 2 }, { extTime1on1: 0, extTimeGroup: 2 }];
+    expect(manualExtHoursFromLogs(logs)).toBe(2); // (기존 버그: 4)
+  });
+  it("1:多 3명, 그룹연장 1.5h → 1.5h", () => {
+    const logs = [{ extTime1on1: 0, extTimeGroup: 1.5 }, { extTime1on1: 0, extTimeGroup: 1.5 }, { extTime1on1: 0, extTimeGroup: 1.5 }];
+    expect(manualExtHoursFromLogs(logs)).toBe(1.5);
+  });
+  it("1:1 단일 일지, 개별연장 2h → 2h", () => {
+    expect(manualExtHoursFromLogs([{ extTime1on1: 2, extTimeGroup: 0 }])).toBe(2);
+  });
+  it("개별연장은 훈련생별 합산 + 그룹은 max (혼합 드문 케이스)", () => {
+    const logs = [{ extTime1on1: 1, extTimeGroup: 2 }, { extTime1on1: 1, extTimeGroup: 2 }];
+    expect(manualExtHoursFromLogs(logs)).toBe(4); // sum(1on1)=2 + max(group)=2
+  });
+  it("빈 로그/비정상 값 방어 → 0", () => {
+    expect(manualExtHoursFromLogs([])).toBe(0);
+    expect(manualExtHoursFromLogs([{ extTime1on1: null, extTimeGroup: undefined }])).toBe(0);
+  });
+});
 
 describe("computeOvertimeMinutes — 퇴근시각 기준 연장(분)", () => {
   it("전일(FULL_DAY): 저녁식사 18:00~19:00 무급 제외, 19:00 이후가 연장 → 21:00 퇴근=120분", () => {

@@ -16,7 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { buildDocFileName } from "@/lib/pdf/filename";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
-import { overtimeMinutesForDay } from "@/lib/attendance/overtime";
+import { overtimeMinutesForDay, manualExtHoursFromLogs } from "@/lib/attendance/overtime";
 import { isMultiTraineeOnDate } from "@/lib/traineePlacement";
 
 function fmtHHMM(d: Date): string {
@@ -141,7 +141,7 @@ export async function buildAttendanceSheetPayload(
       commuteGuidanceIncluded: af.commuteGuidanceIncluded,
       customWorkStart: af.customWorkStart,
       customWorkEnd: af.customWorkEnd,
-      manualExtHours: a.logs.reduce((s, l) => s + Number(l.extTime1on1) + Number(l.extTimeGroup), 0),
+      manualExtHours: manualExtHoursFromLogs(a.logs), // 그룹연장 중복합산 방지(공용 단일소스)
     }) / 60).toFixed(2);
     const multi = isMultiOnDate(a.workDate); // 그 날짜 기준 1:多 여부(날짜별)
     return {

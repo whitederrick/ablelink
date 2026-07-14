@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { ownedAttendanceWhere } from "@/lib/attendance/ownership";
 import { computeWorkTimes, kstWallTimeToInstant } from "@/lib/workSchedule";
 import { getKstDateString } from "@/lib/time";
 
@@ -21,8 +22,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const attendanceId = BigInt(id);
 
     const att = await prisma.dailyAttendance.findFirst({
-      // ★18차(P1): 소유권 = assignment.agencyId(실귀속·non-null), site.agencyId 아님(공유현장 크로스테넌트 방지).
-      where: { id: attendanceId, assignment: { agencyId: scope.agencyId } },
+      // ★소유권은 단일 소스(ownedAttendanceWhere = assignment.agencyId)로 판정 — site.agencyId 금지(공유현장 크로스테넌트).
+      where: { id: attendanceId, ...ownedAttendanceWhere(scope.agencyId) },
       include: {
         assignment: {
           select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true },

@@ -8,8 +8,9 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
-import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
-import { findCapacityOverflow, type CapacitySlot } from "@/lib/assignmentCapacity";
+import { withWorkerAssignmentLock, withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
+import { checkSiteCapacity } from "@/lib/assignmentCapacity";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
   try {
@@ -79,7 +80,9 @@ export async function PATCH(req: NextRequest) {
     }
 
     let claimed = true;
-    await withWorkerAssignmentLock(workerId, async (tx) => {
+    // ★구조적: 자동배정 대상 현장이 있으면 현장 락(+워커 락, site→worker 무교착)으로 정원검사~생성을 직렬화한다
+    //  (checkSiteCapacity의 "항상 현장 락 안" 불변식 충족). 배정 없는 수락/거절은 워커 락만.
+    const claimAndAssign = async (tx: Prisma.TransactionClient) => {
       // 원자적 claim — PENDING일 때만 상태 전이. 더블탭(동시 요청) 중 하나만 성공, 나머지는 count=0.
       const c = await tx.talentOffer.updateMany({
         where: { id, status: "PENDING" },
@@ -102,20 +105,9 @@ export async function PATCH(req: NextRequest) {
           { workType: "FULL_DAY", startDate: offer.serviceStart ?? new Date(), endDate: offer.serviceEnd ?? null },
           others,
         );
-        // ★17차(정원 클래스): 자동배정(FULL_DAY)도 슬롯 정원을 확인 — 꽉 찬 현장이면 배정만 스킵(수락은 유지,
-        //  위탁기관가 수동 처리). finalize·직접배정·PATCH와 동일 판정(findCapacityOverflow). 정원 미설정=무제한.
-        const capSite = await tx.site.findFirst({
-          where: { id: candidate.siteId }, select: { amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true },
-        });
-        const capBySlot: Record<CapacitySlot, number> = {
-          AM: capSite?.amCapacity ?? 0, PM: capSite?.pmCapacity ?? 0, FULL_DAY: capSite?.fullDayCapacity ?? 0, CUSTOM: capSite?.customCapacity ?? 0,
-        };
-        const filledGroups = await tx.siteAssignment.groupBy({
-          by: ["workType"], where: { siteId: candidate.siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } }, _count: { _all: true },
-        });
-        const filledBySlot: Record<string, number> = {};
-        for (const g of filledGroups) if (g.workType) filledBySlot[g.workType] = g._count._all;
-        const overCapacity = findCapacityOverflow(capBySlot, filledBySlot, { FULL_DAY: 1 });
+        // ★구조적 종결: 자동배정(FULL_DAY) 슬롯 정원 검사를 단일 chokepoint(checkSiteCapacity)에 위임한다.
+        //  꽉 찬 현장이면 배정만 스킵(수락은 유지, 위탁기관가 수동 처리). 정원 미설정 현장=무제한(null).
+        const overCapacity = await checkSiteCapacity(tx, candidate.siteId, { FULL_DAY: 1 });
         if (!dup && !timeConflict && !overCapacity) {
           await tx.siteAssignment.create({
             data: {
@@ -139,7 +131,9 @@ export async function PATCH(req: NextRequest) {
           assignAgencyId = candidate.agencyId;
         }
       }
-    });
+    };
+    if (candidate) await withSiteAndWorkersAssignmentLock(candidate.siteId, [workerId], claimAndAssign);
+    else await withWorkerAssignmentLock(workerId, claimAndAssign);
     if (!claimed) return NextResponse.json({ success: false, message: "이미 처리된 제안입니다." }, { status: 409 });
 
     // 수락 결과 알림(WorkerNotice.agencyId 필수 → 위탁기관 연계일 때만, 무료 채널)

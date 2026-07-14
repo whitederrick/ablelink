@@ -9,6 +9,9 @@ import { hashPassword } from "@/lib/password";
 import { signWorkerToken, WORKER_COOKIE } from "@/app/worker/_lib/session";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { getRateLimitIp } from "@/lib/clientIp";
+import { withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
+import { checkSiteCapacity } from "@/lib/assignmentCapacity";
+import type { Prisma } from "@prisma/client";
 
 // 표시용 전화번호 마스킹 — 비인증 GET이 순차 id 열거로 실전화번호를 수집당하지 않도록.
 function maskPhone(p: string): string {
@@ -107,7 +110,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const now = new Date();
     const hashed = await hashPassword(password);
 
-    const user = await prisma.$transaction(async (tx) => {
+    let siteAssigned = false;
+    const runCreate = async (tx: Prisma.TransactionClient) => {
       const newUser = await tx.worker.create({
         data: {
           loginId:           invite.phoneNumber,
@@ -124,22 +128,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         },
       });
 
-      // siteId가 있으면 SiteAssignment 자동 생성
+      // siteId가 있으면 SiteAssignment 자동 생성 — ★구조적: 정원 chokepoint 통과(현장 락 안). 슬롯 초과면 계정만
+      //  만들고 배정은 스킵(매니저가 수동 배정). 마지막까지 chokepoint 밖이던 생성 경로를 편입해 클래스 완결.
       if (invite.siteId) {
-        await tx.siteAssignment.create({
-          data: {
-            workerId:    newUser.id,
-            siteId:    invite.siteId,
-            agencyId:  invite.agencyId,
-            startDate: now,
-            // 파이프라인: 초대 수락=ASSIGNED(계약 대기). 계약 서명→CONFIRMED, 연결+위치확정→ACTIVE.
-            status:    "ASSIGNED",
-            // ★18차(P3): workType 미설정(null)이면 슬롯 정원 집계(if g.workType)에서 안 보이는 '유령 배정'이 된다.
-            //  기본 FULL_DAY로 두어 정원에 잡히게 한다(매니저가 배정 수정 PATCH로 슬롯 변경 가능·그 경로엔 정원검사 有).
-            workType:  "FULL_DAY",
-            commuteGuidanceIncluded: false,
-          },
-        });
+        const over = await checkSiteCapacity(tx, invite.siteId, { FULL_DAY: 1 });
+        if (!over) {
+          await tx.siteAssignment.create({
+            data: {
+              workerId:    newUser.id,
+              siteId:    invite.siteId,
+              agencyId:  invite.agencyId,
+              startDate: now,
+              // 파이프라인: 초대 수락=ASSIGNED(계약 대기). 계약 서명→CONFIRMED, 연결+위치확정→ACTIVE.
+              status:    "ASSIGNED",
+              workType:  "FULL_DAY", // 슬롯 미정이면 정원 집계에서 안 보이는 유령배정이 되므로 기본 FULL_DAY(매니저 PATCH로 변경).
+              commuteGuidanceIncluded: false,
+            },
+          });
+          siteAssigned = true;
+        }
       }
 
       await tx.workerInvite.update({
@@ -147,10 +154,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         data: { usedAt: now, usedByWorkerId: newUser.id },
       });
       return newUser;
-    });
+    };
+    // 현장 지정 초대는 현장 락 안에서(정원 TOCTOU 방지). 워커는 신규 생성이라 워커 락 불필요([] = 현장 락만).
+    const user = invite.siteId != null
+      ? await withSiteAndWorkersAssignmentLock(invite.siteId, [], runCreate)
+      : await prisma.$transaction(runCreate);
 
     const token = await signWorkerToken({ workerId: user.id.toString(), workerName: user.workerName, isTemporary: false });
-    const res = NextResponse.json({ success: true, workerId: user.id.toString(), hasSite: !!invite.siteId });
+    const res = NextResponse.json({ success: true, workerId: user.id.toString(), hasSite: siteAssigned });
     res.cookies.set(WORKER_COOKIE, token, {
       httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 7,
     });

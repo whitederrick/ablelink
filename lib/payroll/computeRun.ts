@@ -5,7 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
-import { overtimeMinutesForDay, workEndMinutesForDay } from "@/lib/attendance/overtime";
+import { overtimeMinutesForDay, workEndMinutesForDay, manualExtHoursFromLogs } from "@/lib/attendance/overtime";
 import { computeWeeklyHoliday } from "@/lib/payroll/weeklyHoliday";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
@@ -299,7 +299,7 @@ export async function computePayrollItems(
         commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded,
         customWorkStart: a.assignment?.customWorkStart,
         customWorkEnd: a.assignment?.customWorkEnd,
-        manualExtHours: a.logs.reduce((t, l) => t + Number(l.extTime1on1) + Number(l.extTimeGroup), 0),
+        manualExtHours: manualExtHoursFromLogs(a.logs), // 그룹연장 중복합산 방지(공용 단일소스)
       }), 0);
     const overtimeHours = +(overtimeMinutes / 60).toFixed(2);
 
@@ -411,7 +411,7 @@ export async function computePayrollItems(
             exempt: a.assignment?.attendanceButtonExempt,
             scheduledEndMin: e,
             actualEndTime: a.actualEndTime,
-            manualExtHours: a.logs.reduce((t, l) => t + Number(l.extTime1on1) + Number(l.extTimeGroup), 0),
+            manualExtHours: manualExtHoursFromLogs(a.logs), // 그룹연장 중복합산 방지(공용 단일소스)
           });
           if (eNight > s) nightMin += ovl(s, eNight, 0, 360) + ovl(s, eNight, 1320, 1440); // 자정 안 넘는 경우만
           const [yy, mm2, dd] = a.workDate.split("-").map(Number);

@@ -8,8 +8,9 @@ import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkQuota } from "@/lib/planGuard";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
-import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
-import { findCapacityOverflow, type CapacitySlot } from "@/lib/assignmentCapacity";
+import { withWorkerAssignmentLock, withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
+import { checkSiteCapacity } from "@/lib/assignmentCapacity";
+import type { Prisma } from "@prisma/client";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -69,8 +70,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
-    // ★워커 단위 advisory lock으로 "겹침 재검사 → 배정 생성"을 원자화(P1-5).
-    await withWorkerAssignmentLock(app.workerId, async (tx) => {
+    // ★구조적: 재사용 현장(app.post.siteId)이 있으면 현장 락(+워커 락)으로 정원검사~생성 직렬화(chokepoint 불변식).
+    //  신규 현장은 이 트랜잭션에서 생성되어 경합이 없고 정원 미설정(무제한)이라 워커 락만으로 충분.
+    const acceptTxn = async (tx: Prisma.TransactionClient) => {
       await tx.recruitApplication.update({
         where: { id: appId },
         data: { status: action === "accept" ? "ACCEPTED" : "REJECTED", decidedAt: new Date() },
@@ -119,21 +121,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       });
       if (dup) return;
 
-      // ★18차(정원 클래스 형제갭): 자동배정(FULL_DAY)도 슬롯 정원을 확인한다. offers 경로의 완전한 쌍둥이인데
-      //  17차가 offers만 고치고 이 형제를 놓쳤다. 재사용 현장(headcount>1, 기존 정원 설정 가능)에서 정원 초과가
-      //  통과하던 갭. over면 배정만 스킵하고 수락은 유지(offers·시간겹침과 동일 soft-skip). 신규 현장=정원 미설정=무제한.
-      const capSite = await tx.site.findFirst({
-        where: { id: siteId }, select: { amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true },
-      });
-      const capBySlot: Record<CapacitySlot, number> = {
-        AM: capSite?.amCapacity ?? 0, PM: capSite?.pmCapacity ?? 0, FULL_DAY: capSite?.fullDayCapacity ?? 0, CUSTOM: capSite?.customCapacity ?? 0,
-      };
-      const filledGroups = await tx.siteAssignment.groupBy({
-        by: ["workType"], where: { siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } }, _count: { _all: true },
-      });
-      const filledBySlot: Record<string, number> = {};
-      for (const g of filledGroups) if (g.workType) filledBySlot[g.workType] = g._count._all;
-      if (findCapacityOverflow(capBySlot, filledBySlot, { FULL_DAY: 1 })) return; // 정원 초과 → 자동배정 스킵(수락 유지)
+      // ★구조적 종결: 자동배정(FULL_DAY) 슬롯 정원 검사를 단일 chokepoint(checkSiteCapacity)에 위임한다.
+      //  재사용 현장(headcount>1)에서 정원 초과면 배정만 스킵(수락 유지, offers·시간겹침과 동일). 신규 현장=무제한.
+      if (await checkSiteCapacity(tx, siteId, { FULL_DAY: 1 })) return; // 정원 초과 → 자동배정 스킵(수락 유지)
 
       // ③ SiteAssignment 생성 — 파이프라인: 선정=ASSIGNED(계약 대기). 계약 서명→CONFIRMED, 연결+위치확정→ACTIVE.
       await tx.siteAssignment.create({
@@ -156,7 +146,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         },
       });
       autoAssigned = true;
-    });
+    };
+    if (canAutoAssign && app.post.siteId != null) await withSiteAndWorkersAssignmentLock(app.post.siteId, [app.workerId], acceptTxn);
+    else await withWorkerAssignmentLock(app.workerId, acceptTxn);
 
     // 직무지도원에게 알림(매칭 결과) — WorkerNotice.agencyId 필수라 위탁기관 공고일 때만
     if (app.post.agencyId) {

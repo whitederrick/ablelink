@@ -30,6 +30,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "올바른 휴대전화번호를 입력해주세요." }, { status: 400 });
     }
 
+    // ★P1(형제갭): 초대에 현장을 지정하면 반드시 본 기관 소유 현장이어야 한다. siteId 소유 검증이 없으면
+    //  타 기관 현장 id(순차 열거)를 넣어 초대→가입 시 그 현장에 배정을 심어 정원 잠식·현장정보 접근이 된다.
+    //  talent offer·직접배정과 동일 가드(site.agencyId === 본 기관). 소비측(worker/invite)도 checkSiteCapacity로 이중방어.
+    if (siteId != null) {
+      const site = await prisma.site.findUnique({ where: { id: siteId }, select: { agencyId: true, isActive: true } });
+      if (!site || !site.isActive || site.agencyId !== agencyId) {
+        return NextResponse.json({ success: false, message: "본인 위탁기관의 현장만 선택할 수 있습니다." }, { status: 403 });
+      }
+    }
+
     // 이미 가입된 계정인지 확인
     const existing = await prisma.worker.findUnique({ where: { loginId: phoneNumber } });
     if (existing) {

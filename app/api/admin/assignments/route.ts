@@ -10,7 +10,7 @@ import { getKstDateString } from "@/lib/time";
 import { audit } from "@/lib/audit";
 import { OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
 import { withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
-import { findCapacityOverflow, CAPACITY_SLOTS, type CapacitySlot } from "@/lib/assignmentCapacity";
+import { checkSiteCapacity } from "@/lib/assignmentCapacity";
 import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
 import { logAccess } from "@/lib/accessLog";
 
@@ -328,20 +328,9 @@ export async function POST(req: NextRequest) {
           return { kind: "otherActive", sameAgency: isSameAgencyConflict(otherActive.agencyId, effectiveAgencyId), companyName: otherActive.site?.companyName ?? "-" };
         }
 
-        // ★17차#2: 직접 배정(즉시 ASSIGNED)은 슬롯별 정원을 강제한다. finalize·respond는 검사하는데 직접배정만
-        //  누락돼(형제 갭) amCap=1 현장에 워커 A·B를 각각 직접배정하면 오전 2명이 통과했다. 정원 미설정 현장=무제한.
-        const site = await tx.site.findFirst({
-          where: { id: siteId }, select: { amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true },
-        });
-        const capBySlot: Record<CapacitySlot, number> = {
-          AM: site?.amCapacity ?? 0, PM: site?.pmCapacity ?? 0, FULL_DAY: site?.fullDayCapacity ?? 0, CUSTOM: site?.customCapacity ?? 0,
-        };
-        const filledGroups = await tx.siteAssignment.groupBy({
-          by: ["workType"], where: { siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } }, _count: { _all: true },
-        });
-        const filledBySlot: Record<string, number> = {};
-        for (const g of filledGroups) if (g.workType) filledBySlot[g.workType] = g._count._all;
-        const overflow = findCapacityOverflow(capBySlot, filledBySlot, { [String(workType)]: 1 });
+        // ★구조적 종결: 직접 배정(즉시 ASSIGNED)의 슬롯 정원 검사를 단일 chokepoint(checkSiteCapacity)에 위임한다.
+        //  finalize 외 모든 단일-슬롯 생성 경로가 이 하나를 호출 → 경로별 형제갭 원천 차단. 정원 미설정=무제한(null).
+        const overflow = await checkSiteCapacity(tx, siteId, { [String(workType)]: 1 });
         if (overflow) return { kind: "over", slot: overflow.slot, sel: overflow.sel, remaining: overflow.remaining };
       }
 
