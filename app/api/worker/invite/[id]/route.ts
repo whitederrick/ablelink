@@ -9,8 +9,6 @@ import { hashPassword } from "@/lib/password";
 import { signWorkerToken, WORKER_COOKIE } from "@/app/worker/_lib/session";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { getRateLimitIp } from "@/lib/clientIp";
-import { withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
-import { checkSiteCapacity } from "@/lib/assignmentCapacity";
 import type { Prisma } from "@prisma/client";
 
 // 표시용 전화번호 마스킹 — 비인증 GET이 순차 id 열거로 실전화번호를 수집당하지 않도록.
@@ -128,25 +126,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         },
       });
 
-      // siteId가 있으면 SiteAssignment 자동 생성 — ★구조적: 정원 chokepoint 통과(현장 락 안). 슬롯 초과면 계정만
-      //  만들고 배정은 스킵(매니저가 수동 배정). 마지막까지 chokepoint 밖이던 생성 경로를 편입해 클래스 완결.
+      // siteId가 있으면 SiteAssignment 자동 생성. ★invite는 매니저가 자기 현장(생성측 소유검증 P1)에 직접 온보딩하는
+      //  행위라 정원으로 막지 않는다 — 비동기(수락 시점) 온보딩을 정원으로 무성(silent) 스킵하면 매니저가 신호 없이
+      //  온보딩 실패를 겪는다(19차에 chokepoint 편입한 게 과했음). 정원 초과분은 매니저가 배정 관리에서 조정.
       if (invite.siteId) {
-        const over = await checkSiteCapacity(tx, invite.siteId, { FULL_DAY: 1 });
-        if (!over) {
-          await tx.siteAssignment.create({
-            data: {
-              workerId:    newUser.id,
-              siteId:    invite.siteId,
-              agencyId:  invite.agencyId,
-              startDate: now,
-              // 파이프라인: 초대 수락=ASSIGNED(계약 대기). 계약 서명→CONFIRMED, 연결+위치확정→ACTIVE.
-              status:    "ASSIGNED",
-              workType:  "FULL_DAY", // 슬롯 미정이면 정원 집계에서 안 보이는 유령배정이 되므로 기본 FULL_DAY(매니저 PATCH로 변경).
-              commuteGuidanceIncluded: false,
-            },
-          });
-          siteAssigned = true;
-        }
+        await tx.siteAssignment.create({
+          data: {
+            workerId:  newUser.id,
+            siteId:    invite.siteId,
+            agencyId:  invite.agencyId,
+            startDate: now,
+            // 파이프라인: 초대 수락=ASSIGNED(계약 대기). 계약 서명→CONFIRMED, 연결+위치확정→ACTIVE.
+            status:    "ASSIGNED",
+            workType:  "FULL_DAY", // 슬롯 미정이면 정원 집계에서 안 보이는 유령배정이 되므로 기본 FULL_DAY(매니저 PATCH로 변경).
+            commuteGuidanceIncluded: false,
+          },
+        });
+        siteAssigned = true;
       }
 
       await tx.workerInvite.update({
@@ -155,10 +151,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
       return newUser;
     };
-    // 현장 지정 초대는 현장 락 안에서(정원 TOCTOU 방지). 워커는 신규 생성이라 워커 락 불필요([] = 현장 락만).
-    const user = invite.siteId != null
-      ? await withSiteAndWorkersAssignmentLock(invite.siteId, [], runCreate)
-      : await prisma.$transaction(runCreate);
+    const user = await prisma.$transaction(runCreate);
 
     const token = await signWorkerToken({ workerId: user.id.toString(), workerName: user.workerName, isTemporary: false });
     const res = NextResponse.json({ success: true, workerId: user.id.toString(), hasSite: siteAssigned });
