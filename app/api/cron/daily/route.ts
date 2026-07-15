@@ -9,6 +9,7 @@ import { getKrHolidays } from "@/lib/krHolidays";
 import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
 import { computePayrollItems } from "@/lib/payroll/computeRun";
 import { parseWorkingWeekdays } from "@/lib/payroll/weekdays";
+import { runAnnualLeaveAccrualBatch } from "@/lib/leave/runAccrual";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { PREMIUM_FEATURE_PLANS } from "@/lib/plans";
@@ -549,9 +550,22 @@ export async function GET(req: NextRequest) {
     }
   } catch (e: any) { errors.push(`배정 자동종료: ${e.message}`); }
 
+  // ── 8. 연차 자동 발생·소멸(정식 연차관리 모듈) ─────────────────────
+  //  판정·기록은 lib/leave/runAccrual에 위임(dedupKey unique 멱등 — 재실행·겹침 실행 안전).
+  //  기존 섹션과 완전 격리(try/catch) — 연차 실패가 급여/근태 배치를 깨지 않음. 역방향도 동일.
+  let leaveAccrued = 0, leaveExpired = 0;
+  let leaveDetail: { accrued: unknown[]; expired: unknown[] } = { accrued: [], expired: [] };
+  try {
+    const r = await runAnnualLeaveAccrualBatch(now);
+    leaveAccrued = r.accrued;
+    leaveExpired = r.expired;
+    leaveDetail = r.detail;
+    if (r.errors.length) errors.push(...r.errors);
+  } catch (e: unknown) { errors.push(`연차배치: ${e instanceof Error ? e.message : String(e)}`); }
+
   // ── 감사로그(변경주체=시스템): 데이터 변경이 있었던 배치만 요약 1건 기록. 상세는 payload에 처리 내역 전량. ──
   try {
-    const changed = autoConfirmed + missedFlagged + exemptCreated + payrollDrafted + surveysExpired + expiryNotified + surveysSent + remindAgencies + tokensCleared + assignmentsEnded;
+    const changed = autoConfirmed + missedFlagged + exemptCreated + payrollDrafted + surveysExpired + expiryNotified + surveysSent + remindAgencies + tokensCleared + assignmentsEnded + leaveAccrued + leaveExpired;
     if (changed > 0) {
       const parts: string[] = [];
       if (autoConfirmed) parts.push(`출근 자동확정 ${autoConfirmed}`);
@@ -563,11 +577,13 @@ export async function GET(req: NextRequest) {
       if (expiryNotified) parts.push(`계약만료 알림 ${expiryNotified}`);
       if (remindAgencies) parts.push(`마감 독려 ${remindAgencies}`);
       if (assignmentsEnded) parts.push(`배정 자동종료 ${assignmentsEnded}`);
+      if (leaveAccrued) parts.push(`연차 발생 ${leaveAccrued}`);
+      if (leaveExpired) parts.push(`연차 소멸 ${leaveExpired}`);
       if (tokensCleared) parts.push(`만료 토큰 삭제 ${tokensCleared}`);
       const payload: Record<string, unknown> = {
         date: yesterday,
-        counts: { autoConfirmed, missedFlagged, exemptCreated, payrollDrafted, surveysExpired, surveysSent, expiryNotified, remindAgencies, assignmentsEnded, tokensCleared },
-        details: detail,
+        counts: { autoConfirmed, missedFlagged, exemptCreated, payrollDrafted, surveysExpired, surveysSent, expiryNotified, remindAgencies, assignmentsEnded, tokensCleared, leaveAccrued, leaveExpired },
+        details: { ...detail, leave: leaveDetail },
       };
       if (errors.length) payload.errors = errors;
       await audit(null, {
@@ -580,11 +596,11 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* 감사 실패는 배치에 영향 없음 */ }
 
-  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 퇴근미실행:${missedFlagged} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent} 평가만료:${surveysExpired} 급여초안:${payrollDrafted} 진척독려:${remindAgencies} 배정종료:${assignmentsEnded}`, errors);
+  console.log(`[CRON] ${yesterday} 자동확정:${autoConfirmed} 퇴근미실행:${missedFlagged} 토큰삭제:${tokensCleared} 만료알림:${expiryNotified} 면제생성:${exemptCreated} 만족도:${surveysSent} 평가만료:${surveysExpired} 급여초안:${payrollDrafted} 진척독려:${remindAgencies} 배정종료:${assignmentsEnded} 연차발생:${leaveAccrued} 연차소멸:${leaveExpired}`, errors);
 
   return NextResponse.json({
     success: true, yesterday,
-    autoConfirmed, missedFlagged, tokensCleared, expiryNotified, exemptCreated, surveysSent, payrollDrafted, remindAgencies, assignmentsEnded,
+    autoConfirmed, missedFlagged, tokensCleared, expiryNotified, exemptCreated, surveysSent, payrollDrafted, remindAgencies, assignmentsEnded, leaveAccrued, leaveExpired,
     errors,
   });
 }
