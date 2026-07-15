@@ -84,6 +84,7 @@ const groups: NavGroup[] = [
     title: "정산",
     items: [
       { href: "/manager/payroll",   label: "급여 관리", plan: "PRO" },
+      { href: "/manager/leave",     label: "연차 관리", plan: "PRO" },
     ],
   },
   {
