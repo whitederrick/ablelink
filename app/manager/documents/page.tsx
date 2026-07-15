@@ -204,10 +204,23 @@ export default function ManagerDocumentsHub() {
     } catch { showToast("변경 실패"); }
   }
 
+  // 연차 교차검증(소프트 게이트): 출근부의 '출근기록 없는 소정근로일 ⓐ > 등록 연차 ⓑ' 경고 —
+  //  미등록 연차가 '월차 0회'로 공단에 나가는 조용한 오기재 방지. 발송 자체는 매니저 확인 후 진행.
+  const [leaveWarnings, setLeaveWarnings] = useState<{
+    runId: string; workerName: string; siteName: string; period: string; emptyDays: number; leaveDays: number;
+  }[]>([]);
   function openSend() {
     if (selected.size === 0) { showToast("발송할 문서를 선택해주세요."); return; }
     setSendTo(govEmailDefault);
     setSendMsg("");
+    setLeaveWarnings([]);
+    fetch(`/api/admin/leave/attendance-check`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ runIds: [...selected] }),
+    })
+      .then(r => r.json())
+      .then(d => { if (d?.success) setLeaveWarnings(d.warnings || []); })
+      .catch(() => {});
     setSendOpen(true);
   }
 
@@ -483,6 +496,19 @@ export default function ManagerDocumentsHub() {
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
             <p className="text-base font-black text-slate-900">문서 발송</p>
             <p className="mt-1 text-[13px] font-semibold text-slate-400">선택한 <strong className="text-slate-700">{selected.size}건</strong>의 최종본 PDF를 장애인고용공단 담당자에게 이메일로 발송합니다.</p>
+            {leaveWarnings.length > 0 && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-[13px] font-black text-amber-800">연차 확인 필요 — 출근 기록 없는 소정근로일이 등록 연차보다 많습니다</p>
+                <ul className="mt-1.5 space-y-0.5">
+                  {leaveWarnings.map(w => (
+                    <li key={w.runId} className="text-xs font-semibold text-amber-700">
+                      {w.workerName} · {w.siteName} ({w.period}) — 빈 소정근로일 {w.emptyDays}일 / 등록 연차 {w.leaveDays}일
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 text-[11px] font-semibold text-amber-600">결근이 맞으면 그대로 발송하세요. 연차 사용이면 [정산 › 연차 관리]에서 등록 후 다시 발송해야 출근부의 ‘월차’ 표기가 정확해집니다.</p>
+              </div>
+            )}
 
             <div className="mt-5 space-y-4">
               <div>

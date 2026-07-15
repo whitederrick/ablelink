@@ -79,6 +79,7 @@ export async function buildAttendanceSheetPayload(
       logs: { select: { extTime1on1: true, extTimeGroup: true } },
       assignment: {
         select: {
+          agencyId: true, // 연차(월차) 사용 집계의 기관 스코프(실귀속 — site.agencyId 폴백)
           workType: true, commuteGuidanceIncluded: true,
           customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true,
         },
@@ -158,6 +159,23 @@ export async function buildAttendanceSheetPayload(
     };
   });
 
+  // 월차(연차) 사용 횟수 — 정식 연차 모듈 원장(USE)에서 그 기간 사용 일수 합(반차 0.5 포함).
+  //  종전 하드코딩 0을 대체(사용자 확정: 신규 생성분부터 연동, 제출 스냅샷은 불변). 기관 스코프는
+  //  배정 실귀속(assignment.agencyId) 우선, 없으면 site.agencyId 폴백. 기관 미확정이면 0(종전 동작).
+  const leaveAgencyId: bigint | null =
+    attendances.find((a) => a.assignment?.agencyId)?.assignment?.agencyId ?? siteRow?.agencyId ?? null;
+  let monthlyLeaveCount = 0;
+  if (leaveAgencyId != null) {
+    const useAgg = await prisma.annualLeaveEntry.aggregate({
+      where: {
+        agencyId: leaveAgencyId, workerId, kind: "USE",
+        effectiveDate: { gte: new Date(`${start}T00:00:00.000Z`), lte: new Date(`${end}T00:00:00.000Z`) },
+      },
+      _sum: { days: true },
+    });
+    monthlyLeaveCount = Math.round(Math.abs(Number(useAgg._sum.days ?? 0)) * 100) / 100;
+  }
+
   const baseTotal = entries.reduce((s, e) => s + Number(e.hours), 0);
   const extTotal  = entries.reduce((s, e) => s + Number(e._ext), 0);
   // 총계 1:1 vs 1:多 분리 = 날짜별 플래그로 각 날의 시간을 해당 버킷에 합산.
@@ -173,7 +191,7 @@ export async function buildAttendanceSheetPayload(
     totalDays: entries.length,
     totalHours: baseTotal + extTotal,
     weeklyHolidayCount: 0,
-    monthlyLeaveCount: 0,
+    monthlyLeaveCount,
     allowanceTotalWon: "0",
     // 일반(1:1)·1:多는 날짜별 재적 훈련생 수로 각 날을 분리 합산(기간 단일값 아님).
     oneToOneHours:    baseTotal - oneToManyBase,
