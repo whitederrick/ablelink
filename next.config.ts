@@ -1,9 +1,30 @@
 // next.config.ts
 import type { NextConfig } from "next";
 
-// (P2-15 CSP 제거 2026-07-09: enforce CSP가 카카오 지도 로드를 깨서 롤백. 되던 기능을 깨면서까지
-//  넣을 가치가 없어 원복. 재도입은 실브라우저 검증 병행 필요 — Report-Only부터 단계 적용 권장.)
+// (P2-15 CSP 이력: 2026-07-09 enforce가 카카오 지도를 깨서 롤백 → 2026-07-15 Report-Only로 재도입.
+//  Report-Only는 아무것도 차단하지 않고 위반만 /api/csp-report로 보고한다(출시 전 도메인 수집).
+//  수집이 안정되면(위반 0 유지) 헤더 키를 Content-Security-Policy로 바꿔 enforce 전환.
+//  script의 unsafe-inline/unsafe-eval은 Next 하이드레이션·카카오 SDK 때문에 1차 허용 — 외부 도메인 수집이 목적.)
+const cspReportOnly = [
+  "default-src 'self'",
+  // 카카오 지도(dapi/daumcdn)·주소검색(postcode)·토스 결제 SDK·Vercel Analytics(RO 수집에서 발견)
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' dapi.kakao.com *.daumcdn.net js.tosspayments.com va.vercel-scripts.com",
+  "style-src 'self' 'unsafe-inline'",
+  // 서명/지도 타일/수파베이스 signed URL·데이터 URI(서명 캔버스)·blob(PDF 뷰어)
+  "img-src 'self' data: blob: *.supabase.co *.daumcdn.net *.kakaocdn.net *.kakao.com",
+  "font-src 'self' data:",
+  "connect-src 'self' *.supabase.co dapi.kakao.com *.tosspayments.com va.vercel-scripts.com",
+  // 주소검색 iframe·토스 결제창
+  "frame-src 'self' postcode.map.daum.net *.tosspayments.com pay.toss.im",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "report-uri /api/csp-report",
+].join("; ");
+
 const securityHeaders = [
+  { key: "Content-Security-Policy-Report-Only", value: cspReportOnly },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },

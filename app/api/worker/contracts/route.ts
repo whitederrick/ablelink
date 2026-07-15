@@ -9,7 +9,8 @@ import { sendAlimtalk } from "@/lib/kakao";
 import { getAcknowledgement } from "@/lib/contractTemplates";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
-import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
+import { withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
+import { checkSiteCapacity } from "@/lib/assignmentCapacity";
 import { workingWeekdaysLabel } from "@/lib/payroll/weekdays";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
@@ -206,9 +207,16 @@ export async function POST(req: NextRequest) {
     //   통과시켜 A의 여집합 슬롯(PM)에 B가 들어올 수 있다. 이때 계약 workType(FULL_DAY)으로 슬롯을 무조건
     //   확장하면 B와 이중배정. → 서명 시 재검사: 계약 슬롯이 다른 점유 배정과 시간충돌하면 슬롯을 확장하지 않고
     //   기존 슬롯을 유지한 채 상태만 CONFIRMED로 승격한다(무급 딜레마 회피 + 이중배정 방지).
-    // ★워커 단위 advisory lock으로 "겹침 재검사 → 슬롯확장/승격"을 원자화(발행~서명 사이 끼어든
-    //  다른 배정과의 이중배정 방지, P1-5). 승격은 항상 수행하되 슬롯 확장만 충돌 시 생략한다.
-    await withWorkerAssignmentLock(contract.workerId, async (tx) => {
+    // ★현장+워커 advisory lock으로 "겹침·정원 재검사 → 슬롯확장/승격"을 원자화(발행~서명 사이 끼어든
+    //  다른 배정과의 이중배정·정원초과 방지, P1-5·E1-C). 승격은 항상 수행하되 슬롯 확장만 문제 시 생략한다.
+    //  (락 순서 site→worker — 다른 정원 경로(finalize 등)와 동일 불변식, 교착 없음.)
+    const asgRow = await prisma.siteAssignment.findUnique({
+      where: { id: contract.assignmentId },
+      select: { siteId: true },
+    });
+    let capacityDeferred: { slot: string } | null = null; // 정원 초과로 확장 생략 시 매니저 알림용
+    if (asgRow) {
+      await withSiteAndWorkersAssignmentLock(asgRow.siteId, [contract.workerId], async (tx) => {
       const others = await tx.siteAssignment.findMany({
         where: { workerId: contract.workerId, status: { in: [...OCCUPYING_STATUSES] }, NOT: { id: contract.assignmentId! } },
         select: { workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
@@ -217,9 +225,26 @@ export async function POST(req: NextRequest) {
         { workType: contract.workType, customWorkStart: contract.customWorkStart, customWorkEnd: contract.customWorkEnd, startDate: contract.contractStart, endDate: contract.contractEnd },
         others,
       );
-      if (conflict) {
-        // 충돌: 슬롯 확장 금지 — 기존 슬롯/기간 유지, 상태만 승격. (계약↔배정 workType 불일치는 관리자 검토 대상)
-        console.warn(`[contracts sign] 서명 재검사 시간충돌 — 슬롯 확장 생략(상태만 승격). assignmentId=${contract.assignmentId}, contractWorkType=${contract.workType}`);
+      // E1-C 종결: 계약 workType이 배정의 현재 슬롯과 다르면(슬롯 이동/확장) 이동할 슬롯 정원도 재검사.
+      //  발행 당시엔 원래 슬롯 기준으로만 정원을 통과했으므로, 발행~서명 사이 대상 슬롯이 만석이 될 수 있다.
+      //  초과면 시간충돌과 동일하게 '슬롯 확장만 생략'(서명·승격은 진행 — 무급 딜레마 회피) + 매니저 알림.
+      let capacityOver = false;
+      if (!conflict && contract.workType) {
+        const cur = await tx.siteAssignment.findUnique({
+          where: { id: contract.assignmentId! },
+          select: { workType: true },
+        });
+        if (cur && cur.workType !== contract.workType) {
+          const overflow = await checkSiteCapacity(tx, asgRow.siteId, { [contract.workType]: 1 }, { excludeAssignmentId: contract.assignmentId! });
+          if (overflow) {
+            capacityOver = true;
+            capacityDeferred = { slot: contract.workType };
+          }
+        }
+      }
+      if (conflict || capacityOver) {
+        // 충돌/정원초과: 슬롯 확장 금지 — 기존 슬롯/기간 유지, 상태만 승격. (계약↔배정 workType 불일치는 관리자 검토 대상)
+        console.warn(`[contracts sign] 서명 재검사 ${conflict ? "시간충돌" : "정원초과"} — 슬롯 확장 생략(상태만 승격). assignmentId=${contract.assignmentId}, contractWorkType=${contract.workType}`);
         await tx.siteAssignment.updateMany({
           where: { id: contract.assignmentId!, status: { in: ["ASSIGNED", "CONFIRMED"] } },
           data: { status: "CONFIRMED", confirmedAt: new Date() },
@@ -239,7 +264,27 @@ export async function POST(req: NextRequest) {
           },
         });
       }
-    });
+      });
+    }
+    // 정원 초과로 확장을 보류했으면 담당 매니저에게 알림(계약↔배정 근무형태 불일치 검토 유도). 실패해도 서명 무영향.
+    if (capacityDeferred && contract.agencyId) {
+      try {
+        const mids = contract.createdByManagerId
+          ? [contract.createdByManagerId]
+          : (await prisma.manager.findMany({ where: { agencyId: contract.agencyId, isActive: true }, select: { id: true } })).map((m) => m.id);
+        const slotLabel: Record<string, string> = { AM: "오전", PM: "오후", FULL_DAY: "전일", CUSTOM: "맞춤" };
+        if (mids.length) {
+          await prisma.managerNotice.createMany({
+            data: mids.map((mid) => ({
+              managerId: mid,
+              title: "[배정 확인 필요] 계약 근무형태 반영 보류(정원 초과)",
+              body: `서명된 계약의 근무형태(${slotLabel[capacityDeferred!.slot] ?? capacityDeferred!.slot})가 현장 정원 초과로 배정에 반영되지 않았습니다. 배정은 기존 근무형태로 확정됐으니 현장 정원 또는 배정 근무형태를 검토해주세요.`,
+              link: "/manager/workers",
+            })),
+          });
+        }
+      } catch (e) { console.warn("[contracts sign] 정원보류 알림 실패:", e); }
+    }
   }
 
   // ── 급여 기준 자동 생성 (1단계-②) ──
