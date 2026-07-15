@@ -981,7 +981,10 @@ model SatisfactionSurvey {
   // ★DB에만 존재하는 partial unique(Prisma 미지원, 마이그 20260715090000):
   //   UNIQUE (contract_id) WHERE auto = true AND contract_id IS NOT NULL
   //   cron §5 자동발송 중복(조사 2건+알림톡 2건) 방어. 수동(auto=false)·재요청 플로는 조건 밖.
-  //   ⚠️`db push`·`migrate dev`가 drop 후보로 잡을 수 있음 — migrate deploy(파일 기반)로만 적용/유지.
+  //   드리프트 실측(2026-07-15, prisma 5.19): migrate diff(DB→schema)=empty·db pull에도 미표출 —
+  //   diff 엔진이 WHERE절 인덱스를 무시하므로 db push/migrate dev가 drop하지 않음(현 버전 확인).
+  //   ⚠️단 Prisma 메이저 업그레이드 시 diff 의미론이 바뀔 수 있어 업그레이드 후 migrate diff 재실측 권장.
+  //   적용/유지는 migrate deploy(파일 기반) 관행 유지. 인덱스 SQL은 IF NOT EXISTS(재적용=즉시 복구).
   @@map("satisfaction_surveys")
 }
 
