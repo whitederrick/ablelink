@@ -109,6 +109,7 @@ model Worker {
 
   notificationSettings WorkerNotificationSetting?
   notices              WorkerNotice[]
+  annualLeaveEntries   AnnualLeaveEntry[]
 
   // ✅ 인력 pool / 매칭
   professions WorkerProfession[]
@@ -569,6 +570,7 @@ model Agency {
   talentOffers          TalentOffer[]
   contractClauses       AgencyContractClause[]
   satisfactionSurveys   SatisfactionSurvey[]
+  annualLeaveEntries    AnnualLeaveEntry[]
 
   @@index([planType])
   @@map("agencies")
@@ -986,6 +988,57 @@ model SatisfactionSurvey {
   //   ⚠️단 Prisma 메이저 업그레이드 시 diff 의미론이 바뀔 수 있어 업그레이드 후 migrate diff 재실측 권장.
   //   적용/유지는 migrate deploy(파일 기반) 관행 유지. 인덱스 SQL은 IF NOT EXISTS(재적용=즉시 복구).
   @@map("satisfaction_surveys")
+}
+
+// ------------------------------------------------------
+// 연차 관리 (정식 모듈, 2026-07-15) — 노무사 판정 #5 workaround('+항목' 자율입력) 대체
+// ------------------------------------------------------
+
+// 연차 원장 항목 종류. 잔여 = days 부호합(부여 +, 사용/소멸/정산 -).
+enum AnnualLeaveKind {
+  ACCRUAL_MONTHLY // 1년 미만: 입사일 기준 1개월 개근 시 1일 (최대 11)
+  ACCRUAL_ANNUAL  // 1년 이상: 연차년도 개시일 15일(+3년차부터 2년당 1일 가산, 최대 25)
+  USE             // 사용(매니저 등록)
+  EXPIRE          // 소멸(사용기한 경과)
+  PAYOUT          // 미사용수당 정산(급여 라인 생성과 연결)
+  ADJUST          // 수동 조정(± 자유, 사유 필수)
+}
+
+// 연차 원장 — 발생/사용/소멸/정산/조정을 불변(append-only) 행으로 기록. 삭제 대신 반대 부호 ADJUST.
+// ★급여엔진(computeRun)은 이 테이블을 모름(수당 정산만 그리드 경유·computeRun 무변경 = 사용자 확정 정책).
+model AnnualLeaveEntry {
+  id       BigInt @id @default(autoincrement())
+  agencyId BigInt @map("agency_id")
+  workerId BigInt @map("worker_id")
+
+  kind AnnualLeaveKind
+  // 일수(+ 부여 / - 사용·소멸·정산). 단시간도 '일수'는 동일 — 임금 비례는 1일 소정근로시간이 반영(노무사 #5).
+  days Decimal @db.Decimal(6, 2)
+
+  // 날짜 의미(계약일자와 동일 관례: 해당 날짜의 UTC 자정):
+  //  ACCRUAL=발생일 / USE=사용일 / EXPIRE=소멸일 / PAYOUT=정산일 / ADJUST=조정 기준일
+  effectiveDate DateTime  @map("effective_date")
+  // 부여(ACCRUAL_*) 행의 사용기한: 월개근분=입사 1주년(근기법 §60⑦), 연분=발생일+1년. 그 외 null.
+  expiresAt     DateTime? @map("expires_at")
+  // 발생 근거 구간 라벨(예: 월개근 "2026-04-03~2026-05-02", 연차년도 "2026") — 표시·추적용.
+  sourceLabel   String?   @map("source_label")
+
+  // ★자동발생 멱등 키(일반 unique — partial index 금지 규율): "am:{agencyId}:{workerId}:{구간라벨}" /
+  //  "ay:{agencyId}:{workerId}:{n주년}" / "ex:{원장id}". 수동 행(USE/ADJUST/PAYOUT 매니저 등록)은 null.
+  dedupKey String? @unique @map("dedup_key")
+
+  memo               String?
+  createdByManagerId BigInt? @map("created_by_manager_id") // null = 시스템(cron)
+  payrollItemId      BigInt? @map("payroll_item_id") // PAYOUT 시 연결된 급여 항목(참조 전용)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  agency Agency @relation(fields: [agencyId], references: [id])
+  worker Worker @relation(fields: [workerId], references: [id])
+
+  @@index([agencyId, workerId])
+  @@index([workerId, effectiveDate])
+  @@index([agencyId, kind, expiresAt]) // cron 소멸 스캔용
+  @@map("annual_leave_entries")
 }
 
 enum ContractStatus {
