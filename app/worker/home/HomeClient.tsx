@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
+  CalendarCheck,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -1476,6 +1477,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
                     { icon: PenLine,           label: "일지 확정",   href: "/worker/review/logs" },
                     { icon: ClipboardList,     label: "일지 목록",   href: "/worker/logs" },
                     { icon: CircleDollarSign,  label: "급여명세서",  href: "/worker/payroll" },
+                    { icon: CalendarCheck,     label: "내 연차",     href: "/worker/leave" },
                     { icon: Megaphone,         label: "공지사항",    href: "/worker/notices" },
                   ].map(({ icon: Icon, label, href }) => (
                     <button
