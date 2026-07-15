@@ -8,6 +8,7 @@ import { computeWorkTimes, kstWallTimeToInstant } from "@/lib/workSchedule";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { sendAlimtalk, isAlimtalkReady } from "@/lib/kakao";
 import { computePayrollItems } from "@/lib/payroll/computeRun";
+import { parseWorkingWeekdays } from "@/lib/payroll/weekdays";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { PREMIUM_FEATURE_PLANS } from "@/lib/plans";
@@ -211,10 +212,35 @@ export async function GET(req: NextRequest) {
           OR: [{ endDate: null }, { endDate: { gte: yStart } }],
         },
         select: {
-          id: true, workerId: true, siteId: true,
+          id: true, workerId: true, siteId: true, agencyId: true,
           workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true,
         },
       });
+
+      // ★근무요일 존중: 그날 유효한 근로계약(computeRun과 동일 규칙: 기간 겹침·contractStart desc 최신)에
+      //  workingWeekdays가 '명시'돼 있으면 비근무요일은 생성/채택하지 않는다(MWF 계약 면제워커에 화·목 출근부가
+      //  생겨 과다지급되던 갭). 명시가 없으면(파생 계약·계약 없음·배정 agencyId null) 기존 동작 그대로(무회귀) —
+      //  파생 요일은 추정이라 cron이 제한 근거로 쓰지 않는다(computeRun 소정 판정과 역할 분리).
+      const exemptWorkerIds = [...new Set(exemptAssignments.map((a) => a.workerId))];
+      const dayContracts = exemptWorkerIds.length
+        ? await prisma.employmentContract.findMany({
+            where: { workerId: { in: exemptWorkerIds }, contractStart: { lte: yEnd }, contractEnd: { gte: yStart } },
+            orderBy: { contractStart: "desc" },
+            select: { agencyId: true, workerId: true, workingWeekdays: true },
+          })
+        : [];
+      const explicitDaysByKey = new Map<string, Set<number> | null>(); // "agencyId:workerId" → 명시 요일 Set(없으면 null)
+      for (const c of dayContracts) {
+        const key = `${c.agencyId}:${c.workerId}`;
+        if (explicitDaysByKey.has(key)) continue; // desc 정렬 첫 행 = 최신 계약
+        const parsed = parseWorkingWeekdays(c.workingWeekdays);
+        explicitDaysByKey.set(key, parsed ? new Set(parsed) : null);
+      }
+      const isContractWorkday = (a: { agencyId: bigint | null; workerId: bigint }) => {
+        if (a.agencyId == null) return true;
+        const set = explicitDaysByKey.get(`${a.agencyId}:${a.workerId}`);
+        return !set || set.has(dow);
+      };
 
       // 배정별 3쿼리 순차(3N) → 일괄 조회 2회 + createMany 1회(함수 타임아웃 방지). 의미 동일.
       const asgIds = exemptAssignments.map((a) => a.id);
@@ -235,9 +261,14 @@ export async function GET(req: NextRequest) {
       //  스킵하지 말고 '채택'한다. 스킵하면 확정행이 영영 안 생겨 그 날이 급여에서 조용히 누락된다
       //  (면제 워커 과소지급). 공휴일/커스텀휴무(holSet)면 채택 안 함=미지급 유지. 이미 확정됐거나
       //  시각 있는 행은 손대지 않는다(실제 clock-in 등).
-      const toAdopt = existRows.filter((r) => !r.isFinalClosed && !r.startTime && !holSet.has(r.assignmentId.toString()));
-      // 아예 출근행이 없는 배정 = 신규 생성(휴무 제외).
-      const toCreate = exemptAssignments.filter((a) => !holSet.has(a.id.toString()) && !existSet.has(a.id.toString()));
+      //  비근무요일 placeholder도 채택 금지(isContractWorkday) — 채택하면 표준시각이 채워져 급여에 들어간다.
+      const toAdopt = existRows.filter((r) => {
+        if (r.isFinalClosed || r.startTime || holSet.has(r.assignmentId.toString())) return false;
+        const a = asgById.get(r.assignmentId.toString());
+        return !!a && isContractWorkday(a);
+      });
+      // 아예 출근행이 없는 배정 = 신규 생성(휴무·계약 비근무요일 제외).
+      const toCreate = exemptAssignments.filter((a) => !holSet.has(a.id.toString()) && !existSet.has(a.id.toString()) && isContractWorkday(a));
       if (toCreate.length) {
         await prisma.dailyAttendance.createMany({
           data: toCreate.map((a) => {

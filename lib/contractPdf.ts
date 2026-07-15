@@ -1,6 +1,7 @@
 // lib/contractPdf.ts
 // EmploymentContract → 표준근로계약서 PDF payload 빌더 (관리자/직무지도원 조회 공용)
 import { renderPdfToBuffer } from "@/lib/pdf";
+import { workingWeekdaysLabel } from "@/lib/payroll/weekdays";
 
 function ymdK(d: Date | null | undefined): string {
   if (!d) return "";
@@ -31,6 +32,8 @@ export function buildContractPdfPayload(c: any) {
     breakEndTime: c.breakEndTime,
     workDaysPerWeek: c.workDaysPerWeek,
     weeklyHoliday: c.weeklyHoliday,
+    // 명시 근무요일(옵트인 CSV "1,3,5") → "월·수·금". 미설정이면 null = 기존 문구 그대로(무회귀).
+    workingWeekdaysText: workingWeekdaysLabel(c.workingWeekdays),
     wageType: c.wageType,
     wageAmount: c.wageAmount,
     bonusExists: c.bonusExists,

@@ -52,6 +52,12 @@ export function resolveWorkingWeekdaySet(
   return new Set(parseWorkingWeekdays(csv) ?? deriveWorkingWeekdays(workDaysPerWeek, weeklyHolidayLabel));
 }
 
+/** 명시 근무요일 CSV → 표기 라벨("1,3,5" → "월·수·금"). 미설정/형식오류 → null(호출부가 기존 문구 유지). */
+export function workingWeekdaysLabel(csv: string | null | undefined): string | null {
+  const nums = parseWorkingWeekdays(csv);
+  return nums ? nums.map((d) => DOW_LABELS[d]).join("·") : null;
+}
+
 /** 계약 저장 시 검증 — 근무요일 집합의 정합성(0~6·비어있지 않음·주휴일 미포함·개수 정합). */
 export function validateWorkingWeekdays(
   nums: number[],

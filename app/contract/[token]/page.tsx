@@ -24,6 +24,7 @@ interface ContractData {
   breakEndTime: string | null;
   workDaysPerWeek: number | null;
   weeklyHoliday: string | null;
+  workingWeekdaysText: string | null; // 명시 근무요일 "월·수·금" (미설정 null)
   wageType: string | null;
   wageAmount: number | null;
   bonusExists: boolean;
@@ -111,7 +112,7 @@ function StandardContractBody({ d, addr }: { d: ContractData; addr: string }) {
       <Row no="2" label="근무장소">{d.workLocation || "-"}</Row>
       <Row no="3" label="업무의 내용">{d.jobDescription || "-"}</Row>
       <Row no="4" label="소정근로시간">{hm(d.workStartTime)} ~ {hm(d.workEndTime)} (휴게: {breakStr})</Row>
-      <Row no="5" label="근무일/휴일">매주 {d.workDaysPerWeek ?? "-"}일 근무, 주휴일 매주 {d.weeklyHoliday || "-"}요일</Row>
+      <Row no="5" label="근무일/휴일">매주 {d.workDaysPerWeek ?? "-"}일{d.workingWeekdaysText ? `(${d.workingWeekdaysText})` : ""} 근무, 주휴일 매주 {d.weeklyHoliday || "-"}요일</Row>
       <Row no="6" label="임금">
         <div>
           <div>· {d.wageType ? WAGE_LABEL[d.wageType] : "임금"} : {won(d.wageAmount) || "-"}</div>

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   parseWorkingWeekdays, serializeWorkingWeekdays, deriveWorkingWeekdays,
-  resolveWorkingWeekdaySet, validateWorkingWeekdays,
+  resolveWorkingWeekdaySet, validateWorkingWeekdays, workingWeekdaysLabel,
 } from "@/lib/payroll/weekdays";
 
 describe("parse/serialize", () => {
@@ -75,5 +75,19 @@ describe("validateWorkingWeekdays", () => {
   });
   it("범위 밖 거부", () => {
     expect(validateWorkingWeekdays([1, 7]).ok).toBe(false);
+  });
+});
+
+describe("workingWeekdaysLabel — 계약 PDF·서명 화면 표기", () => {
+  it("MWF → 월·수·금", () => {
+    expect(workingWeekdaysLabel("1,3,5")).toBe("월·수·금");
+  });
+  it("비정렬 입력도 정렬 표기(일요일 포함)", () => {
+    expect(workingWeekdaysLabel("6,0,2")).toBe("일·화·토");
+  });
+  it("미설정/형식오류 → null(기존 문구 유지)", () => {
+    expect(workingWeekdaysLabel(null)).toBeNull();
+    expect(workingWeekdaysLabel("")).toBeNull();
+    expect(workingWeekdaysLabel("7,8")).toBeNull();
   });
 });

@@ -10,6 +10,7 @@ import { getAcknowledgement } from "@/lib/contractTemplates";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
+import { workingWeekdaysLabel } from "@/lib/payroll/weekdays";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 
@@ -74,6 +75,8 @@ export async function GET(req: NextRequest) {
       breakEndTime: contract.breakEndTime,
       workDaysPerWeek: contract.workDaysPerWeek,
       weeklyHoliday: contract.weeklyHoliday,
+      // 명시 근무요일(옵트인) → "월·수·금". 미설정 null = 서명 화면·PDF 기존 문구 그대로.
+      workingWeekdaysText: workingWeekdaysLabel(contract.workingWeekdays),
       wageType: contract.wageType,
       wageAmount: contract.wageAmount,
       bonusExists: contract.bonusExists,

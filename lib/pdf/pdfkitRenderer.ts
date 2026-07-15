@@ -775,7 +775,7 @@ function payslip(p: any): Promise<Buffer> {
 //   contractStartText, contractEndText,           // "YYYY년 M월 D일"
 //   workLocation, jobDescription,
 //   workStartTime, workEndTime, breakStartTime, breakEndTime,  // "HH:MM"
-//   workDaysPerWeek, weeklyHoliday,
+//   workDaysPerWeek, weeklyHoliday, workingWeekdaysText?,   // "월·수·금"(명시 근무요일 시)
 //   wageType('HOURLY'|'DAILY'|'MONTHLY'), wageAmount,
 //   bonusExists, bonusAmount, extraPayExists, extraPayDesc,
 //   overtimeRate, wagePayday, wagePayMethod('DIRECT'|'ACCOUNT'),
@@ -837,10 +837,11 @@ function employmentContract(p: any): Promise<Buffer> {
     : "    시  분 ~   시  분";
   line(`4. 소정근로시간 : ${hm(p.workStartTime)}부터 ${hm(p.workEndTime)}까지 (휴게시간 : ${brk})`);
 
-  // 5. 근무일/휴일
+  // 5. 근무일/휴일 — 계약에 명시 근무요일이 있으면 "(월·수·금)"으로 특정(비연속 근무 표기), 없으면 원양식 문구.
   const days = p.workDaysPerWeek != null ? `${p.workDaysPerWeek}` : "  ";
   const wh = p.weeklyHoliday || "  ";
-  line(`5. 근무일/휴일 : 매주 ${days}일(또는 매일단위) 근무, 주휴일 매주 ${wh}요일`);
+  const dayDetail = p.workingWeekdaysText ? `(${p.workingWeekdaysText})` : "(또는 매일단위)";
+  line(`5. 근무일/휴일 : 매주 ${days}일${dayDetail} 근무, 주휴일 매주 ${wh}요일`);
 
   // 6. 임금
   line(`6. 임 금`);
