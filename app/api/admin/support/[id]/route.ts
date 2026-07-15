@@ -81,7 +81,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         repliedAt: new Date(),
       };
       // 첨부는 배열로 올 때만 갱신(미전달 시 기존 첨부 보존 — 회신 텍스트만 수정하는 경우).
-      if (Array.isArray(replyAttachments)) replyData.replyAttachments = normalizeAttachments(replyAttachments);
+      //  운영자 업로드 폴더('admin/')만 수용 — 임의 스코프 경로 주입 차단.
+      if (Array.isArray(replyAttachments)) replyData.replyAttachments = normalizeAttachments(replyAttachments, "admin");
       const updated = await prisma.supportTicket.update({ where: { id: ticketId }, data: replyData });
 
       // 지원요청 작성자(manager)에게 알림 생성

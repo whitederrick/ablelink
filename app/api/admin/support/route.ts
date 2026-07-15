@@ -70,7 +70,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "제목과 내용은 필수입니다." }, { status: 400 });
 
     const cat = VALID_CATEGORIES.includes(category) ? category : "GENERAL";
-    const cleanAttachments = normalizeAttachments(attachments);
+    // 자기 기관 업로드 폴더(`{agencyId}/`)만 수용 — 임의 스코프 경로 주입 차단.
+    const cleanAttachments = normalizeAttachments(attachments, String(scope.agencyId));
 
     const ticket = await prisma.supportTicket.create({
       data: {

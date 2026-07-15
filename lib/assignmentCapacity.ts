@@ -41,6 +41,17 @@ export async function checkSiteCapacity(
   selBySlot: Record<string, number>,
   opts?: { excludeAssignmentId?: bigint },
 ): Promise<SlotOverflow | null> {
+  const { capBySlot, filledBySlot } = await getSiteCapacityState(tx, siteId, opts);
+  return findCapacityOverflow(capBySlot, filledBySlot, selBySlot);
+}
+
+/** 정원 상태 조회(chokepoint의 집계 부분). filled = 물리 현장(siteId) 기준 — 집계 기준을 여기 한 곳으로 고정한다.
+ *  finalize처럼 초과 판정 외에 슬롯별 잔여/충족 표시가 필요한 호출부가 사용. 반드시 현장 락 안에서 호출. */
+export async function getSiteCapacityState(
+  tx: Prisma.TransactionClient,
+  siteId: bigint,
+  opts?: { excludeAssignmentId?: bigint },
+): Promise<{ capBySlot: Record<CapacitySlot, number>; filledBySlot: Record<string, number> }> {
   const site = await tx.site.findFirst({
     where: { id: siteId },
     select: { amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true },
@@ -59,5 +70,5 @@ export async function checkSiteCapacity(
   });
   const filledBySlot: Record<string, number> = {};
   for (const g of filledGroups) if (g.workType) filledBySlot[g.workType] = g._count._all;
-  return findCapacityOverflow(capBySlot, filledBySlot, selBySlot);
+  return { capBySlot, filledBySlot };
 }

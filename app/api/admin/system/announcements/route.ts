@@ -57,8 +57,18 @@ export async function POST(req: NextRequest) {
           agencyId: { not: null },
         },
       });
+      // ★워커 기준 1행만 생성 — (workerId×agencyId) 조합대로 만들면 다기관 배정 워커가 같은 공지를 N번 받는다.
+      //  agencyId는 필수 컬럼이라 대표 1건(첫 조합)만 채움. SYSTEM 공지는 매니저 화면에서 kind로 제외되고
+      //  워커 알림 조회는 workerId 기준이라 대표 기관 선택은 표시에 영향 없음. sentCount=워커 수(의미 명확화).
+      const seenWorker = new Set<string>();
       targets = grouped
         .filter(r => r.agencyId != null)
+        .filter(r => {
+          const k = r.workerId.toString();
+          if (seenWorker.has(k)) return false;
+          seenWorker.add(k);
+          return true;
+        })
         .map(r => ({ workerId: r.workerId, agencyId: r.agencyId as bigint }));
     }
 

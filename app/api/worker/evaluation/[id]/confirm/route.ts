@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import { parseBigInt } from "@/lib/adminScope";
 
 export async function PATCH(
   req: NextRequest,
@@ -13,8 +14,10 @@ export async function PATCH(
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
     const { id } = await params;
+    const evalId = parseBigInt(id);
+    if (!evalId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const ev = await prisma.traineeEvaluation.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: evalId },
       select: { id: true, writerId: true, isConfirmed: true },
     });
 

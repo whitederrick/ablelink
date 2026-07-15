@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
         assignments: {
           where: { status: { in: HISTORY } },
           select: {
-            siteId: true, status: true, startDate: true, endDate: true,
+            siteId: true, agencyId: true, status: true, startDate: true, endDate: true,
             site: { select: { companyName: true, businessType: true } },
           },
           orderBy: { startDate: "desc" },
@@ -80,7 +80,11 @@ export async function GET(request: NextRequest) {
         phone: w.phoneNumber,
         engaged: !!engagedAsgn,
         currentStatus: engagedAsgn ? String(engagedAsgn.status) : null,
-        currentSiteName: engagedAsgn?.site?.companyName ?? null,
+        // ★크로스테넌트 노출 방지: 진행 중 배정이 타 기관 것이면 고객사명(영업기밀)은 마스킹.
+        //  가용성 판단(engaged·기간)은 유지 — 배정요청 가능 여부 표시는 그대로.
+        currentSiteName: engagedAsgn
+          ? (engagedAsgn.agencyId === agencyId ? engagedAsgn.site?.companyName ?? null : "타 기관 현장")
+          : null,
         periodStart: engagedAsgn?.startDate ? engagedAsgn.startDate.toISOString() : null,
         periodEnd: engagedAsgn?.endDate ? engagedAsgn.endDate.toISOString() : null,
         // 이력 기반 추천

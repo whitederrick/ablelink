@@ -10,6 +10,7 @@ import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { injectManagerSignature } from "@/lib/docs/managerSig";
 import { logAccess } from "@/lib/accessLog";
+import { parseBigInt } from "@/lib/adminScope";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -26,7 +27,8 @@ export async function GET(
   try {
     const scope = await requireManagerSession(req);
     const { id } = await params;
-    const versionId = BigInt(id);
+    const versionId = parseBigInt(id);
+    if (!versionId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
 
     const v = await prisma.documentVersion.findUnique({
       where: { id: versionId },

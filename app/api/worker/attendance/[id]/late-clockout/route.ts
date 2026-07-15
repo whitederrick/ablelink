@@ -11,6 +11,7 @@ import { getKstDateString } from "@/lib/time";
 import { computeWorkTimes, kstWallTimeToInstant } from "@/lib/workSchedule";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { isLateClockOutReasonCode } from "@/lib/attendance/lateClockOut";
+import { parseBigInt } from "@/lib/adminScope";
 
 export async function POST(
   request: NextRequest,
@@ -38,8 +39,10 @@ export async function POST(
       return NextResponse.json({ success: false, message: "기타 사유를 입력해 주세요." }, { status: 400 });
     }
 
+    const attId = parseBigInt(id);
+    if (!attId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const attendance = await prisma.dailyAttendance.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: attId },
       include: {
         assignment: {
           select: { workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true },

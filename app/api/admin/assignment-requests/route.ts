@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { findTimeConflict, OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
 import { withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
-import { findCapacityOverflow, CAPACITY_SLOTS, type CapacitySlot } from "@/lib/assignmentCapacity";
+import { findCapacityOverflow, getSiteCapacityState, CAPACITY_SLOTS } from "@/lib/assignmentCapacity";
 
 async function expirePastDeadline(agencyId: bigint) {
   await prisma.siteAssignment.updateMany({
@@ -156,16 +156,12 @@ export async function POST(req: NextRequest) {
       const selectedIds = rawSel.filter(x => /^\d+$/.test(String(x))).map(x => BigInt(String(x)));
       if (selectedIds.length === 0) return NextResponse.json({ success: false, message: "선정된 후보가 없습니다." }, { status: 400 });
 
+      // 소유 검증(agencyId)·표시명만 락 밖 조회 — 정원(cap)·점유(filled)는 락 안 getSiteCapacityState로 재조회.
       const site = await prisma.site.findFirst({
         where: { id: siteId, agencyId },
-        select: { companyName: true, amCapacity: true, pmCapacity: true, fullDayCapacity: true, customCapacity: true },
+        select: { companyName: true },
       });
       if (!site) return NextResponse.json({ success: false, message: "현장을 찾을 수 없습니다." }, { status: 404 });
-      // #7: 정원은 슬롯별로 강제한다(근무형태별 버킷). 판정 로직은 lib/assignmentCapacity(순수·테스트그물).
-      const capBySlot: Record<CapacitySlot, number> = {
-        AM: site.amCapacity ?? 0, PM: site.pmCapacity ?? 0, FULL_DAY: site.fullDayCapacity ?? 0, CUSTOM: site.customCapacity ?? 0,
-      };
-      const totalCap = CAPACITY_SLOTS.reduce((t, s) => t + capBySlot[s], 0);
 
       // 선정 대상 = 이 현장의 수락(ACCEPTED) 또는 제외(DROPPED) 후보. (제외 후보 재선정 허용)
       // 기한 초과(EXPIRED)·거절(REJECTED)·회신 대기(REQUESTED)는 선정 불가.
@@ -193,12 +189,11 @@ export async function POST(req: NextRequest) {
           where: { id: { in: selectedIds } },
           select: { id: true, workerId: true, workType: true, customWorkStart: true, customWorkEnd: true, startDate: true, endDate: true },
         });
-        // 슬롯별 이미 채워진(계약대기/연결/근무 중) 인원. ★반드시 락 안에서 재조회(TOCTOU 방지).
-        const filledGroups = await tx.siteAssignment.groupBy({
-          by: ["workType"], where: { agencyId, siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } }, _count: { _all: true },
-        });
-        const filledBySlot: Record<string, number> = {};
-        for (const g of filledGroups) if (g.workType) filledBySlot[g.workType] = g._count._all;
+        // 슬롯별 정원·점유 재조회. ★반드시 락 안(TOCTOU 방지) + 집계 기준은 chokepoint와 동일한
+        //  '물리 현장(siteId) 총원'(getSiteCapacityState) — 종전 인라인 groupBy(agencyId+siteId)는 공유현장에서
+        //  타 기관 점유분을 누락해 다른 5개 경로(checkSiteCapacity)와 기준이 어긋나던 형제갭. 단일기관 현장은 동치(무회귀).
+        const { capBySlot, filledBySlot } = await getSiteCapacityState(tx, siteId);
+        const totalCap = CAPACITY_SLOTS.reduce((t, s) => t + capBySlot[s], 0);
         // 선정 인원 슬롯별 집계
         const selBySlot: Record<string, number> = {};
         for (const s of selDetails) if (s.workType) selBySlot[s.workType] = (selBySlot[s.workType] ?? 0) + 1;

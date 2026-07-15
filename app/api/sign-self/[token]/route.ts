@@ -6,6 +6,8 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateSignatureImage } from "@/lib/imageValidation";
 import { getSelfSignToken, consumeSelfSignTokenAtomic } from "@/lib/selfSignToken";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { getRateLimitIp } from "@/lib/clientIp";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -34,6 +36,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
 // POST — 서명 이미지 제출 → 본인 계정 서명에 저장
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   try {
+    // 공개 API(인증 없음) — IP 기준 rate limit(검증 실패 무한 재시도·스토리지 남용 방어). sign/[token] POST와 동일 정책.
+    const rl = await checkRateLimit(`sign-self-post:${getRateLimitIp(request)}`, { max: 30, windowSec: 15 * 60, blockSec: 10 * 60 });
+    if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
+
     const { token } = await params;
     const payload = await getSelfSignToken(token);
     if (!payload) return NextResponse.json({ success: false, message: "만료되었거나 유효하지 않은 링크입니다." }, { status: 410 });

@@ -11,6 +11,7 @@ import { logAccess } from "@/lib/accessLog";
 import { hash } from "bcryptjs";
 import { randomInt } from "crypto";
 import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
+import { parseBigInt } from "@/lib/adminScope";
 
 function generateTempPassword(): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -31,7 +32,8 @@ export async function GET(
   try {
     const scope = await requireManagerSession(req);
     const { id } = await params;
-    const workerId = BigInt(id);
+    const workerId = parseBigInt(id);
+    if (!workerId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     if (!(await assertAgencyWorker(workerId, scope.agencyId))) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
@@ -64,7 +66,8 @@ export async function PATCH(
     const scope = await requireManagerSession(req);
 
     const { id } = await params;
-    const workerId = BigInt(id);
+    const workerId = parseBigInt(id);
+    if (!workerId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
 
     // 자기 위탁기관 소속 직무지도원만 수정 가능 — ★13차: 공용 판정(CONSENTED 상태/계약)으로 통일.
     if (!(await assertAgencyWorker(workerId, scope.agencyId))) {

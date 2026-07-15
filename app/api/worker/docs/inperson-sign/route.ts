@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { validateSignatureImage } from "@/lib/imageValidation";
 import { signatureDisplayUrl } from "@/lib/signatureImage";
 import { resolveDocAssignment } from "@/lib/docs/resolveDocAssignment";
+import { normalizeDocType } from "@/lib/pdf";
 import { randomUUID } from "crypto";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -28,7 +29,9 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const imageBlob = formData.get("signature") as Blob | null;
-    const docType    = (formData.get("docType")    as string || "").trim();
+    // ★docType 표기 정규화(kebab↔SCREAMING 혼용 차단): 조회측(admin/docs/preview 등)이 normalizeDocType로
+    //  SCREAMING 비교하므로 저장도 동일 정규화. 종전엔 원문 그대로 저장돼 kebab 호출자가 생기면 조회 불일치 잠복.
+    const docType    = normalizeDocType((formData.get("docType") as string || "").trim());
     const periodStart = (formData.get("periodStart") as string || "").trim();
     const periodEnd   = (formData.get("periodEnd")   as string || "").trim();
     const signerNameRaw = (formData.get("signerName") as string || "").trim();

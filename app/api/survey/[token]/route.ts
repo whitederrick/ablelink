@@ -6,6 +6,8 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isEvalSnapshot, validateAnswers, scoreSurvey, type EvalSnapshot } from "@/lib/jobCoachEval";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { getRateLimitIp } from "@/lib/clientIp";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -42,6 +44,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
+  // 공개 API(인증 없음) — IP 기준 rate limit(무차별 토큰 나열·스팸 방어). 형제 공개 라우트 sign/[token]과 동일 정책.
+  //  정상 사용은 담당자 1회 응답이라 여유 예산이면 오차단 없음(공유 IP 감안 sign-post와 동일 수치).
+  const rl = await checkRateLimit(`survey-post:${getRateLimitIp(req)}`, { max: 30, windowSec: 15 * 60, blockSec: 10 * 60 });
+  if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
+
   const { token } = await params;
   const body = await req.json();
 

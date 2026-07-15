@@ -88,13 +88,17 @@ export async function resolveSupportUrl(rawPath: string | null): Promise<string 
   return data.signedUrl;
 }
 
-/** 외부 입력(JSON) → 안전한 SupportAttachment 배열로 정규화. */
-export function normalizeAttachments(raw: any): SupportAttachment[] {
+/** 외부 입력(JSON) → 안전한 SupportAttachment 배열로 정규화.
+ *  scopePrefix(쓰기 경로 전용): 지정 시 `${scopePrefix}/`로 시작하는 path만 수용 — 클라이언트가 임의 경로
+ *  (타 스코프 폴더)를 주입해 저장하는 것을 차단(방어심층). 업로드 라우트가 매니저=`{agencyId}/`·운영자=`admin/`으로
+ *  경로를 만들므로 정당한 첨부는 항상 통과. 읽기(DB 재정규화) 경로는 미지정 = 레거시 저장분 그대로(무회귀). */
+export function normalizeAttachments(raw: unknown, scopePrefix?: string): SupportAttachment[] {
   if (!Array.isArray(raw)) return [];
   const out: SupportAttachment[] = [];
   for (const it of raw) {
     const path = typeof it?.path === "string" ? it.path.trim() : "";
     if (!path || path.startsWith("http")) continue; // 경로만 허용(외부 URL 주입 방지)
+    if (scopePrefix && !path.startsWith(`${scopePrefix}/`)) continue; // 자기 스코프 폴더 밖 경로 거부
     out.push({
       path,
       name: typeof it?.name === "string" ? it.name.trim().slice(0, 200) : "첨부파일",

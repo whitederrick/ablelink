@@ -9,6 +9,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { Decimal } from "@prisma/client/runtime/library";
 import { audit } from "@/lib/audit";
 import type { PayrollBreakdown } from "@/lib/payroll/breakdown";
+import { parseBigInt } from "@/lib/adminScope";
 
 function itemDto(i: any) {
   return {
@@ -29,8 +30,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ runI
   try {
     const scope = await requireManagerSession(req);
     const { runId } = await params;
+    const runIdBig = parseBigInt(runId);
+    if (!runIdBig) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const run = await prisma.payrollRun.findUnique({
-      where: { id: BigInt(runId) },
+      where: { id: runIdBig },
       include: {
         items: {
           include: { user: { select: { id: true, workerName: true, loginId: true } } },
@@ -73,7 +76,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
   try {
     const scope = await requireManagerSession(req);
     const { runId } = await params;
-    const run = await prisma.payrollRun.findUnique({ where: { id: BigInt(runId) } });
+    const runIdBig = parseBigInt(runId);
+    if (!runIdBig) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
+    const run = await prisma.payrollRun.findUnique({ where: { id: runIdBig } });
     if (!run) return NextResponse.json({ success: false, message: "없음" }, { status: 404 });
     if (scope.agencyId && run.agencyId !== scope.agencyId) {
       return NextResponse.json({ success: false, message: "접근 불가" }, { status: 403 });
@@ -83,7 +88,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
     }
 
     const body = await req.json();
-    const itemIdBig = BigInt(body.itemId);
+    const itemIdBig = parseBigInt(body.itemId);
+    if (!itemIdBig) return NextResponse.json({ success: false, message: "잘못된 항목 ID입니다." }, { status: 400 });
 
     // IDOR 방지: itemId가 실제 이 run 소속인지 검증 + 기존 breakdown 보존
     const existingItem = await prisma.payrollItem.findUnique({
@@ -156,7 +162,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ run
   try {
     const scope = await requireManagerSession(req);
     const { runId } = await params;
-    const run = await prisma.payrollRun.findUnique({ where: { id: BigInt(runId) } });
+    const runIdBig = parseBigInt(runId);
+    if (!runIdBig) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
+    const run = await prisma.payrollRun.findUnique({ where: { id: runIdBig } });
     if (!run) return NextResponse.json({ success: false, message: "없음" }, { status: 404 });
     if (scope.agencyId && run.agencyId !== scope.agencyId) {
       return NextResponse.json({ success: false, message: "접근 불가" }, { status: 403 });
