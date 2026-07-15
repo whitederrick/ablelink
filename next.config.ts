@@ -1,11 +1,12 @@
 // next.config.ts
 import type { NextConfig } from "next";
 
-// (P2-15 CSP 이력: 2026-07-09 enforce가 카카오 지도를 깨서 롤백 → 2026-07-15 Report-Only로 재도입.
-//  Report-Only는 아무것도 차단하지 않고 위반만 /api/csp-report로 보고한다(출시 전 도메인 수집).
-//  수집이 안정되면(위반 0 유지) 헤더 키를 Content-Security-Policy로 바꿔 enforce 전환.
-//  script의 unsafe-inline/unsafe-eval은 Next 하이드레이션·카카오 SDK 때문에 1차 허용 — 외부 도메인 수집이 목적.)
-const cspReportOnly = [
+// (P2-15 CSP 이력: 2026-07-09 enforce가 카카오 지도를 깨서 롤백 → 2026-07-15 Report-Only 재도입 후
+//  같은 날 enforce 전환. 전환 근거 = 출시 전 능동 전수검증: enforce 모드로 지도 플로(주소검색→핀·타일)+
+//  매니저 12화면+워커 8화면 순회, CSP 차단·네트워크 실패 0(트래픽 없는 RO 수집 대기는 무의미 — 사용자 결정).
+//  위반 보고는 /api/csp-report로 계속 수집. script의 unsafe-inline/unsafe-eval은 Next 하이드레이션·
+//  카카오 SDK 때문에 허용 — nonce 전환은 별도 과제.)
+const csp = [
   "default-src 'self'",
   // 카카오 지도(dapi/daumcdn)·주소검색(postcode)·토스 결제 SDK·Vercel Analytics(RO 수집에서 발견)
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' dapi.kakao.com *.daumcdn.net js.tosspayments.com va.vercel-scripts.com",
@@ -24,7 +25,8 @@ const cspReportOnly = [
 ].join("; ");
 
 const securityHeaders = [
-  { key: "Content-Security-Policy-Report-Only", value: cspReportOnly },
+  { key: "Content-Security-Policy", value: csp },
+
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
