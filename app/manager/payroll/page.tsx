@@ -1106,6 +1106,27 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
   const [taxNote, setTaxNote] = useState("");
   // #1(노무사): 조기퇴사 등 '당월 예외' — 국민연금·건강·장기요양 공제를 0으로. 확정 저장 시 basicInfo에 보존·감사로그 기록.
   const [earlyLeaveExempt, setEarlyLeaveExempt] = useState<boolean>(() => !!bd.basicInfo?.earlyLeaveExempt);
+  // 연차 미사용수당 정산(정식 연차 모듈): 잔여 연차 → 제안 라인. 저장 시 원장 PAYOUT 원자 기록(서버 트랜잭션).
+  const [leaveInfo, setLeaveInfo] = useState<{ balance: number; dailySojeMinutes: number | null } | null>(null);
+  const [payoutDays, setPayoutDays] = useState<number | null>(null);
+  useEffect(() => {
+    fetch(`/api/admin/leave/${item.workerId}`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => { if (d?.success) setLeaveInfo({ balance: Number(d.balance) || 0, dailySojeMinutes: d.dailySojeMinutes ?? null }); })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.workerId]);
+  function applyLeavePayout() {
+    if (!leaveInfo || leaveInfo.balance <= 0) return;
+    const days = leaveInfo.balance;
+    const ordinaryWage = Number(bd.ordinaryWage) || 0;
+    const suggest = leaveInfo.dailySojeMinutes ? Math.round(ordinaryWage * (leaveInfo.dailySojeMinutes / 60) * days) : 0;
+    setPayLines(prev => [
+      ...prev.filter(l => l.key !== "unusedAnnualLeave"),
+      { key: "unusedAnnualLeave", name: "연차미사용수당", hours: 0, amount: suggest, method: `연차 ${days}일 정산` },
+    ]);
+    setPayoutDays(days);
+  }
   const [bonusAmount, setBonusAmount] = useState(0);
   const [bonusMonths, setBonusMonths] = useState(1);
   const [bonusNote, setBonusNote] = useState("");
@@ -1200,9 +1221,14 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
           if (t.hasTable) { dl = applyTaxLines(deductLines, t.incomeTax, t.localTax); setDeductLines(dl); setTaxNote(t.note); }
         } catch { /* 조회 실패 시 기존 공제 라인 유지 */ }
       }
+      // 연차 정산: 제안 라인이 남아 있을 때만 원장 기록 요청(라인을 지웠으면 정산 안 함).
+      const wantPayout = payoutDays != null && payLines.some(l => l.key === "unusedAnnualLeave");
       const res = await fetch(`/api/admin/payroll/runs/${runId}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: item.id, payLines, deductLines: dl, basicInfo: { ...basic, earlyLeaveExempt } }),
+        body: JSON.stringify({
+          itemId: item.id, payLines, deductLines: dl, basicInfo: { ...basic, earlyLeaveExempt },
+          ...(wantPayout ? { annualLeavePayout: { days: payoutDays } } : {}),
+        }),
       });
       const d = await res.json();
       if (d.success) onSaved(d.item); else alert(d.message);
@@ -1269,6 +1295,20 @@ function PayslipGridEditor({ item, runId, year, onClose, onSaved }: {
               <button onClick={() => setPayLines(p => [...p, { key: `c${Date.now()}`, name: "", hours: 0, amount: 0 }])}
                 className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-50">+ 항목</button>
             </div>
+            {/* 연차 미사용수당 정산 제안 — 잔여가 있고 아직 라인이 없을 때만. 클릭=제안 라인 추가(금액 수정 가능),
+                저장 시 서버가 원장 PAYOUT(-일수)을 원자 기록. 수동 '+항목' 중복 입력 방지를 위해 이 버튼 사용 권장. */}
+            {leaveInfo && leaveInfo.balance > 0 && !payLines.some(l => l.key === "unusedAnnualLeave") && (
+              <button onClick={applyLeavePayout}
+                className="mb-2 w-full rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-bold text-emerald-700 transition hover:bg-emerald-100">
+                잔여 연차 {leaveInfo.balance}일 — 미사용수당 정산 라인 추가
+                {leaveInfo.dailySojeMinutes && Number(bd.ordinaryWage) > 0
+                  ? ` (제안 ${comma(Math.round((Number(bd.ordinaryWage) || 0) * (leaveInfo.dailySojeMinutes / 60) * leaveInfo.balance))}원 = 통상시급 × ${(leaveInfo.dailySojeMinutes / 60).toFixed(1)}h × ${leaveInfo.balance}일)`
+                  : " (계약 소정시간·통상시급 미확인 — 금액 직접 입력)"}
+              </button>
+            )}
+            {payoutDays != null && payLines.some(l => l.key === "unusedAnnualLeave") && (
+              <p className="mb-2 text-[11px] font-semibold text-emerald-700">저장 시 연차 {payoutDays}일이 정산 처리(원장 차감·이력 기록)됩니다. 라인을 지우면 정산하지 않습니다.</p>
+            )}
             <div className="overflow-hidden rounded-xl border border-slate-200">
               <div className="grid grid-cols-[1fr_64px_100px_28px] gap-1 bg-slate-50 px-2 py-1.5 text-[11px] font-black text-slate-400">
                 <span>임금항목</span><span className="text-right">시간</span><span className="text-right">금액</span><span></span>

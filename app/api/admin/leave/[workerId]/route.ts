@@ -43,10 +43,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ work
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
     }
 
-    const [worker, firstContract] = await Promise.all([
+    const [worker, firstContract, latestContract] = await Promise.all([
       prisma.worker.findUnique({ where: { id: workerId }, select: { workerName: true, loginId: true } }),
       prisma.employmentContract.findFirst({ where: { agencyId: scope.agencyId, workerId }, orderBy: { contractStart: "asc" }, select: { contractStart: true } }),
+      prisma.employmentContract.findFirst({
+        where: { agencyId: scope.agencyId, workerId }, orderBy: { contractStart: "desc" },
+        select: { workStartTime: true, workEndTime: true, breakStartTime: true, breakEndTime: true },
+      }),
     ]);
+    // 1일 소정근로시간(분) — 미사용수당 1일치 금액(통상시급×1일소정) 제안용. 계약 시각 없으면 null(수동 입력).
+    const cMin = (t?: string | null) => { if (!t) return null; const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
+    const _cs = cMin(latestContract?.workStartTime), _ce = cMin(latestContract?.workEndTime), _cbs = cMin(latestContract?.breakStartTime), _cbe = cMin(latestContract?.breakEndTime);
+    const dailySojeMinutes = (_cs != null && _ce != null && _ce > _cs)
+      ? Math.max(0, (_ce - _cs) - (_cbs != null && _cbe != null && _cbe > _cbs ? _cbe - _cbs : 0))
+      : null;
     const { rows, state } = await loadLedger(scope.agencyId, workerId);
     const remainingByGrant = new Map(state.grants.map((g) => [g.id, g]));
 
@@ -55,6 +65,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ work
       worker: { name: worker?.workerName ?? "-", loginId: worker?.loginId ?? "" },
       hireDate: firstContract ? isoOf(firstContract.contractStart) : null,
       balance: state.balance,
+      dailySojeMinutes,
       // 부여분별 잔량·만료(모달 요약) — 잔량 있는 것만
       grants: state.grants.filter((g) => g.remaining > 0).map((g) => ({ id: g.id, remaining: g.remaining, expiresAt: g.expiresAt })),
       entries: rows.map((r) => ({

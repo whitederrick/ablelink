@@ -94,12 +94,38 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
     // IDOR 방지: itemId가 실제 이 run 소속인지 검증 + 기존 breakdown 보존
     const existingItem = await prisma.payrollItem.findUnique({
       where: { id: itemIdBig },
-      select: { runId: true, breakdown: true },
+      select: { runId: true, workerId: true, breakdown: true },
     });
     if (!existingItem || existingItem.runId !== run.id) {
       return NextResponse.json({ success: false, message: "접근 불가" }, { status: 403 });
     }
     const prevBd = (existingItem.breakdown ?? {}) as PayrollBreakdown;
+
+    // 연차 미사용수당 정산(옵션): 그리드 저장과 연차 원장 PAYOUT 기록을 트랜잭션으로 원자 처리.
+    //  이중지급 방어 2중 — ①원장 잔여 검증(정산분만큼 차감돼 재정산 자동 차단) ②이 급여 항목으로 이미
+    //  정산했으면 409(더블클릭·재저장 방어). 정정은 연차 관리 화면(ADJUST)에서.
+    let leavePayoutDays: number | null = null;
+    if (body.annualLeavePayout && typeof body.annualLeavePayout === "object") {
+      const days = Number(body.annualLeavePayout.days);
+      if (!Number.isFinite(days) || days <= 0 || days > 30 || Math.round(days * 4) !== days * 4) {
+        return NextResponse.json({ success: false, message: "정산 일수는 0.25일 단위, 최대 30일입니다." }, { status: 400 });
+      }
+      const [sums, dupPayout] = await Promise.all([
+        prisma.annualLeaveEntry.aggregate({
+          where: { agencyId: run.agencyId, workerId: existingItem.workerId },
+          _sum: { days: true },
+        }),
+        prisma.annualLeaveEntry.findFirst({ where: { payrollItemId: itemIdBig, kind: "PAYOUT" }, select: { id: true } }),
+      ]);
+      const balance = Number(sums._sum.days ?? 0);
+      if (dupPayout) {
+        return NextResponse.json({ success: false, message: "이미 이 급여 항목으로 연차를 정산했습니다. 정정은 연차 관리에서 해주세요." }, { status: 409 });
+      }
+      if (balance < days) {
+        return NextResponse.json({ success: false, message: `잔여 연차(${balance}일)가 부족합니다.` }, { status: 409 });
+      }
+      leavePayoutDays = days;
+    }
 
     let gp: number, td: number, breakdown: any;
 
@@ -126,15 +152,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
       breakdown = { ...prevBd, manualTotalEdited: true };
     }
 
-    const updated = await prisma.payrollItem.update({
-      where: { id: itemIdBig },
-      data: {
-        grossPay: new Decimal(gp),
-        totalDeduction: new Decimal(td),
-        netPay: new Decimal(gp - td),
-        breakdown,
-      },
-      include: { user: { select: { id: true, workerName: true, loginId: true } } },
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.payrollItem.update({
+        where: { id: itemIdBig },
+        data: {
+          grossPay: new Decimal(gp),
+          totalDeduction: new Decimal(td),
+          netPay: new Decimal(gp - td),
+          breakdown,
+        },
+        include: { user: { select: { id: true, workerName: true, loginId: true } } },
+      });
+      if (leavePayoutDays != null) {
+        const todayKstISO = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        await tx.annualLeaveEntry.create({
+          data: {
+            agencyId: run.agencyId, workerId: u.workerId, kind: "PAYOUT", days: -leavePayoutDays,
+            effectiveDate: new Date(`${todayKstISO}T00:00:00.000Z`),
+            sourceLabel: `급여 정산(${run.yearMonth})`,
+            createdByManagerId: scope.managerId ?? null,
+            payrollItemId: u.id,
+          },
+        });
+      }
+      return u;
     });
 
     // 증빙: 급여 항목 수동 편집(연차미사용수당 등 1회성 수당·당월 예외 공제 0 포함)을 감사로그에 기록.
@@ -145,7 +186,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
         entityType: "PayrollItem",
         entityId: itemIdBig,
         action: "update",
-        summary: `급여 항목 수동 수정 (${run.yearMonth})${earlyLeaveExempt ? " · 당월 예외(조기퇴사): 국민연금·건강·장기요양 공제 0" : ""}`,
+        summary: `급여 항목 수동 수정 (${run.yearMonth})${earlyLeaveExempt ? " · 당월 예외(조기퇴사): 국민연금·건강·장기요양 공제 0" : ""}${leavePayoutDays != null ? ` · 연차 미사용수당 정산 ${leavePayoutDays}일` : ""}`,
         after: { grossPay: gp, totalDeduction: td, netPay: gp - td, workerId: updated.workerId.toString() },
       });
     } catch (e) { console.error("[payroll item PATCH audit]", e); }
