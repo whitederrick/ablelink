@@ -32,11 +32,13 @@ export async function GET(req: NextRequest) {
         periodStart: { lte: endBound },
         periodEnd: { gte: startBound },
       },
-      select: { workerId: true, docType: true, traineeId: true },
+      select: { workerId: true, docType: true, traineeId: true, siteId: true },
     });
 
+    // ★siteId 포함 — 멀티현장 워커는 현장별 행이므로, A현장 제출이 B현장 행까지 '제출됨'으로 가리면 안 된다.
+    //  (소비처는 /manager/docs 단일 — 클라 submittedKey와 형식 동기.)
     const keys = runs.map(
-      (r) => `${r.workerId.toString()}:${r.docType}:${r.traineeId != null ? r.traineeId.toString() : ""}`,
+      (r) => `${r.workerId.toString()}:${r.docType}:${r.traineeId != null ? r.traineeId.toString() : ""}:${r.siteId.toString()}`,
     );
 
     return NextResponse.json({ success: true, keys: Array.from(new Set(keys)) });

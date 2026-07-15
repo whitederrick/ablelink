@@ -17,9 +17,12 @@ export async function GET(request: NextRequest) {
 
     const workerId = BigInt(workerIdRaw);
 
-    // 직무지도원의 현장 배정
+    // 직무지도원의 현장 배정 — 멀티현장은 assignmentId로 현장 지정(preview C2와 동일 패턴).
+    //  지정 배정도 workerId+agencyId 스코프 안에서만 조회(타기관/타워커 배정 지정 불가). 미지정=최신 배정(무회귀).
+    const assignmentIdRaw = searchParams.get("assignmentId");
+    const assignmentId = assignmentIdRaw && /^[0-9]+$/.test(assignmentIdRaw) ? BigInt(assignmentIdRaw) : null;
     const assignment = await prisma.siteAssignment.findFirst({
-      where: { workerId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] }, agencyId: scope.agencyId },
+      where: { workerId, status: { in: ["ASSIGNED","CONFIRMED","ACTIVE"] }, agencyId: scope.agencyId, ...(assignmentId ? { id: assignmentId } : {}) },
       select: { siteId: true },
       orderBy: { assignedAt: "desc" },
     });

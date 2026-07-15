@@ -343,14 +343,22 @@ export async function GET(req: NextRequest) {
           const phone = site?.businessContactPhone;
           if (!phone) continue; // 연락처 없으면 자동발송 불가 → 스킵
           const token = randomUUID();
-          await prisma.satisfactionSurvey.create({
-            data: {
-              agencyId: c.agencyId, workerId: c.workerId, contractId: c.id,
-              recipientName: site?.businessContactName || null, recipientPhone: phone,
-              siteName: c.siteName || null, token, status: "PENDING", auto: true,
-              expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), sentAt: now,
-            },
-          });
+          // ★중복 발송 방어 2중: 위 findFirst(dup)는 겹침 실행 레이스에 뚫린다 → DB partial unique
+          //  (auto=true, contract_id — 마이그 20260715090000)가 최종 방어. 동시 실행 시 늦은 쪽 create가
+          //  P2002로 실패 → 알림톡 발송 전 스킵(조사·알림톡 모두 1건 보장). P2002는 오류가 아니라 정상 스킵.
+          try {
+            await prisma.satisfactionSurvey.create({
+              data: {
+                agencyId: c.agencyId, workerId: c.workerId, contractId: c.id,
+                recipientName: site?.businessContactName || null, recipientPhone: phone,
+                siteName: c.siteName || null, token, status: "PENDING", auto: true,
+                expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), sentAt: now,
+              },
+            });
+          } catch (ce: unknown) {
+            if ((ce as { code?: string } | null)?.code === "P2002") continue; // 다른 실행이 먼저 생성 — 발송 없이 스킵
+            throw ce;
+          }
           const surveyUrl = `${baseUrl}/survey/${token}`;
           await sendAlimtalk({
             phone, name: site?.businessContactName || "담당자",

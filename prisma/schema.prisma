@@ -978,6 +978,10 @@ model SatisfactionSurvey {
   @@index([agencyId, status])
   @@index([workerId])
   @@index([token])
+  // ★DB에만 존재하는 partial unique(Prisma 미지원, 마이그 20260715090000):
+  //   UNIQUE (contract_id) WHERE auto = true AND contract_id IS NOT NULL
+  //   cron §5 자동발송 중복(조사 2건+알림톡 2건) 방어. 수동(auto=false)·재요청 플로는 조건 밖.
+  //   ⚠️`db push`·`migrate dev`가 drop 후보로 잡을 수 있음 — migrate deploy(파일 기반)로만 적용/유지.
   @@map("satisfaction_surveys")
 }
 

@@ -40,12 +40,15 @@ const RUN_DOC_TYPE: Record<DocType, string> = {
   "adaptation-daily-log": "POST_EMPLOY_ADAPT_LOG",
   "adaptation-final-eval":"ADAPTATION_COMPREHENSIVE_EVAL",
 };
-function submittedKey(workerId: string, docType: DocType, traineeId?: string) {
-  return `${workerId}:${RUN_DOC_TYPE[docType]}:${traineeId ?? ""}`;
+// ★siteId 포함(서버 /api/admin/docs/submitted와 형식 동기) — 멀티현장 워커의 A현장 제출이 B현장 행을 가리지 않게.
+function submittedKey(workerId: string, docType: DocType, siteId: string, traineeId?: string) {
+  return `${workerId}:${RUN_DOC_TYPE[docType]}:${traineeId ?? ""}:${siteId}`;
 }
 
-interface Worker {
-  workerId: string; workerName: string; siteName: string; serviceStep: string;
+// 행 = 배정(워커×현장). 멀티현장 워커는 현장 수만큼 행 — 각 행이 해당 현장 문서로 주소지정된다.
+interface DocRow {
+  assignmentId: string; workerId: string; workerName: string;
+  siteId: string; siteName: string; serviceStep: string;
   trainees: { id: string; name: string }[];
 }
 
@@ -57,8 +60,8 @@ function defaultPeriod() {
 
 export default function AdminDocsPage() {
   const def = defaultPeriod();
-  const [workers, setWorkers]       = useState<Worker[]>([]);
-  const [selectedWorker, setSelectedWorker] = useState("");
+  const [rows, setRows]             = useState<DocRow[]>([]);
+  const [selectedAssignment, setSelectedAssignment] = useState("");
   const [docType,       setDocType]       = useState<DocType | "">("");
   const [traineeId,     setTraineeId]     = useState("");
   const [periodStart,   setPeriodStart]   = useState(def.start);
@@ -70,18 +73,12 @@ export default function AdminDocsPage() {
 
   useEffect(() => {
     setLoadingWorkers(true);
-    fetch("/api/admin/workers?pageSize=100")
+    // 현장(배정)별 행 — 멀티현장 워커는 배정 수만큼 행(각 현장 문서 주소지정).
+    fetch("/api/admin/docs/workers")
       .then(r => r.json())
       .then(d => {
         if (d.success) {
-          setWorkers((d.data || [])
-            .filter((u: any) => u.activeAssignment)
-            .map((u: any) => ({
-              workerId: u.id, workerName: u.workerName,
-              siteName: u.activeAssignment?.siteName || "-",
-              serviceStep: u.activeAssignment?.serviceStep || "FIELD_TRAINING",
-              trainees: [],
-            })));
+          setRows(((d.data || []) as Omit<DocRow, "trainees">[]).map((a) => ({ ...a, trainees: [] })));
         }
       })
       .finally(() => setLoadingWorkers(false));
@@ -95,39 +92,45 @@ export default function AdminDocsPage() {
       .catch(() => {});
   }, [periodStart, periodEnd]);
 
-  // 직무지도원 선택 시 훈련생 로드
+  const row = rows.find(c => c.assignmentId === selectedAssignment);
+
+  // 배정(현장) 선택 시 훈련생 로드 — assignmentId로 해당 현장 재적 훈련생만(멀티현장 타현장 훈련생 혼입 방지)
   useEffect(() => {
-    if (!selectedWorker) return;
-    fetch(`/api/admin/docs/trainees?workerId=${selectedWorker}`)
-      .then(r => r.json())
+    if (!selectedAssignment) return;
+    const r = rows.find(c => c.assignmentId === selectedAssignment);
+    if (!r) return;
+    fetch(`/api/admin/docs/trainees?workerId=${r.workerId}&assignmentId=${r.assignmentId}`)
+      .then(res => res.json())
       .then(d => {
         if (d.success && d.trainees) {
-          setWorkers(prev => prev.map(c => c.workerId === selectedWorker ? { ...c, trainees: d.trainees } : c));
+          setRows(prev => prev.map(c => c.assignmentId === selectedAssignment ? { ...c, trainees: d.trainees } : c));
         }
       });
-  }, [selectedWorker]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAssignment]);
 
-  const worker = workers.find(c => c.workerId === selectedWorker);
   const curDoc = DOC_DEFS.find(d => d.id === docType);
   const needsTrainee = curDoc?.needsTrainee ?? false;
-  const ready = !!selectedWorker && !!docType && (!needsTrainee || !!traineeId);
+  const ready = !!selectedAssignment && !!docType && (!needsTrainee || !!traineeId);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return workers.filter(c => !q || c.workerName.toLowerCase().includes(q) || c.siteName.toLowerCase().includes(q));
-  }, [workers, query]);
+    return rows.filter(c => !q || c.workerName.toLowerCase().includes(q) || c.siteName.toLowerCase().includes(q));
+  }, [rows, query]);
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   useEffect(() => { setPage(1); }, [query]);
 
   function previewUrl() {
-    const p = new URLSearchParams({ workerId: selectedWorker, docType, periodStart, periodEnd, ...(traineeId ? { traineeId } : {}) });
+    if (!row) return "";
+    // assignmentId 명시 = 이 행(현장)의 배정으로 주소지정(preview C2 — 미지정 시 최신 배정 폴백이라 멀티현장 오지정).
+    const p = new URLSearchParams({ workerId: row.workerId, assignmentId: row.assignmentId, docType, periodStart, periodEnd, ...(traineeId ? { traineeId } : {}) });
     return `/api/admin/docs/preview?${p.toString()}`;
   }
 
-  function pickDoc(wId: string, dId: DocType) {
-    setSelectedWorker(wId);
+  function pickDoc(aId: string, dId: DocType) {
+    setSelectedAssignment(aId);
     setDocType(dId);
     setTraineeId("");
   }
@@ -161,7 +164,7 @@ export default function AdminDocsPage() {
           {loadingWorkers ? (
             <p className={T.empty}>불러오는 중…</p>
           ) : filtered.length === 0 ? (
-            <p className={T.empty}>{workers.length === 0 ? "배정된 직무지도원이 없습니다." : "조건에 맞는 직무지도원이 없습니다."}</p>
+            <p className={T.empty}>{rows.length === 0 ? "배정된 직무지도원이 없습니다." : "조건에 맞는 직무지도원이 없습니다."}</p>
           ) : (
             <div className={T.tableWrap}>
               <table className="w-full">
@@ -174,7 +177,7 @@ export default function AdminDocsPage() {
                   {pageItems.map(c => {
                     const isAdapt = c.serviceStep === "ADAPTATION";
                     return (
-                      <tr key={c.workerId} className={`${T.trBase} ${selectedWorker === c.workerId ? "bg-slate-50" : ""}`}>
+                      <tr key={c.assignmentId} className={`${T.trBase} ${selectedAssignment === c.assignmentId ? "bg-slate-50" : ""}`}>
                         <td className="px-2.5 py-1.5 align-middle whitespace-nowrap">
                           <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[12px] font-black ${isAdapt ? "bg-teal-50 text-teal-600" : "bg-sky-50 text-sky-600"}`}>{isAdapt ? "적응지도" : "지원훈련"}</span>
                         </td>
@@ -184,12 +187,12 @@ export default function AdminDocsPage() {
                           <div className="flex flex-nowrap items-center gap-2">
                             {DOC_DEFS.map(doc => {
                               const active = docActive(doc.kind, c.serviceStep);
-                              const selected = selectedWorker === c.workerId && docType === doc.id;
+                              const selected = selectedAssignment === c.assignmentId && docType === doc.id;
                               // 훈련생 비요구 문서(출근부)는 버튼 단계에서 제출여부 확정 가능 → 제출됐으면 비활성.
-                              const submittedHere = !doc.needsTrainee && submittedKeys.has(submittedKey(c.workerId, doc.id));
+                              const submittedHere = !doc.needsTrainee && submittedKeys.has(submittedKey(c.workerId, doc.id, c.siteId));
                               const disabled = !active || submittedHere;
                               return (
-                                <button key={doc.id} disabled={disabled} onClick={() => pickDoc(c.workerId, doc.id)}
+                                <button key={doc.id} disabled={disabled} onClick={() => pickDoc(c.assignmentId, doc.id)}
                                   title={submittedHere ? "공단 제출 완료 — '공단 제출 내역'에서 확인" : undefined}
                                   className={`inline-flex h-7 shrink-0 items-center rounded-md border px-2 text-[12px] font-bold transition ${
                                     selected ? "border-slate-950 bg-slate-950 text-white"
@@ -217,7 +220,7 @@ export default function AdminDocsPage() {
 
         {/* 우측: 선택 문서 미리보기 */}
         <div className="lg:sticky lg:top-4 h-fit space-y-3">
-          {!selectedWorker || !docType ? (
+          {!selectedAssignment || !docType ? (
             <div className={`${T.card} text-center`}>
               <p className="py-10 text-sm font-semibold text-slate-300">좌측에서 직무지도원과 문서를<br />선택하면 미리보기가 표시됩니다.</p>
             </div>
@@ -227,13 +230,13 @@ export default function AdminDocsPage() {
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-                    <p className="text-sm font-black text-slate-900">{worker?.workerName}{worker?.siteName && worker.siteName !== "-" ? ` · ${worker.siteName}` : ""} · {curDoc?.label}</p>
+                    <p className="text-sm font-black text-slate-900">{row?.workerName}{row?.siteName && row.siteName !== "-" ? ` · ${row.siteName}` : ""} · {curDoc?.label}</p>
                     {needsTrainee && (
                       <div className="flex flex-wrap items-center gap-1.5 border-l border-slate-200 pl-5">
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[13px] font-black text-slate-700">훈련생</span>
-                        {(worker?.trainees || []).length === 0 ? (
+                        {(row?.trainees || []).length === 0 ? (
                           <span className="text-xs font-semibold text-slate-400">담당 훈련생 없음</span>
-                        ) : (worker?.trainees || []).map(t => (
+                        ) : (row?.trainees || []).map(t => (
                           <button key={t.id} onClick={() => setTraineeId(t.id)}
                             className={`inline-flex h-7 items-center rounded-md border px-2 text-[12px] font-bold transition ${
                               traineeId === t.id ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
@@ -249,7 +252,7 @@ export default function AdminDocsPage() {
               </div>
 
               {/* 미리보기 */}
-              {ready && docType && submittedKeys.has(submittedKey(selectedWorker, docType, needsTrainee ? traineeId : undefined)) ? (
+              {ready && docType && row && submittedKeys.has(submittedKey(row.workerId, docType, row.siteId, needsTrainee ? traineeId : undefined)) ? (
                 <div className="flex h-[120px] flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center">
                   <p className="text-sm font-bold text-slate-500">이미 공단에 제출된 문서입니다.</p>
                   <p className="text-xs font-semibold text-slate-400">제출본은 ‘공단 제출 내역’에서 확인하세요. (문서 조회에서는 제출 전 문서만 표시)</p>
