@@ -816,6 +816,13 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
                   </button>
                   <button
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    onClick={() => { setShowProfile(false); router.push("/worker/leave"); }}
+                  >
+                    <CalendarCheck className="h-4 w-4 text-slate-400" />
+                    나의 연차
+                  </button>
+                  <button
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                     onClick={() => { setShowProfile(false); router.push("/worker/profile"); }}
                   >
                     <User className="h-4 w-4 text-slate-400" />

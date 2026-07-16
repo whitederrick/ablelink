@@ -120,14 +120,37 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ wor
       if (state.balance < days) {
         return NextResponse.json({ success: false, message: `잔여 연차(${state.balance}일)가 부족합니다.` }, { status: 409 });
       }
-      const created = await prisma.annualLeaveEntry.create({
-        data: {
-          agencyId: scope.agencyId, workerId, kind: "USE", days: -days,
-          effectiveDate: new Date(`${effectiveDate}T00:00:00.000Z`),
-          memo: memo || null, createdByManagerId: scope.managerId,
-        },
-        select: { id: true },
+      // Phase7: 매니저 직접 등록도 유효하되 직무지도원 확인(동의) 플로 필수 —
+      //  원장 USE와 확인 요청(MANAGER_ENTRY_CONFIRM)을 한 트랜잭션으로 생성.
+      const created = await prisma.$transaction(async (tx) => {
+        const entry = await tx.annualLeaveEntry.create({
+          data: {
+            agencyId: scope.agencyId, workerId, kind: "USE", days: -days,
+            effectiveDate: new Date(`${effectiveDate}T00:00:00.000Z`),
+            memo: memo || null, createdByManagerId: scope.managerId,
+          },
+          select: { id: true },
+        });
+        await tx.annualLeaveRequest.create({
+          data: {
+            agencyId: scope.agencyId, workerId, kind: "MANAGER_ENTRY_CONFIRM", status: "PENDING",
+            effectiveDate: new Date(`${effectiveDate}T00:00:00.000Z`), days,
+            reason: memo || null, ledgerEntryId: entry.id, createdByManagerId: scope.managerId,
+          },
+        });
+        return entry;
       });
+      // 워커 확인 요청 알림 — 실패 비치명적.
+      try {
+        await prisma.workerNotice.create({
+          data: {
+            workerId, agencyId: scope.agencyId,
+            title: "연차 사용 등록 확인 요청",
+            body: `담당자가 연차 사용을 등록했습니다.\n사용일 ${effectiveDate} · ${days}일${memo ? `\n메모: ${memo}` : ""}\n내 연차에서 확인 또는 이의를 선택해 주세요.`,
+            type: "INFO", kind: "NOTICE_INDIVIDUAL", link: "/worker/leave",
+          },
+        });
+      } catch (e) { console.warn("[admin/leave] 워커 확인요청 알림 실패:", e); }
       await audit(scope, {
         entityType: "AnnualLeave", entityId: created.id.toString(), action: "create",
         summary: `연차 사용 등록 ${days}일 (${effectiveDate}) — worker ${workerId}`,
@@ -187,7 +210,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ w
       kind: row.kind, days: Number(row.days), effectiveDate: isoOf(row.effectiveDate),
       memo: row.memo, sourceLabel: row.sourceLabel, workerId: row.workerId.toString(),
     };
-    await prisma.annualLeaveEntry.delete({ where: { id: row.id } });
+    await prisma.$transaction(async (tx) => {
+      await tx.annualLeaveEntry.delete({ where: { id: row.id } });
+      // Phase7: 이 원장 행에 연동된 신청/확인 요청은 무효화(CANCELED) — 워커 화면 잔존 방지.
+      await tx.annualLeaveRequest.updateMany({
+        where: { ledgerEntryId: row.id, status: { in: ["PENDING", "APPROVED", "CONFIRMED", "DISPUTED"] } },
+        data: { status: "CANCELED", resolvedAt: new Date() },
+      });
+    });
     await audit(scope, {
       entityType: "AnnualLeave", entityId: row.id.toString(), action: "delete",
       summary: `연차 ${row.kind === "USE" ? "사용" : "조정"} 행 삭제(${Number(row.days)}일, ${isoOf(row.effectiveDate)}) — worker ${workerId}`,

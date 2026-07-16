@@ -110,6 +110,7 @@ model Worker {
   notificationSettings WorkerNotificationSetting?
   notices              WorkerNotice[]
   annualLeaveEntries   AnnualLeaveEntry[]
+  annualLeaveRequests  AnnualLeaveRequest[]
 
   // ✅ 인력 pool / 매칭
   professions WorkerProfession[]
@@ -571,6 +572,7 @@ model Agency {
   contractClauses       AgencyContractClause[]
   satisfactionSurveys   SatisfactionSurvey[]
   annualLeaveEntries    AnnualLeaveEntry[]
+  annualLeaveRequests   AnnualLeaveRequest[]
 
   @@index([planType])
   @@map("agencies")
@@ -1039,6 +1041,56 @@ model AnnualLeaveEntry {
   @@index([workerId, effectiveDate])
   @@index([agencyId, kind, expiresAt]) // cron 소멸 스캔용
   @@map("annual_leave_entries")
+}
+
+// 연차 신청/확인 워크플로(Phase7, 2026-07-16) — 원장(AnnualLeaveEntry)과 분리된 요청 상태 머신.
+//  WORKER_REQUEST: 워커 신청 → 매니저 승인(USE 원장 생성)/반려(사유).
+//  MANAGER_ENTRY_CONFIRM: 매니저 직접 USE 등록 → 워커 확인/이의(사유). 원장 행은 등록 시점에 이미 존재.
+enum LeaveRequestKind {
+  WORKER_REQUEST        // 워커가 신청(달력 선택)
+  MANAGER_ENTRY_CONFIRM // 매니저 직접 등록에 대한 워커 확인 요청
+}
+
+enum LeaveRequestStatus {
+  PENDING   // 대기(워커 신청=매니저 처리 대기 / 매니저 등록=워커 확인 대기)
+  APPROVED  // 승인 — USE 원장 행 생성됨(ledgerEntryId)
+  REJECTED  // 반려 — responseNote에 사유
+  CONFIRMED // 워커 확인(매니저 등록 동의)
+  DISPUTED  // 워커 이의 — responseNote에 사유(원장 정정은 매니저가 삭제/조정으로)
+  CANCELED  // 무효화(대상 원장 행 삭제 등)
+}
+
+model AnnualLeaveRequest {
+  id       BigInt @id @default(autoincrement())
+  agencyId BigInt @map("agency_id")
+  workerId BigInt @map("worker_id")
+
+  kind   LeaveRequestKind
+  status LeaveRequestStatus @default(PENDING)
+
+  // 사용(예정)일 — 원장과 동일 관례(해당 날짜의 UTC 자정). days는 양수(0.25 단위).
+  effectiveDate DateTime @map("effective_date")
+  days          Decimal  @db.Decimal(6, 2)
+
+  reason       String? // 신청 사유(워커) / 등록 메모(매니저)
+  responseNote String? @map("response_note") // 반려(매니저)·이의(워커) 사유
+
+  // 승인 시 생성된 USE 원장 행 / MANAGER_ENTRY_CONFIRM의 대상 원장 행. 원장 행 삭제 시 CANCELED 처리.
+  ledgerEntryId       BigInt?   @map("ledger_entry_id")
+  createdByManagerId  BigInt?   @map("created_by_manager_id") // MANAGER_ENTRY_CONFIRM 생성 매니저
+  resolvedByManagerId BigInt?   @map("resolved_by_manager_id") // WORKER_REQUEST 승인/반려 매니저
+  resolvedAt          DateTime? @map("resolved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  agency Agency @relation(fields: [agencyId], references: [id])
+  worker Worker @relation(fields: [workerId], references: [id])
+
+  @@index([agencyId, status, createdAt]) // 매니저 인박스
+  @@index([workerId, status, createdAt]) // 워커 신청 내역·확인 대기
+  @@index([ledgerEntryId]) // 원장 행 삭제 시 연동 취소 스캔
+  @@map("annual_leave_requests")
 }
 
 enum ContractStatus {

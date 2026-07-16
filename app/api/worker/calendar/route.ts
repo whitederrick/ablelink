@@ -229,6 +229,21 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Phase7: 이 달 연차 사용일(원장 USE, 워커 전체 기관) — '연차' 배지 표시 + 결근(RED) 합성 제외.
+    //  연차 사용일은 발생 배치(runAccrual)에서도 출근 간주이므로 캘린더 결근 표시와 모순되지 않게 맞춘다.
+    const leaveRows = await prisma.annualLeaveEntry.findMany({
+      where: {
+        workerId, kind: "USE",
+        effectiveDate: { gte: new Date(startDate + "T00:00:00.000Z"), lte: new Date(endDate + "T00:00:00.000Z") },
+      },
+      select: { effectiveDate: true, days: true },
+    });
+    const leaveDays: Record<string, number> = {};
+    for (const r of leaveRows) {
+      const k = r.effectiveDate.toISOString().slice(0, 10);
+      leaveDays[k] = Math.round(((leaveDays[k] ?? 0) + Math.abs(Number(r.days))) * 100) / 100;
+    }
+
     // 배정 기간 내 + 오늘 이전 날짜 중 출근 기록 없는 날 → RED (주말·휴무는 위에서 dayMap에 있어 제외됨)
     if (assignment) {
       // ★KST 기준(월간 라우트·absentDays와 동일). UTC 변환은 시각값 저장 배정에서 하루 어긋나 RED가 밀렸다.
@@ -270,8 +285,8 @@ export async function GET(request: NextRequest) {
         const key = cur.toISOString().slice(0, 10);
         const dow = cur.getUTCDay();
         const isWeekend = dow === 0 || dow === 6;
-        // 활성 배정 기간 내 · 평일 · 휴무 아님 · 활성 배정 출근기록 없는 날 → RED(선택현장 결근).
-        if (key >= startDate && key <= endDate && !isWeekend && !allHolidays[key] && !activeRecordDates.has(key)) {
+        // 활성 배정 기간 내 · 평일 · 휴무 아님 · 활성 배정 출근기록 없음 · 연차 아님 → RED(선택현장 결근).
+        if (key >= startDate && key <= endDate && !isWeekend && !allHolidays[key] && !activeRecordDates.has(key) && !leaveDays[key]) {
           dayMap[key] = {
             status:        "RED",
             attendanceId:  "",
@@ -320,6 +335,8 @@ export async function GET(request: NextRequest) {
         days: dayMap,
         holidays: allHolidays,
         customHolidays,
+        leaveDays, // Phase7: "YYYY-MM-DD" → 연차 사용 일수(배지 표시용)
+
         totalWorkDays,
         totalGreenDays,
         totalOrangeDays,

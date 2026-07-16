@@ -41,6 +41,7 @@ interface CalendarData {
   days: Record<string, DayData>;
   holidays: Record<string, string>;
   customHolidays: Record<string, string>;
+  leaveDays?: Record<string, number>; // Phase7: "YYYY-MM-DD" → 연차 사용 일수
   totalWorkDays: number;
   totalGreenDays: number;
   totalOrangeDays: number;
@@ -419,6 +420,7 @@ export default function CalendarPage() {
               const isWeekend = idx % 7 === 0 || idx % 7 === 6;
               const isHoliday = status === "HOLIDAY";
               const isNationalHoliday = isHoliday && !data?.customHolidays?.[key];
+              const leaveUsed = data?.leaveDays?.[key]; // Phase7: 연차 사용일 배지
 
               return (
                 <button
@@ -452,6 +454,9 @@ export default function CalendarPage() {
                   {isNationalHoliday && (
                     <span className="text-[8px] font-black text-slate-400 leading-none">공휴</span>
                   )}
+                  {leaveUsed ? (
+                    <span className="text-[8px] font-black text-emerald-600 leading-none">연차{leaveUsed < 1 ? ` ${leaveUsed}` : ""}</span>
+                  ) : null}
                 </button>
               );
             })}
