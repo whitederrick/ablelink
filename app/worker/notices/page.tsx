@@ -16,6 +16,7 @@ const KIND: Record<string, { label: string; cls: string }> = {
   NOTICE_ALL:        { label: "전체", cls: "bg-slate-200 text-slate-700" },
   NOTICE_GROUP:      { label: "그룹", cls: "bg-teal-100 text-teal-700" },
   NOTICE_INDIVIDUAL: { label: "개별", cls: "bg-emerald-100 text-emerald-700" },
+  SYSTEM:            { label: "시스템", cls: "bg-rose-100 text-rose-700" }, // 운영자 긴급 전체공지(개별로 오폴백되던 것 수정)
 };
 const TYPE_CLS: Record<string, string> = {
   WARN: "bg-amber-50 text-amber-600",

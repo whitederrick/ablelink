@@ -111,6 +111,7 @@ model Worker {
   notices              WorkerNotice[]
   annualLeaveEntries   AnnualLeaveEntry[]
   annualLeaveRequests  AnnualLeaveRequest[]
+  noticeGroupMembers   NoticeGroupMember[]
 
   // ✅ 인력 pool / 매칭
   professions WorkerProfession[]
@@ -573,6 +574,7 @@ model Agency {
   satisfactionSurveys   SatisfactionSurvey[]
   annualLeaveEntries    AnnualLeaveEntry[]
   annualLeaveRequests   AnnualLeaveRequest[]
+  noticeGroups          NoticeGroup[]
 
   @@index([planType])
   @@map("agencies")
@@ -1895,6 +1897,36 @@ model WorkerNotice {
   @@index([workerId, readAt])
   @@index([agencyId])
   @@map("worker_notices")
+}
+
+// 알림 커스텀 수신 그룹(2026-07-16) — 매니저가 임의 워커 묶음을 저장해 반복 발송.
+//  발송 시 멤버는 '현재 활성 배정' 필터를 다시 거친다(퇴사·이적 워커 오발송 방지, 발송 API가 담당).
+model NoticeGroup {
+  id                 BigInt   @id @default(autoincrement())
+  agencyId           BigInt   @map("agency_id")
+  name               String
+  createdByManagerId BigInt?  @map("created_by_manager_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  agency  Agency              @relation(fields: [agencyId], references: [id])
+  members NoticeGroupMember[]
+
+  @@unique([agencyId, name]) // 기관 내 그룹명 중복 방지
+  @@map("notice_groups")
+}
+
+model NoticeGroupMember {
+  id       BigInt @id @default(autoincrement())
+  groupId  BigInt @map("group_id")
+  workerId BigInt @map("worker_id")
+
+  group  NoticeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  worker Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, workerId])
+  @@index([workerId])
+  @@map("notice_group_members")
 }
 
 // ------------------------------------------------------

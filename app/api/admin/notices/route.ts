@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { filterAgencyWorkers } from "@/lib/noticeTargets";
 
 export async function GET(req: NextRequest) {
   try {
@@ -63,8 +64,8 @@ export async function POST(req: NextRequest) {
     if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
 
     const body = await req.json().catch(() => ({}));
-    // audience: "ALL"(전체) | "GROUP"(현장 단위) | "INDIVIDUAL"(개별)
-    const { userIds, siteId, audience, title, body: msgBody, type = "INFO", yearMonth, link } = body;
+    // audience: "ALL"(전체) | "GROUP"(현장 siteId 또는 커스텀 그룹 groupId) | "INDIVIDUAL"(개별)
+    const { userIds, siteId, groupId, audience, title, body: msgBody, type = "INFO", yearMonth, link } = body;
 
     if (!title || !msgBody)
       return NextResponse.json({ success: false, message: "title, body 필수" }, { status: 400 });
@@ -88,25 +89,41 @@ export async function POST(req: NextRequest) {
 
     if (mode === "INDIVIDUAL") {
       kind = "NOTICE_INDIVIDUAL";
-      const requested = (Array.isArray(userIds) ? userIds : [])
-        .map((id: unknown) => parseBigInt(id)).filter((id): id is bigint => id !== null);
       // ✅ 크로스테넌트 방지: 요청된 워커 중 "내 위탁기관 소속"만 대상으로.
-      if (requested.length > 0) {
-        const valid = await prisma.siteAssignment.findMany({
-          where: { agencyId, workerId: { in: requested }, status: { in: [...activeStatuses] } },
-          select: { workerId: true },
-        });
-        targetIds = [...new Map(valid.map(a => [a.workerId.toString(), a.workerId])).values()];
+      //  운영자(admin)는 기관 스코프 없이 '활성 배정 보유' 검증만(종전 동작 보존 — agencyId=undefined 쿼리와 동일).
+      if (isAdmin) {
+        const requested = (Array.isArray(userIds) ? userIds : [])
+          .map((id: unknown) => parseBigInt(id)).filter((id): id is bigint => id !== null);
+        if (requested.length > 0) {
+          const valid = await prisma.siteAssignment.findMany({
+            where: { workerId: { in: requested }, status: { in: [...activeStatuses] } },
+            select: { workerId: true },
+          });
+          targetIds = [...new Map(valid.map(a => [a.workerId.toString(), a.workerId])).values()];
+        }
+      } else {
+        targetIds = await filterAgencyWorkers(agencyId!, userIds);
       }
     } else if (mode === "GROUP") {
       kind = "NOTICE_GROUP";
+      const gid = parseBigInt(groupId);
       const sid = parseBigInt(siteId);
-      if (!sid) return NextResponse.json({ success: false, message: "siteId가 필요합니다." }, { status: 400 });
-      const assignments = await prisma.siteAssignment.findMany({
-        where: { agencyId, siteId: sid, status: { in: [...activeStatuses] } },
-        select: { workerId: true },
-      });
-      targetIds = [...new Map(assignments.map(a => [a.workerId.toString(), a.workerId])).values()];
+      if (gid) {
+        // 커스텀 그룹: 내 기관 그룹만(404) + 멤버를 발송 시점 활성 배정으로 재필터(퇴사·이적 오발송 방지).
+        const group = await prisma.noticeGroup.findFirst({
+          where: { id: gid, agencyId }, select: { members: { select: { workerId: true } } },
+        });
+        if (!group) return NextResponse.json({ success: false, message: "그룹을 찾을 수 없습니다." }, { status: 404 });
+        targetIds = await filterAgencyWorkers(agencyId!, group.members.map(m => m.workerId.toString()));
+      } else if (sid) {
+        const assignments = await prisma.siteAssignment.findMany({
+          where: { agencyId, siteId: sid, status: { in: [...activeStatuses] } },
+          select: { workerId: true },
+        });
+        targetIds = [...new Map(assignments.map(a => [a.workerId.toString(), a.workerId])).values()];
+      } else {
+        return NextResponse.json({ success: false, message: "siteId 또는 groupId가 필요합니다." }, { status: 400 });
+      }
     } else {
       kind = "NOTICE_ALL";
       const assignments = await prisma.siteAssignment.findMany({

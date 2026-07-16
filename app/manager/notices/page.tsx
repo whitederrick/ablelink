@@ -21,6 +21,7 @@ type Worker  = { id: string; workerName: string; siteName: string };
 type Site    = { id: string; companyName: string };
 type SendMode = "ALL" | "GROUP" | "INDIVIDUAL";
 type Notice = { id: string; workerId: string; workerName: string; title: string; body: string; type: string; read: boolean; createdAt: string };
+type NoticeGroup = { id: string; name: string; memberCount: number; members: { workerId: string; workerName: string }[] };
 
 const TYPE_OPTS = [
   { val:"INFO",   label:"일반 안내",  cls:"bg-sky-100 text-sky-700" },
@@ -28,12 +29,124 @@ const TYPE_OPTS = [
   { val:"REJECT", label:"반려",       cls:"bg-rose-100 text-rose-700" },
 ];
 
+// ── 커스텀 그룹 관리 모달(발송 모달 위에 겹침) ─────────────────────
+function GroupManageModal({ workers, groups, onClose, onChanged }: {
+  workers: Worker[]; groups: NoticeGroup[]; onClose: () => void; onChanged: () => void;
+}) {
+  // editId: null=목록, "new"=생성 폼, 그 외=해당 그룹 수정 폼
+  const [editId, setEditId] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [members, setMembers] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  function openForm(g: NoticeGroup | null) {
+    setEditId(g ? g.id : "new");
+    setName(g?.name ?? "");
+    setMembers(new Set(g?.members.map(m => m.workerId) ?? []));
+    setQuery(""); setError("");
+  }
+
+  async function save() {
+    if (!name.trim()) { setError("그룹 이름을 입력해주세요."); return; }
+    if (members.size === 0) { setError("직무지도원을 선택해주세요."); return; }
+    setBusy(true); setError("");
+    try {
+      const isNew = editId === "new";
+      const res = await fetch(isNew ? "/api/admin/notice-groups" : `/api/admin/notice-groups/${editId}`, {
+        method: isNew ? "POST" : "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), workerIds: [...members] }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || "저장 실패");
+      onChanged(); setEditId(null);
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "저장 실패"); }
+    finally { setBusy(false); }
+  }
+
+  async function remove(g: NoticeGroup) {
+    if (!window.confirm(`'${g.name}' 그룹을 삭제할까요? (발송된 알림은 유지됩니다)`)) return;
+    setBusy(true); setError("");
+    try {
+      const res = await fetch(`/api/admin/notice-groups/${g.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || "삭제 실패");
+      onChanged();
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "삭제 실패"); }
+    finally { setBusy(false); }
+  }
+
+  const filtered = workers.filter(w =>
+    !query.trim() || w.workerName.includes(query.trim()) || (w.siteName ?? "").includes(query.trim()));
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4" onClick={() => !busy && onClose()}>
+      <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-base font-black text-slate-900">커스텀 그룹 관리</h3>
+          <button onClick={() => !busy && onClose()} className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-slate-50"><X className="h-4 w-4" /></button>
+        </div>
+
+        {editId === null ? (
+          <>
+            <div className="flex-1 space-y-2 overflow-y-auto">
+              {groups.length === 0 ? (
+                <p className="py-8 text-center text-sm font-semibold text-slate-400">아직 그룹이 없습니다. 자주 보내는 수신자 묶음을 그룹으로 저장해보세요.</p>
+              ) : groups.map(g => (
+                <div key={g.id} className="flex items-center gap-2 rounded-xl border border-slate-100 bg-white px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-slate-800">{g.name}</p>
+                    <p className="truncate text-xs text-slate-400">{g.memberCount}명 · {g.members.slice(0, 4).map(m => m.workerName).join(", ")}{g.memberCount > 4 ? " 외" : ""}</p>
+                  </div>
+                  <button onClick={() => openForm(g)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50">수정</button>
+                  <button onClick={() => remove(g)} disabled={busy} className="rounded-lg border border-rose-200 px-2.5 py-1 text-xs font-bold text-rose-500 hover:bg-rose-50 disabled:opacity-50">삭제</button>
+                </div>
+              ))}
+            </div>
+            {error && <p className="mt-2 text-sm font-semibold text-rose-600">{error}</p>}
+            <button onClick={() => openForm(null)} className={`mt-3 ${T.btnPrimary}`}>+ 새 그룹 만들기</button>
+          </>
+        ) : (
+          <>
+            <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="그룹 이름 (예: 성동구 오전조)" className={`w-full ${T.input}`} />
+              <input value={query} onChange={e => setQuery(e.target.value)} placeholder="이름·현장 검색" className={`w-full ${T.input}`} />
+              <p className="px-1 text-xs font-semibold text-slate-500">선택 {members.size}명 · 조회 {filtered.length}명</p>
+              <div className="max-h-64 space-y-1.5 overflow-y-auto">
+                {filtered.map(w => (
+                  <label key={w.id} className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-100 bg-white px-3 py-2">
+                    <input type="checkbox" checked={members.has(w.id)}
+                      onChange={e => { const next = new Set(members); if (e.target.checked) next.add(w.id); else next.delete(w.id); setMembers(next); }}
+                      className="h-4 w-4 accent-slate-950" />
+                    <span className="text-sm font-semibold text-slate-800">{w.workerName}</span>
+                    {w.siteName && <span className="ml-auto text-xs text-slate-400">{w.siteName}</span>}
+                  </label>
+                ))}
+              </div>
+            </div>
+            {error && <p className="mt-2 text-sm font-semibold text-rose-600">{error}</p>}
+            <div className="mt-3 flex justify-end gap-2">
+              <button onClick={() => setEditId(null)} className={T.btnSecondary}>목록으로</button>
+              <button onClick={save} disabled={busy} className={T.btnPrimary}>{busy ? "저장 중..." : "저장"}</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── 알림 발송 모달 ──────────────────────────────────────────────
 function SendModal({ workers, sites, onClose, onSent }: {
   workers: Worker[]; sites: Site[]; onClose: () => void; onSent: (n: number) => void;
 }) {
   const [mode, setMode] = useState<SendMode>("ALL");
-  const [selectedSite, setSelectedSite] = useState("");
+  // GROUP 대상: "site:<id>"(현장) | "group:<id>"(커스텀 그룹)
+  const [groupTarget, setGroupTarget] = useState("");
+  const [groups, setGroups] = useState<NoticeGroup[]>([]);
+  const [showManage, setShowManage] = useState(false);
   const [selectedWorkers, setSelectedWorkers] = useState<Set<string>>(new Set());
   const [indivQuery, setIndivQuery] = useState("");
   const [indivSite, setIndivSite] = useState("");
@@ -43,13 +156,26 @@ function SendModal({ workers, sites, onClose, onSent }: {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
+  const loadGroups = useCallback(() => {
+    fetch("/api/admin/notice-groups").then(r => r.json())
+      .then(d => { if (d.success) setGroups(d.groups); }).catch(() => {});
+  }, []);
+  useEffect(() => { loadGroups(); }, [loadGroups]);
+  // 선택된 커스텀 그룹이 관리 모달에서 삭제되면 선택 해제(스테일 발송 방지)
+  useEffect(() => {
+    if (groupTarget.startsWith("group:") && !groups.some(g => `group:${g.id}` === groupTarget)) setGroupTarget("");
+  }, [groups, groupTarget]);
+
   async function send() {
     if(!title.trim()||!body.trim()){setError("제목과 내용을 입력해주세요.");return;}
-    if(mode==="GROUP"&&!selectedSite){setError("현장을 선택해주세요.");return;}
+    if(mode==="GROUP"&&!groupTarget){setError("현장 또는 그룹을 선택해주세요.");return;}
     if(mode==="INDIVIDUAL"&&selectedWorkers.size===0){setError("직무지도원을 선택해주세요.");return;}
     setSending(true); setError("");
     const payload: any = { audience: mode, title: title.trim(), body: body.trim(), type };
-    if(mode==="GROUP") payload.siteId = selectedSite;
+    if(mode==="GROUP"){
+      const [tk, tid] = groupTarget.split(":");
+      if(tk==="group") payload.groupId = tid; else payload.siteId = tid;
+    }
     if(mode==="INDIVIDUAL") payload.userIds = [...selectedWorkers];
     try {
       const res = await fetch("/api/admin/notices",{ method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload) });
@@ -91,7 +217,7 @@ function SendModal({ workers, sites, onClose, onSent }: {
             <div className="mb-3 flex gap-2">
               {([
                 { m:"ALL" as SendMode,        icon:<Users className="h-4 w-4"/>,    label:"전체" },
-                { m:"GROUP" as SendMode,      icon:<Building2 className="h-4 w-4"/>, label:"그룹(현장)" },
+                { m:"GROUP" as SendMode,      icon:<Building2 className="h-4 w-4"/>, label:"그룹(현장·커스텀)" },
                 { m:"INDIVIDUAL" as SendMode, icon:<User className="h-4 w-4"/>,     label:"개별" },
               ]).map(o=>(
                 <button key={o.m} onClick={()=>setMode(o.m)}
@@ -101,10 +227,23 @@ function SendModal({ workers, sites, onClose, onSent }: {
               ))}
             </div>
             {mode==="GROUP"&&(
-              <select value={selectedSite} onChange={e=>setSelectedSite(e.target.value)} className={`w-full ${T.input}`}>
-                <option value="">현장 선택…</option>
-                {sites.map(s=><option key={s.id} value={s.id}>{s.companyName}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select value={groupTarget} onChange={e=>setGroupTarget(e.target.value)} className={`flex-1 ${T.input}`}>
+                  <option value="">현장 또는 그룹 선택…</option>
+                  <optgroup label="현장">
+                    {sites.map(s=><option key={`site:${s.id}`} value={`site:${s.id}`}>{s.companyName}</option>)}
+                  </optgroup>
+                  {groups.length>0&&(
+                    <optgroup label="커스텀 그룹">
+                      {groups.map(g=><option key={`group:${g.id}`} value={`group:${g.id}`}>{g.name} ({g.memberCount}명)</option>)}
+                    </optgroup>
+                  )}
+                </select>
+                <button type="button" onClick={()=>setShowManage(true)}
+                  className="whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                  그룹 관리
+                </button>
+              </div>
             )}
             {mode==="INDIVIDUAL"&&(
               <div className="space-y-2">
@@ -171,6 +310,9 @@ function SendModal({ workers, sites, onClose, onSent }: {
           </button>
         </div>
       </div>
+      {showManage && (
+        <GroupManageModal workers={workers} groups={groups} onClose={() => setShowManage(false)} onChanged={loadGroups} />
+      )}
     </div>
   );
 }
@@ -233,7 +375,7 @@ export default function NoticesPage() {
     <div>
       <PageHeader
         title="알림 목록"
-        sub="직무지도원에게 발송한 알림(전체·현장 그룹·개별) 이력입니다. 새 알림은 ‘알림 발송’으로 보냅니다."
+        sub="직무지도원에게 발송한 알림(전체·현장/커스텀 그룹·개별) 이력입니다. 새 알림은 ‘알림 발송’으로 보냅니다."
         actions={<button onClick={()=>setShowSend(true)} className={T.btnPrimary}>+ 알림 발송</button>}
       />
 
