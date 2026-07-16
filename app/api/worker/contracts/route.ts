@@ -301,8 +301,31 @@ export async function POST(req: NextRequest) {
           effectiveFrom: { lte: contract.contractEnd },
           OR: [{ effectiveTo: null }, { effectiveTo: { gte: contract.contractStart } }],
         } as any,
-        select: { id: true },
+        select: { id: true, payType: true, baseAmount: true },
       });
+      // 재계약 임금 변경 감지(2026-07-16): 기존 급여 기준이 있으면 자동 덮어쓰지 않는다(매니저 수동 보정
+      //  — 2인이상 시급·주휴 오버라이드 등 — 파괴 방지). 대신 계약 임금과 불일치 시 담당자에게 확인 알림.
+      if (existingPay) {
+        const contractBase = Number(contract.wageAmount);
+        const payBase = Number(existingPay.baseAmount);
+        if (existingPay.payType !== wt || payBase !== contractBase) {
+          const WT_LABEL: Record<string, string> = { HOURLY: "시급", DAILY: "일급", MONTHLY: "월급" };
+          const mgrs = await prisma.manager.findMany({ where: { agencyId: contract.agencyId, isActive: true }, select: { id: true } });
+          if (mgrs.length > 0) {
+            await prisma.managerNotice.createMany({
+              data: mgrs.map((m) => ({
+                managerId: m.id,
+                title: `[급여 기준 확인] ${user?.workerName ?? "직무지도원"} 재계약 임금 변경 감지`,
+                body: `서명 완료된 근로계약의 임금 조건이 현행 급여 기준과 다릅니다.\n` +
+                  `· 계약서: ${WT_LABEL[wt] ?? wt} ${contractBase.toLocaleString()}원\n` +
+                  `· 현행 급여 기준: ${WT_LABEL[existingPay.payType] ?? existingPay.payType} ${payBase.toLocaleString()}원\n` +
+                  `급여 관리 → 급여 기준에서 확인 후 갱신해 주세요. (수동 보정 보호를 위해 자동 변경하지 않습니다)`,
+                link: "/manager/payroll",
+              })),
+            });
+          }
+        }
+      }
       if (!existingPay) {
         const base = contract.wageAmount;
         const payData: any = {
