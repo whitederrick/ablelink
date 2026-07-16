@@ -142,7 +142,11 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   // CSP nonce는 모든 문서 경로에 균일 적용(랜딩 포함). 정적 에셋·이미지 최적화·API는 제외.
+  //  ★확장자 제외는 '루트 세그먼트'([^/]*)로 한정한다. .*\.ext 로 두면 경로 전체(슬래시 포함)에 걸려
+  //   /admin/sites/1.json 같은 '동적 세그먼트+점 확장자' URL이 정적파일로 오인돼 미들웨어(인증·CSP)를
+  //   통째로 건너뛴다(감사 P2). [^/]* 는 /worker-manifest.json·/sw.js 등 루트 정적파일만 제외하고,
+  //   동적 라우트는 확장자를 붙여도 미들웨어를 정상 통과시킨다.
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon\\.ico|sw\\.js|robots\\.txt|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|ttf|woff2?|json|webmanifest|txt|xml|map)$).*)",
+    "/((?!api|_next/static|_next/image|favicon\\.ico|sw\\.js|robots\\.txt|[^/]*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|ttf|woff2?|json|webmanifest|txt|xml|map)$).*)",
   ],
 };

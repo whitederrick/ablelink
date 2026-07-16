@@ -11,6 +11,7 @@ import { parseBigInt } from "@/lib/adminScope";
 import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
 import { computeLedgerState, type LedgerEntry } from "@/lib/leave/accrual";
 import { audit } from "@/lib/audit";
+import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
 
 const isoOf = (d: Date) => d.toISOString().slice(0, 10);
 const KIND_LABEL: Record<string, string> = {
@@ -116,30 +117,46 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ wor
 
     if (action === "use") {
       if (days <= 0) return NextResponse.json({ success: false, message: "사용 일수는 0보다 커야 합니다." }, { status: 400 });
-      const { state } = await loadLedger(scope.agencyId, workerId);
-      if (state.balance < days) {
-        return NextResponse.json({ success: false, message: `잔여 연차(${state.balance}일)가 부족합니다.` }, { status: 409 });
+      const effUtc = new Date(`${effectiveDate}T00:00:00.000Z`);
+      // Phase7: 매니저 직접 등록도 유효하되 직무지도원 확인(동의) 플로 필수 — 원장 USE와 확인 요청을 한 트랜잭션으로.
+      //  감사 P2: 잔여 검증·중복 검사·원장 생성을 워커 단위 advisory 락으로 직렬화(승인 라우트와 동일 chokepoint)
+      //  → 동시 등록/승인 간 잔여 초과·같은날 이중 USE 차단.
+      let created: { id: bigint };
+      try {
+        created = await withWorkerAssignmentLock(workerId, async (tx) => {
+          const dupUse = await tx.annualLeaveEntry.findFirst({
+            where: { agencyId: scope.agencyId, workerId, kind: "USE", effectiveDate: effUtc },
+            select: { id: true },
+          });
+          if (dupUse) throw new Error("DUP_USE");
+          const agg = await tx.annualLeaveEntry.aggregate({
+            where: { agencyId: scope.agencyId, workerId }, _sum: { days: true },
+          });
+          const balance = Number(agg._sum.days ?? 0);
+          if (balance < days) throw new Error(`INSUFFICIENT:${balance}`);
+          const entry = await tx.annualLeaveEntry.create({
+            data: {
+              agencyId: scope.agencyId, workerId, kind: "USE", days: -days,
+              effectiveDate: effUtc, memo: memo || null, createdByManagerId: scope.managerId,
+            },
+            select: { id: true },
+          });
+          await tx.annualLeaveRequest.create({
+            data: {
+              agencyId: scope.agencyId, workerId, kind: "MANAGER_ENTRY_CONFIRM", status: "PENDING",
+              effectiveDate: effUtc, days,
+              reason: memo || null, ledgerEntryId: entry.id, createdByManagerId: scope.managerId,
+            },
+          });
+          return entry;
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "DUP_USE") return NextResponse.json({ success: false, message: "해당 날짜에 이미 등록된 연차가 있습니다." }, { status: 409 });
+        const m = msg.match(/^INSUFFICIENT:(.+)$/);
+        if (m) return NextResponse.json({ success: false, message: `잔여 연차(${m[1]}일)가 부족합니다.` }, { status: 409 });
+        throw e;
       }
-      // Phase7: 매니저 직접 등록도 유효하되 직무지도원 확인(동의) 플로 필수 —
-      //  원장 USE와 확인 요청(MANAGER_ENTRY_CONFIRM)을 한 트랜잭션으로 생성.
-      const created = await prisma.$transaction(async (tx) => {
-        const entry = await tx.annualLeaveEntry.create({
-          data: {
-            agencyId: scope.agencyId, workerId, kind: "USE", days: -days,
-            effectiveDate: new Date(`${effectiveDate}T00:00:00.000Z`),
-            memo: memo || null, createdByManagerId: scope.managerId,
-          },
-          select: { id: true },
-        });
-        await tx.annualLeaveRequest.create({
-          data: {
-            agencyId: scope.agencyId, workerId, kind: "MANAGER_ENTRY_CONFIRM", status: "PENDING",
-            effectiveDate: new Date(`${effectiveDate}T00:00:00.000Z`), days,
-            reason: memo || null, ledgerEntryId: entry.id, createdByManagerId: scope.managerId,
-          },
-        });
-        return entry;
-      });
       // 워커 확인 요청 알림 — 실패 비치명적.
       try {
         await prisma.workerNotice.create({

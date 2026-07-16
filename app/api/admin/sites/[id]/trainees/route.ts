@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { logAccess } from "@/lib/accessLog";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -59,6 +60,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         },
       },
     });
+
+    // 접속기록(제8조): 훈련생 배치 목록도 생년월일·연락처·장애유형/정도(민감정보) 노출 → 열람 1건 집계 기록.
+    if (rows.length > 0) {
+      await logAccess(req, scope, {
+        subjectType: "Trainee", subjectId: null, subjectLabel: `현장 훈련생 목록 ${rows.length}명`,
+        resource: "disability", action: "view",
+      });
+    }
 
     return NextResponse.json({
       success: true,

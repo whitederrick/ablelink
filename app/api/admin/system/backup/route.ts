@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
+import { logAccess } from "@/lib/accessLog";
 import ExcelJS from "exceljs";
 // G3: CSV 직렬화는 단일 출처(lib/csv.csvBody) — 로컬 복사본은 헤더 미이스케이프로 인젝션/일관성 drift.
 import { csvBody } from "@/lib/csv";
@@ -31,7 +32,7 @@ async function xlsxBody(sheet: string, header: string[], rows: (string | number)
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAdminSession(req);
+    const scope = await requireAdminSession(req);
 
     const { searchParams } = new URL(req.url);
     const type = (searchParams.get("type") || "attendance").trim();
@@ -94,6 +95,13 @@ export async function GET(req: NextRequest) {
       ]);
       baseName = `백업_일지_전체_${stamp}`;
     }
+
+    // 접속기록(제8조): 전 기관·전 기간 근태(성명+연락처)·훈련일지 대량 반출 → 반출 1건 집계 기록.
+    await logAccess(req, scope, {
+      subjectType: type === "attendance" ? "Worker" : "Trainee", subjectId: null,
+      subjectLabel: `전체 백업(${type === "attendance" ? "근태" : "일지"}) ${rows.length}건`,
+      resource: "worker_detail", action: "export",
+    });
 
     const filename = `${baseName}.${format}`;
     const disposition = `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;

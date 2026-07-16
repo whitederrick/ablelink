@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { audit } from "@/lib/audit";
+import { logAccess } from "@/lib/accessLog";
 import { MAX_TRAINEES_PER_WORKER } from "@/lib/rules";
 import { openTraineePlacement } from "@/lib/traineePlacement";
 
@@ -23,6 +24,15 @@ export async function GET(req: NextRequest) {
         },
       },
     });
+
+    // 접속기록(제8조): 훈련생 목록은 생년월일·보호자연락처·장애유형/정도(민감정보)를 노출 → 열람 1건 집계 기록.
+    const traineeCount = sites.reduce((n, s) => n + s.trainees.length, 0);
+    if (traineeCount > 0) {
+      await logAccess(req, scope, {
+        subjectType: "Trainee", subjectId: null, subjectLabel: `훈련생 목록 ${traineeCount}명`,
+        resource: "disability", action: "view",
+      });
+    }
 
     return NextResponse.json({
       success: true,
