@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { overtimeMinutesForDay, workEndMinutesForDay, manualExtHoursFromLogs } from "@/lib/attendance/overtime";
 import { computeWeeklyHoliday } from "@/lib/payroll/weeklyHoliday";
+import { computeNightHolidayMinutes, type NightHolidayRow } from "@/lib/payroll/nightHoliday";
 import { resolveWorkingWeekdaySet } from "@/lib/payroll/weekdays";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { computeIncomeTax, type TaxBracket } from "@/lib/payroll/incomeTax";
@@ -409,19 +410,17 @@ export async function computePayrollItems(
       if (gateIncomeType === "EMPLOYMENT" && ordinaryWage > 0) {
         const KST = 9 * 3600 * 1000;
         const kstMin = (d: Date) => Math.floor(((d.getTime() + KST) % 86400000) / 60000);
-        const ovl = (s: number, e: number, a: number, b: number) => Math.max(0, Math.min(e, b) - Math.max(s, a));
         const DOW: Record<string, number> = { "일": 0, "월": 1, "화": 2, "수": 3, "목": 4, "금": 5, "토": 6 };
         const whDow = empContract?.weeklyHoliday ? (DOW[empContract.weeklyHoliday] ?? 0) : 0; // 주휴일 요일(기본 일)
         const holidaySet = new Set(Object.keys(getKrHolidays(y, m)));
-        let nightMin = 0;
-        // H: 휴일근로 8h 경계는 '일별 합계'에 적용해야 한다. 행 단위로 나누면 같은 날 2배정(AM+PM)
-        //  합계가 8h를 넘어도 각 행이 8h 미만이면 초과분이 0.5배로 과소지급된다. → 날짜별로 모은 뒤 1회 판정.
-        const holidayMinByDate = new Map<string, number>();
+        // 창구간·8h 경계 수학은 lib/payroll/nightHoliday.ts(순수 함수, 전용 회귀테스트)로 추출 —
+        //  여기서는 행별 입력(시각·실효퇴근·휴일여부·무급휴게)만 조립한다. (2026-07-16 동작 불변 리팩터)
+        const nhRows: NightHolidayRow[] = [];
         for (const a of confirmedAtt) {
           if (!a.startTime || !a.endTime) continue;
           const s = kstMin(a.startTime), e = kstMin(a.endTime);
           // 야간(22시+)은 연장 포함 실효 퇴근시각까지 검출. 일반 배정=실제 퇴근시각, 면제 배정=고정 종료+수동 연장.
-          // (전일 저녁식사 18:00~19:00 갭은 야간창 22:00 이전이라 영향 없음)
+          // (전일 저녁식사 18:00~19:00 갭은 야간창 22:00 이전이라 영향 없음. 자정 넘김은 미검출=기존 정책)
           const eNight = workEndMinutesForDay({
             workType: a.assignment?.workType,
             exempt: a.assignment?.attendanceButtonExempt,
@@ -429,23 +428,17 @@ export async function computePayrollItems(
             actualEndTime: a.actualEndTime,
             manualExtHours: manualExtHoursFromLogs(a.logs), // 그룹연장 중복합산 방지(공용 단일소스)
           });
-          if (eNight > s) nightMin += ovl(s, eNight, 0, 360) + ovl(s, eNight, 1320, 1440); // 자정 안 넘는 경우만
           const [yy, mm2, dd] = a.workDate.split("-").map(Number);
           const dow = new Date(Date.UTC(yy, mm2 - 1, dd)).getUTCDay();
-          // 휴일근로(공휴일·주휴일) 실근로시간(무급휴게 제외). 커스텀휴무는 여기 미포함=일반급여(가산 없음).
-          //  · 1일 8h 이내는 0.5배 가산, 8h 초과분은 1.0배 가산(총 2.0배). 일별로 8h 경계 판정.
-          if (holidaySet.has(a.workDate) || dow === whDow) {
-            const span = Math.max(0, e - s);
-            const workedMin = Math.max(0, span - unpaidBreakMin(a.assignment?.workType, span));
-            holidayMinByDate.set(a.workDate, (holidayMinByDate.get(a.workDate) ?? 0) + workedMin);
-          }
+          // 휴일근로(공휴일·주휴일). 커스텀휴무는 여기 미포함=일반급여(가산 없음).
+          const span = Math.max(0, e - s);
+          nhRows.push({
+            workDate: a.workDate, startMin: s, endMin: e, nightEndMin: eNight,
+            isHoliday: holidaySet.has(a.workDate) || dow === whDow,
+            unpaidBreakMin: unpaidBreakMin(a.assignment?.workType, span),
+          });
         }
-        // 날짜별 합계에 8h 경계 적용(8h이내 0.5배 + 초과 1.0배).
-        let holidayLe8Min = 0, holidayGt8Min = 0;
-        for (const dayMin of holidayMinByDate.values()) {
-          holidayLe8Min += Math.min(dayMin, 480);
-          holidayGt8Min += Math.max(0, dayMin - 480);
-        }
+        const { nightMin, holidayLe8Min, holidayGt8Min } = computeNightHolidayMinutes(nhRows);
         if (nightMin > 0) {
           const nightHours = +(nightMin / 60).toFixed(2);
           const pay = Math.round(nightHours * ordinaryWage * 0.5);
