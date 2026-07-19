@@ -160,13 +160,14 @@ export async function PATCH(req: NextRequest) {
     const scope = await requireManagerSession(req);
     const agencyId = scope.agencyId;
 
-    const { holidayId, countAsWorkday } = await req.json();
-    if (!holidayId || typeof countAsWorkday !== "boolean")
+    const { holidayId, countAsWorkday } = await req.json().catch(() => ({}));
+    const holidayIdBig = parseBigInt(holidayId);
+    if (!holidayIdBig || typeof countAsWorkday !== "boolean")
       return NextResponse.json({ success: false, message: "holidayId와 countAsWorkday(boolean)가 필요합니다." }, { status: 400 });
 
     // 자기 위탁기관 소속 휴무일인지 확인
     const holiday = await prisma.siteHoliday.findUnique({
-      where: { id: BigInt(holidayId) },
+      where: { id: holidayIdBig },
       include: { assignment: { select: { agencyId: true, workerId: true } } },
     });
     if (!holiday || holiday.assignment.agencyId !== agencyId)

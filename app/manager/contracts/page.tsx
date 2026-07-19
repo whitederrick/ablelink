@@ -393,16 +393,19 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
     const wts = templateWageTypes(key);
     return wts.length >= 3 ? "" : ` · ${wts.map(w => WAGE_LABEL[w]).join("/")} 전용`;
   };
-  // 임금유형 변경 시: 현재 양식이 그 유형을 지원하지 않으면 표준으로 되돌림
+  // 임금유형 변경 시: 금액 단위(시급/일급/월급) 의미가 달라지므로 입력된 금액을 초기화한다(유형↔금액 불일치
+  //  급여 오산정 방지 — 예: 월급 250만이 시급으로 재해석). 현재 양식이 그 유형을 지원하지 않으면 표준으로 되돌림.
   const onWageTypeChange = (v: "HOURLY" | "DAILY" | "MONTHLY") => {
+    if (v !== wageType) setWageAmount("");
     setWageType(v);
     if (!canUseTemplateForWage(templateKey, v)) { setTemplateKey(DEFAULT_TEMPLATE_KEY); setTemplateData({}); }
   };
-  // 양식 변경 시: 현재 임금유형을 지원하지 않으면 그 양식이 허용하는 첫 유형으로 자동 전환(사용자 재설정 불필요).
+  // 양식 변경 시: 현재 임금유형을 지원하지 않으면 그 양식이 허용하는 첫 유형으로 자동 전환한다.
+  //  ★자동 전환으로 임금유형이 바뀌면 금액도 초기화 — 이전엔 금액이 그대로 남아 유형↔금액 불일치로 급여 과산정됐다.
   const onTemplateChange = (key: string) => {
     setTemplateKey(key); setTemplateData({});
     const wts = templateWageTypes(key);
-    if (!wts.includes(wageType)) setWageType(wts[0]);
+    if (!wts.includes(wageType)) { setWageType(wts[0]); setWageAmount(""); }
   };
   const [bonusExists, setBonusExists] = useState(false);
   const [bonusAmount, setBonusAmount] = useState("");

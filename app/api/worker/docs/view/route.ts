@@ -248,8 +248,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: false, message: "지원하지 않는 문서 유형입니다." }, { status: 400 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    // 내부 예외 message(Prisma 쿼리·경로 등)는 클라이언트에 노출하지 않는다 — 서버 로그로만.
     console.error("[docs/view]", error);
-    return NextResponse.json({ success: false, message: "서버 오류가 발생했습니다.", detail: error?.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류가 발생했습니다." }, { status: 500 });
   }
 }

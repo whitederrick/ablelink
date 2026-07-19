@@ -32,15 +32,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     // ★18차(P3): PATCH도 POST와 동일하게 amount 범위를 검증한다. 누락 시 PERCENTAGE를 5.0 등으로 바꿔
     //  500% 공제→음수 순급여 명세서가 만들어질 수 있었다. 유효 type(변경값 우선, 없으면 기존값) 기준으로 판정.
-    if (amount != null) {
-      const amt = Number(amount);
-      const effType = String(type ?? existing.type);
-      if (!Number.isFinite(amt) || amt < 0) {
-        return NextResponse.json({ success: false, message: "공제 금액/비율은 0 이상이어야 합니다." }, { status: 400 });
-      }
-      if (effType === "PERCENTAGE" && amt > 1) {
-        return NextResponse.json({ success: false, message: "비율 공제는 0~1 사이여야 합니다." }, { status: 400 });
-      }
+    //  effAmount = 변경값 우선, 없으면 기존값 — ★type만 PERCENTAGE로 바꾸고 amount를 생략하면(부분 갱신) 기존
+    //   FIXED 금액(예: 50000)이 그대로 비율로 재해석돼 5,000,000% 공제가 되던 형제갭 차단.
+    const effType = String(type ?? existing.type);
+    const effAmount = amount != null ? Number(amount) : Number(existing.amount);
+    if (!Number.isFinite(effAmount) || effAmount < 0) {
+      return NextResponse.json({ success: false, message: "공제 금액/비율은 0 이상이어야 합니다." }, { status: 400 });
+    }
+    if (effType === "PERCENTAGE" && effAmount > 1) {
+      return NextResponse.json({ success: false, message: "비율 공제는 0~1 사이여야 합니다. (유형을 비율로 바꾸려면 0~1 값으로 금액도 함께 수정하세요.)" }, { status: 400 });
     }
 
     const updateData: any = {

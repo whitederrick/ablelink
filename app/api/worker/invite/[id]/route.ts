@@ -20,6 +20,7 @@ function maskPhone(p: string): string {
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (!/^\d+$/.test(id)) return NextResponse.json({ success: false, message: "초대 링크가 유효하지 않습니다." }, { status: 404 });
   try {
     // 무차별 열거 방어: 신뢰 IP(조작 불가) 기준 레이트리밋. IP 없으면 id별로라도 제한.
     const rl = await checkRateLimit(`invite-view:${getRateLimitIp(req) ?? id}`);
@@ -54,6 +55,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (!/^\d+$/.test(id)) return NextResponse.json({ success: false, message: "초대 링크가 유효하지 않습니다." }, { status: 404 });
   try {
     // 무차별 대입 방어: 초대 ID당 코드 검증/가입 시도 횟수 제한
     const rl = await checkRateLimit(`worker-invite:${id}`);

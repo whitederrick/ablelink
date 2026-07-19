@@ -31,15 +31,19 @@ export async function GET(request: NextRequest) {
 
     const siteId = assignment.siteId;
 
+    // ★P2(크로스테넌트): 훈련생 목록을 siteId만으로 조회하면 공유현장(같은 Site.id를 두 기관이 사용)에서 타 기관
+    //  훈련생 성명·성별(장애인 PII)이 노출된다(audit-package와 동일 클래스). 훈련생의 소속 현장 기관(site.agencyId,
+    //  currentSiteId 경유)이 요청 기관과 같은 훈련생으로 한정한다 — 훈련생은 생성 시 자기 기관 현장에만 귀속(admin/trainees).
+    const agencyScope = { site: { agencyId: scope.agencyId } };
     // 방법 1: Trainee.currentSiteId 기반
     const byCurrentSite = await prisma.trainee.findMany({
-      where: { currentSiteId: siteId, status: { in: ["TRAINING","EMPLOYED"] } },
+      where: { currentSiteId: siteId, status: { in: ["TRAINING","EMPLOYED"] }, ...agencyScope },
       select: { id: true, name: true, gender: true },
     });
 
     // 방법 2: TraineePlacement 기반 (중복 제거용 id 수집)
     const placements = await prisma.traineePlacement.findMany({
-      where: { siteId, status: "ACTIVE" },
+      where: { siteId, status: "ACTIVE", trainee: { ...agencyScope } },
       include: { trainee: { select: { id: true, name: true, gender: true, status: true } } },
     });
     const byPlacement = placements

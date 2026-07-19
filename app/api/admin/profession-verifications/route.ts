@@ -5,13 +5,14 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
+import { logAccess } from "@/lib/accessLog";
 
 const STATUSES = ["PENDING", "VERIFIED", "REJECTED"] as const;
 const PROFS = ["JOB_COACH", "CAREGIVER", "ACTIVITY_ASSISTANT"] as const;
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAdminSession(req);
+    const scope = await requireAdminSession(req);
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status") || "PENDING";
     const profession = searchParams.get("profession") || "";
@@ -28,6 +29,11 @@ export async function GET(req: NextRequest) {
       take: 200,
       include: { worker: { select: { id: true, workerName: true, phoneNumber: true, residenceAddress: true, bio: true } } },
     });
+
+    // 개인정보 접속기록(제8조): 전 기관 직종 신청자 성명·연락처·거주지 대량 열람.
+    if (rows.length > 0) {
+      await logAccess(req, scope, { subjectType: "Worker", resource: "applicant_contact", action: "view", subjectLabel: `직종검증 ${rows.length}명` });
+    }
 
     // 상태별 카운트(대시보드 배지용)
     const counts = await prisma.workerProfession.groupBy({ by: ["verifyStatus"], _count: true });

@@ -121,21 +121,31 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const now = new Date();
 
+    // ★상태 재확인을 조건부 claim으로(TOCTOU): 위 :104 가드는 트랜잭션 밖 read라, 두 운영자가 같은 신청을 동시
+    //  처리하면 approve가 Agency·Manager(로그인 가능) 생성 후 reject가 status를 덮어 '반려인데 실사용 가능 계정
+    //  잔존'이 된다(크리덴셜 발급). updateMany({status:PENDING}) claim으로 직렬화, count===0이면 이미 처리됨(409).
+    class AlreadyProcessed extends Error {}
+
     if (action === "reject") {
-      const updated = await prisma.managerSignupRequest.update({
-        where: { id: requestId },
-        data: {
-          status:      "REJECTED",
-          reviewNote:  reviewNote,
-          reviewedAt:  now,
-          reviewedById: scope.adminId,
-        },
+      const claim = await prisma.managerSignupRequest.updateMany({
+        where: { id: requestId, status: "PENDING" },
+        data: { status: "REJECTED", reviewNote, reviewedAt: now, reviewedById: scope.adminId },
       });
-      return NextResponse.json({ success: true, item: toDetail(updated, null) });
+      if (claim.count === 0) return NextResponse.json({ success: false, message: "이미 처리된 신청입니다." }, { status: 409 });
+      const updated = await prisma.managerSignupRequest.findUnique({ where: { id: requestId } });
+      return NextResponse.json({ success: true, item: toDetail(updated!, null) });
     }
 
     // action === "approve"
-    const result = await prisma.$transaction(async (tx) => {
+    let result;
+    try {
+      result = await prisma.$transaction(async (tx) => {
+      // ★claim 먼저 — 실패(이미 처리)면 Agency·Manager 생성 전에 중단.
+      const claim = await tx.managerSignupRequest.updateMany({
+        where: { id: requestId, status: "PENDING" },
+        data: { status: "APPROVED", reviewNote, reviewedAt: now, reviewedById: scope.adminId },
+      });
+      if (claim.count === 0) throw new AlreadyProcessed();
       // 1. Agency 생성
       // 이미 같은 이름의 위탁기관가 있을 수 있으므로 확인
       let agency = await tx.agency.findUnique({
@@ -191,7 +201,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       });
 
       return updated;
-    });
+      });
+    } catch (e) {
+      if (e instanceof AlreadyProcessed) return NextResponse.json({ success: false, message: "이미 처리된 신청입니다." }, { status: 409 });
+      throw e;
+    }
 
     return NextResponse.json({ success: true, item: toDetail(result, null) });
   } catch (e: any) {

@@ -225,6 +225,7 @@ export async function GET(req: NextRequest) {
   } catch (e: any) {
     if (e instanceof Response || (e && typeof e.status === "number")) return e as any;
     const msg = e?.message || "UNKNOWN";
-    return NextResponse.json({ success: false, message: msg }, { status: errStatus(msg) });
+    const st = errStatus(msg);
+    return NextResponse.json({ success: false, message: st === 500 ? "서버 오류" : msg }, { status: st });
   }
 }

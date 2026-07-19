@@ -19,7 +19,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const appId = parseBigInt(id);
     if (!appId) return NextResponse.json({ success: false, message: "잘못된 ID" }, { status: 400 });
 
-    const b = await req.json();
+    // 락 안에서 status:PENDING claim 실패(동시 처리로 이미 반영) 시 409로 알리는 센티널.
+    class AppAlreadyProcessed extends Error {}
+
+    const b = await req.json().catch(() => ({}));
     const action = String(b.action ?? "");
     if (!["accept", "reject"].includes(action)) {
       return NextResponse.json({ success: false, message: "action은 accept 또는 reject여야 합니다." }, { status: 400 });
@@ -73,10 +76,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // ★구조적: 재사용 현장(app.post.siteId)이 있으면 현장 락(+워커 락)으로 정원검사~생성 직렬화(chokepoint 불변식).
     //  신규 현장은 이 트랜잭션에서 생성되어 경합이 없고 정원 미설정(무제한)이라 워커 락만으로 충분.
     const acceptTxn = async (tx: Prisma.TransactionClient) => {
-      await tx.recruitApplication.update({
-        where: { id: appId },
+      // ★TOCTOU 차단: 바깥 status 가드(:40)는 락 밖 read라, 두 처리자(운영자+매니저/공유공고 2매니저)가 동시에
+      //  PENDING을 읽고 각자 락 안에서 update하면 accept가 배정을 만든 뒤 reject가 status를 덮어 'REJECTED인데
+      //  고아 배정 잔존'이 생긴다. 락 안에서 status:PENDING 조건부 claim, count===0이면 이미 처리됨(409).
+      const claim = await tx.recruitApplication.updateMany({
+        where: { id: appId, status: "PENDING" },
         data: { status: action === "accept" ? "ACCEPTED" : "REJECTED", decidedAt: new Date() },
       });
+      if (claim.count === 0) throw new AppAlreadyProcessed();
 
       if (!canAutoAssign) return;
 
@@ -155,9 +162,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     };
     // ★P2: 자동배정 대상이고 신규 현장(siteId 미정)이면 post 락으로 첫 생성을 직렬화(동시 수락 Site 중복 방지),
     //  재사용 현장이면 현장 락(정원 TOCTOU), 그 외(자동배정 아님)는 워커 락만.
-    if (canAutoAssign && app.post.siteId != null) await withSiteAndWorkersAssignmentLock(app.post.siteId, [app.workerId], acceptTxn);
-    else if (canAutoAssign) await withPostAndWorkerLock(app.post.id, app.workerId, acceptTxn);
-    else await withWorkerAssignmentLock(app.workerId, acceptTxn);
+    try {
+      if (canAutoAssign && app.post.siteId != null) await withSiteAndWorkersAssignmentLock(app.post.siteId, [app.workerId], acceptTxn);
+      else if (canAutoAssign) await withPostAndWorkerLock(app.post.id, app.workerId, acceptTxn);
+      else await withWorkerAssignmentLock(app.workerId, acceptTxn);
+    } catch (e) {
+      if (e instanceof AppAlreadyProcessed) return NextResponse.json({ success: false, message: "이미 처리된 신청입니다." }, { status: 409 });
+      throw e;
+    }
 
     // 직무지도원에게 알림(매칭 결과) — WorkerNotice.agencyId 필수라 위탁기관 공고일 때만
     if (app.post.agencyId) {

@@ -46,19 +46,16 @@ async function redisRateLimit(key: string, max: number, windowSec: number, block
     await redis!.del(blockKey);
   }
 
-  // 카운트 증가 (처음이면 윈도우 TTL 설정 — fixed-window).
-  //  ★원자화: INCR과 EXPIRE가 분리돼 있어, count===1에서 EXPIRE가 실패(Upstash 순간 장애)하면 TTL 없는
-  //   카운터가 영구 잔존한다 → 이후 요청마다 누적돼 max 초과 → 차단 해제 후에도 즉시 재차단되는 '영구 차단
-  //   루프'(login-ip 키는 성공 리셋 경로도 없음). EXPIRE 실패 시 방금 올린 카운터를 되돌려(DECR) 0으로 만들어,
-  //   다음 요청이 다시 count===1로 시작해 EXPIRE를 재시도하게 한다(그 요청은 통과 = 가용성 우선, 폴백 처리).
+  // 카운트 증가 후 'TTL 존재'를 보장한다 (fixed-window).
+  //  ★원자화: INCR과 EXPIRE가 분리돼 있어, count===1에서만 EXPIRE하면 (a)EXPIRE 실패(Upstash 순간 장애)나
+  //   (b)동시요청 경계(A incr→1, B incr→2 후 A의 되돌리기가 0에 못 미침)에서 TTL 없는 카운터가 영구 잔존한다
+  //   → 이후 요청마다 누적돼 max 초과 → 차단 해제 후 즉시 재차단되는 '영구 차단 루프'(login-ip는 성공 리셋도 없음).
+  //   count 값과 무관하게 매 요청 PTTL을 확인해 TTL이 없으면(-1/-2) EXPIRE를 재설정 → dangling 카운터 원천 차단.
+  //   기존 TTL이 있으면 건드리지 않아 fixed-window 의미 유지. PTTL/EXPIRE 실패는 throw→인메모리 폴백(가용성 우선).
   const count = await redis!.incr(countKey);
-  if (count === 1) {
-    try {
-      await redis!.expire(countKey, windowSec);
-    } catch (err) {
-      try { await redis!.decr(countKey); } catch { /* best-effort */ }
-      throw err; // 상위 catch가 인메모리 폴백으로 처리
-    }
+  const ttl = await redis!.pttl(countKey);
+  if (ttl < 0) {
+    await redis!.expire(countKey, windowSec);
   }
 
   if (count > max) {

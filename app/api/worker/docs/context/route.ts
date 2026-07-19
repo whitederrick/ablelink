@@ -29,6 +29,8 @@ export async function GET(req: NextRequest) {
   const selectCtx = {
     serviceStep: true,
     adaptationStartDate: true,
+    agencyId: true,
+    siteId: true,
     site: {
       select: {
         companyName: true,
@@ -36,7 +38,8 @@ export async function GET(req: NextRequest) {
         businessContactPhone: true,
         businessContactEmail: true,
         contacts: { where: { isActive: true }, select: { name: true, phoneNumber: true, email: true, role: true }, orderBy: { id: "asc" } },
-        trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true, name: true, gender: true } },
+        // ★훈련생 목록은 아래에서 배정 기관(agencyId)으로 스코프해 별도 조회 — site.trainees를 그대로 쓰면
+        //  공유현장(같은 Site.id)에서 타 기관 훈련생 성명·성별(PII)이 노출된다(admin/docs/trainees와 동일 방어).
       },
     },
   } satisfies Prisma.SiteAssignmentSelect;
@@ -54,6 +57,15 @@ export async function GET(req: NextRequest) {
   }
   const assignment = resolved.status === "resolved" ? resolved.assignment : null;
   if (!assignment?.site) return NextResponse.json({ success: true, data: null }, noStore);
+
+  // 훈련생 목록 — 배정 현장 + 배정 기관 소속 훈련생만(공유현장 타기관 PII 배제). null 기관이면 빈 목록(fail-closed).
+  const scopedTrainees = assignment.agencyId
+    ? await prisma.trainee.findMany({
+        where: { currentSiteId: assignment.siteId, status: { in: ["TRAINING", "EMPLOYED"] }, site: { agencyId: assignment.agencyId } },
+        select: { id: true, name: true, gender: true },
+        orderBy: { id: "asc" },
+      })
+    : [];
 
   // 오늘 기준 단계(전환일 지나면 적응지도)
   const trainingType = effectiveTrainingType(assignment.serviceStep, assignment.adaptationStartDate, todayStr);
@@ -85,7 +97,7 @@ export async function GET(req: NextRequest) {
       businessContactName: assignment.site.businessContactName ?? "",
       siteContacts,
       trainingType,
-      trainees: assignment.site.trainees.map((t: any) => ({ id: t.id.toString(), name: t.name, gender: t.gender })),
+      trainees: scopedTrainees.map((t) => ({ id: t.id.toString(), name: t.name, gender: t.gender })),
     },
   }, noStore);
 }

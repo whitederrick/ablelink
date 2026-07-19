@@ -9,14 +9,10 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { audit, auditSnapshot } from "@/lib/audit";
 import { logAccess } from "@/lib/accessLog";
 import { hash } from "bcryptjs";
-import { randomInt } from "crypto";
 import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
 import { parseBigInt } from "@/lib/adminScope";
+import { generateTempPassword } from "@/lib/tempPassword";
 
-function generateTempPassword(): string {
-  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  return Array.from({ length: 8 }, () => chars[randomInt(chars.length)]).join("");
-}
 
 // 자기 위탁기관 소속 직무지도원인지 확인(스코프 가드) — ★13차: 공용 판정(수락/근무한 배정 또는 계약이력)으로 위임.
 //  status 없는 assignments.some({site:{agencyId}})는 미동의 REQUESTED 위장 계정탈취(P0)에 뚫렸음.

@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
+import { logAccess } from "@/lib/accessLog";
 
 export async function GET(request: NextRequest) {
   try {
@@ -66,8 +67,14 @@ export async function GET(request: NextRequest) {
     }
 
     const data = Array.from(siteMap.values());
+    const total = data.reduce((s, d) => s + d.trainees.length, 0);
 
-    return NextResponse.json({ success: true, data, total: data.reduce((s, d) => s + d.trainees.length, 0) });
+    // 개인정보 접속기록(제8조): 훈련생 장애유형·정도(민감정보) 대량 열람. 대량이라 subjectId=null+건수 라벨.
+    if (total > 0) {
+      await logAccess(request, session, { subjectType: "Trainee", resource: "disability", action: "view", subjectLabel: `현황 ${total}명` });
+    }
+
+    return NextResponse.json({ success: true, data, total });
   } catch (error: any) {
     if (error instanceof Response) return error;
     console.error("[admin/trainees/summary]", error);

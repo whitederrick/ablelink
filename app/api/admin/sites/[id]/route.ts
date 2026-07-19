@@ -123,9 +123,10 @@ export async function GET(
   } catch (e: any) {
     if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
+    const st = errToStatus(msg);
     return NextResponse.json(
-      { success: false, message: msg },
-      { status: errToStatus(msg) }
+      { success: false, message: st === 500 ? "서버 오류" : msg },
+      { status: st }
     );
   }
 }
@@ -317,9 +318,10 @@ export async function PATCH(
   } catch (e: any) {
     if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
+    const st = errToStatus(msg);
     return NextResponse.json(
-      { success: false, message: msg },
-      { status: errToStatus(msg) }
+      { success: false, message: st === 500 ? "서버 오류" : msg },
+      { status: st }
     );
   }
 }
@@ -351,9 +353,10 @@ export async function DELETE(
   } catch (e: any) {
     if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
+    const st = errToStatus(msg);
     return NextResponse.json(
-      { success: false, message: msg },
-      { status: errToStatus(msg) }
+      { success: false, message: st === 500 ? "서버 오류" : msg },
+      { status: st }
     );
   }
 }

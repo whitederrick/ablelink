@@ -17,6 +17,7 @@ import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { logAccess } from "@/lib/accessLog";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
+import { isValidYmd } from "@/lib/time";
 
 
 const DOC_LABELS: Record<string, string> = {
@@ -38,13 +39,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, message: plan.message, reason: plan.reason }, { status: 403 });
       }
     }
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { workerId: workerIdRaw, docType, periodStart, periodEnd, traineeId, toEmail, assignmentId: assignmentIdRaw } = body;
 
     if (!workerIdRaw || !docType || !periodStart || !periodEnd)
       return NextResponse.json({ success:false, message:"필수 파라미터 누락" }, { status:400 });
     if (!/^[0-9]+$/.test(String(workerIdRaw)))
       return NextResponse.json({ success:false, message:"workerId 오류" }, { status:400 });
+    // 날짜 왕복검증(submit·preview와 통일) — 실존불가 날짜 Invalid Date 500 차단.
+    if (!isValidYmd(String(periodStart)) || !isValidYmd(String(periodEnd)))
+      return NextResponse.json({ success:false, message:"기간(YYYY-MM-DD)이 올바르지 않습니다." }, { status:400 });
+    if (traineeId != null && !/^[0-9]+$/.test(String(traineeId)))
+      return NextResponse.json({ success:false, message:"잘못된 훈련생 ID입니다." }, { status:400 });
 
     const workerId = BigInt(workerIdRaw);
     const start = periodStart, end = periodEnd;

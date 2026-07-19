@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
+import { logAccess } from "@/lib/accessLog";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -35,6 +36,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         },
       },
     });
+
+    // 개인정보 접속기록(제8조): 신청자 성명·연락처·거주지 주소 대량 열람. 대량이라 subjectId=null+건수 라벨.
+    if (apps.length > 0) {
+      await logAccess(req, session, { subjectType: "Worker", resource: "applicant_contact", action: "view", subjectLabel: `신청자 ${apps.length}명` });
+    }
 
     return NextResponse.json({
       success: true,

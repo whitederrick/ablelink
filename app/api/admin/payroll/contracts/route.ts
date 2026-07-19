@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { audit } from "@/lib/audit";
 import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
+import { isValidYmd } from "@/lib/time";
 
 export async function GET(req: NextRequest) {
   try {
@@ -67,8 +68,13 @@ export async function POST(req: NextRequest) {
     // ★월중 단가변경 미지원: computeRun은 겹치는 계약 중 최신 1개를 '월 전체'에 적용하므로,
     //  effectiveFrom이 월 중간이면 그 달 전체가 새 단가로 조용히 재계산된다. 분할계산을 지원하기 전까지는
     //  적용 시작일을 매월 1일로 강제해 데이터와 계산 기준을 일치시킨다.
-    if (!/^\d{4}-\d{2}-01$/.test(String(effectiveFrom))) {
+    if (!/^\d{4}-\d{2}-01$/.test(String(effectiveFrom)) || !isValidYmd(String(effectiveFrom))) {
+      // 형식(매월 1일) + 달력 실존(월 01~12) — 2026-13-01 같은 값이 Invalid Date로 500나던 것 차단.
       return NextResponse.json({ success: false, message: "급여 단가 적용 시작일은 매월 1일이어야 합니다. (월 중간 단가 변경은 아직 지원하지 않습니다)" }, { status: 400 });
+    }
+    if (effectiveTo != null && effectiveTo !== "" && !isValidYmd(String(effectiveTo))) {
+      // effectiveTo는 검증이 없어 비ISO 값이 Invalid Date로 계약종료일 오류·급여 영향이 있었다.
+      return NextResponse.json({ success: false, message: "적용 종료일 형식이 올바르지 않습니다. (YYYY-MM-DD)" }, { status: 400 });
     }
     if (!["INTERNAL", "EXTERNAL"].includes(workerType ?? "EXTERNAL")) {
       return NextResponse.json({ success: false, message: "workerType 오류" }, { status: 400 });
