@@ -39,10 +39,11 @@ export async function GET(
         run: {
           select: {
             docType: true,
+            agencyId: true,
             managerSignatureUrl: true,
             managerSignerName: true,
             worker: { select: { id: true, workerName: true } },
-            assignment: { select: { site: { select: { companyName: true, agencyId: true } } } },
+            assignment: { select: { site: { select: { companyName: true } } } },
           },
         },
       },
@@ -50,7 +51,9 @@ export async function GET(
 
     if (!v) throw new Error("NOT_FOUND");
 
-    const agencyId = v.run?.assignment?.site?.agencyId ?? null;
+    // 실귀속 = run.agencyId(생성 시 assignment.agencyId 기록) — site.agencyId는 공유현장 divergence 시
+    //  타기관 제출본 PDF(PII) 열람으로 새는 참고용 값이라 스코프 판정에 쓰지 않는다(형제 라우트 기준 통일).
+    const agencyId = v.run?.agencyId ?? null;
     if (!agencyId || agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
 
     // Prisma DocumentType → PDF 렌더 docType(vocabulary 다름)

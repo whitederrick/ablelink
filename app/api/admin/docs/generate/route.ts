@@ -16,6 +16,7 @@ import { sigRequirement } from "@/lib/docs/requiredSignatures";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { logAccess } from "@/lib/accessLog";
+import { checkAgencyPlanAccess } from "@/lib/planGuard";
 
 
 const DOC_LABELS: Record<string, string> = {
@@ -29,6 +30,14 @@ const DOC_LABELS: Record<string, string> = {
 export async function POST(request: NextRequest) {
   try {
     const scope = await requireManagerSession(request);
+    // 플랜 게이트: 공식문서 PDF 생성 = STANDARD 등급 기능(PDF_GENERATE). 워커측 docs/generate와 동일 기준 —
+    //  매니저측만 무게이트라 FREE 기관이 우회 생성하던 갭 정렬(TRIAL 허용, 운영자 oversight(agencyId 없음)는 비대상).
+    if (scope.agencyId) {
+      const plan = await checkAgencyPlanAccess(scope.agencyId, "PDF_GENERATE");
+      if (!plan.allowed) {
+        return NextResponse.json({ success: false, message: plan.message, reason: plan.reason }, { status: 403 });
+      }
+    }
     const body = await request.json();
     const { workerId: workerIdRaw, docType, periodStart, periodEnd, traineeId, toEmail, assignmentId: assignmentIdRaw } = body;
 

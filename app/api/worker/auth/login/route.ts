@@ -25,8 +25,20 @@ export async function POST(request: Request) {
       );
     }
 
-    // 🔐 Rate limiting: IP + loginId 조합으로 제한
+    // 🔐 Rate limiting 2중 — ①IP 전역 예산(admin/manager와 동일 축): 한 IP가 여러 계정을 순회하는
+    //  패스워드 스프레이 차단(계정별 키만 있으면 계정마다 예산이 새로 생겨 미차단). 여러 워커가 사무실
+    //  공유 IP(NAT)로 동시 로그인하는 정상 사용을 막지 않도록 예산은 계정별보다 느슨하게. 성공해도
+    //  리셋하지 않는다(성공 로그인 사이에 스프레이를 끼워 은폐하는 것 방지).
     const ip = getRateLimitIp(request) ?? "unknown";
+    const ipRl = await checkRateLimit(`login-ip:${ip}`, { max: 30, windowSec: 15 * 60, blockSec: 30 * 60 });
+    if (!ipRl.allowed) {
+      const retryAfterSec = Math.ceil((ipRl.retryAfterMs ?? 0) / 1000);
+      return NextResponse.json(
+        { success: false, message: `로그인 시도가 너무 많습니다. ${Math.ceil(retryAfterSec / 60)}분 후 다시 시도해주세요.` },
+        { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
+      );
+    }
+    // ②IP+계정 조합(기존): 특정 계정 집중 브루트포스 차단(성공 시 리셋).
     const rateLimitKey = `login:${ip}:${loginId}`;
     const rl = await checkRateLimit(rateLimitKey);
 

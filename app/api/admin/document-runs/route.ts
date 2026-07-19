@@ -203,13 +203,15 @@ export async function POST(req: NextRequest) {
         id: true,
         workerId: true,
         siteId: true,
-        site: { select: { id: true, agencyId: true } },
+        agencyId: true,
       },
     });
     if (!assignment) throw new Error("NOT_FOUND");
 
-    // 소속 위탁기관 스코프 강제
-    if (assignment.site.agencyId == null || assignment.site.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
+    // 소속 위탁기관 스코프 강제 — 실귀속 = assignment.agencyId(근태 ownership 규율과 동일).
+    //  site.agencyId는 "현재 운영 주체 참고용"·공유현장 가능이라 divergence 시 크로스테넌트로 샌다.
+    //  (worker/docs/submit의 run 생성도 동일하게 assignment.agencyId를 기록한다.)
+    if (assignment.agencyId == null || assignment.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
 
     const runSelect = {
       id: true, agencyId: true, assignmentId: true, siteId: true, workerId: true,
@@ -223,7 +225,7 @@ export async function POST(req: NextRequest) {
     try {
       created = await prisma.documentRun.create({
         data: {
-          agencyId: assignment.site.agencyId, // nullable 가능
+          agencyId: assignment.agencyId, // 실귀속(위 스코프 가드로 non-null 보장)
           assignment: { connect: { id: assignment.id } },
           site: { connect: { id: assignment.siteId } },
           worker: { connect: { id: assignment.workerId } },

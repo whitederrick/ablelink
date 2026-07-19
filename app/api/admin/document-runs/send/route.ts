@@ -20,6 +20,7 @@ import { logAccess } from "@/lib/accessLog";
 import { audit } from "@/lib/audit";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { checkRateLimit, resetRateLimit } from "@/lib/rateLimit";
+import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { createHash } from "crypto";
 
 const DOC_LABEL: Record<string, string> = {
@@ -37,6 +38,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function POST(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
+    // 플랜 게이트: 공단 발송은 공식문서 PDF 렌더·발송 = STANDARD 등급(PDF_GENERATE) — docs/generate와 동일 기준.
+    if (scope.agencyId) {
+      const plan = await checkAgencyPlanAccess(scope.agencyId, "PDF_GENERATE");
+      if (!plan.allowed) {
+        return NextResponse.json({ success: false, message: plan.message, reason: plan.reason }, { status: 403 });
+      }
+    }
     const body = await req.json().catch(() => ({}));
 
     // 복수 수신자 허용(쉼표/세미콜론 구분) — 공단 담당자 여러 명에게 동시 발송

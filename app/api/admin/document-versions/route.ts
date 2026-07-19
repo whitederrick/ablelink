@@ -46,17 +46,15 @@ export async function GET(req: NextRequest) {
     if (!isValidNumericId(runIdStr)) throw new Error("VALIDATION:runId");
     const runId = BigInt(runIdStr);
 
-    // run + 스코프 체크
+    // run + 스코프 체크 — run.agencyId(실귀속, 생성 시 assignment.agencyId 기록) 기준.
+    //  site.agencyId는 참고용·공유현장 divergence 시 타기관 제출본(PII) 열람으로 샌다.
+    //  인박스·발송·action 등 형제 라우트와 동일 기준(null이면 fail-closed).
     const run = await prisma.documentRun.findUnique({
       where: { id: runId },
-      select: { assignment: { select: { site: { select: { agencyId: true } } } } },
+      select: { agencyId: true },
     });
     if (!run) throw new Error("NOT_FOUND");
-
-    {
-      const agencyId = run.assignment.site.agencyId;
-      if (agencyId == null || agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
-    }
+    if (run.agencyId == null || run.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
 
     const rows = await prisma.documentVersion.findMany({
       where: { runId },
@@ -114,17 +112,11 @@ export async function POST(req: NextRequest) {
 
     const run = await prisma.documentRun.findUnique({
       where: { id: runId },
-      select: {
-        id: true,
-        assignment: { select: { site: { select: { agencyId: true } } } },
-      },
+      select: { id: true, agencyId: true },
     });
     if (!run) throw new Error("NOT_FOUND");
-
-    {
-      const agencyId = run.assignment.site.agencyId;
-      if (agencyId == null || agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
-    }
+    // 실귀속 = run.agencyId(GET과 동일 — 형제 라우트 기준 통일, null이면 fail-closed).
+    if (run.agencyId == null || run.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
 
     const nextVersionNo =
       (await prisma.documentVersion.aggregate({
