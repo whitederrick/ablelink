@@ -17,12 +17,17 @@ export type NightHolidayRow = {
   nightEndMin: number;    // 야간 검출용 실효 퇴근 분(연장 포함 — workEndMinutesForDay 결과)
   isHoliday: boolean;     // 공휴일 또는 주휴일 여부(판정은 호출부)
   unpaidBreakMin: number; // 무급휴게 분(휴일 실근로 = span − 이 값, 0 미만 클램프)
+  overtimeMin?: number;   // 이 행의 유급 연장 분(overtimeMinutesForDay 결과) — 휴일행만 의미(holidayOtGt8Min 산정용)
 };
 
 export type NightHolidayMinutes = {
   nightMin: number;       // 야간 가산(0.5배) 대상 분
   holidayLe8Min: number;  // 휴일 8h 이내(0.5배 가산) 분
-  holidayGt8Min: number;  // 휴일 8h 초과(1.0배 가산) 분
+  holidayGt8Min: number;  // 휴일 8h 초과(1.0배 가산) 분 — 고정 span 내 초과분(기본급에 이미 포함 → 가산 1.0으로 계 2.0)
+  // 휴일 '연장'분 중 8h 초과분. 연장은 기본급 미포함·연장수당 1.5배로 별도 지급되므로,
+  //  법정 2.0배(휴일 8h 초과)를 맞추려면 이 분에 0.5배 '보충 가산'이 필요하다(1.5+0.5=2.0).
+  //  8h 이내에 머무는 휴일 연장은 연장 1.5배 = 법정 휴일 1.5배로 동액이라 보충 불요.
+  holidayOtGt8Min: number;
 };
 
 const ovl = (s: number, e: number, a: number, b: number) => Math.max(0, Math.min(e, b) - Math.max(s, a));
@@ -30,6 +35,7 @@ const ovl = (s: number, e: number, a: number, b: number) => Math.max(0, Math.min
 export function computeNightHolidayMinutes(rows: NightHolidayRow[]): NightHolidayMinutes {
   let nightMin = 0;
   const holidayMinByDate = new Map<string, number>();
+  const holidayOtMinByDate = new Map<string, number>();
   for (const r of rows) {
     if (r.nightEndMin > r.startMin) {
       nightMin += ovl(r.startMin, r.nightEndMin, 0, 360) + ovl(r.startMin, r.nightEndMin, 1320, 1440);
@@ -38,12 +44,17 @@ export function computeNightHolidayMinutes(rows: NightHolidayRow[]): NightHolida
       const span = Math.max(0, r.endMin - r.startMin);
       const workedMin = Math.max(0, span - r.unpaidBreakMin);
       holidayMinByDate.set(r.workDate, (holidayMinByDate.get(r.workDate) ?? 0) + workedMin);
+      const ot = Math.max(0, r.overtimeMin ?? 0);
+      if (ot > 0) holidayOtMinByDate.set(r.workDate, (holidayOtMinByDate.get(r.workDate) ?? 0) + ot);
     }
   }
-  let holidayLe8Min = 0, holidayGt8Min = 0;
-  for (const dayMin of holidayMinByDate.values()) {
+  let holidayLe8Min = 0, holidayGt8Min = 0, holidayOtGt8Min = 0;
+  for (const [date, dayMin] of holidayMinByDate) {
     holidayLe8Min += Math.min(dayMin, 480);
     holidayGt8Min += Math.max(0, dayMin - 480);
+    // 연장은 고정 근무 뒤에 붙으므로, 연장분 중 8h 경계를 넘는 부분 = (고정+연장) − max(480, 고정).
+    const otMin = holidayOtMinByDate.get(date) ?? 0;
+    if (otMin > 0) holidayOtGt8Min += Math.max(0, dayMin + otMin - Math.max(480, dayMin));
   }
-  return { nightMin, holidayLe8Min, holidayGt8Min };
+  return { nightMin, holidayLe8Min, holidayGt8Min, holidayOtGt8Min };
 }

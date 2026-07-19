@@ -432,13 +432,25 @@ export async function computePayrollItems(
           const dow = new Date(Date.UTC(yy, mm2 - 1, dd)).getUTCDay();
           // 휴일근로(공휴일·주휴일). 커스텀휴무는 여기 미포함=일반급여(가산 없음).
           const span = Math.max(0, e - s);
+          const rowIsHoliday = holidaySet.has(a.workDate) || dow === whDow;
           nhRows.push({
             workDate: a.workDate, startMin: s, endMin: e, nightEndMin: eNight,
-            isHoliday: holidaySet.has(a.workDate) || dow === whDow,
+            isHoliday: rowIsHoliday,
             unpaidBreakMin: unpaidBreakMin(a.assignment?.workType, span),
+            // 휴일행의 유급 연장 분 — 위 overtimeMinutes 합산과 동일 입력(그룹연장 중복합산 방지 포함).
+            //  휴일 연장이 8h 경계를 넘는 분은 연장 1.5배에 더해 0.5배 보충 가산(법정 2.0배) 대상.
+            overtimeMin: rowIsHoliday ? overtimeMinutesForDay({
+              workType: a.assignment?.workType,
+              exempt: a.assignment?.attendanceButtonExempt,
+              actualEndTime: a.actualEndTime ?? null,
+              commuteGuidanceIncluded: a.assignment?.commuteGuidanceIncluded,
+              customWorkStart: a.assignment?.customWorkStart,
+              customWorkEnd: a.assignment?.customWorkEnd,
+              manualExtHours: manualExtHoursFromLogs(a.logs),
+            }) : 0,
           });
         }
-        const { nightMin, holidayLe8Min, holidayGt8Min } = computeNightHolidayMinutes(nhRows);
+        const { nightMin, holidayLe8Min, holidayGt8Min, holidayOtGt8Min } = computeNightHolidayMinutes(nhRows);
         if (nightMin > 0) {
           const nightHours = +(nightMin / 60).toFixed(2);
           const pay = Math.round(nightHours * ordinaryWage * 0.5);
@@ -457,6 +469,16 @@ export async function computePayrollItems(
           calcMethods["휴일근로수당"] = hOver > 0
             ? `8h이내 ${h8}h × 0.5 + 초과 ${hOver}h × 1.0 (× ${ordinaryWage.toLocaleString()}원)`
             : `${h8}시간 × ${ordinaryWage.toLocaleString()}원 × 0.5`;
+        }
+        // 휴일 '연장'으로 8h를 초과한 분 — 연장수당 1.5배는 이미 위에서 지급되므로 0.5배만 보충해 계 2.0배(법정).
+        //  (고정 span 내 초과분은 기본급 1.0 + 위 초과가산 1.0 = 2.0으로 이미 충족 — 여기 미포함.)
+        if (holidayOtGt8Min > 0) {
+          const hOtOver = +(holidayOtGt8Min / 60).toFixed(2);
+          const pay = Math.round(hOtOver * ordinaryWage * 0.5);
+          grossPay += pay;
+          breakdown.holidayOtHoursOver8 = hOtOver;
+          breakdown.holidayOtExtraPay = pay;
+          calcMethods["휴일연장가산"] = `휴일 8h초과 연장 ${hOtOver}h × ${ordinaryWage.toLocaleString()}원 × 0.5 (연장 1.5배에 보충, 계 2.0배)`;
         }
       }
 
@@ -509,7 +531,7 @@ export async function computePayrollItems(
     const owage = Number(bd.ordinaryWage ?? 0);
     const whPay = Number(bd.weeklyHolidayPay ?? 0);
     const whHours = owage > 0 ? +(whPay / owage).toFixed(1) : 0;
-    const basePay = Math.round(grossPay - Number(bd.overtimePay ?? 0) - Number(bd.nightPay ?? 0) - Number(bd.holidayPay ?? 0) - whPay);
+    const basePay = Math.round(grossPay - Number(bd.overtimePay ?? 0) - Number(bd.nightPay ?? 0) - Number(bd.holidayPay ?? 0) - Number(bd.holidayOtExtraPay ?? 0) - whPay);
     const payLines: { key: string; name: string; hours: number; amount: number; method?: string }[] = [];
     if (bd.payType === "HOURLY") {
       const rate1 = Number(contract?.baseAmount ?? bd.hourlyRate ?? 0);
@@ -530,6 +552,9 @@ export async function computePayrollItems(
     }
     if (Number(bd.holidayPay ?? 0) > 0) {
       payLines.push({ key: "holiday", name: "휴일근로수당", hours: Number(bd.holidayHours ?? 0), amount: Number(bd.holidayPay), method: calcMethods["휴일근로수당"] ?? "" });
+    }
+    if (Number(bd.holidayOtExtraPay ?? 0) > 0) {
+      payLines.push({ key: "holidayOtExtra", name: "휴일연장가산", hours: Number(bd.holidayOtHoursOver8 ?? 0), amount: Number(bd.holidayOtExtraPay), method: calcMethods["휴일연장가산"] ?? "" });
     }
     payLines.push({ key: "weeklyHoliday", name: "주휴수당", hours: whHours, amount: whPay, method: calcMethods["주휴수당"] ?? "" });
     payLines.push({ key: "paidHoliday", name: "유급휴일", hours: 0, amount: 0 });

@@ -81,6 +81,51 @@ describe("휴일 근로 8h 경계(일별 합산)", () => {
 
   it("빈 입력은 전부 0", () => {
     const r = computeNightHolidayMinutes([]);
-    expect(r).toEqual({ nightMin: 0, holidayLe8Min: 0, holidayGt8Min: 0 });
+    expect(r).toEqual({ nightMin: 0, holidayLe8Min: 0, holidayGt8Min: 0, holidayOtGt8Min: 0 });
+  });
+});
+
+describe("휴일 '연장'분 8h 초과 보충 가산(holidayOtGt8Min)", () => {
+  // 연장은 기본급 미포함·연장수당 1.5배 별도 지급 → 8h 초과분만 0.5배 보충해 계 2.0배(법정).
+  it("★전일 8h(고정) + 연장 2h: 연장 120분 전부가 8h 초과 → 보충 대상 120", () => {
+    // 09~18시 span 540 − 휴게 60 = 고정 480분. 기존 버킷은 불변(회귀 방지).
+    const r = computeNightHolidayMinutes([
+      row({ isHoliday: true, startMin: 540, endMin: 1080, unpaidBreakMin: 60, overtimeMin: 120 }),
+    ]);
+    expect(r.holidayLe8Min).toBe(480);
+    expect(r.holidayGt8Min).toBe(0);
+    expect(r.holidayOtGt8Min).toBe(120);
+  });
+
+  it("오후 5.5h + 연장 2h = 7.5h ≤ 8h: 보충 0 (연장 1.5배 = 법정 휴일 1.5배 동액)", () => {
+    const r = computeNightHolidayMinutes([
+      row({ isHoliday: true, startMin: 780, endMin: 1110, overtimeMin: 120 }), // 13:00~18:30 = 330분
+    ]);
+    expect(r.holidayLe8Min).toBe(330);
+    expect(r.holidayOtGt8Min).toBe(0);
+  });
+
+  it("고정 5.5h + 연장 4h = 9.5h: 연장 중 8h 경계 넘는 90분만 보충", () => {
+    const r = computeNightHolidayMinutes([
+      row({ isHoliday: true, startMin: 780, endMin: 1110, overtimeMin: 240 }), // 고정 330 + 연장 240 = 570
+    ]);
+    expect(r.holidayLe8Min).toBe(330);
+    expect(r.holidayGt8Min).toBe(0);
+    expect(r.holidayOtGt8Min).toBe(90);
+  });
+
+  it("같은날 2배정(AM 5.5h+PM 5.5h=11h 고정) + 연장 1h: 고정 초과 180은 기존 버킷, 연장 60은 보충 버킷", () => {
+    const r = computeNightHolidayMinutes([
+      row({ isHoliday: true, startMin: 480, endMin: 810 }),                    // 330분
+      row({ isHoliday: true, startMin: 820, endMin: 1150, overtimeMin: 60 }),  // 330분 + 연장 60
+    ]);
+    expect(r.holidayLe8Min).toBe(480);
+    expect(r.holidayGt8Min).toBe(180);   // 고정 660 − 480 (기본급 포함이라 가산 1.0로 충족)
+    expect(r.holidayOtGt8Min).toBe(60);  // 연장분은 전부 8h 밖 → 0.5배 보충
+  });
+
+  it("휴일 아닌 행의 연장은 보충 무관(0)", () => {
+    const r = computeNightHolidayMinutes([row({ overtimeMin: 240 })]);
+    expect(r.holidayOtGt8Min).toBe(0);
   });
 });

@@ -79,6 +79,8 @@ export interface PayrollBreakdown {
   holidayPay?: number;
   holidayHours8?: number;
   holidayHoursOver8?: number;
+  holidayOtHoursOver8?: number; // 휴일 '연장'분 중 8h 초과(0.5배 보충 가산 대상 — 연장 1.5배와 합쳐 계 2.0배)
+  holidayOtExtraPay?: number;
   weeklyHolidayPay?: number;
   weeklyHolidayDetail?: WeeklyHolidayDetail;
   // 통상시급·산식·경고

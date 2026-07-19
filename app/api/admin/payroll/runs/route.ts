@@ -101,6 +101,35 @@ export async function POST(req: NextRequest) {
         throw NextResponse.json({ success: false, message: "이미 확정된 급여입니다. 수정할 수 없습니다." }, { status: 409 });
       }
       if (cur) {
+        // 항목 편집(PATCH: run 행 FOR UPDATE)과 직렬화 — 잠금 없이 진행하면 PATCH가 방금 만든 PAYOUT을
+        //  아래 스냅샷이 못 보고 run 삭제로 고아를 다시 만들 수 있다. 같은 행 잠금을 먼저 획득한다.
+        await tx.$executeRaw`SELECT id FROM payroll_runs WHERE id = ${cur.id} FOR UPDATE`;
+        // ★PAYOUT 고아 방지: 이 DRAFT의 급여 항목에 연결된 연차 미사용수당 정산(PAYOUT)은 항목 삭제와 함께
+        //  지급 근거(수당 라인)를 잃는다. 그대로 두면 원장 −일수만 남고, 재정산 시 payrollItemId가 새 항목 id라
+        //  중복검사도 못 잡아 이중차감된다. 원장은 append-only(삭제 금지 규율) → 반대 부호 ADJUST로 취소를
+        //  기록해 잔여를 복원한다(정산이 필요하면 새 DRAFT에서 다시 등록).
+        const runItems = await tx.payrollItem.findMany({ where: { runId: cur.id }, select: { id: true } });
+        if (runItems.length > 0) {
+          const payouts = await tx.annualLeaveEntry.findMany({
+            where: { kind: "PAYOUT", payrollItemId: { in: runItems.map((i) => i.id) } },
+            select: { id: true, workerId: true, days: true, effectiveDate: true, payrollItemId: true },
+          });
+          if (payouts.length > 0) {
+            await tx.annualLeaveEntry.createMany({
+              data: payouts.map((p) => ({
+                agencyId,
+                workerId: p.workerId,
+                kind: "ADJUST" as const,
+                days: p.days.neg(), // PAYOUT은 음수 → 반대 부호(+)로 잔여 복원
+                effectiveDate: p.effectiveDate,
+                sourceLabel: `정산 취소(급여 재계산 ${yearMonth})`,
+                memo: `급여 재계산으로 초안이 삭제되어 연차 미사용수당 정산을 자동 취소했습니다. 필요 시 새 초안에서 다시 정산해 주세요.`,
+                createdByManagerId: scope.managerId ?? null,
+                payrollItemId: p.payrollItemId, // 취소 대상 추적용(삭제된 항목 id)
+              })),
+            });
+          }
+        }
         // 조건부 삭제 — 재확인(위)과 삭제 사이에 다른 요청이 FINALIZED로 만들면 0건 삭제→409(확정 급여 보호).
         const del = await tx.payrollRun.deleteMany({ where: { id: cur.id, status: { not: "FINALIZED" } } });
         if (del.count === 0) {

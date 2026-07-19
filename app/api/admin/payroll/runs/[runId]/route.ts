@@ -7,6 +7,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { Decimal } from "@prisma/client/runtime/library";
+import type { Prisma } from "@prisma/client";
 import { audit } from "@/lib/audit";
 import type { PayrollBreakdown } from "@/lib/payroll/breakdown";
 import { parseBigInt } from "@/lib/adminScope";
@@ -102,27 +103,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
     const prevBd = (existingItem.breakdown ?? {}) as PayrollBreakdown;
 
     // 연차 미사용수당 정산(옵션): 그리드 저장과 연차 원장 PAYOUT 기록을 트랜잭션으로 원자 처리.
-    //  이중지급 방어 2중 — ①원장 잔여 검증(정산분만큼 차감돼 재정산 자동 차단) ②이 급여 항목으로 이미
-    //  정산했으면 409(더블클릭·재저장 방어). 정정은 연차 관리 화면(ADJUST)에서.
+    //  이중지급 방어 — ①원장 잔여 검증(정산분만큼 차감돼 재정산 자동 차단) ②이 급여 항목으로 이미
+    //  정산했으면 409(더블클릭·재저장 방어). 검증은 아래 트랜잭션 안(워커 advisory 락)에서 수행해
+    //  연차 승인/직접등록(withWorkerAssignmentLock)·동시 재저장과 상호배제한다. 정정은 연차 관리(ADJUST)에서.
     let leavePayoutDays: number | null = null;
     if (body.annualLeavePayout && typeof body.annualLeavePayout === "object") {
       const days = Number(body.annualLeavePayout.days);
       if (!Number.isFinite(days) || days <= 0 || days > 30 || Math.round(days * 4) !== days * 4) {
         return NextResponse.json({ success: false, message: "정산 일수는 0.25일 단위, 최대 30일입니다." }, { status: 400 });
-      }
-      const [sums, dupPayout] = await Promise.all([
-        prisma.annualLeaveEntry.aggregate({
-          where: { agencyId: run.agencyId, workerId: existingItem.workerId },
-          _sum: { days: true },
-        }),
-        prisma.annualLeaveEntry.findFirst({ where: { payrollItemId: itemIdBig, kind: "PAYOUT" }, select: { id: true } }),
-      ]);
-      const balance = Number(sums._sum.days ?? 0);
-      if (dupPayout) {
-        return NextResponse.json({ success: false, message: "이미 이 급여 항목으로 연차를 정산했습니다. 정정은 연차 관리에서 해주세요." }, { status: 409 });
-      }
-      if (balance < days) {
-        return NextResponse.json({ success: false, message: `잔여 연차(${balance}일)가 부족합니다.` }, { status: 409 });
       }
       leavePayoutDays = days;
     }
@@ -152,31 +140,61 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ru
       breakdown = { ...prevBd, manualTotalEdited: true };
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const u = await tx.payrollItem.update({
-        where: { id: itemIdBig },
-        data: {
-          grossPay: new Decimal(gp),
-          totalDeduction: new Decimal(td),
-          netPay: new Decimal(gp - td),
-          breakdown,
-        },
-        include: { user: { select: { id: true, workerName: true, loginId: true } } },
-      });
-      if (leavePayoutDays != null) {
-        const todayKstISO = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        await tx.annualLeaveEntry.create({
+    // 409 사유를 트랜잭션 밖으로 전달하기 위한 센티널(롤백 겸용).
+    class PatchConflict extends Error {}
+    let updated: Prisma.PayrollItemGetPayload<{ include: { user: { select: { id: true; workerName: true; loginId: true } } } }>;
+    try {
+      updated = await prisma.$transaction(async (tx) => {
+        // ★TOCTOU 차단: run 행 잠금 후 상태 재확인. 위 86행 가드는 fast-path일 뿐 — 그 뒤 확정(POST)이
+        //  끼어들면 FINALIZED run 항목이 사후 변경돼 확정본과 불일치했다. FOR UPDATE 행 잠금으로
+        //  확정 updateMany와 직렬화한다(확정이 먼저면 여기서 409, 이 저장이 먼저면 확정이 대기 후 진행).
+        const cur = await tx.$queryRaw<{ status: string }[]>`SELECT status FROM payroll_runs WHERE id = ${run.id} FOR UPDATE`;
+        if (!cur.length || cur[0].status === "FINALIZED") {
+          throw new PatchConflict("확정된 급여는 수정할 수 없습니다.");
+        }
+        if (leavePayoutDays != null) {
+          // 워커 advisory 락(연차 승인/직접등록 경로와 동일 키) 획득 후 잔여·중복 재검증 —
+          //  락 순서는 run행 → 워커로 고정(연차 라우트는 워커 락만 잡으므로 순서 역전·교착 없음).
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(${existingItem.workerId}::bigint)`;
+          const dupPayout = await tx.annualLeaveEntry.findFirst({ where: { payrollItemId: itemIdBig, kind: "PAYOUT" }, select: { id: true } });
+          if (dupPayout) throw new PatchConflict("이미 이 급여 항목으로 연차를 정산했습니다. 정정은 연차 관리에서 해주세요.");
+          const sums = await tx.annualLeaveEntry.aggregate({
+            where: { agencyId: run.agencyId, workerId: existingItem.workerId },
+            _sum: { days: true },
+          });
+          const balance = Number(sums._sum.days ?? 0);
+          if (balance < leavePayoutDays) throw new PatchConflict(`잔여 연차(${balance}일)가 부족합니다.`);
+        }
+        const u = await tx.payrollItem.update({
+          where: { id: itemIdBig },
           data: {
-            agencyId: run.agencyId, workerId: u.workerId, kind: "PAYOUT", days: -leavePayoutDays,
-            effectiveDate: new Date(`${todayKstISO}T00:00:00.000Z`),
-            sourceLabel: `급여 정산(${run.yearMonth})`,
-            createdByManagerId: scope.managerId ?? null,
-            payrollItemId: u.id,
+            grossPay: new Decimal(gp),
+            totalDeduction: new Decimal(td),
+            netPay: new Decimal(gp - td),
+            breakdown,
           },
+          include: { user: { select: { id: true, workerName: true, loginId: true } } },
         });
+        if (leavePayoutDays != null) {
+          const todayKstISO = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          await tx.annualLeaveEntry.create({
+            data: {
+              agencyId: run.agencyId, workerId: u.workerId, kind: "PAYOUT", days: -leavePayoutDays,
+              effectiveDate: new Date(`${todayKstISO}T00:00:00.000Z`),
+              sourceLabel: `급여 정산(${run.yearMonth})`,
+              createdByManagerId: scope.managerId ?? null,
+              payrollItemId: u.id,
+            },
+          });
+        }
+        return u;
+      });
+    } catch (e) {
+      if (e instanceof PatchConflict) {
+        return NextResponse.json({ success: false, message: e.message }, { status: 409 });
       }
-      return u;
-    });
+      throw e;
+    }
 
     // 증빙: 급여 항목 수동 편집(연차미사용수당 등 1회성 수당·당월 예외 공제 0 포함)을 감사로그에 기록.
     //  노동청 분쟁 시 지급/공제 조정 이력 증빙. audit 실패가 저장 응답을 깨지 않도록 방어.
