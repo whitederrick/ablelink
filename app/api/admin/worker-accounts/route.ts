@@ -117,7 +117,8 @@ export async function GET(req: NextRequest) {
   } catch (e: any) {
     if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
-    if (errToStatus(msg) === 500) console.error("[worker-accounts GET]", e);
-    return NextResponse.json({ success: false, message: msg }, { status: errToStatus(msg) });
+    const st = errToStatus(msg);
+    if (st === 500) console.error("[worker-accounts GET]", e);
+    return NextResponse.json({ success: false, message: st === 500 ? "서버 오류" : msg }, { status: st });
   }
 }

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const traineeId = searchParams.get("traineeId");
     const periodStart = searchParams.get("periodStart");
     const periodEnd = searchParams.get("periodEnd");
-    if (!traineeId) return NextResponse.json({ success: false, message: "traineeId가 필요합니다." }, { status: 400 });
+    if (!traineeId || !/^\d+$/.test(traineeId)) return NextResponse.json({ success: false, message: "traineeId가 필요합니다." }, { status: 400 });
 
     const logs = await prisma.traineeLog.findMany({
       where: {

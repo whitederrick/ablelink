@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const traineeId = searchParams.get("traineeId");
 
-    if (!traineeId) {
+    if (!traineeId || !/^\d+$/.test(traineeId)) {
       return NextResponse.json({ success: false, message: "traineeId가 필요합니다." }, { status: 400 });
     }
 

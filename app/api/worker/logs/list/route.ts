@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const periodStart  = searchParams.get("periodStart");
     const periodEnd    = searchParams.get("periodEnd");
     const trainingType = searchParams.get("trainingType");
+    if (traineeId && !/^\d+$/.test(traineeId)) return NextResponse.json({ success: false, message: "잘못된 요청입니다." }, { status: 400 });
 
     const workerId = BigInt(session.workerId);
 

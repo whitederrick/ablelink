@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { parseBigInt } from "@/lib/adminScope";
 import { audit } from "@/lib/audit";
 
 export async function GET(req: NextRequest) {
@@ -76,8 +77,9 @@ export async function POST(req: NextRequest) {
     const scope = await requireManagerSession(req);
     const agencyId = scope.agencyId;
 
-    const { holidayId, requestType, proposedCountAsWorkday, reason } = await req.json();
-    if (!holidayId || !["DELETE", "CHANGE_WORKDAY"].includes(requestType))
+    const { holidayId, requestType, proposedCountAsWorkday, reason } = await req.json().catch(() => ({}));
+    const holidayIdBig = parseBigInt(holidayId);
+    if (!holidayIdBig || !["DELETE", "CHANGE_WORKDAY"].includes(requestType))
       return NextResponse.json({ success: false, message: "잘못된 요청입니다." }, { status: 400 });
 
     if (requestType === "CHANGE_WORKDAY" && proposedCountAsWorkday === undefined)
@@ -85,29 +87,37 @@ export async function POST(req: NextRequest) {
 
     // 해당 휴무일이 자기 위탁기관 소속인지 확인
     const holiday = await prisma.siteHoliday.findUnique({
-      where: { id: BigInt(holidayId) },
+      where: { id: holidayIdBig },
       include: { assignment: { select: { agencyId: true } } },
     });
     if (!holiday || holiday.assignment.agencyId !== agencyId)
       return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
 
-    // 이미 PENDING 요청이 있으면 중복 방지
-    const existing = await prisma.siteHolidayRequest.findFirst({
-      where: { holidayId: BigInt(holidayId), status: "PENDING" },
-    });
-    if (existing)
-      return NextResponse.json({ success: false, message: "이미 처리 대기 중인 요청이 있습니다." }, { status: 409 });
-
-    const request = await prisma.siteHolidayRequest.create({
-      data: {
-        holidayId:             BigInt(holidayId),
-        agencyId,
-        managerId: scope.managerId,
-        requestType,
-        proposedCountAsWorkday: requestType === "CHANGE_WORKDAY" ? Boolean(proposedCountAsWorkday) : null,
-        reason:                reason?.trim() || null,
-      },
-    });
+    // ★중복 PENDING 방지(P3): 더블클릭 시 findFirst→create 사이 경합으로 같은 휴무일에 PENDING 2행이 생기던 것을,
+    //  휴무일 id 기준 advisory 트랜잭션 락으로 직렬화(partial unique는 마이그 필요 규율이라 애플리케이션 락 사용).
+    class DupPending extends Error {}
+    let request: { id: bigint };
+    try {
+      request = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`holreq:${holidayIdBig.toString()}`}))`;
+        const existing = await tx.siteHolidayRequest.findFirst({ where: { holidayId: holidayIdBig, status: "PENDING" }, select: { id: true } });
+        if (existing) throw new DupPending();
+        return tx.siteHolidayRequest.create({
+          data: {
+            holidayId:             holidayIdBig,
+            agencyId,
+            managerId: scope.managerId,
+            requestType,
+            proposedCountAsWorkday: requestType === "CHANGE_WORKDAY" ? Boolean(proposedCountAsWorkday) : null,
+            reason:                reason?.trim() || null,
+          },
+          select: { id: true },
+        });
+      });
+    } catch (e) {
+      if (e instanceof DupPending) return NextResponse.json({ success: false, message: "이미 처리 대기 중인 요청이 있습니다." }, { status: 409 });
+      throw e;
+    }
 
     // 직무지도원에게 WorkerNotice 알림
     const workerId = holiday.assignment
@@ -135,7 +145,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    await audit(scope, { entityType: "SiteHoliday", entityId: BigInt(holidayId), action: "create", summary: `커스텀 휴무일 ${requestType === "DELETE" ? "삭제" : "근무인정 변경"} 요청` });
+    await audit(scope, { entityType: "SiteHoliday", entityId: holidayIdBig, action: "create", summary: `커스텀 휴무일 ${requestType === "DELETE" ? "삭제" : "근무인정 변경"} 요청` });
     return NextResponse.json({ success: true, id: request.id.toString() });
   } catch (e: any) {
     if (e instanceof Response) return e;

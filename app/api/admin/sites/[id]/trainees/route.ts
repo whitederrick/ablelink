@@ -95,6 +95,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch (e: any) {
     if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
-    return NextResponse.json({ success: false, message: msg }, { status: errToStatus(msg) });
+    const st = errToStatus(msg);
+    return NextResponse.json({ success: false, message: st === 500 ? "서버 오류" : msg }, { status: st });
   }
 }

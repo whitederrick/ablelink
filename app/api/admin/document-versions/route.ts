@@ -86,7 +86,8 @@ export async function GET(req: NextRequest) {
     // requireManagerSession은 NextResponse(401)를 throw — message 기반 매핑이 500으로 바꿔버리던 것 방지.
     if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
-    return NextResponse.json({ success: false, message: msg }, { status: errToStatus(msg) });
+    const st = errToStatus(msg);
+    return NextResponse.json({ success: false, message: st === 500 ? "서버 오류" : msg }, { status: st });
   }
 }
 
@@ -179,6 +180,7 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     if (e instanceof Response) return e;
     const msg = e?.message || "UNKNOWN";
-    return NextResponse.json({ success: false, message: msg }, { status: errToStatus(msg) });
+    const st = errToStatus(msg);
+    return NextResponse.json({ success: false, message: st === 500 ? "서버 오류" : msg }, { status: st });
   }
 }
