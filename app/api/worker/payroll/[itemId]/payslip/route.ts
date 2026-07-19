@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer } from "@/lib/pdf";
 import { buildPayslipPayload } from "@/lib/payroll/payslipPayload";
 import { getKstDateString } from "@/lib/time";
+import { parseBigInt } from "@/lib/adminScope";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ itemId: string }> }) {
   try {
@@ -16,8 +17,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ item
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
     const { itemId } = await params;
+    // 비숫자 id의 BigInt() throw → 500으로 새지 않게 400 처리(P3 위생).
+    const itemIdBig = parseBigInt(itemId);
+    if (!itemIdBig) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const item = await prisma.payrollItem.findUnique({
-      where: { id: BigInt(itemId) },
+      where: { id: itemIdBig },
       include: {
         user: { select: { workerName: true, birthDate: true, bankName: true, accountNumber: true, accountHolder: true } },
         run: { select: { status: true, yearMonth: true, finalizedAt: true, agency: { select: { name: true, businessNumber: true, representativeName: true, address: true, phoneNumber: true } } } },

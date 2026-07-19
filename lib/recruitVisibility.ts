@@ -8,9 +8,16 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 
 // worker가 배정 이력이 있는 위탁기관 ID 집합(중복 제거)
+//  ★'이력' = 워커가 실제 동의/체결한 배정만(P3 감사 지적). REQUESTED(회신 대기)·REJECTED(워커 거절)·
+//   EXPIRED(무응답 탈락)는 워커가 동의한 적 없는 관계라 제외 — 기관이 배정 요청만 던져 두고
+//   그 워커의 공고 피드 노출 채널을 얻는 것 방지.
 export async function getWorkerAgencyIds(workerId: bigint): Promise<bigint[]> {
   const rows = await prisma.siteAssignment.findMany({
-    where: { workerId, agencyId: { not: null } },
+    where: {
+      workerId,
+      agencyId: { not: null },
+      status: { in: ["ACTIVE", "ENDED", "ASSIGNED", "CONFIRMED", "ACCEPTED", "DROPPED"] },
+    },
     select: { agencyId: true },
     distinct: ["agencyId"],
   });

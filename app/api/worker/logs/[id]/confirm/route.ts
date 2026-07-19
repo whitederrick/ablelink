@@ -4,6 +4,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
+import { parseBigInt } from "@/lib/adminScope";
 
 export async function PATCH(
   req: NextRequest,
@@ -14,11 +15,14 @@ export async function PATCH(
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
     const { id } = await params;
+    // 비숫자 id의 BigInt() throw → 500으로 새지 않게 400 처리(P3 위생).
+    const idBig = parseBigInt(id);
+    if (!idBig) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const body = await req.json().catch(() => ({}));
     const unconfirm = body?.unconfirm === true;
 
     const log = await prisma.traineeLog.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: idBig },
       select: { id: true, writerId: true, isCompleted: true },
     });
 

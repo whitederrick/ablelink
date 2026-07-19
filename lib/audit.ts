@@ -39,6 +39,8 @@ const SENSITIVE_KEYS = new Set([
   "govContacts", "govContactEmail", "govContactName",
   // 문서 URL류(서명 외 PDF 등 — 접근 시 서류 내용 열람 가능)
   "pdfUrl", "pdfFileName",
+  // 주소·계정 식별자(P3 감사 지적: 마스킹 키 누락) — 주소는 PII, loginId는 로그인 식별자라 유출 시 크리덴셜 공격 표적.
+  "address", "detailAddress", "residenceAddress", "employerAddress", "workerAddress", "workerFilledAddress", "loginId",
 ]);
 const fmtVal = (v: unknown): string => (v === null || v === undefined ? "(비움)" : String(v));
 const eqScalar = (a: unknown, b: unknown): boolean => fmtVal(a) === fmtVal(b);

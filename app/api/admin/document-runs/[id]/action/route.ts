@@ -9,6 +9,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { audit } from "@/lib/audit";
 import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { getKstDateString } from "@/lib/time";
+import { parseBigInt } from "@/lib/adminScope";
 
 const DOC_LABEL: Record<string, string> = {
   ATTENDANCE_SHEET:              "출근부",
@@ -23,7 +24,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const scope = await requireManagerSession(req);
     const { id } = await params;
-    const runId = BigInt(id);
+    // 비숫자 id의 BigInt() throw → 500으로 새지 않게 400 처리(P3 위생).
+    const runId = parseBigInt(id);
+    if (!runId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action || "");
 

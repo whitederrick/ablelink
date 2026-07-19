@@ -278,6 +278,8 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error("[docs/generate]", error);
-    return NextResponse.json({ success: false, message: error.message || "PDF 생성 오류" }, { status: 500 });
+    // 내부 예외 message(쿼리·경로 등 내부정보 포함 가능)는 클라이언트에 노출하지 않는다(P3 위생).
+    //  사용자 안내가 필요한 검증 오류는 위에서 DocPayloadError로 이미 4xx 처리됨.
+    return NextResponse.json({ success: false, message: "PDF 생성 오류" }, { status: 500 });
   }
 }

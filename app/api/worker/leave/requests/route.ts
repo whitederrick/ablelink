@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: "대기", APPROVED: "승인", REJECTED: "반려", CONFIRMED: "확인", DISPUTED: "이의", CANCELED: "취소",
@@ -59,6 +60,12 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
     const workerId = BigInt(session.workerId);
 
+    // 신청 남발 방지(P3) — 신청마다 담당자 전원 알림 fan-out이 발생하므로 워커 단위 예산을 둔다.
+    const rl = await checkRateLimit(`leave-req:${workerId}`, { max: 10, windowSec: 10 * 60, blockSec: 10 * 60 });
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, message: "신청이 너무 잦습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
+    }
+
     const body = await req.json().catch(() => ({}));
     let agencyId: bigint;
     try { agencyId = BigInt(String(body?.agencyId ?? "")); } catch { return NextResponse.json({ success: false, message: "기관 정보가 올바르지 않습니다." }, { status: 400 }); }
@@ -66,7 +73,8 @@ export async function POST(req: NextRequest) {
     const days = Number(body?.days);
     const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 200) : "";
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) {
+    // 형식 + 실존 날짜 검증(P3) — 정규식만으로는 2026-99-99가 통과해 Invalid Date로 500이 났다.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate) || isNaN(Date.parse(`${effectiveDate}T00:00:00.000Z`))) {
       return NextResponse.json({ success: false, message: "날짜 형식이 올바르지 않습니다." }, { status: 400 });
     }
     if (!Number.isFinite(days) || days <= 0 || days > 30 || Math.round(days * 4) !== days * 4) {

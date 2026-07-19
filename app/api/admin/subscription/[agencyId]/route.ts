@@ -7,6 +7,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS } from "@/lib/planGuard";
 import { requireManagerSession } from "@/lib/managerScope";
+import { parseBigInt } from "@/lib/adminScope";
 
 export async function PATCH(
   request: NextRequest,
@@ -29,7 +30,9 @@ export async function PATCH(
       );
     }
 
-    const agencyId = BigInt(agencyIdStr);
+    // 비숫자 id의 BigInt() throw → 500으로 새지 않게 400 처리(P3 위생).
+    const agencyId = parseBigInt(agencyIdStr);
+    if (!agencyId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
 
     if (scope.agencyId !== agencyId) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });

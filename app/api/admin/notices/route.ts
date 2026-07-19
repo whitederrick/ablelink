@@ -16,7 +16,9 @@ export async function GET(req: NextRequest) {
     const agencyId = session.kind === "manager" ? session.agencyId : undefined;
 
     const { searchParams } = new URL(req.url);
-    const limit = Math.min(100, Number(searchParams.get("limit") ?? 50));
+    // limit=abc 같은 비숫자는 NaN이 take로 흘러 500 — 정수 파싱 실패 시 기본 50, 1~100 클램프(P3 위생).
+    const limitRaw = Number(searchParams.get("limit") ?? 50);
+    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.trunc(limitRaw))) : 50;
 
     // 직무지도원에게 보낸 알림만. 시스템 공지(kind=SYSTEM, 레거시 "[시스템 공지]" 제목)는
     // 별도 '시스템 공지사항' 화면에서만 노출하므로 여기서 제외한다.

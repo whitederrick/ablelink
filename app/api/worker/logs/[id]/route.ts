@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
+import { parseBigInt } from "@/lib/adminScope";
 
 export async function GET(
   request: NextRequest,
@@ -13,8 +14,11 @@ export async function GET(
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
     const { id } = await params;
+    // 비숫자 id의 BigInt() throw → 500으로 새지 않게 400 처리(P3 위생).
+    const idBig = parseBigInt(id);
+    if (!idBig) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const log = await prisma.traineeLog.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: idBig },
       include: {
         trainee:    { select: { name: true, gender: true } },
         attendance: { select: { workDate: true } },
@@ -65,8 +69,10 @@ export async function PATCH(
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
     const { id } = await params;
+    const idBig = parseBigInt(id);
+    if (!idBig) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const log = await prisma.traineeLog.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: idBig },
       select: { writerId: true, isCompleted: true },
     });
 
@@ -79,7 +85,7 @@ export async function PATCH(
 
     // 확정된 일지 수정 시 자동 확정 취소 후 저장
     await prisma.traineeLog.update({
-      where: { id: BigInt(id) },
+      where: { id: idBig },
       data: { content: body.content, isCompleted: false },
     });
 
@@ -99,8 +105,10 @@ export async function DELETE(
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
     const { id } = await params;
+    const idBig = parseBigInt(id);
+    if (!idBig) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const log = await prisma.traineeLog.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: idBig },
       select: { writerId: true },
     });
 
@@ -108,7 +116,7 @@ export async function DELETE(
     if (log.writerId.toString() !== session.workerId)
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
 
-    await prisma.traineeLog.delete({ where: { id: BigInt(id) } });
+    await prisma.traineeLog.delete({ where: { id: idBig } });
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

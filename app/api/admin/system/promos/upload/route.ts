@@ -42,11 +42,16 @@ export async function POST(req: Request) {
     const path = `promos/${randomUUID()}.${ext}`;
     const buf = Buffer.from(await file.arrayBuffer());
     const { error } = await supabase.storage.from(BUCKET).upload(path, buf, { contentType: file.type, upsert: false });
-    if (error) return NextResponse.json({ success: false, message: `업로드 실패: ${error.message}` }, { status: 500 });
+    if (error) {
+      // 스토리지 내부 오류 message(버킷·경로 등)는 클라이언트에 노출하지 않는다(P3 위생) — 서버 로그로만.
+      console.error("[promos/upload] 업로드 실패:", error.message);
+      return NextResponse.json({ success: false, message: "업로드에 실패했습니다. 잠시 후 다시 시도해주세요." }, { status: 500 });
+    }
     const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
     return NextResponse.json({ success: true, url: data.publicUrl });
   } catch (e: any) {
     if (e instanceof Response || (e && typeof e.status === "number")) return e as any;
-    return NextResponse.json({ success: false, message: e?.message || "업로드 실패" }, { status: 500 });
+    console.error("[promos/upload]", e);
+    return NextResponse.json({ success: false, message: "업로드 실패" }, { status: 500 });
   }
 }

@@ -34,6 +34,27 @@ GET /manager/leave 500 · GET /worker/calendar 500
 
 이번 주까지 완료: 노무사 큐 #1~#7 전량 · 감사 13~21차 전 항목 · 백로그 재감사 소진 · 정식 연차관리 모듈(6단계) · E1-C 서명 슬롯정원 · CSP enforce 전환. **코드는 출시 가능한 상태 — 개발 관점 필수 작업 0건.**
 
+## ⑦ 전수 심층감사(2026-07-16) — 12개 병렬. 상세=docs/WORK_STATUS_2026_07_16_FULL_AUDIT.md
+> P0/라이브P1 0. 여러차례 감사거친 기존경로(배정·급여·근태·서명·결제·cron) 견고. IDOR 247개 결함0·정원/근태소유권 위반0·노무사7건 온전·마이그 드리프트0.
+
+**✅수정 완료·검증(`c33c696` — push 완료 2026-07-19, 마이그 없음)**:
+- FIX-1 연차 승인/등록 동시성: withWorkerAssignmentLock으로 직렬화(이중 USE·잔여음수 차단). e2e 실증.
+- FIX-4 PII 접속기록(제8조): trainees·sites/[id]/trainees·system/backup에 logAccess 배선.
+- FIX-6 CSP 매처 우회: 확장자제외 루트세그먼트 한정(/x.json 인증게이트 복원).
+
+**✅남은 판단항목 큐 — 2026-07-19 세션에서 소진(노무사 항목 제외)**:
+| 항목 | 처리 결과 |
+|---|---|
+| 월급제 휴일근로 기본급 100% 누락 | ⏳**유일 잔여 — 노무사 확인 대기**(월급제 휴일가산율 해석) |
+| 급여 P2 3건 | ✅휴일 초과연장 0.5배 보충가산(holidayOtGt8Min 버킷+명세서 라인) · 확정↔PATCH는 run행 FOR UPDATE 직렬화 · PAYOUT 고아는 재계산 시 반대부호 ADJUST 자동취소. e2e 실증 |
+| 문서 PDF 스코핑 | ✅run.agencyId(생성=assignment.agencyId)로 5곳 통일. dev·운영 DB divergence 0 실측 |
+| 보안·정책 | ✅워커 로그인 IP 전역 예산(30/15분) 추가 · 매니저 docs/generate·send에 PDF_GENERATE(STANDARD) 플랜 게이트(워커측과 정렬). Redis 폴백 fail-open은 의도적 결정 유지 |
+| P3 위생 | ✅BigInt 파싱 400화(5개 라우트)·예외 message 비노출 2곳·연차신청 레이트리밋·날짜 실존검증 2곳·notices limit 클램프·마스킹 키(주소류·loginId)·recruitVisibility 미동의 상태 제외. 잔여: USE FIFO 소진순서·EXPIRE 재발화(정책 판단 필요 시) |
+
+검증: tsc 0 · vitest 365(신규 회귀 5종 포함) · dev 서버 e2e 22/22 + STARTER 플랜게이트 403 실측.
+
+**⚠️다음 세션 재개점**: 월급제 휴일근로(노무사 회신 후)뿐.
+
 ## ① 출시하려면 필요한 것 — 사용자(사업) 액션
 
 | 일 | 영향도 | 난이도 | 설명 |
