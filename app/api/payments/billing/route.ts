@@ -31,10 +31,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { agencyId, planType, authKey, customerKey } = body;
 
-    if (!agencyId || !planType || !authKey || !customerKey) {
+    if (!agencyId || !/^\d+$/.test(String(agencyId)) || !planType || !authKey || !customerKey) {
       return NextResponse.json(
         { success: false, message: "필수 파라미터가 누락됐습니다." },
         { status: 400 }

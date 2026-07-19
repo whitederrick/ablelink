@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const siteId = searchParams.get("siteId");
 
+    if (siteId && !/^\d+$/.test(siteId)) return NextResponse.json({ success: false, message: "잘못된 현장 ID입니다." }, { status: 400 });
     const sites = await prisma.site.findMany({
       where: { agencyId, ...(siteId ? { id: BigInt(siteId) } : {}) },
       include: {
@@ -66,11 +67,11 @@ export async function POST(req: NextRequest) {
     const scope    = await requireManagerSession(req);
     const agencyId = scope.agencyId;
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { siteId, name, gender, birthDate, phoneNumber, guardianPhoneNumber, guardianPhoneNumber2,
             disabilityType, severity, note } = body;
 
-    if (!siteId || !name?.trim() || !gender || !disabilityType || !severity)
+    if (!siteId || !/^\d+$/.test(String(siteId)) || !name?.trim() || !gender || !disabilityType || !severity)
       return NextResponse.json({ success: false, message: "필수 항목이 누락되었습니다." }, { status: 400 });
 
     const site = await prisma.site.findUnique({ where: { id: BigInt(siteId) } });

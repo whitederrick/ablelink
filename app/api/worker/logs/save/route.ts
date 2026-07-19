@@ -111,6 +111,7 @@ export async function POST(request: NextRequest) {
 
     // 수정 모드: 소유권 + 날짜 이동 충돌 검사
     if (logId) {
+      if (!/^[0-9]+$/.test(String(logId))) return NextResponse.json({ success: false, message: "잘못된 일지 ID입니다." }, { status: 400 });
       const own = await prisma.traineeLog.findUnique({ where: { id: BigInt(logId) }, select: { writerId: true } });
       if (!own) return NextResponse.json({ success: false, message: "일지를 찾을 수 없습니다." }, { status: 404 });
       if (own.writerId !== writerId) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });

@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     const periodStart = searchParams.get("periodStart") || new Date().toISOString().slice(0, 10);
     const periodEnd   = searchParams.get("periodEnd")   || periodStart;
 
-    if (!workerIdRaw) {
+    if (!workerIdRaw || !/^\d+$/.test(workerIdRaw)) {
       return NextResponse.json({ success: false, message: "workerId 필요" }, { status: 400 });
     }
 

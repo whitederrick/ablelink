@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession, requireAdminOrManagerSession } from "@/lib/managerScope";
+import { parseBigInt } from "@/lib/adminScope";
 import { VALID_WORK_TYPES, type WorkType, computeWorkTimes } from "@/lib/workSchedule";
 import { audit, auditSnapshot } from "@/lib/audit";
 import { findTimeConflict, assignmentsTimeConflict, OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
@@ -19,7 +20,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const session = await requireAdminOrManagerSession(req);
     const { id } = await params;
-    const assignmentId = BigInt(id);
+    const assignmentId = parseBigInt(id);
+    if (!assignmentId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
 
     const existing = await prisma.siteAssignment.findUnique({
       where: { id: assignmentId },
@@ -63,7 +65,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // 듀얼: 매니저=본 기관 배정만, 운영자(x-admin-context)=전체. (출퇴근 면제·근무형태 수정)
     const session = await requireAdminOrManagerSession(req);
     const { id } = await params;
-    const assignmentId = BigInt(id);
+    const assignmentId = parseBigInt(id);
+    if (!assignmentId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
 
     const body = await req.json();
 

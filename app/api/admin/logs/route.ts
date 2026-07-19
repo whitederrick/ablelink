@@ -15,6 +15,9 @@ export async function GET(req: NextRequest) {
     const dateTo    = searchParams.get("dateTo")    ?? "";
     const workerId   = searchParams.get("workerId")   ?? "";
     const traineeId = searchParams.get("traineeId") ?? "";
+    // 비숫자 id는 아래 BigInt()에서 500 나므로 400(P3 위생).
+    if ((workerId && !/^\d+$/.test(workerId)) || (traineeId && !/^\d+$/.test(traineeId)))
+      return NextResponse.json({ success: false, message: "잘못된 요청입니다." }, { status: 400 });
     const completed = searchParams.get("completed") ?? ""; // "true"|"false"|""
 
     // 위탁기관 내 배정 목록으로 접근 가능한 workerId 범위 결정

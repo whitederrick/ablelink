@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const scope = await requireManagerSession(request);
     const { searchParams } = new URL(request.url);
     const workerIdRaw = searchParams.get("workerId") ?? "";
-    if (!workerIdRaw) return NextResponse.json({ success: false, message: "workerId 필요" }, { status: 400 });
+    if (!workerIdRaw || !/^[0-9]+$/.test(workerIdRaw)) return NextResponse.json({ success: false, message: "workerId 필요" }, { status: 400 });
 
     const workerId = BigInt(workerIdRaw);
 

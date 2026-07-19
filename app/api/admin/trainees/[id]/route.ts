@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { parseBigInt } from "@/lib/adminScope";
 import { audit, auditSnapshot } from "@/lib/audit";
 import { syncPlacementForStatus } from "@/lib/traineePlacement";
 
@@ -16,12 +17,14 @@ export async function PATCH(
     const agencyId = scope.agencyId;
 
     const { id } = await params;
-    const body = await req.json();
+    const traineeIdBig = parseBigInt(id);
+    if (!traineeIdBig) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
     const { name, gender, birthDate, phoneNumber, guardianPhoneNumber, guardianPhoneNumber2,
             disabilityType, severity, status, note } = body;
 
     const trainee = await prisma.trainee.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: traineeIdBig },
       include: { site: { select: { agencyId: true } } },
     });
     if (!trainee || trainee.site?.agencyId !== agencyId)

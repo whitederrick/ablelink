@@ -17,13 +17,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const { id: idStr } = await params;
+    if (!/^\d+$/.test(idStr)) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const id = BigInt(idStr);
     const existing = await prisma.agencyDeduction.findUnique({ where: { id } });
     if (!existing || existing.agencyId !== agencyId) {
       return NextResponse.json({ success: false, message: "항목을 찾을 수 없습니다." }, { status: 404 });
     }
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { name, type, amount, isActive } = body;
 
     if (type && !["FIXED", "PERCENTAGE"].includes(type)) {
@@ -71,6 +72,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
 
     const { id: idStr } = await params;
+    if (!/^\d+$/.test(idStr)) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
     const id = BigInt(idStr);
     const existing = await prisma.agencyDeduction.findUnique({ where: { id } });
     if (!existing || existing.agencyId !== agencyId) {

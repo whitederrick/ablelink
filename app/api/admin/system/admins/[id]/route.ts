@@ -46,6 +46,7 @@ export async function PATCH(
       if (note !== undefined)        updateData.note = note?.trim() || null;
       if (isActive !== undefined)    updateData.isActive = isActive;
       if (agencyId !== undefined) {
+        if (agencyId && !/^[0-9]+$/.test(String(agencyId))) return NextResponse.json({ success: false, message: "잘못된 위탁기관 ID입니다." }, { status: 400 });
         updateData.agencyId = agencyId ? BigInt(agencyId) : null;
         if (agencyId) {
           const ag = await prisma.agency.findUnique({ where: { id: BigInt(agencyId) }, select: { name: true } });

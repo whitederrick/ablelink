@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
 
     const assignmentIdStr = String(body?.assignmentId || "").trim();
     const docTypeStr = String(body?.docType || "").trim();

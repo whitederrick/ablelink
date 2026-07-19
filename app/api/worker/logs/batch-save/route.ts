@@ -29,10 +29,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { assignmentId, logs }: { assignmentId: string; logs: LogEntry[] } = body;
 
-    if (!assignmentId || !Array.isArray(logs) || logs.length === 0) {
+    if (!assignmentId || !/^[0-9]+$/.test(String(assignmentId)) || !Array.isArray(logs) || logs.length === 0) {
       return NextResponse.json({ success: false, message: "assignmentId와 logs가 필요합니다." }, { status: 400 });
     }
 

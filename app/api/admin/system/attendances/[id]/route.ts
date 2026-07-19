@@ -17,7 +17,8 @@ export async function PATCH(
     const scope = await requireAdminSession(req);
 
     const { id } = await params;
-    const body = await req.json();
+    if (!/^[0-9]+$/.test(id)) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
     const { startTime, endTime, reason } = body;
 
     if (!reason?.trim()) {

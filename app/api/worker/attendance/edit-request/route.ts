@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { attendanceId, reason, proposedStart, proposedEnd } = body;
 
-    if (!attendanceId || !reason?.trim()) {
+    if (!attendanceId || !/^\d+$/.test(String(attendanceId)) || !reason?.trim()) {
       return NextResponse.json({ success: false, message: "출근 기록 ID와 수정 사유는 필수입니다." }, { status: 400 });
     }
 
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
 
     const workerId = BigInt(session.workerId);
     const where: any = { workerId };
-    if (attendanceId) where.attendanceId = BigInt(attendanceId);
+    if (attendanceId && /^\d+$/.test(attendanceId)) where.attendanceId = BigInt(attendanceId);
 
     const requests = await prisma.attendanceEditRequest.findMany({
       where,

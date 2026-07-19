@@ -38,10 +38,12 @@ export async function POST(request: NextRequest) {
     const planCheck = await checkPlanAccess(workerId, "PDF_GENERATE");
     if (!planCheck.allowed) return NextResponse.json({ success: false, message: planCheck.message }, { status: 403 });
 
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { docType, periodStart, periodEnd, sendEmail, toEmail, traineeId, companyManagerSignToken, assignmentId } = body;
 
     if (!docType) return NextResponse.json({ success: false, message: "문서 종류를 선택해주세요." }, { status: 400 });
+    // traineeId는 훈련생 문서에서 BigInt로 쓰임 — 비숫자면 500 대신 400(P3 위생).
+    if (traineeId != null && !/^\d+$/.test(String(traineeId))) return NextResponse.json({ success: false, message: "잘못된 훈련생 ID입니다." }, { status: 400 });
 
     // 멀티현장: 클라가 선택 배정(assignmentId)을 주면 그 현장으로 생성(소유 검증). 없으면 최신 1건 폴백.
     let selAssignmentId: bigint | null = null;
