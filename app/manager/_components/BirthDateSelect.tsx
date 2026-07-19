@@ -46,6 +46,8 @@ export default function BirthDateSelect({
   const years: number[] = [];
   for (let yr = thisYear; yr >= minYear; yr--) years.push(yr);
   const maxDay = daysInMonth(ymd.y, ymd.m);
+  // 부분 입력(하나라도 골랐는데 셋이 안 참) — 저장 시 조용히 미저장되므로 명시 경고(정보성).
+  const partial = (!!ymd.y || !!ymd.m || !!ymd.d) && !(ymd.y && ymd.m && ymd.d);
 
   // 필드 변경 → 로컬 state 갱신 + 세 값 완성 시에만 부모로 방출(미완성은 ""). 일자는 그 달 말일 초과 시 클램프.
   const set = (patch: Partial<typeof ymd>) => {
@@ -58,19 +60,22 @@ export default function BirthDateSelect({
   };
 
   return (
-    <div className={`grid grid-cols-3 gap-2 ${className}`}>
-      <select value={ymd.y || ""} onChange={(e) => set({ y: Number(e.target.value) })} className={T_SELECT} aria-label="출생 연도">
-        <option value="">년</option>
-        {years.map((yr) => <option key={yr} value={yr}>{yr}년</option>)}
-      </select>
-      <select value={ymd.m || ""} onChange={(e) => set({ m: Number(e.target.value) })} className={T_SELECT} aria-label="출생 월">
-        <option value="">월</option>
-        {Array.from({ length: 12 }, (_, i) => i + 1).map((mo) => <option key={mo} value={mo}>{mo}월</option>)}
-      </select>
-      <select value={ymd.d || ""} onChange={(e) => set({ d: Number(e.target.value) })} className={T_SELECT} aria-label="출생 일">
-        <option value="">일</option>
-        {Array.from({ length: maxDay }, (_, i) => i + 1).map((day) => <option key={day} value={day}>{day}일</option>)}
-      </select>
+    <div className={className}>
+      <div className="grid grid-cols-3 gap-2">
+        <select value={ymd.y || ""} onChange={(e) => set({ y: Number(e.target.value) })} className={T_SELECT} aria-label="출생 연도">
+          <option value="">년</option>
+          {years.map((yr) => <option key={yr} value={yr}>{yr}년</option>)}
+        </select>
+        <select value={ymd.m || ""} onChange={(e) => set({ m: Number(e.target.value) })} className={T_SELECT} aria-label="출생 월">
+          <option value="">월</option>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((mo) => <option key={mo} value={mo}>{mo}월</option>)}
+        </select>
+        <select value={ymd.d || ""} onChange={(e) => set({ d: Number(e.target.value) })} className={T_SELECT} aria-label="출생 일">
+          <option value="">일</option>
+          {Array.from({ length: maxDay }, (_, i) => i + 1).map((day) => <option key={day} value={day}>{day}일</option>)}
+        </select>
+      </div>
+      {partial && <p className="mt-1 text-[11px] font-semibold text-rose-500" role="alert">년·월·일을 모두 선택해야 저장됩니다.</p>}
     </div>
   );
 }

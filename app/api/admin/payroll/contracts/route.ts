@@ -118,7 +118,9 @@ export async function POST(req: NextRequest) {
     //  종료만 되고 생성 실패로 유효계약 0개가 되던 경합 방지.
     const contract = await prisma.$transaction(async (tx) => {
       // 기존 유효 계약(열린) 종료 처리 후 신규 생성.
-      if (effectiveTo === undefined || effectiveTo === null) {
+      //  ★"열린 계약"의 판정을 null/undefined/""로 통일 — 위 검증은 ""를 열린계약으로 통과시키는데(UI는 ||null 전송),
+      //   여기서 ""를 안 잡으면 기존 open 계약이 안 닫혀 유효계약 2개가 남던 미세 불일치를 제거.
+      if (effectiveTo === undefined || effectiveTo === null || effectiveTo === "") {
         await tx.payContract.updateMany({
           where: { agencyId, workerId: workerIdVal, siteId: null, effectiveTo: null },
           data: { effectiveTo: new Date(effectiveFrom) },

@@ -5,6 +5,7 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
+import { isValidYmd } from "@/lib/time";
 import { checkPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer } from "@/lib/pdf";
@@ -42,6 +43,9 @@ export async function POST(request: NextRequest) {
     const { docType, periodStart, periodEnd, sendEmail, toEmail, traineeId, companyManagerSignToken, assignmentId } = body;
 
     if (!docType) return NextResponse.json({ success: false, message: "문서 종류를 선택해주세요." }, { status: 400 });
+    // 날짜 왕복검증(submit·preview·admin generate와 통일) — 실존불가 날짜가 findTraineeAtSiteInPeriod의 Invalid Date로 500나던 것 차단.
+    if (!isValidYmd(String(periodStart)) || !isValidYmd(String(periodEnd)))
+      return NextResponse.json({ success: false, message: "기간(YYYY-MM-DD)이 올바르지 않습니다." }, { status: 400 });
     // traineeId는 훈련생 문서에서 BigInt로 쓰임 — 비숫자면 500 대신 400(P3 위생).
     if (traineeId != null && !/^\d+$/.test(String(traineeId))) return NextResponse.json({ success: false, message: "잘못된 훈련생 ID입니다." }, { status: 400 });
 

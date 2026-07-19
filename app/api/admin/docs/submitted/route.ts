@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { isValidYmd } from "@/lib/time";
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,7 +16,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const periodStart = searchParams.get("periodStart");
     const periodEnd = searchParams.get("periodEnd");
-    if (!periodStart || !periodEnd) {
+    // 왕복검증(preview/generate와 통일) — 실존불가 날짜가 Invalid Date로 Prisma 필터 500나던 것 차단.
+    if (!isValidYmd(periodStart ?? "") || !isValidYmd(periodEnd ?? "")) {
       return NextResponse.json({ success: false, message: "기간이 필요합니다." }, { status: 400 });
     }
 

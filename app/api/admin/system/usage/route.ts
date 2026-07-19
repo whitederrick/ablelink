@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
+import { isValidYmd } from "@/lib/time";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,6 +11,10 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const ym = searchParams.get("yearMonth") ?? new Date().toISOString().slice(0,7);
+    // 형식(YYYY-MM) + 실존(월 01~12) 검증 — 비ISO ym이 Invalid Date/NaN으로 Prisma 500나던 것 차단.
+    if (!/^\d{4}-\d{2}$/.test(ym) || !isValidYmd(`${ym}-01`)) {
+      return NextResponse.json({ success: false, message: "yearMonth 형식이 올바르지 않습니다. (YYYY-MM)" }, { status: 400 });
+    }
     const [y, m] = ym.split("-");
     const from = new Date(`${ym}-01T00:00:00.000Z`);
     const to   = new Date(Number(y), Number(m), 1); // next month start
