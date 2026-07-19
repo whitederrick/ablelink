@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { T } from "../_styles";
 import { workerLabel } from "../_format";
+import BirthDateSelect from "../_components/BirthDateSelect";
 
 type Account = {
   id: string; loginId: string; workerName: string; phoneNumber: string;
@@ -361,7 +362,7 @@ export default function WorkerAccountDetailModal({ workerId, onClose, onSaved }:
                     </div>
                     <div>
                       <label className={T.label}>생년월일 <span className="font-semibold text-slate-400">(근로계약서 사용)</span></label>
-                      <input value={birthDate} onChange={e => setBirthDate(e.target.value)} type="date" className={`w-full ${T.input}`} />
+                      <BirthDateSelect value={birthDate} onChange={setBirthDate} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>

@@ -36,7 +36,7 @@ export default function AdminsPage() {
   const [toast, setToast]         = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [resetTarget, setResetTarget] = useState<AdminAccount | null>(null);
-  const [newPw, setNewPw]         = useState("");
+  const [issuedPw, setIssuedPw]   = useState("");   // 서버가 발급한 임시 비밀번호(화면 표시용)
   const [processing, setProcessing] = useState(false);
 
   // 신규 계정 폼
@@ -101,16 +101,16 @@ export default function AdminsPage() {
   }
 
   async function resetPassword() {
-    if (!resetTarget || !newPw || newPw.length < 8) { showToast("비밀번호는 8자 이상이어야 합니다."); return; }
+    if (!resetTarget) return;
     setProcessing(true);
     const res = await fetch(`/api/admin/system/admins/${resetTarget.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "reset-password", newPassword: newPw }),
+      body: JSON.stringify({ action: "reset-password" }), // 서버가 임시 비밀번호 생성·반환
     });
     const data = await res.json();
     setProcessing(false);
-    if (data.success) { showToast(data.message); setResetTarget(null); setNewPw(""); }
+    if (data.success && data.tempPassword) { setIssuedPw(data.tempPassword); } // 모달에서 표시
     else showToast(data.message || "실패");
   }
 
@@ -225,23 +225,35 @@ export default function AdminsPage() {
         </div>
       )}
 
-      {/* 비밀번호 초기화 모달 */}
+      {/* 비밀번호 초기화 모달 — 임시 비밀번호 자동 생성·표시(관리자가 직접 타이핑하지 않음) */}
       {resetTarget && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-5">
           <div className="w-full max-w-xs rounded-2xl bg-white p-6 shadow-2xl">
             <p className="mb-1 text-base font-black text-slate-900">비밀번호 초기화</p>
             <p className="mb-4 text-sm text-slate-500">{resetTarget.loginId}</p>
-            <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)}
-              placeholder="새 비밀번호 (8자 이상)"
-              className="mb-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-sky-400" />
-            <div className="flex gap-2">
-              <button onClick={() => { setResetTarget(null); setNewPw(""); }}
-                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 active:scale-95">취소</button>
-              <button onClick={resetPassword} disabled={processing}
-                className="flex-1 rounded-xl bg-slate-950 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">
-                {processing ? "..." : "초기화"}
-              </button>
-            </div>
+            {issuedPw ? (
+              <>
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center">
+                  <p className="mb-1 text-xs font-semibold text-amber-600">발급된 임시 비밀번호</p>
+                  <p className="text-2xl font-black tracking-widest text-amber-900">{issuedPw}</p>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-500">이 값은 지금만 표시됩니다. 본인에게 안내하세요.</p>
+                </div>
+                <button onClick={() => { setResetTarget(null); setIssuedPw(""); }}
+                  className="w-full rounded-xl bg-slate-950 py-2.5 text-sm font-black text-white active:scale-95">확인</button>
+              </>
+            ) : (
+              <>
+                <p className="mb-4 text-sm text-slate-500">임시 비밀번호를 새로 발급합니다. 기존 로그인 세션은 모두 로그아웃됩니다.</p>
+                <div className="flex gap-2">
+                  <button onClick={() => { setResetTarget(null); setIssuedPw(""); }}
+                    className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 active:scale-95">취소</button>
+                  <button onClick={resetPassword} disabled={processing}
+                    className="flex-1 rounded-xl bg-slate-950 py-2.5 text-sm font-black text-white active:scale-95 disabled:opacity-60">
+                    {processing ? "..." : "임시 비밀번호 발급"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

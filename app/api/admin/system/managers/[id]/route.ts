@@ -10,6 +10,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
+import { generateTempPassword } from "@/lib/tempPassword";
 import bcrypt from "bcryptjs";
 
 type Params = { params: Promise<{ id: string }> };
@@ -32,15 +33,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const body = await req.json().catch(() => ({}));
     const action = body?.action as string | undefined;
 
-    // 비밀번호 초기화
+    // 비밀번호 초기화 — 서버가 임시 비밀번호를 생성해 화면에 표시(워커/운영자 초기화와 동일 UX). newPassword가 오면 존중.
     if (action === "reset-password") {
-      const newPassword = String(body?.newPassword ?? "");
-      if (newPassword.length < 8) {
-        return NextResponse.json({ success: false, message: "비밀번호는 8자 이상이어야 합니다." }, { status: 400 });
-      }
+      const supplied = String(body?.newPassword ?? "");
+      const tempPassword = supplied.length >= 8 ? supplied : generateTempPassword();
       // #5(17차): 비번 초기화 시 sessionVersion +1 → 발급된 모든 기존 JWT 무효화(탈취 세션 회수). 워커와 동일.
-      await prisma.manager.update({ where: { id: managerId }, data: { passwordHash: await bcrypt.hash(newPassword, 12), sessionVersion: { increment: 1 } } });
-      return NextResponse.json({ success: true, message: "비밀번호가 초기화되었습니다." });
+      await prisma.manager.update({ where: { id: managerId }, data: { passwordHash: await bcrypt.hash(tempPassword, 12), sessionVersion: { increment: 1 } } });
+      return NextResponse.json({ success: true, message: "임시 비밀번호가 발급되었습니다.", tempPassword });
     }
 
     // 담당자명 수정

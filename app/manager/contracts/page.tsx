@@ -380,17 +380,25 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
   const [workingWeekdays, setWorkingWeekdays] = useState<number[]>([]);
   const [wageType, setWageType] = useState<"HOURLY" | "DAILY" | "MONTHLY">("MONTHLY");
   const [wageAmount, setWageAmount] = useState("");
-  // 노출 양식 = (공용+부여) 중 현재 임금유형으로 쓸 수 있는 것만. 기관 전용 시급제 양식은 시급 선택 시에만 노출.
+  // 노출 양식 = 공용 + 시스템 관리자가 부여한 전용 양식 전체.
+  //  ★이전엔 '현재 임금유형으로 쓸 수 있는 것만' 필터해, 폼 기본값(월급)에서는 시급 전용 부여 양식이 아예
+  //   목록에서 사라져 "부여했는데 안 보인다"가 됐다. 이제 부여 양식은 임금유형과 무관하게 항상 보이고,
+  //   선택 시 onTemplateChange가 그 양식이 지원하는 임금유형으로 자동 전환한다(라벨에 지원 유형 표기).
   const templateOptions = useMemo(
-    () => visibleTemplates(allowedTemplates).filter(t => canUseTemplateForWage(t.key, wageType)),
-    [allowedTemplates, wageType]
+    () => visibleTemplates(allowedTemplates),
+    [allowedTemplates]
   );
+  const WAGE_LABEL: Record<string, string> = { HOURLY: "시급", DAILY: "일급", MONTHLY: "월급" };
+  const templateWageHint = (key: string) => {
+    const wts = templateWageTypes(key);
+    return wts.length >= 3 ? "" : ` · ${wts.map(w => WAGE_LABEL[w]).join("/")} 전용`;
+  };
   // 임금유형 변경 시: 현재 양식이 그 유형을 지원하지 않으면 표준으로 되돌림
   const onWageTypeChange = (v: "HOURLY" | "DAILY" | "MONTHLY") => {
     setWageType(v);
     if (!canUseTemplateForWage(templateKey, v)) { setTemplateKey(DEFAULT_TEMPLATE_KEY); setTemplateData({}); }
   };
-  // 양식 변경 시: 현재 임금유형을 지원하지 않으면 그 양식이 허용하는 첫 유형으로 맞춤
+  // 양식 변경 시: 현재 임금유형을 지원하지 않으면 그 양식이 허용하는 첫 유형으로 자동 전환(사용자 재설정 불필요).
   const onTemplateChange = (key: string) => {
     setTemplateKey(key); setTemplateData({});
     const wts = templateWageTypes(key);
@@ -532,7 +540,7 @@ function CreateContractModal({ onClose, onCreated, prefill }: { onClose: () => v
                 <button type="button" onClick={() => setShowPreview(true)} className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100">미리보기</button>
               </div>
               <select value={templateKey} onChange={e => onTemplateChange(e.target.value)} className={`w-full ${T.input}`}>
-                {templateOptions.map(t => <option key={t.key} value={t.key}>{t.label}{t.sub ? ` — ${t.sub}` : ""}</option>)}
+                {templateOptions.map(t => <option key={t.key} value={t.key}>{t.label}{templateWageHint(t.key)}{t.sub ? ` — ${t.sub}` : ""}</option>)}
               </select>
               <p className="text-[11px] font-semibold text-slate-400">
                 기관 전용 계약서 양식이 필요하면 <a href="/manager/support" target="_blank" className="font-bold text-sky-600 underline">시스템 관리자에게 양식 등록 요청</a>하세요. 시스템 관리자가 양식을 제작·부여하면 여기 목록에 표시됩니다.
