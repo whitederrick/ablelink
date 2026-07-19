@@ -50,7 +50,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
 
   const { token } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => ({})); // 공개 라우트 — 빈/비정상 본문에 unhandled 500 방지
 
   const s = await prisma.satisfactionSurvey.findUnique({ where: { token } });
   if (!s) return NextResponse.json({ success: false, message: "유효하지 않은 링크입니다." }, { status: 404 });

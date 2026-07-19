@@ -13,11 +13,18 @@ import { trainingDailyLogPayload, traineeFinalEvalPayload, adaptationDailyLogPay
 import { resolveDocTrainee } from "@/lib/docs/traineeSiteGuard";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { logAccess } from "@/lib/accessLog";
+import { checkAgencyPlanAccess } from "@/lib/planGuard";
 
 
 export async function GET(request: NextRequest) {
   try {
     const scope = await requireManagerSession(request);
+    // 플랜 게이트: 미리보기도 generate와 동일한 완성 PDF를 렌더·스트리밍하므로 동일 기준(PDF_GENERATE=STANDARD)으로
+    //  게이트한다(발송만 뺀 우회로였음). 운영자 oversight(agencyId 없음)는 비대상.
+    if (scope.agencyId) {
+      const plan = await checkAgencyPlanAccess(scope.agencyId, "PDF_GENERATE");
+      if (!plan.allowed) return NextResponse.json({ success: false, message: plan.message, reason: plan.reason }, { status: 403 });
+    }
 
     const { searchParams } = new URL(request.url);
     const docType    = normalizeDocType(searchParams.get("docType"));
@@ -175,7 +182,8 @@ export async function GET(request: NextRequest) {
       },
     });
 
-  } catch (e: any) {
+  } catch (e: unknown) {
+    if (e instanceof Response) return e;
     console.error("[admin/docs/preview]", e);
     return NextResponse.json({ success:false, message: "서버 오류" }, { status:500 });
   }

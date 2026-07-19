@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { audit } from "@/lib/audit";
+import { isValidYmd } from "@/lib/time";
 import { Prisma, DocumentType, DocumentRunStatus } from "@prisma/client";
 
 function errToStatus(msg: string) {
@@ -31,7 +32,11 @@ function isDateOnly(s: string) {
 function parseDateOrThrow(s: string, field: string) {
   // ISO 또는 YYYY-MM-DD 모두 허용
   if (!s) throw new Error(`VALIDATION:${field}`);
-  if (isDateOnly(s)) return new Date(`${s}T00:00:00.000+09:00`);
+  if (isDateOnly(s)) {
+    // ★date-only 분기도 달력 실존 검증 — 2026-02-30이 정규식만 통과해 Invalid Date로 뒤 쿼리에서 500나던 것 차단.
+    if (!isValidYmd(s)) throw new Error(`VALIDATION:${field}`);
+    return new Date(`${s}T00:00:00.000+09:00`);
+  }
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) throw new Error(`VALIDATION:${field}`);
   return d;

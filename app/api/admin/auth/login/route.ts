@@ -28,8 +28,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "loginId와 password가 필요합니다." }, { status: 400 });
 
     const admin = await prisma.admin.findUnique({ where: { loginId } });
-    // 타이밍 공격 방지: 계정 없어도 bcrypt 비교 수행
-    const hashToCompare = admin?.passwordHash ?? "$2b$12$invalidhashfortimingattackx";
+    // 타이밍 공격 방지: '유효한 60자' 더미 해시(cost 12)로 계정 부재 시에도 bcrypt 전 연산 수행.
+    //  이전 상수는 60자가 아니어서 bcryptjs가 즉시 false 반환 → 계정 열거 가능했다.
+    const hashToCompare = admin?.passwordHash ?? "$2b$12$vhWvgCV2BKFUKcayK8/3.OyHIPERoDzZkUlivnq07xkeDWJEQCeDu";
     const ok = await bcrypt.compare(password, hashToCompare);
 
     if (!admin || !admin.isActive || !ok)

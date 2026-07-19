@@ -11,6 +11,7 @@
 import { prisma } from "@/lib/prisma";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { resolveWorkingWeekdaySet } from "@/lib/payroll/weekdays";
+import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
 import {
   monthlyAccrualPeriods, annualAccrualsUpTo, expiryDateOf, judgePerfectAttendance,
   attendanceRateSatisfied, isLeaveExcluded, expiryCandidates, addDaysISO, addMonthsClamped,
@@ -212,30 +213,34 @@ export async function runAnnualLeaveAccrualBatch(now: Date): Promise<AccrualBatc
       }
 
       // ── 소멸(EXPIRE): 기한 지난 부여분의 미소진 잔량 — 부여행 id 기반 dedup로 멱등 ──
-      const ledger: LedgerEntry[] = [
-        ...existing.map((e) => ({
+      //  ★워커 락 안에서 원장을 '재조회'해 처리한다(P2 형제갭). 소멸량은 스냅샷 잔여가 아니라 실시간 잔여
+      //   기준이어야 한다 — 승인/직접등록(withWorkerAssignmentLock 하 USE 커밋)과 락 없이 경합하면, 위 스냅샷
+      //   기준으로 소멸을 기록하는 사이 USE가 커밋돼 같은 부여분이 이중 차감(잔여 음수)될 수 있다. 부여
+      //   createMany(멱등)는 이미 커밋됐으므로 재조회에 포함된다. dedup(ex:{grantId})은 재실행 멱등 유지.
+      await withWorkerAssignmentLock(workerId, async (tx) => {
+        const fresh = await tx.annualLeaveEntry.findMany({
+          where: { agencyId, workerId },
+          select: { id: true, kind: true, days: true, effectiveDate: true, expiresAt: true, dedupKey: true },
+        });
+        const freshDedup = new Set(fresh.filter((e) => e.dedupKey).map((e) => e.dedupKey as string));
+        const ledger: LedgerEntry[] = fresh.map((e) => ({
           id: e.id.toString(), kind: e.kind as LedgerEntry["kind"], days: Number(e.days),
           effectiveDate: isoOf(e.effectiveDate), expiresAt: e.expiresAt ? isoOf(e.expiresAt) : null,
-        })),
-        // 방금 만든 부여분 포함(가상 id: dedupKey — 오늘 만든 부여가 오늘 만료일인 병적 케이스 방어)
-        ...toCreate.map((c) => ({
-          id: c.dedupKey, kind: c.kind as LedgerEntry["kind"], days: c.days,
-          effectiveDate: isoOf(c.effectiveDate), expiresAt: isoOf(c.expiresAt),
-        })),
-      ];
-      const cands = expiryCandidates(ledger, todayISO).filter((c) => !dedupSet.has(`ex:${c.grantId}`));
-      if (cands.length) {
-        await prisma.annualLeaveEntry.createMany({
-          data: cands.map((c) => ({
-            agencyId, workerId, kind: "EXPIRE" as const, days: -c.expireDays,
-            effectiveDate: utcMidnight(c.expiresAt), sourceLabel: `소멸(부여#${c.grantId})`,
-            dedupKey: `ex:${c.grantId}`,
-          })),
-          skipDuplicates: true,
-        });
-        res.expired += cands.length;
-        res.detail.expired.push(...cands.map((c) => ({ workerId: String(workerId), days: c.expireDays })));
-      }
+        }));
+        const cands = expiryCandidates(ledger, todayISO).filter((c) => !freshDedup.has(`ex:${c.grantId}`));
+        if (cands.length) {
+          await tx.annualLeaveEntry.createMany({
+            data: cands.map((c) => ({
+              agencyId, workerId, kind: "EXPIRE" as const, days: -c.expireDays,
+              effectiveDate: utcMidnight(c.expiresAt), sourceLabel: `소멸(부여#${c.grantId})`,
+              dedupKey: `ex:${c.grantId}`,
+            })),
+            skipDuplicates: true,
+          });
+          res.expired += cands.length;
+          res.detail.expired.push(...cands.map((c) => ({ workerId: String(workerId), days: c.expireDays })));
+        }
+      });
     } catch (e) {
       res.errors.push(`연차[${agencyId}:${workerId}]: ${e instanceof Error ? e.message : String(e)}`);
     }

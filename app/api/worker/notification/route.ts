@@ -26,11 +26,12 @@ export async function GET(req: NextRequest) {
 
 // POST: 알람 설정 저장 (구독 정보 포함)
 export async function POST(req: NextRequest) {
+  try {
   const session = await getWorkerSessionFromReq(req);
   if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
   const workerId = BigInt(session.workerId);
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
 
   const clockInAlertMinutes  = typeof body.clockInAlertMinutes  === "number" ? Math.max(0, Math.min(60, body.clockInAlertMinutes))  : 3;
   const clockOutAlertMinutes = typeof body.clockOutAlertMinutes === "number" ? Math.max(0, Math.min(60, body.clockOutAlertMinutes)) : 3;
@@ -51,4 +52,8 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({ success: true });
+  } catch (e: unknown) {
+    console.error("[worker/notification POST]", e);
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
+  }
 }

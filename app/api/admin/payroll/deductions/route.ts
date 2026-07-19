@@ -54,12 +54,18 @@ export async function POST(req: NextRequest) {
     if (!["FIXED", "PERCENTAGE"].includes(type)) {
       return NextResponse.json({ success: false, message: "type은 FIXED 또는 PERCENTAGE여야 합니다." }, { status: 400 });
     }
-    if (type === "PERCENTAGE" && (Number(amount) < 0 || Number(amount) > 1)) {
+    // 금액 검증 — PATCH와 동일식(형제갭 해소). 비수치는 Decimal 변환 500, 음수는 netPay 부풀림(급여 무결성),
+    //  PERCENTAGE 1 초과는 100% 초과 공제 → 순급여 음수. FIXED/PERCENTAGE 공통 0 이상 + 비율 상한 1.
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt < 0) {
+      return NextResponse.json({ success: false, message: "공제 금액/비율은 0 이상이어야 합니다." }, { status: 400 });
+    }
+    if (type === "PERCENTAGE" && amt > 1) {
       return NextResponse.json({ success: false, message: "비율은 0~1 사이여야 합니다. (예: 1% = 0.01)" }, { status: 400 });
     }
 
     const deduction = await prisma.agencyDeduction.create({
-      data: { agencyId, name, type, amount },
+      data: { agencyId, name, type, amount: amt },
     });
 
     await audit(scope, { entityType: "AgencyDeduction", entityId: deduction.id, action: "create", after: { name, type, amount: Number(amount) } });

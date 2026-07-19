@@ -59,8 +59,10 @@ export async function POST(request: Request) {
     // 사용자 조회
     const user = await prisma.worker.findUnique({ where: { loginId } });
 
-    // 🔐 타이밍 공격 방지: 사용자가 없어도 동일한 시간 소요되도록 더미 해시 비교
-    const passwordToVerify = user?.password ?? "$2b$12$invalidhashfortimingatk";
+    // 🔐 타이밍 공격 방지: 사용자가 없어도 실제 bcrypt 검증에 동일 시간이 걸리도록 '유효한 60자' 더미 해시로 비교.
+    //  ★이전 상수("$2b$12$invalidhash...")는 60자가 아니라 bcryptjs가 KDF를 건너뛰고 즉시 false를 반환 → 계정
+    //   존재 여부가 응답 시간(0.2ms vs 수십~수백ms)으로 새던 것을 차단. 워커 실해시는 cost 10 위주라 cost-10 더미 사용.
+    const passwordToVerify = user?.password ?? "$2b$10$1NJSHStynJBsTzfCHGS.W.yDUTfgJIm/Qo1UfJckkImqjyyhlUHAq";
     const isValid = await verifyPassword(password, passwordToVerify);
 
     if (!user || !isValid) {

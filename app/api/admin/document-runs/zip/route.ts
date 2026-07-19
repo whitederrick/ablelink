@@ -12,6 +12,7 @@ import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { injectManagerSignature } from "@/lib/docs/managerSig";
 import { logAccess } from "@/lib/accessLog";
 import { mapWithConcurrency } from "@/lib/concurrency";
+import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import JSZip from "jszip";
 
 const DOC_LABEL: Record<string, string> = {
@@ -28,6 +29,11 @@ function safe(s: string) { return (s || "").replace(/[\\/:*?"<>|]/g, "").trim();
 export async function GET(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
+    // 플랜 게이트: ZIP은 제출본 PDF를 일괄 렌더 — 동일 기준(PDF_GENERATE=STANDARD). oversight(agencyId 없음) 비대상.
+    if (scope.agencyId) {
+      const plan = await checkAgencyPlanAccess(scope.agencyId, "PDF_GENERATE");
+      if (!plan.allowed) return NextResponse.json({ success: false, message: plan.message, reason: plan.reason }, { status: 403 });
+    }
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") ?? "").trim();
     const idsParam = (searchParams.get("ids") ?? "").trim();

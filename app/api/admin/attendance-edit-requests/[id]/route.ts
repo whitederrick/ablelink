@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { requireManagerSession } from "@/lib/managerScope";
+import { parseBigInt } from "@/lib/adminScope";
 import { audit } from "@/lib/audit";
 import { kstWallTimeToInstant } from "@/lib/workSchedule";
 
@@ -15,7 +16,9 @@ export async function PATCH(
   try {
     const scope = await requireManagerSession(req);
     const { id } = await params;
-    const body = await req.json();
+    const reqId = parseBigInt(id);
+    if (!reqId) return NextResponse.json({ success: false, message: "잘못된 ID입니다." }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
     const { action, adminNote } = body; // action: "approve" | "reject"
 
     if (!["approve", "reject"].includes(action)) {
@@ -23,7 +26,7 @@ export async function PATCH(
     }
 
     const request = await prisma.attendanceEditRequest.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: reqId },
       include: {
         attendance: {
           // ★18차(P1): 소유권은 assignment.agencyId(실귀속·non-null). site.agencyId(참고용·nullable·공유현장)로
@@ -113,7 +116,8 @@ export async function PATCH(
       await audit(scope, { entityType: "AttendanceEditRequest", entityId: request.id, action: "update", before: { status: request.status }, after: { status: "REJECTED" } });
       return NextResponse.json({ success: true, message: "수정 요청이 반려되었습니다." });
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
+    if (e instanceof Response) return e;
     console.error("[admin/attendance-edit-requests/[id] PATCH]", e);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }

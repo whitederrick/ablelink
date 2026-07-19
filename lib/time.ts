@@ -1,6 +1,16 @@
 // admlink-admin/lib/time.ts
 // KST(한국 표준시) 관련 유틸리티 함수들
 
+// "YYYY-MM-DD"가 형식 + 달력상 실존 날짜인지 검증(왕복검증).
+//  ★정규식(/^\d{4}-\d{2}-\d{2}$/)만으로는 2026-02-30·2026-04-31이 통과하고, Date.parse는
+//   이를 3/2·5/1로 '롤오버'시켜 통과시킨다(NaN은 월>12·일>31뿐). 파싱 결과를 다시 문자열로 만들어
+//   입력과 일치할 때만 실존 날짜로 인정한다. 저장 전 모든 날짜 입력 검증의 단일 소스.
+export function isValidYmd(s: unknown): s is string {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
 export function getKstDateString(date = new Date()) {
   // KST(UTC+9) 기준으로 YYYY-MM-DD 생성
   const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);

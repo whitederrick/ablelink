@@ -64,7 +64,9 @@ export async function GET(req: Request) {
         createdAt:     r.createdAt.toISOString(),
       })),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
+    // requireManagerSession은 NextResponse(401)를 throw — 401이 500으로 오변환되지 않게 패스스루.
+    if (e instanceof Response) return e;
     console.error("[admin/attendance-edit-requests GET]", e);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }

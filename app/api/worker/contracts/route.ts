@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
 
 // POST: 직무지도원 서명 처리
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const body = await req.json().catch(() => ({})); // 빈/비정상 본문 → 아래 필수값 검사로 400(unhandled 500 방지)
   const { token, signatureUrl, workerFilledSiteName, workerFilledWorkType, workerFilledAddress, heardHandwritingUrl } = body;
 
   if (!token || !signatureUrl) {

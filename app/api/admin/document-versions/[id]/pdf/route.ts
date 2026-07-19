@@ -11,6 +11,7 @@ import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { injectManagerSignature } from "@/lib/docs/managerSig";
 import { logAccess } from "@/lib/accessLog";
 import { parseBigInt } from "@/lib/adminScope";
+import { checkAgencyPlanAccess } from "@/lib/planGuard";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -55,6 +56,12 @@ export async function GET(
     //  타기관 제출본 PDF(PII) 열람으로 새는 참고용 값이라 스코프 판정에 쓰지 않는다(형제 라우트 기준 통일).
     const agencyId = v.run?.agencyId ?? null;
     if (!agencyId || agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
+
+    // 플랜 게이트: 제출본 버전 PDF 렌더도 동일 기준(PDF_GENERATE=STANDARD). oversight(agencyId 없음) 비대상.
+    if (scope.agencyId) {
+      const plan = await checkAgencyPlanAccess(scope.agencyId, "PDF_GENERATE");
+      if (!plan.allowed) return NextResponse.json({ success: false, message: plan.message, reason: plan.reason }, { status: 403 });
+    }
 
     // Prisma DocumentType → PDF 렌더 docType(vocabulary 다름)
     const rawDocType = v.run?.docType as string | undefined;

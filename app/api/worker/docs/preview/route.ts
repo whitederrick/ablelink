@@ -14,12 +14,17 @@ import { trainingDailyLogPayload, traineeFinalEvalPayload, adaptationDailyLogPay
 import { resolveDocAssignment } from "@/lib/docs/resolveDocAssignment";
 import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 import { imageToDataUri } from "@/lib/signatureImage";
+import { checkPlanAccess } from "@/lib/planGuard";
 
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getWorkerSessionFromReq(request);
     if (!session) return NextResponse.json({ success:false, message:"인증이 필요합니다." }, { status:401 });
+
+    // 플랜 게이트: 미리보기도 generate와 동일 완성 PDF 렌더 — 동일 기준(PDF_GENERATE)으로 게이트(셀프등록 워커 허용 포함).
+    const planCheck = await checkPlanAccess(BigInt(session.workerId), "PDF_GENERATE");
+    if (!planCheck.allowed) return NextResponse.json({ success: false, message: planCheck.message }, { status: 403 });
 
     const { searchParams } = new URL(request.url);
     const docType    = normalizeDocType(searchParams.get("docType"));

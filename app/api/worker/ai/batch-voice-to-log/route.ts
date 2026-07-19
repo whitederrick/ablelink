@@ -6,6 +6,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
+import { isValidYmd } from "@/lib/time";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { checkPlanAccess, startTrialIfNeeded } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
     if (audioBlob.size > MAX_AUDIO_BYTES) {
       return NextResponse.json({ success: false, message: "음성 파일이 너무 큽니다. (최대 20MB)" }, { status: 413 });
     }
-    if (!dateFrom || !dateTo || !/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+    if (!isValidYmd(dateFrom) || !isValidYmd(dateTo)) { // 왕복검증(가짜 날짜→placement 쿼리 Invalid Date 500 차단)
       return NextResponse.json({ success: false, message: "날짜 범위(YYYY-MM-DD)를 선택해주세요." }, { status: 400 });
     }
 

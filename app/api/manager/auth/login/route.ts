@@ -28,7 +28,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "loginId와 password가 필요합니다." }, { status: 400 });
 
     const manager = await prisma.manager.findUnique({ where: { loginId } });
-    const hashToCompare = manager?.passwordHash ?? "$2b$12$invalidhashfortimingattackx";
+    // 타이밍 공격 방지: '유효한 60자' 더미 해시(cost 12=실해시와 동일)로 계정 부재 시에도 bcrypt 전 연산 수행.
+    //  이전 상수는 60자가 아니라 bcryptjs가 KDF를 건너뛰어 계정 존재가 응답 시간으로 노출됐다.
+    const hashToCompare = manager?.passwordHash ?? "$2b$12$vhWvgCV2BKFUKcayK8/3.OyHIPERoDzZkUlivnq07xkeDWJEQCeDu";
     const ok = await bcrypt.compare(password, hashToCompare);
 
     if (!manager || !manager.isActive || !ok)

@@ -16,7 +16,7 @@ export async function PATCH(
   try {
     const scope = await requireManagerSession(request);
 
-    const { planType } = await request.json();
+    const { planType } = await request.json().catch(() => ({}));
     const { agencyId: agencyIdStr } = await params;
 
     // A(P1)+3차: 매니저 자기스코프 라우트는 무료 다운그레이드(FREE)만 허용.
@@ -46,7 +46,8 @@ export async function PATCH(
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (error instanceof Response) return error;
     console.error("[admin/subscription/patch]", error);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }

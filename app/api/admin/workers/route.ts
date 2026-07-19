@@ -4,16 +4,12 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
-import { getKstDateString } from "@/lib/time";
+import { getKstDateString, isValidYmd } from "@/lib/time";
 import { AssignStatus, WorkerRole, Prisma } from "@prisma/client";
 
 function parseIntSafe(v: string | null, fallback: number) {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
-}
-
-function isDateOnly(s: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
 function kstStart(dateStr: string) {
@@ -45,11 +41,11 @@ export async function GET(req: NextRequest) {
     let fromDt: Date | null = null;
     let toDt: Date | null = null;
     if (from) {
-      if (!isDateOnly(from)) throw new Error("VALIDATION:from");
+      if (!isValidYmd(from)) throw new Error("VALIDATION:from"); // 왕복검증(2026-02-30 Invalid Date→500 차단)
       fromDt = kstStart(from);
     }
     if (to) {
-      if (!isDateOnly(to)) throw new Error("VALIDATION:to");
+      if (!isValidYmd(to)) throw new Error("VALIDATION:to");
       toDt = kstEnd(to);
     }
 

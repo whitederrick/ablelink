@@ -12,6 +12,7 @@ import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
 import { computeLedgerState, type LedgerEntry } from "@/lib/leave/accrual";
 import { audit } from "@/lib/audit";
 import { withWorkerAssignmentLock } from "@/lib/assignmentLock";
+import { isValidYmd } from "@/lib/time";
 
 const isoOf = (d: Date) => d.toISOString().slice(0, 10);
 const KIND_LABEL: Record<string, string> = {
@@ -107,8 +108,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ wor
     const days = Number(body?.days);
     const effectiveDate = String(body?.effectiveDate ?? "").trim();
     const memo = typeof body?.memo === "string" ? body.memo.trim().slice(0, 200) : "";
-    // 형식 + 실존 날짜 검증(P3) — 정규식만으로는 2026-99-99가 통과해 Invalid Date로 500이 났다.
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate) || isNaN(Date.parse(`${effectiveDate}T00:00:00.000Z`))) {
+    // 형식 + 달력 실존 왕복검증(공용 isValidYmd) — 2026-02-30 롤오버 차단.
+    if (!isValidYmd(effectiveDate)) {
       return NextResponse.json({ success: false, message: "날짜 형식이 올바르지 않습니다." }, { status: 400 });
     }
     if (!Number.isFinite(days) || Math.abs(days) > 30 || Math.round(days * 4) !== days * 4) {
