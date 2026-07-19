@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       include: {
         user: { select: { id: true, workerName: true, loginId: true } },
       },
-      orderBy: [{ workerId: "asc" }, { effectiveFrom: "desc" }],
+      orderBy: [{ workerId: "asc" }, { effectiveFrom: "desc" }, { id: "desc" }],
     });
 
     return NextResponse.json({

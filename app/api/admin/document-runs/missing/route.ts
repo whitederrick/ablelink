@@ -8,14 +8,16 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
-import { getKstDateString } from "@/lib/time";
+import { getKstDateString, isValidYmd } from "@/lib/time";
 
 export async function GET(req: NextRequest) {
   try {
     const scope = await requireManagerSession(req);
     const { searchParams } = new URL(req.url);
     let ym = (searchParams.get("yearMonth") ?? "").trim();
-    if (!/^\d{4}-\d{2}$/.test(ym)) ym = getKstDateString().slice(0, 7);
+    // 형식(YYYY-MM) + 달력 실존(월 01~12) — 둘 중 하나라도 아니면 현재 월로 폴백(기존 동작 유지).
+    //  2026-13은 정규식은 통과하나 아래 new Date(...)에서 Invalid Date로 DateTime 필터 500나던 것을 폴백으로 차단.
+    if (!/^\d{4}-\d{2}$/.test(ym) || !isValidYmd(`${ym}-01`)) ym = getKstDateString().slice(0, 7);
 
     const [y, m] = ym.split("-").map(Number);
     const monthStart = new Date(`${ym}-01T00:00:00+09:00`);

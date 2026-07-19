@@ -139,9 +139,20 @@ export type LedgerState = { balance: number; grants: GrantState[] };
 /** 원장 → 잔여·부여분별 소진 상태. 차감(-)은 부여분에 FIFO(발생일 오름차순) 배분.
  *  ADJUST(+)는 만료 없는 부여로, ADJUST(-)는 일반 차감으로 취급. 잔여 = 전체 부호합(배분과 무관하게 보존). */
 export function computeLedgerState(entries: LedgerEntry[]): LedgerState {
+  // 차감 배분 우선순위: ①만료임박(expiresAt 오름차순, 무만료 null은 후순위) ②만료일 동일 시 발생일 오름차순(FIFO) ③id.
+  //  소멸로 잃기 쉬운 부여부터 소진해 워커 유리(만기 손실 방지). 통상 적립은 월개근분(이른 만료)이 연차분(늦은 만료)보다
+  //  앞서 기존 '발생일순'과 결과가 같고, 무만료 ADJUST(+)가 이른 발생일을 가질 때만 후순위로 밀려 만료 부여를 먼저 소진한다.
   const grants: GrantState[] = entries
     .filter((e) => e.days > 0)
-    .sort((a, b) => (a.effectiveDate < b.effectiveDate ? -1 : a.effectiveDate > b.effectiveDate ? 1 : a.id < b.id ? -1 : 1))
+    .sort((a, b) => {
+      if (a.expiresAt !== b.expiresAt) {
+        if (a.expiresAt == null) return 1;
+        if (b.expiresAt == null) return -1;
+        return a.expiresAt < b.expiresAt ? -1 : 1;
+      }
+      if (a.effectiveDate !== b.effectiveDate) return a.effectiveDate < b.effectiveDate ? -1 : 1;
+      return a.id < b.id ? -1 : 1;
+    })
     .map((e) => ({ id: e.id, days: e.days, used: 0, remaining: e.days, expiresAt: e.expiresAt }));
   const debits = entries
     .filter((e) => e.days < 0)

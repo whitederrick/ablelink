@@ -123,7 +123,9 @@ export async function computePayrollItems(
         effectiveFrom: { lte: new Date(periodEnd) },
         OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date(periodStart) } }],
       },
-      orderBy: { effectiveFrom: "desc" },
+      // 같은 달·같은 effectiveFrom으로 급여기준을 재생성하면 경계월에 2건이 겹친다. 단일키(effectiveFrom desc)는
+      //  이때 DB 순서가 비결정이라 잘못된 단가가 선택될 수 있어, id desc 2차 정렬로 '최근 생성분 우선'을 결정화한다.
+      orderBy: [{ effectiveFrom: "desc" }, { id: "desc" }],
     }),
     prisma.dailyAttendance.findMany({
       // ★근본 chokepoint(placeholder 유령 근무일 차단): isFinalClosed:true여도 startTime 없는 행은

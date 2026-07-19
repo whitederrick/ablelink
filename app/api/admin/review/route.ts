@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { prisma } from "@/lib/prisma";
+import { isValidYmd } from "@/lib/time";
 
 // 월별 진척도 현황 관리 — 기관단위 요약 오버사이트.
 // 핵심: "해당 월에 근무(배정)가 종료되는 직무지도원" 중 출근부/일지가 미완료인 건만 '독려 필요'로 집계.
@@ -14,7 +15,9 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const yearMonth = searchParams.get("yearMonth") ?? "";
-    if (!/^\d{4}-\d{2}$/.test(yearMonth))
+    // 형식(YYYY-MM) + 달력 실존(월 01~12) 왕복검증 — 2026-13 같은 값이 아래 new Date(...)에서 Invalid Date로
+    //  DateTime 필터 500나던 것 차단(400으로). isValidYmd는 `-01`을 붙여 월 유효성까지 확인.
+    if (!/^\d{4}-\d{2}$/.test(yearMonth) || !isValidYmd(`${yearMonth}-01`))
       return NextResponse.json({ success: false, message: "yearMonth 형식 오류 (YYYY-MM)" }, { status: 400 });
 
     const [y, m] = yearMonth.split("-").map(Number);

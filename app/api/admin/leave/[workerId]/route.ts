@@ -229,7 +229,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ w
       kind: row.kind, days: Number(row.days), effectiveDate: isoOf(row.effectiveDate),
       memo: row.memo, sourceLabel: row.sourceLabel, workerId: row.workerId.toString(),
     };
-    await prisma.$transaction(async (tx) => {
+    // 워커 단위 advisory 락 안에서 삭제 — cron EXPIRE 재계산(runAccrual, 동일 락)과 상호배제.
+    //  락 밖 삭제 시 EXPIRE가 잔여를 재조회한 직후 그 잔여의 근거였던 USE가 삭제돼 과대/음수 크레딧 창이 생기던 것 차단.
+    await withWorkerAssignmentLock(workerId, async (tx) => {
       await tx.annualLeaveEntry.delete({ where: { id: row.id } });
       // Phase7: 이 원장 행에 연동된 신청/확인 요청은 무효화(CANCELED) — 워커 화면 잔존 방지.
       await tx.annualLeaveRequest.updateMany({

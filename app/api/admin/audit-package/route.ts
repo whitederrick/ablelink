@@ -15,6 +15,7 @@ import JSZip from "jszip";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { logAccess } from "@/lib/accessLog";
+import { isValidYmd } from "@/lib/time";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,11 @@ export async function GET(request: NextRequest) {
 
     if (!workerIdRaw || !/^\d+$/.test(workerIdRaw)) {
       return NextResponse.json({ success: false, message: "workerId 필요" }, { status: 400 });
+    }
+    // 날짜 왕복검증 — 형제 렌더 라우트와 통일. periodStart/End가 실존불가/비ymd(2026-13-01 등)면 아래
+    //  new Date(...+09:00)가 Invalid Date가 되어 Prisma DateTime 필터에서 500나던 것 차단(400으로). 기본값(오늘/동일)은 항상 valid.
+    if (!isValidYmd(periodStart) || !isValidYmd(periodEnd)) {
+      return NextResponse.json({ success: false, message: "기간 형식 오류 (YYYY-MM-DD)" }, { status: 400 });
     }
 
     const workerId = BigInt(workerIdRaw);

@@ -53,7 +53,9 @@ export async function GET(req: NextRequest) {
     let items = workers.map((w) => {
       const k = w.id.toString();
       const m = sumOf.get(k) ?? {};
-      const accrued = (m.ACCRUAL_MONTHLY ?? 0) + (m.ACCRUAL_ANNUAL ?? 0) + Math.max(0, m.ADJUST ?? 0);
+      // ADJUST는 부호 그대로 발생분에 반영 — max(0,…)로 음수 조정을 버리면 accrued−used−expired−paidOut ≠ balance
+      //  표시 불일치가 났다(양수 조정은 동일). 조정은 발생 잔량의 정정이므로 발생 열에 순액으로 합산.
+      const accrued = (m.ACCRUAL_MONTHLY ?? 0) + (m.ACCRUAL_ANNUAL ?? 0) + (m.ADJUST ?? 0);
       const used = -(m.USE ?? 0);
       const expired = -(m.EXPIRE ?? 0);
       const paidOut = -(m.PAYOUT ?? 0);
