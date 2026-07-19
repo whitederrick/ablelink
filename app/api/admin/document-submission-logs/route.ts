@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { logAccess } from "@/lib/accessLog";
 import { Prisma, DocumentStage } from "@prisma/client";
 
 function errToStatus(msg: string) {
@@ -71,6 +72,10 @@ export async function GET(req: NextRequest) {
         emailPayload: true,
       },
     });
+
+    // 개인정보 접속기록(제8조): 제출 이력엔 발송 수신처(sentToEmail)·발송 payload 스냅샷이 포함 —
+    //  형제인 document-versions GET(sourceData 열람)과 동일하게 취급자 열람을 기록한다.
+    await logAccess(req, scope, { subjectType: "DocumentRun", subjectId: runId, resource: "submission_log", action: "view" });
 
     return NextResponse.json({ success: true, items: rows.map(toItem) });
   } catch (e: any) {

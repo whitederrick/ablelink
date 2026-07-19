@@ -202,8 +202,8 @@ export async function POST(request: NextRequest) {
       ...(skippedNotEnrolled.length ? { skippedNotEnrolled } : {}),
       ...(skipMsgs.length ? { message: skipMsgs.join(" / ") } : {}),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[worker/logs/batch-save]", error);
-    return NextResponse.json({ success: false, message: error.message || "서버 오류" }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

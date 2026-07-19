@@ -107,8 +107,8 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, token, signatureUrl: await signatureDisplayUrl(storedPath) });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[inperson-sign]", error);
-    return NextResponse.json({ success: false, message: error.message || "서버 오류" }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

@@ -64,8 +64,9 @@ export async function GET(request: NextRequest) {
       custom: customHolidays,
       customDetail, // countAsWorkday 포함 상세 정보
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("[worker/holidays]", error);
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }
 
@@ -91,8 +92,9 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("[worker/holidays]", error);
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }
 
@@ -113,7 +115,8 @@ export async function DELETE(request: NextRequest) {
 
     await prisma.siteHoliday.deleteMany({ where: { assignmentId: assignment.id, date } });
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("[worker/holidays]", error);
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

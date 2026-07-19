@@ -87,7 +87,11 @@ export interface AuditEntry {
 export async function logAudit(actor: AuditActor, entry: AuditEntry): Promise<void> {
   try {
     let summary = entry.summary ?? null;
-    let payload = entry.payload;
+    // ★직접 지정 payload도 마스킹 경유(P3): override 경로가 maskSensitive를 건너뛰어, 향후 PII 포함 payload를
+    //  넘기면 평문 감사로그로 남을 수 있었다. before/after 파생 경로와 동일하게 민감키를 마스킹한다.
+    let payload = entry.payload !== undefined
+      ? (JSON.parse(JSON.stringify(maskSensitive(entry.payload))) as Prisma.InputJsonValue)
+      : undefined;
     if (payload === undefined) {
       if (entry.before && entry.after) {
         const keys = scalarKeysOf(entry.after);

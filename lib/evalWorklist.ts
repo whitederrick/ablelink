@@ -45,8 +45,12 @@ export async function getEvalWorklistPage(opts: {
 }): Promise<EvalWorklistResult> {
   const now = new Date();
   const windowStart = new Date(now.getTime() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const page = Math.max(1, opts.page ?? 1);
-  const pageSize = Math.min(50, Math.max(1, opts.pageSize ?? 10));
+  // ★NaN 가드: 호출부가 Number("abc")=NaN을 넘기면 `NaN ?? 1`=NaN(??는 null/undefined만) → Math.max(1,NaN)=NaN이
+  //  skip/take로 흘러 Prisma 500. isFinite로 기본값 복원 후 클램프.
+  const pageRaw = opts.page;
+  const pageSizeRaw = opts.pageSize;
+  const page = Math.max(1, Number.isFinite(pageRaw) ? Math.trunc(pageRaw as number) : 1);
+  const pageSize = Math.min(50, Math.max(1, Number.isFinite(pageSizeRaw) ? Math.trunc(pageSizeRaw as number) : 10));
   const q = (opts.q ?? "").trim();
   const states = (opts.states ?? []).filter(s => ["needs", "requested", "done"].includes(s));
 

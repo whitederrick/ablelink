@@ -173,8 +173,8 @@ export async function POST(request: NextRequest) {
     await audit(session, { entityType: "TraineeLog", entityId: log.id, action: existing ? "update" : "create", summary: "일지 저장" });
 
     return NextResponse.json({ success: true, logId: log.id.toString() });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[worker/logs/save]", error);
-    return NextResponse.json({ success: false, message: error.message || "서버 오류" }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

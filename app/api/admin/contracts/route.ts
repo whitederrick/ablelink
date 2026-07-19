@@ -336,6 +336,20 @@ export async function POST(req: NextRequest) {
     const resolvedTemplateKey = canUseTemplateForWage(grantedTemplateKey, str(wageType)) ? grantedTemplateKey : DEFAULT_TEMPLATE_KEY;
     const resolvedTemplateData = templateData && typeof templateData === "object" ? templateData : undefined;
 
+    // ★발행 더블클릭 방어(P3): 같은 배정·기간의 PENDING 계약이 방금(최근 10초) 만들어졌으면 중복 발행으로 보고 409.
+    //  발행마다 실비용 카카오 알림톡이 나가고 중복 법적 문서 요청이 생기던 것 차단. 정상 재발행(10초 이후)은 허용.
+    const recentDup = await prisma.employmentContract.findFirst({
+      where: {
+        workerId: userIdBig, assignmentId: assignmentIdBig, status: "PENDING",
+        contractStart: startDate, contractEnd: endDate,
+        createdAt: { gte: new Date(Date.now() - 10_000) },
+      },
+      select: { id: true },
+    });
+    if (recentDup) {
+      return NextResponse.json({ success: false, message: "방금 발행한 계약이 있습니다. 잠시 후 목록에서 확인해주세요." }, { status: 409 });
+    }
+
     const contract = await prisma.employmentContract.create({
       data: {
         agencyId,
