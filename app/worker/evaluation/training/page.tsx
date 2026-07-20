@@ -183,8 +183,8 @@ function TrainingEvalInner() {
             <div className="mt-3">
               <p className="mb-1.5 text-xs font-semibold text-slate-400">평가소견</p>
               <textarea value={comments[sec.code] || ""} onChange={e => setComment(sec.code, e.target.value)}
-                maxLength={400}
-                placeholder="평가소견을 입력하세요 (400자 이내)"
+                maxLength={230}
+                placeholder="평가소견을 입력하세요 (230자 이내)"
                 className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-700 outline-none focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
                 rows={3} />
             </div>

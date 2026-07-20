@@ -44,11 +44,11 @@ export async function POST(req: NextRequest) {
     // 형식 + 달력 실존 왕복검증(2026-02-30 롤오버로 placement 쿼리 Invalid Date→500 나던 것 차단).
     if (!isValidYmd(String(periodStart)) || !isValidYmd(String(periodEnd))) return NextResponse.json({ success: false, message: "기간 형식이 올바르지 않습니다." }, { status: 400 });
     if (JSON.stringify(scores ?? {}).length > 20000 || JSON.stringify(comments ?? {}).length > 20000) return NextResponse.json({ success: false, message: "평가 내용이 너무 큽니다." }, { status: 400 });
-    // 평가소견 항목당 400자 상한 — PDF 소견 셀(6pt 축소 시 약 409자)에 온전히 들어가는 범위.
-    //  초과분은 렌더러가 …로 클램프하지만 공식문서 유실이 되므로 입력 시점에 막는다.
+    // 평가소견 항목당 230자 상한 — PDF 소견 셀이 8pt 이상 유지되는 범위(8pt 수용량 238자 실측,
+    //  고령 가독성 지침). 초과분은 렌더러가 …로 클램프하지만 공식문서 유실이 되므로 입력 시점에 막는다.
     if (comments && typeof comments === "object") {
       for (const v of Object.values(comments)) {
-        if (typeof v === "string" && v.length > 400) return NextResponse.json({ success: false, message: "평가소견은 항목당 400자 이내로 입력해주세요." }, { status: 400 });
+        if (typeof v === "string" && v.length > 230) return NextResponse.json({ success: false, message: "평가소견은 항목당 230자 이내로 입력해주세요." }, { status: 400 });
       }
     }
 
