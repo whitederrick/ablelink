@@ -87,7 +87,10 @@ function cell(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: numbe
     th = doc.heightOfString(t, { width: tw, align, lineGap });
   }
   const ty = y + Math.max(0, (h - th) / 2);
-  doc.text(t, x + pad, ty, { width: tw, align, lineGap });
+  // 하한(6pt)까지 줄여도 넘치면 셀 높이로 클램프(…) — 셀 밖 침범·pdfkit 자동 페이지흘림으로
+  // 이후 요소 전체가 다른 페이지에 흩어지는 레이아웃 붕괴 방지(고정높이 셀 최후 안전망).
+  const clamp = th > h - 1 ? { height: h - 2, ellipsis: "…" as const } : {};
+  doc.text(t, x + pad, ty, { width: tw, align, lineGap, ...clamp });
 }
 
 function title(doc: PDFKit.PDFDocument, text: string, y: number, size = 17, opts: { x?: number; w?: number; font?: string; gap?: number } = {}): number {
