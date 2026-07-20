@@ -279,6 +279,11 @@ function attendanceSheet(p: any): Promise<Buffer> {
     y += multiH;
   }
 
+  // 확인문구·작성일·서명은 한 블록 — 통째로 들어갈 자리가 없으면 블록 전체를 다음 페이지로.
+  // (가드가 signatures()에만 있으면 문구·날짜는 전 페이지 하단에 남고 서명만 넘어가 분리되고,
+  //  문구·날짜가 하단 여백을 침범하면 pdfkit 자동 흘림으로 요소가 페이지마다 흩어진다)
+  const sigBlockH = mm(6) + mm(6) + mm(13) + 3 * 24 + 12;
+  if (y + sigBlockH > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
   y += mm(6);
   doc.font("KR").fontSize(11).fillColor("#000").text("위와 같이 근무(출근) 하였음을 확인함", x, y, { width: W, align: "center" }); y += mm(6);
   // ★KST 벽시계일. 서버(UTC)에서 raw getFullYear/Month/Date는 KST 00~09시 생성 시 하루 밀림(공단 제출 문서).
