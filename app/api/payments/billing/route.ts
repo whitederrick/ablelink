@@ -11,6 +11,8 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { PLAN_PRICES, PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel, buildSubscribeOrderId, resolveActivationPlan } from "@/lib/billing";
 import { isPaidAgencyPlan } from "@/lib/plans";
 import { outboundAllowed } from "@/lib/outboundGuard";
+import { computeProRataRefund } from "@/lib/payments/refund";
+import { refundSubscriptionPayment } from "@/lib/payments/tossRefund";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const TOSS_API = "https://api.tosspayments.com/v1";
@@ -80,6 +82,43 @@ export async function POST(request: NextRequest) {
 
     // 청구 금액·주기 = 운영자 협상가 우선, 없으면 표준 월정액. (확정 등급 기준으로 표준가 산출)
     const { amount, cycle } = effectiveBilling({ planType: effectivePlanType, billingCycle: agencyRow.billingCycle, customAmount: agencyRow.customAmount });
+
+    // 플랜 변경(현재 유료 → 새 플랜 결제): 기존 활성 주기 결제의 잔여일을 해지와 같은 산식으로 부분환불한 뒤
+    //  새 플랜을 청구한다(정책 §4 정합·이중과금 방지, 2026-07-21 결정). 환불을 먼저 해야 새 결제 실패 시에도
+    //  이중과금이 남지 않는다. 환불 실패 시 변경 중단 — claim(lib/payments/tossRefund)이 금액을 고정해 재시도 안전.
+    if (isPaidAgencyPlan(agencyRow.planType)) {
+      const changeAt = new Date();
+      const prev = await prisma.subscriptionPayment.findFirst({
+        where: { agencyId: BigInt(agencyId), refundedAt: null, supersededAt: null, periodEnd: { gt: changeAt } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      });
+      if (prev) {
+        const pro = computeProRataRefund({ amount: prev.amount, periodStart: prev.periodStart, periodEnd: prev.periodEnd, at: changeAt });
+        if (pro.refundAmount > 0) {
+          const outcome = await refundSubscriptionPayment({
+            paymentId: prev.id,
+            amount: pro.refundAmount,
+            reason: "플랜 변경 — 기존 주기 잔여일 일할 환불",
+          });
+          if (!outcome.ok) {
+            return NextResponse.json(
+              { success: false, message: "기존 구독 잔여분 환불에 실패해 플랜 변경을 중단했습니다. 잠시 후 다시 시도해 주세요." },
+              { status: 502 },
+            );
+          }
+        } else {
+          await prisma.subscriptionPayment.update({ where: { id: prev.id }, data: { supersededAt: changeAt } });
+        }
+      }
+      // 그 외 잔존 미환불 활성주기 행(비정상 흔적)은 대체 표기 — 이후 해지에서 반복 환불 재료가 되지 않게.
+      await prisma.subscriptionPayment.updateMany({
+        where: {
+          agencyId: BigInt(agencyId), refundedAt: null, supersededAt: null, periodEnd: { gt: changeAt },
+          ...(prev ? { id: { not: prev.id } } : {}),
+        },
+        data: { supersededAt: changeAt },
+      });
+    }
 
     // 1. 빌링키 발급 (토스 빌링키 발급 엔드포인트는 /issue. 과거 /confirm은 404)
     const billingRes = await fetch(`${TOSS_API}/billing/authorizations/issue`, {
@@ -186,12 +225,12 @@ export async function POST(request: NextRequest) {
 
     console.log(`[payments/billing] 구독 완료: agencyId=${agencyId}, plan=${effectivePlanType}, amount=${amount}`);
 
+    // paymentKey는 응답에 싣지 않는다(P3 — 클라이언트 소비처 없음·표면적 축소, DB 이력에 저장됨).
     return NextResponse.json({
       success: true,
       planType: effectivePlanType,
       amount,
       nextBillingAt: nextBillingAt.toISOString(),
-      paymentKey: chargeData.paymentKey ?? null,
     });
   } catch (e: any) {
     if (e instanceof Response) return e;

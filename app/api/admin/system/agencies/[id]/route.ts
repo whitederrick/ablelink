@@ -7,6 +7,9 @@ import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 import { audit, auditSnapshot } from "@/lib/audit";
 import { RESTRICTED_TEMPLATES } from "@/lib/contractTemplates";
 import { isPaidAgencyPlan } from "@/lib/plans";
+import { computeProRataRefund } from "@/lib/payments/refund";
+import { refundSubscriptionPayment } from "@/lib/payments/tossRefund";
+import { outboundAllowed } from "@/lib/outboundGuard";
 
 const RESTRICTED_KEYS = new Set(RESTRICTED_TEMPLATES.map(t => t.key));
 
@@ -86,6 +89,58 @@ export async function PATCH(
         allowedContractTemplates.filter((k: any) => typeof k === "string" && RESTRICTED_KEYS.has(k))
       ));
       updateData.allowedContractTemplates = cleaned;
+    }
+
+    // 유료 → 무료(FREE/TRIAL) 강등 = 실질 구독 종료(2026-07-21 감사 P2): 잔여일 자동 환불(해지와 동일 산식)
+    //  + 빌링 상태 정리. 정리 없이 강등만 하면 ①고객이 잔여일을 환불받지 못하고(정책 §4 위반) ②tossBillingKey·
+    //  nextBillingAt 잔존 → 이후 유료 복원 시 cron이 FREE였던 기간을 소급 청구한다.
+    const isTermination = updateData.planType !== undefined
+      && !isPaidAgencyPlan(updateData.planType)
+      && isPaidAgencyPlan(agency.planType);
+    if (isTermination) {
+      const at = new Date();
+      const prev = await prisma.subscriptionPayment.findFirst({
+        where: { agencyId: agency.id, refundedAt: null, supersededAt: null, periodEnd: { gt: at } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      });
+      if (prev) {
+        const pro = computeProRataRefund({ amount: prev.amount, periodStart: prev.periodStart, periodEnd: prev.periodEnd, at });
+        if (pro.refundAmount > 0 && outboundAllowed()) {
+          const outcome = await refundSubscriptionPayment({
+            paymentId: prev.id,
+            amount: pro.refundAmount,
+            reason: "운영자 구독 종료 — 잔여일 일할 환불",
+          });
+          if (!outcome.ok) {
+            // 환불 실패 시 강등도 중단(재시도 가능 — claim이 금액 고정). 환불 없는 강등은 정책 위반.
+            return NextResponse.json(
+              { success: false, message: `잔여분 환불에 실패해 강등을 중단했습니다: ${outcome.reason}` },
+              { status: 502 },
+            );
+          }
+          await audit(scope, {
+            entityType: "SubscriptionPayment",
+            entityId: prev.id,
+            action: "refund",
+            summary: `운영자 강등(${agency.planType}→${updateData.planType}) · 일할 환불 ${outcome.refundedAmount.toLocaleString("ko-KR")}원`,
+            payload: { refundAmount: outcome.refundedAmount, orderId: prev.orderId },
+          });
+        } else {
+          // 잔여 0원 또는 dev 안전모드 — 대체 표기만(이후 해지 재호출로 반복 환불되는 것 차단).
+          await prisma.subscriptionPayment.update({ where: { id: prev.id }, data: { supersededAt: at } });
+        }
+      }
+      await prisma.subscriptionPayment.updateMany({
+        where: { agencyId: agency.id, refundedAt: null, supersededAt: null, periodEnd: { gt: at } },
+        data: { supersededAt: at },
+      });
+      // 빌링 상태 정리 — payments/cancel과 동등(소급 과청구·무결제 재활성 차단).
+      updateData.tossBillingKey = null;
+      updateData.tossCustomerKey = null;
+      updateData.nextBillingAt = null;
+      updateData.subscriptionId = null;
+      updateData.subscriptionCanceledAt = at;
+      updateData.billingEpoch = { increment: 1 };
     }
 
     const auditBefore = await auditSnapshot("Agency", { id: agency.id }, updateData);

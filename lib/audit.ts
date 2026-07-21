@@ -41,6 +41,8 @@ const SENSITIVE_KEYS = new Set([
   "pdfUrl", "pdfFileName",
   // 주소·계정 식별자(P3 감사 지적: 마스킹 키 누락) — 주소는 PII, loginId는 로그인 식별자라 유출 시 크리덴셜 공격 표적.
   "address", "detailAddress", "residenceAddress", "employerAddress", "workerAddress", "workerFilledAddress", "loginId",
+  // 결제 자격증명(2026-07-21 부분환불 도입) — 강등 감사 diff에 빌링키·paymentKey 평문이 남지 않게.
+  "tossBillingKey", "tossCustomerKey", "paymentKey",
 ]);
 const fmtVal = (v: unknown): string => (v === null || v === undefined ? "(비움)" : String(v));
 const eqScalar = (a: unknown, b: unknown): boolean => fmtVal(a) === fmtVal(b);

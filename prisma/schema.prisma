@@ -595,6 +595,12 @@ model SubscriptionPayment {
   periodEnd      DateTime  @map("period_end") // 주기 종료(= 다음 결제일)
   refundedAmount Int       @default(0) @map("refunded_amount")
   refundedAt     DateTime? @map("refunded_at")
+  // 환불 claim(선점) — 토스 호출 전 환불액을 고정 기록. 재시도는 이 금액을 재사용해 멱등키 본문 불변을 보장하고,
+  //  토스 멱등키 15일 만료 후에도 기취소액 사전확인과 결합해 이중환불을 차단한다(2026-07-21 감사 P1).
+  refundPendingAmount Int?      @map("refund_pending_amount")
+  refundClaimedAt     DateTime? @map("refund_claimed_at")
+  // 대체 표기 — 플랜 변경·강등으로 이 결제가 더는 활성 주기를 대표하지 않음(환불 대상 선정에서 제외).
+  supersededAt        DateTime? @map("superseded_at")
   createdAt      DateTime  @default(now()) @map("created_at")
 
   agency Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)

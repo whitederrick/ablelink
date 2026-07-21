@@ -1,7 +1,7 @@
 // 구독 중도 해지 잔여일 일할 환불 산식 테스트 (lib/payments/refund.ts)
 // 정책: 환불액 = 결제금액 × 잔여일 ÷ 주기 총일수, 해지 당일=이용일(부분일 올림), 공제 없음, 원 미만 버림.
 import { describe, it, expect } from "vitest";
-import { computeProRataRefund } from "@/lib/payments/refund";
+import { computeProRataRefund, isWithinFullRefundWindow } from "@/lib/payments/refund";
 
 const d = (s: string) => new Date(s);
 
@@ -73,6 +73,70 @@ describe("computeProRataRefund — 연 주기·엣지", () => {
     expect(r.refundAmount).toBe(Math.floor((49000 * 14) / 28)); // 24500
   });
 
+  it("윤년 포함 연 주기(366일) 총일수 정확", () => {
+    const r = computeProRataRefund({
+      amount: 1200000,
+      periodStart: d("2027-06-10T00:00:00Z"),
+      periodEnd: d("2028-06-10T00:00:00Z"), // 2028-02-29 포함 = 366일
+      at: d("2027-09-18T00:00:00Z"), // 100일 경과
+    });
+    expect(r.totalDays).toBe(366);
+    expect(r.usedDays).toBe(100);
+    expect(r.refundAmount).toBe(Math.floor((1200000 * 266) / 366));
+  });
+
+  it("30일 주기(4월)", () => {
+    const r = computeProRataRefund({
+      amount: 99000,
+      periodStart: d("2026-04-01T00:00:00Z"),
+      periodEnd: d("2026-05-01T00:00:00Z"),
+      at: d("2026-04-16T00:00:00Z"),
+    });
+    expect(r.totalDays).toBe(30);
+    expect(r.remainingDays).toBe(15);
+    expect(r.refundAmount).toBe(49500);
+  });
+
+  it("말일 앵커 clamp 주기 — 1/31→2/28(28일)·2/28→3/31(31일)", () => {
+    const feb = computeProRataRefund({
+      amount: 99000,
+      periodStart: d("2026-01-31T00:00:00Z"),
+      periodEnd: d("2026-02-28T00:00:00Z"), // advanceBilling clamp 산출물
+      at: d("2026-02-10T00:00:00Z"), // 10일 경과
+    });
+    expect(feb.totalDays).toBe(28);
+    expect(feb.usedDays).toBe(10);
+    expect(feb.refundAmount).toBe(Math.floor((99000 * 18) / 28));
+
+    const mar = computeProRataRefund({
+      amount: 99000,
+      periodStart: d("2026-02-28T00:00:00Z"),
+      periodEnd: d("2026-03-31T00:00:00Z"), // 원일(31) 복원 주기
+      at: d("2026-03-10T00:00:00Z"),
+    });
+    expect(mar.totalDays).toBe(31);
+    expect(mar.usedDays).toBe(10);
+    expect(mar.refundAmount).toBe(Math.floor((99000 * 21) / 31));
+  });
+
+  it("협상가 소액 — floor로 0원까지 내려가되 음수 없음", () => {
+    const r = computeProRataRefund({
+      amount: 20, // 극단 소액(비현실적 협상가)
+      periodStart: d("2026-07-01T00:00:00Z"),
+      periodEnd: d("2026-08-01T00:00:00Z"),
+      at: d("2026-07-31T02:00:00Z"), // 잔여 0~1일 경계
+    });
+    expect(r.refundAmount).toBeGreaterThanOrEqual(0);
+    expect(r.refundAmount).toBeLessThanOrEqual(20);
+    const tiny = computeProRataRefund({
+      amount: 20,
+      periodStart: d("2026-07-01T00:00:00Z"),
+      periodEnd: d("2026-08-01T00:00:00Z"),
+      at: d("2026-07-31T00:00:00Z"), // 잔여 1일 → 20*1/31 = 0.64 → floor 0
+    });
+    expect(tiny.refundAmount).toBe(0);
+  });
+
   it("환불액이 결제금액을 넘지 않고 음수도 아님", () => {
     const periodStart = d("2026-07-01T00:00:00Z");
     const periodEnd = d("2026-08-01T00:00:00Z");
@@ -82,5 +146,20 @@ describe("computeProRataRefund — 연 주기·엣지", () => {
     // 종료 훨씬 뒤 → 0 하한
     const after = computeProRataRefund({ amount: 99000, periodStart, periodEnd, at: d("2027-01-01T00:00:00Z") });
     expect(after.refundAmount).toBe(0);
+  });
+});
+
+describe("isWithinFullRefundWindow — 제3조 7일 청약철회 창", () => {
+  const start = d("2026-07-01T00:00:00Z");
+
+  it("결제 직후·7일 정각까지 true", () => {
+    expect(isWithinFullRefundWindow(start, start)).toBe(true);
+    expect(isWithinFullRefundWindow(start, d("2026-07-04T12:00:00Z"))).toBe(true);
+    expect(isWithinFullRefundWindow(start, d("2026-07-08T00:00:00Z"))).toBe(true); // 정확히 7×24h
+  });
+
+  it("7일 경과·시작 전은 false", () => {
+    expect(isWithinFullRefundWindow(start, d("2026-07-08T00:00:01Z"))).toBe(false);
+    expect(isWithinFullRefundWindow(start, d("2026-06-30T23:59:59Z"))).toBe(false);
   });
 });

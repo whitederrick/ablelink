@@ -102,11 +102,17 @@ export default function SubscriptionPage() {
   }
 
   async function cancel() {
+    if (busy) return;
     if (!confirm("구독을 해지하시겠습니까?\n해지 즉시 유료 기능이 종료되고 무료 플랜 한도가 적용됩니다.\n잔여 이용일은 일할 계산으로 부분 환불됩니다(공제 없음).")) return;
-    const res = await fetch("/api/payments/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
-    const data = await res.json();
-    if (data.success) { alert(data.message || "구독이 해지되었습니다."); router.refresh(); location.reload(); }
-    else alert(data.message || "해지에 실패했습니다.");
+    setBusy(true);
+    try {
+      const res = await fetch("/api/payments/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      const data = await res.json();
+      if (data.success) { alert(data.message || "구독이 해지되었습니다."); router.refresh(); location.reload(); }
+      else alert(data.message || "해지에 실패했습니다.");
+    } catch {
+      alert("해지 요청에 실패했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.");
+    } finally { setBusy(false); }
   }
 
   const plan = agency?.planType ?? "FREE";

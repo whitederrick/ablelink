@@ -4,6 +4,14 @@
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 
+// 환불정책 제3조: 결제 7일 이내 + 유료기능 미이용이면 청약철회(전액 환불).
+export const FULL_REFUND_WINDOW_DAYS = 7;
+
+export function isWithinFullRefundWindow(periodStart: Date, at: Date): boolean {
+  const elapsed = at.getTime() - periodStart.getTime();
+  return elapsed >= 0 && elapsed <= FULL_REFUND_WINDOW_DAYS * MS_DAY;
+}
+
 export interface ProRataRefund {
   totalDays: number;
   usedDays: number;

@@ -8,7 +8,8 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel, buildBillingOrderId } from "@/lib/billing";
 import { outboundAllowed } from "@/lib/outboundGuard";
-import { PAID_AGENCY_PLANS } from "@/lib/plans";
+import { PAID_AGENCY_PLANS, isPaidAgencyPlan } from "@/lib/plans";
+import { refundSubscriptionPayment } from "@/lib/payments/tossRefund";
 import { decideChargeOutcome, type ChargeOutcome } from "@/lib/payments/chargeDecision";
 import { timingSafeEqual } from "crypto";
 
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
       // 결제 성공/멱등 → 다음 결제일로 진행(현재 결제일 그대로일 때만 = 동시 실행 경합 방지)
       //  + 결제 이력 기록(해지 시 잔여일 부분환불용). orderId가 멱등 키라 재시도는 upsert로 중복 없음.
       //  ALREADY_PROCESSED 복구 경로는 paymentKey 미제공 → 기존 값 보존(null이면 환불 시 orders/{orderId} 폴백).
-      await prisma.$transaction([
+      const [, advanced] = await prisma.$transaction([
         prisma.subscriptionPayment.upsert({
           where: { orderId },
           create: {
@@ -145,6 +146,34 @@ export async function POST(request: NextRequest) {
           data: { nextBillingAt },
         }),
       ]);
+      if (advanced.count === 0) {
+        // 스냅샷 이후 이 기관의 결제 상태가 바뀜 — ①쌍둥이 cron이 이미 전진(무해) ②해지/변경으로 FREE 전환
+        //  (= 방금 청구가 유령 결제: 돈은 나갔는데 서비스는 FREE). ②면 자동 전액 취소(2026-07-21 감사 P2).
+        const fresh = await prisma.agency.findUnique({
+          where: { id: agency.id },
+          select: { planType: true, nextBillingAt: true },
+        });
+        const benign = fresh && isPaidAgencyPlan(fresh.planType) && fresh.nextBillingAt != null;
+        if (!benign) {
+          const row = await prisma.subscriptionPayment.findUnique({ where: { orderId } });
+          if (row && !row.refundedAt) {
+            const refund = await refundSubscriptionPayment({
+              paymentId: row.id,
+              amount: row.amount,
+              reason: "구독 해지 경합 — 자동 전액 취소",
+            });
+            if (refund.ok) {
+              console.warn(`[charge] 해지 경합 감지 — 자동 전액 취소: ${agency.name} ${row.amount}원`);
+              results.push({ agencyId: agency.id.toString(), status: "conflict_refunded", amount: row.amount });
+            } else {
+              // 환불 실패 — claim은 남아 있으나 자동 재시도 주체가 없으므로 운영 경보(수동 확인 필요).
+              console.error(`[charge] ★해지 경합 결제 자동취소 실패 — 수동 환불 필요: ${agency.name} orderId=${orderId}`, refund.reason);
+              results.push({ agencyId: agency.id.toString(), status: "conflict_refund_failed", reason: refund.reason });
+            }
+            continue;
+          }
+        }
+      }
       const already = outcome.kind === "already_processed";
       results.push({ agencyId: agency.id.toString(), status: "success", amount, ...(already ? { reason: "already_processed" } : {}) });
       console.log(`[charge] 결제 ${already ? "중복=성공간주" : "성공"}: ${agency.name} ${amount}원`);
