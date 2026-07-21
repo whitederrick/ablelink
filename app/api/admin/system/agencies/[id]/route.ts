@@ -111,6 +111,7 @@ export async function PATCH(
             paymentId: prev.id,
             amount: pro.refundAmount,
             reason: "운영자 구독 종료 — 잔여일 일할 환불",
+            kind: "ADMIN_TERMINATION",
           });
           if (!outcome.ok) {
             // 환불 실패 시 강등도 중단(재시도 가능 — claim이 금액 고정). 환불 없는 강등은 정책 위반.

@@ -601,6 +601,9 @@ model SubscriptionPayment {
   refundClaimedAt     DateTime? @map("refund_claimed_at")
   // 대체 표기 — 플랜 변경·강등으로 이 결제가 더는 활성 주기를 대표하지 않음(환불 대상 선정에서 제외).
   supersededAt        DateTime? @map("superseded_at")
+  // 환불 종류 판별자 — CANCEL(해지)·PLAN_CHANGE(플랜변경)·ADMIN_TERMINATION(운영자 강등)·CONFLICT(경합 자동취소).
+  //  사이클링 남용 모니터가 해지(CANCEL)만 집계하도록 해 플랜변경·강등 환불의 오탐을 제거(2026-07-21 감사 P3).
+  refundKind          String?   @map("refund_kind")
   createdAt      DateTime  @default(now()) @map("created_at")
 
   agency Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)

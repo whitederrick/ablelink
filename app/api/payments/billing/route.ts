@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
             paymentId: prev.id,
             amount: pro.refundAmount,
             reason: "플랜 변경 — 기존 주기 잔여일 일할 환불",
+            kind: "PLAN_CHANGE",
           });
           if (!outcome.ok) {
             return NextResponse.json(

@@ -27,12 +27,16 @@ export type RefundOutcome =
   | { ok: true; refundedAmount: number; alreadyRefunded: boolean }
   | { ok: false; reason: string };
 
+// 환불 발생 경로 — 사이클링 남용 모니터가 해지(CANCEL)만 집계하도록 구분(2026-07-21 감사 P3).
+export type RefundKind = "CANCEL" | "PLAN_CHANGE" | "ADMIN_TERMINATION" | "CONFLICT";
+
 export async function refundSubscriptionPayment(params: {
   paymentId: bigint;
   amount: number; // 이번 환불액(호출자가 산식으로 확정). 기존 claim이 있으면 그 금액이 우선한다.
   reason: string; // 토스 cancelReason
+  kind: RefundKind; // 환불 경로 — DB refundKind로 기록(모니터링 판별용).
 }): Promise<RefundOutcome> {
-  const { paymentId, reason } = params;
+  const { paymentId, reason, kind } = params;
   if (!outboundAllowed()) return { ok: false, reason: "dev 안전모드 — 환불 호출 차단" };
 
   const payment = await prisma.subscriptionPayment.findUnique({ where: { id: paymentId } });
@@ -61,7 +65,7 @@ export async function refundSubscriptionPayment(params: {
     }
   }
   if (fixedAmount <= 0) {
-    await finalize(paymentId, 0);
+    await finalize(paymentId, 0, kind);
     return { ok: true, refundedAmount: 0, alreadyRefunded: false };
   }
 
@@ -110,13 +114,13 @@ export async function refundSubscriptionPayment(params: {
 
   if (alreadyCanceled >= fixedAmount) {
     // 이미 이번 환불분 이상이 취소돼 있음(15일 경과 재시도·토스 콘솔 수동환불) → 완료 동치.
-    await finalize(paymentId, fixedAmount);
+    await finalize(paymentId, fixedAmount, kind);
     return { ok: true, refundedAmount: fixedAmount, alreadyRefunded: true };
   }
   // 외부 개입으로 취소가능 잔액이 모자라면 남은 만큼만(콘솔 수동 부분환불과의 공존 — 정상 흐름에선 발생하지 않음).
   const cancelAmount = Math.min(fixedAmount, balance);
   if (cancelAmount <= 0) {
-    await finalize(paymentId, Math.max(0, alreadyCanceled));
+    await finalize(paymentId, Math.max(0, alreadyCanceled), kind);
     return { ok: true, refundedAmount: Math.max(0, alreadyCanceled), alreadyRefunded: true };
   }
 
@@ -139,7 +143,7 @@ export async function refundSubscriptionPayment(params: {
     if (!res.ok) {
       if (cancelData?.code === "ALREADY_CANCELED_PAYMENT") {
         // 전액 취소 완료 상태 — 이번 몫 이상이 이미 환불됨. 완료 동치.
-        await finalize(paymentId, fixedAmount);
+        await finalize(paymentId, fixedAmount, kind);
         return { ok: true, refundedAmount: fixedAmount, alreadyRefunded: true };
       }
       console.error("[tossRefund] 부분취소 실패:", payment.orderId, cancelData?.code, cancelData?.message);
@@ -150,13 +154,13 @@ export async function refundSubscriptionPayment(params: {
   }
 
   // ④ finalize — DB 실패해도 claim·멱등키·사전확인 조합으로 재시도가 안전(이중환불 없음).
-  await finalize(paymentId, cancelAmount);
+  await finalize(paymentId, cancelAmount, kind);
   return { ok: true, refundedAmount: cancelAmount, alreadyRefunded: false };
 }
 
-async function finalize(paymentId: bigint, refundedAmount: number): Promise<void> {
+async function finalize(paymentId: bigint, refundedAmount: number, kind: RefundKind): Promise<void> {
   await prisma.subscriptionPayment.update({
     where: { id: paymentId },
-    data: { refundedAmount, refundedAt: new Date(), refundPendingAmount: null },
+    data: { refundedAmount, refundedAt: new Date(), refundPendingAmount: null, refundKind: kind },
   });
 }

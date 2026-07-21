@@ -175,6 +175,7 @@ export async function POST(request: NextRequest) {
               paymentId: row.id,
               amount: row.amount,
               reason: "구독 해지 경합 — 자동 전액 취소",
+              kind: "CONFLICT",
             });
             if (refund.ok) {
               console.warn(`[charge] 해지 경합 감지 — 자동 전액 취소: ${agency.name} ${row.amount}원`);

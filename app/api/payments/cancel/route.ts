@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
           paymentId: payment!.id,
           amount: refundAmount,
           reason: fullRefund ? "청약철회 — 7일 이내 미이용 전액 환불" : "구독 중도 해지 — 잔여일 일할 환불",
+          kind: "CANCEL",
         });
         if (!outcome.ok) {
           // 환불 실패 시 해지도 하지 않는다(구독 유지) — claim이 금액을 고정해 재시도는 동일 금액으로 안전.
@@ -147,9 +148,11 @@ export async function POST(request: NextRequest) {
       payload: { refundAmount, fullRefund, remainingDays, orderId: payment?.orderId ?? null },
     });
 
-    // 사이클링 남용 모니터링(정책 결정 2026-07-21): 90일 내 환불 3회 이상이면 운영 경보 로그.
+    // 사이클링 남용 모니터링(정책 결정 2026-07-21): 90일 내 '해지' 환불 3회 이상이면 운영 경보 로그.
+    //  ★P3: refundKind="CANCEL"만 집계 — 플랜변경(PLAN_CHANGE)·운영자강등(ADMIN_TERMINATION)·경합(CONFLICT)
+    //  환불은 반복 구독-해지 남용이 아니므로 오탐에서 제외한다.
     const recentRefunds = await prisma.subscriptionPayment.count({
-      where: { agencyId: scope.agencyId, refundedAt: { gte: new Date(now.getTime() - 90 * MS_DAY) }, refundedAmount: { gt: 0 } },
+      where: { agencyId: scope.agencyId, refundedAt: { gte: new Date(now.getTime() - 90 * MS_DAY) }, refundedAmount: { gt: 0 }, refundKind: "CANCEL" },
     });
     if (recentRefunds >= 3) {
       console.warn(`[payments/cancel] 반복 구독-해지 의심: agencyId=${scope.agencyId} 90일 내 환불 ${recentRefunds}회`);
