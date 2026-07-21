@@ -18,13 +18,25 @@ const nextConfig: NextConfig = {
 
   // PDF 생성(pdfkit) 라우트의 서버리스 함수 번들에 한글 폰트 포함
   // (public/은 기본적으로 함수 fs에 포함되지 않아 fs.readFileSync 실패 방지)
-  // renderPdfToBuffer를 호출하는 모든 라우트 그룹 커버: worker/docs, admin/docs, audit-package, document-versions
-  outputFileTracingIncludes: {
-    "/api/worker/docs/**": ["./public/fonts/NotoSansKR-Light.ttf", "./public/fonts/NotoSansKR-Bold.ttf"],
-    "/api/admin/docs/**": ["./public/fonts/NotoSansKR-Light.ttf", "./public/fonts/NotoSansKR-Bold.ttf"],
-    "/api/admin/audit-package/**": ["./public/fonts/NotoSansKR-Light.ttf", "./public/fonts/NotoSansKR-Bold.ttf"],
-    "/api/admin/document-versions/**": ["./public/fonts/NotoSansKR-Light.ttf", "./public/fonts/NotoSansKR-Bold.ttf"],
-  },
+  // ★2026-07-21 감사 P2: 렌더러(lib/pdf/pdfkitRenderer.ts)가 실제로 쓰는 폰트는 HCR 4종인데 종전엔 미사용
+  //  NotoSansKR 2종을 나열하고 payroll payslip·document-runs(zip/send) 라우트를 누락했다. 실사용 폰트·전
+  //  PDF 라우트로 정정(설정이 죽은 문서가 되지 않게). ※폰트 파일 자체 축소(서브셋)는 공식 양식 글리프
+  //  커버리지 시각검증이 필요한 별도 작업 — 근본적 번들 축소는 후속 과제.
+  outputFileTracingIncludes: (() => {
+    const HCR = [
+      "./public/fonts/HCRDotum.ttf", "./public/fonts/HCRDotum-Bold.ttf",
+      "./public/fonts/HCRBatang.ttf", "./public/fonts/HCRBatang-Bold.ttf",
+    ];
+    return {
+      "/api/worker/docs/**": HCR,
+      "/api/admin/docs/**": HCR,
+      "/api/admin/audit-package/**": HCR,
+      "/api/admin/document-versions/**": HCR,
+      "/api/admin/document-runs/**": HCR, // zip·send
+      "/api/worker/payroll/**": HCR,      // payslip
+      "/api/admin/payroll/**": HCR,       // payslip
+    };
+  })(),
 
   async headers() {
     return [

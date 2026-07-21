@@ -51,6 +51,11 @@ export async function GET(request: NextRequest) {
     const [kstY, kstM] = getKstDateString().split("-").map(Number);
     const year  = Number(searchParams.get("year")  ?? kstY);
     const month = Number(searchParams.get("month") ?? kstM);
+    // ★2026-07-21 감사 P2: year/month NaN·범위밖 가드. 무검증이면 "NaN-NaN-01"→SiteAssignment DateTime 필터에
+    //  Invalid Date 주입→Prisma 500(?year=abc 1회로 워커 라우트 500). evalWorklist와 동일 정책.
+    if (!Number.isInteger(year) || !Number.isInteger(month) || year < 2000 || year > 2100 || month < 1 || month > 12) {
+      return NextResponse.json({ success: false, message: "유효하지 않은 연/월입니다." }, { status: 400 });
+    }
 
     const workerId = BigInt(session.workerId);
 

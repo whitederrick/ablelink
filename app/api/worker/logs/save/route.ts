@@ -4,7 +4,8 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
-import { getKstDateString } from "@/lib/time";
+import { getKstDateString, isValidYmd } from "@/lib/time";
+import { checkLogText } from "@/lib/docs/logTextLimit";
 import { audit } from "@/lib/audit";
 import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 
@@ -36,6 +37,16 @@ export async function POST(request: NextRequest) {
     if (!traineeId || !/^[0-9]+$/.test(String(traineeId))) {
       return NextResponse.json({ success: false, message: "traineeId는 필수입니다." }, { status: 400 });
     }
+
+    // ★2026-07-21 감사 P2: logDate가 오면 왕복검증(isValidYmd). 무검증이면 임의 문자열이 workDate로 저장되거나
+    //  (findOrCreateAttendance) 하류 traineePlacement의 new Date(ymd)가 Invalid Date→DateTime 필터 500이 된다.
+    if (logDate != null && logDate !== "" && !isValidYmd(String(logDate))) {
+      return NextResponse.json({ success: false, message: "유효하지 않은 날짜입니다." }, { status: 400 });
+    }
+
+    // ★2026-07-21 감사 P2: 지도사항(content)·특이사항(specialNotes) 길이 상한(무상한이면 장문 일지가 PDF 셀 붕괴).
+    const lenErr = checkLogText("지도사항", content) ?? checkLogText("특이사항", specialNotes);
+    if (lenErr) return NextResponse.json({ success: false, message: lenErr }, { status: 400 });
 
     const writerId = BigInt(session.workerId);
 

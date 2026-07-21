@@ -45,10 +45,13 @@ export async function GET(req: NextRequest) {
     }
 
     // ★15차: 훈련일지의 '근무 현장'이 이 기관인 것만. writerId(현재 배정 워커)만 스코프하면, 멀티기관 배정 워커가
-    //  타 기관(B) 현장에서 작성한 훈련일지가 A 매니저에게 유출된다(로그 내용=크로스테넌트). attendance.site.agencyId로
-    //  스코프해 차단(attendanceId는 non-null이라 정당 로그 배제 없음). 운영자(agencyId 없음)는 전체.
-    const attendanceWhere: { site?: { agencyId: bigint }; workDate?: { gte: string; lte: string } } = {};
-    if (scope.agencyId) attendanceWhere.site = { agencyId: scope.agencyId };
+    //  타 기관(B) 현장에서 작성한 훈련일지가 A 매니저에게 유출된다(로그 내용=크로스테넌트). 배정 소유 기관으로 스코프.
+    // ★2026-07-21 감사 P2(금지축 정정): 종전엔 attendance.site.agencyId로 스코프했으나, 이는 확립된 표준
+    //  (ownedAttendanceWhere = assignment.agencyId 단일축, site.agencyId 금지)에 어긋난다. divergent 현장
+    //  (site=B 소유, 배정 실귀속=A)에서 site.agencyId 축은 소유 기관 B의 매니저에게 A의 일지를 노출한다.
+    //  assignmentId는 non-null(필수)이라 정당 로그 배제 없음. export/csv 등 형제 경로와 축 통일. 운영자(agencyId 없음)는 전체.
+    const attendanceWhere: { assignment?: { agencyId: bigint }; workDate?: { gte: string; lte: string } } = {};
+    if (scope.agencyId) attendanceWhere.assignment = { agencyId: scope.agencyId };
     if (dateFrom && dateTo) attendanceWhere.workDate = { gte: dateFrom, lte: dateTo };
 
     const logs = await prisma.traineeLog.findMany({

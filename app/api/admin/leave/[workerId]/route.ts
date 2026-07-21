@@ -181,13 +181,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ wor
     if (action === "adjust") {
       if (days === 0) return NextResponse.json({ success: false, message: "조정 일수는 0이 될 수 없습니다." }, { status: 400 });
       if (!memo) return NextResponse.json({ success: false, message: "조정 사유를 입력해주세요." }, { status: 400 });
-      const created = await prisma.annualLeaveEntry.create({
-        data: {
-          agencyId: scope.agencyId, workerId, kind: "ADJUST", days,
-          effectiveDate: new Date(`${effectiveDate}T00:00:00.000Z`),
-          memo, createdByManagerId: scope.managerId,
-        },
-        select: { id: true },
+      // ★2026-07-21 감사 P2(형제갭): USE·DELETE·승인·PAYOUT·cron EXPIRE는 모두 워커 단위 advisory 락으로
+      //  직렬화되는데 ADJUST 등록만 무락이었다. cron EXPIRE가 락 안에서 원장을 재조회해 소멸분을 산정하는 사이
+      //  ADJUST(−)가 무락으로 커밋되면 이중 차감(잔여 음수)이 난다(runAccrual 주석이 경고한 바로 그 경합).
+      //  USE 경로와 동일하게 락 안에서 생성한다. (음수 조정의 잔액 하한 검증은 별도 정책 항목이라 여기선 미변경.)
+      const created = await withWorkerAssignmentLock(workerId, async (tx) => {
+        return tx.annualLeaveEntry.create({
+          data: {
+            agencyId: scope.agencyId, workerId, kind: "ADJUST", days,
+            effectiveDate: new Date(`${effectiveDate}T00:00:00.000Z`),
+            memo, createdByManagerId: scope.managerId,
+          },
+          select: { id: true },
+        });
       });
       await audit(scope, {
         entityType: "AnnualLeave", entityId: created.id.toString(), action: "create",

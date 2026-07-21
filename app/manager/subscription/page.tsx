@@ -9,6 +9,7 @@ import { Check, Sparkles } from "lucide-react";
 import { T } from "../_styles";
 import PageHeader from "../_components/PageHeader";
 import { BUSINESS_INFO } from "@/lib/businessInfo";
+import { PLAN_PRICES } from "@/lib/billing";
 
 interface AgencySub {
   id: string; name: string; planType: string;
@@ -20,7 +21,7 @@ interface AgencySub {
 // 가격·기능은 lib/planGuard.ts(게이트)·PLAN_LIMITS(한도)·payments/billing(PLAN_PRICES)과 정합 유지.
 const PLANS = [
   {
-    id: "STARTER", name: "스타터", price: 49000,
+    id: "STARTER", name: "스타터", price: PLAN_PRICES.STARTER,
     features: [
       "직무지도원·현장(site) 무제한 등록",
       "GPS 기반 출근 관리·출근부 자동 작성",
@@ -32,7 +33,7 @@ const PLANS = [
     recommended: false,
   },
   {
-    id: "STANDARD", name: "스탠다드", price: 99000,
+    id: "STANDARD", name: "스탠다드", price: PLAN_PRICES.STANDARD,
     features: [
       "스타터 모든 기능",
       "PDF 자동 생성·전자 서명",
@@ -44,7 +45,7 @@ const PLANS = [
     recommended: true,
   },
   {
-    id: "PRO", name: "프로", price: 199000,
+    id: "PRO", name: "프로", price: PLAN_PRICES.PRO,
     features: [
       "스탠다드 모든 기능",
       "전자 근로계약서 작성",

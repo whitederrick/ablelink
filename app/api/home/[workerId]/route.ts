@@ -121,7 +121,13 @@ export async function GET(
 
     const activeAssignment = userWithData.assignments[0];
     const site = activeAssignment?.site;
-    const trainees = site?.trainees || [];
+    // 공유(divergent) 현장 크로스테넌트 PII 차단(2026-07-21 감사 P2): 배정 기관(agencyId)이 현장 소유 기관과
+    //  일치할 때만 훈련생 노출 + 재직(TRAINING/EMPLOYED)만. 불일치·null이면 빈 목록(fail-closed) — worker/site/current와 동일.
+    //  (기존 include는 status 필터 없이 trainees:true라 퇴사자·타 기관 훈련생까지 응답에 실렸음.)
+    const sameAgency = activeAssignment?.agencyId != null && site?.agencyId === activeAssignment.agencyId;
+    const trainees = sameAgency
+      ? (site?.trainees || []).filter((t) => t.status === "TRAINING" || t.status === "EMPLOYED")
+      : [];
 
     // 현장 담당자 전체(대표 사업체담당자 먼저, 이어서 활성 추가담당자) — 워커 표시용(읽기전용)
     const siteContacts = [

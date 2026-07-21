@@ -10,7 +10,8 @@ import { prisma } from "@/lib/prisma";
 import { WorkStatus } from "@prisma/client";
 import { audit } from "@/lib/audit";
 import { traineeCountOnDate, type PlacementSpan } from "@/lib/traineePlacement";
-import { getKstDateString } from "@/lib/time";
+import { getKstDateString, isValidYmd } from "@/lib/time";
+import { checkLogText } from "@/lib/docs/logTextLimit";
 
 interface LogEntry {
   date: string;
@@ -34,6 +35,17 @@ export async function POST(request: NextRequest) {
 
     if (!assignmentId || !/^[0-9]+$/.test(String(assignmentId)) || !Array.isArray(logs) || logs.length === 0) {
       return NextResponse.json({ success: false, message: "assignmentId와 logs가 필요합니다." }, { status: 400 });
+    }
+
+    // ★2026-07-21 감사 P2: 각 로그 date를 왕복검증(isValidYmd). 무검증이면 "garbage"→Prisma DateTime 필터 500,
+    //  "2026-02-30"→비실존 날짜의 DailyAttendance 유령행 생성(출근부·급여 오염). 형식+실존 모두 강제.
+    if (!logs.every(l => typeof l?.date === "string" && isValidYmd(l.date))) {
+      return NextResponse.json({ success: false, message: "유효하지 않은 날짜가 포함되어 있습니다." }, { status: 400 });
+    }
+    // ★2026-07-21 감사 P2: 지도사항(content)·평가(evaluation) 길이 상한 — 장문 일지 PDF 셀 붕괴 방어.
+    for (const l of logs) {
+      const lenErr = checkLogText("지도사항", l?.content) ?? checkLogText("평가", l?.evaluation);
+      if (lenErr) return NextResponse.json({ success: false, message: lenErr }, { status: 400 });
     }
 
     const writerId = BigInt(session.workerId);

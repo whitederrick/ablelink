@@ -11,7 +11,12 @@ import { parseHometaxTable, extractChildCreditFromText, summarizeBrackets } from
 export async function GET(req: NextRequest) {
   try {
     await requireAdminSession(req);
-    const rows = await prisma.incomeTaxTable.findMany({ orderBy: { year: "desc" } });
+    // ★2026-07-21 감사 P2(성능): 목록은 year/rowCount/updatedAt/meta만 쓴다. select 없이 조회하면 수천 브래킷의
+    //  거대한 data(Json)가 연도마다 딸려와 요청당 수 MB를 낭비하던 것을 제외(응답 형태 무변화).
+    const rows = await prisma.incomeTaxTable.findMany({
+      orderBy: { year: "desc" },
+      select: { year: true, rowCount: true, updatedAt: true, meta: true },
+    });
     return NextResponse.json({
       success: true,
       data: rows.map(r => ({

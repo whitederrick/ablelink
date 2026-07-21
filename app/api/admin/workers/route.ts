@@ -130,7 +130,10 @@ export async function GET(req: NextRequest) {
           planType: true,
           createdAt: true,
           assignments: {
-            where: { status: { in: [AssignStatus.ACTIVE, AssignStatus.ASSIGNED, AssignStatus.CONFIRMED] } },
+            // ★2026-07-21 감사 P2: agencyId 스코프 없이 최신 배정 1건만 뽑으면, 멀티기관 배정 워커의 '더 최신
+            //  타 기관 배정'이 잡혀 타 기관명·고객사명·근무형태·회신기한이 이 기관 목록에 노출된다(candidates
+            //  라우트는 이미 마스킹). 본인 기관 배정으로 스코프. asgnIds→satisfactionSurvey 조회도 자동 스코프됨.
+            where: { agencyId: scope.agencyId, status: { in: [AssignStatus.ACTIVE, AssignStatus.ASSIGNED, AssignStatus.CONFIRMED] } },
             orderBy: { id: "desc" },
             take: 1,
             select: {

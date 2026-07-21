@@ -1,7 +1,7 @@
 // 구독 중도 해지 잔여일 일할 환불 산식 테스트 (lib/payments/refund.ts)
 // 정책: 환불액 = 결제금액 × 잔여일 ÷ 주기 총일수, 해지 당일=이용일(부분일 올림), 공제 없음, 원 미만 버림.
 import { describe, it, expect } from "vitest";
-import { computeProRataRefund, isWithinFullRefundWindow } from "@/lib/payments/refund";
+import { computeProRataRefund, isWithinFullRefundWindow, shouldReclaimStaleRefund, CLAIM_FRESH_MS } from "@/lib/payments/refund";
 
 const d = (s: string) => new Date(s);
 
@@ -161,5 +161,69 @@ describe("isWithinFullRefundWindow — 제3조 7일 청약철회 창", () => {
   it("7일 경과·시작 전은 false", () => {
     expect(isWithinFullRefundWindow(start, d("2026-07-08T00:00:01Z"))).toBe(false);
     expect(isWithinFullRefundWindow(start, d("2026-06-30T23:59:59Z"))).toBe(false);
+  });
+});
+
+describe("shouldReclaimStaleRefund — stale claim 재산정 판별(P3)", () => {
+  const FRESH = CLAIM_FRESH_MS; // 1시간
+
+  it("★핵심: claim 오래됨 + 실제 취소액 0 + 금액 드리프트 → 재산정(true)", () => {
+    // 예: 2일차에 96% claim해두고 취소 실패 → 25일차 재시도(20%). 과거 큰 금액을 그대로 쓰면 과다환불.
+    expect(shouldReclaimStaleRefund({
+      claimAgeMs: 23 * 24 * 60 * 60 * 1000, // 23일 경과
+      alreadyCanceled: 0,
+      freshAmount: 20000,   // 지금 공정 금액(작아짐)
+      claimedAmount: 96000, // 과거 고정 금액(큼)
+    })).toBe(true);
+  });
+
+  it("claim이 신선(TTL 이내)하면 재산정 안 함 → 얼려서 멱등 재생(false)", () => {
+    expect(shouldReclaimStaleRefund({
+      claimAgeMs: FRESH - 1, // 아직 1시간 안 됨(즉시 재시도 storm)
+      alreadyCanceled: 0,
+      freshAmount: 20000,
+      claimedAmount: 96000,
+    })).toBe(false);
+    // 정확히 TTL 경계도 아직 false(> 비교라 초과해야 재산정)
+    expect(shouldReclaimStaleRefund({
+      claimAgeMs: FRESH,
+      alreadyCanceled: 0,
+      freshAmount: 20000,
+      claimedAmount: 96000,
+    })).toBe(false);
+  });
+
+  it("★이중환불 방지: 실제 취소액이 0이 아니면(이전 취소 성사/진행) 오래돼도 재산정 금지(false)", () => {
+    expect(shouldReclaimStaleRefund({
+      claimAgeMs: 30 * 24 * 60 * 60 * 1000,
+      alreadyCanceled: 96000, // 이전 취소가 이미 나감 → 절대 재산정·재취소 금지
+      freshAmount: 20000,
+      claimedAmount: 96000,
+    })).toBe(false);
+    // 부분 취소가 있었어도(>0) 금지
+    expect(shouldReclaimStaleRefund({
+      claimAgeMs: 30 * 24 * 60 * 60 * 1000,
+      alreadyCanceled: 1,
+      freshAmount: 20000,
+      claimedAmount: 96000,
+    })).toBe(false);
+  });
+
+  it("금액이 같으면(드리프트 없음) 불필요한 키 회전 안 함(false)", () => {
+    expect(shouldReclaimStaleRefund({
+      claimAgeMs: 30 * 24 * 60 * 60 * 1000,
+      alreadyCanceled: 0,
+      freshAmount: 96000,
+      claimedAmount: 96000,
+    })).toBe(false);
+  });
+
+  it("fresh 금액이 0이면 재산정 안 함(0원 환불은 별도 finalize 경로)", () => {
+    expect(shouldReclaimStaleRefund({
+      claimAgeMs: 30 * 24 * 60 * 60 * 1000,
+      alreadyCanceled: 0,
+      freshAmount: 0,
+      claimedAmount: 96000,
+    })).toBe(false);
   });
 });

@@ -18,6 +18,10 @@ import { trainingDailyLogPayload, traineeFinalEvalPayload, adaptationDailyLogPay
 import { resolveDocAssignment } from "@/lib/docs/resolveDocAssignment";
 import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 import { imageToDataUri } from "@/lib/signatureImage";
+import { checkRateLimit } from "@/lib/rateLimit";
+
+// 간단·보수적 이메일 형식 검증(발신 남용·오발송 방지용). RFC 완벽 준수보다 명백한 오입력 차단이 목적.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ── 유틸 ──────────────────────────────────────────────────────
 
@@ -48,6 +52,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "기간(YYYY-MM-DD)이 올바르지 않습니다." }, { status: 400 });
     // traineeId는 훈련생 문서에서 BigInt로 쓰임 — 비숫자면 500 대신 400(P3 위생).
     if (traineeId != null && !/^\d+$/.test(String(traineeId))) return NextResponse.json({ success: false, message: "잘못된 훈련생 ID입니다." }, { status: 400 });
+
+    // ★2026-07-21 감사 P2: PDF 생성은 CPU를, 이메일 발송은 외부(Resend) 비용·발신 도메인 평판을 소모한다.
+    //  종전엔 toEmail을 형식검증·상한 없이 Able-Link 명의로 임의 주소에 발송 가능(스팸·평판 훼손 표면). 이중 방어:
+    //  ① 생성 자체에 완만한 상한(PDF CPU 폭주 방어) ② 발송에는 형식검증 + 더 엄격한 상한.
+    const genRl = await checkRateLimit(`doc-gen:${workerId}`, { max: 30, windowSec: 60, blockSec: 60 });
+    if (!genRl.allowed) return NextResponse.json({ success: false, message: "요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
+    if (sendEmail && toEmail) {
+      if (typeof toEmail !== "string" || !EMAIL_RE.test(toEmail.trim())) {
+        return NextResponse.json({ success: false, message: "받는사람 이메일 형식이 올바르지 않습니다." }, { status: 400 });
+      }
+      const sendRl = await checkRateLimit(`doc-send:${workerId}`, { max: 10, windowSec: 3600, blockSec: 600 });
+      if (!sendRl.allowed) return NextResponse.json({ success: false, message: "이메일 발송이 너무 잦습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
+    }
 
     // 멀티현장: 클라가 선택 배정(assignmentId)을 주면 그 현장으로 생성(소유 검증). 없으면 최신 1건 폴백.
     let selAssignmentId: bigint | null = null;

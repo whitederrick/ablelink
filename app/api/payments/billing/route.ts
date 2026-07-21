@@ -13,6 +13,7 @@ import { isPaidAgencyPlan } from "@/lib/plans";
 import { outboundAllowed } from "@/lib/outboundGuard";
 import { computeProRataRefund } from "@/lib/payments/refund";
 import { refundSubscriptionPayment } from "@/lib/payments/tossRefund";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const TOSS_API = "https://api.tosspayments.com/v1";
@@ -46,6 +47,13 @@ export async function POST(request: NextRequest) {
     // 자기 위탁기관만 구독 변경 가능
     if (scope.agencyId !== BigInt(agencyId)) {
       return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+    }
+
+    // 외부 토스 호출(빌링키 발급·선환불·결제)을 유발하는 라우트 — cancel과 동등한 완만한 예산.
+    //  (2026-07-21 P1: 위조 authKey 반복 호출로 선환불만 유발하는 남용의 반복 빈도 제한.)
+    const rl = await checkRateLimit(`payments-billing:${scope.agencyId}`, { max: 5, windowSec: 60, blockSec: 60 });
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, message: "요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
     }
 
     if (!PLAN_PRICES[planType]) {
@@ -83,9 +91,37 @@ export async function POST(request: NextRequest) {
     // 청구 금액·주기 = 운영자 협상가 우선, 없으면 표준 월정액. (확정 등급 기준으로 표준가 산출)
     const { amount, cycle } = effectiveBilling({ planType: effectivePlanType, billingCycle: agencyRow.billingCycle, customAmount: agencyRow.customAmount });
 
-    // 플랜 변경(현재 유료 → 새 플랜 결제): 기존 활성 주기 결제의 잔여일을 해지와 같은 산식으로 부분환불한 뒤
+    // 1. 빌링키 발급 (토스 빌링키 발급 엔드포인트는 /issue. 과거 /confirm은 404)
+    //  ★2026-07-21 P1: authKey(1회용) 실검증인 빌링키 발급을 '선환불'보다 반드시 앞에 둔다. 예전엔 선환불이
+    //   먼저라, 위조 authKey로 호출하면 구플랜 잔여분만 환불되고(토스 부분취소 실행) 발급이 400으로 실패해
+    //   '환불 수령 + 구플랜 유지'가 반복 가능했다(무기한 무료 이용). 발급을 먼저 해 authKey를 검증한 뒤에만
+    //   환불/과금 상태를 건드린다.
+    const billingRes = await fetch(`${TOSS_API}/billing/authorizations/issue`, {
+      method: "POST",
+      headers: {
+        Authorization: tossAuth(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ authKey, customerKey }),
+    });
+
+    const billingData = await billingRes.json();
+
+    if (!billingRes.ok) {
+      console.error("[payments/billing] 빌링키 발급 실패:", billingData);
+      return NextResponse.json(
+        { success: false, message: billingData.message || "카드 등록에 실패했습니다." },
+        { status: 400 }
+      );
+    }
+
+    const billingKey = billingData.billingKey;
+
+    // 2. 플랜 변경(현재 유료 → 새 플랜 결제): 기존 활성 주기 결제의 잔여일을 해지와 같은 산식으로 부분환불한 뒤
     //  새 플랜을 청구한다(정책 §4 정합·이중과금 방지, 2026-07-21 결정). 환불을 먼저 해야 새 결제 실패 시에도
     //  이중과금이 남지 않는다. 환불 실패 시 변경 중단 — claim(lib/payments/tossRefund)이 금액을 고정해 재시도 안전.
+    //  (빌링키 발급 성공 뒤이므로 authKey는 이미 검증됨 — 위조 authKey의 선환불 유발 불가.)
+    let priorPlanChanged = false; // 구플랜 잔여분을 환불/정리했는가 — 새 결제 실패 시 낙착(FREE) 판단용.
     if (isPaidAgencyPlan(agencyRow.planType)) {
       const changeAt = new Date();
       const prev = await prisma.subscriptionPayment.findFirst({
@@ -109,6 +145,7 @@ export async function POST(request: NextRequest) {
         } else {
           await prisma.subscriptionPayment.update({ where: { id: prev.id }, data: { supersededAt: changeAt } });
         }
+        priorPlanChanged = true;
       }
       // 그 외 잔존 미환불 활성주기 행(비정상 흔적)은 대체 표기 — 이후 해지에서 반복 환불 재료가 되지 않게.
       await prisma.subscriptionPayment.updateMany({
@@ -120,33 +157,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 1. 빌링키 발급 (토스 빌링키 발급 엔드포인트는 /issue. 과거 /confirm은 404)
-    const billingRes = await fetch(`${TOSS_API}/billing/authorizations/issue`, {
-      method: "POST",
-      headers: {
-        Authorization: tossAuth(),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ authKey, customerKey }),
-    });
-
-    const billingData = await billingRes.json();
-
-    if (!billingRes.ok) {
-      console.error("[payments/billing] 빌링키 발급 실패:", billingData);
-      return NextResponse.json(
-        { success: false, message: billingData.message || "카드 등록에 실패했습니다." },
-        { status: 400 }
-      );
-    }
-
-    const billingKey = billingData.billingKey;
     const now = new Date();
     // 이벤트 키(billingEpoch×plan) orderId — 시간 미포함이라 재시도(자정/월경계 무관)는 같은 orderId로 멱등
     //  복구되고, 해지→재구독은 epoch가 올라 새 orderId로 실결제된다(이중청구·무료사이클 딜레마 근본 제거).
     const orderId = buildSubscribeOrderId(agencyId, agencyRow.billingEpoch, effectivePlanType);
 
-    // 2. 최초 결제
+    // 3. 최초 결제
     const chargeRes = await fetch(`${TOSS_API}/billing/${billingKey}`, {
       method: "POST",
       headers: {
@@ -170,6 +186,39 @@ export async function POST(request: NextRequest) {
     const alreadyPaid = !chargeRes.ok && chargeData?.code === "ALREADY_PROCESSED_PAYMENT";
     if (!chargeRes.ok && !alreadyPaid) {
       console.error("[payments/billing] 결제 실패:", chargeData);
+      // ★2026-07-21 P1: 플랜 변경으로 이미 구플랜 잔여분을 환불/정리한 상태에서 새 결제가 실패하면 구플랜을
+      //  그대로 유지해선 안 된다(환불받고도 유료 유지 = 무료 이용). 해지와 등가로 FREE 낙착 — 새 청구는 없었고
+      //  구플랜 잔여는 환불됐으므로 무료 전환이 정직한 종착 상태. (최초 구독/재구독 등 변경이 없던 경우는 종전대로.)
+      if (priorPlanChanged) {
+        const freeLimits = PLAN_LIMITS.FREE;
+        const at = new Date();
+        await prisma.$transaction([
+          prisma.agency.update({
+            where: { id: BigInt(agencyId) },
+            data: {
+              planType: "FREE",
+              tossBillingKey: null,
+              tossCustomerKey: null,
+              nextBillingAt: null,
+              subscriptionId: null,
+              subscriptionCanceledAt: at,
+              customAmount: null,
+              billingCycle: "MONTHLY",
+              billingEpoch: { increment: 1 },
+              maxWorkers: freeLimits.maxWorkers,
+              maxSites: freeLimits.maxSites,
+            },
+          }),
+          prisma.subscriptionPayment.updateMany({
+            where: { agencyId: BigInt(agencyId), refundedAt: null, supersededAt: null, periodEnd: { gt: at } },
+            data: { supersededAt: at },
+          }),
+        ]);
+        return NextResponse.json(
+          { success: false, message: "기존 구독 잔여분은 환불되었으나 새 결제에 실패하여 무료 플랜으로 전환되었습니다. 다시 구독해 주세요." },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
         { success: false, message: chargeData.message || "결제에 실패했습니다." },
         { status: 400 }

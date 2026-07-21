@@ -49,11 +49,18 @@ export async function GET(req: NextRequest) {
       where.status = status;
     }
 
+    // ★2026-07-21 감사 P1(성능): 목록에 필요한 컬럼만 select. 종전엔 top-level select 없이 전체 행을 로드해
+    //  서명 data-URI(2종)·templateData(자필 이미지 최대 2MB)·특약 등 무거운 필드가 매핑에서 폐기될 뿐인데도
+    //  DB→함수로 조회당 수 MB 전송됐다(매니저 상시 화면). 아래 매핑이 쓰는 스칼라만 선택.
     const rows = await prisma.employmentContract.findMany({
       where,
       orderBy: { createdAt: "desc" },
       take: 50,
-      include: {
+      select: {
+        id: true, workerId: true, contractStart: true, contractEnd: true,
+        siteName: true, workLocation: true, workType: true, commuteGuidanceIncluded: true,
+        wageType: true, wageAmount: true, status: true, signToken: true, tokenExpiresAt: true,
+        workerSignedAt: true, adminSignedAt: true, pdfUrl: true, createdAt: true,
         user: { select: { workerName: true, loginId: true, phoneNumber: true } },
         agency: { select: { name: true } },
       },

@@ -11,6 +11,7 @@ import { checkPlanAccess, startTrialIfNeeded } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
 import { logApiCall } from "@/lib/logApiCall";
 import { buildContextLines } from "@/lib/worker/aiContext";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +21,15 @@ export async function POST(request: NextRequest) {
     }
 
     const workerId = BigInt(session.workerId);
+
+    // ★2026-07-21 감사 P2: 단일 음성 변환은 제품상 무제한(월쿼터 없음)이나, 외부 STT/LLM(Groq·Gemini) 비용을
+    //  유발하므로 루프 남용(탈취 세션이 20MB 오디오 반복 호출)에 대한 최소 백스톱이 필요하다. 사람의 정상
+    //  음성 입력은 분당 수 건이라 걸리지 않는 완만한 분당 상한으로 스크립트 폭주만 차단한다(월쿼터 미도입=제품 정책 유지).
+    const rl = await checkRateLimit(`ai-voice:${workerId}`, { max: 20, windowSec: 60, blockSec: 60 });
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, message: "요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
+    }
+
     const planCheck = await checkPlanAccess(workerId, "AI_VOICE");
 
     if (!planCheck.allowed) {

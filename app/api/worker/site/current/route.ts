@@ -85,6 +85,13 @@ export async function GET(request: NextRequest) {
     const site = assignment.site;
     const agency = assignment.agency;
 
+    // 공유(divergent) 현장 크로스테넌트 PII 차단(2026-07-21 감사 P2): 훈련생은 배정 기관(assignment.agencyId)이
+    //  현장 소유 기관(site.agencyId)과 일치할 때만 노출한다. 불일치·null이면 빈 목록(fail-closed) — worker/docs/context와
+    //  동일 정책. 같은 Site.id를 두 기관이 공유하면 타 기관 훈련생 성명·성별(장애인 PII)이 섞여 나올 수 있으므로.
+    const scopedTrainees = assignment.agencyId != null && site.agencyId === assignment.agencyId
+      ? (site.trainees ?? [])
+      : [];
+
     // 현장 담당자 전체(대표 사업체담당자 먼저, 이어서 활성 추가담당자) — 워커 표시용(읽기전용)
     const siteContacts = [
       ...(site.businessContactName
@@ -133,8 +140,8 @@ export async function GET(request: NextRequest) {
         customWorkStart: assignment.customWorkStart ?? null,
         customWorkEnd: assignment.customWorkEnd ?? null,
         attendanceButtonExempt: assignment.attendanceButtonExempt ?? false,
-        traineeCount: site.trainees.length,
-        trainees: site.trainees.map(t => ({
+        traineeCount: scopedTrainees.length,
+        trainees: scopedTrainees.map(t => ({
           id: t.id.toString(),
           name: t.name,
           gender: t.gender,

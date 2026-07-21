@@ -52,6 +52,9 @@ export async function POST(request: NextRequest) {
     let remainingDays = 0;
     let fullRefund = false;
     let refundSkippedDev = false;
+    // 실제 환불액이 방금 계산한 잔여일 기준액과 정확히 일치하는가 — 불일치(기존 claim 재사용·취소가능 잔액 캡)면
+    //  "잔여 N일" 문구가 실환불액과 어긋나므로 금액만 안내한다(2026-07-21 P3 메시지 정합).
+    let refundMatchesDays = true;
 
     if (payment) {
       // 제3조: 7일 이내 + 유료기능 미이용 → 전액 환불(청약철회). 그 외 일할.
@@ -87,7 +90,20 @@ export async function POST(request: NextRequest) {
           //  (환불 없는 해지 강행은 입점 기준 위반)
           return NextResponse.json({ success: false, message: outcome.reason }, { status: 502 });
         }
+        refundMatchesDays = outcome.refundedAmount === refundAmount; // 요청액과 실환불액 일치 여부
         refundAmount = outcome.refundedAmount;
+        // ★2026-07-21 P3: 환불(금전 이동)은 엔진이 이미 커밋됨 — 아래 강등 트랜잭션이 실패해도 이 사실은 남아야
+        //  한다. 강등 tx 이후의 종합 감사로그가 tx 예외로 유실되는 창을 막기 위해, 실제 환불 시점에 별도 기록.
+        //  (admin 강등 라우트의 환불 선기록과 동일 패턴.)
+        if (refundAmount > 0) {
+          await audit(scope, {
+            entityType: "SubscriptionPayment",
+            entityId: payment!.id,
+            action: "refund",
+            summary: `구독 해지 환불 실행 · ${fullRefund ? "전액" : "일할"} ${refundAmount.toLocaleString("ko-KR")}원`,
+            payload: { refundAmount, fullRefund, remainingDays, orderId: payment!.orderId },
+          });
+        }
       }
     }
 
@@ -150,7 +166,9 @@ export async function POST(request: NextRequest) {
       refundAmount > 0
         ? fullRefund
           ? `구독이 해지되었습니다. 7일 이내 미이용 청약철회로 ${refundAmount.toLocaleString("ko-KR")}원 전액이 결제 수단으로 환불됩니다.`
-          : `구독이 해지되었습니다. 잔여 ${remainingDays}일에 대한 ${refundAmount.toLocaleString("ko-KR")}원이 결제 수단으로 부분 환불됩니다.`
+          : refundMatchesDays
+            ? `구독이 해지되었습니다. 잔여 ${remainingDays}일에 대한 ${refundAmount.toLocaleString("ko-KR")}원이 결제 수단으로 부분 환불됩니다.`
+            : `구독이 해지되었습니다. ${refundAmount.toLocaleString("ko-KR")}원이 결제 수단으로 부분 환불됩니다.`
         : refundSkippedDev
           ? "[dev 안전모드] 구독이 해지되었습니다. (실제 환불 호출은 차단됨)"
           : "구독이 해지되었습니다.";

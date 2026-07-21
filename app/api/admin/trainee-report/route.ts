@@ -55,7 +55,10 @@ export async function GET(request: NextRequest) {
     // N+1 제거: 3개 쿼리로 전체 데이터 일괄 조회
     const [allTrainees, allAttendances] = await Promise.all([
       prisma.trainee.findMany({
-        where: { currentSiteId: { in: siteIds }, status: { in: ["TRAINING", "EMPLOYED"] } },
+        // 공유(divergent) 현장 크로스테넌트 PII 차단(2026-07-21 감사 P2): siteIds는 배정 기준이라 타 기관 소유
+        //  공유현장이 섞일 수 있다. 매니저 조회는 현장 소유 기관(site.agencyId)으로 훈련생을 스코프해 타 기관
+        //  훈련생 장애유형(민감정보) 유출을 차단. 운영자 전체 조회(agencyId 미지정)는 종전대로 전량. (docs/trainees와 동일 패턴.)
+        where: { currentSiteId: { in: siteIds }, status: { in: ["TRAINING", "EMPLOYED"] }, ...(agencyId ? { site: { agencyId } } : {}) },
         select: { id: true, name: true, gender: true, disabilityType: true, status: true, currentSiteId: true },
       }),
       prisma.dailyAttendance.findMany({

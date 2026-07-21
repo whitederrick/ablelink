@@ -145,6 +145,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ★2026-07-21 감사 P2: 재확인(RECONFIRM) 60분 창을 서버에서도 강제한다. 종전엔 클라 안내 + 홈진입 lazy
+    //  마감 + 익일 cron뿐이라, 홈을 열지 않고 API로 reconfirm을 직접 호출하면 60분(AUTO_FINALIZE_MINUTES) 경과
+    //  후에도 퇴근시각(actualEndTime)이 계속 후행 재기록돼 연장수당이 부풀 수 있었다. 경과 시 자동 마감 대상으로
+    //  간주해 409. (홈진입 lazy 마감 기준 lib/worker/homeSummary.ts와 동일 창.)
+    if (action === "RECONFIRM") {
+      const AUTO_FINALIZE_MINUTES = Number(process.env.AUTO_FINALIZE_MINUTES ?? 60);
+      const pressedEnd = attendance.actualEndTime ?? attendance.endTime;
+      if (pressedEnd && Date.now() - new Date(pressedEnd).getTime() >= AUTO_FINALIZE_MINUTES * 60 * 1000) {
+        return NextResponse.json(
+          { success: false, code: "RECONFIRM_WINDOW_CLOSED", message: `재확인 가능 시간(${AUTO_FINALIZE_MINUTES}분)이 지나 업무가 자동 종료되었습니다.` },
+          { status: 409 },
+        );
+      }
+    }
+
     const site = attendance.site;
 
     if (!site) {

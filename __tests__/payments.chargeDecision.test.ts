@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { decideChargeOutcome } from "@/lib/payments/chargeDecision";
+import { decideChargeOutcome, isTwinCronAdvance } from "@/lib/payments/chargeDecision";
 
 const GRACE = 3;
+
+// 실제 라우트가 쓰는 판정과 동일한 isPaid
+const isPaid = (p: string | null | undefined) => !!p && ["STARTER", "STANDARD", "PRO"].includes(p);
 
 describe("decideChargeOutcome — 성공 계열", () => {
   it("success → 다음 결제일 진행, 키 유지", () => {
@@ -74,5 +77,60 @@ describe("decideChargeOutcome — HTTP 오류(Toss 응답 확정)", () => {
       action: "retry",
       wipeBillingKey: false,
     });
+  });
+});
+
+describe("isTwinCronAdvance — 결제 후 count=0 경합 원인 판별(P2)", () => {
+  const expected = new Date("2026-08-15T01:00:00Z");
+
+  it("쌍둥이 cron: 같은 planType·같은 결제일로 전진 → benign(true)", () => {
+    expect(isTwinCronAdvance({
+      freshPlanType: "STANDARD",
+      freshNextBillingAt: new Date("2026-08-15T01:00:00Z"),
+      expectedNextBillingAt: expected,
+      originalPlanType: "STANDARD",
+      isPaid,
+    })).toBe(true);
+  });
+
+  it("★P2 회귀: 해지 경합(FREE 전환) → 유해(false) → 자동취소 합류", () => {
+    expect(isTwinCronAdvance({
+      freshPlanType: "FREE",
+      freshNextBillingAt: null,
+      expectedNextBillingAt: expected,
+      originalPlanType: "STANDARD",
+      isPaid,
+    })).toBe(false);
+  });
+
+  it("★P2 회귀: 플랜변경/재구독 경합 — 유료 유지·nextBillingAt!=null 이나 결제일이 다름 → 유해(false)", () => {
+    // 예전 판정('유료 && nextBillingAt!=null')이면 true로 오판했던 케이스.
+    expect(isTwinCronAdvance({
+      freshPlanType: "PRO",
+      freshNextBillingAt: new Date("2026-09-01T01:00:00Z"), // 재구독이 다른 결제일로 갱신
+      expectedNextBillingAt: expected,
+      originalPlanType: "STANDARD",
+      isPaid,
+    })).toBe(false);
+  });
+
+  it("★P2 회귀: 같은 결제일이라도 planType이 바뀌면(다운/업그레이드) 유해(false)", () => {
+    expect(isTwinCronAdvance({
+      freshPlanType: "PRO",
+      freshNextBillingAt: new Date("2026-08-15T01:00:00Z"),
+      expectedNextBillingAt: expected,
+      originalPlanType: "STANDARD",
+      isPaid,
+    })).toBe(false);
+  });
+
+  it("조회 실패(planType null) → 유해(false)", () => {
+    expect(isTwinCronAdvance({
+      freshPlanType: null,
+      freshNextBillingAt: null,
+      expectedNextBillingAt: expected,
+      originalPlanType: "STANDARD",
+      isPaid,
+    })).toBe(false);
   });
 });

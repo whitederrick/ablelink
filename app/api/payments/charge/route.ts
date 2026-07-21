@@ -3,14 +3,19 @@
 // 매월 nextBillingAt에 스케줄러(cron)가 호출
 
 export const runtime = "nodejs";
+// ★2026-07-21 감사 P1(성능): 기관별 최대 10초 직렬 토스 결제 루프인데 maxDuration 미선언이라 기본 함수 한도
+//  (10s)에서 유료 기관 10여 곳·토스 스톨 1건만으로 루프가 절단돼 그날 나머지 기관 청구가 스킵됐다(익일 재시도로
+//  밀림). cron/daily와 동일하게 상한 명시. (orderId 멱등이라 병렬화도 가능하나 후순위.)
+export const maxDuration = 300;
 
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLAN_NAMES, effectiveBilling, advanceBilling, cycleLabel, buildBillingOrderId } from "@/lib/billing";
 import { outboundAllowed } from "@/lib/outboundGuard";
 import { PAID_AGENCY_PLANS, isPaidAgencyPlan } from "@/lib/plans";
+import { PLAN_LIMITS } from "@/lib/planGuard";
 import { refundSubscriptionPayment } from "@/lib/payments/tossRefund";
-import { decideChargeOutcome, type ChargeOutcome } from "@/lib/payments/chargeDecision";
+import { decideChargeOutcome, isTwinCronAdvance, type ChargeOutcome } from "@/lib/payments/chargeDecision";
 import { timingSafeEqual } from "crypto";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
@@ -153,7 +158,16 @@ export async function POST(request: NextRequest) {
           where: { id: agency.id },
           select: { planType: true, nextBillingAt: true },
         });
-        const benign = fresh && isPaidAgencyPlan(fresh.planType) && fresh.nextBillingAt != null;
+        // benign = '쌍둥이 cron이 이미 전진'한 경우뿐이어야 한다(판별=isTwinCronAdvance 순수 로직·테스트됨).
+        //  2026-07-21 P2: 예전엔 '유료 && nextBillingAt!=null'만 봐서, 이 청구 직후 플랜변경/재구독이 nextBillingAt을
+        //  다른 값으로 갱신한 경합을 benign으로 오판 → 구플랜 유령결제가 미환불로 잔존[이중과금].
+        const benign = !!fresh && isTwinCronAdvance({
+          freshPlanType: fresh.planType,
+          freshNextBillingAt: fresh.nextBillingAt,
+          expectedNextBillingAt: nextBillingAt,
+          originalPlanType: agency.planType,
+          isPaid: isPaidAgencyPlan,
+        });
         if (!benign) {
           const row = await prisma.subscriptionPayment.findUnique({ where: { orderId } });
           if (row && !row.refundedAt) {
@@ -186,7 +200,9 @@ export async function POST(request: NextRequest) {
       await prisma.agency.updateMany({
         where: { id: agency.id, nextBillingAt: currentBillingAt },
         // ★10차#2: 카드거절 강등도 협상가(customAmount) 소멸(1회성 딜). 재구독 시 무결제-FREE 방지.
-        data: { planType: "FREE", customAmount: null, billingCycle: "MONTHLY", nextBillingAt: null, ...(decision.wipeBillingKey ? { tossBillingKey: null } : {}) },
+        // ★2026-07-21 P3: FREE 강등 시 FREE 온램프 한도도 복원(cancel과 정합). 유료는 maxWorkers/maxSites=0(무제한)
+        //  이라, 복원하지 않으면 FREE 기관이 무제한 정원을 영구 잔존시킨다.
+        data: { planType: "FREE", customAmount: null, billingCycle: "MONTHLY", nextBillingAt: null, maxWorkers: PLAN_LIMITS.FREE.maxWorkers, maxSites: PLAN_LIMITS.FREE.maxSites, ...(decision.wipeBillingKey ? { tossBillingKey: null } : {}) },
       });
       results.push({ agencyId: agency.id.toString(), status: "failed", reason: reasonMsg });
       console.error(`[charge] 결제 실패 강등: ${agency.name}`, reasonMsg);

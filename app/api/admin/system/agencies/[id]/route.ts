@@ -7,6 +7,7 @@ import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 import { audit, auditSnapshot } from "@/lib/audit";
 import { RESTRICTED_TEMPLATES } from "@/lib/contractTemplates";
 import { isPaidAgencyPlan } from "@/lib/plans";
+import { PLAN_LIMITS } from "@/lib/planGuard";
 import { computeProRataRefund } from "@/lib/payments/refund";
 import { refundSubscriptionPayment } from "@/lib/payments/tossRefund";
 import { outboundAllowed } from "@/lib/outboundGuard";
@@ -141,6 +142,11 @@ export async function PATCH(
       updateData.subscriptionId = null;
       updateData.subscriptionCanceledAt = at;
       updateData.billingEpoch = { increment: 1 };
+      // ★2026-07-21 P3: FREE 강등 시 FREE 온램프 한도 복원(cancel·charge와 정합). 운영자 폼이 유료 시절의
+      //  maxWorkers/maxSites=0(무제한)을 그대로 보내므로, 종료 처리에서 FREE 한도로 덮어써야 무제한 정원이
+      //  잔존하지 않는다. (운영자가 같은 요청에서 명시 전달했어도 종료의 FREE 캡이 우선.)
+      updateData.maxWorkers = PLAN_LIMITS.FREE.maxWorkers;
+      updateData.maxSites = PLAN_LIMITS.FREE.maxSites;
     }
 
     const auditBefore = await auditSnapshot("Agency", { id: agency.id }, updateData);

@@ -351,6 +351,11 @@ function dailyLogTable(
       drawMerged(y);  // 현재 페이지 구분 라벨 마감
       doc.addPage(); y = doc.page.margins.top; drawHeader(); segStartY = y; prevKey = "";
     }
+    // ★2026-07-21 감사 P2: 단일 셀(지도사항 등)이 한 페이지 가용 높이를 넘는 레거시 장문이면, 페이지를 넘겨도
+    //  y+needed가 여전히 pageBottom을 초과해 doc.text가 셀 밖으로 흘러 자동 페이지흘림 캐스케이드(07-20 출근부
+    //  패턴)가 난다. 행 높이를 가용 높이로 클램프하면 cell()의 6pt+ellipsis 안전망이 발동해 셀 안에 담긴다.
+    //  (신규 입력은 lib/docs/logTextLimit 800자 상한으로 애초에 여기 도달하지 않음 — 이 클램프는 레거시 대비.)
+    needed = Math.min(needed, pageBottom(doc) - y);
     // 구분 열
     if (mergedLabel) {
       // 빈 셀(테두리 없음 — 마지막에 병합 박스 1개로 그림)

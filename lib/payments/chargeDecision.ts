@@ -23,6 +23,26 @@ export interface ChargeDecision {
   wipeBillingKey: boolean;
 }
 
+// 결제 후 agency.updateMany(count=0) 경합의 원인 판별(순수 로직·단위 테스트 가능).
+//  count=0 = 스냅샷 이후 이 기관의 nextBillingAt이 바뀜. 두 가지 원인:
+//   ① 쌍둥이 cron이 이미 전진(무해) — 동일 스냅샷으로 같은 planType·같은 nextBillingAt으로 갔다.
+//   ② 해지/플랜변경 경합(유해) — planType이 FREE로 갔거나(해지) 다른 결제일로 갱신됨(변경/재구독).
+//  ①만 참일 때 true. 그 외(②·조회실패)는 false → 방금 청구는 '유령 결제'일 수 있어 자동 전액취소로 합류.
+//  (2026-07-21 P2: 예전엔 '유료 && nextBillingAt!=null'만 봐서 ②의 재구독을 무해로 오판 → 이중과금.)
+export function isTwinCronAdvance(params: {
+  freshPlanType: string | null | undefined;
+  freshNextBillingAt: Date | null | undefined;
+  expectedNextBillingAt: Date;
+  originalPlanType: string;
+  isPaid: (p: string | null | undefined) => boolean;
+}): boolean {
+  const { freshPlanType, freshNextBillingAt, expectedNextBillingAt, originalPlanType, isPaid } = params;
+  return isPaid(freshPlanType)
+    && freshNextBillingAt != null
+    && freshNextBillingAt.getTime() === expectedNextBillingAt.getTime()
+    && freshPlanType === originalPlanType;
+}
+
 export function decideChargeOutcome(
   outcome: ChargeOutcome,
   daysOverdue: number,

@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
         site: {
           select: {
             companyName: true,
+            agencyId: true, // 공유현장 크로스테넌트 PII 스코프 판정용(아래)
             trainees: {
               where: { status: { in: ["TRAINING", "EMPLOYED"] } },
               select: { id: true, name: true, gender: true },
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
           },
         },
         assignment: {
-          select: { serviceStep: true, adaptationStartDate: true },
+          select: { serviceStep: true, adaptationStartDate: true, agencyId: true },
         },
       },
       orderBy: { workDate: "desc" },
@@ -46,12 +47,18 @@ export async function GET(request: NextRequest) {
       attendances: attendances.map(a => {
         // 해당 출근일 기준 단계(전환일 반영)
         const trainingType = effectiveTrainingType((a.assignment as any)?.serviceStep, (a.assignment as any)?.adaptationStartDate, a.workDate);
+        // 공유(divergent) 현장 크로스테넌트 PII 차단(2026-07-21 감사 P2): 배정 기관과 현장 소유 기관이 일치할
+        //  때만 훈련생 노출. 불일치·null이면 빈 목록(fail-closed) — worker/site/current·docs/context와 동일.
+        const asgAgencyId = a.assignment?.agencyId;
+        const scopedTrainees = asgAgencyId != null && a.site.agencyId === asgAgencyId
+          ? a.site.trainees
+          : [];
         return {
           attendanceId:  a.id.toString(),
           workDate:      a.workDate,
           siteName:      a.site.companyName,
           trainingType,
-          trainees:      a.site.trainees.map(t => ({
+          trainees:      scopedTrainees.map(t => ({
             id:     t.id.toString(),
             name:   t.name,
             gender: t.gender,

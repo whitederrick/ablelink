@@ -14,6 +14,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { outboundAllowed } from "@/lib/outboundGuard";
+import { shouldReclaimStaleRefund } from "@/lib/payments/refund";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const TOSS_API = "https://api.tosspayments.com/v1";
@@ -40,19 +41,23 @@ export async function refundSubscriptionPayment(params: {
 
   // ① claim — 최초 시도만 금액을 고정하고, 이후엔 고정된 금액을 재사용한다(동시 시도 포함).
   let fixedAmount = payment.refundPendingAmount;
+  let claimAt: Date | null = payment.refundClaimedAt;
   if (fixedAmount == null) {
+    const at = new Date();
     const claimed = await prisma.subscriptionPayment.updateMany({
       where: { id: paymentId, refundedAt: null, refundPendingAmount: null },
-      data: { refundPendingAmount: params.amount, refundClaimedAt: new Date() },
+      data: { refundPendingAmount: params.amount, refundClaimedAt: at },
     });
     if (claimed.count === 1) {
       fixedAmount = params.amount;
+      claimAt = at;
     } else {
       // 경합 — 다른 시도가 먼저 claim했거나 완료함. 현재 상태를 다시 읽어 따른다.
       const fresh = await prisma.subscriptionPayment.findUnique({ where: { id: paymentId } });
       if (!fresh) return { ok: false, reason: "결제 이력을 찾을 수 없습니다." };
       if (fresh.refundedAt) return { ok: true, refundedAmount: fresh.refundedAmount, alreadyRefunded: true };
       fixedAmount = fresh.refundPendingAmount ?? params.amount;
+      claimAt = fresh.refundClaimedAt;
     }
   }
   if (fixedAmount <= 0) {
@@ -77,6 +82,32 @@ export async function refundSubscriptionPayment(params: {
 
   const balance = typeof lookup.balanceAmount === "number" ? lookup.balanceAmount : payment.amount;
   const alreadyCanceled = payment.amount - balance;
+
+  // ①-b stale claim 재산정(2026-07-21 P3): claim이 충분히 오래됐고(진행 중 취소 없음 보증) 실제 취소액이 0이면
+  //  이전 시도가 취소를 성사시키지 못한 채 과거 금액만 고정된 상태 → 호출자의 현재 공정 금액으로 재고정.
+  //  판별=shouldReclaimStaleRefund(순수·테스트됨). 재고정은 claimClaimedAt 낙관적 락으로 단일 승자만 수행하고,
+  //  멱등키가 claim 시각을 포함해 회전한다(아래 ③). alreadyCanceled==0 + TTL 경과로 성사/진행 중 취소가 없음이
+  //  증명돼 이중환불 불가. (즉시 재시도는 TTL 이내라 얼려서 토스 멱등 재생으로 처리.)
+  const claimAgeMs = claimAt ? Date.now() - claimAt.getTime() : Infinity;
+  if (shouldReclaimStaleRefund({ claimAgeMs, alreadyCanceled, freshAmount: params.amount, claimedAmount: fixedAmount })) {
+    const at = new Date();
+    const reclaimed = await prisma.subscriptionPayment.updateMany({
+      where: { id: paymentId, refundedAt: null, refundClaimedAt: claimAt },
+      data: { refundPendingAmount: params.amount, refundClaimedAt: at },
+    });
+    if (reclaimed.count === 1) {
+      fixedAmount = params.amount;
+      claimAt = at;
+    } else {
+      // 경합 — 다른 시도가 재고정/완료. 현재 상태를 다시 읽어 따른다(같은 새 claim 시각·금액으로 수렴).
+      const fresh = await prisma.subscriptionPayment.findUnique({ where: { id: paymentId } });
+      if (!fresh) return { ok: false, reason: "결제 이력을 찾을 수 없습니다." };
+      if (fresh.refundedAt) return { ok: true, refundedAmount: fresh.refundedAmount, alreadyRefunded: true };
+      fixedAmount = fresh.refundPendingAmount ?? params.amount;
+      claimAt = fresh.refundClaimedAt;
+    }
+  }
+
   if (alreadyCanceled >= fixedAmount) {
     // 이미 이번 환불분 이상이 취소돼 있음(15일 경과 재시도·토스 콘솔 수동환불) → 완료 동치.
     await finalize(paymentId, fixedAmount);
@@ -89,7 +120,9 @@ export async function refundSubscriptionPayment(params: {
     return { ok: true, refundedAmount: Math.max(0, alreadyCanceled), alreadyRefunded: true };
   }
 
-  // ③ 부분취소 — 고정 금액·고정 멱등키(본문 불변이라 15일 내 재시도는 저장 응답 재생).
+  // ③ 부분취소 — 고정 금액·고정 멱등키(본문 불변이라 15일 내 재시도는 저장 응답 재생). 키에 claim 시각을 포함해
+  //  재산정(①-b) 시 회전 — 재산정은 alreadyCanceled==0으로 이전 키의 취소가 성사되지 않았음이 증명된 뒤에만 일어나
+  //  이전 키의 취소와 겹치지 않는다.
   let cancelData: { code?: string; message?: string } = {};
   try {
     const res = await fetch(`${TOSS_API}/payments/${encodeURIComponent(paymentKey)}/cancel`, {
@@ -97,7 +130,7 @@ export async function refundSubscriptionPayment(params: {
       headers: {
         Authorization: tossAuth(),
         "Content-Type": "application/json",
-        "Idempotency-Key": `refund_${payment.orderId}`,
+        "Idempotency-Key": `refund_${payment.orderId}_${claimAt ? claimAt.getTime() : 0}`,
       },
       signal: AbortSignal.timeout(10000),
       body: JSON.stringify({ cancelReason: reason, cancelAmount }),
