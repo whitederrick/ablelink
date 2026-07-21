@@ -87,6 +87,10 @@ export function PricingContent() {
 
       <div className="mt-6 rounded-2xl bg-slate-100 p-4 text-xs font-semibold leading-6 text-slate-500">
         <p>· 상위 요금제는 하위 요금제의 모든 기능을 포함합니다.</p>
+        <p>
+          · 구독 해지 시 잔여 이용일에 대해 일할 계산으로 부분 환불됩니다(위약금·수수료 공제 없음).
+          자세한 내용은 <Link href="/refund" className="font-black text-sky-600">환불정책</Link>을 확인해 주세요.
+        </p>
         <p>· 연 결제 및 기관 규모별 협의 단가는 고객센터로 문의해 주세요.</p>
         <p>· 도입 문의·체험은 <Link href="/" className="font-black text-sky-600">메인 화면</Link>의 고객센터 안내를 이용해 주세요.</p>
       </div>

@@ -575,9 +575,32 @@ model Agency {
   annualLeaveEntries    AnnualLeaveEntry[]
   annualLeaveRequests   AnnualLeaveRequest[]
   noticeGroups          NoticeGroup[]
+  subscriptionPayments  SubscriptionPayment[]
 
   @@index([planType])
   @@map("agencies")
+}
+
+// 구독 결제 이력 — 해지 시 잔여일 일할 부분환불(토스 부분취소)에 필요한 paymentKey·주기 보존. (2026-07-21)
+// orderId가 멱등 키(재시도=같은 orderId)라 upsert로 중복 없이 기록한다.
+model SubscriptionPayment {
+  id             BigInt    @id @default(autoincrement())
+  agencyId       BigInt    @map("agency_id")
+  orderId        String    @unique @map("order_id")
+  paymentKey     String?   @map("payment_key") // 토스 paymentKey. ALREADY_PROCESSED 복구 경로에선 null → 환불 시 orders/{orderId} 조회 폴백
+  planType       String    @map("plan_type")
+  amount         Int // 결제 금액(원, VAT 포함)
+  cycle          String // MONTHLY | ANNUAL
+  periodStart    DateTime  @map("period_start") // 이 결제가 커버하는 주기 시작
+  periodEnd      DateTime  @map("period_end") // 주기 종료(= 다음 결제일)
+  refundedAmount Int       @default(0) @map("refunded_amount")
+  refundedAt     DateTime? @map("refunded_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  agency Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@index([agencyId, createdAt])
+  @@map("subscription_payments")
 }
 
 // 시스템 운영자 (Ablelink 내부 직원만, ADMIN 역할 전용)

@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
     //  절대 강등/빌링키 삭제하지 않는다(decideChargeOutcome). 카드 거절 등 4xx 응답만 확정 실패로 강등.
     let outcome: ChargeOutcome;
     let reasonMsg = "";
+    let paymentKey: string | null = null; // 성공 응답의 paymentKey — 해지 시 잔여일 부분환불(부분취소)용 이력 기록
     try {
       const res = await fetch(`${TOSS_API}/billing/${agency.tossBillingKey}`, {
         method: "POST",
@@ -101,9 +102,10 @@ export async function POST(request: NextRequest) {
           taxFreeAmount: 0,
         }),
       });
-      const data: { code?: string; message?: string } = await res.json().catch(() => ({}));
+      const data: { code?: string; message?: string; paymentKey?: string } = await res.json().catch(() => ({}));
       if (res.ok) {
         outcome = { kind: "success" };
+        paymentKey = data?.paymentKey ?? null;
       } else if (data?.code === "ALREADY_PROCESSED_PAYMENT") {
         outcome = { kind: "already_processed" };
       } else {
@@ -121,10 +123,28 @@ export async function POST(request: NextRequest) {
     const decision = decideChargeOutcome(outcome, daysOverdue, GRACE_DAYS);
     if (decision.action === "advance") {
       // 결제 성공/멱등 → 다음 결제일로 진행(현재 결제일 그대로일 때만 = 동시 실행 경합 방지)
-      await prisma.agency.updateMany({
-        where: { id: agency.id, nextBillingAt: currentBillingAt },
-        data: { nextBillingAt },
-      });
+      //  + 결제 이력 기록(해지 시 잔여일 부분환불용). orderId가 멱등 키라 재시도는 upsert로 중복 없음.
+      //  ALREADY_PROCESSED 복구 경로는 paymentKey 미제공 → 기존 값 보존(null이면 환불 시 orders/{orderId} 폴백).
+      await prisma.$transaction([
+        prisma.subscriptionPayment.upsert({
+          where: { orderId },
+          create: {
+            agencyId: agency.id,
+            orderId,
+            paymentKey,
+            planType: agency.planType,
+            amount,
+            cycle,
+            periodStart: currentBillingAt,
+            periodEnd: nextBillingAt,
+          },
+          update: paymentKey ? { paymentKey } : {},
+        }),
+        prisma.agency.updateMany({
+          where: { id: agency.id, nextBillingAt: currentBillingAt },
+          data: { nextBillingAt },
+        }),
+      ]);
       const already = outcome.kind === "already_processed";
       results.push({ agencyId: agency.id.toString(), status: "success", amount, ...(already ? { reason: "already_processed" } : {}) });
       console.log(`[charge] 결제 ${already ? "중복=성공간주" : "성공"}: ${agency.name} ${amount}원`);

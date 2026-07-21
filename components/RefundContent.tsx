@@ -1,6 +1,7 @@
 // components/RefundContent.tsx
 // 환불정책 본문 — 단일 출처. /refund 페이지와 앱 내 모달(LegalDocModal)이 공유.
-// ⚠️ 초안. 전자상거래법·PG(토스·포트원) 심사 기준으로 법무 검토 후 확정 필요.
+// 2026-07-21 개정: 토스 입점 기준(구독 해지 시 잔여일 청약철회 보장)에 맞춰 잔여일 일할 부분환불(공제 없음)로 전환.
+//  실제 환불은 payments/cancel이 토스 부분취소로 자동 처리(산식 = lib/payments/refund.ts와 동일해야 함).
 import { BUSINESS_INFO } from "@/lib/businessInfo";
 
 export function RefundContent() {
@@ -25,17 +26,18 @@ export function RefundContent() {
         <h2 className="mb-3 text-base font-black text-slate-900">제3조 (청약철회)</h2>
         <ul className="list-disc space-y-1.5 pl-5">
           <li>결제일로부터 7일 이내이고, 유료 기능을 실질적으로 이용하지 않은 경우 청약철회 및 전액 환불이 가능합니다.</li>
-          <li>다만 유료 서비스 내 PDF 생성, 전자서명 등 핵심 기능이 1회 이상 발생한 경우에는 서비스를 이용한 것으로 간주하여, 콘텐츠 제공이 개시된 것으로 보아 청약철회가 제한될 수 있습니다.</li>
+          <li>유료 기능을 이용한 이후에도 제4조에 따라 언제든지 구독을 해지하고 잔여 이용기간에 대한 부분 환불(부분 청약철회)을 받을 수 있습니다.</li>
         </ul>
       </section>
 
       <section>
-        <h2 className="mb-3 text-base font-black text-slate-900">제4조 (구독 해지 및 환불)</h2>
+        <h2 className="mb-3 text-base font-black text-slate-900">제4조 (구독 해지 및 잔여 기간 부분 환불)</h2>
         <ul className="list-disc space-y-1.5 pl-5">
-          <li>구독은 다음 결제일 이전에 언제든지 해지할 수 있으며, 해지 시 해당 주기 종료일까지 서비스가 유지됩니다.</li>
-          <li>월 정액 구독의 결제주기 중도 해지 시, 이미 이용을 개시한 주기의 요금은 원칙적으로 환불되지 않습니다.</li>
+          <li>구독은 언제든지 해지할 수 있으며, 해지 즉시 유료 기능 이용이 종료됩니다.</li>
+          <li>결제주기 중도 해지 시 잔여 이용일에 대해 일할 계산으로 부분 환불합니다. <strong className="text-slate-900">환불액 = 결제금액 × (잔여 이용일수 ÷ 결제주기 총 일수)</strong>이며, 해지 당일은 이용일로 계산합니다.</li>
+          <li>부분 환불 시 위약금이나 별도 수수료를 공제하지 않습니다.</li>
           <li>회사의 귀책(중대한 서비스 장애 등)으로 서비스를 이용하지 못한 경우, 이용하지 못한 기간에 비례하여 환불합니다.</li>
-          <li>기관별 협의 단가·연 결제 환불은 개별 계약 조건에 따릅니다.</li>
+          <li>기관별 협의 단가·연 결제의 경우에도 동일하게 잔여 이용기간에 대한 일할 환불 원칙이 적용됩니다.</li>
         </ul>
       </section>
 
@@ -49,7 +51,7 @@ export function RefundContent() {
 
       <section>
         <h2 className="mb-3 text-base font-black text-slate-900">제6조 (환불 비용)</h2>
-        <p>회사의 귀책사유가 없는 이용자의 단순 변심으로 인한 환불 시, 결제 대행 수수료 등 환불 처리에 소요되는 실비는 환불 금액에서 공제될 수 있습니다.</p>
+        <p>잔여 기간 부분 환불을 포함한 모든 환불에서 위약금·결제 수수료 등 별도 비용을 공제하지 않습니다.</p>
       </section>
 
       <section>

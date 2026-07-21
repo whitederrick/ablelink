@@ -21,7 +21,7 @@ export type LegalDoc = "terms" | "privacy" | "refund" | "pricing";
 const REGISTRY: Record<LegalDoc, { title: string; href: string; effectiveDate?: string; Content: ComponentType }> = {
   terms:   { title: "서비스 이용약관",   href: "/terms",   effectiveDate: "2026년 1월 1일", Content: TermsContent },
   privacy: { title: "개인정보처리방침",   href: "/privacy", effectiveDate: "2026년 1월 1일", Content: PrivacyPolicyContent },
-  refund:  { title: "환불정책",         href: "/refund",  effectiveDate: "2026년 1월 1일", Content: RefundContent },
+  refund:  { title: "환불정책",         href: "/refund",  effectiveDate: "2026년 7월 21일", Content: RefundContent },
   pricing: { title: "요금안내",         href: "/pricing", Content: PricingContent },
 };
 

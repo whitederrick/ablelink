@@ -102,10 +102,10 @@ export default function SubscriptionPage() {
   }
 
   async function cancel() {
-    if (!confirm("구독을 해지하시겠습니까?\n해지 후 유료 기능을 사용할 수 없고 무료 플랜 한도가 적용됩니다.")) return;
+    if (!confirm("구독을 해지하시겠습니까?\n해지 즉시 유료 기능이 종료되고 무료 플랜 한도가 적용됩니다.\n잔여 이용일은 일할 계산으로 부분 환불됩니다(공제 없음).")) return;
     const res = await fetch("/api/payments/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
     const data = await res.json();
-    if (data.success) { alert("구독이 해지되었습니다."); router.refresh(); location.reload(); }
+    if (data.success) { alert(data.message || "구독이 해지되었습니다."); router.refresh(); location.reload(); }
     else alert(data.message || "해지에 실패했습니다.");
   }
 
@@ -216,7 +216,12 @@ export default function SubscriptionPage() {
                 );
               })}
             </div>
-            <p className="text-xs font-semibold text-slate-400">표시된 모든 금액은 부가세(VAT) 포함입니다. 카드 등록 후 매월 자동 결제됩니다. 문의: {BUSINESS_INFO.email}</p>
+            <p className="text-xs font-semibold text-slate-400">
+              표시된 모든 금액은 부가세(VAT) 포함입니다. 카드 등록 후 매월 자동 결제됩니다.
+              구독 해지 시 잔여 이용일에 대해 일할 계산으로 부분 환불됩니다(위약금·수수료 공제 없음) —{" "}
+              <a href="/refund" target="_blank" rel="noopener noreferrer" className="font-black text-sky-600">환불정책</a>.
+              {" "}문의: {BUSINESS_INFO.email}
+            </p>
           </div>
         )}
       </div>

@@ -142,26 +142,47 @@ export async function POST(request: NextRequest) {
 
     const limits = PLAN_LIMITS[effectivePlanType] || { maxWorkers: 0, maxSites: 0 };
 
-    await prisma.agency.update({
-      where: { id: BigInt(agencyId) },
-      data: {
-        planType: effectivePlanType,
-        tossBillingKey: billingKey,
-        tossCustomerKey: customerKey,
-        subscriptionId: chargeData.orderId ?? orderId,
-        subscribedAt: now,
-        nextBillingAt,
-        subscriptionCanceledAt: null,
-        // trialStartedAt은 지우지 않는다 — '트라이얼 1회 소진' 이력을 영구 보존해 취소→재트라이얼 남용 방지.
-        trialEndsAt: null,
-        // ★성공한 활성화마다 이벤트 키 소비(+1) — 이후 어떤 재구독/plan 복귀도 새 orderId가 되어 무결제
-        //  재사용(A→B→A 왕복·다른 강등경로 후 재구독)이 원천 차단된다. 이 증가는 활성화 update와 원자적이라
-        //  결제 성공+DB실패 재시도 시엔 epoch가 소비되지 않아 같은 orderId로 멱등 복구된다(이중청구 없음).
-        billingEpoch: { increment: 1 },
-        maxWorkers: limits.maxWorkers,
-        maxSites: limits.maxSites,
-      },
-    });
+    // 활성화 + 결제 이력 기록을 한 트랜잭션으로 — 이력 기록 실패 시 epoch가 소비되지 않아야
+    //  재시도가 같은 orderId(ALREADY_PROCESSED 멱등 복구)로 돌아온다. 분리하면 재시도=새 epoch=실결제(이중청구).
+    //  이력의 paymentKey는 해지 시 잔여일 일할 부분환불(토스 부분취소)에 사용. ALREADY_PROCESSED 복구 경로는
+    //  paymentKey가 응답에 없으므로 기존 값을 보존(null이면 환불 시 orders/{orderId} 조회 폴백).
+    const paymentKey: string | null = chargeData.paymentKey ?? null;
+    await prisma.$transaction([
+      prisma.subscriptionPayment.upsert({
+        where: { orderId },
+        create: {
+          agencyId: BigInt(agencyId),
+          orderId,
+          paymentKey,
+          planType: effectivePlanType,
+          amount,
+          cycle,
+          periodStart: now,
+          periodEnd: nextBillingAt,
+        },
+        update: paymentKey ? { paymentKey } : {},
+      }),
+      prisma.agency.update({
+        where: { id: BigInt(agencyId) },
+        data: {
+          planType: effectivePlanType,
+          tossBillingKey: billingKey,
+          tossCustomerKey: customerKey,
+          subscriptionId: chargeData.orderId ?? orderId,
+          subscribedAt: now,
+          nextBillingAt,
+          subscriptionCanceledAt: null,
+          // trialStartedAt은 지우지 않는다 — '트라이얼 1회 소진' 이력을 영구 보존해 취소→재트라이얼 남용 방지.
+          trialEndsAt: null,
+          // ★성공한 활성화마다 이벤트 키 소비(+1) — 이후 어떤 재구독/plan 복귀도 새 orderId가 되어 무결제
+          //  재사용(A→B→A 왕복·다른 강등경로 후 재구독)이 원천 차단된다. 이 증가는 활성화 update와 원자적이라
+          //  결제 성공+DB실패 재시도 시엔 epoch가 소비되지 않아 같은 orderId로 멱등 복구된다(이중청구 없음).
+          billingEpoch: { increment: 1 },
+          maxWorkers: limits.maxWorkers,
+          maxSites: limits.maxSites,
+        },
+      }),
+    ]);
 
     console.log(`[payments/billing] 구독 완료: agencyId=${agencyId}, plan=${effectivePlanType}, amount=${amount}`);
 
