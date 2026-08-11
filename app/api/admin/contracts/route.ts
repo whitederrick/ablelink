@@ -10,6 +10,7 @@ import { checkAgencyPlanAccess, checkQuota } from "@/lib/planGuard";
 import { isValidTemplateKey, DEFAULT_TEMPLATE_KEY, canUseTemplate, canUseTemplateForWage } from "@/lib/contractTemplates";
 import { sendAlimtalk } from "@/lib/kakao";
 import { findTimeConflict, isSameAgencyConflict } from "@/lib/assignmentOverlap";
+import { withContractIssueLock } from "@/lib/assignmentLock";
 import { randomUUID } from "crypto";
 import { hash } from "bcryptjs";
 import { audit } from "@/lib/audit";
@@ -343,21 +344,8 @@ export async function POST(req: NextRequest) {
     const resolvedTemplateKey = canUseTemplateForWage(grantedTemplateKey, str(wageType)) ? grantedTemplateKey : DEFAULT_TEMPLATE_KEY;
     const resolvedTemplateData = templateData && typeof templateData === "object" ? templateData : undefined;
 
-    // ★발행 더블클릭 방어(P3): 같은 배정·기간의 PENDING 계약이 방금(최근 10초) 만들어졌으면 중복 발행으로 보고 409.
-    //  발행마다 실비용 카카오 알림톡이 나가고 중복 법적 문서 요청이 생기던 것 차단. 정상 재발행(10초 이후)은 허용.
-    const recentDup = await prisma.employmentContract.findFirst({
-      where: {
-        workerId: userIdBig, assignmentId: assignmentIdBig, status: "PENDING",
-        contractStart: startDate, contractEnd: endDate,
-        createdAt: { gte: new Date(Date.now() - 10_000) },
-      },
-      select: { id: true },
-    });
-    if (recentDup) {
-      return NextResponse.json({ success: false, message: "방금 발행한 계약이 있습니다. 잠시 후 목록에서 확인해주세요." }, { status: 409 });
-    }
-
-    const contract = await prisma.employmentContract.create({
+    // 생성 입력은 락 밖에서 조립하고(순수 계산), 임계구역에서는 재조회+create만 수행한다.
+    const contractInput = {
       data: {
         agencyId,
         workerId: userIdBig,
@@ -407,7 +395,34 @@ export async function POST(req: NextRequest) {
         templateKey: resolvedTemplateKey,
         templateData: resolvedTemplateData,
       } as any,
-    });
+    };
+
+    // ★발행 더블클릭 방어: 같은 배정·기간의 PENDING 계약이 방금(최근 10초) 만들어졌으면 중복 발행으로 보고 409.
+    //  발행마다 실비용 카카오 알림톡이 나가고 중복 법적 문서 요청이 생기던 것 차단. 정상 재발행(10초 이후)은 허용.
+    // ★E-2: 종전에는 이 재조회와 create 사이에 직렬화가 없어, 순차 더블클릭만 막히고 ms 단위 동시 요청은
+    //  둘 다 통과해 중복 계약 2건 + 알림톡 2건이 나갈 수 있었다(best-effort). 배정 단위 advisory 락
+    //  임계구역 안으로 재조회를 옮겨 실제 동시성까지 직렬화한다. 감사로그·알림톡은 락 밖(아래)에서 수행.
+    class DuplicateIssue extends Error {}
+    let contract;
+    try {
+      contract = await withContractIssueLock({ assignmentId: assignmentIdBig, workerId: userIdBig }, async (tx) => {
+        const recentDup = await tx.employmentContract.findFirst({
+          where: {
+            workerId: userIdBig, assignmentId: assignmentIdBig, status: "PENDING",
+            contractStart: startDate, contractEnd: endDate,
+            createdAt: { gte: new Date(Date.now() - 10_000) },
+          },
+          select: { id: true },
+        });
+        if (recentDup) throw new DuplicateIssue();
+        return tx.employmentContract.create(contractInput);
+      });
+    } catch (e) {
+      if (e instanceof DuplicateIssue) {
+        return NextResponse.json({ success: false, message: "방금 발행한 계약이 있습니다. 잠시 후 목록에서 확인해주세요." }, { status: 409 });
+      }
+      throw e;
+    }
 
     await audit(scope, { entityType: "EmploymentContract", entityId: contract.id, action: "create", after: { workerId: String(userIdBig), siteName: siteName || null, wageType: str(wageType), wageAmount: toInt(wageAmount), status: "PENDING" } });
 

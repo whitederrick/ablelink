@@ -55,6 +55,41 @@ const SITE_LOCK_NS = 1;
 // 공고(RecruitPost) 락 네임스페이스 — 마켓 신청 동시 수락 시 '아직 없는 현장'의 최초 생성 경합을 직렬화.
 //  (site 락은 siteId를 알아야 잡는데, find-or-create 이전엔 siteId가 없어 못 잡음 → postId로 잠근다.)
 const POST_LOCK_NS = 2;
+// 근로계약서 발행 락 네임스페이스(E-2) — 같은 배정에 대한 동시 발행을 직렬화.
+const CONTRACT_ISSUE_LOCK_NS = 3;
+
+/**
+ * 근로계약서 발행 임계구역 락(E-2). 발행은 '최근 10초 PENDING 재조회(dedup) → create' 사이에 직렬화가
+ * 없어, ms 단위 동시 요청 둘이 모두 dedup을 통과해 중복 계약 2건 + 카카오 알림톡 2건(실비용·법적 문서
+ * 중복 요청)이 새어나갈 수 있었다. 기존 10초 dedup은 순차 더블클릭만 막는 best-effort였다.
+ *
+ * ★락 키는 배정 단위로 거칠게 잡는다. 기간(contractStart/End)까지 키에 넣으면 기간이 하루라도 다른 두
+ *  발행이 서로 다른 락을 잡고 동시에 통과하는데, 이 시스템의 계약 중복·충돌 의미론은 기간 '겹침'까지
+ *  포함하므로(findTimeConflict) 그 배정의 모든 발행을 직렬화하는 편이 안전하고 단순하다. 계약 발행은
+ *  저빈도라 과-잠금 비용은 사실상 0이다.
+ *
+ * 배정 없이 발행하는 수동입력 계약(assignmentId=null)은 dedup 스코프가 (workerId, assignmentId=null,
+ * 기간)이므로 워커 단위로 잠근다. 두 키는 접두사("a:"/"w:")로 구분해 id 값이 우연히 겹쳐도 서로 다른
+ * 락이 된다(해시 충돌은 잠깐 과-잠금될 뿐 정합성엔 안전 — site 락과 동일한 hashtext 패턴).
+ *
+ * ※교착 안전: 이 트랜잭션은 NS=3 락 하나만 잡고 워커 락(단일키)이나 현장 락(NS=1)을 잡지 않으므로,
+ *  기존 '[site|post] → worker' 획득 순서와 순환대기를 만들 수 없다. 임계구역은 재조회+create만 —
+ *  감사로그·알림톡(외부 통신)은 반드시 락 밖에서 수행한다.
+ */
+export function contractIssueLockKey(key: { assignmentId: bigint | null; workerId: bigint }): string {
+  return key.assignmentId != null ? `a:${key.assignmentId}` : `w:${key.workerId}`;
+}
+
+export async function withContractIssueLock<T>(
+  key: { assignmentId: bigint | null; workerId: bigint },
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  const lockKey = contractIssueLockKey(key);
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${CONTRACT_ISSUE_LOCK_NS}::int, hashtext(${lockKey}))`;
+    return fn(tx);
+  });
+}
 
 /**
  * 공고 락 + 워커 락(post→worker, 무교착). 마켓 신청 수락에서 신규 현장 find-or-create를 postId로 직렬화한다.
