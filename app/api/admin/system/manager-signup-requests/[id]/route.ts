@@ -204,6 +204,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       });
     } catch (e) {
       if (e instanceof AlreadyProcessed) return NextResponse.json({ success: false, message: "이미 처리된 신청입니다." }, { status: 409 });
+      // ★E-4 경합: 위 Agency는 findUnique(name) → create의 TOCTOU다. 같은 기관명 신청 2건을 동시에
+      //  승인하면 둘 다 findUnique에서 null을 보고 create해 unique(name) 위반(P2002)이 난다.
+      //  Manager.loginId도 같은 클래스(findUnique → create).
+      //  트랜잭션 안에서 P2002를 잡아 재조회하는 복구는 불가능하다 — Postgres는 오류 발생 시점에 트랜잭션을
+      //  abort하므로 이후 쿼리가 전부 실패한다. 대신 트랜잭션이 통째로 롤백되면서 claim(status=APPROVED)도
+      //  함께 되돌아가 PENDING으로 복원되므로, 재시도하면 이번엔 findUnique가 상대가 만든 행을 찾아 정상 승인된다.
+      //  → 데이터 훼손 없는 순수 경합이므로 500(서버 오류)이 아니라 409(재시도 가능)로 알린다.
+      if ((e as { code?: string })?.code === "P2002") {
+        return NextResponse.json(
+          { success: false, message: "다른 승인 처리와 동시에 실행되어 반영되지 않았습니다. 잠시 후 다시 시도해주세요." },
+          { status: 409 },
+        );
+      }
       throw e;
     }
 

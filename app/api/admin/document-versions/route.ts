@@ -34,6 +34,35 @@ function toItem(v: any) {
   };
 }
 
+// 목록 전용 매퍼 — sourceData(서명 data-URI 포함 문서 원본) 제외.
+//  버전 목록은 "어떤 버전이 있는가"만 보여주면 되고, 실제 내용은 /document-versions/[id]/pdf가
+//  서버에서 직접 읽어 렌더한다. 전문을 목록에 실으면 건당 수백 KB가 불필요하게 나가고
+//  필요최소 원칙에도 어긋난다. (소비처 실측: manager/documents/page.tsx:108 = id·versionNo·createdAt만 사용)
+type VersionListRow = {
+  id: bigint;
+  runId: bigint;
+  versionNo: number;
+  stage: DocumentStage;
+  pdfUrl: string;
+  pdfFileName: string | null;
+  createdAt: Date;
+  createdByWorkerId: bigint | null;
+  createdByManagerId: bigint | null;
+};
+function toListItem(v: VersionListRow) {
+  return {
+    id: String(v.id),
+    runId: String(v.runId),
+    versionNo: v.versionNo,
+    stage: v.stage,
+    pdfUrl: v.pdfUrl,
+    pdfFileName: v.pdfFileName ?? null,
+    createdAt: v.createdAt.toISOString(),
+    createdByWorkerId: v.createdByWorkerId != null ? String(v.createdByWorkerId) : null,
+    createdByManagerId: v.createdByManagerId != null ? String(v.createdByManagerId) : null,
+  };
+}
+
 // GET: runId로 버전 목록 조회
 // query: runId (required)
 export async function GET(req: NextRequest) {
@@ -66,14 +95,16 @@ export async function GET(req: NextRequest) {
         stage: true,
         pdfUrl: true,
         pdfFileName: true,
-        sourceData: true,
+        // sourceData는 select하지 않는다 — DB→서버 전송량까지 함께 줄인다(toListItem과 짝).
         createdAt: true,
         createdByWorkerId: true,
         createdByManagerId: true,
       },
     });
 
-    // 개인정보 접속기록: 취급자의 제출 문서(사업자 제출 서류) 내용(sourceData) 열람.
+    // 개인정보 접속기록: 취급자가 특정 대상자의 제출 문서(사업자 제출 서류) 이력을 조회.
+    //  ※응답에서 sourceData 전문은 제외됐지만, 어떤 대상자에게 어떤 문서가 있는지 자체가
+    //   개인정보 열람에 해당하므로 기록은 유지한다(안전성확보조치 제8조).
     await logAccess(req, scope, {
       subjectType: "DocumentRun",
       subjectId: runId,
@@ -81,7 +112,7 @@ export async function GET(req: NextRequest) {
       action: "view",
     });
 
-    return NextResponse.json({ success: true, items: rows.map(toItem) });
+    return NextResponse.json({ success: true, items: rows.map(toListItem) });
   } catch (e: any) {
     // requireManagerSession은 NextResponse(401)를 throw — message 기반 매핑이 500으로 바꿔버리던 것 방지.
     if (e instanceof Response) return e;

@@ -8,13 +8,12 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getKstDateString } from "@/lib/time";
+import { getKstDateString, isValidYmd } from "@/lib/time";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { computeWorkTimes, kstWallTimeToInstant } from "@/lib/workSchedule";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { audit } from "@/lib/audit";
 
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_RANGE_DAYS = 100; // 과도한 일괄 생성 방지
 
 function toBigIntOrNull(v: any): bigint | null {
@@ -54,7 +53,10 @@ export async function POST(request: NextRequest) {
     const from = String(body?.from ?? "").trim();
     const to = String(body?.to ?? "").trim();
 
-    if (!DATE_ONLY.test(from) || !DATE_ONLY.test(to)) {
+    // ★형태검사만으로는 2026-02-31이 통과하고, 아래 enumerateDates의 Date.UTC(2026,1,31)가 3/3으로
+    //  '롤오버'해 사용자가 입력한 기간과 다른 날짜에 출근부가 생성된다(급여·문서까지 오염).
+    //  달력 왕복검증(isValidYmd)으로 입력 단계에서 차단 — 저장 전 날짜 검증 단일 소스.
+    if (!isValidYmd(from) || !isValidYmd(to)) {
       return NextResponse.json(
         { success: false, message: "기간(시작일/종료일)을 YYYY-MM-DD 형식으로 입력해주세요." },
         { status: 400 },

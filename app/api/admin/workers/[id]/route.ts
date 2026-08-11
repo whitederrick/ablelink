@@ -12,6 +12,7 @@ import { hash } from "bcryptjs";
 import { workerBelongsToAgency } from "@/lib/worker/agencyScope";
 import { parseBigInt } from "@/lib/adminScope";
 import { generateTempPassword } from "@/lib/tempPassword";
+import { isValidYmd } from "@/lib/time";
 
 
 // 자기 위탁기관 소속 직무지도원인지 확인(스코프 가드) — ★13차: 공용 판정(수락/근무한 배정 또는 계약이력)으로 위임.
@@ -80,7 +81,9 @@ export async function PATCH(
     // 생년월일(YYYY-MM-DD, 빈 값=null) — 근로계약서(07/06) 등에 사용되는 단일 출처
     if (birthDate !== undefined) {
       const b = typeof birthDate === "string" && birthDate.trim() ? birthDate.trim() : null;
-      if (b && !/^\d{4}-\d{2}-\d{2}$/.test(b)) {
+      // 형태(정규식)만 보면 1975-13-40·2026-02-31이 통과해 String 컬럼에 그대로 저장된다.
+      //  근로계약서(07/06)·임금명세서에 그대로 인쇄되는 값이므로 달력 왕복검증(isValidYmd)으로 통일.
+      if (b && !isValidYmd(b)) {
         return NextResponse.json({ success: false, message: "생년월일 형식이 올바르지 않습니다. (YYYY-MM-DD)" }, { status: 400 });
       }
       updates.birthDate = b;

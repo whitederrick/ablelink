@@ -10,8 +10,15 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { getKrHolidays } from "@/lib/krHolidays";
 import { prisma } from "@/lib/prisma";
+import { isValidYmd } from "@/lib/time";
 
-function isDateOnly(s: string) { return /^\d{4}-\d{2}-\d{2}$/.test(s); }
+// 쓰기(POST)와 정리(DELETE)의 검증 강도를 의도적으로 나눈다.
+//  · POST: isValidYmd(달력 왕복검증) — 형태검사만 하면 2026-02-31이 String 컬럼(SiteHoliday.date)에
+//    verbatim 저장돼 달력에 유령 휴무가 남는다. 새 오염을 원천 차단.
+//  · DELETE: 형태검사만 — 이 수정 이전에 저장된 잘못된 날짜 행(GET의 문자열 범위 조회에는 잡혀
+//    화면에 보인다)을 삭제로 정리할 수 있어야 한다. DELETE는 이미 본인 배정(assignmentId)으로
+//    스코프되므로 관대해도 안전하다. 여기까지 엄격하게 하면 기존 오염 행이 영구 잔존한다.
+function isDateShape(s: string) { return /^\d{4}-\d{2}-\d{2}$/.test(s); }
 
 function parseSel(sp: URLSearchParams): bigint | null {
   const raw = sp.get("assignmentId");
@@ -76,7 +83,7 @@ export async function POST(request: NextRequest) {
     if (!session) return NextResponse.json({ success: false, message: "인증 필요" }, { status: 401 });
 
     const { date, reason } = await request.json();
-    if (!date || !isDateOnly(date)) {
+    if (!date || !isValidYmd(date)) {
       return NextResponse.json({ success: false, message: "올바른 날짜를 입력해주세요." }, { status: 400 });
     }
 
@@ -108,7 +115,7 @@ export async function DELETE(request: NextRequest) {
 
     const sp = new URL(request.url).searchParams;
     const date = sp.get("date") ?? "";
-    if (!isDateOnly(date)) return NextResponse.json({ success: false, message: "올바른 날짜를 입력해주세요." }, { status: 400 });
+    if (!isDateShape(date)) return NextResponse.json({ success: false, message: "올바른 날짜를 입력해주세요." }, { status: 400 });
 
     const assignment = await getAssignment(BigInt(session.workerId), parseSel(sp));
     if (!assignment) return NextResponse.json({ success: false, message: "배정 없음" }, { status: 404 });

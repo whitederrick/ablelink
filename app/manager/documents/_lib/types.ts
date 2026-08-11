@@ -31,7 +31,9 @@ export type DocumentVersionItem = {
   stage: DocStage;
   pdfUrl: string;
   pdfFileName: string | null;
-  sourceData: any | null;
+  // 목록 GET(/api/admin/document-versions?runId=)은 sourceData를 반환하지 않는다(페이로드 경량화).
+  //  POST(생성) 응답에만 포함되므로 optional. 내용이 필요하면 .../[id]/pdf를 사용한다.
+  sourceData?: unknown;
   createdAt: string;
 };
 
