@@ -8,9 +8,16 @@
 |------|---|
 | 플랫폼 | Vercel (Hobby) |
 | 도메인 | https://able-link.co.kr |
-| 브랜치 | `master` → 자동 배포 |
+| 배포 방식 | **CLI 수동 배포** — git push는 배포를 유발하지 않음 |
 | 빌드 명령 | `prisma generate && next build` |
 | DB | Supabase PostgreSQL (ap-northeast-2) |
+| Vercel CLI | **56.4.1 고정** (아래 §CLI 버전 핀) |
+
+> **★ 자동 배포는 없습니다** (2026-08-11 실측 정정).
+> 이 문서는 오래도록 "`master` → 자동 배포"로 적혀 있었으나 사실이 아닙니다. 확인 근거:
+> `vercel project inspect`에 Git 연결 섹션 없음 · GitHub 웹훅 0건 · 모든 배포가 git 브랜치가 아니라
+> **사용자명(CLI)에 귀속** · push 이후에도 새 배포가 생기지 않음.
+> 따라서 `git push`는 안전하며, **운영 반영은 항상 아래 절차를 명시적으로 실행해야** 합니다.
 
 ---
 
@@ -21,9 +28,14 @@
 ```bash
 git add .
 git commit -m "feat: 기능 설명"
-git push origin master
-# → Vercel 자동 빌드·배포 시작 (약 2~3분)
+git push origin master        # ← 배포되지 않음. 원격 저장소 반영만.
+
+npm run deploy:preview        # 1) Preview로 먼저 검증
+npm exec -- vercel --prod     # 2) 승인 후 운영 반영 (로컬 핀 CLI 사용)
 ```
+
+> Production 단축 스크립트는 **의도적으로 만들지 않았습니다.** 운영 배포는 오타나 습관으로
+> 실행되면 안 되는 명령이라, 매번 전체 명령을 치도록 두는 편이 안전합니다.
 
 ### DB 스키마 변경 포함 시
 
@@ -49,9 +61,51 @@ npx prisma migrate deploy
 # Vercel CLI로 추가/수정
 echo "값" | npx vercel env add 변수명 production --force
 
-# 적용을 위해 Redeploy 필요
-npx vercel --prod --yes
+# 적용을 위해 Redeploy 필요 (로컬 핀 CLI 사용 — §CLI 버전 핀 참고)
+npm exec -- vercel --prod
 ```
+
+---
+
+## CLI 버전 핀 (Vercel 56.4.1)
+
+`package.json`의 `devDependencies.vercel`을 **정확히 `56.4.1`로 고정**하고 lockfile에 반영했습니다.
+
+### 사유 (2026-08-11)
+
+- **CLI 58.9.1에서 배포가 실패합니다.** 서버가 400 `invalid_root_directory`를 반환:
+  ``If defined, the Root Directory must be a relative path not starting with `./` ...``
+- **동일 환경·동일 프로젝트 설정에서 56.4.1은 성공합니다.** 두 시도는 수 분 간격이었고 그 사이
+  프로젝트 설정을 바꾸지 않았습니다. 서버 저장값이 원인이라면 56.4.1도 실패했어야 합니다.
+- 대시보드의 Root Directory 필드는 **비어 있습니다**(`./`는 placeholder, Save 버튼 비활성).
+  `vercel project update --auto-detect root-directory`도 "Unchanged"로 no-op입니다.
+  → 프로젝트 설정에 잘못된 값이 남아 있어 생긴 문제로 보기는 어렵습니다.
+- **결론: 58.9.1에 종속된 회귀.** 정확한 원인은 **미확정**입니다. CLI 디버그가 배포 요청 본문을
+  덤프하지 않아 무엇이 거부됐는지 직접 확인하지 못했습니다. 근거로 삼을 수 있는 것은
+  "동일 환경에서 56.4.1 성공 / 58.9.1 실패"라는 대조 실험까지입니다.
+
+### 핀의 한계 — 완전한 강제가 아님
+
+| 실행 방식 | 사용되는 버전 |
+|---|---|
+| `npm exec -- vercel`, npm script 안의 `vercel` | ✅ 로컬 핀 56.4.1 |
+| `npx vercel` (로컬 설치가 있을 때) | ✅ 로컬 핀 56.4.1 |
+| **전역 설치된 `vercel`** | ❌ 전역 버전 |
+| **`npx vercel@latest`** | ❌ 명시한 최신 버전 |
+
+전역 CLI나 버전을 명시한 실행은 핀을 우회합니다. 배포가 `invalid_root_directory`로 실패하면
+**가장 먼저 `vercel --version`을 확인**하십시오.
+
+### 핀 해제 조건
+
+후속 CLI 버전으로 `npm run deploy:preview`가 **성공하면** 핀을 갱신하거나 해제합니다.
+확인 방법:
+
+```bash
+npx vercel@<후보버전> deploy --yes     # 성공하면 그 버전으로 핀 갱신 가능
+```
+
+성공을 확인하기 전에는 핀을 올리지 마십시오. 원인이 미확정이라 회귀가 조용히 돌아올 수 있습니다.
 
 ---
 

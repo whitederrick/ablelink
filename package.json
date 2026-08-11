@@ -12,7 +12,8 @@
     "seed": "tsx prisma/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "deploy:preview": "vercel"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1047.0",
@@ -56,6 +57,7 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
+    "vercel": "56.4.1",
     "vitest": "^4.1.7"
   }
 }
