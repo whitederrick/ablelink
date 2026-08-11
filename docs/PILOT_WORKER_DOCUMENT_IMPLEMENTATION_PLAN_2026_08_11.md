@@ -103,12 +103,22 @@ P6의 `signatures()` 개편 회귀를 잡지 못한다. 이 스크립트 없이 
   - `app/api/cron/daily/route.ts:437` — 급여 DRAFT 자동 생성(`payrollAutoDay` 미설정으로 자연 회피되나 값에 의존하지 않음)
   - `app/api/payments/charge/route.ts:59` — 결제 대상 조회. **심층방어**: 조회 조건이 `tossBillingKey != null` AND
     `tossCustomerKey != null` AND `nextBillingAt < tomorrow`라 빌링키 없는 파일럿 기관은 구조적으로 청구 대상이 될 수 없다
-- 모든 assignment 생성 chokepoint에서 demo Site/Agency 배정 하드블록.
-  **대상은 추측하지 않고 `lib/assignmentLock.ts` 호출부를 앵커로 전수 열거한다**(실측 7곳):
-  `admin/assignments/route.ts:316` · `admin/assignments/[id]/route.ts:126` · `admin/assignment-requests/route.ts:184` ·
-  `admin/recruit-applications/[id]/route.ts:166,167,168` · `worker/assignment/respond/route.ts:106` ·
-  `worker/recruit/offers/route.ts:135,136` · `worker/contracts/route.ts:219`.
-  같은 락을 쓰지만 배정을 만들지 않는 `admin/leave/**`·`admin/payroll/runs/[runId]`는 대상이 아니다
+- **8곳**의 assignment 생성 경로에서 demo Site/Agency 배정 하드블록.
+  전수조사는 **두 축을 병행**한다 — ① `lib/assignmentLock.ts` 호출부(**주요 앵커이지 단일 관문이 아니다**)
+  ② `siteAssignment.create` / `upsert` / `updateMany` 직접 검색
+  - **락 경유 7곳**: `admin/assignments/route.ts:316` · `admin/assignments/[id]/route.ts:126` ·
+    `admin/assignment-requests/route.ts:184` · `admin/recruit-applications/[id]/route.ts:166,167,168` ·
+    `worker/assignment/respond/route.ts:106` · `worker/recruit/offers/route.ts:135,136` · `worker/contracts/route.ts:219`
+  - ★**락 밖 1곳**: `app/api/worker/invite/[id]/route.ts:135` — **초대 수락**.
+    `invite.siteId`가 있으면 `agencyId: invite.agencyId`로 `ASSIGNED` 배정을 직접 생성한다.
+    `:131-133` 주석대로 **의도적으로 락·정원검사에서 제외**된 경로라 락 호출부만 훑으면 발견되지 않는다
+- 초대 수락 경로 조치는 **정책 + 코드 양쪽**이다
+  - 파일럿 초대는 **`siteId = null`로만 발급**(Site/Assignment는 `/api/pilot/setup`에서만 생성)
+  - `invite.agencyId`가 demo면 `:134` 분기를 건너뛰거나 403 (매니저의 `siteId` 오입력 방어)
+- 같은 락을 쓰지만 배정을 만들지 않는 `admin/leave/**`·`admin/payroll/runs/[runId]`는 대상이 아니다.
+  `siteAssignment.update/updateMany` 22곳은 기존 배정의 **상태 전이**라 새 worker 부착이 아니지만,
+  `assignment-requests/route.ts:228`의 `ACCEPTED → ASSIGNED` 승격처럼 demo Site 대상 승격이 있는지
+  P1에서 함께 점검하고 결과를 설계 문서에 확정 기록한다
 
 완료 기준:
 
@@ -116,6 +126,8 @@ P6의 `signatures()` 개편 회귀를 잡지 못한다. 이 스크립트 없이 
 - 유효 파일럿 worker만 context 조회 가능
 - 참여자 N명이 각자 Site N개를 생성할 수 있음
 - manager가 일반 배정 API로 demo Site에 worker를 배정하면 403
+- **demo 기관 초대에 `siteId`가 있어도 수락 시 배정이 생성되지 않음**
+- **파일럿 Site에 두 번째 배정이 어떤 경로로도 생기지 않음**(8경로 전부 검증)
 - demo worker에 연차·급여 draft·결제 대상이 자동 생성되지 않음
 - 클라이언트가 다른 agencyId를 보내도 무시·차단
 - 운영 agency는 기존 동작 불변
@@ -175,7 +187,10 @@ P6의 `signatures()` 개편 회귀를 잡지 못한다. 이 스크립트 없이 
 - `add`는 `daily_attendances(assignment_id, work_date)` unique를 키로 생성, 이미 있으면 409
 - `update`는 시간만 갱신하며 일지가 있는 날짜도 허용
 - `remove`는 종속 `TraineeLog`가 없을 때만 삭제, 있으면 409와 정리 안내
-- `update`·`remove`는 `expectedUpdatedAt`을 함께 받아 서버 값과 불일치하면 409
+- `update`·`remove`는 `expectedUpdatedAt`을 함께 받아 불일치 시 409.
+  ★**조회 후 비교가 아니라 `WHERE id AND updatedAt` 조건을 쓰기 구문에 실은 원자적 CAS**로 구현한다
+  (`updateMany`/`deleteMany`의 `count === 0` → 409). 읽고 비교한 뒤 쓰면 검사 자체가 TOCTOU가 된다.
+  기존 규율과 동일한 패턴이다 — `admin/document-runs/[id]/action/route.ts:69`
 - 세 배열은 한 트랜잭션에서 처리하고 하나라도 409면 전체 롤백
 - ★**`remove` 전 일지 존재 검사는 필수다.** `TraineeLog.attendanceId`가 `onDelete: Cascade`이므로
   (`prisma/schema.prisma:469`) `DailyAttendance`를 지우면 **DB가 일지를 조용히 함께 지운다.**
@@ -401,7 +416,9 @@ Word/HWP 생성
 | 같은 실제 사업체 Site 중복 | demo Agency 내부에서만 worker별 분리, 운영 병합 금지 |
 | 자동 평일을 실제 출근으로 오인 | preview 후 명시 체크·확정한 날만 저장 |
 | 파일럿 데이터 운영 합계·자동화 혼입 | 데이터 생성 전 급여·연차·결제 하드블록 + 조회 필터 테스트 |
-| 다른 경로에서 demo Site에 worker 추가 배정 | 모든 assignment 생성 chokepoint 하드블록 + 403 테스트 |
+| 다른 경로에서 demo Site에 worker 추가 배정 | **8경로** 하드블록 + 403 테스트. ★락 밖 `worker/invite/[id]:135` 포함 — 락 호출부만 훑으면 놓친다 |
+| 관문 함수 호출부만 훑어 예외 경로를 놓침 | 전수조사는 **락 호출부 + 모델 쓰기 구문(`create`/`upsert`/`updateMany`) 검색 병행** |
+| 낙관적 잠금이 TOCTOU가 됨 | `expectedUpdatedAt`을 **조건에 실은 원자적 CAS**로 구현, 조회 후 비교 금지 |
 | 사업체 서명 오귀속 | assignment+기간 완전일치, 최근 토큰 폴백 금지 |
 | 위탁기관 이름을 전자서명으로 오인 | 이름 전용, 서명 이미지·signStage와 연결 금지 |
 | 공란 이름 공간 부족 | 최소 40mm 고정 이름 영역과 밑줄 |
@@ -442,6 +459,22 @@ Claude 2차 검토(코드 실측 기반) 지적 9건을 반영했다. 상세 근
 | 7 | 결제 경로는 이미 구조적으로 안전 | P1 위험도 차등 |
 | 8 | cleanup에 `AttendanceIssueEvent` 누락 | P7 |
 | 9 | 배정 chokepoint는 `assignmentLock.ts` 호출부가 앵커 | P1(7곳 실측) |
+
+### v3 보정 — 배정 경로 누락 1건
+
+v3 최초본의 *"락 호출부를 앵커로 전수 열거"* 는 **틀렸다.**
+`app/api/worker/invite/[id]/route.ts:135`가 락 밖에서 `siteAssignment.create()`를 직접 호출한다.
+
+| # | 보정 | 위치 |
+|---|---|---|
+| 1 | 초대 수락을 **8번째 하드블록 대상**으로 추가 | P1 |
+| 2 | "단일 관문" → **"주요 앵커"** | P1 · 설계 §4-5 |
+| 3 | 전수조사는 **락 호출부 + `create`/`upsert`/`updateMany` 검색 병행** | P1 · §4 위험표 |
+| 4 | `expectedUpdatedAt`은 **원자적 CAS**(조회 후 비교 금지) | P3 · §4 위험표 |
+
+★**교훈**: 이 리포는 chokepoint 단일화를 여러 차례 했지만(`checkSiteCapacity`·`ownedAttendanceWhere`·`assignmentLock`),
+**의도적 예외가 주석으로만 남은 경우**가 있다. 관문 호출부 훑기는 그런 예외를 구조적으로 놓친다.
+모델 단위 쓰기 구문 검색을 항상 병행할 것.
 
 ---
 

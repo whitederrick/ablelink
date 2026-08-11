@@ -199,9 +199,13 @@ Site 하나를 여러 worker가 공유하면 파일럿 문서 화면에서 서�
 `SiteAssignment` 생성 chokepoint는 demo Site/Agency 대상 배정을 403으로 차단한다. 파일럿 assignment는
 `/api/pilot/setup` transaction에서만 만든다.
 
-**chokepoint 전수 조사는 `lib/assignmentLock.ts` 호출부를 앵커로 삼는다.** 이 락 함수들은 2026-07-08에
-"배정 생성·승격 6경로"를 일괄 방어하려고 도입된 단일 관문이므로, 호출부를 따라가면 대상이 그대로 나온다.
-새 경로를 추측으로 찾지 않는다. 실측 결과 배정을 만들거나 승격하는 호출부는 다음 7곳이다.
+**chokepoint 전수 조사는 두 축을 병행한다. 어느 한쪽만으로는 완전하지 않다.**
+
+`lib/assignmentLock.ts` 호출부는 **주요 앵커이지 단일 관문이 아니다.** 2026-07-08에 "배정 생성·승격 6경로"를
+일괄 방어하려고 도입됐지만, 이후 **의도적으로 락에서 제외된 경로가 존재**한다(아래 ⑧).
+따라서 최종 전수조사는 **① 락 호출부 + ② `siteAssignment.create` / `upsert` / `updateMany` 직접 검색**을 함께 수행한다.
+
+**축 ①·② 교집합 — 락을 거치는 배정 생성·승격 7곳**
 
 | 경로 | 호출부 |
 |---|---|
@@ -213,9 +217,39 @@ Site 하나를 여러 worker가 공유하면 파일럿 문서 화면에서 서�
 | 마켓 오퍼 수락 | `app/api/worker/recruit/offers/route.ts:135,136` |
 | 계약 서명 write-back | `app/api/worker/contracts/route.ts:219` |
 
-같은 락 함수를 쓰지만 **배정을 만들지 않는** 호출부는 대상이 아니다:
-`app/api/admin/leave/[workerId]/route.ts:128,188,240` · `app/api/admin/leave/requests/[id]/route.ts:48,80` ·
-`app/api/admin/payroll/runs/[runId]/route.ts:158`(연차·급여 경로).
+**⑧ 락 밖 경로 — 초대 수락 (★차단급 누락이었다)**
+
+`app/api/worker/invite/[id]/route.ts:135`가 **`assignmentLock`을 거치지 않고 `tx.siteAssignment.create()`를
+직접 호출한다.** `invite.siteId`가 있으면 `agencyId: invite.agencyId`(`:139`)로 `status: ASSIGNED` 배정을 만든다.
+
+이것은 누락이 아니라 **의도적 제외**다. `:131-133` 주석에 근거가 남아 있다 —
+*"invite는 매니저가 자기 현장에 직접 온보딩하는 행위라 정원으로 막지 않는다… 19차에 chokepoint 편입한 게 과했음"*.
+`checkSiteCapacity`와 함께 락에서도 빠져 있어 **락 호출부만 훑는 방식으로는 영원히 발견되지 않는다.**
+
+파일럿에 미치는 영향이 셋이다.
+1. 이 경로를 막지 않으면 **P1 demo 배정 하드블록에 구멍이 남는다.**
+2. 이미 존재하는 파일럿 Site의 `siteId`로 초대를 발급하면 **그 Site에 두 번째 배정이 생겨
+   §4-5의 "Site 1개당 worker 1명"이 깨지고, 훈련생 목록이 섞여 1:多 판정이 붕괴한다.**
+   D-1을 도입하지 않는 근거 자체가 무너지는 지점이다.
+3. §4-2 판정 2(demo assignment 존재)를 이 경로가 자동 충족시켜 **참여 자격이 부여된다.**
+
+**조치는 정책과 코드 양쪽이다.**
+- 파일럿 초대는 **`siteId = null`로만 발급**한다(`WorkerInvite.siteId`는 nullable).
+  그러면 `:134` 분기를 타지 않아 Site/Assignment가 `/api/pilot/setup`에서만 생성된다.
+- 정책만으로는 부족하므로(매니저가 실수로 `siteId`를 넣을 수 있다) **코드 가드도 둔다** —
+  `invite.agencyId`가 demo면 `:134` 분기를 건너뛰거나 403.
+- 완화 요인: 이 라우트는 `worker.create`(`:115`)로 **신규 계정을 만드는 경로**라 이미 가입된 번호는
+  409로 막힌다(`:107-108`). 참여자가 전원 기존 직무지도원이면 타지 않는다. **신규 참여자 1명만 생겨도 열린다.**
+
+**대상이 아닌 것**
+
+- 같은 락을 쓰지만 **배정을 만들지 않는** 연차·급여 경로:
+  `app/api/admin/leave/[workerId]/route.ts:128,188,240` · `app/api/admin/leave/requests/[id]/route.ts:48,80` ·
+  `app/api/admin/payroll/runs/[runId]/route.ts:158`
+- `siteAssignment.update/updateMany` 22곳은 **기존 배정의 상태 전이**이며 새 worker가 demo Site에
+  붙는 사건이 아니다. 다만 `assignment-requests/route.ts:228`처럼 `ACCEPTED → ASSIGNED` 승격이 있으므로,
+  P1 구현 시 **demo Site를 대상으로 하는 승격도 함께 점검**하고 결과를 이 문서에 확정 기록한다.
+- `prisma/seed.ts` · `scripts/*.mts`는 런타임 경로가 아니다.
 
 대안 비교:
 
@@ -308,10 +342,27 @@ Site 하나를 여러 worker가 공유하면 파일럿 문서 화면에서 서�
 ★**전체 집합 방식을 쓰지 않는 이유**: 사용자가 모바일과 PC를 동시에 열면 나중 저장이 앞선 저장을 통째로
 되돌린다(lost update). delta는 서로 다른 날짜의 동시 수정을 서로 간섭 없이 반영한다.
 
-★**같은 날짜 동시 수정 보호**: `update`·`remove` 항목은 클라이언트가 읽은 시점의
-`DailyAttendance.updatedAt`을 `expectedUpdatedAt`으로 실어 보낸다. 서버 값과 다르면 **409**로 거부하고
-현재 값을 응답에 담아 화면이 갱신하도록 한다. 이 프로젝트의 경합 응답 규약(E-4·E-5에서 P2002·삭제 경합을
-409로 정규화한 것)과 정합적이다.
+★**같은 날짜 동시 수정 보호 — 반드시 원자적 CAS로 구현한다.**
+`update`·`remove` 항목은 클라이언트가 읽은 시점의 `DailyAttendance.updatedAt`을 `expectedUpdatedAt`으로 실어 보낸다.
+
+**조회 후 비교(read-then-compare)는 금지한다.** `findUnique`로 읽어 `updatedAt`을 비교한 뒤 `update`하면
+비교와 쓰기 사이에 다른 요청이 끼어들 수 있어 **검사 자체가 TOCTOU가 된다.**
+
+`WHERE id AND updatedAt` 조건을 **쓰기 구문에 직접 실어** 영향 행 수로 판정한다.
+
+```ts
+const r = await tx.dailyAttendance.updateMany({
+  where: { id, assignmentId, updatedAt: expectedUpdatedAt },   // 조건을 쓰기에 포함
+  data:  { startTime, endTime },
+});
+if (r.count === 0) throw new Conflict(...);                     // 0건 = 경합 → 409
+```
+
+`remove`도 동일하게 `deleteMany({ where: { id, assignmentId, updatedAt: expectedUpdatedAt } })`로 하고
+`count === 0`이면 409다. 이 패턴은 이 프로젝트의 기존 규율과 동일하다 —
+`app/api/admin/document-runs/[id]/action/route.ts:69`가 `updateMany({ where: { id, signStage: "SUBMITTED" } })`의
+영향 행 수로 상태 경합을 판정하고, E-4·E-5에서 P2002·삭제 경합을 409로 정규화했다.
+409 응답에는 현재 값을 담아 화면이 갱신하도록 한다.
 
 ★**`remove` 전 일지 존재 검사는 선택이 아니라 필수다.**
 `TraineeLog.attendanceId`는 `onDelete: Cascade`이므로(`prisma/schema.prisma:469`)
@@ -461,8 +512,9 @@ PDF 원본과 입력 payload를 서버에 보존하지 않으므로 나중에 �
 유료 1건으로 잡힌다. 이건 `findMany`가 아니라 **조건부 `count`** 라 "기관 목록 제외"만 훑으면 놓친다.
 해당 줄에 `isDemo: false`를 **명시적으로 추가**한다.
 
-manager 직접 배정·marketplace 수락·recruit 자동배정 등 모든 assignment 생성 chokepoint에서도 demo Site/Agency를
-하드블록한다. 그 다음 `Agency.isDemo=true` 데이터는 다음 조회 경로에서 기본 제외한다.
+manager 직접 배정·marketplace 수락·recruit 자동배정 **그리고 초대 수락**까지 **8곳**의 assignment 생성 경로에서
+demo Site/Agency를 하드블록한다(§4-5). ★8번째인 `worker/invite/[id]/route.ts:135`는 **락을 거치지 않으므로**
+락 호출부 점검만으로는 잡히지 않는다. 그 다음 `Agency.isDemo=true` 데이터는 다음 조회 경로에서 기본 제외한다.
 
 - 시스템 전체 통계
 - 일반 기관 목록 및 과금 집계
@@ -536,6 +588,8 @@ URL은 같은 배포의 `/pilot`이므로 DNS 변경은 없다. 검색 노출을
 - pilot 데이터가 운영 통계·과금·마켓·급여 대상에 미포함
 - demo agency 문서의 공단 발송 API 하드블록
 - demo Site에 manager 일반 배정 API로 worker 배정 시 403
+- **demo 기관 초대에 `siteId`가 있어도 수락 시 배정이 생성되지 않음**(`worker/invite/[id]` 경로)
+- **파일럿 Site에 두 번째 배정이 어떤 경로로도 생기지 않음**
 - demo worker의 연차 자동적립·급여 draft·결제 대상 생성 없음
 
 ### 11-2 설정
@@ -636,6 +690,23 @@ Claude 2차 검토(코드 실측 기반)에서 나온 지적을 반영했다.
 | 7 | 결제 경로는 이미 구조적으로 안전 | §8 위험도 표로 P1 세 항목의 실제 위험도 차등 표기 |
 | 8 | cleanup 순서에 `AttendanceIssueEvent` 누락 | §9 순서 보정 |
 | 9 | 배정 chokepoint 전수 조사 방법 | §4-5에 `assignmentLock.ts` 호출부 앵커 + 대상 7곳/비대상 3곳 실측 표 |
+
+## 13-1. v3 보정 (배정 경로 누락 1건)
+
+v3 최초본이 *"`assignmentLock.ts` 호출부를 앵커로 삼는다 … 새 경로를 추측으로 찾지 않는다"* 라고 단정한 것은
+**틀렸다.** `app/api/worker/invite/[id]/route.ts:135`가 락을 거치지 않고 `siteAssignment.create()`를 직접 호출한다.
+
+| # | 보정 | 위치 |
+|---|---|---|
+| 1 | 초대 수락 경로를 **8번째 하드블록 대상**으로 추가 | §4-5 ⑧ · §8 · §11-1 |
+| 2 | "단일 관문" → **"주요 앵커"** 로 표현 정정 | §4-5 |
+| 3 | 전수조사는 **락 호출부 + `create`/`upsert`/`updateMany` 검색 병행** | §4-5 |
+| 4 | `expectedUpdatedAt`은 조회 후 비교가 아니라 **`WHERE id AND updatedAt` 원자적 CAS** | §5-3 |
+
+★**교훈**: 이 리포는 "chokepoint 단일화"를 여러 차례 수행했지만(정원=`checkSiteCapacity`, 근태소유권=`ownedAttendanceWhere`,
+배정=`assignmentLock`), **의도적으로 제외된 예외가 주석으로만 남아 있는 경우**가 있다.
+관문 함수의 호출부를 훑는 방식은 그런 예외를 구조적으로 놓친다.
+**모델 단위 쓰기 구문(`create`/`upsert`/`updateMany`) 직접 검색을 항상 병행**할 것.
 
 **참고(파일럿 범위 밖)**: `WorkerInvite.code`에는 unique 제약이 없다(`prisma/schema.prisma:1845`는 index만).
 파일럿 참여 판정은 `code`가 아니라 `existingWorkerId`/`usedByWorkerId`로 하므로 영향은 없다.
