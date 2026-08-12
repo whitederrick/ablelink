@@ -57,6 +57,8 @@ const SITE_LOCK_NS = 1;
 const POST_LOCK_NS = 2;
 // 근로계약서 발행 락 네임스페이스(E-2) — 같은 배정에 대한 동시 발행을 직렬화.
 const CONTRACT_ISSUE_LOCK_NS = 3;
+// 훈련생 단위 락 네임스페이스(D-1) — 같은 훈련생의 재적(placement)·담당(supervision) 기간 겹침 검사를 직렬화.
+const TRAINEE_LOCK_NS = 4;
 
 /**
  * 근로계약서 발행 임계구역 락(E-2). 발행은 '최근 10초 PENDING 재조회(dedup) → create' 사이에 직렬화가
@@ -89,6 +91,45 @@ export async function withContractIssueLock<T>(
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${CONTRACT_ISSUE_LOCK_NS}::int, hashtext(${lockKey}))`;
     return fn(tx);
   });
+}
+
+/**
+ * 훈련생 단위 임계구역 락(D-1). 같은 훈련생에 대한 재적·담당 기간 겹침 검사와 생성 사이에 직렬화가 없으면,
+ * ms 단위 동시 요청 둘이 모두 "겹치는 기간 없음"을 통과해 한 훈련생이 같은 시점에 두 직무지도원에게
+ * 담당되는 상태가 새어나간다. SiteAssignment와 마찬가지로 날짜범위 배타 제약을 걸 수 없으므로
+ * (DB exclusion constraint는 Prisma drift·운영 복잡성 때문에 1차 필수조건에서 제외) advisory 락으로 막는다.
+ *
+ * ★교착 안전 — 전역 획득 순서는 `[site|post] → worker → trainee`다.
+ *  이 락(NS=4)은 그 순서의 맨 끝이므로, 워커·현장 락을 이미 잡은 트랜잭션이 추가로 잡아도 순환대기가 없다.
+ *  반대로 이 락을 잡은 뒤에 워커·현장 락을 잡아서는 안 된다.
+ *
+ * 임계구역은 짧게(겹침 재조회 + create 1건) 유지하고, 감사로그·알림 등 부수효과는 락 밖에서 수행한다.
+ */
+export async function withTraineeLock<T>(
+  traineeId: bigint,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    await acquireTraineeLock(tx, traineeId);
+    return fn(tx);
+  });
+}
+
+/**
+ * 이미 열려 있는 트랜잭션에서 훈련생 락만 획득한다.
+ * 여러 자원을 한 트랜잭션에서 만드는 경로(예: 초대 수락 = Worker + 배정 + 담당 관계)는
+ * 자체 트랜잭션을 새로 열 수 없으므로 이 함수로 같은 tx 위에서 락을 잡는다.
+ *
+ * ★호출 시점 주의 — 전역 획득 순서 `[site|post] → worker → trainee`를 지킨다.
+ *  이미 워커·현장 락을 잡은 트랜잭션이 추가로 잡는 것은 안전하지만, 그 반대는 교착을 만든다.
+ */
+export async function acquireTraineeLock(
+  tx: Prisma.TransactionClient,
+  traineeId: bigint,
+): Promise<void> {
+  // ★BigInt를 ::int로 캐스팅하면 2^31 초과 id에서 'integer out of range'로 실패한다(18차 P3와 동일).
+  //  hashtext로 32비트 키를 결정적으로 파생한다. 해시 충돌은 서로 다른 두 훈련생이 잠깐 직렬화될 뿐이라 안전.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${TRAINEE_LOCK_NS}::int, hashtext(${traineeId.toString()}))`;
 }
 
 /**

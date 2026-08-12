@@ -322,6 +322,7 @@ model SiteAssignment {
   DocumentRun        DocumentRun[]
   signTokens         SiteSignToken[]
   holidays           SiteHoliday[]
+  supervisions       TraineeSupervision[]
 
   @@index([workerId, status])
   @@index([siteId, status])
@@ -350,10 +351,11 @@ model Trainee {
   note                String?
   createdAt           DateTime      @default(now()) @map("created_at")
 
-  logs        TraineeLog[]
-  placements  TraineePlacement[]
-  evaluations TraineeEvaluation[]
-  site        Site?               @relation(fields: [currentSiteId], references: [id])
+  logs         TraineeLog[]
+  placements   TraineePlacement[]
+  evaluations  TraineeEvaluation[]
+  supervisions TraineeSupervision[]
+  site         Site?               @relation(fields: [currentSiteId], references: [id])
 
   @@map("trainees")
 }
@@ -369,12 +371,42 @@ model TraineePlacement {
   // ✅ (구멍 #2 해결) String → Enum
   status TraineePlacementStatus @default(ACTIVE) @map("status")
 
-  site    Site    @relation(fields: [siteId], references: [id])
-  trainee Trainee @relation(fields: [traineeId], references: [id])
+  site         Site                 @relation(fields: [siteId], references: [id])
+  trainee      Trainee              @relation(fields: [traineeId], references: [id])
+  supervisions TraineeSupervision[]
 
   @@index([siteId, status])
   @@index([traineeId, status])
   @@map("trainee_placements")
+}
+
+// 직무지도원 전담(D-1). "이 훈련생을 이 기간 동안 이 배정의 직무지도원이 담당한다"를 명시한다.
+//  · 문서 접근권의 근거: 배정(SiteAssignment) ∩ 재적(TraineePlacement) ∩ 담당(TraineeSupervision) ∩ 요청기간.
+//    배정·재적만으로는 같은 사업체에 직무지도원이 2명일 때 누가 어느 훈련생을 담당하는지 구분할 수 없다.
+//  · 한 훈련생은 같은 시점에 정확히 한 명에게만 담당된다(기간 중복 금지).
+//    반대로 한 직무지도원이 서로 다른 훈련생을 동시에 담당하는 것은 정상이다(1:多의 근거).
+//  · workerId·siteId·agencyId는 중복 저장하지 않는다 — assignment/placement에서 파생한다.
+//  · 삭제를 기본 동작으로 쓰지 않는다. 종료일(endDate) 기록으로 이력을 보존한다.
+//  · ★출근부의 1:1/1:多 표기 규칙(2026-06-18 확정 = 해당 날짜·현장의 재적 훈련생 수)은 이 모델 도입으로
+//    변경하지 않는다. 담당 관계는 접근권·coverage 전용이며 급여 로직의 근거가 아니다.
+model TraineeSupervision {
+  id           BigInt    @id @default(autoincrement())
+  traineeId    BigInt    @map("trainee_id")
+  placementId  BigInt    @map("placement_id")
+  assignmentId BigInt    @map("assignment_id")
+  startDate    DateTime  @map("start_date")
+  endDate      DateTime? @map("end_date")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt      @map("updated_at")
+
+  trainee    Trainee          @relation(fields: [traineeId], references: [id])
+  placement  TraineePlacement @relation(fields: [placementId], references: [id])
+  assignment SiteAssignment   @relation(fields: [assignmentId], references: [id])
+
+  @@index([traineeId, startDate, endDate])
+  @@index([assignmentId, startDate, endDate])
+  @@index([placementId])
+  @@map("trainee_supervisions")
 }
 
 // ✅ (구멍 #3 해결) assignment 기준으로 유니크/귀속 강화
