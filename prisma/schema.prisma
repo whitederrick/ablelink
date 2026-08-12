@@ -123,6 +123,14 @@ model Worker {
   recruitApplications RecruitApplication[] // 공급측 신청(방향 A)
   talentOffers        TalentOffer[]        // 수신한 제안(방향 B)
 
+  // ★이 회차의 초대로 새로 만든 계정인가(종료 정책 판정용).
+  //  파일럿 신규 Worker는 폐기 시 hard delete하지 않는다 — 다른 정상 배정이 없으면
+  //  PAUSED 전환 + sessionVersion 증가로 로그인만 차단한다(동의 이력·서명·개인정보 보존).
+  createdByPilotSessionId BigInt? @map("created_by_pilot_session_id")
+  createdByPilotSession   PilotSession?      @relation("PilotSessionCreatedWorkers", fields: [createdByPilotSessionId], references: [id])
+  pilotParticipations     PilotParticipant[]
+
+  @@index([createdByPilotSessionId])
   @@index([openToOffers, status]) // 인력풀 검색(talent) 필터 가속
   @@map("workers")
 }
@@ -221,12 +229,18 @@ model Site {
   basePoints  SiteBasePoint[]
   contacts    SiteContact[]
 
+  // ★이 회차가 새로 만든 자원인가(폐기 판정용). 재사용한 기존 현장은 null이라 폐기 대상이 아니다.
+  createdByPilotSessionId BigInt? @map("created_by_pilot_session_id")
+
   agency        Agency?        @relation(fields: [agencyId], references: [id])
   DocumentRun   DocumentRun[]
   workerInvites WorkerInvite[]
   recruitPosts  RecruitPost[]  @relation("RecruitPostSite")
   talentOffers  TalentOffer[]  @relation("TalentOfferSite")
+  createdByPilotSession PilotSession? @relation("PilotSessionCreatedSites", fields: [createdByPilotSessionId], references: [id])
+  pilotParticipants     PilotParticipant[]
 
+  @@index([createdByPilotSessionId])
   @@index([agencyId, isActive])
   @@index([siteSourceType, isVerified])
   @@index([normalizedAddressKey])
@@ -318,12 +332,18 @@ model SiteAssignment {
   site Site   @relation(fields: [siteId], references: [id])
   user Worker @relation(fields: [workerId], references: [id])
 
+  // 파일럿 회차 귀속(§파일럿). null = 정상 운영 배정. 기관·기간이 아니라 이 FK로만 파일럿을 판정한다.
+  pilotSessionId BigInt? @map("pilot_session_id")
+
   attendances        DailyAttendance[]
   DocumentRun        DocumentRun[]
   signTokens         SiteSignToken[]
   holidays           SiteHoliday[]
   supervisions       TraineeSupervision[]
+  pilotSession       PilotSession?     @relation(fields: [pilotSessionId], references: [id])
+  pilotParticipant   PilotParticipant?
 
+  @@index([pilotSessionId])
   @@index([workerId, status])
   @@index([siteId, status])
   @@index([agencyId, status])
@@ -351,12 +371,19 @@ model Trainee {
   note                String?
   createdAt           DateTime      @default(now()) @map("created_at")
 
+  // ★이 회차가 새로 만든 자원인가(폐기 판정용). 재사용한 기존 훈련생은 null이라 폐기 대상이 아니다.
+  //  참여(pilotSessionId)와 의미가 다르다 — 이건 "회차가 생성했다"는 출처다.
+  createdByPilotSessionId BigInt? @map("created_by_pilot_session_id")
+
   logs         TraineeLog[]
   placements   TraineePlacement[]
   evaluations  TraineeEvaluation[]
   supervisions TraineeSupervision[]
   site         Site?               @relation(fields: [currentSiteId], references: [id])
+  createdByPilotSession PilotSession? @relation("PilotSessionCreatedTrainees", fields: [createdByPilotSessionId], references: [id])
+  pilotParticipantLinks PilotParticipantTrainee[]
 
+  @@index([createdByPilotSessionId])
   @@map("trainees")
 }
 
@@ -371,12 +398,17 @@ model TraineePlacement {
   // ✅ (구멍 #2 해결) String → Enum
   status TraineePlacementStatus @default(ACTIVE) @map("status")
 
+  // 파일럿 회차 귀속. null = 정상 운영 재적.
+  pilotSessionId BigInt? @map("pilot_session_id")
+
   site         Site                 @relation(fields: [siteId], references: [id])
   trainee      Trainee              @relation(fields: [traineeId], references: [id])
   supervisions TraineeSupervision[]
+  pilotSession PilotSession?        @relation(fields: [pilotSessionId], references: [id])
 
   @@index([siteId, status])
   @@index([traineeId, status])
+  @@index([pilotSessionId])
   @@map("trainee_placements")
 }
 
@@ -399,13 +431,18 @@ model TraineeSupervision {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt      @map("updated_at")
 
+  // 파일럿 회차 귀속. null = 정상 운영 담당.
+  pilotSessionId BigInt? @map("pilot_session_id")
+
   trainee    Trainee          @relation(fields: [traineeId], references: [id])
   placement  TraineePlacement @relation(fields: [placementId], references: [id])
   assignment SiteAssignment   @relation(fields: [assignmentId], references: [id])
+  pilotSession PilotSession?  @relation(fields: [pilotSessionId], references: [id])
 
   @@index([traineeId, startDate, endDate])
   @@index([assignmentId, startDate, endDate])
   @@index([placementId])
+  @@index([pilotSessionId])
   @@map("trainee_supervisions")
 }
 
@@ -608,6 +645,7 @@ model Agency {
   annualLeaveRequests   AnnualLeaveRequest[]
   noticeGroups          NoticeGroup[]
   subscriptionPayments  SubscriptionPayment[]
+  pilotSessions         PilotSession[]
 
   @@index([planType])
   @@map("agencies")
@@ -665,6 +703,9 @@ model Admin {
   repliedTickets       SupportTicket[]        @relation("TicketReplier")
   signupRequestReviews ManagerSignupRequest[] @relation("SignupRequestReviewer")
   managerInvites       ManagerInvite[]        @relation("ManagerInviteCreator")
+  pilotSessions        PilotSession[]
+  // ★WorkerInvite.createdByAdminId의 역방향. 기존 WorkerInvite.creator(Manager)와 이름이 겹치지 않게 분리한다.
+  createdWorkerInvites WorkerInvite[]         @relation("WorkerInviteAdminCreator")
 
   @@map("admins")
 }
@@ -1867,15 +1908,25 @@ model WorkerInvite {
   existingWorkerId   BigInt?   @map("existing_worker_id") // 기존 유저 연결(계정 미생성)
   assignmentId       BigInt?   @map("assignment_id")      // 연결 대상 배정
   purpose            String    @default("NEW_ACCOUNT") @map("purpose") // NEW_ACCOUNT | CONNECT_EXISTING
-  createdByManagerId BigInt    @map("created_by_manager_id")
+  // ★발급자는 매니저 또는 시스템 운영자 중 정확히 하나다(XOR — DB CHECK로 강제).
+  //  파일럿에는 위탁기관 담당자(Manager) 계정이 없으므로 운영자가 발급한다.
+  //  일반 초대는 기존대로 createdByManagerId만 채워지며 동작이 바뀌지 않는다.
+  createdByManagerId BigInt?   @map("created_by_manager_id")
+  createdByAdminId   BigInt?   @map("created_by_admin_id")
+  // 파일럿 회차 귀속. 수락 처리가 이 값으로 파일럿 전용 분기를 탄다.
+  pilotSessionId     BigInt?   @map("pilot_session_id")
   createdAt          DateTime  @default(now()) @map("created_at")
 
-  agency  Agency  @relation(fields: [agencyId], references: [id])
-  site    Site?   @relation(fields: [siteId], references: [id])
-  creator Manager @relation(fields: [createdByManagerId], references: [id])
+  agency       Agency        @relation(fields: [agencyId], references: [id])
+  site         Site?         @relation(fields: [siteId], references: [id])
+  creator      Manager?      @relation(fields: [createdByManagerId], references: [id])
+  createdBy    Admin?        @relation("WorkerInviteAdminCreator", fields: [createdByAdminId], references: [id])
+  pilotSession PilotSession? @relation(fields: [pilotSessionId], references: [id])
+  pilotParticipant PilotParticipant?
 
   @@index([code])
   @@index([agencyId])
+  @@index([pilotSessionId])
   @@map("worker_invites")
 }
 
@@ -2292,4 +2343,129 @@ model DashboardPromo {
 
   @@index([kind, isActive, sortOrder])
   @@map("dashboard_promos")
+}
+
+// ------------------------------------------------------
+// 파일럿 회차 (직무지도원 문서 파일럿 — docs/PILOT_DESIGN_2026_08_12_v1_8.md)
+// ------------------------------------------------------
+//
+// ★파일럿 여부를 기관·기간으로 추론하지 않는다. 같은 실재 기관이 정상 운영을 병행할 수 있으므로
+//  회차 id(pilotSessionId)로만 명시 구분한다. 기관 엔티티에는 파일럿 플래그를 붙이지 않는다.
+//  (기관+기간 판정은 정상 데이터를 오차단·오폐기한다.)
+//
+// v1은 WORKER_DOCUMENT_POC 한 유형만 존재하므로 회차에 유형 필드를 두지 않는다.
+
+enum PilotSessionStatus {
+  DRAFT     // 셋업 중
+  READY     // 필수 설정 완료 — 초대 수락은 이 상태에서만 허용
+  ACTIVE    // 직무지도원 사용 중
+  ENDED     // 종료·보존 중
+  PURGED    // 파일럿 데이터 폐기 완료
+  CANCELLED // 시작 전 취소
+}
+
+enum PilotParticipantStatus {
+  CONFIGURED // 설정 완료, 초대 전
+  INVITED    // 초대 발급됨
+  ACCEPTED   // 수락 완료, 배정 생성됨
+  CANCELLED  // 운영자 취소(미응답 포함) — 연결 초대 즉시 무효화
+}
+
+model PilotSession {
+  id                 BigInt             @id @default(autoincrement())
+  agencyId           BigInt             @map("agency_id") // 실재 위탁기관
+  startDate          DateTime           @map("start_date") @db.Date
+  endDate            DateTime           @map("end_date")   @db.Date
+
+  // 위탁기관 담당자 표시명. 계정도 전자서명도 아니고 PDF 표시용 문자열이다.
+  // 비우면 PDF에 수기 기입 공간이 남는다. ACTIVE 중에는 후입력·수정 가능, ENDED 이후 고정.
+  managerDisplayName String?            @map("manager_display_name")
+
+  status             PilotSessionStatus @default(DRAFT)
+  createdByAdminId   BigInt             @map("created_by_admin_id")
+  activatedAt        DateTime?          @map("activated_at")
+  endedAt            DateTime?          @map("ended_at")
+  purgedAt           DateTime?          @map("purged_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt      @map("updated_at")
+
+  agency    Agency @relation(fields: [agencyId], references: [id])
+  createdBy Admin  @relation(fields: [createdByAdminId], references: [id])
+
+  participants PilotParticipant[]
+  invites      WorkerInvite[]
+  assignments  SiteAssignment[]
+  placements   TraineePlacement[]
+  supervisions TraineeSupervision[]
+  createdSites    Site[]    @relation("PilotSessionCreatedSites")
+  createdTrainees Trainee[] @relation("PilotSessionCreatedTrainees")
+  createdWorkers  Worker[]  @relation("PilotSessionCreatedWorkers")
+
+  @@index([status, startDate, endDate])
+  @@index([agencyId, status])
+  @@map("pilot_sessions")
+}
+
+// 회차 참여자. 신규 Worker는 계정·배정이 아직 없으므로 배정 설정값을 여기 저장해 두고,
+// 초대 수락 트랜잭션에서 그 값으로 Worker·SiteAssignment·TraineeSupervision을 만든다.
+// (PilotSession은 기관 단위 회차, WorkerInvite는 초대 정보 — 참여자 단위 중간 모델이 따로 필요하다.)
+model PilotParticipant {
+  id             BigInt                 @id @default(autoincrement())
+  pilotSessionId BigInt                 @map("pilot_session_id")
+
+  // 기존 Worker면 셋업 시점에, 신규 Worker면 초대 수락 시 채워진다.
+  workerId       BigInt?                @map("worker_id")
+  // ★@unique — 수락 시 invite로 참여자 행을 유일하게 역참조한다(모호성 제거).
+  inviteId       BigInt?                @unique @map("invite_id")
+  // ★폐기 시 Site가 삭제될 수 있어 nullable + SetNull. CONFIGURED~ACCEPTED 동안은 앱 검증으로 필수.
+  siteId         BigInt?                @map("site_id")
+  status         PilotParticipantStatus @default(CONFIGURED)
+
+  // ── 배정 사전 설정값 (수락 시 이 값으로 SiteAssignment를 만든다) ──
+  // ★생성 불변식: assignmentStartDate~EndDate ⊆ 회차 startDate~endDate
+  assignmentStartDate     DateTime       @map("assignment_start_date") @db.Date
+  assignmentEndDate       DateTime       @map("assignment_end_date")   @db.Date
+  serviceStep             ServiceStep    @map("service_step")
+  // ★workType은 SiteAssignment에서 enum이 아니라 String이다. 기존 컬럼 타입과 일치시키고
+  //  값 검증은 lib/workSchedule.ts의 VALID_WORK_TYPES로 한다.
+  workType                String         @map("work_type")
+  commuteGuidanceIncluded Boolean        @default(true) @map("commute_guidance_included")
+  customWorkStart         String?        @map("custom_work_start")
+  customWorkEnd           String?        @map("custom_work_end")
+  attendanceMode          AttendanceMode @default(NONE) @map("attendance_mode")
+  attendanceButtonExempt  Boolean        @default(true) @map("attendance_button_exempt")
+
+  createdAssignmentId BigInt?   @unique @map("created_assignment_id")
+  acceptedAt          DateTime? @map("accepted_at")
+  purgedAt            DateTime? @map("purged_at") // 폐기 잡이 관계를 정리한 시점
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt      @map("updated_at")
+
+  pilotSession      PilotSession    @relation(fields: [pilotSessionId], references: [id])
+  worker            Worker?         @relation(fields: [workerId], references: [id])
+  invite            WorkerInvite?   @relation(fields: [inviteId], references: [id], onDelete: SetNull)
+  site              Site?           @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  createdAssignment SiteAssignment? @relation(fields: [createdAssignmentId], references: [id], onDelete: SetNull)
+  trainees          PilotParticipantTrainee[]
+
+  // 같은 회차에 같은 Worker 중복 참여 금지. workerId=NULL(신규 대기)은 Postgres가 NULL을
+  // 구분값으로 취급하므로 여러 행이 공존한다.
+  @@unique([pilotSessionId, workerId])
+  @@index([pilotSessionId, status])
+  @@map("pilot_participants")
+}
+
+// 참여자가 담당할 훈련생 목록. 배열(BigInt[]) 대신 조인 테이블 — FK 정합성을 DB가 보장해야 하고
+// 스키마 전체에 BigInt[] 전례가 0건이다.
+model PilotParticipantTrainee {
+  id            BigInt @id @default(autoincrement())
+  participantId BigInt @map("participant_id")
+  traineeId     BigInt @map("trainee_id")
+
+  participant PilotParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  trainee     Trainee          @relation(fields: [traineeId], references: [id])
+
+  @@unique([participantId, traineeId])
+  @@index([traineeId])
+  @@map("pilot_participant_trainees")
 }
