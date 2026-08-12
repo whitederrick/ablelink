@@ -123,6 +123,20 @@ export async function withTraineeLock<T>(
  * ★호출 시점 주의 — 전역 획득 순서 `[site|post] → worker → trainee`를 지킨다.
  *  이미 워커·현장 락을 잡은 트랜잭션이 추가로 잡는 것은 안전하지만, 그 반대는 교착을 만든다.
  */
+/**
+ * 이미 열려 있는 트랜잭션에서 현장 락만 획득한다(NS=1).
+ * 여러 자원을 한 트랜잭션에서 만드는 경로가 정원검사 TOCTOU를 막으려면 이 락 안에서
+ * checkSiteCapacity → 배정 생성을 해야 한다.
+ *
+ * ★전역 획득 순서의 **맨 앞**이다: `[site|post] → worker → trainee`.
+ */
+export async function acquireSiteLock(
+  tx: Prisma.TransactionClient,
+  siteId: bigint,
+): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SITE_LOCK_NS}::int, hashtext(${siteId.toString()}))`;
+}
+
 export async function acquireTraineeLock(
   tx: Prisma.TransactionClient,
   traineeId: bigint,

@@ -31,6 +31,11 @@ export interface SupervisionCandidate {
   startDate: Date | string;
   /** null = 열린 기간(무기한). */
   endDate?: Date | string | null;
+  /**
+   * 파일럿 회차 귀속. null/미지정 = 정상 운영 담당 관계.
+   * ★기관·기간이 아니라 이 FK로만 파일럿을 판정하므로, 파일럿 경로는 반드시 채워야 한다.
+   */
+  pilotSessionId?: bigint | null;
 }
 
 /** 검증에 필요한 재적 정보(호출부가 placementId로 조회해 전달). */
@@ -234,6 +239,7 @@ export async function createTraineeSupervisionInTx(
       assignmentId: input.assignmentId,
       startDate: new Date(input.startDate),
       endDate: input.endDate == null ? null : new Date(input.endDate),
+      pilotSessionId: input.pilotSessionId ?? null,
     },
     select: { id: true },
   });
