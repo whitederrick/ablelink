@@ -256,6 +256,31 @@ async function main() {
     check("참여 취소 200", cancelRes.status === 200 && cancelRes.json.success === true, cancelRes);
     check("★초대 무효화 보고", cancelRes.json.invalidatedInvite === true, cancelRes);
 
+    // ── 6.5 근무일 API 라우트 계층 (8단계) ──────────────────────
+    // ★서비스 로직은 verify-pilot-workday가 24건으로 덮는다. 여기서 보는 것은 라우트뿐이다:
+    //  인증·경로 파라미터 검증·입력 검증·존재하지 않는 자원. (커버리지 갭을 숨기지 않는다.)
+    console.log("\n[6.5] 근무일 API — 라우트 계층");
+    const wdNoAuth = await api("GET", `/api/admin/pilots/${sessionId}/workdays`, undefined, { noAuth: true });
+    check("★인증 없이 근무일 조회 401", wdNoAuth.status === 401, wdNoAuth);
+
+    const wdBadSession = await api("GET", "/api/admin/pilots/abc/workdays");
+    check("잘못된 회차 ID 400", wdBadSession.status === 400, wdBadSession);
+
+    const wdList = await api("GET", `/api/admin/pilots/${sessionId}/workdays`);
+    check("근무일 목록 200 + 배열", wdList.status === 200 && Array.isArray(wdList.json.workdays), wdList);
+
+    const wdNoAsg = await api("POST", `/api/admin/pilots/${sessionId}/workdays`, { workDate: "2026-08-10" });
+    check("배정 없이 등록 400", wdNoAsg.status === 400, wdNoAsg);
+
+    const wdGhost = await api("POST", `/api/admin/pilots/${sessionId}/workdays`, {
+      assignmentId: "999999999", workDate: "2026-08-10",
+    });
+    check("★없는 배정으로 등록 404(운영 배정 접근 차단과 같은 관문)",
+      wdGhost.status === 404, wdGhost);
+
+    const wdDelGhost = await api("DELETE", `/api/admin/pilots/${sessionId}/workdays/999999999`);
+    check("없는 근무일 삭제 404", wdDelGhost.status === 404, wdDelGhost);
+
     // ── 7. audit 기록 확인 ──────────────────────────────────────
     console.log("\n[7] 감사 기록");
     const audits = await prisma.auditEvent.count({

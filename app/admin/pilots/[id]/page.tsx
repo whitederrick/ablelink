@@ -10,6 +10,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import PageHeader from "../../_components/PageHeader";
+import Pagination from "../../_components/Pagination";
 import { T } from "../../_styles";
 import { PILOT_STATUS, PARTICIPANT_STATUS, WORK_TYPES, SERVICE_STEPS } from "../_constants";
 
@@ -216,7 +217,20 @@ export default function PilotDetailPage() {
         onChanged={load} notify={notify} post={post}
       />
 
-      {/* 6. 상태 전이 */}
+      {/* 6. 근무일 확인·정정 (§10) */}
+      <WorkdayCard
+        sessionId={id}
+        sessionStatus={session.status}
+        assignments={participants
+          .filter((p) => p.assignmentId)
+          .map((p) => ({
+            id: p.assignmentId as string,
+            label: `${p.workerName ?? p.inviteWorkerName ?? "직무지도원"} · ${p.siteName ?? "-"}`,
+          }))}
+        notify={notify}
+      />
+
+      {/* 7. 상태 전이 */}
       <Card step={4} title="회차 진행" desc="참여자가 모두 정리되면 파일럿을 시작합니다.">
         <div className="flex flex-wrap gap-2">
           {session.status === "DRAFT" && (
@@ -258,6 +272,222 @@ export default function PilotDetailPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+// ── 근무일 확인·정정 (§10) ────────────────────────────────────────
+//
+// ★파일럿에는 위탁기관 담당자가 없어 기존 근태 승인 경로가 끝까지 가지 않는다.
+//  운영자가 여기서 직접 확인·정정한다. 서버(lib/pilot/workday.ts)가 파일럿 배정만
+//  받아들이므로, 이 화면이 운영 근태를 건드릴 방법은 없다.
+type Workday = { id: string; assignmentId: string; workDate: string; start: string | null; end: string | null; linkedLogs: number };
+
+const WORKDAY_PAGE_SIZE = 10;
+
+function WorkdayCard({
+  sessionId, sessionStatus, assignments, notify,
+}: {
+  sessionId: string; sessionStatus: string;
+  assignments: { id: string; label: string }[];
+  notify: (m: string) => void;
+}) {
+  const [rows, setRows] = useState<Workday[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [busy, setBusy] = useState<string | null>(null);
+  // 등록 폼
+  const [asgId, setAsgId] = useState("");
+  const [date, setDate] = useState("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  // 인라인 시각 수정
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
+
+  const editable = sessionStatus === "ACTIVE";
+  const hasAssignment = assignments.length > 0;
+
+  const load = useCallback(async () => {
+    if (!hasAssignment) { setRows([]); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/pilots/${sessionId}/workdays`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!data?.success) { notify(data?.message || "근무일을 불러오지 못했습니다."); return; }
+      setRows(data.workdays ?? []);
+    } finally { setLoading(false); }
+  }, [sessionId, hasAssignment, notify]);
+
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (assignments.length === 1) setAsgId(assignments[0].id); }, [assignments]);
+
+  const label = useMemo(
+    () => new Map(assignments.map((a) => [a.id, a.label])),
+    [assignments],
+  );
+  const totalPages = Math.max(1, Math.ceil(rows.length / WORKDAY_PAGE_SIZE));
+  const pageItems = rows.slice((page - 1) * WORKDAY_PAGE_SIZE, page * WORKDAY_PAGE_SIZE);
+
+  async function add() {
+    if (!asgId) { notify("배정을 선택해주세요."); return; }
+    if (!date) { notify("날짜를 선택해주세요."); return; }
+    setBusy("add");
+    try {
+      const res = await fetch(`/api/admin/pilots/${sessionId}/workdays`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ assignmentId: asgId, workDate: date, start: start || null, end: end || null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!data?.success) { notify(data?.message || "등록하지 못했습니다."); return; }
+      notify("근무일을 등록했습니다.");
+      setDate(""); setStart(""); setEnd("");
+      await load();
+    } finally { setBusy(null); }
+  }
+
+  async function saveTime(w: Workday) {
+    setBusy(w.id);
+    try {
+      const res = await fetch(`/api/admin/pilots/${sessionId}/workdays/${w.id}`, {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ start: editStart, end: editEnd }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!data?.success) { notify(data?.message || "정정하지 못했습니다."); return; }
+      notify("시각을 정정했습니다.");
+      setEditId(null);
+      await load();
+    } finally { setBusy(null); }
+  }
+
+  /**
+   * ★일지가 붙은 근무일은 서버가 409로 막는다. 여기서 한 번 더 묻는 이유는
+   *  일지가 **함께 사라진다**는 사실을 지우기 전에 보여주기 위해서다(Cascade).
+   */
+  async function remove(w: Workday) {
+    const warn = w.linkedLogs > 0
+      ? `${w.workDate} 근무일을 삭제하면 작성된 일지 ${w.linkedLogs}건도 함께 삭제됩니다. 되돌릴 수 없습니다. 계속할까요?`
+      : `${w.workDate} 근무일을 삭제할까요?`;
+    if (!window.confirm(warn)) return;
+    setBusy(w.id);
+    try {
+      const res = await fetch(
+        `/api/admin/pilots/${sessionId}/workdays/${w.id}${w.linkedLogs > 0 ? "?force=1" : ""}`,
+        { method: "DELETE" },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!data?.success) { notify(data?.message || "삭제하지 못했습니다."); return; }
+      notify(data.deletedLogs > 0 ? `삭제했습니다. (일지 ${data.deletedLogs}건 동반 삭제)` : "삭제했습니다.");
+      await load();
+    } finally { setBusy(null); }
+  }
+
+  return (
+    <Card
+      step={5}
+      title="근무일 확인·정정"
+      desc="파일럿에는 위탁기관 담당자가 없어, 운영자가 근무일을 직접 확인·정정합니다. 미래 날짜는 만들 수 없습니다."
+      disabled={!editable || !hasAssignment}
+      disabledReason={
+        !hasAssignment
+          ? "참여자가 초대를 수락해 배정이 만들어지면 근무일을 관리할 수 있습니다."
+          : "진행 중(ACTIVE)인 회차에서만 정정할 수 있습니다. 목록은 아래에서 계속 확인할 수 있습니다."
+      }
+      always={
+        <>
+          <h3 className="text-sm font-black text-slate-700">등록된 근무일</h3>
+          {loading ? (
+            <p className="mt-3 text-sm font-semibold text-slate-400">불러오는 중…</p>
+          ) : rows.length === 0 ? (
+            <p className="mt-3 text-sm font-semibold text-slate-400">아직 등록된 근무일이 없습니다.</p>
+          ) : (
+            <>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full table-fixed">
+                  <colgroup>
+                    <col className="w-[110px]" /><col className="w-[200px]" />
+                    <col className="w-[150px]" /><col className="w-[90px]" /><col className="w-[150px]" />
+                  </colgroup>
+                  <thead>
+                    <tr>{["날짜", "배정", "근무시각", "일지", "작업"].map((h) => (
+                      <th key={h} className={T.th}>{h}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody>
+                    {pageItems.map((w) => (
+                      <tr key={w.id} className={T.trBase}>
+                        <td className={`${T.td} truncate`}>{w.workDate}</td>
+                        <td className={`${T.td} truncate`}>{label.get(w.assignmentId) ?? "-"}</td>
+                        <td className={`${T.td} truncate`}>
+                          {editId === w.id ? (
+                            <span className="flex items-center gap-1">
+                              <input type="time" value={editStart} onChange={(e) => setEditStart(e.target.value)} className={`h-9 w-[76px] ${T.input} px-1`} />
+                              <input type="time" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} className={`h-9 w-[76px] ${T.input} px-1`} />
+                            </span>
+                          ) : (
+                            `${w.start ?? "-"} ~ ${w.end ?? "-"}`
+                          )}
+                        </td>
+                        <td className={`${T.td} truncate`}>
+                          {w.linkedLogs > 0
+                            ? <span className="font-bold text-amber-700">{w.linkedLogs}건</span>
+                            : <span className="text-slate-400">없음</span>}
+                        </td>
+                        <td className={`${T.td} truncate`}>
+                          {!editable ? (
+                            <span className="text-slate-400">-</span>
+                          ) : editId === w.id ? (
+                            <span className="flex gap-1">
+                              <button type="button" disabled={busy === w.id} onClick={() => saveTime(w)} className={T.btnPrimary}>저장</button>
+                              <button type="button" onClick={() => setEditId(null)} className={T.btnSecondary}>취소</button>
+                            </span>
+                          ) : (
+                            <span className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => { setEditId(w.id); setEditStart(w.start ?? "09:00"); setEditEnd(w.end ?? "18:00"); }}
+                                className={T.btnSecondary}
+                              >
+                                시각 수정
+                              </button>
+                              <button type="button" disabled={busy === w.id} onClick={() => remove(w)} className={T.btnDanger}>삭제</button>
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination page={page} totalPages={totalPages} total={rows.length} onPageChange={setPage} />
+            </>
+          )}
+        </>
+      }
+    >
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="배정">
+          <select value={asgId} onChange={(e) => setAsgId(e.target.value)} className={`w-[220px] ${T.select}`}>
+            <option value="">선택</option>
+            {assignments.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+          </select>
+        </Field>
+        <Field label="날짜">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={`w-[160px] ${T.input}`} />
+        </Field>
+        <Field label="출근(선택)">
+          <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className={`w-[120px] ${T.input}`} />
+        </Field>
+        <Field label="퇴근(선택)">
+          <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className={`w-[120px] ${T.input}`} />
+        </Field>
+        <button type="button" disabled={busy === "add"} onClick={add} className={T.btnPrimary}>근무일 등록</button>
+      </div>
+      <p className="mt-2 text-[13px] font-semibold text-slate-500">
+        시각을 비우면 근무형태의 표준 출퇴근 시각으로 등록됩니다.
+      </p>
+    </Card>
   );
 }
 
