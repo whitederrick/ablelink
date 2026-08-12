@@ -240,6 +240,13 @@ PilotSession
 
 미리보기와 다운로드는 같은 담당자명 생성 함수를 사용해 동일하게 출력한다. 담당자 서명 공간은 이름 입력 여부와 관계없이 유지한다.
 
+구현 메모(7단계):
+
+- 슬롯 매핑은 기존 코드가 이미 위 표와 같아 변경하지 않았다.
+- 수기 입력 공간은 렌더러에 새 그리기 코드를 넣지 않고 담당자 이름 자리에 고정 폭 밑줄을 넣어 처리한다. 전각 문자는 글꼴에 글리프가 없을 때 깨지므로 ASCII 밑줄만 사용한다.
+- 표시명이 공백 문자로만 입력된 경우도 미입력과 같게 취급한다.
+- 미리보기 경로와 다운로드 경로가 같은 함수 하나만 호출하도록 배선했다. 기존 비파일럿 동작은 그대로 둔다.
+
 ## 10. 근무일 처리
 
 직무지도원이 실제로 근무한 날짜만 문서에 포함되어야 한다. 위탁기관 담당자가 없는 파일럿에서 기존 매니저 승인 경로에 의존하지 않도록 운영자 파일럿 관리 화면에서 회차 근무일을 확인·정정할 수 있게 한다.
@@ -285,9 +292,9 @@ PilotSession
 4. 운영자 파일럿 관리·셋업 화면 — 완료 (4-A 서버 / 4-B 화면 분할)
 5. 파일럿 기능 권한 — 완료 (§7.1 채택으로 앱 코드 변경 없음)
 6. 제출·외부 전송 차단 — 완료
-7. PDF 담당자명·수기 공란·슬롯 매핑 — 미착수. 착수 전 PDF 스윕 baseline 확보를 선행한다.
-8. 운영자 근무일 확인·정정 — 미착수
-9. 폐기 기능과 테스트 — 미착수
+7. PDF 담당자명·수기 공란·슬롯 매핑 — 완료 (선행 PDF 스윕 baseline 확보 후 착수)
+8. 운영자 근무일 확인·정정 — 완료 (8-A 서버 / 8-B 화면 분할)
+9. 폐기 기능과 테스트 — 완료
 
 도메인 관계 마이그레이션과 파일럿 운영 메타데이터 마이그레이션은 분리한다.
 운영 데이터베이스 마이그레이션 적용은 단계 완료와 분리해 별도 승인으로 진행한다.
@@ -367,7 +374,10 @@ PilotSession
 ### 17.1 삭제만 하면 되는 것
 
 - `app/admin/pilots/**`, `app/api/admin/pilots/**`, `lib/pilot/**`
+  - 8·9단계에서 추가한 `lib/pilot/workday.ts`·`lib/pilot/purge.ts`와 근무일·폐기 라우트도 전부 여기에 속한다.
 - `scripts/verify-pilot-*.mts`, `scripts/smoke-pilot-*.mts`
+  - `scripts/verify-pdf-sweep.mts`와 `scripts/pdf-sweep-baseline.json`은 **파일럿 전용이 아니다.**
+    출근부 페이지 분할 회귀를 감시하는 일반 자산이므로 파일럿을 걷어낸 뒤에도 남긴다.
 - 단, `lib/trainee/supervision.ts`와 `TraineeSupervision` 모델은 **파일럿이 아니라 D-1 운영 기능**이므로 남긴다.
   `lib/assignmentLock.ts`의 훈련생 락(NS=4)도 마찬가지다.
 
@@ -375,7 +385,7 @@ PilotSession
 
 `★[PILOT]` ~ `★[PILOT] 끝` 사이와 해당 import만 제거한다. 비파일럿 동작은 판정이 추가되지 않았으므로 그대로다.
 
-- `app/api/worker/docs/submit/route.ts`, `app/api/worker/docs/generate/route.ts`
+- `app/api/worker/docs/submit/route.ts`, `app/api/worker/docs/generate/route.ts`, `app/api/worker/docs/preview/route.ts`
 - `app/api/admin/document-runs/send/route.ts`, `app/api/admin/sites/route.ts`
 - `app/api/worker/invite/[id]/route.ts`, `app/api/worker/assignment/connect/route.ts`
 - `app/api/worker/site/current/route.ts`, `app/admin/shell/components/AdminNav.tsx`
