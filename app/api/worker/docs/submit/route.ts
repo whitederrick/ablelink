@@ -45,6 +45,11 @@ export async function POST(req: NextRequest) {
     if (!Array.isArray(documents) || documents.length === 0)
       return NextResponse.json({ success: false, message: "제출할 문서가 없습니다." }, { status: 400 });
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // ★[PILOT] 파일럿(WORKER_DOCUMENT_POC) 전용 차단 — 회차 종료 시 **이 블록과 위 import 2줄**
+    //  (resolveDocAssignment · getPilotAssignmentState)만 지우면 원복된다. 아래 기존 로직은 무변경.
+    //  ★비파일럿 비용: 모든 제출에 쿼리 +2~4(resolveDocAssignment 중복 호출 포함).
+    // ─────────────────────────────────────────────────────────────────────────
     // ★§8 제출 차단 — 파일럿에는 위탁기관 담당자가 없다. 제출은 "담당자 검토 대기열로 넘긴다"는
     //  뜻이라 받을 사람이 없는 채로 run이 SUBMITTED로 쌓이고 매니저 알림까지 발생한다.
     //  루프 진입 전에 한 번만 막는다 — 같은 요청의 모든 문서가 같은 assignmentId로 해석되고
@@ -62,6 +67,7 @@ export async function POST(req: NextRequest) {
         );
       }
     }
+    // ★[PILOT] 끝
 
     const pStart = new Date(`${periodStart}T00:00:00.000+09:00`);
     const pEnd   = new Date(`${periodEnd}T23:59:59.999+09:00`);

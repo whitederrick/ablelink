@@ -68,6 +68,11 @@ export async function POST(req: NextRequest) {
     if (ids.length === 0) return NextResponse.json({ success: false, message: "발송할 문서를 선택해주세요." }, { status: 400 });
     if (ids.length > 50) return NextResponse.json({ success: false, message: "한 번에 최대 50건까지 발송할 수 있습니다." }, { status: 400 });
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // ★[PILOT] 파일럿 전용 차단 — 회차 종료 시 **이 블록과 위 import 1줄**(countPilotRuns)만 지우면
+    //  원복된다. 아래 발송 로직·플랜 게이트는 무변경.
+    //  ★비파일럿 비용: 요청당 COUNT 1회(파일럿 run이 0이면 즉시 통과).
+    // ─────────────────────────────────────────────────────────────────────────
     // ★§8 공단 발송 차단 — 파일럿 문서는 외부로 나가지 않는다.
     //  한 건이라도 파일럿이면 묶음 전체를 거부한다. 파일럿 문서를 실제 문서와 섞어 보내는 것이
     //  정확히 막아야 할 사고이므로, 파일럿 건만 조용히 빼고 나머지를 보내지 않는다.
@@ -78,6 +83,7 @@ export async function POST(req: NextRequest) {
         { status: 403 },
       );
     }
+    // ★[PILOT] 끝
 
     const runs = await prisma.documentRun.findMany({
       // 공단 발송 대상: DRAFT(미제출)·CHANGES_REQUESTED(수정요청 중)는 제외 — 수정요청 문서가 그대로 발송되지 않도록.

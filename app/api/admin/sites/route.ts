@@ -246,6 +246,11 @@ export async function POST(req: NextRequest) {
     // manager: 본인 agency / admin(운영자): body.agencyId 지정 필수
     const agencyId = resolveScopeAgencyId(session, body.agencyId);
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // ★[PILOT] 파일럿 전용 입력 — 회차 종료 시 **이 블록 + create 데이터의 `[PILOT]` 스프레드 1줄**
+    //  을 지우면 원복된다. 기존 생성 로직·정원 검사는 무변경.
+    //  ★비파일럿 비용 0 — `body.pilotSessionId`가 없으면 조회 없이 통과한다.
+    // ─────────────────────────────────────────────────────────────────────────
     // ★파일럿 회차에서 만든 현장이면 생성 출처를 남긴다(폐기 시 "이 회차가 만든 것"만 지우기 위해).
     //  운영자 전용이며, 회차 기관과 일치하고 셋업 가능한 상태여야 한다 — 아니면 귀속이 어긋난다.
     let createdByPilotSessionId: bigint | null = null;
@@ -268,6 +273,7 @@ export async function POST(req: NextRequest) {
       }
       createdByPilotSessionId = psid;
     }
+    // ★[PILOT] 끝
 
     const quotaCheck = await checkQuota(agencyId, "sites");
     if (!quotaCheck.allowed) {
@@ -315,7 +321,8 @@ export async function POST(req: NextRequest) {
         ...(allowanceRange !== undefined ? { allowanceRange } : {}),
         ...(lateThresholdMin !== null ? { lateThresholdMin } : {}),
         ...(additionalContacts.length ? { contacts: { create: additionalContacts } } : {}),
-        // 파일럿 회차가 만든 현장 — 정식 검증 대상이 아니므로 isVerified도 함께 내린다.
+        // ★[PILOT] 파일럿 회차가 만든 현장 — 정식 검증 대상이 아니므로 isVerified도 함께 내린다.
+        //  회차 종료 시 이 한 줄 삭제(위 [PILOT] 블록과 한 쌍).
         ...(createdByPilotSessionId ? { createdByPilotSessionId, isVerified: false } : {}),
       },
       select: {

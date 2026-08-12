@@ -90,6 +90,10 @@ export async function POST(request: NextRequest) {
     const start = periodStart || new Date().toISOString().slice(0,10);
     const end   = periodEnd   || new Date().toISOString().slice(0,10);
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // ★[PILOT] 파일럿 전용 차단 — 회차 종료 시 **이 블록과 위 import 1줄**(getPilotAssignmentState)만
+    //  지우면 원복된다. 플랜 게이트(checkPlanAccess)를 포함한 기존 판정은 한 줄도 건드리지 않았다.
+    // ─────────────────────────────────────────────────────────────────────────
     // ★파일럿 문서는 이메일로 내보내지 않는다(v1.8 §3.2 제외항목).
     //  PDF 생성·로컬 다운로드는 그대로 허용이라 요청 전체를 막지 않고 '발송 요청'만 거부한다.
     //  ★비용: sendEmail을 명시한 요청에서만 조회한다 — 발송 안 하는 기존 요청은 쿼리가 늘지 않는다.
@@ -99,6 +103,7 @@ export async function POST(request: NextRequest) {
         { status: 403 },
       );
     }
+    // ★[PILOT] 끝
 
     // 일지 PDF용 근무형태 고정 시간값(훈련시간/측정시간/근무시간/Y·N) — 단일 출처
     const docTimes = dailyDocTimes(

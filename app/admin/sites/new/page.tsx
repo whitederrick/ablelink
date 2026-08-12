@@ -16,6 +16,16 @@ type AgencyOption = { id: string; name: string };
 
 type AddrItem = { addressName: string; x: string; y: string };
 
+// ★[PILOT] ★★이 파일은 파일럿이 **구조를 바꾼** 유일한 화면이다(단순 블록 삭제로는 원복 불가).
+//  파일럿 상세(`/admin/pilots/[id]`)가 `?pilotSessionId=&returnTo=`로 이 화면을 재사용한다 —
+//  파일럿 전용 사업체 폼을 따로 만들면 주소검색 같은 기능이 한쪽에서 빠지기 때문이다(4-B 재작업 교훈).
+//  회차 종료 시 원복 절차:
+//    ① 아래 `AdminSiteNewPage`의 Suspense 래퍼를 지우고 `AdminSiteNewInner`를 다시 default export로.
+//       (`useSearchParams`가 사라지면 Suspense 경계가 필요 없다 — Next.js 요구사항이었다.)
+//    ② `Suspense`·`useSearchParams` import 2개 삭제
+//    ③ 아래 `[PILOT]` 표시된 지점 4곳 삭제: 회차 조회 useEffect / 기관목록 로드의 `|| pilotSessionId` 가드
+//       / payload의 `pilotSessionId` 주입 / 기관 필드의 readOnly 분기(→ `<select>`만 남긴다)
+//    ④ 저장 후 이동 `location.href = returnTo || "/admin/sites"` → `"/admin/sites"`
 export default function AdminSiteNewPage() {
   // useSearchParams는 Suspense 경계가 필요하다(Next.js).
   return (
@@ -68,6 +78,7 @@ function AdminSiteNewInner() {
     })();
   }, []);
 
+  // ★[PILOT] ③-1 회차 조회 useEffect — 원복 시 이 useEffect 통째 삭제.
   // 파일럿 회차 컨텍스트 — 기관을 회차 기관으로 고정한다(운영자가 다른 기관을 고를 수 없게).
   useEffect(() => {
     if (!pilotSessionId) return;
@@ -82,7 +93,7 @@ function AdminSiteNewInner() {
   }, [pilotSessionId]);
 
   useEffect(() => {
-    if (!isAdmin || pilotSessionId) return; // 파일럿이면 기관이 고정이라 목록이 필요 없다
+    if (!isAdmin || pilotSessionId) return; // ★[PILOT] ③-2 원복: `|| pilotSessionId` 만 제거(파일럿이면 기관 고정이라 목록 불요)
     (async () => {
       const r = await fetch("/api/admin/sites/options", { cache: "no-store" });
       const d = await r.json();
@@ -152,7 +163,8 @@ function AdminSiteNewInner() {
         requiredProfession,
       };
       if (isAdmin) payload.agencyId = agencyId;
-      // ★파일럿 회차에서 왔으면 회차를 함께 보낸다 — 서버가 createdByPilotSessionId(생성 출처)를
+      // ★[PILOT] ③-3 원복: 아래 한 줄 삭제.
+      //  파일럿 회차에서 왔으면 회차를 함께 보낸다 — 서버가 createdByPilotSessionId(생성 출처)를
       //  기록해야 폐기 시 "이 회차가 만든 것"만 지울 수 있다.
       if (pilotSessionId) payload.pilotSessionId = pilotSessionId;
       const r = await fetch("/api/admin/sites", {
@@ -163,7 +175,7 @@ function AdminSiteNewInner() {
       const d = await r.json();
       if (!d?.success) throw new Error(d?.message || "FAILED");
       alert("등록 완료");
-      location.href = returnTo || "/admin/sites";
+      location.href = returnTo || "/admin/sites"; // ★[PILOT] ④ 원복: `"/admin/sites"` 로 되돌린다
     } catch (e) {
       console.error(e);
       alert("등록 실패");
@@ -183,6 +195,7 @@ function AdminSiteNewInner() {
         {isAdmin && (
           <div className={T.card}>
             <label className={T.label}>기관</label>
+            {/* ★[PILOT] ③-4 원복: 삼항을 걷어내고 아래 `<select>` 분기만 남긴다. */}
             {pilotSessionId ? (
               // 파일럿 회차에서 온 경우 기관은 회차에 고정된다(다른 기관을 고르면 귀속이 어긋난다).
               <input

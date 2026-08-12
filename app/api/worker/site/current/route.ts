@@ -135,7 +135,8 @@ export async function GET(request: NextRequest) {
         assignmentId: assignment.id.toString(),
         agencyId: agency?.id.toString() ?? null,
         companyName: site.companyName,
-        // 파일럿 배정이면 문서 화면이 '위탁기관 최종 제출' 대신 PDF 생성·다운로드 동선을 보인다(v1.8 §8).
+        // ★[PILOT] 파일럿 전용 응답 필드 — 종료 시 이 한 줄만 지우면 원복된다(소비처=app/worker/docs/page.tsx).
+        //  파일럿 배정이면 문서 화면이 '위탁기관 최종 제출' 대신 PDF 생성·다운로드 동선을 보인다(v1.8 §8).
         //  ★차단의 본체는 서버(worker/docs/submit 403)다. 이 값은 안내일 뿐이라 없어도 제출은 막힌다.
         isPilot: assignment.pilotSessionId != null,
         workType: assignment.workType || "FULL_DAY",

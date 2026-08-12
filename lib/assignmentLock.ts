@@ -59,7 +59,10 @@ const POST_LOCK_NS = 2;
 const CONTRACT_ISSUE_LOCK_NS = 3;
 // 훈련생 단위 락 네임스페이스(D-1) — 같은 훈련생의 재적(placement)·담당(supervision) 기간 겹침 검사를 직렬화.
 const TRAINEE_LOCK_NS = 4;
-// 파일럿 회차 단위 락 네임스페이스 — 회차 상태 전이와 초대 발급·수락·연결을 한 축에서 직렬화.
+// ★[PILOT] 파일럿 회차 단위 락 네임스페이스 — 회차 상태 전이와 초대 발급·수락·연결을 한 축에서 직렬화.
+//  회차 종료 시 이 상수와 `acquirePilotSessionLock`·`acquirePilotActivationLock` 2개 함수를 지우고,
+//  아래 "전역 락 획득 순서" 주석에서 pilotSession 항목만 빼면 원복된다.
+//  ★NS=4(훈련생 락)는 파일럿이 아니라 D-1 운영 기능이므로 **남긴다** — 함께 지우지 말 것.
 const PILOT_SESSION_LOCK_NS = 5;
 
 /**
@@ -127,6 +130,7 @@ export async function withTraineeLock<T>(
 // 계약 발행 락(NS=3)은 이 사슬의 어느 것도 함께 잡지 않아 독립적이다.
 // ─────────────────────────────────────────────────────────────────
 
+// ★[PILOT] 아래 두 함수는 파일럿 전용 — 회차 종료 시 함께 삭제한다(소비처는 lib/pilot/** 뿐).
 /**
  * 이미 열려 있는 트랜잭션에서 파일럿 회차 락을 획득한다(NS=5, 순서 **1번째**).
  *
@@ -153,6 +157,7 @@ export async function acquirePilotSessionLock(
 export async function acquirePilotActivationLock(tx: Prisma.TransactionClient): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${PILOT_SESSION_LOCK_NS}::int, hashtext(${"__pilot_global_activation__"}))`;
 }
+// ★[PILOT] 끝
 
 /**
  * 이미 열려 있는 트랜잭션에서 현장 락만 획득한다(NS=1, 순서 **2번째**).

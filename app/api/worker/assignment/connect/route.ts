@@ -36,7 +36,11 @@ export async function POST(req: NextRequest) {
     if (!invite) {
       return NextResponse.json({ success: false, message: "유효하지 않은 인증코드입니다." }, { status: 404 });
     }
-    // ── 파일럿 초대는 전용 서비스로 위임 ──────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // ★[PILOT] 파일럿 초대는 전용 서비스로 위임 — 회차 종료 시 **이 블록과 위 import 1줄**
+    //  (connectExistingPilotInvite)만 지우면 원복된다. 아래 레거시 연결 경로는 한 줄도 안 바뀌었다.
+    //  ★비파일럿 비용 0 — `invite.pilotSessionId`가 null이면 조회 없이 그대로 통과한다.
+    // ─────────────────────────────────────────────────────────────────────────
     // 회차 READY 재검증·참여자 ACCEPTED CAS·배정 연결·초대 사용을 한 트랜잭션에서 처리한다.
     // ★검사와 쓰기를 분리하면 참여자 취소와 겹칠 때 배정만 활성화되는 부분 정합이 생긴다.
     if (invite.pilotSessionId) {
@@ -47,6 +51,7 @@ export async function POST(req: NextRequest) {
       await audit(session, { entityType: "SiteAssignment", entityId: r.assignmentId, action: "update", summary: "파일럿 배정 연결" });
       return NextResponse.json({ success: true, message: "배정이 연결되었습니다.", siteName: r.siteName });
     }
+    // ★[PILOT] 끝
 
     if (new Date() > invite.expiresAt) {
       return NextResponse.json({ success: false, message: "만료된 인증코드입니다. 담당자에게 재발급을 요청하세요." }, { status: 410 });
@@ -58,7 +63,7 @@ export async function POST(req: NextRequest) {
     // 배정이 본인 것인지 확인 후 연결 처리
     const assignment = await prisma.siteAssignment.findFirst({
       where: { id: invite.assignmentId, workerId },
-      select: { id: true, connectedAt: true, attendanceButtonExempt: true, pilotSessionId: true, site: { select: { companyName: true } } },
+      select: { id: true, connectedAt: true, attendanceButtonExempt: true, site: { select: { companyName: true } } },
     });
     if (!assignment) {
       return NextResponse.json({ success: false, message: "연결할 배정을 찾을 수 없습니다." }, { status: 404 });
