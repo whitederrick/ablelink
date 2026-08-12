@@ -267,10 +267,13 @@ export default function PilotDetailPage() {
         )}
         {session.status === "ENDED" && (
           <p className="mt-2 text-[13px] font-semibold text-slate-500">
-            종료된 회차입니다. 데이터 폐기는 별도 폐기 기능에서 진행합니다.
+            종료된 회차입니다. 아래에서 데이터를 폐기할 수 있습니다.
           </p>
         )}
       </Card>
+
+      {/* 8. 폐기 (§11) */}
+      <PurgeCard sessionId={id} sessionStatus={session.status} purgedAt={session.purgedAt} onDone={load} notify={notify} />
     </div>
   );
 }
@@ -487,6 +490,98 @@ function WorkdayCard({
       <p className="mt-2 text-[13px] font-semibold text-slate-500">
         시각을 비우면 근무형태의 표준 출퇴근 시각으로 등록됩니다.
       </p>
+    </Card>
+  );
+}
+
+// ── 폐기 (§11) ────────────────────────────────────────────────────
+//
+// ★되돌릴 수 없는 삭제라 **미리보기를 먼저 보여준다.** 특히 "보존"이 몇 건인지가 중요하다 —
+//  실제 위탁기관에서 도는 파일럿이라 재사용 자원이 남는 것을 눈으로 확인해야 한다.
+type PurgeCounts = {
+  participantTrainees: number; supervisions: number; invites: number;
+  attendances: number; documentRuns: number; assignments: number; placements: number;
+  traineesDeleted: number; traineesKept: number;
+  sitesDeleted: number; sitesKept: number; workersPaused: number;
+};
+
+function PurgeCard({
+  sessionId, sessionStatus, purgedAt, onDone, notify,
+}: {
+  sessionId: string; sessionStatus: string; purgedAt: string | null;
+  onDone: () => void; notify: (m: string) => void;
+}) {
+  const [counts, setCounts] = useState<PurgeCounts | null>(null);
+  const [busy, setBusy] = useState(false);
+  const canPurge = sessionStatus === "ENDED";
+
+  async function preview() {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/pilots/${sessionId}/purge`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!data?.success) { notify(data?.message || "미리보기를 불러오지 못했습니다."); return; }
+      setCounts(data.counts);
+    } finally { setBusy(false); }
+  }
+
+  async function run() {
+    if (!counts) { notify("먼저 폐기 대상을 확인해주세요."); return; }
+    const msg =
+      `파일럿 데이터를 폐기합니다. 되돌릴 수 없습니다.\n\n` +
+      `삭제: 배정 ${counts.assignments} · 근태 ${counts.attendances} · 문서 ${counts.documentRuns} · ` +
+      `초대 ${counts.invites} · 담당 ${counts.supervisions} · 재적 ${counts.placements} · ` +
+      `사업체 ${counts.sitesDeleted} · 훈련생 ${counts.traineesDeleted}\n` +
+      `정지: 회차 생성 계정 ${counts.workersPaused}명(삭제하지 않습니다)\n` +
+      `보존: 재사용 사업체 ${counts.sitesKept} · 재사용 훈련생 ${counts.traineesKept} · 기관·기존 계정·회차 이력\n\n계속할까요?`;
+    if (!window.confirm(msg)) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/pilots/${sessionId}/purge`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!data?.success) { notify(data?.message || "폐기하지 못했습니다."); return; }
+      notify("파일럿 데이터를 폐기했습니다.");
+      setCounts(null);
+      onDone();
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <Card
+      step={6}
+      title="데이터 폐기"
+      desc="파일럿이 만든 데이터만 지웁니다. 위탁기관·기존 계정·재사용 자원·회차 이력은 남습니다."
+      disabled={!canPurge}
+      disabledReason={
+        sessionStatus === "PURGED"
+          ? `이미 폐기했습니다.${purgedAt ? ` (${purgedAt})` : ""}`
+          : "종료(ENDED)된 회차만 폐기할 수 있습니다."
+      }
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" disabled={busy} onClick={preview} className={T.btnSecondary}>폐기 대상 확인</button>
+        <button type="button" disabled={busy || !counts} onClick={run} className={T.btnDanger}>데이터 폐기</button>
+      </div>
+      {counts && (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-rose-100 bg-rose-50/50 p-3">
+            <p className="text-[13px] font-black text-rose-700">삭제</p>
+            <ul className="mt-1 space-y-0.5 text-[13px] font-semibold text-slate-700">
+              <li>배정 {counts.assignments} · 근태 {counts.attendances} · 문서 {counts.documentRuns}</li>
+              <li>초대 {counts.invites} · 담당 {counts.supervisions} · 재적 {counts.placements}</li>
+              <li>회차가 만든 사업체 {counts.sitesDeleted} · 훈련생 {counts.traineesDeleted}</li>
+            </ul>
+          </div>
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+            <p className="text-[13px] font-black text-emerald-700">보존</p>
+            <ul className="mt-1 space-y-0.5 text-[13px] font-semibold text-slate-700">
+              <li>재사용 사업체 {counts.sitesKept} · 재사용 훈련생 {counts.traineesKept}</li>
+              <li>회차 생성 계정 {counts.workersPaused}명 — 삭제하지 않고 로그인만 정지</li>
+              <li>위탁기관 · 기존 계정 · 감사 로그 · 회차 이력</li>
+            </ul>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
