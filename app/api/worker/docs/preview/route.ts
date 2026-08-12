@@ -16,6 +16,7 @@ import { resolveDocAssignment } from "@/lib/docs/resolveDocAssignment";
 import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { checkPlanAccess } from "@/lib/planGuard";
+import { resolvePilotManagerSlotName } from "@/lib/pilot/capability"; // ★[PILOT]
 
 
 export async function GET(request: NextRequest) {
@@ -74,6 +75,21 @@ export async function GET(request: NextRequest) {
       govAgent:    { name: adminForSign?.displayName||"", imageUrl: undefined },
       agencyAgent: { name: adminForSign?.displayName||"", imageUrl: undefined },
     };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ★[PILOT] 위탁기관 담당자 이름 — 파일럿에는 담당자 계정이 없다(v1.8 §9).
+    //  운영자가 표시명을 입력했으면 인쇄하고, 아니면 수기 입력 공간을 남긴다.
+    //  ★generate(다운로드)에도 **같은 함수**를 쓴다 — 미리보기와 결과가 달라지면 안 된다.
+    //   (이 라우트는 매니저 displayName을 채우고 generate는 빈 값이라 원래 둘이 어긋나 있었다.)
+    //  ★서명 이미지(imageUrl)는 건드리지 않는다 — 서명란은 이름과 무관하게 공란이다.
+    //  회차 종료 시 이 블록과 위 import 1줄만 지우면 원복된다.
+    // ─────────────────────────────────────────────────────────────────────────
+    const pilotSlotName = await resolvePilotManagerSlotName(assignment.id);
+    if (pilotSlotName !== null) {
+      sigs.govAgent.name = pilotSlotName;
+      sigs.agencyAgent.name = pilotSlotName;
+    }
+    // ★[PILOT] 끝
 
     const site = assignment.site;
     const start = periodStart, end = periodEnd;

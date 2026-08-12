@@ -34,6 +34,32 @@ export async function getPilotAssignmentState(assignmentId: bigint): Promise<Pil
   return { isPilot: true, sessionActive: a.pilotSession?.status === "ACTIVE" };
 }
 
+/**
+ * 위탁기관 담당자 이름을 못 받았을 때 PDF에 넣는 **고정 폭 수기 입력 공간**(v1.8 §9).
+ *
+ * 파일럿에는 위탁기관 담당자 계정이 없다. 이름을 아는 경우만 인쇄하고, 모르면 손으로 적을
+ * 자리를 남긴다. 밑줄 문자는 ASCII `_`만 쓴다 — 전각 `＿`는 HCR 폰트에 글리프가 없으면
+ * 두부(tofu)로 나오는데, 공단 제출 서식에서 그건 그냥 오류로 보인다.
+ */
+export const PILOT_HANDWRITE_BLANK = "____________";
+
+/**
+ * 파일럿 배정이면 위탁기관 담당자 슬롯(govAgent·agencyAgent)에 넣을 이름을 돌려준다.
+ *
+ * ★비파일럿이면 **null**이다 — 호출부는 null일 때 아무것도 하지 않으므로 기존 동작이 그대로다.
+ * ★`managerDisplayName`은 계정도 전자서명도 아니고 **PDF 표시용 문자열**이다. 서명란은
+ *  이름 입력 여부와 관계없이 비워 둔다(이 함수는 이름만 정하고 imageUrl은 건드리지 않는다).
+ */
+export async function resolvePilotManagerSlotName(assignmentId: bigint): Promise<string | null> {
+  const a = await prisma.siteAssignment.findUnique({
+    where: { id: assignmentId },
+    select: { pilotSessionId: true, pilotSession: { select: { managerDisplayName: true } } },
+  });
+  if (!a?.pilotSessionId) return null;
+  const name = a.pilotSession?.managerDisplayName?.trim();
+  return name ? name : PILOT_HANDWRITE_BLANK;
+}
+
 /** 문서 run 중 파일럿 배정에 속한 건수. 0이 아니면 외부 전송을 막는다(§3.2). */
 export async function countPilotRuns(runIds: bigint[]): Promise<number> {
   if (runIds.length === 0) return 0;

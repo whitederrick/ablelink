@@ -7,7 +7,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { isValidYmd } from "@/lib/time";
 import { checkPlanAccess } from "@/lib/planGuard";
-import { getPilotAssignmentState } from "@/lib/pilot/capability";
+import { getPilotAssignmentState, resolvePilotManagerSlotName } from "@/lib/pilot/capability";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer } from "@/lib/pdf";
 import { buildDocFileName } from "@/lib/pdf/filename";
@@ -160,6 +160,19 @@ export async function POST(request: NextRequest) {
       companyManager: { name: companyManagerSignerName,    imageUrl: companyImg },
       agencyAgent:    { name: "",                          imageUrl: undefined as string | undefined },
     };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ★[PILOT] 위탁기관 담당자 이름 — preview 라우트와 **같은 함수**를 쓴다(v1.8 §9:
+    //  미리보기와 다운로드의 담당자명이 일치해야 한다). 표시명이 없으면 수기 입력 공간.
+    //  ★companyManager는 건드리지 않는다 — 사업체 담당자는 기존 대면 서명 흐름 그대로다.
+    //  회차 종료 시 이 블록과 위 import 1줄만 지우면 원복된다.
+    // ─────────────────────────────────────────────────────────────────────────
+    const pilotSlotName = await resolvePilotManagerSlotName(assignment.id);
+    if (pilotSlotName !== null) {
+      sigs.govAgent.name = pilotSlotName;
+      sigs.agencyAgent.name = pilotSlotName;
+    }
+    // ★[PILOT] 끝
 
     // ── 문서별 payload 빌드 ──────────────────────────────────
     let payload: any;
