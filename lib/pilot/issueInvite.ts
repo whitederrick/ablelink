@@ -6,6 +6,7 @@
 // 검증이 통과해 버린다(재현 테스트는 실코드를 지키지 못한다).
 
 import { prisma } from "@/lib/prisma";
+import { acquirePilotSessionLock } from "@/lib/assignmentLock";
 
 export type IssuePilotInviteFailure =
   | "SESSION_NOT_FOUND"
@@ -62,6 +63,10 @@ export async function issuePilotInvite(input: IssuePilotInviteInput): Promise<Is
 
   try {
     const created = await prisma.$transaction(async (tx) => {
+      // ★회차 락(전역 순서 맨 앞) — 상태 전이와 직렬화한다.
+      //  락 없이 상태만 읽으면 "발급 검사 통과 → 그 사이 ACTIVE 전환 → 발급 커밋"이 가능하다.
+      await acquirePilotSessionLock(tx, input.sessionId);
+
       const session = await tx.pilotSession.findUnique({
         where: { id: input.sessionId },
         select: { id: true, status: true, agencyId: true },

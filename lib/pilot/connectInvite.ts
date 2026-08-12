@@ -11,6 +11,7 @@
 //    하나라도 실패하면 배정·초대까지 전부 롤백된다.
 
 import { prisma } from "@/lib/prisma";
+import { acquirePilotSessionLock } from "@/lib/assignmentLock";
 
 export type ConnectPilotFailure =
   | "INVITE_NOT_FOUND"
@@ -48,6 +49,16 @@ export async function connectExistingPilotInvite(
   try {
     return await prisma.$transaction(async (tx) => {
       // ── 재조회 (전부 트랜잭션 안에서) ────────────────────────
+      // 락을 잡을 회차 id를 알아내는 사전 조회. 이 값으로 판정하지 않는다.
+      const preload = await tx.workerInvite.findUnique({
+        where: { id: input.inviteId },
+        select: { pilotSessionId: true },
+      });
+      // ★회차 락(전역 순서 맨 앞) — 상태 전이와 직렬화한다.
+      if (preload?.pilotSessionId) {
+        await acquirePilotSessionLock(tx, preload.pilotSessionId);
+      }
+
       const invite = await tx.workerInvite.findUnique({
         where: { id: input.inviteId },
         select: {

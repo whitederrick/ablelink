@@ -59,6 +59,8 @@ const POST_LOCK_NS = 2;
 const CONTRACT_ISSUE_LOCK_NS = 3;
 // 훈련생 단위 락 네임스페이스(D-1) — 같은 훈련생의 재적(placement)·담당(supervision) 기간 겹침 검사를 직렬화.
 const TRAINEE_LOCK_NS = 4;
+// 파일럿 회차 단위 락 네임스페이스 — 회차 상태 전이와 초대 발급·수락·연결을 한 축에서 직렬화.
+const PILOT_SESSION_LOCK_NS = 5;
 
 /**
  * 근로계약서 발행 임계구역 락(E-2). 발행은 '최근 10초 PENDING 재조회(dedup) → create' 사이에 직렬화가
@@ -99,9 +101,9 @@ export async function withContractIssueLock<T>(
  * 담당되는 상태가 새어나간다. SiteAssignment와 마찬가지로 날짜범위 배타 제약을 걸 수 없으므로
  * (DB exclusion constraint는 Prisma drift·운영 복잡성 때문에 1차 필수조건에서 제외) advisory 락으로 막는다.
  *
- * ★교착 안전 — 전역 획득 순서는 `[site|post] → worker → trainee`다.
- *  이 락(NS=4)은 그 순서의 맨 끝이므로, 워커·현장 락을 이미 잡은 트랜잭션이 추가로 잡아도 순환대기가 없다.
- *  반대로 이 락을 잡은 뒤에 워커·현장 락을 잡아서는 안 된다.
+ * ★교착 안전 — 전역 획득 순서는 `pilotSession → [site|post] → worker → trainee`다.
+ *  이 락(NS=4)은 그 순서의 맨 끝이므로, 앞 순서 락을 이미 잡은 트랜잭션이 추가로 잡아도 순환대기가 없다.
+ *  반대로 이 락을 잡은 뒤에 회차·현장·워커 락을 잡아서는 안 된다.
  *
  * 임계구역은 짧게(겹침 재조회 + create 1건) 유지하고, 감사로그·알림 등 부수효과는 락 밖에서 수행한다.
  */
@@ -115,20 +117,47 @@ export async function withTraineeLock<T>(
   });
 }
 
+// ─────────────────────────────────────────────────────────────────
+// ★전역 락 획득 순서 (교착 방지의 근거 — 새 경로는 반드시 이 순서를 지킨다)
+//
+//     pilotSession(NS=5) → [site(NS=1) | post(NS=2)] → worker(단일키) → trainee(NS=4)
+//
+// 앞 순서를 이미 잡은 트랜잭션이 뒤 순서를 추가로 잡는 것은 안전하다.
+// 반대 방향(뒤를 잡은 뒤 앞을 잡는 것)은 순환대기를 만든다.
+// 계약 발행 락(NS=3)은 이 사슬의 어느 것도 함께 잡지 않아 독립적이다.
+// ─────────────────────────────────────────────────────────────────
+
 /**
- * 이미 열려 있는 트랜잭션에서 훈련생 락만 획득한다.
- * 여러 자원을 한 트랜잭션에서 만드는 경로(예: 초대 수락 = Worker + 배정 + 담당 관계)는
- * 자체 트랜잭션을 새로 열 수 없으므로 이 함수로 같은 tx 위에서 락을 잡는다.
+ * 이미 열려 있는 트랜잭션에서 파일럿 회차 락을 획득한다(NS=5, 순서 **1번째**).
  *
- * ★호출 시점 주의 — 전역 획득 순서 `[site|post] → worker → trainee`를 지킨다.
- *  이미 워커·현장 락을 잡은 트랜잭션이 추가로 잡는 것은 안전하지만, 그 반대는 교착을 만든다.
+ * ★회차 상태 전이(READY→ACTIVE 등)와 초대 발급·수락·연결·참여 취소를 **같은 축**에서 직렬화한다.
+ *  각 경로가 회차 상태를 읽기만 하면, "연결 진행 중에 ACTIVE 전환"처럼 검사와 전이가
+ *  겹쳐 창구 규칙이 무너진다. 상태를 읽는 쪽과 바꾸는 쪽이 같은 락을 잡아야 한다.
  */
+export async function acquirePilotSessionLock(
+  tx: Prisma.TransactionClient,
+  pilotSessionId: bigint,
+): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${PILOT_SESSION_LOCK_NS}::int, hashtext(${pilotSessionId.toString()}))`;
+}
+
 /**
- * 이미 열려 있는 트랜잭션에서 현장 락만 획득한다(NS=1).
+ * 전역 활성화 락(NS=5의 고정 키). **서로 다른 회차**를 동시에 ACTIVE로 만들려는 경합을 직렬화한다.
+ *
+ * ★회차 락만으로는 부족하다 — 회차 A와 B는 서로 다른 키를 잡으므로 직렬화되지 않는다.
+ *  둘 다 "다른 ACTIVE 없음"을 관측하고 통과하면 partial unique index가 뒤늦게 터져
+ *  409가 아니라 Prisma 오류(500)가 된다. 전이 경로가 이 락을 함께 잡아 먼저 줄을 세운다.
+ *
+ * 획득 순서는 **회차 락 다음**이다(항상 마지막에 잡으므로 순환대기가 없다).
+ */
+export async function acquirePilotActivationLock(tx: Prisma.TransactionClient): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${PILOT_SESSION_LOCK_NS}::int, hashtext(${"__pilot_global_activation__"}))`;
+}
+
+/**
+ * 이미 열려 있는 트랜잭션에서 현장 락만 획득한다(NS=1, 순서 **2번째**).
  * 여러 자원을 한 트랜잭션에서 만드는 경로가 정원검사 TOCTOU를 막으려면 이 락 안에서
  * checkSiteCapacity → 배정 생성을 해야 한다.
- *
- * ★전역 획득 순서의 **맨 앞**이다: `[site|post] → worker → trainee`.
  */
 export async function acquireSiteLock(
   tx: Prisma.TransactionClient,
@@ -137,6 +166,23 @@ export async function acquireSiteLock(
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SITE_LOCK_NS}::int, hashtext(${siteId.toString()}))`;
 }
 
+/**
+ * 이미 열려 있는 트랜잭션에서 워커 락만 획득한다(단일키, 순서 **3번째**).
+ * 같은 워커에 대한 배정 생성·승격을 직렬화한다 — 겹침 검사와 생성 사이에 직렬화가 없으면
+ * 동시 요청 둘이 모두 통과해 이중배정이 새어나간다.
+ */
+export async function acquireWorkerLock(
+  tx: Prisma.TransactionClient,
+  workerId: bigint,
+): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${workerId}::bigint)`;
+}
+
+/**
+ * 이미 열려 있는 트랜잭션에서 훈련생 락만 획득한다(NS=4, 순서 **4번째=맨 끝**).
+ * 여러 자원을 한 트랜잭션에서 만드는 경로(예: 초대 수락 = Worker + 배정 + 담당 관계)는
+ * 자체 트랜잭션을 새로 열 수 없으므로 이 함수로 같은 tx 위에서 락을 잡는다.
+ */
 export async function acquireTraineeLock(
   tx: Prisma.TransactionClient,
   traineeId: bigint,

@@ -9,11 +9,12 @@
 //   startDate=now·FULL_DAY 기본값으로 배정을 만들고 pilotSessionId를 남기지 않아, 회차 기간과
 //   어긋나고 운영자가 사전 설정한 값과 중복 생성될 수 있다.
 //
-// ★락 획득 순서 — 전역 규칙 `[site|post] → worker → trainee`를 지킨다.
-//   여기서는 site → (worker 생성) → trainee 순이다. 역순으로 잡으면 다른 경로와 교착한다.
+// ★락 획득 순서 — 전역 규칙 `pilotSession → [site|post] → worker → trainee`를 지킨다.
+//   여기서는 pilotSession → site → (worker 생성) → trainee 순이다. 역순으로 잡으면 교착한다.
+//   회차 락은 상태 전이(READY→ACTIVE 등)와 발급·수락·연결을 한 축에서 직렬화하기 위한 것이다.
 
 import { prisma } from "@/lib/prisma";
-import { acquireSiteLock } from "@/lib/assignmentLock";
+import { acquireSiteLock, acquirePilotSessionLock } from "@/lib/assignmentLock";
 import { checkSiteCapacity } from "@/lib/assignmentCapacity";
 import { createTraineeSupervisionInTx } from "@/lib/trainee/supervision";
 import { VALID_WORK_TYPES } from "@/lib/workSchedule";
@@ -70,11 +71,10 @@ export async function acceptPilotInvite(
   try {
     return await prisma.$transaction(async (tx) => {
       // ── 1. 락을 잡기 위한 사전 조회 ──────────────────────────
-      // ★여기서 읽은 값으로는 판정하지 않는다. 락을 잡을 siteId를 알아내는 용도일 뿐이다.
-      //  (site 락은 siteId를 알아야 잡을 수 있는데, siteId는 참여자 행에 있다.)
+      // ★여기서 읽은 값으로는 판정하지 않는다. 락 대상(회차·현장) id를 알아내는 용도일 뿐이다.
       const preload = await tx.pilotParticipant.findUnique({
         where: { inviteId: input.inviteId },
-        select: { siteId: true },
+        select: { siteId: true, pilotSessionId: true },
       });
       if (!preload) {
         throw new PilotAcceptAbort("PARTICIPANT_NOT_FOUND", "초대에 연결된 파일럿 설정을 찾을 수 없습니다.");
@@ -83,8 +83,9 @@ export async function acceptPilotInvite(
         throw new PilotAcceptAbort("SITE_REQUIRED", "참여 설정에 사업체가 지정되지 않았습니다.");
       }
 
-      // ── 2. 현장 락 (락 순서 1번째) ───────────────────────────
-      // 정원검사 TOCTOU와 같은 초대의 동시 수락을 함께 직렬화한다.
+      // ── 2. 락 획득 — 전역 순서 pilotSession → site → (worker) → trainee ──
+      // ★회차 락으로 상태 전이와 직렬화하고, 현장 락으로 정원검사 TOCTOU와 동시 수락을 직렬화한다.
+      await acquirePilotSessionLock(tx, preload.pilotSessionId);
       await acquireSiteLock(tx, preload.siteId);
 
       // ── 3. ★락 안에서 재조회 — 여기부터가 임계구역이다 ────────
