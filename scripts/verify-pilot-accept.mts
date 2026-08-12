@@ -18,6 +18,7 @@ try {
 } catch {}
 import { PrismaClient } from "@prisma/client";
 import { assertWritableDb } from "./_dbGuard.mts";
+import { CleanupGuard } from "./_cleanupGuard.mts";
 import * as acceptNs from "../lib/pilot/acceptInvite";
 import * as issueNs from "../lib/pilot/issueInvite";
 import * as connectNs from "../lib/pilot/connectInvite";
@@ -368,20 +369,22 @@ async function main() {
     check("★고아 초대 없음(진 쪽은 롤백되어 초대가 남지 않음)", orphans === 1, { orphans });
   } finally {
     console.log("\n[정리]");
-    const sups = await prisma.traineeSupervision.deleteMany({ where: { pilotSessionId: session.id } });
-    await prisma.pilotParticipantTrainee.deleteMany({ where: { participant: { pilotSessionId: session.id } } });
-    await prisma.pilotParticipant.deleteMany({ where: { pilotSessionId: session.id } });
-    await prisma.siteAssignment.deleteMany({ where: { pilotSessionId: session.id } });
-    await prisma.workerInvite.deleteMany({ where: { pilotSessionId: session.id } });
-    await prisma.traineePlacement.deleteMany({ where: { siteId: site.id } });
-    await prisma.trainee.deleteMany({ where: { currentSiteId: site.id } });
-    await prisma.worker.deleteMany({ where: { createdByPilotSessionId: session.id } });
-    await prisma.worker.deleteMany({ where: { loginId: { startsWith: "__pa_" } } });
-    await prisma.pilotSession.delete({ where: { id: session.id } });
-    await prisma.site.delete({ where: { id: site.id } });
-    await prisma.admin.delete({ where: { id: admin.id } });
-    await prisma.agency.delete({ where: { id: agency.id } });
-    console.log(`  정리 완료(담당 ${sups.count}건 포함)`);
+    const c = new CleanupGuard();
+    await c.step("supervision", () => prisma.traineeSupervision.deleteMany({ where: { pilotSessionId: session.id } }));
+    await c.step("participantTrainee", () => prisma.pilotParticipantTrainee.deleteMany({ where: { participant: { pilotSessionId: session.id } } }));
+    await c.step("participant", () => prisma.pilotParticipant.deleteMany({ where: { pilotSessionId: session.id } }));
+    await c.step("assignment", () => prisma.siteAssignment.deleteMany({ where: { pilotSessionId: session.id } }));
+    await c.step("invite", () => prisma.workerInvite.deleteMany({ where: { pilotSessionId: session.id } }));
+    await c.step("placement", () => prisma.traineePlacement.deleteMany({ where: { siteId: site.id } }));
+    await c.step("trainee", () => prisma.trainee.deleteMany({ where: { currentSiteId: site.id } }));
+    await c.step("pilotWorkers", () => prisma.worker.deleteMany({ where: { createdByPilotSessionId: session.id } }));
+    await c.step("workers", () => prisma.worker.deleteMany({ where: { loginId: { startsWith: "__pa_" } } }));
+    await c.step("pilotSession", () => prisma.pilotSession.delete({ where: { id: session.id } }));
+    await c.step("site", () => prisma.site.delete({ where: { id: site.id } }));
+    await c.step("admin", () => prisma.admin.delete({ where: { id: admin.id } }));
+    await c.step("agency", () => prisma.agency.delete({ where: { id: agency.id } }));
+    fail += c.report();
+    fail += await c.assertNoStale(prisma, ["__pa_"]);
   }
 
   console.log(`\n=== 결과: ${pass} passed, ${fail} failed ===`);

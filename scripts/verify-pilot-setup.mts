@@ -20,6 +20,7 @@ try {
 } catch {}
 import { PrismaClient } from "@prisma/client";
 import { assertWritableDb } from "./_dbGuard.mts";
+import { CleanupGuard } from "./_cleanupGuard.mts";
 // ★라우트 계층(HTTP)은 이 스크립트가 덮지 못한다 — tsx가 Next의 `server-only`를 해석하지 못해
 //  app/api/** 를 import하면 MODULE_NOT_FOUND로 죽는다(node_modules/server-only 스텁이 필요한데
 //  npm install이 지우므로 의존하지 않는다). 라우트 계층은 4-B 화면 스모크에서 덮는다.
@@ -885,22 +886,25 @@ async function main() {
     }
   } finally {
     console.log("\n[정리]");
+    const c = new CleanupGuard();
     if (sessionId) {
-      await prisma.traineeSupervision.deleteMany({ where: { pilotSessionId: sessionId } });
-      await prisma.pilotParticipantTrainee.deleteMany({ where: { participant: { pilotSessionId: sessionId } } });
-      await prisma.pilotParticipant.deleteMany({ where: { pilotSessionId: sessionId } });
-      await prisma.workerInvite.deleteMany({ where: { pilotSessionId: sessionId } });
-      await prisma.siteAssignment.deleteMany({ where: { pilotSessionId: sessionId } });
-      await prisma.traineePlacement.deleteMany({ where: { pilotSessionId: sessionId } });
-      await prisma.trainee.deleteMany({ where: { createdByPilotSessionId: sessionId } });
-      await prisma.site.deleteMany({ where: { createdByPilotSessionId: sessionId } });
-      await prisma.pilotSession.delete({ where: { id: sessionId } }).catch(() => {});
+      const sid = sessionId;
+      await c.step("supervision", () => prisma.traineeSupervision.deleteMany({ where: { pilotSessionId: sid } }));
+      await c.step("participantTrainee", () => prisma.pilotParticipantTrainee.deleteMany({ where: { participant: { pilotSessionId: sid } } }));
+      await c.step("participant", () => prisma.pilotParticipant.deleteMany({ where: { pilotSessionId: sid } }));
+      await c.step("invite", () => prisma.workerInvite.deleteMany({ where: { pilotSessionId: sid } }));
+      await c.step("assignment", () => prisma.siteAssignment.deleteMany({ where: { pilotSessionId: sid } }));
+      await c.step("placement", () => prisma.traineePlacement.deleteMany({ where: { pilotSessionId: sid } }));
+      await c.step("trainee", () => prisma.trainee.deleteMany({ where: { createdByPilotSessionId: sid } }));
+      await c.step("site", () => prisma.site.deleteMany({ where: { createdByPilotSessionId: sid } }));
+      await c.step("pilotSession", () => prisma.pilotSession.delete({ where: { id: sid } }));
     }
-    await prisma.worker.deleteMany({ where: { loginId: { startsWith: "__ps4_" } } });
-    await prisma.site.deleteMany({ where: { agencyId: { in: [agency.id, otherAgency.id] } } });
-    await prisma.admin.delete({ where: { id: admin.id } }).catch(() => {});
-    await prisma.agency.deleteMany({ where: { id: { in: [agency.id, otherAgency.id] } } });
-    console.log("  테스트 데이터 정리 완료");
+    await c.step("workers", () => prisma.worker.deleteMany({ where: { loginId: { startsWith: "__ps4_" } } }));
+    await c.step("sites", () => prisma.site.deleteMany({ where: { agencyId: { in: [agency.id, otherAgency.id] } } }));
+    await c.step("admin", () => prisma.admin.delete({ where: { id: admin.id } }));
+    await c.step("agencies", () => prisma.agency.deleteMany({ where: { id: { in: [agency.id, otherAgency.id] } } }));
+    fail += c.report();
+    fail += await c.assertNoStale(prisma, ["__ps4_"]);
   }
 
   console.log(`\n=== 결과: ${pass} passed, ${fail} failed ===`);

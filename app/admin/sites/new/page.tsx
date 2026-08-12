@@ -2,7 +2,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { T } from "../../_styles";
 import PageHeader from "../../_components/PageHeader";
 import AddressMapPicker from "@/components/AddressMapPicker";
@@ -16,8 +17,24 @@ type AgencyOption = { id: string; name: string };
 type AddrItem = { addressName: string; x: string; y: string };
 
 export default function AdminSiteNewPage() {
+  // useSearchParams는 Suspense 경계가 필요하다(Next.js).
+  return (
+    <Suspense fallback={<div className="p-6 text-sm font-semibold text-slate-400">불러오는 중…</div>}>
+      <AdminSiteNewInner />
+    </Suspense>
+  );
+}
+
+function AdminSiteNewInner() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const isAdmin = (me as any)?.success === true && (me as any).session?.role === "ADMIN";
+
+  // ★파일럿 회차에서 넘어온 경우 — 화면은 그대로 쓰고 귀속만 회차로 고정한다.
+  //  파일럿용 사업체 폼을 따로 만들지 않는다(폼이 두 벌이 되면 주소검색 같은 게 한쪽에서 빠진다).
+  const searchParams = useSearchParams();
+  const pilotSessionId = searchParams.get("pilotSessionId") ?? "";
+  const returnTo = searchParams.get("returnTo") ?? "";
+  const [pilotInfo, setPilotInfo] = useState<{ agencyId: string; agencyName: string } | null>(null);
 
   const [agencies, setAgencies] = useState<AgencyOption[]>([]);
   const [agencyId, setAgencyId] = useState<string>("");
@@ -51,8 +68,21 @@ export default function AdminSiteNewPage() {
     })();
   }, []);
 
+  // 파일럿 회차 컨텍스트 — 기관을 회차 기관으로 고정한다(운영자가 다른 기관을 고를 수 없게).
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!pilotSessionId) return;
+    (async () => {
+      const r = await fetch(`/api/admin/pilots/${pilotSessionId}`, { cache: "no-store" });
+      const d = await r.json().catch(() => ({}));
+      if (d?.success && d.session) {
+        setPilotInfo({ agencyId: String(d.session.agencyId), agencyName: String(d.session.agencyName) });
+        setAgencyId(String(d.session.agencyId));
+      }
+    })();
+  }, [pilotSessionId]);
+
+  useEffect(() => {
+    if (!isAdmin || pilotSessionId) return; // 파일럿이면 기관이 고정이라 목록이 필요 없다
     (async () => {
       const r = await fetch("/api/admin/sites/options", { cache: "no-store" });
       const d = await r.json();
@@ -122,6 +152,9 @@ export default function AdminSiteNewPage() {
         requiredProfession,
       };
       if (isAdmin) payload.agencyId = agencyId;
+      // ★파일럿 회차에서 왔으면 회차를 함께 보낸다 — 서버가 createdByPilotSessionId(생성 출처)를
+      //  기록해야 폐기 시 "이 회차가 만든 것"만 지울 수 있다.
+      if (pilotSessionId) payload.pilotSessionId = pilotSessionId;
       const r = await fetch("/api/admin/sites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -130,7 +163,7 @@ export default function AdminSiteNewPage() {
       const d = await r.json();
       if (!d?.success) throw new Error(d?.message || "FAILED");
       alert("등록 완료");
-      location.href = "/admin/sites";
+      location.href = returnTo || "/admin/sites";
     } catch (e) {
       console.error(e);
       alert("등록 실패");
@@ -150,15 +183,24 @@ export default function AdminSiteNewPage() {
         {isAdmin && (
           <div className={T.card}>
             <label className={T.label}>기관</label>
-            <select
-              value={agencyId}
-              onChange={(e) => { setAgencyId(e.target.value); }}
-              className={`w-full ${T.select}`}
-            >
-              {agencies.map((a) => (
-                <option key={a.id} value={a.id}>{a.name} (#{a.id})</option>
-              ))}
-            </select>
+            {pilotSessionId ? (
+              // 파일럿 회차에서 온 경우 기관은 회차에 고정된다(다른 기관을 고르면 귀속이 어긋난다).
+              <input
+                value={pilotInfo ? `${pilotInfo.agencyName} (#${pilotInfo.agencyId})` : "불러오는 중…"}
+                readOnly
+                className={`w-full ${T.input} bg-slate-50 text-slate-500`}
+              />
+            ) : (
+              <select
+                value={agencyId}
+                onChange={(e) => { setAgencyId(e.target.value); }}
+                className={`w-full ${T.select}`}
+              >
+                {agencies.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name} (#{a.id})</option>
+                ))}
+              </select>
+            )}
           </div>
         )}
 

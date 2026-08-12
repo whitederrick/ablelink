@@ -23,6 +23,12 @@ const groups: NavGroup[] = [
     ],
   },
   {
+    title: "파일럿",
+    items: [
+      { href: "/admin/pilots", label: "파일럿 관리" },
+    ],
+  },
+  {
     title: "위탁기관 데이터 관리",
     items: [
       { href: "/admin/workers",     label: "직무지도원 현황 관리" },

@@ -44,7 +44,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ sessionId: 
             serviceStep: true, workType: true, acceptedAt: true,
             site: { select: { companyName: true } },
             worker: { select: { workerName: true, phoneNumber: true } },
-            invite: { select: { code: true, expiresAt: true, usedAt: true } },
+            invite: { select: { code: true, expiresAt: true, usedAt: true, workerName: true } },
             trainees: { select: { trainee: { select: { id: true, name: true } } } },
           },
         },
@@ -52,8 +52,34 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ sessionId: 
     });
     if (!s) return NextResponse.json({ success: false, message: "회차를 찾을 수 없습니다." }, { status: 404 });
 
+    // ★회차가 만든 사업체·훈련생을 함께 내린다. 참여자에서 역산하면 첫 등록 직후
+    //  아직 참여자가 없어 셋업 화면의 선택지가 비고, 다음 단계로 넘어갈 수 없다.
+    const [pilotSites, pilotTrainees] = await Promise.all([
+      prisma.site.findMany({
+        where: { createdByPilotSessionId: id },
+        orderBy: { id: "asc" },
+        select: { id: true, companyName: true, address: true, businessContactName: true },
+      }),
+      prisma.trainee.findMany({
+        where: { createdByPilotSessionId: id },
+        orderBy: { id: "asc" },
+        select: { id: true, name: true, currentSiteId: true },
+      }),
+    ]);
+
     return NextResponse.json({
       success: true,
+      sites: pilotSites.map((x) => ({
+        id: x.id.toString(),
+        companyName: x.companyName,
+        address: x.address,
+        businessContactName: x.businessContactName,
+      })),
+      trainees: pilotTrainees.map((x) => ({
+        id: x.id.toString(),
+        name: x.name,
+        siteId: x.currentSiteId?.toString() ?? null,
+      })),
       session: {
         id: s.id.toString(),
         status: s.status,
@@ -86,6 +112,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ sessionId: 
           expiresAt: p.invite.expiresAt.toISOString(),
           used: p.invite.usedAt != null,
         } : null,
+        // 신규 참여자는 계정이 생기기 전이라 workerName이 없다 — 초대에 적어 둔 성명을 대신 보여준다.
+        inviteWorkerName: p.invite?.workerName ?? null,
         trainees: p.trainees.map((t) => ({ id: t.trainee.id.toString(), name: t.trainee.name })),
       })),
     });

@@ -19,6 +19,7 @@ try {
 } catch {}
 import { PrismaClient } from "@prisma/client";
 import { assertWritableDb } from "./_dbGuard.mts";
+import { CleanupGuard } from "./_cleanupGuard.mts";
 
 const prisma = new PrismaClient();
 let pass = 0, fail = 0;
@@ -61,6 +62,7 @@ async function main() {
   });
 
   const sessionIds: bigint[] = [];
+  let agency2Id: bigint | null = null;
 
   try {
     // ── 1. 회차 생성 ────────────────────────────────────────────
@@ -93,16 +95,18 @@ async function main() {
     );
 
     // 다른 기관이어도 전역 1개다
-    const agency2 = await prisma.agency.create({ data: { name: `__ps_test2_${stamp}` } });
+    agency2Id = (await prisma.agency.create({ data: { name: `__ps_test2_${stamp}` } })).id;
     const s3 = await prisma.pilotSession.create({
-      data: { agencyId: agency2.id, createdByAdminId: admin.id, startDate: D("2026-11-01"), endDate: D("2026-11-30") },
+      data: { agencyId: agency2Id!, createdByAdminId: admin.id, startDate: D("2026-11-01"), endDate: D("2026-11-30") },
     });
     sessionIds.push(s3.id);
     await expectReject(
       "★다른 기관이어도 두 번째 ACTIVE 거부(전역 제약)",
       () => prisma.pilotSession.update({ where: { id: s3.id }, data: { status: "ACTIVE" } }),
     );
-    await prisma.agency.delete({ where: { id: agency2.id } }).catch(() => {});
+    // ★여기서 지우지 않는다 — 아직 s3가 이 기관을 참조하므로 FK로 실패하고,
+    //  실패를 삼키면 테스트 기관이 남아 운영자 기관 드롭다운에 노출된다(실제로 그랬다).
+    //  정리는 finally에서 회차를 먼저 지운 뒤 수행한다.
 
     // ENDED로 내리면 다음 회차가 ACTIVE 될 수 있다
     await prisma.pilotSession.update({ where: { id: s1.id }, data: { status: "ENDED", endedAt: new Date() } });
@@ -230,17 +234,21 @@ async function main() {
     await prisma.site.delete({ where: { id: createdSite.id } });
   } finally {
     console.log("\n[정리]");
-    await prisma.pilotParticipantTrainee.deleteMany({ where: { participant: { pilotSessionId: { in: sessionIds } } } });
-    await prisma.pilotParticipant.deleteMany({ where: { pilotSessionId: { in: sessionIds } } });
-    await prisma.siteAssignment.deleteMany({ where: { workerId: worker.id } });
-    await prisma.workerInvite.deleteMany({ where: { agencyId: agency.id } });
-    await prisma.site.deleteMany({ where: { agencyId: agency.id } });
-    await prisma.pilotSession.deleteMany({ where: { id: { in: sessionIds } } });
-    await prisma.worker.delete({ where: { id: worker.id } }).catch(() => {});
-    await prisma.manager.delete({ where: { id: manager.id } }).catch(() => {});
-    await prisma.admin.delete({ where: { id: admin.id } }).catch(() => {});
-    await prisma.agency.delete({ where: { id: agency.id } }).catch(() => {});
-    console.log("  테스트 데이터 정리 완료");
+    const c = new CleanupGuard();
+    await c.step("participantTrainee", () => prisma.pilotParticipantTrainee.deleteMany({ where: { participant: { pilotSessionId: { in: sessionIds } } } }));
+    await c.step("participant", () => prisma.pilotParticipant.deleteMany({ where: { pilotSessionId: { in: sessionIds } } }));
+    await c.step("assignment", () => prisma.siteAssignment.deleteMany({ where: { workerId: worker.id } }));
+    await c.step("invite", () => prisma.workerInvite.deleteMany({ where: { agencyId: agency.id } }));
+    await c.step("site", () => prisma.site.deleteMany({ where: { agencyId: agency.id } }));
+    // ★회차를 먼저 지워야 두 번째 기관(agency2)의 FK가 풀린다.
+    await c.step("pilotSession", () => prisma.pilotSession.deleteMany({ where: { id: { in: sessionIds } } }));
+    await c.step("worker", () => prisma.worker.delete({ where: { id: worker.id } }));
+    await c.step("manager", () => prisma.manager.delete({ where: { id: manager.id } }));
+    await c.step("admin", () => prisma.admin.delete({ where: { id: admin.id } }));
+    await c.step("agency", () => prisma.agency.delete({ where: { id: agency.id } }));
+    if (agency2Id) await c.step("agency2", () => prisma.agency.delete({ where: { id: agency2Id! } }));
+    fail += c.report();
+    fail += await c.assertNoStale(prisma, ["__ps_"]);
   }
 
   console.log(`\n=== 결과: ${pass} passed, ${fail} failed ===`);

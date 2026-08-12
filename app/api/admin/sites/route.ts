@@ -246,6 +246,29 @@ export async function POST(req: NextRequest) {
     // manager: 본인 agency / admin(운영자): body.agencyId 지정 필수
     const agencyId = resolveScopeAgencyId(session, body.agencyId);
 
+    // ★파일럿 회차에서 만든 현장이면 생성 출처를 남긴다(폐기 시 "이 회차가 만든 것"만 지우기 위해).
+    //  운영자 전용이며, 회차 기관과 일치하고 셋업 가능한 상태여야 한다 — 아니면 귀속이 어긋난다.
+    let createdByPilotSessionId: bigint | null = null;
+    if (body.pilotSessionId != null && String(body.pilotSessionId).trim() !== "") {
+      if (session.kind !== "admin") {
+        return NextResponse.json({ success: false, message: "파일럿 현장은 시스템 운영자만 만들 수 있습니다." }, { status: 403 });
+      }
+      const psid = parseBigInt(body.pilotSessionId);
+      if (!psid) throw new Error("VALIDATION:pilotSessionId");
+      const ps = await prisma.pilotSession.findUnique({
+        where: { id: psid },
+        select: { agencyId: true, status: true },
+      });
+      if (!ps) return NextResponse.json({ success: false, message: "파일럿 회차를 찾을 수 없습니다." }, { status: 404 });
+      if (ps.agencyId !== agencyId) {
+        return NextResponse.json({ success: false, message: "회차의 위탁기관과 일치하지 않습니다.", reason: "AGENCY_MISMATCH" }, { status: 409 });
+      }
+      if (ps.status !== "DRAFT" && ps.status !== "READY") {
+        return NextResponse.json({ success: false, message: "이 회차는 설정을 추가할 수 있는 상태가 아닙니다.", reason: "SESSION_LOCKED" }, { status: 409 });
+      }
+      createdByPilotSessionId = psid;
+    }
+
     const quotaCheck = await checkQuota(agencyId, "sites");
     if (!quotaCheck.allowed) {
       return NextResponse.json({
@@ -292,6 +315,8 @@ export async function POST(req: NextRequest) {
         ...(allowanceRange !== undefined ? { allowanceRange } : {}),
         ...(lateThresholdMin !== null ? { lateThresholdMin } : {}),
         ...(additionalContacts.length ? { contacts: { create: additionalContacts } } : {}),
+        // 파일럿 회차가 만든 현장 — 정식 검증 대상이 아니므로 isVerified도 함께 내린다.
+        ...(createdByPilotSessionId ? { createdByPilotSessionId, isVerified: false } : {}),
       },
       select: {
         id: true,

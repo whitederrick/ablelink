@@ -17,6 +17,7 @@ try {
 } catch {}
 import { PrismaClient } from "@prisma/client";
 import { assertWritableDb } from "./_dbGuard.mts";
+import { CleanupGuard } from "./_cleanupGuard.mts";
 // ★.mts(ESM) → lib/*.ts(CJS) 인터롭: tsx 환경에서 named export가 감지되지 않아
 //  (`Object.keys(ns)` = ['default']) 이름 import가 런타임에 실패한다. 리포 전역 조건이며
 //  traineePlacement·assignmentOverlap도 동일하다. 타입은 정상(named)이라 tsc를 만족시키려면
@@ -264,16 +265,17 @@ async function main() {
     check("롤백되어 배정이 늘지 않음", beforeAsg === afterAsg, { beforeAsg, afterAsg });
   } finally {
     // ── 정리 (FK 역순) ──────────────────────────────────────────
-    // 테스트 중 추가로 만든 재적·배정(열린 담당·트랜잭션 합류 케이스)까지 포함해 넓게 지운다.
     console.log("\n[정리]");
-    await prisma.traineeSupervision.deleteMany({ where: { traineeId: { in: [trainee.id, trainee2.id] } } });
-    await prisma.traineePlacement.deleteMany({ where: { traineeId: { in: [trainee.id, trainee2.id] } } });
-    await prisma.trainee.deleteMany({ where: { id: { in: [trainee.id, trainee2.id] } } });
-    await prisma.siteAssignment.deleteMany({ where: { workerId: worker.id } });
-    await prisma.site.deleteMany({ where: { id: { in: [site.id, site2.id] } } });
-    await prisma.worker.delete({ where: { id: worker.id } });
-    await prisma.agency.delete({ where: { id: agency.id } });
-    console.log("  테스트 데이터 정리 완료");
+    const c = new CleanupGuard();
+    await c.step("supervision", () => prisma.traineeSupervision.deleteMany({ where: { traineeId: { in: [trainee.id, trainee2.id] } } }));
+    await c.step("placement", () => prisma.traineePlacement.deleteMany({ where: { traineeId: { in: [trainee.id, trainee2.id] } } }));
+    await c.step("trainee", () => prisma.trainee.deleteMany({ where: { id: { in: [trainee.id, trainee2.id] } } }));
+    await c.step("assignment", () => prisma.siteAssignment.deleteMany({ where: { workerId: worker.id } }));
+    await c.step("site", () => prisma.site.deleteMany({ where: { id: { in: [site.id, site2.id] } } }));
+    await c.step("worker", () => prisma.worker.delete({ where: { id: worker.id } }));
+    await c.step("agency", () => prisma.agency.delete({ where: { id: agency.id } }));
+    fail += c.report();
+    fail += await c.assertNoStale(prisma, ["__sv_"]);
   }
 
   console.log(`\n=== 결과: ${pass} passed, ${fail} failed ===`);
