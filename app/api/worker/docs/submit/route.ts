@@ -14,6 +14,8 @@ import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { isValidYmd } from "@/lib/time";
 import { audit } from "@/lib/audit";
+import { resolveDocAssignment } from "@/lib/docs/resolveDocAssignment";
+import { getPilotAssignmentState } from "@/lib/pilot/capability";
 
 const MAX_VERSIONS_PER_RUN = 20; // 보존: run당 최근 N개 버전만 유지(과도 누적·PII 적재 방지)
 
@@ -42,6 +44,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "기간(YYYY-MM-DD)이 필요합니다." }, { status: 400 });
     if (!Array.isArray(documents) || documents.length === 0)
       return NextResponse.json({ success: false, message: "제출할 문서가 없습니다." }, { status: 400 });
+
+    // ★§8 제출 차단 — 파일럿에는 위탁기관 담당자가 없다. 제출은 "담당자 검토 대기열로 넘긴다"는
+    //  뜻이라 받을 사람이 없는 채로 run이 SUBMITTED로 쌓이고 매니저 알림까지 발생한다.
+    //  루프 진입 전에 한 번만 막는다 — 같은 요청의 모든 문서가 같은 assignmentId로 해석되고
+    //  (buildDocPayload와 동일한 resolveDocAssignment·동일 인자), 루프 안에서 막으면 앞 문서가
+    //  이미 커밋된 뒤라 부분 제출이 된다.
+    let preAssignmentId: bigint | null = null;
+    try { preAssignmentId = assignmentId != null && String(assignmentId).trim() !== "" ? BigInt(assignmentId) : null; } catch { preAssignmentId = null; }
+    const preResolved = await resolveDocAssignment(workerId, preAssignmentId, { select: { id: true } });
+    if (preResolved.status === "resolved") {
+      const pilotState = await getPilotAssignmentState(preResolved.assignment.id);
+      if (pilotState.isPilot) {
+        return NextResponse.json(
+          { success: false, message: "파일럿에서는 위탁기관 제출을 사용하지 않습니다. PDF를 내려받아 사용해주세요.", reason: "PILOT_SUBMIT_BLOCKED" },
+          { status: 403 },
+        );
+      }
+    }
 
     const pStart = new Date(`${periodStart}T00:00:00.000+09:00`);
     const pEnd   = new Date(`${periodEnd}T23:59:59.999+09:00`);

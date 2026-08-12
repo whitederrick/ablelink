@@ -34,6 +34,7 @@ interface SiteContact {
 
 interface SiteInfo {
   companyName: string;
+  isPilot: boolean;
   managerEmail: string;
   managerName: string;
   businessContactName: string;
@@ -131,6 +132,7 @@ function DocsContent() {
       if (d.success && d.data) {
         setSiteInfo({
           companyName:  d.data.companyName,
+          isPilot:      d.data.isPilot === true,
           managerEmail: d.data.managerEmail || "",
           managerName:  d.data.managerName  || "담당자",
           businessContactName: d.data.businessContactName || "",
@@ -254,6 +256,26 @@ function DocsContent() {
       else alert(data.message || "제출에 실패했습니다.");
     } catch {
       alert("서버와 연결할 수 없습니다.");
+    } finally {
+      setSubmitLoading(false);
+    }
+  }
+
+  // 파일럿: 위탁기관 제출 대신 선택 문서를 한 번에 생성한다(v1.8 §8 — 파일럿에는 받을 담당자가 없다).
+  //  생성 경로는 단건과 동일한 sendDoc(=/api/worker/docs/generate)을 그대로 쓴다. 결과 PDF는 각 문서
+  //  카드의 'PDF 다운로드 (사본)'로 내려받는다 — 파일럿 전용 생성·다운로드 구현을 새로 만들지 않는다.
+  async function generateChecked() {
+    const checkedDocs = ALL_DOC_TYPES.filter(d => activeDocIds.includes(d.id) && docStates[d.id].checked);
+    if (checkedDocs.length === 0) { alert("생성할 문서를 선택해주세요."); return; }
+    for (const doc of checkedDocs) {
+      if (doc.needsTrainee && docStates[doc.id].traineeIds.length === 0) {
+        alert(`${doc.label}: 훈련생을 선택해주세요.`);
+        return;
+      }
+    }
+    setSubmitLoading(true);
+    try {
+      for (const doc of checkedDocs) await sendDoc(doc.id);
     } finally {
       setSubmitLoading(false);
     }
@@ -580,22 +602,28 @@ function DocsContent() {
           </div>
         </div>
 
-        {/* 최종 제출(인앱) — 담당 매니저 확인·서명 워크플로 */}
+        {/* 최종 제출(인앱) — 담당 매니저 확인·서명 워크플로.
+            ★파일럿 회차 배정은 위탁기관 담당자가 없어 제출 대신 PDF 생성·다운로드로 마무리한다(v1.8 §8).
+             서버(worker/docs/submit)가 이미 403으로 막으므로 여기서는 동선만 바꾼다. */}
         {checkedCount > 0 && (
           <>
             <button
-              onClick={submitDocs}
+              onClick={siteInfo?.isPilot ? generateChecked : submitDocs}
               disabled={submitLoading}
               className="mx-4 mt-4 flex min-h-14 w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-base font-black text-white shadow-lg shadow-emerald-600/20 transition active:scale-[0.97] disabled:opacity-70"
             >
               {submitLoading ? (
-                <><Clock className="h-5 w-5 animate-spin" aria-hidden="true" /> 제출 중...</>
+                <><Clock className="h-5 w-5 animate-spin" aria-hidden="true" /> {siteInfo?.isPilot ? "생성 중..." : "제출 중..."}</>
+              ) : siteInfo?.isPilot ? (
+                <><Download className="h-5 w-5" aria-hidden="true" /> 파일럿 PDF 생성 ({checkedCount}개)</>
               ) : (
                 <><Check className="h-5 w-5" aria-hidden="true" /> 위탁기관에 최종 제출 ({checkedCount}개)</>
               )}
             </button>
             <p className="mx-4 mt-1.5 text-center text-[11px] font-semibold text-slate-400">
-              제출하면 담당 매니저가 앱에서 확인·서명합니다. 수정 후 재제출 시 새 버전으로 관리됩니다.
+              {siteInfo?.isPilot
+                ? "생성한 뒤 각 문서의 'PDF 다운로드'로 내려받아 사용해주세요."
+                : "제출하면 담당 매니저가 앱에서 확인·서명합니다. 수정 후 재제출 시 새 버전으로 관리됩니다."}
             </p>
           </>
         )}
@@ -603,7 +631,11 @@ function DocsContent() {
         {/* 안내 */}
         <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4 text-center">
           <p className="text-xs font-semibold leading-relaxed text-slate-400">
-'위탁기관에 최종 제출'을 누르면 담당 매니저 앱으로 전달됩니다.<br />
+            {siteInfo?.isPilot ? (
+              <>파일럿 기간에는 위탁기관 제출 없이 PDF로 내려받아 사용합니다.<br /></>
+            ) : (
+              <>&apos;위탁기관에 최종 제출&apos;을 누르면 담당 매니저 앱으로 전달됩니다.<br /></>
+            )}
             직무지도원 서명은 등록된 서명이 자동 삽입됩니다.
           </p>
         </div>

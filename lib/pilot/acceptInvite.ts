@@ -161,7 +161,13 @@ export async function acceptPilotInvite(
             phoneNumber: w.phoneNumber,
             role: "WORKER",
             status: "ACTIVE",
-            planType: "FREE",
+            // ★파일럿 기능 권한 = 기존 "운영자 개인 부여"(planGuard.ts (1)번 경로) 그대로 사용.
+            //  planGuard 주석이 명시한 "초기 직무지도원 테스트/특례용"이 정확히 이 용도다.
+            //  덕분에 문서·서명 라우트를 한 줄도 고치지 않고 파일럿 참여자가 PDF·서명을 쓸 수 있다.
+            //  ★회차가 만든 계정에만 준다(사용자 확정 2026-08-12, 선택 '가') — 기존 Worker의 등급을
+            //   건드리면 폐기 때 원래 값 복원을 놓칠 위험이 있어 아예 손대지 않는다.
+            //   기존 Worker 참여자는 소속 기관이 이미 유료여야 참여할 수 있다.
+            planType: "STANDARD",
             isTemporary: false,
             consentTermsAt: w.consentTermsAt,
             consentPrivacyAt: w.consentPrivacyAt,

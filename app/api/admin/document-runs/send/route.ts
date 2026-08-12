@@ -16,6 +16,7 @@ import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { injectManagerSignature } from "@/lib/docs/managerSig";
 import { missingSignatureLabels } from "@/lib/docs/requiredSignatures";
 import { sendEmailWithAttachments } from "@/lib/email";
+import { countPilotRuns } from "@/lib/pilot/capability";
 import { logAccess } from "@/lib/accessLog";
 import { audit } from "@/lib/audit";
 import { mapWithConcurrency } from "@/lib/concurrency";
@@ -66,6 +67,17 @@ export async function POST(req: NextRequest) {
     const ids = idsRaw.map(String).filter(s => /^\d+$/.test(s)).map(s => BigInt(s));
     if (ids.length === 0) return NextResponse.json({ success: false, message: "발송할 문서를 선택해주세요." }, { status: 400 });
     if (ids.length > 50) return NextResponse.json({ success: false, message: "한 번에 최대 50건까지 발송할 수 있습니다." }, { status: 400 });
+
+    // ★§8 공단 발송 차단 — 파일럿 문서는 외부로 나가지 않는다.
+    //  한 건이라도 파일럿이면 묶음 전체를 거부한다. 파일럿 문서를 실제 문서와 섞어 보내는 것이
+    //  정확히 막아야 할 사고이므로, 파일럿 건만 조용히 빼고 나머지를 보내지 않는다.
+    const pilotRunCount = await countPilotRuns(ids);
+    if (pilotRunCount > 0) {
+      return NextResponse.json(
+        { success: false, message: `파일럿 문서 ${pilotRunCount}건이 포함되어 있습니다. 파일럿 문서는 공단으로 발송할 수 없습니다.`, reason: "PILOT_SEND_BLOCKED" },
+        { status: 403 },
+      );
+    }
 
     const runs = await prisma.documentRun.findMany({
       // 공단 발송 대상: DRAFT(미제출)·CHANGES_REQUESTED(수정요청 중)는 제외 — 수정요청 문서가 그대로 발송되지 않도록.

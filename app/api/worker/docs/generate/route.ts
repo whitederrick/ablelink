@@ -7,6 +7,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { isValidYmd } from "@/lib/time";
 import { checkPlanAccess } from "@/lib/planGuard";
+import { getPilotAssignmentState } from "@/lib/pilot/capability";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer } from "@/lib/pdf";
 import { buildDocFileName } from "@/lib/pdf/filename";
@@ -88,6 +89,16 @@ export async function POST(request: NextRequest) {
     const site = assignment.site;
     const start = periodStart || new Date().toISOString().slice(0,10);
     const end   = periodEnd   || new Date().toISOString().slice(0,10);
+
+    // ★파일럿 문서는 이메일로 내보내지 않는다(v1.8 §3.2 제외항목).
+    //  PDF 생성·로컬 다운로드는 그대로 허용이라 요청 전체를 막지 않고 '발송 요청'만 거부한다.
+    //  ★비용: sendEmail을 명시한 요청에서만 조회한다 — 발송 안 하는 기존 요청은 쿼리가 늘지 않는다.
+    if (sendEmail && (await getPilotAssignmentState(assignment.id)).isPilot) {
+      return NextResponse.json(
+        { success: false, message: "파일럿 문서는 이메일로 발송할 수 없습니다. PDF를 내려받아 사용해주세요.", reason: "PILOT_SEND_BLOCKED" },
+        { status: 403 },
+      );
+    }
 
     // 일지 PDF용 근무형태 고정 시간값(훈련시간/측정시간/근무시간/Y·N) — 단일 출처
     const docTimes = dailyDocTimes(
