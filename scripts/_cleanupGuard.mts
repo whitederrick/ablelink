@@ -2,12 +2,12 @@
 // 검증·스모크 스크립트의 테스트 데이터 정리를 "실패하면 드러나게" 만드는 공용 헬퍼.
 //
 // ★왜 필요한가 — 정리 삭제를 `.catch(() => {})`로 삼키면 실패해도 "정리 완료"가 찍히고
-//  스크립트는 통과로 끝난다. 실제로 그 탓에 테스트 기관(__ps_test2_*)이 dev DB에 남아
-//  **운영자 회차 생성 화면의 기관 드롭다운에 노출**됐다. 통과 결과와 별개로 데이터가 누적된다.
+//  스크립트는 통과로 끝난다. 실제로 그 탓에 테스트 기관이 dev DB에 남아
+//  **운영자 화면의 기관 드롭다운에 노출**된 적이 있다. 통과 결과와 별개로 데이터가 누적된다.
 //
 // 사용:
 //   const c = new CleanupGuard();
-//   await c.step("participant", () => prisma.pilotParticipant.deleteMany({ ... }));
+//   await c.step("placement", () => prisma.traineePlacement.deleteMany({ ... }));
 //   ...
 //   c.report();                       // 실패 목록 출력 + 실패 수 반환
 //   await c.assertNoStale(prisma, ["__ps_"]);  // 이전 실행 잔여물까지 확인

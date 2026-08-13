@@ -7,7 +7,6 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { isValidYmd } from "@/lib/time";
 import { checkPlanAccess } from "@/lib/planGuard";
-import { getPilotAssignmentState, resolvePilotManagerSlotName } from "@/lib/pilot/capability";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer } from "@/lib/pdf";
 import { buildDocFileName } from "@/lib/pdf/filename";
@@ -90,21 +89,6 @@ export async function POST(request: NextRequest) {
     const start = periodStart || new Date().toISOString().slice(0,10);
     const end   = periodEnd   || new Date().toISOString().slice(0,10);
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ★[PILOT] 파일럿 전용 차단 — 회차 종료 시 **이 블록과 위 import 1줄**(getPilotAssignmentState)만
-    //  지우면 원복된다. 플랜 게이트(checkPlanAccess)를 포함한 기존 판정은 한 줄도 건드리지 않았다.
-    // ─────────────────────────────────────────────────────────────────────────
-    // ★파일럿 문서는 이메일로 내보내지 않는다(v1.8 §3.2 제외항목).
-    //  PDF 생성·로컬 다운로드는 그대로 허용이라 요청 전체를 막지 않고 '발송 요청'만 거부한다.
-    //  ★비용: sendEmail을 명시한 요청에서만 조회한다 — 발송 안 하는 기존 요청은 쿼리가 늘지 않는다.
-    if (sendEmail && (await getPilotAssignmentState(assignment.id)).isPilot) {
-      return NextResponse.json(
-        { success: false, message: "파일럿 문서는 이메일로 발송할 수 없습니다. PDF를 내려받아 사용해주세요.", reason: "PILOT_SEND_BLOCKED" },
-        { status: 403 },
-      );
-    }
-    // ★[PILOT] 끝
-
     // 일지 PDF용 근무형태 고정 시간값(훈련시간/측정시간/근무시간/Y·N) — 단일 출처
     const docTimes = dailyDocTimes(
       assignment.workType,
@@ -160,19 +144,6 @@ export async function POST(request: NextRequest) {
       companyManager: { name: companyManagerSignerName,    imageUrl: companyImg },
       agencyAgent:    { name: "",                          imageUrl: undefined as string | undefined },
     };
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // ★[PILOT] 위탁기관 담당자 이름 — preview 라우트와 **같은 함수**를 쓴다(v1.8 §9:
-    //  미리보기와 다운로드의 담당자명이 일치해야 한다). 표시명이 없으면 수기 입력 공간.
-    //  ★companyManager는 건드리지 않는다 — 사업체 담당자는 기존 대면 서명 흐름 그대로다.
-    //  회차 종료 시 이 블록과 위 import 1줄만 지우면 원복된다.
-    // ─────────────────────────────────────────────────────────────────────────
-    const pilotSlotName = await resolvePilotManagerSlotName(assignment.id);
-    if (pilotSlotName !== null) {
-      sigs.govAgent.name = pilotSlotName;
-      sigs.agencyAgent.name = pilotSlotName;
-    }
-    // ★[PILOT] 끝
 
     // ── 문서별 payload 빌드 ──────────────────────────────────
     let payload: any;

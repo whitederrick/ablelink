@@ -22,15 +22,6 @@ const groups: NavGroup[] = [
       { href: "/admin/admins",                   label: "시스템 관리자 관리" },
     ],
   },
-  // ★[PILOT] 파일럿(WORKER_DOCUMENT_POC) 전용 — 회차 종료 후 이 그룹 객체를 통째로 삭제하면 원복된다.
-  //  다른 그룹과 독립적이고, 이 배열 밖에서 참조하는 곳이 없다.
-  {
-    title: "파일럿",
-    items: [
-      { href: "/admin/pilots", label: "파일럿 관리" },
-    ],
-  },
-  // ★[PILOT] 끝
   {
     title: "위탁기관 데이터 관리",
     items: [

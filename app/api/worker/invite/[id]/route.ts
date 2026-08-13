@@ -9,7 +9,6 @@ import { hashPassword } from "@/lib/password";
 import { signWorkerToken, WORKER_COOKIE } from "@/app/worker/_lib/session";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { getRateLimitIp } from "@/lib/clientIp";
-import { acceptPilotInvite } from "@/lib/pilot/acceptInvite";
 import type { Prisma } from "@prisma/client";
 
 // 표시용 전화번호 마스킹 — 비인증 GET이 순차 id 열거로 실전화번호를 수집당하지 않도록.
@@ -110,54 +109,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const now = new Date();
     const hashed = await hashPassword(password);
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // ★[PILOT] 파일럿 초대는 전용 수락 경로로 분기 — 회차 종료 시 **이 블록(`if (invite.pilotSessionId)`
-    //  전체)과 위 import 1줄**(acceptPilotInvite)만 지우면 원복된다. 아래 레거시 자동배정 분기는 무변경.
-    //  ★비파일럿 비용 0 — `invite.pilotSessionId`가 null이면 조회 없이 그대로 통과한다.
-    // ─────────────────────────────────────────────────────────────────────────
-    // ★아래 기본 분기(invite.siteId → 자동 배정)를 타면 안 된다. 그 분기는 startDate=now·FULL_DAY로
-    //  배정을 만들고 pilotSessionId를 남기지 않아, 회차 기간과 어긋나고 운영자가 사전 설정한 값과
-    //  중복 생성될 수 있다. 파일럿은 참여자 설정값으로 Worker+배정+담당을 한 트랜잭션에서 만든다.
-    if (invite.pilotSessionId) {
-      const accepted = await acceptPilotInvite({
-        inviteId: invite.id,
-        newWorker: {
-          loginId: invite.phoneNumber,
-          phoneNumber: invite.phoneNumber,
-          workerName,
-          passwordHash: hashed,
-          consentTermsAt: consentTerms ? now : null,
-          consentPrivacyAt: consentPrivacy ? now : null,
-          consentLocationAt: consentLocation ? now : null,
-        },
-      });
-      if (!accepted.ok) {
-        // 수락 창구가 닫혔거나(READY 아님) 설정↔실데이터가 어긋난 경우 — 참여자가 스스로 고칠 수 없으므로
-        // 운영자 문의로 안내한다. 계정도 만들지 않고 전체 롤백된 상태다.
-        const status = accepted.code === "CAPACITY_EXCEEDED" ? 409 : 400;
-        return NextResponse.json({ success: false, message: accepted.message, reason: accepted.code }, { status });
-      }
-
-      await prisma.workerInvite.update({
-        where: { id: invite.id },
-        data: { usedAt: now, usedByWorkerId: accepted.workerId },
-      });
-
-      const pilotUser = await prisma.worker.findUniqueOrThrow({
-        where: { id: accepted.workerId },
-        select: { id: true, workerName: true },
-      });
-      const pilotToken = await signWorkerToken({
-        workerId: pilotUser.id.toString(), workerName: pilotUser.workerName, isTemporary: false,
-      });
-      const pilotRes = NextResponse.json({ success: true, workerId: pilotUser.id.toString(), hasSite: true });
-      pilotRes.cookies.set(WORKER_COOKIE, pilotToken, {
-        httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 7,
-      });
-      return pilotRes;
-    }
-    // ★[PILOT] 끝
 
     let siteAssigned = false;
     const runCreate = async (tx: Prisma.TransactionClient) => {

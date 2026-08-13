@@ -34,7 +34,6 @@ interface SiteContact {
 
 interface SiteInfo {
   companyName: string;
-  isPilot: boolean; // ★[PILOT] 파일럿 전용 — 회차 종료 시 삭제(출처=/api/worker/site/current)
   managerEmail: string;
   managerName: string;
   businessContactName: string;
@@ -132,7 +131,6 @@ function DocsContent() {
       if (d.success && d.data) {
         setSiteInfo({
           companyName:  d.data.companyName,
-          isPilot:      d.data.isPilot === true, // ★[PILOT] 회차 종료 시 삭제
           managerEmail: d.data.managerEmail || "",
           managerName:  d.data.managerName  || "담당자",
           businessContactName: d.data.businessContactName || "",
@@ -260,28 +258,6 @@ function DocsContent() {
       setSubmitLoading(false);
     }
   }
-
-  // ★[PILOT] 파일럿 전용 함수 — 회차 종료 시 이 함수 통째로 삭제(호출부는 아래 제출 버튼 삼항 1곳뿐).
-  // 파일럿: 위탁기관 제출 대신 선택 문서를 한 번에 생성한다(v1.8 §8 — 파일럿에는 받을 담당자가 없다).
-  //  생성 경로는 단건과 동일한 sendDoc(=/api/worker/docs/generate)을 그대로 쓴다. 결과 PDF는 각 문서
-  //  카드의 'PDF 다운로드 (사본)'로 내려받는다 — 파일럿 전용 생성·다운로드 구현을 새로 만들지 않는다.
-  async function generateChecked() {
-    const checkedDocs = ALL_DOC_TYPES.filter(d => activeDocIds.includes(d.id) && docStates[d.id].checked);
-    if (checkedDocs.length === 0) { alert("생성할 문서를 선택해주세요."); return; }
-    for (const doc of checkedDocs) {
-      if (doc.needsTrainee && docStates[doc.id].traineeIds.length === 0) {
-        alert(`${doc.label}: 훈련생을 선택해주세요.`);
-        return;
-      }
-    }
-    setSubmitLoading(true);
-    try {
-      for (const doc of checkedDocs) await sendDoc(doc.id);
-    } finally {
-      setSubmitLoading(false);
-    }
-  }
-  // ★[PILOT] 끝
 
   function handleDownload(docId: string) {
     const r = docStates[docId].result;
@@ -604,50 +580,30 @@ function DocsContent() {
           </div>
         </div>
 
-        {/* 최종 제출(인앱) — 담당 매니저 확인·서명 워크플로.
-            ★파일럿 회차 배정은 위탁기관 담당자가 없어 제출 대신 PDF 생성·다운로드로 마무리한다(v1.8 §8).
-             서버(worker/docs/submit)가 이미 403으로 막으므로 여기서는 동선만 바꾼다.
-
-            ★[PILOT] ★★이 파일은 파일럿 코드가 **기존 줄을 치환**한 유일한 화면이다(블록 삭제로는 원복 불가).
-             회차 종료 시 아래 4곳의 `siteInfo?.isPilot` 삼항을 **비파일럿 쪽 값만 남기고** 되돌린다:
-               ① onClick        → `submitDocs`
-               ② 로딩 문구       → `제출 중...`
-               ③ 버튼 라벨       → `<Check …/> 위탁기관에 최종 제출 ({checkedCount}개)`
-               ④ 보조 문구       → `제출하면 담당 매니저가 앱에서 확인·서명합니다. 수정 후 재제출 시 새 버전으로 관리됩니다.`
-               ⑤ 하단 안내(아래)  → `'위탁기관에 최종 제출'을 누르면 담당 매니저 앱으로 전달됩니다.`
-             그리고 `generateChecked` 함수·`SiteInfo.isPilot` 필드·`isPilot` 대입 1줄을 삭제하면 끝난다.
-             (Download 아이콘 import는 handleDownload가 이미 쓰므로 남긴다.) */}
+        {/* 최종 제출(인앱) — 담당 매니저 확인·서명 워크플로 */}
         {checkedCount > 0 && (
           <>
             <button
-              onClick={siteInfo?.isPilot ? generateChecked : submitDocs}
+              onClick={submitDocs}
               disabled={submitLoading}
               className="mx-4 mt-4 flex min-h-14 w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-base font-black text-white shadow-lg shadow-emerald-600/20 transition active:scale-[0.97] disabled:opacity-70"
             >
               {submitLoading ? (
-                <><Clock className="h-5 w-5 animate-spin" aria-hidden="true" /> {siteInfo?.isPilot ? "생성 중..." : "제출 중..."}</>
-              ) : siteInfo?.isPilot ? (
-                <><Download className="h-5 w-5" aria-hidden="true" /> 파일럿 PDF 생성 ({checkedCount}개)</>
+                <><Clock className="h-5 w-5 animate-spin" aria-hidden="true" /> 제출 중...</>
               ) : (
                 <><Check className="h-5 w-5" aria-hidden="true" /> 위탁기관에 최종 제출 ({checkedCount}개)</>
               )}
             </button>
             <p className="mx-4 mt-1.5 text-center text-[11px] font-semibold text-slate-400">
-              {siteInfo?.isPilot
-                ? "생성한 뒤 각 문서의 'PDF 다운로드'로 내려받아 사용해주세요."
-                : "제출하면 담당 매니저가 앱에서 확인·서명합니다. 수정 후 재제출 시 새 버전으로 관리됩니다."}
+              제출하면 담당 매니저가 앱에서 확인·서명합니다. 수정 후 재제출 시 새 버전으로 관리됩니다.
             </p>
           </>
         )}
 
-        {/* 안내 — ★[PILOT] 위 ⑤. 원복 시 파일럿 분기를 지우고 아래 비파일럿 문구만 남긴다. */}
+        {/* 안내 */}
         <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4 text-center">
           <p className="text-xs font-semibold leading-relaxed text-slate-400">
-            {siteInfo?.isPilot ? (
-              <>파일럿 기간에는 위탁기관 제출 없이 PDF로 내려받아 사용합니다.<br /></>
-            ) : (
-              <>&apos;위탁기관에 최종 제출&apos;을 누르면 담당 매니저 앱으로 전달됩니다.<br /></>
-            )}
+'위탁기관에 최종 제출'을 누르면 담당 매니저 앱으로 전달됩니다.<br />
             직무지도원 서명은 등록된 서명이 자동 삽입됩니다.
           </p>
         </div>
