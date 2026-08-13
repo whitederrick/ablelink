@@ -1,9 +1,18 @@
-# 작업지시 — 파일럿 범위 재정의와 재구성 (2026-08-13 v4)
+# 작업지시 — 파일럿 범위 재정의와 재구성 (2026-08-13 v4 · **2026-08-14 v5 개정**)
 
 > 수신: VS Code Claude · 작성: 검토 세션(Claude Code)
 > 이 문서는 **지시서**다. "확정 사실"은 전부 코드로 실측했으므로 **재조사하지 말 것.**
 > 설계를 다시 확장하지 말 것. 범위 밖 개선·리팩터링 금지.
 > **★사용자 승인 완료(2026-08-13) — §14 순서대로 착수 가능.**
+>
+> ★★**v5 개정(2026-08-14) — 5단계 착수 게이트(§10-5 FK 전수조사) 수행 결과 반영. 9건.**
+> 초안의 초기화 설계에 **실행하면 실패하는 결함 2건**이 있었다:
+> ①`TraineeEvaluation` 누락(RESTRICT라 삭제가 막힌다) ②감사 축이 `agencyId` 1순위인데 그 값은 **항상 null**이라 0건을 잡는다.
+> 개정 항목: ①FK 기준값 107/69·Cascade15·SetNull18·Restrict36(§10-5) ②감사 축 재정의(§10-2-1)
+> ③`ApiCallLog`·`AgencyAnnouncement`·`TraineeEvaluation` 명시 삭제 추가(§10-2) ④자식 5종 사전 수집(§10-2)
+> ⑤`SiteSignToken.token` 사전 수집(§10-2·§7) ⑥`DocumentVersion` Storage 오기 삭제(§10-2)
+> ⑦Storage 등록 규칙을 **prefix 나열**로 대체(§7 — 운영 라우트 수정 요구를 기각) ⑧부분완료 시 생성 차단(§10-3-2)
+> ⑨초기화 경로 `audit()` 호출 금지(§10-2-2). 근거는 전부 실측이며 GPT·Claude 교차검토 3라운드를 거쳤다.
 
 ---
 
@@ -260,11 +269,22 @@ enum PilotResourceKind {
 - ★**DB 자원**의 생성과 레지스트리 기록은 **같은 DB 트랜잭션**에서 처리한다.
   기록 없이 생성되면 영원히 못 지운다
 - ★**Storage는 이 규칙의 예외다** — 외부 HTTP 호출이라 DB 트랜잭션에 묶을 수 없다(§10-1).
-  **업로드 성공 직후 등록**하고, **등록이 실패하면 방금 올린 객체를 보상 삭제한 뒤 실패 처리**한다.
-  보상 삭제가 없으면 레지스트리에 없는 고아 객체가 남아 초기화가 영영 못 찾는다
-- ★**그리고 초기화 직전에 경로를 다시 수집한다**(둘 다 한다).
-  업로드 직후 등록만 하면 그 뒤 사용자 활동이 만든 객체를 놓치고,
-  재수집만 하면 DB 행이 먼저 사라진 경우를 놓친다(F20). **두 경로가 상호 보완이다.**
+- ★★**개정(2026-08-14) — "업로드 성공 직후 등록" 규칙은 기각한다.**
+  그 규칙은 서명을 올리는 **기존 운영 라우트**(`app/api/worker/signature/route.ts` 등) 수정을 요구한다.
+  파일럿 때문에 운영 코드를 고치지 않는다는 규율에 정면으로 어긋난다.
+  **고칠 필요도 없다** — signatures 버킷의 파일럿 경로가 전부 **결정적 prefix**를 갖기 때문이다.
+
+  | 경로 형식 | 생성 지점 | 초기화 시 prefix 근거 |
+  |---|---|---|
+  | `{workerId}/signature_*.png` | `worker/signature/route.ts:57` | 레지스트리 `WORKER` id |
+  | `inperson/{assignmentId}/*.png` | `worker/docs/inperson-sign/route.ts:66` | 레지스트리 `ASSIGNMENT` id |
+  | `sign-tokens/{token}/*.png` | `app/api/sign/[token]/route.ts:95` | ★`SiteSignToken.token` — **DB 삭제 전에 수집**해야 한다 |
+
+  → **초기화 직전에 prefix를 나열(Storage list)** 해 실제 객체를 수집한다. DB가 참조하지 않는
+  **고아 객체까지 회수**되므로 "업로드 직후 등록"과 동등하거나 그보다 완전하다.
+  ★**단 `sign-tokens/{token}`은 `SiteSignToken` 행이 유일한 근거**이고 그 행은 `SiteAssignment`
+  Cascade로 사라진다 — **삭제 전 사전 수집이 필수**다(F20의 실제 사례).
+- ★`STORAGE_OBJECT` 레지스트리 행은 **초기화 시점에** 수집 결과로 기록한다(삭제 실패분의 재시도 목록).
 
 ---
 
@@ -522,20 +542,52 @@ app/api/pilot/docs/generate/
 
 **Cascade가 알아서 지우는 것과 명시 삭제가 필요한 것을 분리한다.** 섞으면 순서 오류가 난다.
 
+★★**2026-08-14 개정** — FK 전수조사(§10-5) 결과로 **명시 삭제 4건 추가 · 감사 축 재정의 · 오기 1건 삭제**.
+GPT·Claude 교차검토 3라운드 + 실측으로 확정했다. 구 문안의 감사 축은 **한 건도 못 지운다**(아래 근거).
+
+★**사용자 확정(2026-08-14) — 파생 기록도 초기화의 정식 단계다.**
+정식 오픈 전 파일럿이므로 파일럿에 귀속된 `AuditEvent`·`AccessLog`·`ApiCallLog`까지 전량 삭제한다.
+**단 범위는 "파일럿 귀속 행"이지 테이블 전량 비우기가 아니다** — 비파일럿 행은 건드리지 않는다
+(전량 비우기를 원하면 §10-4의 별도 판단 항목으로 분리한다).
+
 ```
 [사전 수집] ─ 아무것도 지우기 전에
   · 레지스트리의 모든 DB 자원 id
-  · ★Storage 경로 — DocumentVersion·서명 등. Cascade로 사라지기 전에 확보한다(F20)
+  · ★Cascade로 사라질 자식 중 **감사기록에 entityType 으로 남는 5종의 id**
+      DailyAttendance(assignmentId IN 배정) · TraineeLog(attendanceId IN 위)
+      AttendanceEditRequest(attendanceId IN 위) · DocumentRun(assignmentId IN 배정) · SiteHoliday(동)
+      ★5종뿐인 이유 = 코드가 실제로 쓰는 entityType 에 없는 자식은 수집이 불필요하다.
+        TraineeLogTask · DocumentVersion · DocumentSubmissionLog · AttendanceIssue ·
+        SiteHolidayRequest · SiteContact · SiteBasePoint 는 감사기록에 등장하지 않는다(실측)
+      ★DocumentRun.id 는 AccessLog 축에도 쓰인다
+  · ★SiteSignToken.token — Storage `sign-tokens/{token}/` 의 **유일한 근거**.
+      SiteAssignment Cascade 로 사라지면 그 객체는 영영 못 찾는다(F20의 실제 사례)
+  · Storage prefix 나열 결과(§7 개정판)
   · WorkerInvite 및 예상 밖 종속 행 조회(§10-5 preflight)
+  ⚠️**삭제된 구 문안**: "Storage 경로 — DocumentVersion". `worker/docs/submit:120` 이
+    `pdfUrl: ""`(sourceData 재생성 방식·파일 미저장)이라 **DocumentVersion 은 Storage 대상이 아니다.**
+    없는 것을 지키느라 정작 `sign-tokens/{token}` 을 놓치고 있었다
+
+[파생 기록 삭제] ─ ★ApiCallLog 는 부모보다 반드시 먼저
+  · ApiCallLog   ★신규. agencyId·workerId 가 **둘 다 SetNull** 이라 막지도 지워지지도 않고
+                 **판별 불가 상태로 잔존**한다. 부모를 먼저 지우면 null 이 되어 영영 못 찾는다.
+                 `lib/logApiCall.ts:10-16` 이 워커의 ACTIVE 배정에서 agencyId 를 끌어와 기록하므로
+                 파일럿 AI 음성일지 사용 시 실제로 생긴다. 축 = workerId IN(파일럿 워커) OR agencyId=파일럿 기관
+  · AuditEvent   ★FK가 없어 Cascade 로 안 지워진다(F21)
+  · AccessLog    ★동일
 
 [명시 삭제] ─ 부모보다 먼저 지워야 하는 것
-  · TraineeSupervision   ★FK가 RESTRICT라 SiteAssignment·TraineePlacement보다 반드시 먼저
-  · WorkerInvite         ★siteId FK를 가지므로 Site보다 먼저
-  · Cascade 대상이 아닌 그 밖의 종속 행(§10-5가 찾아낸 것)
-  · AuditEvent·AccessLog ★FK가 없어 Cascade로 안 지워진다(F21)
-      - AuditEvent: 파일럿 agencyId + actorType=WORKER·actorId IN(파일럿 워커)
-      - AccessLog : 파일럿 agencyId + subjectType='Worker'·subjectId IN(파일럿 워커)
-      ★agencyId=null인 운영자 행위 기록이 있으므로 subjectId 축도 함께 건다
+  · TraineeSupervision   ★RESTRICT라 SiteAssignment·TraineePlacement보다 반드시 먼저
+  · TraineeEvaluation    ★★신규 — trainee·writer **양쪽 RESTRICT** 이고 Cascade 체인에 없다.
+                         `app/api/worker/evaluation/route.ts:79` 에 실제 생성 경로가 있어
+                         직무지도원이 한 건이라도 저장하면 Trainee·Worker 삭제가 FK 오류로 막힌다.
+                         조건은 **OR**: traineeId IN(파일럿 훈련생) OR writerId IN(파일럿 워커)
+                         (AND 로 묶으면 교차 연결된 행이 남아 삭제를 막는다)
+  · WorkerInvite         ★근거 정정 — siteId 는 optional 이라 **SetNull** 이다(Site 삭제를 막지 않는다).
+                         실제 차단 지점은 **agencyId(required→RESTRICT)**. 결론(선행 삭제)은 그대로
+  · AgencyAnnouncement   ★신규 — agencyId 가 **@relation 없는 스칼라**라 FK 도 Cascade 경로도 없다.
+                         Manager 부재라 0건이 정상이지만, 있으면 영구 잔존한다
+  · Cascade 대상이 아닌 그 밖의 종속 행(§10-5 preflight 가 찾아낸 것)
 
 [부모 삭제] ─ Cascade가 딸린 것을 뒤에
   · SiteAssignment
@@ -550,21 +602,118 @@ app/api/pilot/docs/generate/
 ```
 
 ★**Cascade 목록은 "안 지워도 되는 것"이지 "확인 안 해도 되는 것"이 아니다.**
-Storage 경로를 가진 자식(DocumentVersion·서명)은 Cascade로 사라지기 전에 경로를 확보해야 한다.
+Cascade 로 사라지는 자식이라도 **감사기록의 근거(id)와 Storage 경로의 근거(SiteSignToken.token)** 는
+사라지기 전에 확보해야 한다.
 
-### 10-5. ★5단계 착수 전 필수 게이트 — FK 전수조사
+### 10-2-1. ★★감사 축 재정의 — 구 문안의 1순위 축은 항상 0건이다
+
+`lib/audit.ts` 의 `auditActorFrom` 은 **MANAGER scope 에서만 `agencyId` 를 채운다**(:21,:23).
+ADMIN(:20)도 WORKER(:24)도 `agencyId` 가 없고, **파일럿은 Manager 를 만들지 않는다.**
+→ 파일럿이 만드는 `AuditEvent`·`AccessLog` 의 `agencyId` 는 **예외 없이 null** 이다.
+구 문안이 1순위로 적은 "파일럿 agencyId" 축은 **0건을 잡는다.**
+
+**AuditEvent — 2축(+보험 1)**
+
+| 축 | 조건 | 무엇을 잡는가 |
+|---|---|---|
+| ① 대상 | `(entityType, entityId)` **쌍**으로 IN — 아래 11종 | 운영자 행위 전량 |
+| ② 행위자 | `actorType='WORKER' AND actorId IN(파일럿 워커)` | 워커 활동 전량 |
+| ③ 기관 | `agencyId = 파일럿 기관` | 실효 0건 — 보험으로만 유지 |
+
+★**`entityId` 단독 매칭 금지.** 테이블별 id 라 값이 겹친다 — 반드시 `entityType` 과 쌍으로 건다.
+
+**entityType 11종**(코드가 실제로 쓰는 25종 중 파일럿 도달 가능한 것만 — 실측 확정):
+· 레지스트리로 즉시 확보(6종) — `Pilot` `Agency` `Site` `Trainee` `Worker` `SiteAssignment`
+· 사전 수집 필요(5종) — `DailyAttendance` `TraineeLog` `DocumentRun` `AttendanceEditRequest` `SiteHoliday`
+★`TraineePlacement` 는 **감사기록에 쓰이지 않는다**(훈련생 라우트가 `Trainee` 로만 기록) — 축에 넣지 않는다.
+
+**AccessLog — 1축(+보험 1)**
+
+| 축 | 조건 |
+|---|---|
+| ① 대상 | `(subjectType, subjectId)` 쌍 — `Worker` · `Trainee` · `DocumentRun` (실측 3종) |
+| ② 기관 | `agencyId = 파일럿 기관` — 보험 |
+
+★`subjectId` 는 **String 컬럼**이라 id 를 문자열로 변환해 비교한다.
+★`actorType`/`actorId` 는 열람 주체가 운영자라 축이 되지 않는다.
+
+★**구조적 예외(인지 사항, 유일)**: `subjectId=null` 인 **요약형 접속기록**은 귀속 판별이 불가능하다
+(예: `admin/sites/[id]/trainees:67` → subjectId=null, label `"현장 훈련생 목록 3명"` /
+`admin/system/backup:129` → `"전체 백업(근태) N건"`). 파일럿 대상자의 성명·연락처가 들어가지 않으므로
+삭제 대상에서 빠지는 것이 정상이다. **"흔적 0" 의 유일한 예외로 명시해 둔다.**
+
+★★**문자열·날짜로 로그를 찾지 않는다.** `summary contains "pilot"` 같은 조건 금지 —
+축은 **id 와 (entityType|subjectType) 쌍**뿐이다(§12-5 와 같은 규율).
+
+### 10-2-2. ★초기화 실행 자체는 감사기록을 남기지 않는다
+
+`AuditEvent` 는 Prisma 확장 자동기록이 **아니라** 라우트가 `audit()` 를 명시 호출하는 방식이다
+(`lib/audit.ts:2-3` — 미들웨어/ALS 가 행위자를 잃어 명시 방식으로 전환).
+→ **초기화 경로가 `audit()` 를 부르지 않으면 그 대량 삭제는 감사행을 한 줄도 만들지 않는다.**
+규율만으로 "흔적 0" 이 달성되므로 별도 장치가 필요 없다.
+남기면 삭제 직후 파일럿을 가리키는 행이 다시 1건 생겨 목적과 충돌한다.
+**결과(종류별 삭제 건수·실패분)는 API 응답과 화면에 전량 표시한다.**
+
+### 10-5. ★5단계 착수 전 필수 게이트 — FK 전수조사 ✅**완료(2026-08-14)**
 
 전용 Agency라도 **cron과 사용자 활동이 예상 밖 종속 행을 만든다.** 삭제 구현 전에 반드시 전수조사한다.
 
-- `prisma/schema.prisma`에서 **Agency·Worker·Site·SiteAssignment·Trainee를 참조하는 모든 FK를 열거**한다
-  (리포 전체 `references: [id]` **106건** 기준 — 이 중 해당 부모를 가리키는 것 전부)
-- 각각에 대해 **`onDelete` 동작을 확인**해 [Cascade / 명시 삭제 / RESTRICT라 선행 필요] 3분류한다
-- ★**스칼라 컬럼을 FK로 오인하지 말 것.** 예: `WorkerNotice.agencyId`는 `@relation`이 없는
-  **단순 스칼라**라 Agency 삭제를 막지 않는다. `WorkerNotice`는 `user Worker`의 `onDelete: Cascade`로
-  **Worker 삭제 시 함께 사라진다.** 컬럼명만 보고 판단하면 틀린다
-- **preflight로 실제 건수를 조회**한다. 0이 아닌 것이 §10-2의 "명시 삭제" 목록에 들어간다
-- `WorkerInvite`는 **"만들지 않는다"고만 적어두지 않는다.** preflight에서 **0건을 확인**하고,
-  존재하면 전용 Agency 기준으로 **삭제한 뒤** Site·Agency를 지운다
+**★조사 결과(실측 확정 — 재조사 불요)**
+
+- `prisma/schema.prisma` 2,369줄 · `references: [id]` **총 107건**
+  (지시서 초안의 106건 + 2단계에서 추가된 `PilotResource.pilotId` 1건 = 일치)
+- 삭제 대상 부모 **6종**(Agency·Worker·Site·SiteAssignment·Trainee·**TraineePlacement**)을 참조하는 FK = **69건**
+  (5종 기준으로 세면 68건 — `TraineePlacement` 는 레지스트리 `PLACEMENT` kind 로 삭제 대상이고
+   `TraineeSupervision.placementId`(RESTRICT) 1건이 이를 참조하므로 **6종·69건이 기준값**이다)
+
+| 부모 | FK | Cascade | SetNull | Restrict |
+|---|---|---|---|---|
+| Agency | 22 | 1 | 7 | 14 |
+| Worker | 25 | 8 | 5 | 12 |
+| Site | 12 | 2 | 6 | 4 |
+| SiteAssignment | 5 | 4 | 0 | 1 |
+| Trainee | 4 | 0 | 0 | 4 |
+| TraineePlacement | 1 | 0 | 0 | 1 |
+| **계** | **69** | **15** | **18** | **36** |
+
+★**판정 규칙**: `onDelete` 가 없으면 Prisma 기본값이 적용된다 — **필수 관계=Restrict, 선택 관계=SetNull.**
+이 기본값 차이가 아래 함정의 원인이다.
+
+**★조사에서 드러난 함정 4건**
+
+1. **SetNull 이라 순서 위반이 에러를 안 낸다** — `Site.agencyId`·`SiteAssignment.agencyId` 는 optional 이라
+   Agency 를 먼저 지워도 오류 없이 **`agencyId=null` 고아**로 남는다. `Trainee.currentSiteId` 도 동일하다.
+   → 레지스트리 기반 삭제라면 안전하지만, **"삭제가 성공했으니 정리됐다"는 착각**이 가능한 지점이다.
+     §10-1 의 **잔여 0 재조회**가 그래서 필수다.
+2. **스칼라 컬럼을 FK로 오인하지 말 것** — `WorkerNotice.agencyId`·`DocumentRun.agencyId`·
+   `AgencyAnnouncement.agencyId`·`EmploymentContract.assignmentId`·`SatisfactionSurvey.assignmentId`·
+   `WorkerInvite.assignmentId` 는 `@relation` 없는 **단순 스칼라**라 삭제를 막지 않는다.
+   `WorkerNotice` 는 `user Worker` 의 Cascade 로 사라지고, `DocumentRun` 은 배정 Cascade 로 사라지지만,
+   **`AgencyAnnouncement` 만은 어떤 Cascade 경로에도 없어 명시 삭제가 필요하다.**
+3. **RESTRICT 36건 중 Cascade 체인에도 없고 파일럿에서 실제 생성 가능한 것 = `TraineeEvaluation` 하나**(§10-2).
+4. **SetNull 로 조용히 잔존하는 것 = `ApiCallLog`**(§10-2). 그 외 `ManagerSignupRequest`·`RecruitPost`·
+   `TalentOffer`·`WorkerReview`·`PayContract.siteId`·`Site.mergedToSiteId` 는 **외부 행이 파일럿 자원을
+   가리키는 경우**라 preflight 에서 0을 확인하고, 0이 아니면 **삭제가 아니라 중단**한다(아래).
+
+**★preflight — 실행 시점에 실제 건수를 조회한다**
+
+0이 아니면 [명시 삭제 승격] 또는 [중단] 둘 중 하나로 분류한다. **추정으로 건너뛰지 않는다.**
+
+| 대상 | 예상 | 0이 아니면 | 근거 |
+|---|---|---|---|
+| `TraineeEvaluation` | **0 아닐 수 있음** | 명시 삭제(§10-2) | 사용성 테스트 중 작성 가능 |
+| `ApiCallLog` | **0 아닐 수 있음** | 명시 삭제(부모보다 먼저) | AI 음성일지 사용 시 |
+| `WorkerInvite` | 0 | 명시 삭제 | 지시서 §10-5 요구 항목 |
+| `AgencyAnnouncement` | 0 | 명시 삭제 | Manager 부재 |
+| `Manager` | 0 | ★**중단** | 파일럿은 Manager 를 만들지 않는다 — 있으면 설계 위반이라 사람이 판단한다 |
+| `EmploymentContract`·`PayContract`·`PayrollRun`·`AgencyDeduction` | 0 | ★**중단** | 계약·급여 미생성(F28·F5) |
+| `AnnualLeaveEntry`·`AnnualLeaveRequest` | 0 | ★**중단** | 근로계약 없으면 적립 제외(F12) |
+| `SatisfactionSurvey`·`NoticeGroup`·`ManagerInvite`·`SupportTicket` | 0 | ★**중단** | Manager 부재 |
+| **레지스트리 밖 자원** — 전용 기관 소속인데 레지스트리에 없는 Site·SiteAssignment·TraineePlacement | 0 | ★★**중단** | **기록 누락**이라는 뜻이다. 레지스트리가 삭제의 유일한 근거이므로 사람이 확인해야 한다 |
+| **외부 참조** — 파일럿 Site/Worker 를 가리키는 비파일럿 `RecruitPost`·`TalentOffer`·`Site.mergedToSiteId` 등 | 0 | ★★**중단** | 삭제하면 **외부 운영 행이 조용히 수정**된다(SetNull) |
+
+★`WorkerInvite` 는 **"만들지 않는다"고만 적어두지 않는다.** preflight 에서 **0건을 확인**하고,
+존재하면 전용 Agency 기준으로 **삭제한 뒤** Site·Agency 를 지운다.
 
 ### 10-3. 삭제 실패 처리
 
@@ -572,6 +721,28 @@ Storage 경로를 가진 자식(DocumentVersion·서명)은 Cascade로 사라지
 - ★실패분이 있으면 **`Pilot`을 지우지 않는다.** 지우면 Cascade로 `PilotResource`까지 사라져 **재시도 목록을 잃는다**
 - 실패분이 있으면 **초기화를 "완료"로 보고하지 않는다.** 남은 목록을 출력하고 재시도 경로를 제공한다
 - ★`.catch(() => {})`로 실패를 삼키지 않는다 — 과거에 정리 코드가 실패를 삼켜 dev DB에 계정이 누적된 사고가 있었다
+
+### 10-3-1. ★Storage 삭제는 **자체 함수**로 한다 — 운영 함수를 재사용하지 않는다
+
+`app/api/worker/signature/route.ts:135-141` 의 `deleteFromStorage` 는 **응답의 `ok` 를 검사하지 않는다** —
+4xx/5xx 도 성공처럼 지나간다. §10-3 의 "실패를 삼키지 않는다" 와 정면으로 어긋난다.
+
+- 초기화는 **응답 코드를 검사하는 자체 삭제 함수**를 파일럿 코드 안에 새로 쓴다
+- ★그 운영 함수를 **고치지도 않는다**(파일럿 때문에 운영 코드를 수정하지 않는다) → §13 백로그로 이관
+- 404(이미 없음)는 **성공으로 취급**한다 — 재시도 시 멱등이어야 한다
+
+### 10-3-2. ★부분완료 상태에서 신규 자원 생성 차단
+
+Storage 삭제가 실패하면 **DB 자원은 이미 지워졌는데 `Pilot`·레지스트리는 남는다**(재시도 목록).
+이 상태에서 운영자가 자원을 더 만들면 재시도 목록과 실제가 다시 어긋난다.
+
+- ★**구멍은 `createPilotWorker` 하나뿐이다.** `createPilotSite`·`createPilotTrainee`·`createPilotAssignment`
+  는 이미 삭제된 `agencyId`/`siteId` 를 참조해 **FK 위반으로 실패**한다. 반면 `createPilotWorker` 는
+  `getPilotAgencyId` 를 존재 확인용으로만 부르고(`resources.ts:215`) **Worker 에 기관 FK 가 없어**
+  그대로 성공한다.
+- → **`deleteError` 가 남아 있는 파일럿에서는 자원 생성을 거부**한다. `deleteError` 자체가 "재시도 대기"
+  라는 파생 상태이므로 **§7의 "상태 머신 없음"을 깨지 않는다**(새 필드·새 전이 없음).
+- 잠금 규칙을 전면 도입할 필요는 없다 — 이 한 경로만 막으면 된다.
 
 ### 10-4. 초기화 범위 밖 (인지 사항)
 
@@ -612,6 +783,9 @@ Storage 경로를 가진 자식(DocumentVersion·서명)은 Cascade로 사라지
 6. `_prisma_migrations` 행 직접 삭제 금지(§6-3).
 7. 삭제 실패를 `.catch(()=>{})`로 삼키기 금지(§10-3).
    ★**DB 트랜잭션 안에서 Storage 등 외부 API 호출 금지**(§10-1) — 3단계로 분리한다.
+   ★**운영 Storage 함수 재사용 금지**(§10-3-1) — `deleteFromStorage`는 `ok`를 검사하지 않는다.
+   ★**초기화 경로에서 `audit()` 호출 금지**(§10-2-2) — 삭제 직후 파일럿을 가리키는 감사행이 다시 생긴다.
+   ★**감사·접속 기록을 문자열·날짜로 찾기 금지**(§10-2-1) — 축은 id와 (entityType|subjectType) 쌍뿐이다.
 8. 파일럿에 **이메일 수신처 저장 금지**(§8-4). 기존 Worker의 `planType`·`status` **변경 금지**(§8-3).
 8. 운영 DB 마이그레이션·`vercel --prod` 배포 금지(별도 승인 사항).
 9. `git push --force`·이력 재작성 금지. 되돌림은 **새 커밋**으로 남긴다.
@@ -623,6 +797,10 @@ Storage 경로를 가진 자식(DocumentVersion·서명)은 Cascade로 사라지
 - `admin/workers/invite/route.ts:33-35` 주석 허위(소비측 정원검사 호출 0건).
 - `/worker/docs` 인라인 미리보기가 CSP `object-src 'none'`에 차단된다(`page.tsx:571`). `/worker/docs/view`는 정상.
 - `.mts` 스크립트에서 `lib/*.ts` named import 런타임 실패(리포 전역 조건).
+- **운영 버그**: `worker/signature/route.ts:135-141` `deleteFromStorage`가 응답 `ok`를 검사하지 않아
+  Storage 삭제 실패가 조용히 성공 처리된다(서명=개인정보가 버킷에 잔존). 파일럿은 자체 함수로 우회(§10-3-1).
+- **운영 갭**: 같은 파일 `:90` 의 DB 갱신이 실패하면 방금 올린 서명 객체가 고아로 남는다(보상 삭제 없음).
+  `sign/[token]:121-129`는 같은 상황을 이미 보상 삭제한다 — 규율이 두 라우트에서 갈린다.
 
 ---
 
@@ -636,7 +814,23 @@ Storage 경로를 가진 자식(DocumentVersion·서명)은 Cascade로 사라지
 3) §8 /admin/pilots 일괄 설정 화면 + 전용 자원 생성 API → 커밋     ✅ 2026-08-13 완료 `9cf0b57`·`1841901`
 4) §9 파일럿 전용 문서 경로 → 커밋                                 ✅ 2026-08-13 구현·검증 완료
    ★남은 것 = 3종 실렌더 시각검증 → 통과 후 `--baseline` 기록
-5) §10 초기화 → 커밋 (★§10-5 FK 전수조사 게이트 선행, Storage·감사기록 포함)   ← 다음
+5) §10 초기화 → 커밋 (Storage·감사기록 포함)                       ← 진행 중
+   ✅ 5-0 §10-5 FK 전수조사 게이트 완료(2026-08-14) — 결과는 §10-5에 확정 기록,
+        그 결과로 §7·§10-2·§10-3·§12·§13 정정(보완 9건)
+   ▸ 5-A 초기화 서비스 + API(미리보기·실행) + 검증 스크립트
+   ▸ 5-B 화면(초기화 카드) + 시각검증
+```
+
+**★5단계 실행 순서(§10-2 개정 반영 최종판)**
+
+```
+[사전 수집]  레지스트리 id + 자식 5종 id + SiteSignToken.token + Storage prefix 나열 + preflight
+[파생 삭제]  ApiCallLog → AuditEvent → AccessLog        ★ApiCallLog는 부모보다 먼저 필수
+[명시 삭제]  TraineeSupervision → TraineeEvaluation → WorkerInvite → AgencyAnnouncement
+[부모 삭제]  SiteAssignment → TraineePlacement → Trainee → Worker → Site → Agency
+[Storage]    ★트랜잭션 밖에서 삭제(자체 함수·응답 검사·404는 성공)
+[마무리]     전부 성공 → PilotResource·Pilot 삭제 / 실패분 있으면 보존 + deleteError
+             ★어느 경우에도 audit() 호출 없음
 ```
 
 각 단계는 **독립 커밋**으로 남긴다.
