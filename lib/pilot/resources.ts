@@ -213,6 +213,19 @@ export async function createPilotWorker(pilotId: bigint, input: {
   workerName: unknown; phoneNumber: unknown; password: unknown;
 }) {
   await getPilotAgencyId(pilotId); // 파일럿 존재 확인
+
+  // ★부분완료 상태에서는 계정을 만들지 않는다(§10-3-2).
+  //  Storage 삭제가 실패하면 DB 자원은 이미 지워졌는데 Pilot·레지스트리는 남는다(재시도 목록).
+  //  이때 Site·Trainee·Assignment 생성은 삭제된 agencyId/siteId를 참조해 FK 위반으로 알아서 실패하지만,
+  //  **Worker는 기관 FK가 없어 그대로 성공**한다 — 재시도 목록과 실제가 다시 어긋나는 유일한 구멍이다.
+  //  `deleteError`가 남아 있다는 사실 자체가 "재시도 대기"라는 파생 상태이므로
+  //  새 필드·새 전이 없이 막을 수 있다(§7 "상태 머신 없음" 유지).
+  const purgePending = await prisma.pilotResource.count({ where: { pilotId, deleteError: { not: null } } });
+  if (purgePending > 0) {
+    throw new PilotError(409, "PURGE_PENDING",
+      "초기화가 완료되지 않은 파일럿입니다. 남은 삭제 실패분을 처리한 뒤 다시 시도해 주세요.");
+  }
+
   const workerName = reqStr(input.workerName, "성명", 2);
   const phoneNumber = normPhone(input.phoneNumber);
   if (!PHONE_RE.test(phoneNumber)) throw new PilotError(400, "INVALID_PHONE", "올바른 휴대전화번호를 입력해 주세요.");
