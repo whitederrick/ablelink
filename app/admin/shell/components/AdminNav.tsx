@@ -56,6 +56,13 @@ const groups: NavGroup[] = [
     ],
   },
   {
+    // ★[PILOT] 파일럿 종료 시 이 그룹 전체를 지우면 원복된다(로직 없음, 링크뿐).
+    title: "파일럿",
+    items: [
+      { href: "/admin/pilots", label: "파일럿 설정" },
+    ],
+  },
+  {
     title: "소통·지원",
     items: [
       { href: "/admin/announcements", label: "시스템 공지" },
