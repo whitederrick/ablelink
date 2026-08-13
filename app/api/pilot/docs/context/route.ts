@@ -39,10 +39,20 @@ export async function GET(request: NextRequest) {
       orderBy: { id: "asc" },
     });
 
+    // ★★현장 기준으로 뽑으면 안 된다 — 파일럿 현장에 비파일럿 훈련생이 잘못 재적되면
+    //  그 이름이 선택지에 노출된다. **레지스트리에 등록된 훈련생 ∩ 그 현장 재적**으로 좁힌다.
+    //  (문서 생성 쪽도 같은 검증을 한다 — lib/pilot/docs.ts. 화면과 서버가 같은 기준을 써야
+    //   "목록에는 보이는데 만들면 404" 같은 어긋남이 안 생긴다.)
+    const traineeKeys = await prisma.pilotResource.findMany({
+      where: { pilotId: wRes.pilotId, kind: "TRAINEE" },
+      select: { resourceKey: true },
+    });
+    const pilotTraineeIds = traineeKeys.map((r) => BigInt(r.resourceKey));
+
     const siteIds = assignments.map((a) => a.site?.id).filter((v): v is bigint => v != null);
-    const placements = siteIds.length
+    const placements = siteIds.length && pilotTraineeIds.length
       ? await prisma.traineePlacement.findMany({
-          where: { siteId: { in: siteIds } },
+          where: { siteId: { in: siteIds }, traineeId: { in: pilotTraineeIds } },
           select: { siteId: true, startDate: true, endDate: true, trainee: { select: { id: true, name: true } } },
           orderBy: { id: "asc" },
         })

@@ -162,6 +162,32 @@ async function main() {
     }), "TRAINEE_REQUIRED");
   }
 
+  console.log("\n[4-1] ★비파일럿 훈련생이 파일럿 현장에 재적된 경우");
+  // 현장·기간 가드(findTraineeAtSiteInPeriod)만으로는 통과해 버리는 상황을 **실제로 만들어** 본다.
+  //  파일럿은 전용 자원만 쓰므로 훈련생도 레지스트리에 있어야 한다.
+  // ★기존 가드는 `trainee.site.agencyId === site.agencyId` 까지 본다(traineeSiteGuard:38).
+  //  구멍을 실제로 재현하려면 currentSiteId 를 파일럿 현장으로 붙여 그 조건을 통과시켜야 한다.
+  const intruder = await prisma.trainee.create({
+    data: { name: `침입훈련생-${STAMP}`, gender: "남", disabilityType: "지적장애", severity: "중증", currentSiteId: site.id },
+    select: { id: true },
+  });
+  const intruderPl = await prisma.traineePlacement.create({
+    data: { traineeId: intruder.id, siteId: site.id, startDate: new Date("2026-08-01T00:00:00+09:00") },
+    select: { id: true },
+  });
+  strays.trainees.push(intruder.id); strays.placements.push(intruderPl.id);
+
+  // 기존 가드는 통과하는지 먼저 확인 — 통과해야 이 케이스가 의미가 있다(그래서 추가 검증이 필요한 것).
+  const passedOldGuard = await (async () => {
+    const { findTraineeAtSiteInPeriod } = await import("../lib/docs/traineeSiteGuard");
+    return !!(await findTraineeAtSiteInPeriod(intruder.id, site.id, START, END));
+  })();
+  ok("현장·기간 가드는 통과한다(그래서 레지스트리 검증이 필요하다)", passedOldGuard);
+  await expectFail("★★레지스트리 미등록 훈련생 거부", () => D.buildPilotDocPayload({
+    workerId: w.id, assignmentId: a.id, docType: "TRAINING_DAILY_LOG", start: START, end: END,
+    traineeId: intruder.id.toString(),
+  }), "NOT_PILOT");
+
   console.log("\n[5] ★생성물 0 — 문서를 만들어도 DB 부산물이 늘지 않는다");
   const before = {
     run: await prisma.documentRun.count(),
@@ -203,6 +229,8 @@ async function main() {
 }
 
 const extraPilots: { pilotId: bigint; agencyId: bigint; workerId: bigint }[] = [];
+// ★레지스트리 밖에서 만든 것 — 레지스트리 기반 정리가 못 잡으므로 id 를 따로 들고 있어야 한다.
+const strays: { trainees: bigint[]; placements: bigint[] } = { trainees: [], placements: [] };
 
 async function cleanup() {
   console.log("\n[정리]");
@@ -227,6 +255,9 @@ async function cleanup() {
     }
     await c.step("pilot", () => prisma.pilot.delete({ where: { id: pilotId } }));
   };
+  // ★레지스트리 밖 자원을 먼저 지운다 — Site 보다 나중이면 FK 로 막힌다.
+  if (strays.placements.length) await c.step("stray:placement", () => prisma.traineePlacement.deleteMany({ where: { id: { in: strays.placements } } }));
+  if (strays.trainees.length) await c.step("stray:trainee", () => prisma.trainee.deleteMany({ where: { id: { in: strays.trainees } } }));
   for (const e of extraPilots) await del(e.pilotId, e.agencyId);
   await del(made.pilotId, made.agencyId);
   const left = c.report();

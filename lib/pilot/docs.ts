@@ -86,7 +86,7 @@ export async function buildPilotDocPayload(input: PilotDocInput) {
     throw new PilotError(400, "UNSUPPORTED_DOC", "파일럿에서는 출근부·훈련일지·적응지도 일지만 제공합니다.");
   }
 
-  const { assignment } = await assertPilotDocAccess(workerId, assignmentId);
+  const { assignment, pilotId } = await assertPilotDocAccess(workerId, assignmentId);
   const site = assignment.site!;
 
   const worker = await prisma.worker.findUnique({
@@ -116,6 +116,19 @@ export async function buildPilotDocPayload(input: PilotDocInput) {
     // IDOR 방지: 배정 현장 + 기간에 실제 재적한 훈련생만(기존 가드 재사용)
     trainee = tid ? await findTraineeAtSiteInPeriod(tid, site.id, start, end) : null;
     if (!trainee) throw new PilotError(400, "TRAINEE_REQUIRED", "훈련생을 선택해 주세요.");
+
+    // ★★현장·기간만으로는 부족하다 — **훈련생도 같은 파일럿의 레지스트리에 있어야 한다.**
+    //  파일럿 현장에 비파일럿 훈련생이 잘못 재적되면 위 가드는 통과한다(현장·기간이 맞으므로).
+    //  그 이름이 PDF 에 박히고, 5단계 초기화는 레지스트리에 없는 그 훈련생을 지우지 못해
+    //  "이름은 문서에 남았는데 데이터는 안 지워지는" 상태가 된다.
+    //  파일럿은 전용 자원만 쓴다 — 실제 훈련생을 재사용하지 않는다.
+    const tRes = await prisma.pilotResource.findUnique({
+      where: { kind_resourceKey: { kind: "TRAINEE", resourceKey: dbKey(trainee.id) } },
+      select: { pilotId: true },
+    });
+    if (!tRes || tRes.pilotId !== pilotId) {
+      throw new PilotError(404, "NOT_PILOT", "파일럿 훈련생이 아닙니다.");
+    }
   }
 
   if (docType === "ATTENDANCE_SHEET") {
