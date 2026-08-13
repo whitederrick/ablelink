@@ -250,9 +250,17 @@ enum PilotResourceKind {
 ```
 
 - ★`resourceKey`는 **String**이다. `BigInt`로는 Storage 경로를 담을 수 없다
+- ★**정규화 규칙(필수)** — `@@unique([kind, resourceKey])`가 의미를 가지려면 형식이 하나여야 한다
+  · DB 자원(AGENCY·SITE·TRAINEE·PLACEMENT·WORKER·ASSIGNMENT) = **BigInt의 10진 문자열**(`String(id)`).
+    선행 0·공백·따옴표 금지. 조회 시 `BigInt(resourceKey)`로 되돌린다
+  · `STORAGE_OBJECT` = **`버킷명/객체경로`** 형식(예: `signatures/xxx/yyy.png`).
+    서명 URL을 그대로 넣지 않는다 — 같은 객체가 public/signed 두 형태로 중복 등록된다
 - ★운영 테이블에 **컬럼을 추가하지 않는다.** 레지스트리가 단방향으로 참조만 한다 → 제거 시 2테이블 DROP으로 끝난다
 - ★`purgedAt` 필드는 **두지 않는다.** §10이 `Pilot` 행까지 지우므로 보존할 곳이 없다(흔적 전량 삭제 우선)
 - ★자원 생성과 레지스트리 기록은 **같은 트랜잭션**이어야 한다. 기록 없이 생성되면 영원히 못 지운다
+- ★**Storage는 업로드 직후 등록하고, 삭제 직전에 다시 수집한다**(둘 다 한다).
+  업로드 직후 등록만 하면 그 뒤 사용자 활동이 만든 객체를 놓치고,
+  삭제 직전 수집만 하면 DB 행이 먼저 사라진 경우를 놓친다(F20). **두 경로가 상호 보완이다.**
 
 ---
 
@@ -491,21 +499,53 @@ app/api/pilot/docs/generate/
 - 삭제 후 **잔여 0을 재조회로 확인**한다
 - `scripts/_dbGuard.mts` 규율을 따르고 대상 DB를 먼저 출력한다
 
-### 10-2. DB 자원 삭제 순서 (1단계 ③ 내부)
+### 10-2. DB 자원 삭제 구조 (1단계 ③ 내부)
+
+**Cascade가 알아서 지우는 것과 명시 삭제가 필요한 것을 분리한다.** 섞으면 순서 오류가 난다.
 
 ```
-1) 문서·서명·일지
-2) 출근부(DailyAttendance)
-3) 배정(SiteAssignment)
-4) 훈련생 재적(TraineePlacement) → 훈련생(Trainee)
-5) 파일럿 Worker
-6) Site
-7) Agency
-8) ★감사·접속 기록 — FK가 없어 Cascade로 안 지워진다(F21)
-   · AuditEvent: 파일럿 agencyId + actorType=WORKER·actorId IN(파일럿 워커)
-   · AccessLog : 파일럿 agencyId + subjectType='Worker'·subjectId IN(파일럿 워커)
-   ★agencyId=null인 운영자 행위 기록이 있으므로 subjectId 축도 함께 건다
+[사전 수집] ─ 아무것도 지우기 전에
+  · 레지스트리의 모든 DB 자원 id
+  · ★Storage 경로 — DocumentVersion·서명 등. Cascade로 사라지기 전에 확보한다(F20)
+  · WorkerInvite 및 예상 밖 종속 행 조회(§10-5 preflight)
+
+[명시 삭제] ─ 부모보다 먼저 지워야 하는 것
+  · TraineeSupervision   ★FK가 RESTRICT라 SiteAssignment·TraineePlacement보다 반드시 먼저
+  · WorkerInvite         ★siteId FK를 가지므로 Site보다 먼저
+  · Cascade 대상이 아닌 그 밖의 종속 행(§10-5가 찾아낸 것)
+  · AuditEvent·AccessLog ★FK가 없어 Cascade로 안 지워진다(F21)
+      - AuditEvent: 파일럿 agencyId + actorType=WORKER·actorId IN(파일럿 워커)
+      - AccessLog : 파일럿 agencyId + subjectType='Worker'·subjectId IN(파일럿 워커)
+      ★agencyId=null인 운영자 행위 기록이 있으므로 subjectId 축도 함께 건다
+
+[부모 삭제] ─ Cascade가 딸린 것을 뒤에
+  · SiteAssignment
+      └ Cascade: DailyAttendance → TraineeLog · DocumentRun → DocumentVersion
+                 SiteHoliday · SiteSignToken
+  · TraineePlacement
+  · Trainee
+  · Worker
+      └ Cascade: WorkerNotice 등
+  · Site
+  · Agency
 ```
+
+★**Cascade 목록은 "안 지워도 되는 것"이지 "확인 안 해도 되는 것"이 아니다.**
+Storage 경로를 가진 자식(DocumentVersion·서명)은 Cascade로 사라지기 전에 경로를 확보해야 한다.
+
+### 10-5. ★5단계 착수 전 필수 게이트 — FK 전수조사
+
+전용 Agency라도 **cron과 사용자 활동이 예상 밖 종속 행을 만든다.** 삭제 구현 전에 반드시 전수조사한다.
+
+- `prisma/schema.prisma`에서 **Agency·Worker·Site·SiteAssignment·Trainee를 참조하는 모든 FK를 열거**한다
+  (리포 전체 `references: [id]` **106건** 기준 — 이 중 해당 부모를 가리키는 것 전부)
+- 각각에 대해 **`onDelete` 동작을 확인**해 [Cascade / 명시 삭제 / RESTRICT라 선행 필요] 3분류한다
+- ★**스칼라 컬럼을 FK로 오인하지 말 것.** 예: `WorkerNotice.agencyId`는 `@relation`이 없는
+  **단순 스칼라**라 Agency 삭제를 막지 않는다. `WorkerNotice`는 `user Worker`의 `onDelete: Cascade`로
+  **Worker 삭제 시 함께 사라진다.** 컬럼명만 보고 판단하면 틀린다
+- **preflight로 실제 건수를 조회**한다. 0이 아닌 것이 §10-2의 "명시 삭제" 목록에 들어간다
+- `WorkerInvite`는 **"만들지 않는다"고만 적어두지 않는다.** preflight에서 **0건을 확인**하고,
+  존재하면 전용 Agency 기준으로 **삭제한 뒤** Site·Agency를 지운다
 
 ### 10-3. 삭제 실패 처리
 
@@ -572,11 +612,24 @@ app/api/pilot/docs/generate/
 **★§2(UI 격리 + 운영 통제) 확정 완료 — 착수 차단 조건 없음.**
 
 ```
-1) §6 되돌림 + dev DB 정리 + §6-4 검증 → 커밋 (여기까지가 원복)
+1) §6 되돌림 + dev DB 정리 + §6-4 검증 → 커밋 (여기까지가 원복)   ✅ 2026-08-13 완료
 2) §7 레지스트리 스키마 + 마이그레이션 → 커밋
-3) §8 /admin/pilots 축소 재작성 + 전용 자원 생성 API → 커밋 (시각검증 필수)
+3) §8 /admin/pilots 일괄 설정 화면 + 전용 자원 생성 API → 커밋 (시각검증 필수)
 4) §9 파일럿 전용 문서 경로 → 커밋 (PDF 스윕 baseline 동일 + 실렌더 확인)
-5) §10 초기화 → 커밋 (Storage·감사기록 포함, 실패 재시도 확인)
+5) §10 초기화 → 커밋 (★§10-5 FK 전수조사 게이트 선행, Storage·감사기록 포함)
 ```
 
-각 단계는 **독립 커밋**으로 남긴다. 1)만 해도 운영 코드는 원복 완료 상태가 된다.
+각 단계는 **독립 커밋**으로 남긴다.
+
+### 14-1. ★2단계 마이그레이션 검증 절차
+
+새 마이그레이션이 **레지스트리 2테이블만** 만드는지 적용 **전에** 확인한다.
+
+1. 생성된 SQL을 **적용 전에 육안 검토**한다
+   · 허용: `CREATE TYPE`(enum) · `CREATE TABLE pilots` · `CREATE TABLE pilot_resources` ·
+     **두 테이블 사이의** FK와 인덱스
+   · ★**기존 테이블을 대상으로 한 `ALTER`/`DROP`이 한 줄이라도 있으면 즉시 중단**하고 보고한다
+2. 적용 후 `prisma migrate status` 정상
+3. `prisma migrate diff --from-schema-datasource ... --to-schema-datamodel ... --exit-code` **종료 코드 0**
+4. `npx tsc --noEmit` 0 · `npx vitest run` 무감소
+5. 독립 커밋 후 **push 없이** 보고
