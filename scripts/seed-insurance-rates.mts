@@ -11,7 +11,16 @@
 //          (운영 접속정보는 .env.prod.bak에서 읽고, ref가 운영과 일치하는지 확인 후에만 실행)
 import { readFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
-import { INSURANCE_RATE_DEFAULTS, INSURANCE_DEFAULT_YEARS } from "../lib/payroll/insuranceRateDefaults";
+// ★.mts(ESM) → lib/*.ts(CJS) 인터롭: tsx 환경에서 named export가 감지되지 않아
+//  (`Object.keys(ns)` = ['default']) 이름 import가 런타임에 실패한다. 리포 전역 조건이며
+//  trainee/supervision·traineePlacement·assignmentOverlap도 동일하다. 타입은 정상(named)이라
+//  tsc를 만족시키려면 namespace import 후 default가 있으면 그것을, 없으면 namespace 자체를 쓴다.
+import * as insuranceNs from "../lib/payroll/insuranceRateDefaults";
+type InsuranceModule = typeof import("../lib/payroll/insuranceRateDefaults");
+const insuranceModule =
+  (insuranceNs as unknown as { default?: InsuranceModule }).default ??
+  (insuranceNs as unknown as InsuranceModule);
+const { INSURANCE_RATE_DEFAULTS, INSURANCE_DEFAULT_YEARS } = insuranceModule;
 
 const PROD_REF = "gmfdmfmgeyvewugbqqiw";
 

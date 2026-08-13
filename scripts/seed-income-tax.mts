@@ -10,7 +10,16 @@
 import { readFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import ExcelJS from "exceljs";
-import { bracketsFromMatrix, extractChildCreditFromText, summarizeBrackets } from "../lib/payroll/incomeTax";
+// ★.mts(ESM) → lib/*.ts(CJS) 인터롭: tsx 환경에서 named export가 감지되지 않아
+//  (`Object.keys(ns)` = ['default']) 이름 import가 런타임에 실패한다. 리포 전역 조건이며
+//  trainee/supervision·traineePlacement·assignmentOverlap도 동일하다. 타입은 정상(named)이라
+//  tsc를 만족시키려면 namespace import 후 default가 있으면 그것을, 없으면 namespace 자체를 쓴다.
+import * as incomeTaxNs from "../lib/payroll/incomeTax";
+type IncomeTaxModule = typeof import("../lib/payroll/incomeTax");
+const incomeTaxModule =
+  (incomeTaxNs as unknown as { default?: IncomeTaxModule }).default ??
+  (incomeTaxNs as unknown as IncomeTaxModule);
+const { bracketsFromMatrix, extractChildCreditFromText, summarizeBrackets } = incomeTaxModule;
 
 const PROD_REF = "gmfdmfmgeyvewugbqqiw";
 
