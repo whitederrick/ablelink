@@ -125,8 +125,32 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
 
   // ── 4) 직무지도원 ────────────────────────────────────────────
   const [wk, setWk] = useState({ workerName: "", phoneNumber: "", password: "" });
+  const [showPw, setShowPw] = useState(false);
   const [issued, setIssued] = useState<{ name: string; loginId: string; password: string } | null>(null);
-  const wkReady = wk.workerName.trim().length >= 2 && /^01[0-9]{8,9}$/.test(wk.phoneNumber.replace(/[^0-9]/g, "")) && wk.password.length >= 8;
+  // ★중복은 발급 **전에** 알린다(§8-3). 409를 만나고 나서 알려주는 방식은 안 된다.
+  const [phoneCheck, setPhoneCheck] = useState<{ state: "idle" | "checking" | "ok" | "taken" | "error"; msg?: string }>({ state: "idle" });
+  const phoneValid = /^01[0-9]{8,9}$/.test(wk.phoneNumber.replace(/[^0-9]/g, ""));
+  const wkReady = wk.workerName.trim().length >= 2 && phoneValid && wk.password.length >= 8 && phoneCheck.state === "ok";
+
+  // 번호를 고치면 이전 확인 결과를 무효화한다(확인 없이 발급되는 것을 막는다).
+  function onPhoneChange(v: string) {
+    setWk((p) => ({ ...p, phoneNumber: v }));
+    setPhoneCheck({ state: "idle" });
+  }
+  async function checkPhone() {
+    if (!phoneValid) return;
+    setPhoneCheck({ state: "checking" });
+    try {
+      const r = await fetch(`/api/admin/pilots/${pilotId}/workers?phone=${encodeURIComponent(wk.phoneNumber.replace(/[^0-9]/g, ""))}`, { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok || !j?.success) { setPhoneCheck({ state: "error", msg: j?.message || "확인에 실패했습니다." }); return; }
+      setPhoneCheck(j.available
+        ? { state: "ok", msg: "사용 가능한 번호입니다." }
+        : { state: "taken", msg: "이미 가입된 번호입니다. 기존 계정은 재사용하지 않습니다 — 이 참여자는 제외하거나 본인 소유의 다른 번호를 쓰세요." });
+    } catch {
+      setPhoneCheck({ state: "error", msg: "확인에 실패했습니다." });
+    }
+  }
 
   // ── 5) 배정 ──────────────────────────────────────────────────
   const [asg, setAsg] = useState({ workerId: "", siteId: "", workType: "FULL_DAY", startDate: "", endDate: "" });
@@ -350,16 +374,34 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
           </div>
           <div>
             <label className={T.label}>휴대전화번호 (= 아이디) <span className="text-rose-500">*</span></label>
-            <input value={wk.phoneNumber} onChange={(e) => setWk((p) => ({ ...p, phoneNumber: e.target.value }))} placeholder="01012345678" className={`w-full ${T.input}`} />
+            <div className="flex gap-2">
+              <input value={wk.phoneNumber} onChange={(e) => onPhoneChange(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") void checkPhone(); }}
+                placeholder="01012345678" className={`flex-1 ${T.input}`} />
+              <button onClick={() => void checkPhone()} disabled={!phoneValid || phoneCheck.state === "checking"} className={T.btnSecondary}>
+                {phoneCheck.state === "checking" ? "확인 중…" : "중복확인"}
+              </button>
+            </div>
+            {phoneCheck.msg && (
+              <p className={`mt-1 text-xs font-semibold leading-relaxed ${phoneCheck.state === "ok" ? "text-emerald-600" : "text-rose-600"}`}>
+                {phoneCheck.msg}
+              </p>
+            )}
           </div>
           <div>
             <label className={T.label}>임시 비밀번호 (8자 이상) <span className="text-rose-500">*</span></label>
-            <input value={wk.password} onChange={(e) => setWk((p) => ({ ...p, password: e.target.value }))} className={`w-full ${T.input}`} />
+            <div className="flex gap-2">
+              <input type={showPw ? "text" : "password"} value={wk.password} autoComplete="new-password"
+                onChange={(e) => setWk((p) => ({ ...p, password: e.target.value }))} className={`flex-1 ${T.input}`} />
+              <button onClick={() => setShowPw((v) => !v)} className={T.btnSecondary}>{showPw ? "숨기기" : "표시"}</button>
+            </div>
           </div>
         </div>
-        <p className="mt-2 text-xs font-semibold text-slate-500">
-          이미 가입된 번호면 발급되지 않습니다. <b className="text-slate-700">기존 계정은 재사용하지 않습니다</b> —
-          그 참여자는 제외하거나 본인 소유의 다른 번호를 쓰세요.
+        <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500">
+          발급 전에 <b className="text-slate-700">중복확인</b>을 해야 버튼이 활성화됩니다.
+          <b className="text-slate-700"> 기존 계정은 재사용하지 않습니다</b> — 이미 가입된 번호라면 그 참여자는 제외하거나 본인 소유의 다른 번호를 쓰세요.
+          <br />
+          발급된 계정은 <b className="text-slate-700">임시 비밀번호 상태</b>라 참여자가 최초 로그인 시 비밀번호를 바꾸게 됩니다.
         </p>
         <div className="mt-4 flex justify-end">
           <button disabled={!wkReady || busy}
@@ -368,6 +410,8 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
               if (j) {
                 setIssued({ name: String(j.workerName), loginId: String(j.loginId), password: String(j.initialPassword) });
                 setWk({ workerName: "", phoneNumber: "", password: "" });
+                setPhoneCheck({ state: "idle" });
+                setShowPw(false);
               }
             }}
             className={T.btnPrimary}>계정 발급</button>
@@ -380,6 +424,7 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
               <p>성명 : {issued.name}</p>
               <p>아이디 : {issued.loginId}</p>
               <p>초기 비밀번호 : <span className="font-black">{issued.password}</span></p>
+              <p className="pt-1 text-xs">참여자가 최초 로그인하면 비밀번호 변경 화면으로 이동합니다.</p>
             </div>
             <button onClick={() => setIssued(null)} className={`mt-3 ${T.btnSecondary}`}>확인했습니다</button>
           </div>

@@ -10,8 +10,24 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/adminScope";
 import { audit } from "@/lib/audit";
-import { createPilotWorker } from "@/lib/pilot/resources";
+import { createPilotWorker, checkPilotWorkerPhone } from "@/lib/pilot/resources";
 import { toPilotResponse, parsePilotId } from "@/lib/pilot/httpError";
+
+/**
+ * 전화번호 중복 **사전** 확인 — 발급 버튼을 누르기 전에 화면이 알려주기 위한 것(§8-3).
+ * ★존재 여부만 돌려준다. 기존 계정의 성명·소속은 노출하지 않는다.
+ */
+export async function GET(req: Request, { params }: { params: Promise<{ pilotId: string }> }) {
+  try {
+    await requireAdminSession(req);
+    const { pilotId } = await params;
+    parsePilotId(pilotId);
+    const phone = new URL(req.url).searchParams.get("phone");
+    return NextResponse.json({ success: true, ...(await checkPilotWorkerPhone(phone)) });
+  } catch (e) {
+    return toPilotResponse(e);
+  }
+}
 
 export async function POST(req: Request, { params }: { params: Promise<{ pilotId: string }> }) {
   try {

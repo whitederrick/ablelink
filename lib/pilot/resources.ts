@@ -228,12 +228,32 @@ export async function createPilotWorker(pilotId: bigint, input: {
   const hashed = await hashPassword(password);
   return prisma.$transaction(async (tx) => {
     const worker = await tx.worker.create({
-      data: { loginId: phoneNumber, password: hashed, workerName, phoneNumber, planType: "STANDARD" },
-      select: { id: true, workerName: true, loginId: true },
+      data: {
+        loginId: phoneNumber, password: hashed, workerName, phoneNumber, planType: "STANDARD",
+        // ★운영자가 부여한 임시 비밀번호 → 최초 로그인 시 온보딩(비밀번호 변경) 강제.
+        //  기본값이 false라 생략하면 임시 비밀번호가 그대로 영구 비밀번호가 된다.
+        //  로그인 토큰이 이 값을 클레임으로 싣고(worker/auth/login) 서버 컴포넌트가
+        //  /worker/onboarding으로 보낸다 — 기존 운영자 발급 경로와 같은 규칙이다.
+        isTemporary: true,
+      },
+      select: { id: true, workerName: true, loginId: true, isTemporary: true },
     });
     await recordDbResource(tx, pilotId, "WORKER", worker.id);
     return worker;
   });
+}
+
+/**
+ * 전화번호 중복 **사전** 확인.
+ *
+ * ★계획서 §8-3: "화면은 등록 **전에** 중복을 조회해 알린다. 409를 만나고 나서 알려주는 방식은 안 된다."
+ * ★존재 여부만 돌려준다 — 기존 계정의 성명·소속 등 어떤 정보도 노출하지 않는다.
+ */
+export async function checkPilotWorkerPhone(phoneNumber: unknown): Promise<{ available: boolean; phone: string }> {
+  const phone = normPhone(phoneNumber);
+  if (!PHONE_RE.test(phone)) throw new PilotError(400, "INVALID_PHONE", "올바른 휴대전화번호를 입력해 주세요.");
+  const exists = await prisma.worker.findUnique({ where: { loginId: phone }, select: { id: true } });
+  return { available: !exists, phone };
 }
 
 // ─────────────────────────────────────────────────────────────

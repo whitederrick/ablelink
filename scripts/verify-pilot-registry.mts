@@ -86,13 +86,23 @@ async function main() {
   const phone = `010${String(Date.now()).slice(-8)}`;
   const w = await R.createPilotWorker(p.pilotId, { workerName: "검증지도원", phoneNumber: phone, password: "pilot1234!" });
   ok("WORKER 레지스트리 = 1", (await cnt("WORKER")) === 1);
-  const wrow = await prisma.worker.findUnique({ where: { id: w.id }, select: { loginId: true, planType: true, password: true } });
+  const wrow = await prisma.worker.findUnique({ where: { id: w.id }, select: { loginId: true, planType: true, password: true, isTemporary: true, hasKnownPassword: true } });
   ok("loginId = 휴대전화번호", wrow?.loginId === phone);
   ok("planType=STANDARD", wrow?.planType === "STANDARD");
   ok("★평문 비밀번호 미저장(bcrypt 해시)", !!wrow && wrow.password !== "pilot1234!" && wrow.password.startsWith("$2"));
+  // ★기본값이 false라 생략하면 임시 비밀번호가 그대로 영구 비밀번호가 되고 최초 온보딩을 건너뛴다.
+  //  로그인 토큰이 이 값을 클레임으로 실어 서버 컴포넌트가 /worker/onboarding으로 보낸다.
+  ok("★isTemporary=true (최초 로그인 시 비밀번호 변경 강제)", wrow?.isTemporary === true, String(wrow?.isTemporary));
+  ok("hasKnownPassword=true (스키마 기본값)", wrow?.hasKnownPassword === true);
   await expectFail("중복 전화번호 거부 (기존 계정 재사용 금지)", () =>
     R.createPilotWorker(p.pilotId!, { workerName: "중복", phoneNumber: phone, password: "pilot1234!" }));
   ok("거부 후에도 WORKER 레지스트리 = 1", (await cnt("WORKER")) === 1);
+
+  console.log("\n[6-1] 전화번호 중복 사전확인 (§8-3 — 409를 만나기 전에 알린다)");
+  const freePhone = `010${String(Date.now() + 1).slice(-8)}`;
+  ok("미가입 번호 → available=true", (await R.checkPilotWorkerPhone(freePhone)).available === true);
+  ok("가입된 번호 → available=false", (await R.checkPilotWorkerPhone(phone)).available === false);
+  await expectFail("형식 오류 번호 거부", () => R.checkPilotWorkerPhone("123"));
 
   console.log("\n[7] 배정 — 출퇴근 면제 + 근무형태");
   const a = await R.createPilotAssignment(p.pilotId, {
@@ -168,9 +178,37 @@ async function cleanup() {
   await c.step("worker", () => prisma.worker.deleteMany({ where: { id: { in: wkIds } } }));
   await c.step("site", () => prisma.site.deleteMany({ where: { id: { in: stIds } } }));
   if (created.agencyId) await c.step("agency", () => prisma.agency.deleteMany({ where: { id: created.agencyId! } }));
+
+  // ★감사·접속 기록은 FK가 없어 Cascade로 안 지워진다(F21). summary·actorLabel에 기관명·사업체명이
+  //  스냅샷으로 박히므로 검증 흔적도 반드시 명시 삭제한다. 5단계 초기화도 같은 축을 처리해야 한다.
+  const auditIdSets: { entityType: string; ids: string[] }[] = [
+    { entityType: "Pilot", ids: [pid.toString()] },
+    { entityType: "Site", ids: stIds.map(String) },
+    { entityType: "Trainee", ids: trIds.map(String) },
+    { entityType: "Worker", ids: wkIds.map(String) },
+    { entityType: "SiteAssignment", ids: asgIds.map(String) },
+  ];
+  for (const { entityType, ids: eids } of auditIdSets) {
+    if (eids.length === 0) continue;
+    await c.step(`audit:${entityType}`, () => prisma.auditEvent.deleteMany({ where: { entityType, entityId: { in: eids } } }));
+  }
+  if (created.agencyId) {
+    await c.step("audit:agency-scope", () => prisma.auditEvent.deleteMany({ where: { agencyId: created.agencyId! } }));
+    await c.step("accesslog:agency-scope", () => prisma.accessLog.deleteMany({ where: { agencyId: created.agencyId! } }));
+  }
+
   await c.step("pilot", () => prisma.pilot.delete({ where: { id: pid } })); // PilotResource 는 Cascade
   const left = c.report();
   ok("테스트 데이터 정리 완료(잔여 0)", left === 0, `정리 실패 ${left}건`);
+
+  // 잔여를 조회로 재확인한다 — "정리 완료" 출력만 믿지 않는다.
+  const leftovers = {
+    pilots: await prisma.pilot.count({ where: { id: pid } }),
+    resources: await prisma.pilotResource.count({ where: { pilotId: pid } }),
+    agency: created.agencyId ? await prisma.agency.count({ where: { id: created.agencyId } }) : 0,
+    audit: await prisma.auditEvent.count({ where: { OR: auditIdSets.map((s) => ({ entityType: s.entityType, entityId: { in: s.ids } })) } }),
+  };
+  ok(`잔여 재조회 0 (${JSON.stringify(leftovers)})`, Object.values(leftovers).every((v) => v === 0));
 }
 
 main()
