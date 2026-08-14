@@ -15,8 +15,9 @@ export const maxDuration = 300;
 
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/adminScope";
-import { previewPilotPurge, purgePilot } from "@/lib/pilot/purge";
+import { previewPilotPurge, purgePilot, quiescePilot } from "@/lib/pilot/purge";
 import { toPilotResponse, parsePilotId } from "@/lib/pilot/httpError";
+import { PilotError } from "@/lib/pilot/resources";
 
 export async function GET(req: Request, ctx: { params: Promise<{ pilotId: string }> }) {
   try {
@@ -28,15 +29,28 @@ export async function GET(req: Request, ctx: { params: Promise<{ pilotId: string
   }
 }
 
+/**
+ * `action` 은 **명시**로 받는다 — 종료(계정 회수)와 삭제는 되돌릴 수 없고 성격이 달라,
+ * 서버가 단계를 보고 알아서 고르면 운영자가 의도하지 않은 쪽이 실행될 수 있다.
+ */
 export async function POST(req: Request, ctx: { params: Promise<{ pilotId: string }> }) {
   try {
     await requireAdminSession(req);
     const { pilotId } = await ctx.params;
-    const body = (await req.json().catch(() => ({}))) as { confirm?: unknown };
-    const result = await purgePilot(parsePilotId(pilotId), body.confirm);
+    const body = (await req.json().catch(() => ({}))) as { confirm?: unknown; action?: unknown };
+    const id = parsePilotId(pilotId);
+    const action = String(body.action ?? "");
 
+    if (action === "QUIESCE") {
+      // 1단계 — 파일럿 종료·계정 회수. 데이터는 지우지 않는다.
+      return NextResponse.json({ success: true, quiesce: await quiescePilot(id, body.confirm) });
+    }
+    if (action !== "PURGE") {
+      throw new PilotError(400, "INVALID_ACTION", "action 은 QUIESCE 또는 PURGE 여야 합니다.");
+    }
+
+    const result = await purgePilot(id, body.confirm);
     // ★실패분이 있으면 "완료"로 보고하지 않는다(§10-3). 남은 목록을 그대로 돌려준다.
-    //  `AWAITING_CONFIRM`(1차 정리 완료·확인 대기)은 오류가 아니므로 200이다.
     return NextResponse.json({ success: true, result }, { status: result.outcome === "FAILED" ? 207 : 200 });
   } catch (e) {
     return toPilotResponse(e);

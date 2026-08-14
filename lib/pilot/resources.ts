@@ -111,8 +111,16 @@ export async function getPilotAgencyId(pilotId: bigint): Promise<bigint> {
  *  첫 실패까지는 `deleteError`가 0이라 ③만으로는 아무것도 막지 못한다.
  */
 async function assertPilotWritable(tx: Prisma.TransactionClient, pilotId: bigint): Promise<bigint> {
-  const locked = await tx.$queryRaw<{ id: bigint }[]>`SELECT id FROM pilots WHERE id = ${pilotId} FOR UPDATE`;
+  const locked = await tx.$queryRaw<{ id: bigint; quiesced_at: Date | null }[]>`
+    SELECT id, quiesced_at FROM pilots WHERE id = ${pilotId} FOR UPDATE`;
   if (locked.length === 0) throw new PilotError(404, "PILOT_NOT_FOUND", "파일럿을 찾을 수 없습니다.");
+
+  // ★종료·계정 회수가 끝난 파일럿에는 자원을 추가하지 않는다. 배출 대기 중에 새 자원이 생기면
+  //  그 대기가 무의미해진다(막 만든 계정이 다시 서명을 올릴 수 있게 된다).
+  if (locked[0].quiesced_at) {
+    throw new PilotError(409, "PILOT_QUIESCED",
+      "종료된 파일럿입니다. 참여자 계정이 회수되어 자원을 추가할 수 없습니다.");
+  }
 
   const pending = await tx.pilotResource.count({ where: { pilotId, deleteError: { not: null } } });
   if (pending > 0) {

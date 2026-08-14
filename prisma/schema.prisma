@@ -2315,6 +2315,9 @@ model DashboardPromo {
 
 model Pilot {
   id        BigInt   @id @default(autoincrement())
+  // ★파일럿 종료·계정 회수 시각(§10-1). 이 시각 이후로는 참여자가 새 서명을 올릴 수 없고,
+  //  +배출 대기(§10-6)가 지나야 데이터 삭제가 열린다. 종료와 삭제를 분리하는 유일한 상태값이다.
+  quiescedAt DateTime? @map("quiesced_at")
   name      String // 식별용 라벨
   note      String? // ★비밀번호 등 비밀정보 저장 금지
   createdAt DateTime @default(now()) @map("created_at")

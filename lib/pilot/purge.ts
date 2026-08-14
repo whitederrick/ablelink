@@ -472,12 +472,19 @@ export interface PurgePreview {
   retryPending: number;
   /**
    * ★현재 단계. **응답에만 두지 않고 미리보기가 복원**한다 — 새로고침하거나 다른 운영자가 열어도
-   *  "1차 정리는 끝났고 확인만 남았다"가 보여야 한다.
-   *  · `READY` — 아직 아무것도 지우지 않았다
-   *  · `AWAITING_CONFIRM` — 1차 정리 완료. 남은 객체가 없는지 한 번 더 확인하고 종료한다
+   *  같은 화면이 보여야 한다.
+   *  · `READY` — 아직 종료하지 않았다(데이터 무변경)
+   *  · `DRAINING` — 종료·계정 회수 완료. 배출 대기 중이라 삭제가 아직 열리지 않았다
+   *  · `PURGE_READY` — 배출 대기가 끝났다. 삭제할 수 있다
    *  · `RETRY_PENDING` — 삭제 실패분·착지분이 있다. 재시도가 필요하다
    */
-  stage: "READY" | "AWAITING_CONFIRM" | "RETRY_PENDING";
+  stage: "READY" | "DRAINING" | "PURGE_READY" | "RETRY_PENDING";
+  /** 종료·계정 회수 시각(미종료면 null) */
+  quiescedAt: string | null;
+  /** 삭제 가능 시각(미종료면 null) */
+  purgeReadyAt: string | null;
+  /** 삭제까지 남은 초(0이면 삭제 가능) */
+  drainRemainingSec: number;
   /** 참여자가 기존 /worker/docs 경로를 썼다는 신호(0이 정상) */
   signals: Record<string, number>;
 }
@@ -485,17 +492,22 @@ export interface PurgePreview {
 /** 초기화 미리보기. **아무것도 지우지 않는다.** 실행 전 재확인용이다(§10-1 공통 규율). */
 export async function previewPilotPurge(pilotId: bigint): Promise<PurgePreview> {
   const s = await collectPilotScope(prisma, pilotId);
-  const [blockers, storage, counts, retryPending, agencyAlive] = await Promise.all([
+  const [blockers, storage, counts, retryPending, pilotRow] = await Promise.all([
     findPurgeBlockers(prisma, s),
     listPilotStorageObjects(s),
     countTargets(prisma, s),
     prisma.pilotResource.count({ where: { pilotId, deleteError: { not: null } } }),
-    s.agencyId ? prisma.agency.count({ where: { id: s.agencyId } }) : Promise.resolve(0),
+    prisma.pilot.findUnique({ where: { id: pilotId }, select: { quiescedAt: true } }),
   ]);
 
-  // ★단계는 파생 상태로 복원한다(새 필드 없음): 실패 기록이 있으면 재시도, 전용 기관이 이미 없으면 확인 대기.
+  // ★단계는 저장된 `quiescedAt` 과 실패 기록만으로 복원된다 — 화면 상태를 응답에 의존하지 않는다.
+  const quiescedAt = pilotRow?.quiescedAt ?? null;
+  const purgeReadyAt = quiescedAt ? new Date(quiescedAt.getTime() + PILOT_DRAIN_MS) : null;
+  const drainRemainingSec = purgeReadyAt ? Math.max(0, Math.ceil((purgeReadyAt.getTime() - Date.now()) / 1000)) : 0;
   const stage: PurgePreview["stage"] =
-    retryPending > 0 ? "RETRY_PENDING" : s.agencyId != null && agencyAlive === 0 ? "AWAITING_CONFIRM" : "READY";
+    retryPending > 0 ? "RETRY_PENDING"
+      : !quiescedAt ? "READY"
+        : drainRemainingSec > 0 ? "DRAINING" : "PURGE_READY";
 
   return {
     pilot: { id: s.pilotId.toString(), name: s.pilotName },
@@ -521,6 +533,9 @@ export async function previewPilotPurge(pilotId: bigint): Promise<PurgePreview> 
     blockers,
     retryPending,
     stage,
+    quiescedAt: quiescedAt?.toISOString() ?? null,
+    purgeReadyAt: purgeReadyAt?.toISOString() ?? null,
+    drainRemainingSec,
     signals: { DocumentRun: s.docRunIds.length },
   };
 }
@@ -584,7 +599,18 @@ function inviteWhere(s: PilotScope): Prisma.WorkerInviteWhereInput {
 // 실행
 // ─────────────────────────────────────────────────────────────
 
-export type PurgeOutcome = "COMPLETED" | "AWAITING_CONFIRM" | "FAILED";
+export type PurgeOutcome = "COMPLETED" | "FAILED";
+
+/**
+ * ★배출 대기(drain) 시간 — 종료·계정 회수 이후 이 시간이 지나야 데이터 삭제가 열린다.
+ *
+ * ★★근거는 "이미 시작된 업로드 요청의 수명은 유한하다" 하나뿐이다. 계정 회수 이후로는 새 요청이
+ *  관문에서 막히므로, 남는 것은 그 순간 진행 중이던 요청뿐이고 그것은 서버리스 실행 시간 상한에서 끝난다.
+ * ★★**배포 게이트**: 서명 업로드 3개 라우트(`worker/signature`·`sign/[token]`·`worker/docs/inperson-sign`)의
+ *  **실제 배포 실행 상한이 이 값 이하인지 배포 전에 확인**하고 운영 전제로 기록한다.
+ *  "모든 플랜에서 항상 짧다"고 가정하지 않는다 — 확인한 사실만 근거로 쓴다.
+ */
+export const PILOT_DRAIN_MS = 15 * 60 * 1000;
 
 export interface PurgeResult {
   pilot: { id: string; name: string };
@@ -641,9 +667,96 @@ export interface PurgeDeps {
   deleteObject: (path: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
+export interface QuiesceResult {
+  pilot: { id: string; name: string };
+  /** 이번 호출에서 새로 종료했는가(이미 종료된 파일럿이면 false — 멱등) */
+  quiescedNow: boolean;
+  quiescedAt: Date;
+  purgeReadyAt: Date;
+  /** 정지시킨 계정 수 · 무효화한 서명 링크 수 */
+  pausedWorkers: number;
+  expiredSignTokens: number;
+}
+
 /**
- * 파일럿 전량 초기화.
+ * 1단계 — **파일럿 종료·계정 회수**. 데이터는 하나도 지우지 않는다.
  *
+ * 한 트랜잭션에서: 파일럿 잠금 → 범위·중단사유 재확인 → 참여자 계정 `PAUSED` + `sessionVersion` +1
+ * → 미사용 서명 링크 만료 → `quiescedAt` 기록.
+ *
+ * ★효과: 기존 세션은 다음 요청부터 401(sessionVersion), 재로그인은 `status!=="ACTIVE"` 로 차단,
+ *  공개 서명 링크는 만료로 차단 → **이 시점 이후 새 서명 업로드는 시작될 수 없다.**
+ * ★멱등: 이미 종료된 파일럿이면 `quiescedAt` 을 다시 쓰지 않고 `sessionVersion` 도 다시 올리지 않는다.
+ * ★운영 규칙 의존(수용): 종료 후 운영자가 그 워커를 다시 `ACTIVE` 로 되돌리지 않는다.
+ *  운영 계정 관리 API 는 파일럿 때문에 고치지 않는다 — 화면과 지시서에 경고로 남긴다.
+ */
+export async function quiescePilot(pilotId: bigint, confirmName: unknown): Promise<QuiesceResult> {
+  const pre = await collectPilotScope(prisma, pilotId);
+  if (String(confirmName ?? "").trim() !== pre.pilotName) {
+    throw new PilotError(400, "CONFIRM_MISMATCH", "확인을 위해 파일럿 이름을 정확히 입력해 주세요.");
+  }
+  const blockers = await findPurgeBlockers(prisma, pre);
+  if (blockers.length > 0) {
+    throw new PilotError(409, "PURGE_BLOCKED",
+      `종료를 중단했습니다 — 예상 밖 데이터가 있습니다: ${blockers.map((b) => `${b.label} ${b.count}건`).join(", ")}`);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<{ id: bigint; quiesced_at: Date | null }[]>`
+      SELECT id, quiesced_at FROM pilots WHERE id = ${pilotId} FOR UPDATE`;
+    if (rows.length === 0) throw new PilotError(404, "PILOT_NOT_FOUND", "파일럿을 찾을 수 없습니다.");
+
+    const already = rows[0].quiesced_at;
+    if (already) {
+      // ★멱등 — 두 번 눌러도 sessionVersion 을 다시 올리지 않는다(불필요한 세션 무효화 방지).
+      return {
+        pilot: { id: pilotId.toString(), name: pre.pilotName },
+        quiescedNow: false,
+        quiescedAt: already,
+        purgeReadyAt: new Date(already.getTime() + PILOT_DRAIN_MS),
+        pausedWorkers: 0,
+        expiredSignTokens: 0,
+      };
+    }
+
+    const s = await collectPilotScope(tx, pilotId);
+    if (!sameScope(pre, s)) {
+      throw new PilotError(409, "SCOPE_CHANGED", "준비 중 파일럿 자원이 변경되었습니다. 다시 시도해 주세요.");
+    }
+
+    const paused = s.workerIds.length
+      ? await tx.worker.updateMany({
+          where: { id: { in: s.workerIds } },
+          data: { status: "PAUSED", sessionVersion: { increment: 1 } },
+        })
+      : { count: 0 };
+
+    const now = new Date();
+    const expired = s.assignmentIds.length
+      ? await tx.siteSignToken.updateMany({
+          where: { assignmentId: { in: s.assignmentIds }, usedAt: null, expiresAt: { gt: now } },
+          data: { expiresAt: now },
+        })
+      : { count: 0 };
+
+    await tx.pilot.update({ where: { id: pilotId }, data: { quiescedAt: now } });
+
+    return {
+      pilot: { id: pilotId.toString(), name: pre.pilotName },
+      quiescedNow: true,
+      quiescedAt: now,
+      purgeReadyAt: new Date(now.getTime() + PILOT_DRAIN_MS),
+      pausedWorkers: paused.count,
+      expiredSignTokens: expired.count,
+    };
+  });
+}
+
+/**
+ * 2단계 — 파일럿 전량 삭제.
+ *
+ * ★**종료·계정 회수(`quiescePilot`)와 배출 대기가 선행 조건**이다. 그 전에는 실행하지 않는다 —
+ *  참여자가 아직 서명을 올릴 수 있는 상태에서 지우면 착지분이 계속 생긴다.
  * @param confirmName 파일럿 이름과 정확히 일치해야 실행한다(오클릭 방지 — 되돌릴 수 없는 작업).
  */
 export async function purgePilot(
@@ -661,11 +774,21 @@ export async function purgePilot(
     throw new PilotError(409, "PURGE_BLOCKED",
       `초기화를 중단했습니다 — 예상 밖 데이터가 있습니다: ${blockers.map((b) => `${b.label} ${b.count}건`).join(", ")}`);
   }
-  const storagePaths = await listPilotStorageObjects(pre);
+  // ★★배출 대기 게이트 — 종료·계정 회수가 선행이고, 그로부터 PILOT_DRAIN_MS 가 지나야 열린다.
+  //  이 게이트가 착지 경쟁의 **주 방어선**이다(재나열·최종검증은 마지막 안전망으로 유지한다).
+  const pilotRow = await prisma.pilot.findUnique({ where: { id: pilotId }, select: { quiescedAt: true } });
+  if (!pilotRow?.quiescedAt) {
+    throw new PilotError(409, "NOT_QUIESCED",
+      "먼저 파일럿을 종료하고 참여자 계정을 회수해야 합니다. 종료 후 배출 대기가 지나면 삭제할 수 있습니다.");
+  }
+  const readyAt = new Date(pilotRow.quiescedAt.getTime() + PILOT_DRAIN_MS);
+  const remainingMs = readyAt.getTime() - Date.now();
+  if (remainingMs > 0) {
+    throw new PilotError(409, "DRAIN_PENDING",
+      `아직 배출 대기 중입니다. ${readyAt.toLocaleTimeString("ko-KR")} 이후에 삭제할 수 있습니다(남은 ${Math.ceil(remainingMs / 1000)}초).`);
+  }
 
-  // ★확인 실행 판별(파생 상태) — 전용 기관 행이 이미 없으면 1차 정리가 끝난 파일럿이다.
-  const confirmationRun =
-    pre.agencyId != null && (await prisma.agency.count({ where: { id: pre.agencyId } })) === 0;
+  const storagePaths = await listPilotStorageObjects(pre);
 
   // ── [2] 트랜잭션 — 잠금 → 재수집·정합 확인 → 기록 → 삭제
   const deleted = await prisma.$transaction(async (tx) => {
@@ -804,12 +927,9 @@ export async function purgePilot(
     }
   }
 
-  // ★★종료 판정 — "정리했다"와 "끝났다"를 분리한다(§10-1 ⑧).
-  //  1차 실행은 남은 것이 없어도 **확인 대기**로 끝난다. DB 관문이 닫힌 뒤라 새 업로드는 시작될 수 없고
-  //  이미 시작된 요청의 수명은 유한하므로(서버리스 실행 시간 상한), 한 번 더 보면 닫힌다.
-  //  ★확인 실행인지는 파생 상태로 판별한다 — 전용 기관 행이 이미 없으면 확인 실행이다(새 필드 없음).
-  const outcome: PurgeOutcome =
-    failed.length > 0 || deferred.length > 0 ? "FAILED" : confirmationRun ? "COMPLETED" : "AWAITING_CONFIRM";
+  // ★종료 판정. 배출 대기가 착지 경쟁을 이미 막았으므로, 남은 것이 없으면 이 실행에서 끝낸다
+  //  (예전의 "삭제 후 한 번 더 확인" 단계는 배출 대기가 대체한다 — 클릭이 세 번이 되면 안 된다).
+  const outcome: PurgeOutcome = failed.length > 0 || deferred.length > 0 ? "FAILED" : "COMPLETED";
 
   // ★남은 것이 있거나 확인 전이면 Pilot 을 지우지 않는다 — 지우면 Cascade 로 재시도 목록까지 사라진다.
   const completed = outcome === "COMPLETED";

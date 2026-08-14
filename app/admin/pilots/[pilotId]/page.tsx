@@ -41,8 +41,11 @@ type PurgePreview = {
   storage: string[];
   blockers: { label: string; count: number; reason: string }[];
   retryPending: number;
-  /** READY=미착수 · AWAITING_CONFIRM=1차 정리 완료(확인만 남음) · RETRY_PENDING=실패분 있음 */
-  stage: "READY" | "AWAITING_CONFIRM" | "RETRY_PENDING";
+  /** READY=미종료 · DRAINING=종료 후 배출 대기 · PURGE_READY=삭제 가능 · RETRY_PENDING=실패분 있음 */
+  stage: "READY" | "DRAINING" | "PURGE_READY" | "RETRY_PENDING";
+  quiescedAt: string | null;
+  purgeReadyAt: string | null;
+  drainRemainingSec: number;
   signals: Record<string, number>;
 };
 type PurgeResult = {
@@ -54,7 +57,7 @@ type PurgeResult = {
     /** 최종 검증 나열에서 발견된 착지분(삭제 실패와 성격이 다르다) */
     deferred: { path: string; error: string }[];
   };
-  outcome: "COMPLETED" | "AWAITING_CONFIRM" | "FAILED";
+  outcome: "COMPLETED" | "FAILED";
   completed: boolean;
   leftovers: Record<string, number>;
   /** 재시도를 위해 의도적으로 남긴 것(실패가 없으면 null) */
@@ -210,22 +213,30 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
    *   **확인·재시도 실행**은 이미 지워진 뒤라 미리보기가 준 파일럿 이름을 그대로 쓴다.
    * @param ask window.confirm 여부. 파괴가 일어나는 1차 실행에서만 받는다.
    */
-  async function runPurge(confirmName: string, ask: boolean) {
-    // ★terminal·복구 불가라 확인을 받는다(리포 기존 패턴). 이름 입력과 별개다.
-    if (ask && !window.confirm("이 파일럿의 모든 데이터를 삭제합니다. 되돌릴 수 없습니다. 진행할까요?")) return;
+  /**
+   * @param action QUIESCE=파일럿 종료·계정 회수(데이터 무변경) · PURGE=데이터 전체 삭제
+   * @param confirmName 보낼 확인 문자열. 종료는 운영자가 입력한 값, 삭제·재시도는 미리보기가 준 이름.
+   */
+  async function runPurge(action: "QUIESCE" | "PURGE", confirmName: string, ask: string | null) {
+    if (ask && !window.confirm(ask)) return;
     setBusy(true); setPurgeMsg(null);
     try {
       const r = await fetch(`/api/admin/pilots/${pilotId}/purge`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirm: confirmName }),
+        body: JSON.stringify({ confirm: confirmName, action }),
       });
       const j = await r.json();
-      if (!r.ok && r.status !== 207) throw new Error(j?.message || "초기화에 실패했습니다.");
-      setPurgeResult(j.result as PurgeResult);
-      setPurgePrev(null);
-      setPurgeConfirm("");
+      if (!r.ok && r.status !== 207) throw new Error(j?.message || "처리에 실패했습니다.");
+      if (action === "QUIESCE") {
+        // 종료는 데이터를 지우지 않는다 — 미리보기를 다시 읽어 배출 대기 화면으로 넘어간다.
+        setPurgeConfirm("");
+        await loadPurgePreview();
+      } else {
+        setPurgeResult(j.result as PurgeResult);
+        setPurgePrev(null);
+      }
     } catch (e: unknown) {
-      setPurgeMsg(e instanceof Error ? e.message : "초기화에 실패했습니다.");
+      setPurgeMsg(e instanceof Error ? e.message : "처리에 실패했습니다.");
     } finally { setBusy(false); }
   }
 
@@ -667,32 +678,58 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
                   ))}
                 </ul>
               </div>
-            ) : purgePrev.stage !== "READY" ? (
-              // ★1차 정리가 끝난 뒤의 단계. 응답이 아니라 **미리보기가 복원**하므로 새로고침해도,
-              //  다른 운영자가 열어도 같은 상태가 보인다.
+            ) : purgePrev.stage === "DRAINING" ? (
+              // ★종료는 끝났고 배출 대기 중. 상태는 응답이 아니라 **미리보기가 복원**하므로
+              //  새로고침해도, 다른 운영자가 열어도 같은 화면이 보인다.
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs font-black text-amber-800">
-                  {purgePrev.stage === "AWAITING_CONFIRM"
-                    ? "1차 정리가 끝났습니다. 남은 서명 이미지가 없는지 한 번 더 확인하고 종료합니다."
-                    : `삭제하지 못한 서명 이미지 ${purgePrev.retryPending}건이 남아 있습니다. 다시 실행해 정리하세요.`}
+                <p className="text-xs font-black text-amber-800">참여자 계정 회수 완료 — 진행 중이던 요청을 정리하고 있습니다.</p>
+                <p className="mt-1 text-sm font-black text-slate-900">
+                  삭제 가능 시각 {purgePrev.purgeReadyAt ? new Date(purgePrev.purgeReadyAt).toLocaleTimeString("ko-KR") : "—"}
+                  <span className="ml-2 font-bold text-amber-700">
+                    남은 시간 {Math.floor(purgePrev.drainRemainingSec / 60)}분 {purgePrev.drainRemainingSec % 60}초
+                  </span>
                 </p>
                 <p className="mt-1 text-xs font-semibold text-slate-500">
-                  데이터는 이미 지워졌습니다. 이 단계는 버킷에 남은 것이 없는지 확인하는 절차입니다.
+                  데이터는 아직 그대로입니다. ★회수한 참여자 계정을 다시 활성화하지 마세요 — 대기의 의미가 없어집니다.
                 </p>
                 <div className="mt-2">
-                  <button onClick={() => void runPurge(purgePrev.pilot.name, false)} disabled={busy} className={T.btnPrimary}>
-                    {purgePrev.stage === "AWAITING_CONFIRM" ? "확인하고 종료" : "재시도"}
-                  </button>
+                  <button onClick={() => void loadPurgePreview()} disabled={busy} className={T.btnSecondary}>남은 시간 새로고침</button>
+                </div>
+              </div>
+            ) : purgePrev.stage === "RETRY_PENDING" ? (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                <p className="text-xs font-black text-rose-700">
+                  삭제하지 못한 서명 이미지 {purgePrev.retryPending}건이 남아 있습니다. 다시 실행해 정리하세요.
+                </p>
+                <div className="mt-2">
+                  <button onClick={() => void runPurge("PURGE", purgePrev.pilot.name, null)} disabled={busy} className={T.btnPrimary}>재시도</button>
+                </div>
+              </div>
+            ) : purgePrev.stage === "PURGE_READY" ? (
+              <div className="rounded-xl border border-slate-200 p-3">
+                <p className="text-xs font-black text-slate-700">배출 대기가 끝났습니다. 이제 데이터를 지울 수 있습니다.</p>
+                <div className="mt-2">
+                  <button
+                    onClick={() => void runPurge("PURGE", purgePrev.pilot.name,
+                      "이 파일럿의 모든 데이터를 삭제합니다. 되돌릴 수 없습니다. 진행할까요?")}
+                    disabled={busy} className={T.btnDanger}>데이터 전체 삭제</button>
                 </div>
               </div>
             ) : (
               <div className="rounded-xl border border-slate-200 p-3">
                 <label className={T.label}>확인을 위해 파일럿 이름을 정확히 입력하세요 <span className="text-rose-500">*</span></label>
+                <p className="mb-2 text-xs font-semibold text-slate-500">
+                  먼저 <span className="font-black text-slate-700">파일럿을 종료하고 참여자 계정을 회수</span>합니다.
+                  데이터는 이 단계에서 지워지지 않습니다 — 회수 후 대기 시간이 지나면 삭제 버튼이 열립니다.
+                </p>
                 <div className="flex flex-wrap gap-2">
                   <input value={purgeConfirm} onChange={(e) => setPurgeConfirm(e.target.value)}
                     placeholder={purgePrev.pilot.name} className={`flex-1 min-w-[240px] ${T.input}`} />
-                  <button onClick={() => void runPurge(purgeConfirm, true)} disabled={busy || purgeConfirm.trim() !== purgePrev.pilot.name}
-                    className={T.btnDanger}>전체 초기화 실행</button>
+                  <button
+                    onClick={() => void runPurge("QUIESCE", purgeConfirm,
+                      "참여자 계정을 정지하고 서명 링크를 만료시킵니다. 파일럿을 종료할까요?")}
+                    disabled={busy || purgeConfirm.trim() !== purgePrev.pilot.name}
+                    className={T.btnDanger}>파일럿 종료 · 계정 회수</button>
                 </div>
               </div>
             )}
@@ -701,19 +738,14 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
 
         {purgeResult && (
           <div className="mt-4 space-y-3">
-            {/* ★"정리했다"와 "끝났다"를 구분해 말한다 — 1차 실행은 남은 것이 없어도 완료가 아니다. */}
-            <p className={`text-sm font-black ${
-              purgeResult.outcome === "COMPLETED" ? "text-emerald-600"
-                : purgeResult.outcome === "AWAITING_CONFIRM" ? "text-amber-700" : "text-rose-600"}`}>
+            <p className={`text-sm font-black ${purgeResult.outcome === "COMPLETED" ? "text-emerald-600" : "text-rose-600"}`}>
               {purgeResult.outcome === "COMPLETED"
                 ? `초기화 완료 — ${purgeResult.pilot.name}`
-                : purgeResult.outcome === "AWAITING_CONFIRM"
-                  ? "1차 정리 완료 — 남은 서명 이미지가 없는지 한 번 더 확인하면 끝납니다. 아래 '확인하고 종료'를 눌러 주세요."
-                  : `정리하지 못한 서명 이미지 ${purgeResult.storage.failed.length + purgeResult.storage.deferred.length}건이 있습니다. 파일럿을 남겨 두었으니 다시 실행하세요.`}
+                : `정리하지 못한 서명 이미지 ${purgeResult.storage.failed.length + purgeResult.storage.deferred.length}건이 있습니다. 파일럿을 남겨 두었으니 다시 실행하세요.`}
             </p>
-            {purgeResult.outcome === "AWAITING_CONFIRM" && (
+            {purgeResult.outcome === "FAILED" && (
               <button onClick={() => { setPurgeResult(null); void loadPurgePreview(); }} disabled={busy} className={T.btnPrimary}>
-                확인 단계로
+                재시도 단계로
               </button>
             )}
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
