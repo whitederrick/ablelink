@@ -50,7 +50,7 @@ type PurgeResult = {
   completed: boolean;
   leftovers: Record<string, number>;
   /** 재시도를 위해 의도적으로 남긴 것(실패가 없으면 null) */
-  retained: { pilot: number; resources: number } | null;
+  retained: { pilot: number; resources: number; failedObjects: number } | null;
 };
 
 const WORK_TYPES = [
@@ -705,9 +705,12 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
                 return left.length ? left.map(([k, v]) => `${k} ${v}`).join(", ") : "전부 0";
               })()}
             </p>
+            {/* ★"보존된 레지스트리"와 "삭제 실패한 객체"는 다른 수다 — 같은 이름으로 부르면
+                실패 건수가 실제보다 크게 보인다. */}
             {purgeResult.retained && (
               <p className="text-xs font-bold text-amber-700">
-                재시도를 위해 보존: 파일럿 {purgeResult.retained.pilot}건 · 삭제 실패 기록 {purgeResult.retained.resources}건
+                재시도를 위해 보존: 파일럿 {purgeResult.retained.pilot}건 · 레지스트리 {purgeResult.retained.resources}건
+                (삭제 실패한 서명 이미지 {purgeResult.retained.failedObjects}건 포함)
                 <span className="ml-1 font-semibold text-slate-500">— 지우면 재시도 목록을 잃습니다. 다시 실행하면 남은 것부터 처리합니다.</span>
               </p>
             )}

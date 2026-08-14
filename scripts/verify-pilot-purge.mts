@@ -231,6 +231,22 @@ async function main() {
   ok("서명 객체 2건 업로드(고아 1 + 토큰 1)", await objectExists(tokenPath));
 
   // ─────────────────────────────────────────────────────────
+  console.log("\n[3-1] ★범위 지문이 서명 경로 변화를 감지하는가 (초기화 창의 새 서명)");
+  // ★★id 만 비교하면: [1]나열 → 참여자가 서명을 새로 저장 → [2]통과 → Worker 삭제 →
+  //  **새 객체는 나열 결과에도 레지스트리에도 없다**. 파일럿이 지워진 뒤엔 prefix 를 나열할 근거도 없어
+  //  서명 이미지가 영구 잔존한다. 그래서 지문에 서명 경로가 들어가야 한다.
+  const scopeBefore = await P.collectPilotScope(prisma, p.pilotId);
+  await prisma.worker.update({ where: { id: w1.id }, data: { signatureUrl: `${w1.id}/signature_new_${STAMP}.png` } });
+  const scopeAfter = await P.collectPilotScope(prisma, p.pilotId);
+  ok("자원 id 는 그대로다(이 변화는 id 로는 안 보인다)",
+    JSON.stringify(scopeBefore.workerIds.map(String)) === JSON.stringify(scopeAfter.workerIds.map(String)) &&
+    JSON.stringify(scopeBefore.assignmentIds.map(String)) === JSON.stringify(scopeAfter.assignmentIds.map(String)));
+  ok("★그래도 범위 지문은 달라진다 → SCOPE_CHANGED 로 중단된다",
+    P.scopeSignature(scopeBefore) !== P.scopeSignature(scopeAfter));
+  await prisma.worker.update({ where: { id: w1.id }, data: { signatureUrl: null } });
+  ok("★양성 대조 — 되돌리면 지문도 같아진다(과잉 중단이 아님)",
+    P.scopeSignature(await P.collectPilotScope(prisma, p.pilotId)) === P.scopeSignature(scopeBefore));
+
   console.log("\n[4] 미리보기 — 아무것도 지우지 않는다");
   const prev = await P.previewPilotPurge(p.pilotId);
   ok("레지스트리 집계 정확(기관1·현장1·훈련생1·재적1·워커1·배정1)",
@@ -327,6 +343,10 @@ async function main() {
   ok("★잔여를 0으로 위장하지 않는다 — Pilot·PilotResource 실제 건수 보고",
     failed.leftovers.Pilot === 1 && failed.leftovers.PilotResource > 0, JSON.stringify(failed.leftovers));
   ok("★retained 로 '보존'과 '소멸'을 구분해 보고", failed.retained !== null && failed.retained.pilot === 1);
+  ok("★보존 레지스트리 수와 삭제 실패 객체 수를 구분해 보고(실패 2건 < 레지스트리 전체)",
+    failed.retained !== null && failed.retained.failedObjects === 2 &&
+    failed.retained.resources > failed.retained.failedObjects,
+    JSON.stringify(failed.retained));
   ok("자원·기록 잔여는 0(보존 대상 2종 제외)",
     Object.entries(failed.leftovers).every(([k, v]) => v === 0 || k === "Pilot" || k === "PilotResource"),
     JSON.stringify(failed.leftovers));

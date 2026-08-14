@@ -577,8 +577,13 @@ export interface PurgeResult {
    *  보존과 소멸을 같은 0으로 뭉개면 화면이 거짓말을 한다. 아래 `retained`로 구분한다.
    */
   leftovers: Record<string, number>;
-  /** 재시도를 위해 의도적으로 남긴 것(실패가 없으면 null). */
-  retained: { pilot: number; resources: number } | null;
+  /**
+   * 재시도를 위해 의도적으로 남긴 것(실패가 없으면 null).
+   *
+   * ★`resources` 는 **보존된 레지스트리 전체 건수**다(자원 기록 포함). 삭제에 실패한 객체 수는
+   *  `failedObjects` 다 — 둘을 같은 이름으로 부르면 실패 건수가 실제보다 크게 보인다.
+   */
+  retained: { pilot: number; resources: number; failedObjects: number } | null;
 }
 
 /**
@@ -722,20 +727,37 @@ export async function purgePilot(
     storage: { total: storagePaths.length, deleted: removed, failed },
     completed,
     leftovers,
-    retained: completed ? null : { pilot: leftovers.Pilot, resources: leftovers.PilotResource },
+    retained: completed
+      ? null
+      : { pilot: leftovers.Pilot, resources: leftovers.PilotResource, failedObjects: failed.length },
   };
 }
 
 /** [1]과 [2]의 범위가 같은지 — 그 사이 자원이 늘거나 줄었으면 Storage 나열 결과가 낡았다. */
+/**
+ * 범위 지문. [1]과 [2] 사이에 무엇이든 달라졌으면 Storage 나열 결과가 낡았다는 뜻이다.
+ *
+ * ★★**서명 경로(`dbStoragePaths`)를 반드시 포함한다.** id 만 비교하면 다음이 새어 나간다:
+ *  [1] 나열 완료 → 참여자가 서명을 새로 저장(기존 객체 삭제 + 새 객체 업로드) → [2] id 는 전부 그대로라
+ *  통과 → Worker 삭제 → **새 객체는 나열 결과에도 레지스트리에도 없다.**
+ *  파일럿이 지워진 뒤에는 `{workerId}/` prefix 를 다시 나열할 근거조차 없어 **서명 이미지가 영구 잔존**한다.
+ *  포함하면 이 경우가 `SCOPE_CHANGED` 로 중단되고, 재실행의 나열이 새 객체를 잡는다(정상 동선).
+ */
+export function scopeSignature(s: PilotScope): string {
+  return JSON.stringify([
+    s.agencyId?.toString() ?? null,
+    s.siteIds.map(String), s.traineeIds.map(String), s.placementIds.map(String),
+    s.workerIds.map(String), s.assignmentIds.map(String),
+    s.attendanceIds.map(String), s.docRunIds.map(String), s.signTokens,
+    // ★DB 행이 가리키는 서명 경로. 이 줄이 위 시나리오를 막는다.
+    [...s.dbStoragePaths].sort(),
+    // 이전 실행의 재시도 목록(동시 초기화 시도 대비 — 정상적으로는 이 구간에 변하지 않는다)
+    [...s.registryStoragePaths].sort(),
+  ]);
+}
+
 function sameScope(a: PilotScope, b: PilotScope): boolean {
-  const key = (s: PilotScope) =>
-    JSON.stringify([
-      s.agencyId?.toString() ?? null,
-      s.siteIds.map(String), s.traineeIds.map(String), s.placementIds.map(String),
-      s.workerIds.map(String), s.assignmentIds.map(String),
-      s.attendanceIds.map(String), s.docRunIds.map(String), s.signTokens,
-    ]);
-  return key(a) === key(b);
+  return scopeSignature(a) === scopeSignature(b);
 }
 
 /**
