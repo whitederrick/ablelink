@@ -30,6 +30,24 @@ import * as purgeNs from "../lib/pilot/purge";
 type PurgeModule = typeof import("../lib/pilot/purge");
 const P = (purgeNs as unknown as { default?: PurgeModule }).default ?? (purgeNs as unknown as PurgeModule);
 
+import * as sessNs from "../app/worker/_lib/session";
+type SessModule = typeof import("../app/worker/_lib/session");
+const SESS = (sessNs as unknown as { default?: SessModule }).default ?? (sessNs as unknown as SessModule);
+
+// ★★계정 회수의 효과(재로그인 403 · 기존 세션 401 · 공개 서명 링크 410)는 §10-0 설계의 **근거**다.
+//  코드 판독으로 갈음하지 않고 **실제 HTTP 경계**에서 확인한다.
+//  ★핸들러 직접 import 는 불가하다 — `sign/[token]` 이 `lib/signatureImage`(`server-only`)를 물고,
+//   그 패키지는 설치돼 있지 않아 tsx 가 해석하지 못한다(리포 전역 조건). 그래서 dev 서버로 호출한다.
+//  ★로그인은 레이트리밋이 Upstash 를 타고 **로컬 .env 가 운영 인스턴스와 같다.** 키는
+//   `login:{ip}:{loginId}` 와 `login-ip:{ip}` 다 — **파일럿 테스트 전용 loginId** 로만 호출하고
+//   실행당 2회(양성 대조 1 + 거부 1)로 제한한다. 운영 사용자 키와는 겹치지 않는다.
+const BASE = (process.env.PILOT_SMOKE_BASE_URL || "").replace(/\/+$/, "");
+
+/** dev 서버가 없으면 건너뛴다 — 다만 "건너뛰었다"를 눈에 띄게 남긴다. */
+function httpSkipped(label: string) {
+  console.log(`  ⚠️ 건너뜀(HTTP 미검증) — ${label}. PILOT_SMOKE_BASE_URL 를 주고 dev 서버와 함께 실행하세요.`);
+}
+
 assertWritableDb("파일럿 초기화 검증(테스트 자원 생성·삭제)");
 
 const prisma = new PrismaClient();
@@ -347,14 +365,60 @@ async function main() {
   ok("★거부되면 계정이 정지되지 않는다",
     (await prisma.worker.count({ where: { id: w1.id, status: "ACTIVE" } })) === 1);
 
+  // ★양성 대조 — 종료 전에는 로그인이 된다. 이게 없으면 뒤의 403 이 "비밀번호가 틀려서"일 수 있다.
+  if (BASE) {
+    const r = await fetch(`${BASE}/api/worker/auth/login`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ loginId: "01099990001", password: "pilot1234!" }),
+    });
+    ok("★[양성대조] 종료 전에는 로그인 200 + 세션 쿠키 발급", r.status === 200 && !!r.headers.get("set-cookie"));
+  } else httpSkipped("종료 전 로그인 양성대조");
+
+  // 종료 전 토큰을 미리 발급해 둔다 — 종료 후 이 토큰이 죽는지(401) 보기 위해서다.
+  const preToken = await SESS.signWorkerToken({ workerId: w1.id.toString(), loginId: "01099990001", name: "지도원1" } as never);
+  if (BASE) {
+    const r = await fetch(`${BASE}/api/pilot/docs/context`, { headers: { cookie: `${SESS.WORKER_COOKIE}=${preToken}` } });
+    ok("[양성대조] 종료 전 세션으로 파일럿 문서 경로 접근 가능(401 아님)", r.status !== 401, String(r.status));
+  } else httpSkipped("종료 전 세션 양성대조");
+
   const q = await P.quiescePilot(p.pilotId, prev.pilot.name);
   ok("종료 실행 — 계정 1건 정지", q.quiescedNow === true && q.pausedWorkers === 1, JSON.stringify(q));
   const wAfter = await prisma.worker.findUnique({ where: { id: w1.id }, select: { status: true, sessionVersion: true } });
   ok("★계정 회수 — status=PAUSED(재로그인 403·login:75) + sessionVersion 증가(기존 세션 401)",
     wAfter?.status === "PAUSED" && (wAfter?.sessionVersion ?? 0) >= 1, JSON.stringify(wAfter));
   const tokAfter = await prisma.siteSignToken.findUnique({ where: { id: token.id }, select: { expiresAt: true } });
-  ok("★공개 서명 링크 만료(sign/[token] 이 410 으로 막는다)",
-    !!tokAfter && tokAfter.expiresAt.getTime() <= Date.now());
+  ok("공개 서명 링크 만료 시각이 과거로 당겨짐", !!tokAfter && tokAfter.expiresAt.getTime() <= Date.now());
+
+  // ★★여기부터 3건은 **실제 HTTP 경계**에서 확인한다 — 설계의 근거를 코드 판독으로 갈음하지 않는다.
+  if (BASE) {
+    const loginRes = await fetch(`${BASE}/api/worker/auth/login`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ loginId: "01099990001", password: "pilot1234!" }),
+    });
+    ok("★재로그인 403 + 세션 쿠키 미발급",
+      loginRes.status === 403 && !loginRes.headers.get("set-cookie"),
+      `${loginRes.status} setCookie=${!!loginRes.headers.get("set-cookie")}`);
+
+    const sessRes = await fetch(`${BASE}/api/pilot/docs/context`, { headers: { cookie: `${SESS.WORKER_COOKIE}=${preToken}` } });
+    ok("★기존 세션 401 (정지 + sessionVersion 증가)", sessRes.status === 401, String(sessRes.status));
+
+    const before = await prisma.siteSignToken.findUnique({ where: { id: token.id }, select: { signatureUrl: true, usedAt: true } });
+    // ★부작용 판정 기준 = **증가 여부**. 이 prefix 에는 픽스처가 올려둔 객체가 이미 있다.
+    const objBefore = (await P.listStorageByPrefix(await P.collectPilotScope(prisma, p.pilotId)))
+      .filter((x) => x.startsWith(`sign-tokens/${token.token}/`));
+    const signRes = await fetch(`${BASE}/api/sign/${token.token}`, { method: "POST" });
+    const after = await prisma.siteSignToken.findUnique({ where: { id: token.id }, select: { signatureUrl: true, usedAt: true } });
+    const objAfter = (await P.listStorageByPrefix(await P.collectPilotScope(prisma, p.pilotId)))
+      .filter((x) => x.startsWith(`sign-tokens/${token.token}/`));
+    ok("★공개 서명 링크 410", signRes.status === 410, String(signRes.status));
+    // ★거부가 말뿐이 아니어야 한다 — 부작용 부재까지 본다.
+    ok("★410 이후 서명 값·사용 시각이 변하지 않음",
+      before?.signatureUrl === after?.signatureUrl && String(before?.usedAt) === String(after?.usedAt));
+    ok("★410 이후 Storage 에 새 객체가 생기지 않음(업로드에 도달하지 못한다)",
+      objAfter.length === objBefore.length, `${objBefore.length} → ${objAfter.length}`);
+  } else {
+    httpSkipped("재로그인 403 · 기존 세션 401 · 공개 서명 링크 410");
+  }
   await expectFail("★종료된 파일럿에는 자원을 추가할 수 없다", "PILOT_QUIESCED",
     () => R.createPilotWorker(made.pilotId!, { workerName: "종료후", phoneNumber: "01099990008", password: "pilot1234!" }));
   await expectFail("배출 대기 중 삭제는 409(DRAIN_PENDING)", "DRAIN_PENDING",

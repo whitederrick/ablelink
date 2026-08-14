@@ -723,6 +723,13 @@ export async function quiescePilot(pilotId: bigint, confirmName: unknown): Promi
     if (!sameScope(pre, s)) {
       throw new PilotError(409, "SCOPE_CHANGED", "준비 중 파일럿 자원이 변경되었습니다. 다시 시도해 주세요.");
     }
+    // ★중단 사유도 **잠금 안에서** 다시 본다 — 트랜잭션 밖 검사만 두면 "blocker 가 있으면 계정을
+    //  정지하지 않는다"는 보장이 원자적이지 않다(그 사이 생긴 blocker 를 못 본다).
+    const inTxBlockers = await findPurgeBlockers(tx, s);
+    if (inTxBlockers.length > 0) {
+      throw new PilotError(409, "PURGE_BLOCKED",
+        `종료를 중단했습니다 — 예상 밖 데이터가 있습니다: ${inTxBlockers.map((b) => `${b.label} ${b.count}건`).join(", ")}`);
+    }
 
     const paused = s.workerIds.length
       ? await tx.worker.updateMany({
