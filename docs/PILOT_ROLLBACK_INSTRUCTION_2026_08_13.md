@@ -547,6 +547,18 @@ app/api/pilot/docs/generate/
   재나열·최종 검증 나열은 **마지막 안전망**으로 유지한다.
 - 단계는 저장된 `quiescedAt` 으로 복원한다: `READY → DRAINING → PURGE_READY → COMPLETED`
   (실패 시 `RETRY_PENDING`). **화면 상태를 응답에 의존시키지 않는다.**
+- ★**중단 사유는 잠금 안에서도 다시 본다.** 트랜잭션 밖 검사만 두면 "blocker 가 있으면 계정을 정지하지
+  않는다"는 보장이 원자적이지 않다 — `sameScope` 직후·계정 상태 변경 **직전**에 재확인한다.
+- ★★**위 "효과" 3가지는 실제 HTTP 경계에서 검증한다**(코드 판독으로 갈음하지 않는다):
+  재로그인 **403 + Set-Cookie 없음** · 기존 세션으로 파일럿 문서 경로 호출 시 **401** ·
+  만료 링크 서명 POST 시 **410 + `signatureUrl`·`usedAt` 불변 + Storage 신규 객체 0**.
+  각각 **양성 대조**(종료 전 200·접근 가능)를 함께 둔다.
+  실행: `PILOT_SMOKE_BASE_URL=http://localhost:3000 npx tsx scripts/verify-pilot-purge.mts`
+  (dev 서버 필요. 값이 없으면 그 3건을 **"건너뜀"으로 출력**한다 — 조용히 통과시키지 않는다.)
+  ★핸들러 직접 import 는 불가하다 — `sign/[token]` 이 `lib/signatureImage`(`server-only`)를 물고
+  그 패키지가 설치돼 있지 않다(리포 전역 조건).
+  ★로그인 레이트리밋은 Upstash 를 타고 **로컬 `.env` 가 운영 인스턴스와 같다** — 키는
+  `login:{ip}:{loginId}`·`login-ip:{ip}` 이므로 **파일럿 테스트 전용 loginId** 로만, 실행당 2회로 제한한다.
 
 ### 10-1. ★실행은 3단계다 — 전체를 하나의 트랜잭션으로 묶지 않는다
 
