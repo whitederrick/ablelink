@@ -277,6 +277,20 @@ async function main() {
   const prevBlocked2 = await P.previewPilotPurge(p.pilotId);
   ok("설계 위반(NoticeGroup)도 중단 사유로 잡힘", prevBlocked2.blockers.some((b) => b.label === "NoticeGroup"));
   await prisma.noticeGroup.delete({ where: { id: group.id } });
+
+  // ★Agency 필수 FK(RESTRICT) 14종 중 유일하게 빠져 있던 모델. 미리보기가 통과하고 실제 삭제가
+  //  원문 FK 오류로 터지던 자리다(외부 리뷰 지적 P2-3).
+  const clause = await prisma.agencyContractClause.create({
+    data: { agencyId: p.agencyId, title: `검증특약-${STAMP}`, body: "검증" },
+  });
+  const prevBlocked3 = await P.previewPilotPurge(p.pilotId);
+  ok("AgencyContractClause 가 중단 사유로 잡힘",
+    prevBlocked3.blockers.some((b) => b.label === "AgencyContractClause"), JSON.stringify(prevBlocked3.blockers));
+  await expectFail("특약이 있으면 실행 거부(409) — FK 오류로 터지지 않는다", "PURGE_BLOCKED",
+    () => P.purgePilot(made.pilotId!, prev.pilot.name));
+  ok("거부 후 자원 생존", (await prisma.agency.count({ where: { id: p.agencyId } })) === 1);
+  await prisma.agencyContractClause.delete({ where: { id: clause.id } });
+
   await prisma.site.delete({ where: { id: stray.id } });
   made.strayIds = [];
   const prevClear = await P.previewPilotPurge(p.pilotId);
@@ -293,16 +307,50 @@ async function main() {
   await prisma.pilotResource.update({ where: { id: anyRes!.id }, data: { deleteError: null } });
 
   // ─────────────────────────────────────────────────────────
-  console.log("\n[8] 초기화 실행");
-  const result = await P.purgePilot(p.pilotId, prev.pilot.name);
-  ok("완료(completed)", result.completed === true, JSON.stringify(result.storage));
-  ok("잔여 재조회 전량 0", Object.values(result.leftovers).every((v) => v === 0), JSON.stringify(result.leftovers));
-  ok("Storage 2건 삭제", result.storage.total === 2 && result.storage.deleted === 2 && result.storage.failed.length === 0,
-    JSON.stringify(result.storage));
+  // ─────────────────────────────────────────────────────────
+  // ★★여기부터가 실패 경로다. 이전 검증(52/52)은 정상 경로만 태워서
+  //  "실패 → 보존 → 재시도" 가 한 번도 실행되지 않은 채 통과했다.
+  console.log("\n[8] ★Storage 삭제 실패 주입 — 보존과 재시도 목록이 실제로 남는가");
+  const failing = { deleteObject: async () => ({ ok: false as const, error: "주입된 실패(검증)" }) };
+  const failed = await P.purgePilot(p.pilotId, prev.pilot.name, failing);
+  ok("완료로 보고하지 않는다(completed=false)", failed.completed === false);
+  ok("Storage 2건 전부 실패로 집계", failed.storage.total === 2 && failed.storage.deleted === 0 && failed.storage.failed.length === 2,
+    JSON.stringify(failed.storage));
+  ok("DB 자원은 이미 삭제됨(트랜잭션은 커밋됐다)",
+    (await prisma.agency.count({ where: { id: p.agencyId } })) === 0 &&
+    (await prisma.siteAssignment.count({ where: { id: g1.id } })) === 0);
+  ok("★Pilot·레지스트리는 보존 — 지우면 재시도 목록을 잃는다",
+    (await prisma.pilot.count({ where: { id: p.pilotId } })) === 1 &&
+    (await prisma.pilotResource.count({ where: { pilotId: p.pilotId } })) > 0);
+  ok("★deleteError 가 실제로 기록됨(재시도 목록)",
+    (await prisma.pilotResource.count({ where: { pilotId: p.pilotId, deleteError: { not: null } } })) === 2);
+  ok("★잔여를 0으로 위장하지 않는다 — Pilot·PilotResource 실제 건수 보고",
+    failed.leftovers.Pilot === 1 && failed.leftovers.PilotResource > 0, JSON.stringify(failed.leftovers));
+  ok("★retained 로 '보존'과 '소멸'을 구분해 보고", failed.retained !== null && failed.retained.pilot === 1);
+  ok("자원·기록 잔여는 0(보존 대상 2종 제외)",
+    Object.entries(failed.leftovers).every(([k, v]) => v === 0 || k === "Pilot" || k === "PilotResource"),
+    JSON.stringify(failed.leftovers));
   ok("삭제 건수 보고(평가 3·담당 1·API 1·감사 3·접속 2)",
-    result.deleted.TraineeEvaluation === 3 && result.deleted.TraineeSupervision === 1 &&
-    result.deleted.ApiCallLog === 1 && result.deleted.AuditEvent === 3 && result.deleted.AccessLog === 2,
-    JSON.stringify(result.deleted));
+    failed.deleted.TraineeEvaluation === 3 && failed.deleted.TraineeSupervision === 1 &&
+    failed.deleted.ApiCallLog === 1 && failed.deleted.AuditEvent === 3 && failed.deleted.AccessLog === 2,
+    JSON.stringify(failed.deleted));
+
+  console.log("\n[8-1] ★초기화 창에서 새 자원 생성 차단 (기관은 사라졌고 Pilot 은 살아 있는 구간)");
+  // ★이 상태에서는 기관이 이미 사라졌으므로 `PURGE_IN_PROGRESS` 축이 먼저 걸린다.
+  //  (기관이 살아 있는 `deleteError` 단독 상태 = `PURGE_PENDING` 은 [7]이 덮는다.)
+  await expectFail("초기화가 시작된 파일럿에는 계정을 만들 수 없다", "PURGE_IN_PROGRESS",
+    () => R.createPilotWorker(made.pilotId!, { workerName: "창테스트", phoneNumber: "01099990003", password: "pilot1234!" }));
+  // ★★deleteError 를 지워 **P1-1 의 실제 창**을 재현한다 — deleteError 는 Storage 실패 '이후'에야
+  //  기록되므로, DB 삭제 직후~첫 실패 사이에는 0이다. 그 구간을 기관 실물 확인이 막아야 한다.
+  await prisma.pilotResource.updateMany({ where: { pilotId: p.pilotId }, data: { deleteError: null } });
+  await expectFail("★deleteError 가 0이어도 기관 실물이 없으면 409(PURGE_IN_PROGRESS)", "PURGE_IN_PROGRESS",
+    () => R.createPilotWorker(made.pilotId!, { workerName: "창테스트", phoneNumber: "01099990003", password: "pilot1234!" }));
+  ok("차단이 말뿐이 아님 — 계정이 만들어지지 않음",
+    (await prisma.worker.count({ where: { loginId: "01099990003" } })) === 0);
+  // 재시도 목록을 원상복구(위 updateMany 가 지운 사유를 되돌린다)
+  await prisma.pilotResource.updateMany({
+    where: { pilotId: p.pilotId, kind: "STORAGE_OBJECT" }, data: { deleteError: "주입된 실패(검증)" },
+  });
 
   // ★보존 단언을 먼저 — 과잉 삭제가 누락보다 위험하다.
   console.log("\n[9] ★보존 단언 — 비파일럿은 전량 살아 있어야 한다");
@@ -346,18 +394,80 @@ async function main() {
     (await prisma.auditEvent.count({ where: { id: { in: [aeTarget.id, aeActor.id, aeChild.id] } } })) === 0 &&
     (await prisma.accessLog.count({ where: { id: { in: [alWorker.id, alRun.id] } } })) === 0);
   if (inviteId) ok("초대 소멸", (await prisma.workerInvite.count({ where: { id: inviteId } })) === 0);
+  ok("실패했으므로 Pilot·PilotResource 는 아직 살아 있다",
+    (await prisma.pilot.count({ where: { id: p.pilotId } })) === 1);
+
+  // ─────────────────────────────────────────────────────────
+  console.log("\n[11] ★★재시도 — 레지스트리가 실제 재시도 입력으로 쓰이는가");
+  // ★★이 케이스가 P1-2 의 회귀 테스트다. 1차 실행에서 SiteSignToken 이 배정 Cascade 로 사라졌으므로
+  //  `sign-tokens/{token}/` 은 **prefix 나열로는 절대 다시 못 찾는다**. 레지스트리(STORAGE_OBJECT)를
+  //  합집합하지 않으면 지울 게 없다고 판단해 실패 기록까지 지우고 "완료" 로 보고한다.
+  ok("근거 소멸 확인 — SiteSignToken 은 이미 없다(prefix 나열 불가)",
+    (await prisma.siteSignToken.count({ where: { id: token.id } })) === 0);
+  const retryPrev = await P.previewPilotPurge(p.pilotId);
+  ok("★재시도 미리보기가 토큰 경로를 되찾음(레지스트리 복원)",
+    retryPrev.storage.includes(tokenPath), JSON.stringify(retryPrev.storage));
+  ok("이전 실행의 실패분이 재시도 대상으로 표시됨", retryPrev.retryPending === 2, String(retryPrev.retryPending));
+
+  const retry = await P.purgePilot(p.pilotId, prev.pilot.name);
+  ok("재시도 완료(completed)", retry.completed === true, JSON.stringify(retry.storage));
+  ok("★재시도가 2건 모두 삭제(토큰 경로 포함)",
+    retry.storage.total === 2 && retry.storage.deleted === 2 && retry.storage.failed.length === 0,
+    JSON.stringify(retry.storage));
+  ok("재시도 후 잔여 전량 0", Object.values(retry.leftovers).every((v) => v === 0), JSON.stringify(retry.leftovers));
+  ok("retained 는 null(보존할 것이 없다)", retry.retained === null);
   ok("Pilot·PilotResource 소멸",
     (await prisma.pilot.count({ where: { id: p.pilotId } })) === 0 &&
     (await prisma.pilotResource.count({ where: { pilotId: p.pilotId } })) === 0);
 
-  console.log("\n[11] Storage 실물 확인");
+  console.log("\n[12] Storage 실물 확인");
   const stillThere: string[] = [];
   for (const path of made.storagePaths) if (await objectExists(path)) stillThere.push(path);
-  ok("업로드한 서명 객체 2건이 실제로 사라짐(고아 포함)", stillThere.length === 0, stillThere.join(", "));
+  ok("★업로드한 서명 객체 2건이 실제로 사라짐(고아 + 토큰 경로)", stillThere.length === 0, stillThere.join(", "));
   made.storagePaths = stillThere;
 
-  console.log("\n[12] 재실행 멱등 — 이미 사라진 파일럿");
+  console.log("\n[13] 재실행 멱등 — 이미 사라진 파일럿");
   await expectFail("삭제된 파일럿 재초기화는 404", "PILOT_NOT_FOUND", () => P.purgePilot(made.pilotId!, prev.pilot.name));
+  made.pilotId = null; made.agencyId = null;
+
+  // ─────────────────────────────────────────────────────────
+  console.log("\n[14] ★초기화와 자원 생성의 경쟁 — 고아가 남지 않는가");
+  // ★단언은 "어느 쪽이 이기는가" 가 아니라 **불변식**이다: 계정이 만들어졌다면 반드시 함께 지워지고,
+  //  못 만들었다면 존재하지 않는다. 어느 인터리빙에서도 추적 불가능한 계정이 남으면 안 된다.
+  const p2 = await R.createPilot({ name: `경쟁검증-${STAMP}`, agencyName: `경쟁검증기관-${STAMP}` });
+  made.pilotId = p2.pilotId; made.agencyId = p2.agencyId;
+  const racePhone = "01099990004";
+  const [racePurge, raceCreate] = await Promise.allSettled([
+    P.purgePilot(p2.pilotId, `경쟁검증-${STAMP}`),
+    R.createPilotWorker(p2.pilotId, { workerName: "경쟁", phoneNumber: racePhone, password: "pilot1234!" }),
+  ]);
+  const purgeOutcome = racePurge.status === "fulfilled"
+    ? (racePurge.value.completed ? "완료" : "부분실패")
+    : `거부(${(racePurge.reason as { code?: string })?.code ?? "?"})`;
+  const createOutcome = raceCreate.status === "fulfilled"
+    ? "생성됨" : `거부(${(raceCreate.reason as { code?: string })?.code ?? "?"})`;
+  console.log(`     인터리빙: 초기화=${purgeOutcome} · 생성=${createOutcome}`);
+
+  // ★불변식 ①: 계정이 만들어졌다면 **레지스트리에 기록돼 있거나 이미 삭제됐다**. 어느 쪽도 아니면 고아다.
+  if (raceCreate.status === "fulfilled") {
+    const wid = (raceCreate.value as { id: bigint }).id;
+    const alive = await prisma.worker.count({ where: { id: wid } });
+    const tracked = await prisma.pilotResource.count({ where: { kind: "WORKER", resourceKey: wid.toString() } });
+    ok("★생성된 계정은 삭제됐거나 레지스트리로 추적 가능하다", alive === 0 || tracked === 1,
+      `alive=${alive} tracked=${tracked}`);
+  }
+
+  // 초기화가 안전하게 중단됐다면(자원이 늘어 SCOPE_CHANGED) 재시도로 마무리한다 — 그것이 설계된 동선이다.
+  if ((await prisma.pilot.count({ where: { id: p2.pilotId } })) === 1) {
+    const fin = await P.purgePilot(p2.pilotId, `경쟁검증-${STAMP}`);
+    ok("남은 자원은 재시도로 정리된다", fin.completed === true, JSON.stringify(fin.leftovers));
+  }
+
+  // ★불변식 ②: 어느 인터리빙에서도 최종 상태에 추적 불가능한 계정이 없다.
+  ok("★고아 계정이 남지 않는다", (await prisma.worker.count({ where: { loginId: racePhone } })) === 0);
+  ok("파일럿·레지스트리도 남지 않는다",
+    (await prisma.pilot.count({ where: { id: p2.pilotId } })) === 0 &&
+    (await prisma.pilotResource.count({ where: { pilotId: p2.pilotId } })) === 0);
   made.pilotId = null; made.agencyId = null;
 }
 

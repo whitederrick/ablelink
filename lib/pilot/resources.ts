@@ -9,6 +9,7 @@
 // ★기존 운영 화면·API를 재사용하거나 수정하지 않는다. 여기서 완결한다.
 
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { hashPassword } from "@/lib/password";
 import { dbKey, recordDbResource } from "./registry";
 
@@ -73,7 +74,12 @@ export async function createPilot(input: { name: unknown; note?: unknown; agency
   });
 }
 
-/** 파일럿의 전용 Agency id. 레지스트리가 유일한 근거다(이름·날짜 추정 금지). */
+/**
+ * 파일럿의 전용 Agency id. 레지스트리가 유일한 근거다(이름·날짜 추정 금지).
+ *
+ * ★**기관 행의 실물 존재까지 확인한다.** 레지스트리만 보면 초기화의 [2]DB삭제와 [3]Storage삭제 사이
+ *  (기관은 이미 사라졌는데 Pilot·레지스트리는 아직 살아 있는 구간)를 통과해 버린다.
+ */
 export async function getPilotAgencyId(pilotId: bigint): Promise<bigint> {
   const row = await prisma.pilotResource.findFirst({
     where: { pilotId, kind: "AGENCY" },
@@ -81,7 +87,51 @@ export async function getPilotAgencyId(pilotId: bigint): Promise<bigint> {
     orderBy: { id: "asc" },
   });
   if (!row) throw new PilotError(404, "PILOT_NOT_FOUND", "파일럿 또는 전용 기관을 찾을 수 없습니다.");
-  return BigInt(row.resourceKey);
+  const agencyId = BigInt(row.resourceKey);
+  if ((await prisma.agency.count({ where: { id: agencyId } })) === 0) {
+    throw new PilotError(409, "PURGE_IN_PROGRESS",
+      "이 파일럿은 초기화가 진행 중이거나 이미 삭제되었습니다. 자원을 추가할 수 없습니다.");
+  }
+  return agencyId;
+}
+
+/**
+ * ★자원 생성 트랜잭션의 **첫 구문**으로 호출한다. 초기화와 같은 축(`pilots` 행)에서 직렬화한다.
+ *
+ * 세 가지를 한 자리에서 막는다.
+ *  ① `SELECT … FOR UPDATE` — 초기화의 DB 삭제 트랜잭션과 **같은 행 잠금**을 잡는다.
+ *     잠금이 없으면 초기화가 자원을 모은 뒤 커밋하기 전에 끼어든 생성이 삭제 범위 밖에 남고,
+ *     초기화 마지막의 `pilotResource.deleteMany({ pilotId })`가 그 레지스트리 기록까지 지워
+ *     **추적 불가능한 운영 데이터**가 된다.
+ *  ② 전용 기관 실물 확인 — 잠금은 트랜잭션 구간만 덮는다. Storage 삭제 구간(트랜잭션 밖)은
+ *     "기관은 삭제됐고 Pilot은 살아 있는" 상태라 잠금으로 못 막는다. 존재 확인이 그 창을 닫는다.
+ *  ③ `deleteError` 잔존 — 재시도 대기 상태에서는 자원을 더 만들지 않는다.
+ *
+ * ★★②가 필요한 이유: `deleteError`는 **Storage 삭제가 실패한 뒤에야** 기록된다. DB 삭제 직후부터
+ *  첫 실패까지는 `deleteError`가 0이라 ③만으로는 아무것도 막지 못한다.
+ */
+async function assertPilotWritable(tx: Prisma.TransactionClient, pilotId: bigint): Promise<bigint> {
+  const locked = await tx.$queryRaw<{ id: bigint }[]>`SELECT id FROM pilots WHERE id = ${pilotId} FOR UPDATE`;
+  if (locked.length === 0) throw new PilotError(404, "PILOT_NOT_FOUND", "파일럿을 찾을 수 없습니다.");
+
+  const pending = await tx.pilotResource.count({ where: { pilotId, deleteError: { not: null } } });
+  if (pending > 0) {
+    throw new PilotError(409, "PURGE_PENDING",
+      "초기화가 완료되지 않은 파일럿입니다. 남은 삭제 실패분을 처리한 뒤 다시 시도해 주세요.");
+  }
+
+  const row = await tx.pilotResource.findFirst({
+    where: { pilotId, kind: "AGENCY" },
+    select: { resourceKey: true },
+    orderBy: { id: "asc" },
+  });
+  if (!row) throw new PilotError(404, "PILOT_NOT_FOUND", "파일럿 또는 전용 기관을 찾을 수 없습니다.");
+  const agencyId = BigInt(row.resourceKey);
+  if ((await tx.agency.count({ where: { id: agencyId } })) === 0) {
+    throw new PilotError(409, "PURGE_IN_PROGRESS",
+      "이 파일럿은 초기화가 진행 중이거나 이미 삭제되었습니다. 자원을 추가할 수 없습니다.");
+  }
+  return agencyId;
 }
 
 /** 레지스트리에 등록된 자원인지 확인한다(교차 파일럿·비파일럿 자원 차단). */
@@ -130,6 +180,7 @@ export async function createPilotSite(pilotId: bigint, input: {
   }
 
   return prisma.$transaction(async (tx) => {
+    await assertPilotWritable(tx, pilotId); // ★초기화와 같은 축에서 직렬화
     const site = await tx.site.create({
       data: {
         agencyId, companyName, address, detailAddress,
@@ -175,6 +226,7 @@ export async function createPilotTrainee(pilotId: bigint, input: {
   if (endDate && endDate < startDate) throw new PilotError(400, "INVALID_RANGE", "재적 종료일이 시작일보다 빠릅니다.");
 
   return prisma.$transaction(async (tx) => {
+    await assertPilotWritable(tx, pilotId); // ★초기화와 같은 축에서 직렬화
     const trainee = await tx.trainee.create({
       data: { name, gender, disabilityType, severity, currentSiteId: siteId },
       select: { id: true, name: true },
@@ -214,18 +266,8 @@ export async function createPilotWorker(pilotId: bigint, input: {
 }) {
   await getPilotAgencyId(pilotId); // 파일럿 존재 확인
 
-  // ★부분완료 상태에서는 계정을 만들지 않는다(§10-3-2).
-  //  Storage 삭제가 실패하면 DB 자원은 이미 지워졌는데 Pilot·레지스트리는 남는다(재시도 목록).
-  //  이때 Site·Trainee·Assignment 생성은 삭제된 agencyId/siteId를 참조해 FK 위반으로 알아서 실패하지만,
-  //  **Worker는 기관 FK가 없어 그대로 성공**한다 — 재시도 목록과 실제가 다시 어긋나는 유일한 구멍이다.
-  //  `deleteError`가 남아 있다는 사실 자체가 "재시도 대기"라는 파생 상태이므로
-  //  새 필드·새 전이 없이 막을 수 있다(§7 "상태 머신 없음" 유지).
-  const purgePending = await prisma.pilotResource.count({ where: { pilotId, deleteError: { not: null } } });
-  if (purgePending > 0) {
-    throw new PilotError(409, "PURGE_PENDING",
-      "초기화가 완료되지 않은 파일럿입니다. 남은 삭제 실패분을 처리한 뒤 다시 시도해 주세요.");
-  }
-
+  // ★부분완료·초기화 진행 중 차단은 `assertPilotWritable`(트랜잭션 안)이 담당한다.
+  //  여기 밖에서 미리 검사하면 검사와 쓰기가 다시 갈라진다 — 3단계에서 같은 클래스의 결함을 세 번 냈다.
   const workerName = reqStr(input.workerName, "성명", 2);
   const phoneNumber = normPhone(input.phoneNumber);
   if (!PHONE_RE.test(phoneNumber)) throw new PilotError(400, "INVALID_PHONE", "올바른 휴대전화번호를 입력해 주세요.");
@@ -240,6 +282,10 @@ export async function createPilotWorker(pilotId: bigint, input: {
 
   const hashed = await hashPassword(password);
   return prisma.$transaction(async (tx) => {
+    // ★★Worker 는 기관 FK 가 없어 **삭제된 파일럿에도 그냥 만들어진다** — 다른 세 경로는
+    //  없어진 agencyId/siteId 를 참조해 FK 위반으로 알아서 실패하지만 여기만 뚫린다.
+    //  잠금(트랜잭션 구간) + 기관 실물 확인(Storage 삭제 구간)이 둘 다 있어야 닫힌다.
+    await assertPilotWritable(tx, pilotId);
     const worker = await tx.worker.create({
       data: {
         loginId: phoneNumber, password: hashed, workerName, phoneNumber, planType: "STANDARD",
@@ -305,6 +351,7 @@ export async function createPilotAssignment(pilotId: bigint, input: {
   const commute = workType === "FULL_DAY" ? false : input.commuteGuidanceIncluded !== false;
 
   return prisma.$transaction(async (tx) => {
+    await assertPilotWritable(tx, pilotId); // ★초기화와 같은 축에서 직렬화
     const asg = await tx.siteAssignment.create({
       data: {
         workerId, siteId, agencyId,

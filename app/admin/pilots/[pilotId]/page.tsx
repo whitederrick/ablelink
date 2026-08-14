@@ -49,6 +49,8 @@ type PurgeResult = {
   storage: { total: number; deleted: number; failed: { path: string; error: string }[] };
   completed: boolean;
   leftovers: Record<string, number>;
+  /** 재시도를 위해 의도적으로 남긴 것(실패가 없으면 null) */
+  retained: { pilot: number; resources: number } | null;
 };
 
 const WORK_TYPES = [
@@ -693,9 +695,22 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
                 ))}
               </ul>
             )}
+            {/* ★보존(재시도 목록)과 소멸을 같은 "0"으로 뭉개지 않는다 — 실패했는데 "잔여 전부 0"이
+                함께 뜨면 화면이 거짓말을 한다. 남은 것은 남았다고 쓰고 이유를 붙인다. */}
             <p className="text-xs font-semibold text-slate-400">
-              잔여 재조회: {Object.entries(purgeResult.leftovers).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${v}`).join(", ") || "전부 0"}
+              잔여 재조회:{" "}
+              {(() => {
+                const left = Object.entries(purgeResult.leftovers)
+                  .filter(([k, v]) => v > 0 && !(purgeResult.retained && (k === "Pilot" || k === "PilotResource")));
+                return left.length ? left.map(([k, v]) => `${k} ${v}`).join(", ") : "전부 0";
+              })()}
             </p>
+            {purgeResult.retained && (
+              <p className="text-xs font-bold text-amber-700">
+                재시도를 위해 보존: 파일럿 {purgeResult.retained.pilot}건 · 삭제 실패 기록 {purgeResult.retained.resources}건
+                <span className="ml-1 font-semibold text-slate-500">— 지우면 재시도 목록을 잃습니다. 다시 실행하면 남은 것부터 처리합니다.</span>
+              </p>
+            )}
             {purgeResult.completed && (
               <Link href="/admin/pilots" className={T.btnPrimary}>파일럿 목록으로</Link>
             )}

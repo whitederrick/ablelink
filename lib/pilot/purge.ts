@@ -51,6 +51,17 @@ export interface PilotScope {
   signTokens: string[];
   /** DB 행이 가리키는 서명 경로(신·구 포맷 모두 정규화). */
   dbStoragePaths: string[];
+  /**
+   * ★이전 실행이 남긴 재시도 목록(`PilotResource.STORAGE_OBJECT`)에서 복원한 경로.
+   *
+   * ★★이것이 없으면 재시도가 **결정적으로 실패**한다. `sign-tokens/{token}/`의 유일한 근거인
+   *  `SiteSignToken` 행은 1차 실행의 배정 Cascade로 이미 사라져, 2차 실행의 prefix 나열에서
+   *  그 경로가 통째로 빠진다 → 지울 게 없다고 판단 → `completed=true` → 실패 기록까지 지우고
+   *  "완료"로 보고한다. 남은 객체는 영원히 못 찾는다.
+   */
+  registryStoragePaths: string[];
+  /** 우리 삭제기(signatures 버킷 전용)가 처리할 수 없는 레지스트리 키. 있으면 중단 사유다. */
+  foreignStorageKeys: string[];
 }
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
@@ -161,6 +172,19 @@ export async function collectPilotScope(db: DbClient, pilotId: bigint): Promise<
     ),
   );
 
+  // ★이전 실행의 재시도 목록을 경로로 되돌린다. `storageKey()`가 `버킷/경로`로 정규화해 두었으므로
+  //  버킷 접두만 떼면 된다. 다른 버킷 키는 이 삭제기가 처리할 수 없으므로 따로 모아 중단 사유로 쓴다.
+  const registryStoragePaths: string[] = [];
+  const foreignStorageKeys: string[] = [];
+  for (const key of reg.storageKeys) {
+    if (key.startsWith(`${SIG_BUCKET}/`)) {
+      const path = key.slice(SIG_BUCKET.length + 1);
+      if (path) registryStoragePaths.push(path);
+    } else {
+      foreignStorageKeys.push(key);
+    }
+  }
+
   return {
     pilotId,
     pilotName: pilot.name,
@@ -177,6 +201,8 @@ export async function collectPilotScope(db: DbClient, pilotId: bigint): Promise<
     siteHolidayIds: holidays.map((h) => h.id),
     signTokens: tokens.map((t) => t.token),
     dbStoragePaths,
+    registryStoragePaths,
+    foreignStorageKeys,
   };
 }
 
@@ -268,10 +294,17 @@ export async function findPurgeBlockers(db: DbClient, s: PilotScope): Promise<Pu
   const w = s.workerIds;
   const sites = s.siteIds;
 
+  // ★삭제기가 처리할 수 없는 Storage 키(다른 버킷)는 조용히 흘리면 영구 잔존한다.
+  push("알 수 없는 버킷의 Storage 기록", s.foreignStorageKeys.length,
+    `이 초기화는 '${SIG_BUCKET}' 버킷만 삭제한다. 해당 키: ${s.foreignStorageKeys.slice(0, 3).join(", ")}`);
+
   if (agencyId) {
-    const [manager, contract, payContract, payrollRun, deduction, leaveEntry, leaveReq, survey, group, mInvite, ticket, signup] =
+    const [manager, clause, contract, payContract, payrollRun, deduction, leaveEntry, leaveReq, survey, group, mInvite, ticket, signup] =
       await Promise.all([
         db.manager.count({ where: { agencyId } }),
+        // ★Agency 필수 FK(RESTRICT) 14종 중 유일하게 빠져 있던 모델. 행이 있으면 미리보기는 통과하고
+        //  실제 트랜잭션에서 Agency 삭제가 원문 FK 오류로 터진다.
+        db.agencyContractClause.count({ where: { agencyId } }),
         db.employmentContract.count({ where: { OR: [{ agencyId }, ...(w.length ? [{ workerId: { in: w } }] : [])] } }),
         db.payContract.count({ where: { OR: [{ agencyId }, ...(w.length ? [{ workerId: { in: w } }] : [])] } }),
         db.payrollRun.count({ where: { agencyId } }),
@@ -286,6 +319,7 @@ export async function findPurgeBlockers(db: DbClient, s: PilotScope): Promise<Pu
       ]);
 
     push("Manager", manager, "파일럿은 위탁기관 담당자 계정을 만들지 않는다 — 설계 위반이라 사람이 판단해야 한다.");
+    push("AgencyContractClause", clause, "기관 공용 특약이 존재한다 — Agency 필수 FK(RESTRICT)라 삭제를 막는다.");
     push("EmploymentContract", contract, "근로계약은 만들지 않기로 했다(F28). 연차 자동적립 회피 전제가 깨진다.");
     push("PayContract", payContract, "급여 기준은 만들지 않기로 했다(F28).");
     push("PayrollRun", payrollRun, "급여는 기관 플랜(STANDARD)으로 막혀 있어야 한다(F5).");
@@ -383,6 +417,9 @@ export async function listPilotStorageObjects(s: PilotScope): Promise<string[]> 
     }
   }
   for (const p of s.dbStoragePaths) found.add(p);
+  // ★이전 실행의 재시도 목록을 반드시 합집합한다 — prefix 나열만으로는 1차에서 근거 행이
+  //  사라진 경로(sign-tokens)를 다시 찾지 못한다.
+  for (const p of s.registryStoragePaths) found.add(p);
   return Array.from(found).sort();
 }
 
@@ -532,8 +569,27 @@ export interface PurgeResult {
   storage: { total: number; deleted: number; failed: { path: string; error: string }[] };
   /** 전부 성공해 Pilot·레지스트리까지 지웠는가 */
   completed: boolean;
-  /** 삭제 후 재조회한 잔여 건수. 전부 0이어야 한다 */
+  /**
+   * 삭제 후 **재조회한 실제 건수**. 전부 0이어야 한다.
+   *
+   * ★`Pilot`·`PilotResource`는 실패 시 재시도 목록으로 **의도적으로 보존**되므로 0이 아닐 수 있다.
+   *  이전 구현은 이 둘을 강제로 0으로 돌려줘 "일부 실패"와 "잔여 전부 0"이 동시에 표시됐다 —
+   *  보존과 소멸을 같은 0으로 뭉개면 화면이 거짓말을 한다. 아래 `retained`로 구분한다.
+   */
   leftovers: Record<string, number>;
+  /** 재시도를 위해 의도적으로 남긴 것(실패가 없으면 null). */
+  retained: { pilot: number; resources: number } | null;
+}
+
+/**
+ * Storage 삭제 주입 지점.
+ *
+ * ★검증에서 **실패 경로**를 실제로 태우기 위한 이음매다. 운영 경로는 기본값(실제 삭제)을 그대로 쓴다.
+ *  실패 주입 없이는 "재시도 목록 보존 → 재시도 성공"이 한 번도 실행되지 않은 채 통과한다
+ *  (실제로 52/52가 이 경로를 못 덮었다).
+ */
+export interface PurgeDeps {
+  deleteObject: (path: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
 /**
@@ -541,7 +597,11 @@ export interface PurgeResult {
  *
  * @param confirmName 파일럿 이름과 정확히 일치해야 실행한다(오클릭 방지 — 되돌릴 수 없는 작업).
  */
-export async function purgePilot(pilotId: bigint, confirmName: unknown): Promise<PurgeResult> {
+export async function purgePilot(
+  pilotId: bigint,
+  confirmName: unknown,
+  deps: PurgeDeps = { deleteObject: deleteStorageObject },
+): Promise<PurgeResult> {
   // ── [1] 트랜잭션 밖 — 읽기 전용 수집 + Storage 나열(외부 호출)
   const pre = await collectPilotScope(prisma, pilotId);
   if (String(confirmName ?? "").trim() !== pre.pilotName) {
@@ -631,7 +691,7 @@ export async function purgePilot(pilotId: bigint, confirmName: unknown): Promise
   const failed: { path: string; error: string }[] = [];
   let removed = 0;
   for (const path of storagePaths) {
-    const r = await deleteStorageObject(path);
+    const r = await deps.deleteObject(path);
     const key = storageKey(SIG_BUCKET, path);
     if (r.ok) {
       removed++;
@@ -654,7 +714,7 @@ export async function purgePilot(pilotId: bigint, confirmName: unknown): Promise
   }
 
   // ★"정리 완료" 출력만 믿지 않는다 — 조회로 잔여 0을 재확인한다(§10-1 공통 규율).
-  const leftovers = await recheckLeftovers(pre, completed);
+  const leftovers = await recheckLeftovers(pre);
 
   return {
     pilot: { id: pre.pilotId.toString(), name: pre.pilotName },
@@ -662,6 +722,7 @@ export async function purgePilot(pilotId: bigint, confirmName: unknown): Promise
     storage: { total: storagePaths.length, deleted: removed, failed },
     completed,
     leftovers,
+    retained: completed ? null : { pilot: leftovers.Pilot, resources: leftovers.PilotResource },
   };
 }
 
@@ -677,8 +738,14 @@ function sameScope(a: PilotScope, b: PilotScope): boolean {
   return key(a) === key(b);
 }
 
-/** 삭제 후 잔여를 **재조회**한다. 전부 0이어야 한다. */
-async function recheckLeftovers(s: PilotScope, completed: boolean): Promise<Record<string, number>> {
+/**
+ * 삭제 후 잔여를 **재조회**한다. 자원·기록은 전부 0이어야 한다.
+ *
+ * ★`Pilot`·`PilotResource`는 **실제 건수를 그대로** 돌려준다. 실패 시 재시도 목록으로 남는 것이
+ *  정상이지만, 그것을 0으로 위장하면 "일부 실패"와 "잔여 전부 0"이 동시에 표시된다.
+ *  보존인지 소멸인지는 호출부가 `completed`·`retained`로 구분한다.
+ */
+async function recheckLeftovers(s: PilotScope): Promise<Record<string, number>> {
   const aw = auditWhere(s), acw = accessWhere(s), apw = apiCallWhere(s);
   const [agency, site, trainee, placement, worker, assignment, supervision, evaluation, invite, apiCall, audit, access, resource, pilot] =
     await Promise.all([
@@ -705,8 +772,7 @@ async function recheckLeftovers(s: PilotScope, completed: boolean): Promise<Reco
     Worker: worker, SiteAssignment: assignment,
     TraineeSupervision: supervision, TraineeEvaluation: evaluation, WorkerInvite: invite,
     ApiCallLog: apiCall, AuditEvent: audit, AccessLog: access,
-    // 실패분이 남은 경우 재시도 목록이므로 0이 아닌 것이 정상이다.
-    PilotResource: completed ? resource : 0,
-    Pilot: completed ? pilot : 0,
+    PilotResource: resource,
+    Pilot: pilot,
   };
 }
