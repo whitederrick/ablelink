@@ -32,6 +32,25 @@ type Detail = {
 
 type AddrItem = { addressName: string; x: string; y: string };
 
+// 초기화(§10) — 미리보기·실행 결과
+type PurgePreview = {
+  pilot: { id: string; name: string };
+  registry: Record<string, number>;
+  cascade: Record<string, number>;
+  explicit: Record<string, number>;
+  storage: string[];
+  blockers: { label: string; count: number; reason: string }[];
+  retryPending: number;
+  signals: Record<string, number>;
+};
+type PurgeResult = {
+  pilot: { id: string; name: string };
+  deleted: Record<string, number>;
+  storage: { total: number; deleted: number; failed: { path: string; error: string }[] };
+  completed: boolean;
+  leftovers: Record<string, number>;
+};
+
 const WORK_TYPES = [
   { v: "AM", label: "오전 4시간", time: "08:30~14:00 (지도 포함)" },
   { v: "PM", label: "오후 4시간", time: "12:30~18:00 (지도 포함)" },
@@ -156,6 +175,45 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
   const [asg, setAsg] = useState({ workerId: "", siteId: "", workType: "FULL_DAY", startDate: "", endDate: "" });
   const asgReady = asg.workerId && asg.siteId && asg.workType && asg.startDate && asg.endDate;
 
+  // ── 6) 초기화 ────────────────────────────────────────────────
+  // ★되돌릴 수 없는 작업이다. 미리보기 없이는 실행 버튼을 열지 않는다.
+  const [purgePrev, setPurgePrev] = useState<PurgePreview | null>(null);
+  const [purgeMsg, setPurgeMsg] = useState<string | null>(null);
+  const [purgeConfirm, setPurgeConfirm] = useState("");
+  const [purgeResult, setPurgeResult] = useState<PurgeResult | null>(null);
+
+  async function loadPurgePreview() {
+    setBusy(true); setPurgeMsg(null); setPurgeResult(null);
+    try {
+      const r = await fetch(`/api/admin/pilots/${pilotId}/purge`, { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok || !j?.success) throw new Error(j?.message || "미리보기에 실패했습니다.");
+      setPurgePrev(j.preview as PurgePreview);
+    } catch (e: unknown) {
+      setPurgePrev(null);
+      setPurgeMsg(e instanceof Error ? e.message : "미리보기에 실패했습니다.");
+    } finally { setBusy(false); }
+  }
+
+  async function runPurge() {
+    // ★terminal·복구 불가라 확인을 받는다(리포 기존 패턴). 이름 입력과 별개다.
+    if (!window.confirm("이 파일럿의 모든 데이터를 삭제합니다. 되돌릴 수 없습니다. 진행할까요?")) return;
+    setBusy(true); setPurgeMsg(null);
+    try {
+      const r = await fetch(`/api/admin/pilots/${pilotId}/purge`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: purgeConfirm }),
+      });
+      const j = await r.json();
+      if (!r.ok && r.status !== 207) throw new Error(j?.message || "초기화에 실패했습니다.");
+      setPurgeResult(j.result as PurgeResult);
+      setPurgePrev(null);
+      setPurgeConfirm("");
+    } catch (e: unknown) {
+      setPurgeMsg(e instanceof Error ? e.message : "초기화에 실패했습니다.");
+    } finally { setBusy(false); }
+  }
+
   if (loading) return <p className="py-16 text-center text-sm font-semibold text-slate-400">불러오는 중…</p>;
   if (loadError || !d) return (
     <div className="py-16 text-center">
@@ -164,6 +222,8 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
     </div>
   );
 
+  // ★초기화가 끝나면 파일럿 자체가 사라진다 — 설정 화면을 계속 보여주면 안 된다.
+  const purged = purgeResult?.completed === true;
   const siteName = (id: string) => d.sites.find((s) => s.id === id)?.companyName ?? "—";
   const workerName = (id: string) => d.workers.find((w) => w.id === id)?.workerName ?? "—";
   const c = d.registry.counts;
@@ -175,6 +235,10 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
         sub={d.agency ? `전용 기관 ${d.agency.name} · ${d.agency.planType} 등급 (급여는 PRO 전용이라 열리지 않습니다)` : "전용 기관 없음"}
         actions={<Link href="/admin/pilots" className={T.btnSecondary}>목록</Link>}
       />
+
+      {/* ★초기화가 끝나면 설정 화면을 내린다 — 이미 사라진 자원의 목록과 등록 폼이 남아 있으면
+          운영자가 없는 파일럿에 등록을 시도하게 된다(시각검증에서 실제로 확인). */}
+      {!purged && (<>
 
       {/* 등록 현황 — 레지스트리 기준. 여기 숫자가 곧 삭제 대상이다. */}
       <div className={T.card}>
@@ -519,6 +583,123 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
               ))}
             </tbody>
           </table>
+        )}
+      </Card>
+
+      </>)}
+
+      {/* 6) 초기화 — 되돌릴 수 없다. 미리보기 → 이름 입력 → 확인 3단계를 거친다. */}
+      <Card step={6} title="전체 초기화"
+        desc="파일럿이 만든 기관·사업체·훈련생·계정·배정과 그로부터 생긴 근태·일지·문서·서명 이미지, 그리고 파일럿에 귀속된 감사·접속·API 기록까지 전부 지웁니다. 되돌릴 수 없습니다.">
+        {!purged && (
+          <div className="flex flex-wrap items-center gap-2">
+            {/* ★서명 이미지 목록 조회(외부 Storage)가 5초 넘게 걸린다 — 진행 표시가 없으면
+                "눌러도 반응이 없다"로 읽힌다(시각검증에서 실제로 그렇게 오인했다). */}
+            <button onClick={() => void loadPurgePreview()} disabled={busy} className={T.btnSecondary}>
+              {busy ? "조회 중…" : "삭제 대상 미리보기"}
+            </button>
+            <p className="text-xs font-semibold text-slate-400">먼저 미리보기로 무엇이 지워지는지 확인하세요. 미리보기는 아무것도 지우지 않습니다.</p>
+          </div>
+        )}
+
+        {purgeMsg && <p className="mt-3 text-sm font-bold text-rose-600">{purgeMsg}</p>}
+
+        {purgePrev && (
+          <div className="mt-4 space-y-3">
+            <div className="grid gap-3 md:grid-cols-3">
+              {[
+                { title: "레지스트리 자원", rows: purgePrev.registry },
+                { title: "함께 사라지는 것", rows: purgePrev.cascade },
+                { title: "명시 삭제 대상", rows: purgePrev.explicit },
+              ].map((g) => (
+                <div key={g.title} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="mb-2 text-xs font-black text-slate-500">{g.title}</p>
+                  <ul className="space-y-1">
+                    {Object.entries(g.rows).map(([k, v]) => (
+                      <li key={k} className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                        <span className="truncate pr-2">{k}</span>
+                        <span className={v > 0 ? "font-black text-slate-900" : "text-slate-300"}>{v}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs font-semibold text-slate-500">
+              서명 이미지 <span className="font-black text-slate-900">{purgePrev.storage.length}</span>건
+              {purgePrev.retryPending > 0 && (
+                <span className="ml-2 font-black text-rose-600">· 이전 실행의 삭제 실패분 {purgePrev.retryPending}건(재시도 대상)</span>
+              )}
+            </p>
+
+            {/* ★참여자가 기존 워커 문서 경로를 썼다는 신호. 0이 정상이다. */}
+            {(purgePrev.signals.DocumentRun ?? 0) > 0 && (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
+                문서 발행 기록 {purgePrev.signals.DocumentRun}건 — 참여자가 파일럿 문서 경로가 아닌 기존 화면을 사용했을 수 있습니다. 함께 삭제됩니다.
+              </p>
+            )}
+
+            {purgePrev.blockers.length > 0 ? (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                <p className="text-xs font-black text-rose-700">예상 밖 데이터가 있어 초기화를 실행할 수 없습니다. 확인 후 다시 시도하세요.</p>
+                <ul className="mt-2 space-y-1">
+                  {purgePrev.blockers.map((b) => (
+                    <li key={b.label} className="text-xs font-semibold text-rose-700">
+                      · <span className="font-black">{b.label} {b.count}건</span> — {b.reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 p-3">
+                <label className={T.label}>확인을 위해 파일럿 이름을 정확히 입력하세요 <span className="text-rose-500">*</span></label>
+                <div className="flex flex-wrap gap-2">
+                  <input value={purgeConfirm} onChange={(e) => setPurgeConfirm(e.target.value)}
+                    placeholder={purgePrev.pilot.name} className={`flex-1 min-w-[240px] ${T.input}`} />
+                  <button onClick={() => void runPurge()} disabled={busy || purgeConfirm.trim() !== purgePrev.pilot.name}
+                    className={T.btnDanger}>전체 초기화 실행</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {purgeResult && (
+          <div className="mt-4 space-y-3">
+            <p className={`text-sm font-black ${purgeResult.completed ? "text-emerald-600" : "text-rose-600"}`}>
+              {purgeResult.completed
+                ? `초기화 완료 — ${purgeResult.pilot.name}`
+                : `일부 실패 — 서명 이미지 ${purgeResult.storage.failed.length}건을 지우지 못했습니다. 파일럿을 남겨 두었으니 다시 실행하세요.`}
+            </p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-2 text-xs font-black text-slate-500">삭제 건수</p>
+              <ul className="grid gap-1 md:grid-cols-3">
+                {Object.entries(purgeResult.deleted).map(([k, v]) => (
+                  <li key={k} className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                    <span className="truncate pr-2">{k}</span><span className="font-black text-slate-900">{v}</span>
+                  </li>
+                ))}
+                <li className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                  <span className="truncate pr-2">서명 이미지</span>
+                  <span className="font-black text-slate-900">{purgeResult.storage.deleted}/{purgeResult.storage.total}</span>
+                </li>
+              </ul>
+            </div>
+            {purgeResult.storage.failed.length > 0 && (
+              <ul className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                {purgeResult.storage.failed.map((f) => (
+                  <li key={f.path} className="truncate text-xs font-semibold text-rose-700">· {f.path} — {f.error}</li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs font-semibold text-slate-400">
+              잔여 재조회: {Object.entries(purgeResult.leftovers).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${v}`).join(", ") || "전부 0"}
+            </p>
+            {purgeResult.completed && (
+              <Link href="/admin/pilots" className={T.btnPrimary}>파일럿 목록으로</Link>
+            )}
+          </div>
         )}
       </Card>
 
