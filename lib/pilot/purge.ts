@@ -470,6 +470,14 @@ export interface PurgePreview {
   blockers: PurgeBlocker[];
   /** 이전 실행의 Storage 삭제 실패분(재시도 대상) */
   retryPending: number;
+  /**
+   * ★현재 단계. **응답에만 두지 않고 미리보기가 복원**한다 — 새로고침하거나 다른 운영자가 열어도
+   *  "1차 정리는 끝났고 확인만 남았다"가 보여야 한다.
+   *  · `READY` — 아직 아무것도 지우지 않았다
+   *  · `AWAITING_CONFIRM` — 1차 정리 완료. 남은 객체가 없는지 한 번 더 확인하고 종료한다
+   *  · `RETRY_PENDING` — 삭제 실패분·착지분이 있다. 재시도가 필요하다
+   */
+  stage: "READY" | "AWAITING_CONFIRM" | "RETRY_PENDING";
   /** 참여자가 기존 /worker/docs 경로를 썼다는 신호(0이 정상) */
   signals: Record<string, number>;
 }
@@ -477,12 +485,17 @@ export interface PurgePreview {
 /** 초기화 미리보기. **아무것도 지우지 않는다.** 실행 전 재확인용이다(§10-1 공통 규율). */
 export async function previewPilotPurge(pilotId: bigint): Promise<PurgePreview> {
   const s = await collectPilotScope(prisma, pilotId);
-  const [blockers, storage, counts, retryPending] = await Promise.all([
+  const [blockers, storage, counts, retryPending, agencyAlive] = await Promise.all([
     findPurgeBlockers(prisma, s),
     listPilotStorageObjects(s),
     countTargets(prisma, s),
     prisma.pilotResource.count({ where: { pilotId, deleteError: { not: null } } }),
+    s.agencyId ? prisma.agency.count({ where: { id: s.agencyId } }) : Promise.resolve(0),
   ]);
+
+  // ★단계는 파생 상태로 복원한다(새 필드 없음): 실패 기록이 있으면 재시도, 전용 기관이 이미 없으면 확인 대기.
+  const stage: PurgePreview["stage"] =
+    retryPending > 0 ? "RETRY_PENDING" : s.agencyId != null && agencyAlive === 0 ? "AWAITING_CONFIRM" : "READY";
 
   return {
     pilot: { id: s.pilotId.toString(), name: s.pilotName },
@@ -507,6 +520,7 @@ export async function previewPilotPurge(pilotId: bigint): Promise<PurgePreview> 
     storage,
     blockers,
     retryPending,
+    stage,
     signals: { DocumentRun: s.docRunIds.length },
   };
 }
@@ -570,12 +584,34 @@ function inviteWhere(s: PilotScope): Prisma.WorkerInviteWhereInput {
 // 실행
 // ─────────────────────────────────────────────────────────────
 
+export type PurgeOutcome = "COMPLETED" | "AWAITING_CONFIRM" | "FAILED";
+
 export interface PurgeResult {
   pilot: { id: string; name: string };
   /** 종류별 실제 삭제 건수 */
   deleted: Record<string, number>;
-  storage: { total: number; deleted: number; failed: { path: string; error: string }[] };
-  /** 전부 성공해 Pilot·레지스트리까지 지웠는가 */
+  storage: {
+    total: number;
+    deleted: number;
+    /** 삭제를 시도했는데 실패한 것 */
+    failed: { path: string; error: string }[];
+    /**
+     * ★최종 검증 나열에서 발견된 **착지분**. "삭제 대상이었는데 실패한 것"이 아니라
+     *  "대상 목록이 확정된 뒤에 생긴 것"이라 성격이 다르다 — 같은 배열에 넣으면
+     *  total/deleted/failed 산술이 맞지 않는 응답이 나간다.
+     */
+    deferred: { path: string; error: string }[];
+  };
+  /**
+   * ★종료 판정.
+   *  · `AWAITING_CONFIRM` — 1차 정리는 끝났고 남은 객체도 없다. **아직 완료가 아니다.**
+   *    DB 관문이 닫힌 뒤라 새 업로드는 시작될 수 없지만, 이미 시작된 요청이 최종 나열 **뒤에**
+   *    착지할 수 있다. 그래서 한 번 더 보고 끝낸다(운영자 클릭 1회).
+   *  · `FAILED` — 삭제 실패분 또는 착지분이 있다. Pilot 보존.
+   *  · `COMPLETED` — 확인 실행에서 남은 것이 없었다. Pilot·레지스트리 삭제.
+   */
+  outcome: PurgeOutcome;
+  /** `outcome === "COMPLETED"` 와 같다(Pilot 까지 지웠는가). */
   completed: boolean;
   /**
    * 삭제 후 **재조회한 실제 건수**. 전부 0이어야 한다.
@@ -626,6 +662,10 @@ export async function purgePilot(
       `초기화를 중단했습니다 — 예상 밖 데이터가 있습니다: ${blockers.map((b) => `${b.label} ${b.count}건`).join(", ")}`);
   }
   const storagePaths = await listPilotStorageObjects(pre);
+
+  // ★확인 실행 판별(파생 상태) — 전용 기관 행이 이미 없으면 1차 정리가 끝난 파일럿이다.
+  const confirmationRun =
+    pre.agencyId != null && (await prisma.agency.count({ where: { id: pre.agencyId } })) === 0;
 
   // ── [2] 트랜잭션 — 잠금 → 재수집·정합 확인 → 기록 → 삭제
   const deleted = await prisma.$transaction(async (tx) => {
@@ -744,21 +784,35 @@ export async function purgePilot(
   //  **완료로 보고하지 않고** 재시도 목록에 넣는다. 업로드와 DB 커밋은 원자적일 수 없으므로
   //  이 꼬리를 0으로 만들 수는 없다 — 대신 도구가 거짓말을 하지 않게 한다.
   const remaining = await listStorageByPrefix(pre);
+  const deferred: { path: string; error: string }[] = [];
   if (remaining.length) {
     const reason = "초기화 도중 새로 착지한 객체 — 재시도가 필요합니다.";
-    await prisma.pilotResource.createMany({
-      data: remaining.map((p) => ({ pilotId, kind: "STORAGE_OBJECT" as const, resourceKey: storageKey(SIG_BUCKET, p) })),
-      skipDuplicates: true,
-    });
-    await prisma.pilotResource.updateMany({
-      where: { pilotId, kind: "STORAGE_OBJECT", resourceKey: { in: remaining.map((p) => storageKey(SIG_BUCKET, p)) } },
-      data: { deleteError: reason },
-    });
-    for (const path of remaining) if (!failed.some((f) => f.path === path)) failed.push({ path, error: reason });
+    // ★★삭제에 **진짜 실패한** 객체도 버킷에 남아 remaining 에 들어온다. 전체에 착지 사유를 덮어쓰면
+    //  레지스트리의 실제 실패 사유(HTTP 500 등)가 "착지한 객체"로 바뀌어 나중에 원인을 오독한다.
+    //  → 이미 failed 로 잡힌 경로는 빼고, **차집합에만** 사유를 쓴다.
+    const landed = remaining.filter((p) => !failed.some((f) => f.path === p));
+    if (landed.length) {
+      await prisma.pilotResource.createMany({
+        data: landed.map((p) => ({ pilotId, kind: "STORAGE_OBJECT" as const, resourceKey: storageKey(SIG_BUCKET, p) })),
+        skipDuplicates: true,
+      });
+      await prisma.pilotResource.updateMany({
+        where: { pilotId, kind: "STORAGE_OBJECT", resourceKey: { in: landed.map((p) => storageKey(SIG_BUCKET, p)) } },
+        data: { deleteError: reason },
+      });
+      for (const path of landed) deferred.push({ path, error: reason });
+    }
   }
 
-  // ★실패분이 있으면 Pilot을 지우지 않는다 — 지우면 Cascade로 재시도 목록까지 사라진다.
-  const completed = failed.length === 0;
+  // ★★종료 판정 — "정리했다"와 "끝났다"를 분리한다(§10-1 ⑧).
+  //  1차 실행은 남은 것이 없어도 **확인 대기**로 끝난다. DB 관문이 닫힌 뒤라 새 업로드는 시작될 수 없고
+  //  이미 시작된 요청의 수명은 유한하므로(서버리스 실행 시간 상한), 한 번 더 보면 닫힌다.
+  //  ★확인 실행인지는 파생 상태로 판별한다 — 전용 기관 행이 이미 없으면 확인 실행이다(새 필드 없음).
+  const outcome: PurgeOutcome =
+    failed.length > 0 || deferred.length > 0 ? "FAILED" : confirmationRun ? "COMPLETED" : "AWAITING_CONFIRM";
+
+  // ★남은 것이 있거나 확인 전이면 Pilot 을 지우지 않는다 — 지우면 Cascade 로 재시도 목록까지 사라진다.
+  const completed = outcome === "COMPLETED";
   if (completed) {
     await prisma.pilotResource.deleteMany({ where: { pilotId } });
     await prisma.pilot.delete({ where: { id: pilotId } });
@@ -770,7 +824,8 @@ export async function purgePilot(
   return {
     pilot: { id: pre.pilotId.toString(), name: pre.pilotName },
     deleted,
-    storage: { total: storagePaths.length, deleted: removed, failed },
+    storage: { total: storagePaths.length, deleted: removed, failed, deferred },
+    outcome,
     completed,
     leftovers,
     retained: completed

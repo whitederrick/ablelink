@@ -36,7 +36,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ pilotId: strin
     const result = await purgePilot(parsePilotId(pilotId), body.confirm);
 
     // ★실패분이 있으면 "완료"로 보고하지 않는다(§10-3). 남은 목록을 그대로 돌려준다.
-    return NextResponse.json({ success: true, result }, { status: result.completed ? 200 : 207 });
+    //  `AWAITING_CONFIRM`(1차 정리 완료·확인 대기)은 오류가 아니므로 200이다.
+    return NextResponse.json({ success: true, result }, { status: result.outcome === "FAILED" ? 207 : 200 });
   } catch (e) {
     return toPilotResponse(e);
   }

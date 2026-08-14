@@ -329,7 +329,15 @@ async function main() {
   console.log("\n[8] ★Storage 삭제 실패 주입 — 보존과 재시도 목록이 실제로 남는가");
   const failing = { deleteObject: async () => ({ ok: false as const, error: "주입된 실패(검증)" }) };
   const failed = await P.purgePilot(p.pilotId, prev.pilot.name, failing);
-  ok("완료로 보고하지 않는다(completed=false)", failed.completed === false);
+  ok("완료로 보고하지 않는다(outcome=FAILED)", failed.completed === false && failed.outcome === "FAILED", failed.outcome);
+  ok("★실제 실패 사유가 레지스트리에 그대로 남는다(착지 사유로 덮어쓰지 않는다)",
+    (await prisma.pilotResource.count({
+      where: { pilotId: p.pilotId, kind: "STORAGE_OBJECT", deleteError: { contains: "주입된 실패" } },
+    })) === 2 &&
+    (await prisma.pilotResource.count({
+      where: { pilotId: p.pilotId, deleteError: { contains: "착지" } },
+    })) === 0);
+  ok("착지분(deferred)과 삭제 실패(failed)를 분리해 보고", failed.storage.deferred.length === 0);
   ok("Storage 2건 전부 실패로 집계", failed.storage.total === 2 && failed.storage.deleted === 0 && failed.storage.failed.length === 2,
     JSON.stringify(failed.storage));
   ok("DB 자원은 이미 삭제됨(트랜잭션은 커밋됐다)",
@@ -478,10 +486,14 @@ async function main() {
   }
 
   // 초기화가 안전하게 중단됐다면(자원이 늘어 SCOPE_CHANGED) 재시도로 마무리한다 — 그것이 설계된 동선이다.
-  if ((await prisma.pilot.count({ where: { id: p2.pilotId } })) === 1) {
-    const fin = await P.purgePilot(p2.pilotId, `경쟁검증-${STAMP}`);
-    ok("남은 자원은 재시도로 정리된다", fin.completed === true, JSON.stringify(fin.leftovers));
+  // ★2단계 종료 규약이라 최대 2회(정리 → 확인)면 끝난다. 무한 반복이 아니라는 것도 함께 단언한다.
+  let rounds = 0;
+  let finOutcome = racePurge.status === "fulfilled" ? racePurge.value.outcome : "FAILED";
+  while ((await prisma.pilot.count({ where: { id: p2.pilotId } })) === 1 && rounds < 3) {
+    rounds++;
+    finOutcome = (await P.purgePilot(p2.pilotId, `경쟁검증-${STAMP}`)).outcome;
   }
+  ok(`남은 자원은 정리 → 확인으로 끝난다(추가 ${rounds}회)`, finOutcome === "COMPLETED" && rounds <= 2, finOutcome);
 
   // ★불변식 ②: 어느 인터리빙에서도 최종 상태에 추적 불가능한 계정이 없다.
   ok("★고아 계정이 남지 않는다", (await prisma.worker.count({ where: { loginId: racePhone } })) === 0);
@@ -516,15 +528,42 @@ async function main() {
     },
   };
   const landedRes = await P.purgePilot(p3.pilotId, `착지검증-${STAMP}`, lateDeps);
-  ok("★착지한 객체를 잡아 '완료'로 보고하지 않는다", landedRes.completed === false, JSON.stringify(landedRes.storage));
-  ok("★착지 객체가 실패 목록에 사유와 함께 들어간다",
-    landedRes.storage.failed.some((f) => f.path === latePath), JSON.stringify(landedRes.storage.failed));
+  ok("★착지한 객체를 잡아 '완료'로 보고하지 않는다",
+    landedRes.completed === false && landedRes.outcome === "FAILED", landedRes.outcome);
+  ok("★착지분은 deferred 로 분리 보고(삭제 실패와 성격이 다르다)",
+    landedRes.storage.deferred.some((f) => f.path === latePath) &&
+    !landedRes.storage.failed.some((f) => f.path === latePath),
+    JSON.stringify(landedRes.storage));
   ok("Pilot·레지스트리 보존(재시도 가능)", (await prisma.pilot.count({ where: { id: p3.pilotId } })) === 1);
 
   const landedRetry = await P.purgePilot(p3.pilotId, `착지검증-${STAMP}`);
   ok("★재시도가 착지 객체를 실제로 지운다", landedRetry.completed === true, JSON.stringify(landedRetry.storage));
   ok("★버킷에도 남지 않는다", (await objectExists(latePath)) === false);
   made.storagePaths = made.storagePaths.filter((p) => p !== firstPath && p !== latePath);
+  made.pilotId = null; made.agencyId = null;
+
+  // ─────────────────────────────────────────────────────────
+  console.log("\n[16] ★2단계 종료 규약 — '정리했다'와 '끝났다'를 분리한다");
+  const p4 = await R.createPilot({ name: `종료검증-${STAMP}`, agencyName: `종료검증기관-${STAMP}` });
+  made.pilotId = p4.pilotId; made.agencyId = p4.agencyId;
+  await R.createPilotWorker(p4.pilotId, { workerName: "종료", phoneNumber: "01099990006", password: "pilot1234!" });
+
+  const first = await P.purgePilot(p4.pilotId, `종료검증-${STAMP}`);
+  ok("★1차 실행은 남은 것이 없어도 완료가 아니다(AWAITING_CONFIRM)",
+    first.outcome === "AWAITING_CONFIRM" && first.completed === false, first.outcome);
+  ok("DB 자원은 지워졌다", (await prisma.agency.count({ where: { id: p4.agencyId } })) === 0);
+  ok("Pilot·레지스트리는 확인 때까지 보존", (await prisma.pilot.count({ where: { id: p4.pilotId } })) === 1);
+
+  // ★상태가 응답에만 있으면 새로고침에서 사라진다 — 미리보기가 복원하는지 확인한다.
+  const stagePrev = await P.previewPilotPurge(p4.pilotId);
+  ok("★미리보기가 단계를 복원한다(새로고침·다른 운영자도 같은 화면)",
+    stagePrev.stage === "AWAITING_CONFIRM", stagePrev.stage);
+
+  const confirmRun = await P.purgePilot(p4.pilotId, `종료검증-${STAMP}`);
+  ok("★확인 실행에서 비로소 완료", confirmRun.outcome === "COMPLETED" && confirmRun.completed === true, confirmRun.outcome);
+  ok("Pilot·레지스트리 소멸",
+    (await prisma.pilot.count({ where: { id: p4.pilotId } })) === 0 &&
+    (await prisma.pilotResource.count({ where: { pilotId: p4.pilotId } })) === 0);
   made.pilotId = null; made.agencyId = null;
 }
 

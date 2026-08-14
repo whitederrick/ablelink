@@ -41,12 +41,20 @@ type PurgePreview = {
   storage: string[];
   blockers: { label: string; count: number; reason: string }[];
   retryPending: number;
+  /** READY=미착수 · AWAITING_CONFIRM=1차 정리 완료(확인만 남음) · RETRY_PENDING=실패분 있음 */
+  stage: "READY" | "AWAITING_CONFIRM" | "RETRY_PENDING";
   signals: Record<string, number>;
 };
 type PurgeResult = {
   pilot: { id: string; name: string };
   deleted: Record<string, number>;
-  storage: { total: number; deleted: number; failed: { path: string; error: string }[] };
+  storage: {
+    total: number; deleted: number;
+    failed: { path: string; error: string }[];
+    /** 최종 검증 나열에서 발견된 착지분(삭제 실패와 성격이 다르다) */
+    deferred: { path: string; error: string }[];
+  };
+  outcome: "COMPLETED" | "AWAITING_CONFIRM" | "FAILED";
   completed: boolean;
   leftovers: Record<string, number>;
   /** 재시도를 위해 의도적으로 남긴 것(실패가 없으면 null) */
@@ -197,14 +205,19 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
     } finally { setBusy(false); }
   }
 
-  async function runPurge() {
+  /**
+   * @param confirmName 보낼 확인 문자열. 1차 실행은 운영자가 직접 입력한 값,
+   *   **확인·재시도 실행**은 이미 지워진 뒤라 미리보기가 준 파일럿 이름을 그대로 쓴다.
+   * @param ask window.confirm 여부. 파괴가 일어나는 1차 실행에서만 받는다.
+   */
+  async function runPurge(confirmName: string, ask: boolean) {
     // ★terminal·복구 불가라 확인을 받는다(리포 기존 패턴). 이름 입력과 별개다.
-    if (!window.confirm("이 파일럿의 모든 데이터를 삭제합니다. 되돌릴 수 없습니다. 진행할까요?")) return;
+    if (ask && !window.confirm("이 파일럿의 모든 데이터를 삭제합니다. 되돌릴 수 없습니다. 진행할까요?")) return;
     setBusy(true); setPurgeMsg(null);
     try {
       const r = await fetch(`/api/admin/pilots/${pilotId}/purge`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirm: purgeConfirm }),
+        body: JSON.stringify({ confirm: confirmName }),
       });
       const j = await r.json();
       if (!r.ok && r.status !== 207) throw new Error(j?.message || "초기화에 실패했습니다.");
@@ -224,8 +237,9 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
     </div>
   );
 
-  // ★초기화가 끝나면 파일럿 자체가 사라진다 — 설정 화면을 계속 보여주면 안 된다.
-  const purged = purgeResult?.completed === true;
+  // ★1차 정리가 실행된 뒤에는 설정 화면을 내린다 — 자원은 이미 사라졌고, 남은 폼으로 등록을 시도하면
+  //  없는 파일럿에 쓰게 된다. 응답(purgeResult)뿐 아니라 **미리보기 단계**로도 판정해 새로고침을 견딘다.
+  const purged = purgeResult != null || (purgePrev != null && purgePrev.stage !== "READY");
   const siteName = (id: string) => d.sites.find((s) => s.id === id)?.companyName ?? "—";
   const workerName = (id: string) => d.workers.find((w) => w.id === id)?.workerName ?? "—";
   const c = d.registry.counts;
@@ -653,13 +667,31 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
                   ))}
                 </ul>
               </div>
+            ) : purgePrev.stage !== "READY" ? (
+              // ★1차 정리가 끝난 뒤의 단계. 응답이 아니라 **미리보기가 복원**하므로 새로고침해도,
+              //  다른 운영자가 열어도 같은 상태가 보인다.
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs font-black text-amber-800">
+                  {purgePrev.stage === "AWAITING_CONFIRM"
+                    ? "1차 정리가 끝났습니다. 남은 서명 이미지가 없는지 한 번 더 확인하고 종료합니다."
+                    : `삭제하지 못한 서명 이미지 ${purgePrev.retryPending}건이 남아 있습니다. 다시 실행해 정리하세요.`}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  데이터는 이미 지워졌습니다. 이 단계는 버킷에 남은 것이 없는지 확인하는 절차입니다.
+                </p>
+                <div className="mt-2">
+                  <button onClick={() => void runPurge(purgePrev.pilot.name, false)} disabled={busy} className={T.btnPrimary}>
+                    {purgePrev.stage === "AWAITING_CONFIRM" ? "확인하고 종료" : "재시도"}
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="rounded-xl border border-slate-200 p-3">
                 <label className={T.label}>확인을 위해 파일럿 이름을 정확히 입력하세요 <span className="text-rose-500">*</span></label>
                 <div className="flex flex-wrap gap-2">
                   <input value={purgeConfirm} onChange={(e) => setPurgeConfirm(e.target.value)}
                     placeholder={purgePrev.pilot.name} className={`flex-1 min-w-[240px] ${T.input}`} />
-                  <button onClick={() => void runPurge()} disabled={busy || purgeConfirm.trim() !== purgePrev.pilot.name}
+                  <button onClick={() => void runPurge(purgeConfirm, true)} disabled={busy || purgeConfirm.trim() !== purgePrev.pilot.name}
                     className={T.btnDanger}>전체 초기화 실행</button>
                 </div>
               </div>
@@ -669,11 +701,21 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
 
         {purgeResult && (
           <div className="mt-4 space-y-3">
-            <p className={`text-sm font-black ${purgeResult.completed ? "text-emerald-600" : "text-rose-600"}`}>
-              {purgeResult.completed
+            {/* ★"정리했다"와 "끝났다"를 구분해 말한다 — 1차 실행은 남은 것이 없어도 완료가 아니다. */}
+            <p className={`text-sm font-black ${
+              purgeResult.outcome === "COMPLETED" ? "text-emerald-600"
+                : purgeResult.outcome === "AWAITING_CONFIRM" ? "text-amber-700" : "text-rose-600"}`}>
+              {purgeResult.outcome === "COMPLETED"
                 ? `초기화 완료 — ${purgeResult.pilot.name}`
-                : `일부 실패 — 서명 이미지 ${purgeResult.storage.failed.length}건을 지우지 못했습니다. 파일럿을 남겨 두었으니 다시 실행하세요.`}
+                : purgeResult.outcome === "AWAITING_CONFIRM"
+                  ? "1차 정리 완료 — 남은 서명 이미지가 없는지 한 번 더 확인하면 끝납니다. 아래 '확인하고 종료'를 눌러 주세요."
+                  : `정리하지 못한 서명 이미지 ${purgeResult.storage.failed.length + purgeResult.storage.deferred.length}건이 있습니다. 파일럿을 남겨 두었으니 다시 실행하세요.`}
             </p>
+            {purgeResult.outcome === "AWAITING_CONFIRM" && (
+              <button onClick={() => { setPurgeResult(null); void loadPurgePreview(); }} disabled={busy} className={T.btnPrimary}>
+                확인 단계로
+              </button>
+            )}
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <p className="mb-2 text-xs font-black text-slate-500">삭제 건수</p>
               <ul className="grid gap-1 md:grid-cols-3">
@@ -688,10 +730,13 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
                 </li>
               </ul>
             </div>
-            {purgeResult.storage.failed.length > 0 && (
+            {(purgeResult.storage.failed.length > 0 || purgeResult.storage.deferred.length > 0) && (
               <ul className="rounded-xl border border-rose-200 bg-rose-50 p-3">
                 {purgeResult.storage.failed.map((f) => (
-                  <li key={f.path} className="truncate text-xs font-semibold text-rose-700">· {f.path} — {f.error}</li>
+                  <li key={f.path} className="truncate text-xs font-semibold text-rose-700">· 삭제 실패 · {f.path} — {f.error}</li>
+                ))}
+                {purgeResult.storage.deferred.map((f) => (
+                  <li key={f.path} className="truncate text-xs font-semibold text-amber-700">· 도중 착지 · {f.path} — {f.error}</li>
                 ))}
               </ul>
             )}
