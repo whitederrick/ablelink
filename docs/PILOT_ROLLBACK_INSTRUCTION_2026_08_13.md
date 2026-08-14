@@ -13,6 +13,14 @@
 > ⑤`SiteSignToken.token` 사전 수집(§10-2·§7) ⑥`DocumentVersion` Storage 오기 삭제(§10-2)
 > ⑦Storage 등록 규칙을 **prefix 나열**로 대체(§7 — 운영 라우트 수정 요구를 기각) ⑧부분완료 시 생성 차단(§10-3-2)
 > ⑨초기화 경로 `audit()` 호출 금지(§10-2-2). 근거는 전부 실측이며 GPT·Claude 교차검토 3라운드를 거쳤다.
+>
+> ★★**v5-a 보정(2026-08-14, 외부 코드리뷰 반영) — 4건.** 정상 경로만 검증해 **실패 경로와 동시성**을 놓쳤다.
+> ①**재시도 목록 유실**(P1): 레지스트리 `STORAGE_OBJECT` 를 재시도 입력으로 안 썼다 → `sign-tokens` 경로는
+> 근거가 Cascade 로 사라져 재시도에서 못 찾고 **"완료"로 오보** (§10-2 사전 수집)
+> ②**초기화 중 생성 경쟁**(P1): `deleteError` 는 실패 이후에야 기록돼 그 전 구간이 무방비 →
+> **행 잠금 + 기관 실물 확인** 두 겹으로 교체 (§10-3-2)
+> ③`AgencyContractClause` preflight 누락(P2, §10-5) ④**부분 실패인데 "잔여 전부 0"** 표시(P2, §10-3).
+> ★교훈: **통과 수치가 검증 범위를 보증하지 않는다** — 52/52 는 실패 주입·재시도·동시 실행 케이스가 아예 없었다.
 
 ---
 
@@ -563,6 +571,11 @@ GPT·Claude 교차검토 3라운드 + 실측으로 확정했다. 구 문안의 �
   · ★SiteSignToken.token — Storage `sign-tokens/{token}/` 의 **유일한 근거**.
       SiteAssignment Cascade 로 사라지면 그 객체는 영영 못 찾는다(F20의 실제 사례)
   · Storage prefix 나열 결과(§7 개정판)
+  · ★★**이전 실행이 남긴 `PilotResource(STORAGE_OBJECT)` 를 경로로 복원해 반드시 합집합**한다.
+      **이것이 없으면 재시도가 결정적으로 실패한다** — `sign-tokens/{token}/` 의 근거인 `SiteSignToken` 은
+      1차 실행의 배정 Cascade 로 이미 사라져 2차 실행의 prefix 나열에서 통째로 빠진다.
+      지울 게 없다고 판단해 `completed=true` 로 끝내면 **실패 기록까지 지우고** 객체는 영영 못 찾는다.
+      ★삭제기가 다루지 못하는 다른 버킷 키는 조용히 흘리지 말고 **중단 사유**로 세운다
   · WorkerInvite 및 예상 밖 종속 행 조회(§10-5 preflight)
   ⚠️**삭제된 구 문안**: "Storage 경로 — DocumentVersion". `worker/docs/submit:120` 이
     `pdfUrl: ""`(sourceData 재생성 방식·파일 미저장)이라 **DocumentVersion 은 Storage 대상이 아니다.**
@@ -706,6 +719,7 @@ ADMIN(:20)도 WORKER(:24)도 `agencyId` 가 없고, **파일럿은 Manager 를 �
 | `WorkerInvite` | 0 | 명시 삭제 | 지시서 §10-5 요구 항목 |
 | `AgencyAnnouncement` | 0 | 명시 삭제 | Manager 부재 |
 | `Manager` | 0 | ★**중단** | 파일럿은 Manager 를 만들지 않는다 — 있으면 설계 위반이라 사람이 판단한다 |
+| `AgencyContractClause` | 0 | ★**중단** | ★Agency 필수 FK(RESTRICT) 14종 중 **초안에서 유일하게 빠져 있던 모델**. 있으면 미리보기는 통과하고 트랜잭션이 원문 FK 오류로 터진다 |
 | `EmploymentContract`·`PayContract`·`PayrollRun`·`AgencyDeduction` | 0 | ★**중단** | 계약·급여 미생성(F28·F5) |
 | `AnnualLeaveEntry`·`AnnualLeaveRequest` | 0 | ★**중단** | 근로계약 없으면 적립 제외(F12) |
 | `SatisfactionSurvey`·`NoticeGroup`·`ManagerInvite`·`SupportTicket` | 0 | ★**중단** | Manager 부재 |
@@ -720,6 +734,9 @@ ADMIN(:20)도 WORKER(:24)도 `agencyId` 가 없고, **파일럿은 Manager 를 �
 - Storage 삭제는 외부 호출이라 실패할 수 있다. 실패 시 `PilotResource.deleteError`에 사유를 기록하고 **행을 남긴다**
 - ★실패분이 있으면 **`Pilot`을 지우지 않는다.** 지우면 Cascade로 `PilotResource`까지 사라져 **재시도 목록을 잃는다**
 - 실패분이 있으면 **초기화를 "완료"로 보고하지 않는다.** 남은 목록을 출력하고 재시도 경로를 제공한다
+- ★★**보존과 소멸을 같은 "0"으로 뭉개지 않는다.** 잔여 재조회는 `Pilot`·`PilotResource` 도 **실제 건수**를
+  돌려주고, 화면은 "재시도를 위해 보존"으로 따로 표시한다. 초안 구현은 이 둘을 강제로 0으로 만들어
+  **"일부 실패"와 "잔여 전부 0"이 동시에 표시**됐다 — 화면이 거짓말을 한다
 - ★`.catch(() => {})`로 실패를 삼키지 않는다 — 과거에 정리 코드가 실패를 삼켜 dev DB에 계정이 누적된 사고가 있었다
 
 ### 10-3-1. ★Storage 삭제는 **자체 함수**로 한다 — 운영 함수를 재사용하지 않는다
@@ -736,13 +753,19 @@ ADMIN(:20)도 WORKER(:24)도 `agencyId` 가 없고, **파일럿은 Manager 를 �
 Storage 삭제가 실패하면 **DB 자원은 이미 지워졌는데 `Pilot`·레지스트리는 남는다**(재시도 목록).
 이 상태에서 운영자가 자원을 더 만들면 재시도 목록과 실제가 다시 어긋난다.
 
-- ★**구멍은 `createPilotWorker` 하나뿐이다.** `createPilotSite`·`createPilotTrainee`·`createPilotAssignment`
-  는 이미 삭제된 `agencyId`/`siteId` 를 참조해 **FK 위반으로 실패**한다. 반면 `createPilotWorker` 는
-  `getPilotAgencyId` 를 존재 확인용으로만 부르고(`resources.ts:215`) **Worker 에 기관 FK 가 없어**
-  그대로 성공한다.
-- → **`deleteError` 가 남아 있는 파일럿에서는 자원 생성을 거부**한다. `deleteError` 자체가 "재시도 대기"
-  라는 파생 상태이므로 **§7의 "상태 머신 없음"을 깨지 않는다**(새 필드·새 전이 없음).
-- 잠금 규칙을 전면 도입할 필요는 없다 — 이 한 경로만 막으면 된다.
+- ★**뚫리는 자원은 `Worker` 하나뿐이다.** `Site`·`Trainee`·`Assignment` 생성은 이미 삭제된
+  `agencyId`/`siteId` 를 참조해 **FK 위반으로 실패**한다. 반면 `Worker` 는 **기관 FK 가 없어** 그대로 성공한다.
+- ★★**개정(2026-08-14) — `deleteError` 검사만으로는 못 막는다.**
+  `deleteError` 는 **Storage 삭제가 실패한 뒤에야** 기록된다. DB 삭제 커밋 직후부터 첫 실패까지는 **0** 이라
+  게이트가 열려 있다. 그 사이 만들어진 자원은 마지막 `pilotResource.deleteMany({ pilotId })` 가
+  레지스트리 기록까지 지워 **추적 불가능한 운영 데이터**가 된다.
+- → **자원 생성 4경로 전부**가 트랜잭션 첫 구문에서 `assertPilotWritable` 을 호출한다. 세 겹이다:
+  ① `SELECT … FROM pilots … FOR UPDATE` — 초기화의 DB 삭제 트랜잭션과 **같은 행 잠금**(트랜잭션 구간을 덮는다)
+  ② **전용 Agency 실물 존재 확인** — 잠금이 못 덮는 **Storage 삭제 구간**(기관은 없고 Pilot 은 있는 창)을 막는다
+  ③ `deleteError` 잔존 검사 — 재시도 대기 상태
+  ★①②는 **둘 다 필요하다.** 하나만으로는 각각 트랜잭션 밖·안의 창이 열린다.
+- `deleteError`·기관 존재는 **파생 상태**이므로 §7의 "상태 머신 없음"을 깨지 않는다(새 필드·새 전이 없음).
+- ★초기화가 자원 증가를 감지하면(`SCOPE_CHANGED`) **안전하게 중단**하고 재시도로 마무리한다 — 정상 동선이다.
 
 ### 10-4. 초기화 범위 밖 (인지 사항)
 
