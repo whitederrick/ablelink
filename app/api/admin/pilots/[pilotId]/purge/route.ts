@@ -11,7 +11,14 @@
 
 export const runtime = "nodejs";
 // ★Storage 나열·삭제(외부 HTTP)와 대량 삭제 트랜잭션이 있어 기본 제한으로는 짧다.
-export const maxDuration = 300;
+//
+// ★★값은 **플랜 상한 이내**로 둔다. 이 프로젝트는 Vercel hobby 플랜이고 프로젝트 레벨
+//  `defaultMaxDuration` 설정이 없다(2026-08-14 실측) — 300 을 적어도 그대로 받지 못하고
+//  조용히 잘린다. "받지 못하는 값을 적어두는 것"이 더 위험하다(운영자가 504 를 보고 원인을 오해한다).
+//  파일럿 규모의 초기화는 수 초~수십 초로 끝난다(dev 실측: 미리보기 5~7초 포함). 상한에 걸리면
+//  부분완료로 남아 재시도로 정리된다(§10-3).
+//  ★플랜을 올리거나 프로젝트 설정에서 상한을 올린 뒤에는 이 값도 함께 올릴 것.
+export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/adminScope";
