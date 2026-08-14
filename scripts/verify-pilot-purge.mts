@@ -489,6 +489,43 @@ async function main() {
     (await prisma.pilot.count({ where: { id: p2.pilotId } })) === 0 &&
     (await prisma.pilotResource.count({ where: { pilotId: p2.pilotId } })) === 0);
   made.pilotId = null; made.agencyId = null;
+
+  // ─────────────────────────────────────────────────────────
+  console.log("\n[15] ★삭제 도중 착지한 서명 객체 — 지문 비교가 아니라 실제 인터리빙을 태운다");
+  // ★범위 지문은 [1]나열~[2]커밋 구간만 덮는다. 삭제가 도는 동안 관문을 이미 통과했던 요청이
+  //  착지하면 첫 목록에 없다. 최종 검증 나열이 그것을 잡아 **완료로 보고하지 않는지**를 본다.
+  const p3 = await R.createPilot({ name: `착지검증-${STAMP}`, agencyName: `착지검증기관-${STAMP}` });
+  made.pilotId = p3.pilotId; made.agencyId = p3.agencyId;
+  const w3 = await R.createPilotWorker(p3.pilotId, { workerName: "착지", phoneNumber: "01099990005", password: "pilot1234!" });
+  const firstPath = `${w3.id}/signature_first_${STAMP}.png`;
+  await uploadObject(firstPath);
+  await prisma.worker.update({ where: { id: w3.id }, data: { signatureUrl: firstPath } });
+
+  const latePath = `${w3.id}/signature_late_${STAMP}.png`;
+  let landed = false;
+  const lateDeps = {
+    deleteObject: async (path: string) => {
+      // 첫 삭제가 도는 순간 새 객체가 착지한다(관문을 이미 통과했던 요청).
+      if (!landed) { landed = true; await uploadObject(latePath); }
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SIG_BUCKET}/${path}`, {
+        method: "DELETE", headers: { Authorization: `Bearer ${SERVICE_KEY}` },
+      });
+      return res.ok || res.status === 404
+        ? { ok: true as const }
+        : { ok: false as const, error: `HTTP ${res.status}` };
+    },
+  };
+  const landedRes = await P.purgePilot(p3.pilotId, `착지검증-${STAMP}`, lateDeps);
+  ok("★착지한 객체를 잡아 '완료'로 보고하지 않는다", landedRes.completed === false, JSON.stringify(landedRes.storage));
+  ok("★착지 객체가 실패 목록에 사유와 함께 들어간다",
+    landedRes.storage.failed.some((f) => f.path === latePath), JSON.stringify(landedRes.storage.failed));
+  ok("Pilot·레지스트리 보존(재시도 가능)", (await prisma.pilot.count({ where: { id: p3.pilotId } })) === 1);
+
+  const landedRetry = await P.purgePilot(p3.pilotId, `착지검증-${STAMP}`);
+  ok("★재시도가 착지 객체를 실제로 지운다", landedRetry.completed === true, JSON.stringify(landedRetry.storage));
+  ok("★버킷에도 남지 않는다", (await objectExists(latePath)) === false);
+  made.storagePaths = made.storagePaths.filter((p) => p !== firstPath && p !== latePath);
+  made.pilotId = null; made.agencyId = null;
 }
 
 // ★정리는 성공 경로에서만 도는 코드가 아니어야 한다 — finally 에서 null-safe 로 돈다.

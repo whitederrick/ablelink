@@ -389,7 +389,7 @@ export async function findPurgeBlockers(db: DbClient, s: PilotScope): Promise<Pu
  *  DB가 참조하지 않는 **고아 객체까지 회수**되므로 등록 방식보다 오히려 완전하다
  *  (`worker/signature:90`의 DB 갱신 실패로 남는 고아가 실제 사례다).
  */
-export async function listPilotStorageObjects(s: PilotScope): Promise<string[]> {
+export async function listStorageByPrefix(s: PilotScope): Promise<string[]> {
   if (!SUPABASE_URL || !SERVICE_KEY) {
     throw new PilotError(500, "STORAGE_ENV", "Storage 접근 설정(NEXT_PUBLIC_SUPABASE_URL·SUPABASE_SERVICE_ROLE_KEY)이 없습니다.");
   }
@@ -416,9 +416,17 @@ export async function listPilotStorageObjects(s: PilotScope): Promise<string[]> 
       if (rows.length < 100) break;
     }
   }
+  return Array.from(found).sort();
+}
+
+/**
+ * 삭제 대상 경로 = **prefix 나열 ∪ DB 참조 경로 ∪ 이전 실행의 재시도 목록**.
+ *
+ * ★재시도 목록 합집합이 없으면 2차 실행이 결정적으로 실패한다(§7·P1-2).
+ */
+export async function listPilotStorageObjects(s: PilotScope): Promise<string[]> {
+  const found = new Set(await listStorageByPrefix(s));
   for (const p of s.dbStoragePaths) found.add(p);
-  // ★이전 실행의 재시도 목록을 반드시 합집합한다 — prefix 나열만으로는 1차에서 근거 행이
-  //  사라진 경로(sign-tokens)를 다시 찾지 못한다.
   for (const p of s.registryStoragePaths) found.add(p);
   return Array.from(found).sort();
 }
@@ -693,6 +701,26 @@ export async function purgePilot(
   }, { timeout: 120_000, maxWait: 20_000 });
 
   // ── [3] 트랜잭션 밖 — Storage 삭제 → 결과 반영
+  //
+  // ★★**커밋 직후 같은 prefix 를 다시 나열한다.** [1]나열과 [2]커밋 사이에 착지한 서명 객체는
+  //  첫 목록에 없다(범위 지문은 [2] 시점까지만 본다). 이 재나열이 그 구간을 덮는다.
+  //  ★이 시점부터는 **새 업로드가 구조적으로 시작될 수 없다** — 세 업로드 경로가 전부 업로드보다
+  //   먼저 DB 를 본다(`worker/signature`=checkPlanAccess 의 워커 조회 / `sign/[token]`=토큰 404 /
+  //   `inperson-sign`=배정 해석). DB 행이 사라진 뒤에는 관문에서 막힌다.
+  //  ★그래서 **운영 업로드 라우트를 고치지 않는다.** writer 마다 등록·보상을 심는 방식은
+  //   공개 서명 라우트(`sign/[token]`)에 잠금 경합과 새 실패 모드를 들이는 일이고,
+  //   서명 경로가 하나 더 생기면 다시 새어 나간다. prefix 재나열은 writer 가 무엇이든 상관없다.
+  const afterCommit = await listStorageByPrefix(pre);
+  const extra = afterCommit.filter((p) => !storagePaths.includes(p));
+  if (extra.length) {
+    // 지우기 전에 먼저 기록한다 — 중간에 죽어도 재시도 목록에 남는다.
+    await prisma.pilotResource.createMany({
+      data: extra.map((p) => ({ pilotId, kind: "STORAGE_OBJECT" as const, resourceKey: storageKey(SIG_BUCKET, p) })),
+      skipDuplicates: true,
+    });
+    storagePaths.push(...extra);
+  }
+
   const failed: { path: string; error: string }[] = [];
   let removed = 0;
   for (const path of storagePaths) {
@@ -709,6 +737,24 @@ export async function purgePilot(
         data: { deleteError: r.error },
       });
     }
+  }
+
+  // ★★[4] 최종 검증 나열 — "지웠다"를 출력만으로 믿지 않는다.
+  //  삭제 도중에 착지한 객체(관문을 이미 통과했던 요청)가 여기서 잡힌다. 남은 것이 있으면
+  //  **완료로 보고하지 않고** 재시도 목록에 넣는다. 업로드와 DB 커밋은 원자적일 수 없으므로
+  //  이 꼬리를 0으로 만들 수는 없다 — 대신 도구가 거짓말을 하지 않게 한다.
+  const remaining = await listStorageByPrefix(pre);
+  if (remaining.length) {
+    const reason = "초기화 도중 새로 착지한 객체 — 재시도가 필요합니다.";
+    await prisma.pilotResource.createMany({
+      data: remaining.map((p) => ({ pilotId, kind: "STORAGE_OBJECT" as const, resourceKey: storageKey(SIG_BUCKET, p) })),
+      skipDuplicates: true,
+    });
+    await prisma.pilotResource.updateMany({
+      where: { pilotId, kind: "STORAGE_OBJECT", resourceKey: { in: remaining.map((p) => storageKey(SIG_BUCKET, p)) } },
+      data: { deleteError: reason },
+    });
+    for (const path of remaining) if (!failed.some((f) => f.path === path)) failed.push({ path, error: reason });
   }
 
   // ★실패분이 있으면 Pilot을 지우지 않는다 — 지우면 Cascade로 재시도 목록까지 사라진다.
