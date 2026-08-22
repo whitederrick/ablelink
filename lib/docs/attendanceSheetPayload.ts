@@ -71,7 +71,7 @@ export async function buildAttendanceSheetPayload(
   // ★현장 필터 필수: 멀티현장 직무지도원이 같은 기간 다른 현장(B) 출근기록을 가지면
   //   siteId 필터가 없을 경우 이 현장(siteId=A) 출근부에 B현장 행이 섞인다(공단 문서 오염).
   //   DailyAttendance.siteId는 non-null(모든 생성경로 필수)이라 필터로 정상 행 누락 없음.
-  const attendances = await prisma.dailyAttendance.findMany({
+  const attendanceRows = await prisma.dailyAttendance.findMany({
     // ★P2: placeholder(startTime=null·소급일지용 batch-save 행)는 공단 출근부에서 제외 — computeRun:133 chokepoint와
     //  동일 논리(startTime 기준). placeholder가 남으면 면제 유령 8h·문서(8h)↔급여(0h) 불일치. 정상 미퇴근행(startTime有)은 유지.
     where: { workerId, siteId, startTime: { not: null }, workDate: { gte: start, lte: end } },
@@ -87,6 +87,31 @@ export async function buildAttendanceSheetPayload(
     },
     orderBy: { workDate: "asc" },
   });
+
+  // ★휴무일(SiteHoliday, countAsWorkday=false)로 등록된 날짜는 출근부에서 제외한다.
+  //  출근부는 DailyAttendance 행 그 자체라, 출근부를 먼저 만든 뒤 휴무일을 등록하면 그 날 행이 그대로 남아
+  //  근무일로 인쇄됐다. 일괄생성(bulk-generate)은 '생성 전용'이라 다시 눌러도 기존 행을 지우지 않고,
+  //  출근부 행을 삭제하는 경로 자체가 없어 화면에서 되돌릴 수도 없었다(2026-08-22 파일럿에서 발견).
+  //  급여(computeRun:287·293·378)는 이미 같은 기준으로 휴무일을 소정근로일에서 빼므로, 이 제외로 문서·급여 축이 일치한다.
+  //  · countAsWorkday=true(근무 인정일)는 제외하지 않는다 — cron/daily·bulk-generate와 동일 기준.
+  //  · SiteHoliday는 배정(assignmentId) 단위라 (배정, 날짜) 쌍으로 대조한다. 멀티현장에서 다른 배정의
+  //    휴무일이 이 현장 출근부를 지우지 않도록(DailyAttendance.assignmentId는 non-null).
+  //  · 제출 완료분은 payload 스냅샷이 남으므로 영향 없다 — 신규 생성분부터 반영.
+  const holidayAssignmentIds = [...new Set(attendanceRows.map((a) => a.assignmentId))];
+  const holidayRows = holidayAssignmentIds.length
+    ? await prisma.siteHoliday.findMany({
+        where: {
+          assignmentId: { in: holidayAssignmentIds },
+          date: { gte: start, lte: end },
+          countAsWorkday: false,
+        },
+        select: { assignmentId: true, date: true },
+      })
+    : [];
+  const holidayKeys = new Set(holidayRows.map((h) => `${h.assignmentId}:${h.date}`));
+  const attendances = holidayKeys.size
+    ? attendanceRows.filter((a) => !holidayKeys.has(`${a.assignmentId}:${a.workDate}`))
+    : attendanceRows;
 
   // 1:1 vs 1:多 = "그 날짜에 이 현장(site)에 재적한 훈련생 수"로 날짜별 결정(워커 입력 아님).
   //  · 1명  → 그 날은 일반(1:1) 칸에 인정 지도시간
