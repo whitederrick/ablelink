@@ -176,8 +176,28 @@ function mdSlash(ymd: string): string {
 }
 
 // 총 지도시간 셀: 3줄(시작 / ~끝 / (Xh)) — HCR돋움
-function drawTimeCell(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number, e: any) {
+/** 출근부 시각 셀이 실제로 읽는 필드만 선언(payload 전체 형태에 묶이지 않도록). */
+type TimeCellEntry = {
+  pending?: boolean;
+  start?: string; end?: string;
+  startTime?: string; endTime?: string;
+  hours?: number | string; totalHours?: number | string;
+};
+
+function drawTimeCell(
+  doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number,
+  e: TimeCellEntry | null | undefined, holiday = false,
+) {
   doc.lineWidth(0.6).rect(x, y, w, h).stroke("#000");
+  // 휴무일(커스텀 휴무·공휴일)이라 출근 행이 없는 날 — 빈 서식만 두면 '쉰 날'인지 '기록이 빠진 날'인지
+  //  문서만 봐서는 구분되지 않는다(2026-08-22 사용자 지적). 보정대기와 같은 방식으로 사유를 찍는다.
+  if (!e && holiday) {
+    const lineH = 10.2;
+    doc.font("KR").fontSize(8).fillColor("#475569");
+    doc.text("휴무", x, y + Math.max(0, (h - lineH) / 2), { width: w, align: "center" });
+    doc.fillColor("#000");
+    return;
+  }
   // 급여 게이트: 심한 지각/조퇴 미컨펌(보정대기)인 날은 기본 시각을 박지 않고 "보정대기"만 표시.
   if (e?.pending) {
     const lineH = 10.2;
@@ -225,6 +245,10 @@ function attendanceSheet(p: any): Promise<Buffer> {
     const key = normYmd(e.date ?? e.workDate ?? "");
     if (key) map.set(key, e);
   }
+  // 휴무일(커스텀 휴무 + 공휴일). payload 에 없으면 빈 집합 → 종전 동작 그대로.
+  const holidaySet = new Set<string>(
+    (Array.isArray(p.holidays) ? p.holidays : []).map((d: unknown) => normYmd(String(d ?? ""))).filter(Boolean),
+  );
   const weeks: WeekCell[][] = [];
   if (start && end) {
     let cur = addDaysYmd(start, -dowMon0(start));
@@ -292,7 +316,11 @@ function attendanceSheet(p: any): Promise<Buffer> {
     y += dateH;
     // 총 지도시간
     cell(doc, x, y, labelW, totalH, "총\n지도시간", { size: 10 });
-    week.forEach((c, i) => drawTimeCell(doc, x + labelW + dayW * i, y, dayW, totalH, c.e));
+    // ★주말(i=5 토, 6 일)은 요일 헤더로 자명해 표기하지 않는다 — 평일에 빈 칸일 때만 사유를 찍는다.
+    week.forEach((c, i) => drawTimeCell(
+      doc, x + labelW + dayW * i, y, dayW, totalH, c.e,
+      i < 5 && !!c.ymd && holidaySet.has(c.ymd),
+    ));
     y += totalH;
     // 1:多 지도
     cell(doc, x, y, labelW, multiH, "1:多 지도", { size: 10 });

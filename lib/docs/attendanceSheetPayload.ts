@@ -18,6 +18,7 @@ import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { overtimeMinutesForDay, manualExtHoursFromLogs } from "@/lib/attendance/overtime";
 import { isMultiTraineeOnDate } from "@/lib/traineePlacement";
+import { getKrHolidayDates } from "@/lib/krHolidays";
 
 function fmtHHMM(d: Date): string {
   const kst = new Date(d.getTime() + 9 * 3600000);
@@ -97,17 +98,16 @@ export async function buildAttendanceSheetPayload(
   //  · SiteHoliday는 배정(assignmentId) 단위라 (배정, 날짜) 쌍으로 대조한다. 멀티현장에서 다른 배정의
   //    휴무일이 이 현장 출근부를 지우지 않도록(DailyAttendance.assignmentId는 non-null).
   //  · 제출 완료분은 payload 스냅샷이 남으므로 영향 없다 — 신규 생성분부터 반영.
-  const holidayAssignmentIds = [...new Set(attendanceRows.map((a) => a.assignmentId))];
-  const holidayRows = holidayAssignmentIds.length
-    ? await prisma.siteHoliday.findMany({
-        where: {
-          assignmentId: { in: holidayAssignmentIds },
-          date: { gte: start, lte: end },
-          countAsWorkday: false,
-        },
-        select: { assignmentId: true, date: true },
-      })
-    : [];
+  //  ★조회 범위는 '출근 행이 있는 배정'이 아니라 **이 워커·이 현장의 배정 전체**다. 출근 행에서 배정을
+  //   역산하면 그 기간에 출근 행이 하나도 없는 배정의 휴무일을 놓쳐, 아래 '휴무' 표기가 비는 날이 생긴다.
+  const holidayRows = await prisma.siteHoliday.findMany({
+    where: {
+      assignment: { workerId, siteId },
+      date: { gte: start, lte: end },
+      countAsWorkday: false,
+    },
+    select: { assignmentId: true, date: true },
+  });
   const holidayKeys = new Set(holidayRows.map((h) => `${h.assignmentId}:${h.date}`));
   const attendances = holidayKeys.size
     ? attendanceRows.filter((a) => !holidayKeys.has(`${a.assignmentId}:${a.workDate}`))
@@ -215,6 +215,11 @@ export async function buildAttendanceSheetPayload(
     periodEndYMD:   fmtDot(end),
     totalDays: entries.length,
     totalHours: baseTotal + extTotal,
+    // ★출근부에서 빈 칸이 '쉰 날'인지 '기록이 빠진 날'인지 문서만 봐서는 구분되지 않던 것(2026-08-22 사용자 지적).
+    //  렌더러가 빈 칸에 '휴무'를 찍을 수 있도록 그 기간의 휴무일을 넘긴다.
+    //  · 커스텀 휴무일(SiteHoliday, countAsWorkday=false) + 한국 공휴일. 주말은 요일로 자명해 렌더러가 건너뛴다.
+    //  · 근무 인정일(countAsWorkday=true)과 공휴일 출근은 출근 행이 있어 시각이 찍히므로 표기 대상이 아니다.
+    holidays: [...new Set([...getKrHolidayDates(start, end), ...holidayRows.map((h) => h.date)])].sort(),
     weeklyHolidayCount: 0,
     monthlyLeaveCount,
     allowanceTotalWon: "0",

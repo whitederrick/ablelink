@@ -49,7 +49,7 @@ const SIGS = {
 };
 
 type Entry = { date: string; hours: number };
-type Built = { payload: { entries: Entry[]; totalDays: number; totalHours: number; oneToOneHours: number } };
+type Built = { payload: { entries: Entry[]; totalDays: number; totalHours: number; oneToOneHours: number; holidays: string[] } };
 
 async function build(siteId: bigint, workerId: bigint) {
   return (await P.buildAttendanceSheetPayload({
@@ -148,6 +148,16 @@ async function main() {
   ok(`${HOLIDAY} 다시 포함`, wDates.includes(HOLIDAY), wDates.join(","));
   ok("totalDays = 5", asWorkday.payload.totalDays === 5, String(asWorkday.payload.totalDays));
   await prisma.siteHoliday.update({ where: { id: hol.id }, data: { countAsWorkday: false } });
+
+  console.log("\n[4-1] ★payload.holidays — 출근부에 '휴무'로 찍을 날짜가 실려 나온다");
+  const marked = await build(site.id, worker.id);
+  ok(`${HOLIDAY} 가 holidays 에 포함`, marked.payload.holidays.includes(HOLIDAY), JSON.stringify(marked.payload.holidays));
+  ok("★제외와 표기가 동시에 성립(entries 에는 없고 holidays 에는 있다)",
+    !marked.payload.entries.some((e) => e.date === HOLIDAY) && marked.payload.holidays.includes(HOLIDAY));
+  ok("근무일은 holidays 에 들어가지 않는다",
+    !marked.payload.holidays.includes("2026-08-03"), JSON.stringify(marked.payload.holidays));
+  // 광복절(2026-08-15)은 기간(08-03~08-07) 밖 — 공휴일이 기간을 넘어 새지 않는지.
+  ok("기간 밖 공휴일은 실리지 않는다", !marked.payload.holidays.includes("2026-08-15"));
 
   console.log("\n[5] ★배정 격리 — 같은 워커의 다른 배정 휴무일은 이 출근부에 영향 없음");
   const site2 = await prisma.site.create({
