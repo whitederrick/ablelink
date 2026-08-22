@@ -63,7 +63,8 @@ async function expectFail(label: string, fn: () => Promise<unknown>, code?: stri
 
 const STAMP = Date.now().toString(36);
 const made = { pilotId: null as bigint | null, agencyId: null as bigint | null, siteId: null as bigint | null,
-  workerId: null as bigint | null, assignmentId: null as bigint | null, traineeId: null as bigint | null };
+  workerId: null as bigint | null, assignmentId: null as bigint | null, assignment2Id: null as bigint | null,
+  traineeId: null as bigint | null };
 
 const CONTACT = "박담당";
 const START = "2026-08-03", END = "2026-08-28";
@@ -86,13 +87,20 @@ async function main() {
   const w = await R.createPilotWorker(p.pilotId, { workerName: "이지도", phoneNumber: phone, password: "pilot1234!" });
   made.workerId = w.id;
   const a = await R.createPilotAssignment(p.pilotId, {
-    workerId: w.id.toString(), siteId: site.id.toString(), workType: "FULL_DAY", startDate: START, endDate: END,
+    workerId: w.id.toString(), siteId: site.id.toString(), serviceStep: "FIELD_TRAINING", workType: "FULL_DAY", startDate: START, endDate: END,
   });
   made.assignmentId = a.id;
-  console.log(`  파일럿 ${p.pilotId} · 사업체 ${site.id} · 워커 ${w.id} · 배정 ${a.id}`);
+  // ★적응지도 단계 배정도 하나 만든다 — 단계별 문서 세트를 양방향으로 확인해야 한다.
+  //  (지원고용에서 적응지도일지가 막히는 것만 보면, 적응지도에서 실제로 열리는지는 모른 채 통과한다.)
+  const aAdapt = await R.createPilotAssignment(p.pilotId, {
+    workerId: w.id.toString(), siteId: site.id.toString(), serviceStep: "ADAPTATION",
+    workType: "FULL_DAY", startDate: START, endDate: END,
+  });
+  made.assignment2Id = aAdapt.id;
+  console.log(`  파일럿 ${p.pilotId} · 사업체 ${site.id} · 워커 ${w.id} · 배정 ${a.id}(훈련)/${aAdapt.id}(적응지도)`);
 
-  console.log("\n[1] 허용 문서 3종만");
-  for (const dt of ["ATTENDANCE_SHEET", "TRAINING_DAILY_LOG", "ADAPTATION_DAILY_LOG"]) {
+  console.log("\n[1] 단계에 맞는 문서만 — 이 배정은 지원고용 훈련");
+  for (const dt of ["ATTENDANCE_SHEET", "TRAINING_DAILY_LOG"]) {
     const needsTrainee = dt !== "ATTENDANCE_SHEET";
     const r = await D.buildPilotDocPayload({
       workerId: w.id, assignmentId: a.id, docType: dt, start: START, end: END,
@@ -100,6 +108,11 @@ async function main() {
     });
     ok(`${dt} payload 생성`, !!r.payload);
   }
+  // ★단계 밖 문서는 거부한다 — 허용하면 일지가 한 건도 안 담긴 빈 문서가 나온다.
+  await expectFail("★지원고용 배정에서 적응지도일지 거부", () => D.buildPilotDocPayload({
+    workerId: w.id, assignmentId: a.id, docType: "ADAPTATION_DAILY_LOG", start: START, end: END,
+    traineeId: tr.trainee.id.toString(),
+  }), "DOC_NOT_IN_STEP");
   for (const dt of ["TRAINEE_FINAL_EVAL", "ADAPTATION_FINAL_EVAL", "PAYSLIP", ""]) {
     await expectFail(`미지원 문서 거부: ${dt || "(빈값)"}`, () => D.buildPilotDocPayload({
       workerId: w.id, assignmentId: a.id, docType: dt, start: START, end: END, traineeId: tr.trainee.id.toString(),
@@ -123,7 +136,14 @@ async function main() {
   ok("훈련일지 govAgent = 수기 공란", trnSig.govAgent?.name === D.PILOT_HANDWRITE_BLANK);
   ok("훈련일지 companyManager = businessContactName", trnSig.companyManager?.name === CONTACT);
 
-  const adp = await D.buildPilotDocPayload({ workerId: w.id, assignmentId: a.id, docType: "ADAPTATION_DAILY_LOG", start: START, end: END, traineeId: tr.trainee.id.toString() });
+  // ★적응지도일지는 적응지도 단계 배정에서만 열린다.
+  const adpOk = await D.buildPilotDocPayload({ workerId: w.id, assignmentId: aAdapt.id, docType: "ADAPTATION_DAILY_LOG", start: START, end: END, traineeId: tr.trainee.id.toString() });
+  ok("★적응지도 배정에서 적응지도일지 생성", !!adpOk.payload);
+  await expectFail("★적응지도 배정에서 훈련일지 거부", () => D.buildPilotDocPayload({
+    workerId: w.id, assignmentId: aAdapt.id, docType: "TRAINING_DAILY_LOG", start: START, end: END,
+    traineeId: tr.trainee.id.toString(),
+  }), "DOC_NOT_IN_STEP");
+  const adp = adpOk;
   const adpSig = (adp.payload as { signatures?: Record<string, { name?: string }> }).signatures ?? {};
   ok("적응지도일지 govAgent = 수기 공란", adpSig.govAgent?.name === D.PILOT_HANDWRITE_BLANK);
   // ★이 문서에는 사업체담당자 서명 슬롯 자체가 없다(렌더러 :466 은 2행).
@@ -194,9 +214,11 @@ async function main() {
     ver: await prisma.documentVersion.count(),
     tok: await prisma.siteSignToken.count(),
   };
-  for (const dt of ["ATTENDANCE_SHEET", "TRAINING_DAILY_LOG", "ADAPTATION_DAILY_LOG"]) {
+  for (const [asgId, dt] of [
+    [a.id, "ATTENDANCE_SHEET"], [a.id, "TRAINING_DAILY_LOG"], [aAdapt.id, "ADAPTATION_DAILY_LOG"],
+  ] as [bigint, string][]) {
     await D.buildPilotDocPayload({
-      workerId: w.id, assignmentId: a.id, docType: dt, start: START, end: END,
+      workerId: w.id, assignmentId: asgId, docType: dt, start: START, end: END,
       traineeId: dt === "ATTENDANCE_SHEET" ? null : tr.trainee.id.toString(),
     });
   }

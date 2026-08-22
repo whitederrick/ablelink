@@ -9,6 +9,36 @@ export const PILOT_DOC_TYPES = ["ATTENDANCE_SHEET", "TRAINING_DAILY_LOG", "ADAPT
 export type PilotDocType = (typeof PILOT_DOC_TYPES)[number];
 
 /**
+ * 파일럿 배정의 서비스 단계. 운영 `SiteAssignment.serviceStep` 과 같은 값을 쓴다.
+ * ★파일럿은 2종만 — `PRE_TRAINING`(사전훈련)은 별도 전환일 개념이 얽혀 범위 밖이다.
+ */
+export const PILOT_SERVICE_STEPS = ["FIELD_TRAINING", "ADAPTATION"] as const;
+export type PilotServiceStep = (typeof PILOT_SERVICE_STEPS)[number];
+
+export const PILOT_SERVICE_STEP_LABEL: Record<PilotServiceStep, string> = {
+  FIELD_TRAINING: "지원고용 훈련",
+  ADAPTATION: "취업 후 적응지도",
+};
+
+/**
+ * 단계별 문서 세트 — **운영 `/worker/docs`(page.tsx:56-57)와 같은 규칙**이다.
+ * 운영은 종합평가까지 포함하지만 파일럿은 제공하지 않으므로 그만큼만 뺐다.
+ *
+ * ★이 구분이 없으면 적응지도 파일럿인데 훈련일지가 뽑히고, 더 나쁘게는 작성한 일지가
+ *  `trainingType` 축이 어긋나 적응지도일지 PDF에 **한 건도 안 나온다**
+ *  (`serviceStep` → `lib/serviceStep.serviceStepToTrainingType` → 일지 조회 조건).
+ */
+export const PILOT_DOCS_BY_STEP: Record<PilotServiceStep, readonly PilotDocType[]> = {
+  FIELD_TRAINING: ["ATTENDANCE_SHEET", "TRAINING_DAILY_LOG"],
+  ADAPTATION:     ["ATTENDANCE_SHEET", "ADAPTATION_DAILY_LOG"],
+};
+
+/** 배정의 serviceStep(운영 enum 문자열)을 파일럿 단계로 정규화. 모르는 값은 지원고용으로. */
+export function toPilotServiceStep(v: unknown): PilotServiceStep {
+  return String(v ?? "") === "ADAPTATION" ? "ADAPTATION" : "FIELD_TRAINING";
+}
+
+/**
  * 위탁기관 담당자 이름 자리에 넣는 **수기 기입 공간**.
  *
  * ★★**보이는 표시를 넣지 않는다 — 공백만 둔다**(사용자 확정 2026-08-13).

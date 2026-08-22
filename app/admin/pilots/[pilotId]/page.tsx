@@ -26,7 +26,7 @@ type Detail = {
   trainees: { id: string; name: string; gender: string; disabilityType: string; severity: string; currentSiteId: string | null }[];
   placements: { id: string; traineeId: string; siteId: string; startDate: string; endDate: string | null }[];
   workers: { id: string; workerName: string; loginId: string; planType: string; status: string }[];
-  assignments: { id: string; workerId: string; siteId: string; workType: string | null; startDate: string; endDate: string | null; attendanceButtonExempt: boolean; commuteGuidanceIncluded: boolean }[];
+  assignments: { id: string; workerId: string; siteId: string; serviceStep: string | null; workType: string | null; startDate: string; endDate: string | null; attendanceButtonExempt: boolean; commuteGuidanceIncluded: boolean }[];
   registry: { counts: Record<string, number>; deleteErrors: number };
 };
 
@@ -68,6 +68,12 @@ const WORK_TYPES = [
   { v: "AM", label: "오전 4시간", time: "08:30~14:00 (지도 포함)" },
   { v: "PM", label: "오후 4시간", time: "12:30~18:00 (지도 포함)" },
   { v: "FULL_DAY", label: "전일 8시간", time: "09:00~18:00 (지도 미포함)" },
+];
+// ★서비스 단계 — 운영 `SiteAssignment.serviceStep` 과 같은 값. 파일럿은 2종만 쓴다.
+//  이 값이 일지의 trainingType 축과 `/pilot/docs` 문서 목록을 함께 결정한다.
+const SERVICE_STEPS = [
+  { v: "FIELD_TRAINING", label: "지원고용 훈련", docs: "출근부 · 지원고용 훈련일지" },
+  { v: "ADAPTATION", label: "취업 후 적응지도", docs: "출근부 · 적응지도 일지" },
 ];
 const GENDERS = ["남", "여"];
 const SEVERITIES = ["중증", "경증"];
@@ -185,8 +191,8 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
   }
 
   // ── 5) 배정 ──────────────────────────────────────────────────
-  const [asg, setAsg] = useState({ workerId: "", siteId: "", workType: "FULL_DAY", startDate: "", endDate: "" });
-  const asgReady = asg.workerId && asg.siteId && asg.workType && asg.startDate && asg.endDate;
+  const [asg, setAsg] = useState({ workerId: "", siteId: "", serviceStep: "FIELD_TRAINING", workType: "FULL_DAY", startDate: "", endDate: "" });
+  const asgReady = asg.workerId && asg.siteId && asg.serviceStep && asg.workType && asg.startDate && asg.endDate;
 
   // ── 6) 초기화 ────────────────────────────────────────────────
   // ★되돌릴 수 없는 작업이다. 미리보기 없이는 실행 버튼을 열지 않는다.
@@ -564,6 +570,15 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
             </select>
           </div>
           <div>
+            {/* ★서비스 단계 — 이 값이 일지의 trainingType 축과 /pilot/docs 문서 목록을 함께 결정한다.
+                잘못 고르면 작성한 일지가 문서에 한 건도 안 나온다. */}
+            <label className={T.label}>서비스 단계 <span className="text-rose-500">*</span></label>
+            <select value={asg.serviceStep} onChange={(e) => setAsg((p) => ({ ...p, serviceStep: e.target.value }))} className={`w-full ${T.input}`}>
+              {SERVICE_STEPS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
+            </select>
+            <p className="mt-1 text-xs font-semibold text-slate-400">{SERVICE_STEPS.find((s) => s.v === asg.serviceStep)?.docs}</p>
+          </div>
+          <div>
             <label className={T.label}>근무형태 <span className="text-rose-500">*</span></label>
             <select value={asg.workType} onChange={(e) => setAsg((p) => ({ ...p, workType: e.target.value }))} className={`w-full ${T.input}`}>
               {WORK_TYPES.map((w) => <option key={w.v} value={w.v}>{w.label}</option>)}
@@ -591,7 +606,8 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
               <tr className="border-b border-slate-200 text-left text-xs font-black text-slate-500">
                 <th className="w-[140px] py-2 pr-3">직무지도원</th>
                 <th className="w-[200px] py-2 pr-3">사업체</th>
-                <th className="w-[140px] py-2 pr-3">근무형태</th>
+                <th className="w-[130px] py-2 pr-3">서비스 단계</th>
+                <th className="w-[130px] py-2 pr-3">근무형태</th>
                 <th className="w-[200px] py-2 pr-3">기간</th>
                 <th className="w-[110px] py-2">출퇴근</th>
               </tr>
@@ -601,6 +617,7 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
                 <tr key={a.id} className="border-b border-slate-100">
                   <td className="truncate py-2.5 pr-3 font-black text-slate-900">{workerName(a.workerId)}</td>
                   <td className="truncate py-2.5 pr-3 font-semibold text-slate-500">{siteName(a.siteId)}</td>
+                  <td className="truncate py-2.5 pr-3 font-semibold text-slate-700">{SERVICE_STEPS.find((x) => x.v === a.serviceStep)?.label ?? a.serviceStep ?? "-"}</td>
                   <td className="truncate py-2.5 pr-3 font-semibold text-slate-700">{WORK_TYPES.find((w) => w.v === a.workType)?.label ?? a.workType}</td>
                   <td className="truncate py-2.5 pr-3 font-semibold text-slate-500">
                     {a.startDate.slice(0, 10)} ~ {a.endDate ? a.endDate.slice(0, 10) : "무기한"}

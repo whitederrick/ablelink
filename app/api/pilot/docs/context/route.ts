@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { toPilotResponse } from "@/lib/pilot/httpError";
+import { toPilotServiceStep } from "@/lib/pilot/docConstants";
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
       // ★레지스트리 ∩ 실제 소유 — 둘 다 만족해야 보여준다.
       where: { id: { in: asgIds }, workerId },
       select: {
-        id: true, startDate: true, endDate: true, workType: true,
+        id: true, startDate: true, endDate: true, workType: true, serviceStep: true,
         site: { select: { id: true, companyName: true } },
       },
       orderBy: { id: "asc" },
@@ -67,6 +68,8 @@ export async function GET(request: NextRequest) {
         siteId: a.site?.id.toString() ?? "",
         companyName: a.site?.companyName ?? "",
         workType: a.workType,
+        // ★서비스 단계 — 화면이 이 값으로 문서 목록을 좁힌다(서버도 같은 기준으로 거부한다).
+        serviceStep: toPilotServiceStep(a.serviceStep),
         startDate: a.startDate.toISOString().slice(0, 10),
         endDate: a.endDate ? a.endDate.toISOString().slice(0, 10) : null,
         trainees: placements

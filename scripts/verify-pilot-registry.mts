@@ -106,7 +106,7 @@ async function main() {
 
   console.log("\n[7] 배정 — 출퇴근 면제 + 근무형태");
   const a = await R.createPilotAssignment(p.pilotId, {
-    workerId: w.id.toString(), siteId: s1.id.toString(), workType: "FULL_DAY",
+    workerId: w.id.toString(), siteId: s1.id.toString(), serviceStep: "FIELD_TRAINING", workType: "FULL_DAY",
     startDate: "2026-08-03", endDate: "2026-08-28",
   });
   ok("ASSIGNMENT 레지스트리 = 1", (await cnt("ASSIGNMENT")) === 1);
@@ -115,7 +115,7 @@ async function main() {
   ok("agencyId = 전용 기관 (급여 스코프 격리)", arow?.agencyId === p.agencyId);
   ok("FULL_DAY 는 출퇴근지도 미포함", arow?.commuteGuidanceIncluded === false);
   await expectFail("CUSTOM 근무형태 거부 (시각 없으면 09:00~18:00로 조용히 대체됨)", () =>
-    R.createPilotAssignment(p.pilotId!, { workerId: w.id.toString(), siteId: s1.id.toString(), workType: "CUSTOM", startDate: "2026-08-03", endDate: "2026-08-28" }));
+    R.createPilotAssignment(p.pilotId!, { workerId: w.id.toString(), siteId: s1.id.toString(), serviceStep: "FIELD_TRAINING", workType: "CUSTOM", startDate: "2026-08-03", endDate: "2026-08-28" }));
 
   console.log("\n[8] ★★기록 누락 0 — 생성 자원 수 == 레지스트리 kind별 건수");
   const expected: Record<string, number> = { AGENCY: 1, SITE: 2, TRAINEE: 2, PLACEMENT: 2, WORKER: 1, ASSIGNMENT: 1 };

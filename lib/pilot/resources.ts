@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { hashPassword } from "@/lib/password";
 import { dbKey, recordDbResource } from "./registry";
+import { PILOT_SERVICE_STEPS, type PilotServiceStep } from "./docConstants";
 
 /** 라우트가 상태코드로 그대로 옮길 수 있는 판별 오류. */
 export class PilotError extends Error {
@@ -338,6 +339,7 @@ export async function checkPilotWorkerPhone(phoneNumber: unknown): Promise<{ ava
 export async function createPilotAssignment(pilotId: bigint, input: {
   workerId: unknown; siteId: unknown; workType: unknown;
   startDate: unknown; endDate: unknown; commuteGuidanceIncluded?: unknown;
+  serviceStep?: unknown;
 }) {
   const agencyId = await getPilotAgencyId(pilotId);
   const workerId = BigInt(String(input.workerId ?? "0"));
@@ -350,6 +352,15 @@ export async function createPilotAssignment(pilotId: bigint, input: {
   if (!(PILOT_WORK_TYPES as readonly string[]).includes(workType)) {
     throw new PilotError(400, "INVALID_WORK_TYPE", "근무형태는 오전 4시간 · 오후 4시간 · 전일 8시간 중 하나여야 합니다.");
   }
+  // ★서비스 단계(지원고용 훈련 / 취업 후 적응지도). 종전엔 아예 넘기지 않아 스키마 기본값
+  //  FIELD_TRAINING 으로 고정됐고, 적응지도 파일럿을 하면 일지가 훈련 축에 쌓여
+  //  적응지도일지 PDF 에 한 건도 안 나왔다(2026-08-23 사용자 지적).
+  const stepRaw = String(input.serviceStep ?? "");
+  if (!(PILOT_SERVICE_STEPS as readonly string[]).includes(stepRaw)) {
+    throw new PilotError(400, "INVALID_SERVICE_STEP", "서비스 단계는 지원고용 훈련 · 취업 후 적응지도 중 하나여야 합니다.");
+  }
+  const serviceStep = stepRaw as PilotServiceStep;
+
   const startDate = reqDate(input.startDate, "배정 시작일");
   const endDate = reqDate(input.endDate, "배정 종료일");
   if (endDate < startDate) throw new PilotError(400, "INVALID_RANGE", "배정 종료일이 시작일보다 빠릅니다.");
@@ -366,10 +377,11 @@ export async function createPilotAssignment(pilotId: bigint, input: {
         status: "ACTIVE",
         startDate, endDate,
         workType,
+        serviceStep,
         commuteGuidanceIncluded: commute,
         attendanceButtonExempt: true,
       },
-      select: { id: true, workType: true, startDate: true, endDate: true },
+      select: { id: true, workType: true, serviceStep: true, startDate: true, endDate: true },
     });
     await recordDbResource(tx, pilotId, "ASSIGNMENT", asg.id);
     return asg;
@@ -445,7 +457,7 @@ export async function getPilotDetail(pilotId: bigint) {
     }),
     prisma.siteAssignment.findMany({
       where: { id: { in: idsOf("ASSIGNMENT") } },
-      select: { id: true, workerId: true, siteId: true, workType: true, startDate: true, endDate: true, attendanceButtonExempt: true, commuteGuidanceIncluded: true },
+      select: { id: true, workerId: true, siteId: true, serviceStep: true, workType: true, startDate: true, endDate: true, attendanceButtonExempt: true, commuteGuidanceIncluded: true },
       orderBy: { id: "asc" },
     }),
   ]);

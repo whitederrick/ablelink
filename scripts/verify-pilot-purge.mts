@@ -151,7 +151,7 @@ async function main() {
   });
   const w1 = await R.createPilotWorker(p.pilotId, { workerName: "지도원1", phoneNumber: "01099990001", password: "pilot1234!" });
   const g1 = await R.createPilotAssignment(p.pilotId, {
-    workerId: w1.id.toString(), siteId: s1.id.toString(), workType: "FULL_DAY",
+    workerId: w1.id.toString(), siteId: s1.id.toString(), serviceStep: "FIELD_TRAINING", workType: "FULL_DAY",
     startDate: "2026-08-01", endDate: "2026-08-31",
   });
   ok("파일럿 자원 6종 생성", !!p.pilotId && !!s1.id && !!t1.trainee.id && !!w1.id && !!g1.id);

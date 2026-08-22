@@ -19,11 +19,17 @@ import { trainingDailyLogPayload, adaptationDailyLogPayload } from "@/lib/docs/t
 import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 import { dbKey } from "./registry";
 import { PilotError } from "./resources";
-import { PILOT_DOC_TYPES, PILOT_HANDWRITE_BLANK, type PilotDocType } from "./docConstants";
+import {
+  PILOT_DOC_TYPES, PILOT_HANDWRITE_BLANK, PILOT_DOCS_BY_STEP, PILOT_SERVICE_STEP_LABEL,
+  toPilotServiceStep, type PilotDocType,
+} from "./docConstants";
 
 // ★상수의 정의는 `./docConstants` 가 갖는다 — 검증 스윕이 prisma·supabase 를 끌어오지 않도록
 //  분리했다. 소비처 편의를 위해 여기서 재수출한다.
-export { PILOT_DOC_TYPES, PILOT_HANDWRITE_BLANK } from "./docConstants";
+export {
+  PILOT_DOC_TYPES, PILOT_HANDWRITE_BLANK, PILOT_SERVICE_STEPS, PILOT_DOCS_BY_STEP,
+  PILOT_SERVICE_STEP_LABEL, toPilotServiceStep,
+} from "./docConstants";
 export type { PilotDocType } from "./docConstants";
 
 /** 훈련생 선택이 필요한 문서. */
@@ -56,6 +62,7 @@ export async function assertPilotDocAccess(workerId: bigint, assignmentId: bigin
     select: {
       id: true, workerId: true, siteId: true, workType: true, commuteGuidanceIncluded: true,
       customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true, stepStart: true,
+      serviceStep: true,
       site: { select: { id: true, companyName: true, businessContactName: true } },
     },
   });
@@ -88,6 +95,15 @@ export async function buildPilotDocPayload(input: PilotDocInput) {
 
   const { assignment, pilotId } = await assertPilotDocAccess(workerId, assignmentId);
   const site = assignment.site!;
+
+  // ★단계에 맞는 문서만 허용한다 — 운영 `/worker/docs` 와 같은 규칙.
+  //  지원고용 배정에서 적응지도일지를 뽑으면 일지가 한 건도 안 담긴 빈 문서가 나온다
+  //  (`trainingType` 축이 어긋난다) — 빈 문서를 주는 것보다 거부하는 편이 낫다.
+  const step = toPilotServiceStep(assignment.serviceStep);
+  if (!PILOT_DOCS_BY_STEP[step].includes(docType)) {
+    throw new PilotError(400, "DOC_NOT_IN_STEP",
+      `이 배정은 '${PILOT_SERVICE_STEP_LABEL[step]}' 단계입니다. 해당 단계의 문서만 생성할 수 있습니다.`);
+  }
 
   const worker = await prisma.worker.findUnique({
     where: { id: workerId },

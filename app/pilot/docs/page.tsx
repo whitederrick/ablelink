@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 type Trainee = { id: string; name: string };
 type Assignment = {
   id: string; siteId: string; companyName: string; workType: string | null;
-  startDate: string; endDate: string | null; trainees: Trainee[];
+  serviceStep: string; startDate: string; endDate: string | null; trainees: Trainee[];
 };
 
 const DOCS = [
@@ -20,6 +20,17 @@ const DOCS = [
   { v: "TRAINING_DAILY_LOG", label: "훈련일지", needsTrainee: true },
   { v: "ADAPTATION_DAILY_LOG", label: "적응지도 일지", needsTrainee: true },
 ];
+
+// ★서비스 단계별 문서 세트 — 운영 `/worker/docs` 와 같은 규칙(lib/pilot/docConstants 와 동일).
+//  지원고용 배정에서 적응지도 일지를 뽑으면 일지가 한 건도 안 담긴 빈 문서가 나오므로 아예 감춘다.
+const STEP_LABEL: Record<string, string> = {
+  FIELD_TRAINING: "지원고용 훈련",
+  ADAPTATION: "취업 후 적응지도",
+};
+const DOCS_BY_STEP: Record<string, string[]> = {
+  FIELD_TRAINING: ["ATTENDANCE_SHEET", "TRAINING_DAILY_LOG"],
+  ADAPTATION: ["ATTENDANCE_SHEET", "ADAPTATION_DAILY_LOG"],
+};
 
 function ym(d: Date) { return d.toISOString().slice(0, 10); }
 
@@ -60,8 +71,16 @@ export default function PilotDocsPage() {
   }, []);
 
   const asg = asgs.find((a) => a.id === asgId);
-  const doc = DOCS.find((d) => d.v === docType)!;
-  const ready = !!asgId && !!start && !!end && (!doc.needsTrainee || !!traineeId);
+  // ★배정의 서비스 단계에 맞는 문서만 노출. 배정 미선택이면 전부 보여준다(첫 화면 공백 방지).
+  const allowed = asg ? (DOCS_BY_STEP[asg.serviceStep] ?? DOCS_BY_STEP.FIELD_TRAINING) : DOCS.map((d) => d.v);
+  const visibleDocs = DOCS.filter((d) => allowed.includes(d.v));
+  const doc = visibleDocs.find((d) => d.v === docType) ?? visibleDocs[0];
+  const ready = !!asgId && !!start && !!end && !!doc && (!doc.needsTrainee || !!traineeId);
+
+  // 배정을 바꿔 현재 선택 문서가 그 단계에 없으면 첫 문서로 되돌린다(선택이 서버에서 거부되지 않도록).
+  useEffect(() => {
+    if (visibleDocs.length > 0 && !visibleDocs.some((d) => d.v === docType)) setDocType(visibleDocs[0].v);
+  }, [asgId, visibleDocs, docType]);
 
   function url(kind: "preview" | "generate") {
     const p = new URLSearchParams({ docType, periodStart: start, periodEnd: end, assignmentId: asgId });
@@ -126,14 +145,14 @@ export default function PilotDocsPage() {
               setTraineeId(a?.trainees[0]?.id ?? "");
               if (a) { setStart(a.startDate); setEnd(a.endDate ?? ym(new Date())); }
             }}>
-            {asgs.map((a) => <option key={a.id} value={a.id}>{a.companyName}</option>)}
+            {asgs.map((a) => <option key={a.id} value={a.id}>{a.companyName} · {STEP_LABEL[a.serviceStep] ?? a.serviceStep}</option>)}
           </select>
         </div>
 
         <div>
           <label className={L}>문서 종류</label>
           <select value={docType} onChange={(e) => setDocType(e.target.value)} className={F}>
-            {DOCS.map((d) => <option key={d.v} value={d.v}>{d.label}</option>)}
+            {visibleDocs.map((d) => <option key={d.v} value={d.v}>{d.label}</option>)}
           </select>
         </div>
 
