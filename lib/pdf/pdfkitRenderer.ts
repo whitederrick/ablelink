@@ -217,19 +217,6 @@ function attendanceSheet(p: any): Promise<Buffer> {
     { label: "일반 지도시간\n(1:1 지도시간)", value: `총 ${p.oneToOneHours ?? 0} h`, label2: "1:多 지도시간\n(2인 이상)", value2: `총 ${p.oneToManyHours ?? 0} h`, h: mm(10) },
     { label: "연장 지도시간\n(1:1 지도시간)", value: `총 ${p.otOneToOneHours ?? 0} h`, label2: "연장 1:多 지도 시간\n(2인 이상)", value2: `총 ${p.otOneToManyHours ?? 0} h`, h: mm(10) },
   ];
-  for (const r of info) {
-    cell(doc, x, y, lc, r.h, r.label, { size: 10 });
-    cell(doc, x + lc, y, vc, r.h, r.value, { size: 10 });
-    cell(doc, x + lc + vc, y, lc, r.h, r.label2, { size: 10 });
-    cell(doc, x + lc * 2 + vc, y, W - lc * 2 - vc, r.h, r.value2, { size: 10 });
-    y += r.h;
-  }
-
-  y += mm(2.5);
-  doc.font("KR").fontSize(10).fillColor("#000").text("※ 주휴수당은 위탁기관 담당자가 작성", x, y);
-  y += mm(9);
-  doc.font("Batang").fontSize(12).fillColor("#000").text("■ 근무상황표", x, y); y += mm(7);
-
   // 근무상황표: 월~일 주차 그리드 (일자 / 총 지도시간 / 1:多 지도)
   const start = normYmd(p.periodStartYMD), end = normYmd(p.periodEndYMD);
   const entries: any[] = Array.isArray(p.entries) ? p.entries : [];
@@ -257,6 +244,40 @@ function attendanceSheet(p: any): Promise<Buffer> {
   const dayW = (W - labelW) / 7;
   const dayNames = ["월", "화", "수", "목", "금", "토", "일"];
   const headH = mm(5), dateH = mm(5), totalH = mm(12), multiH = mm(5);
+
+  // ── 여백 압축 판정(2026-08-22) ───────────────────────────────────────────────
+  // 6주에 걸치는 달(2026-03·08·11 …)은 서명 블록이 **10.9mm 모자라** 통째로 다음 장으로 밀려
+  // '서명부만 있는 2페이지'가 나온다(07-20 블록 가드의 의도된 동작이지만 제출물로는 어색).
+  // 표 형태·글자크기·행 높이는 공단 원본 1:1 이라 **건드리지 않고**, 빈 공간(여백)에서만 13mm 를
+  // 회수해 한 장에 담는다. 압축해도 못 담는 긴 기간(그리드가 애초에 여러 페이지)은 압축하지 않아
+  // 5주 달·장기간 출력물은 종전과 완전히 동일하다.
+  const GAP_NOTE = mm(2.5);                      // 정보표 → 주휴 안내문 (압축 대상 아님)
+  const SIG_CONFIRM_GAP = mm(6);                 // 확인문구 → 작성일 (압축 대상 아님)
+  const SIG_TAIL_H = 3 * 24 + 12;                // signatures() 내부 가드와 동일한 서명 3란 높이
+  const gridBlockH = headH + weeks.length * (dateH + totalH + multiH);
+  const infoH = info.reduce((s, r) => s + r.h, 0);
+  /** 주어진 여백 조합으로 그렸을 때 마지막 서명줄이 끝나는 절대 y. */
+  const layoutBottom = (afterNote: number, afterHead: number, sigLead: number, sigDate: number) =>
+    y + infoH + GAP_NOTE + afterNote + afterHead + gridBlockH + sigLead + SIG_CONFIRM_GAP + sigDate + SIG_TAIL_H;
+  const NORMAL = [mm(9), mm(7), mm(6), mm(13)] as const;
+  const TIGHT  = [mm(5), mm(5), mm(4), mm(8)] as const;   // 회수 합계 13mm — 각 여백은 해당 글줄 높이보다 크게 유지
+  const compact =
+    layoutBottom(...NORMAL) > pageBottom(doc) && layoutBottom(...TIGHT) <= pageBottom(doc);
+  const [gapAfterNote, gapAfterHead, gapSigLead, gapSigDate] = compact ? TIGHT : NORMAL;
+
+  for (const r of info) {
+    cell(doc, x, y, lc, r.h, r.label, { size: 10 });
+    cell(doc, x + lc, y, vc, r.h, r.value, { size: 10 });
+    cell(doc, x + lc + vc, y, lc, r.h, r.label2, { size: 10 });
+    cell(doc, x + lc * 2 + vc, y, W - lc * 2 - vc, r.h, r.value2, { size: 10 });
+    y += r.h;
+  }
+
+  y += GAP_NOTE;
+  doc.font("KR").fontSize(10).fillColor("#000").text("※ 주휴수당은 위탁기관 담당자가 작성", x, y);
+  y += gapAfterNote;
+  doc.font("Batang").fontSize(12).fillColor("#000").text("■ 근무상황표", x, y); y += gapAfterHead;
+
   const drawGridHeader = () => {
     cell(doc, x, y, labelW, headH, "구분", { bold: true, size: 10.5 });
     dayNames.forEach((d, i) => cell(doc, x + labelW + dayW * i, y, dayW, headH, d, { bold: true, size: 10.5 }));
@@ -285,13 +306,13 @@ function attendanceSheet(p: any): Promise<Buffer> {
   // 확인문구·작성일·서명은 한 블록 — 통째로 들어갈 자리가 없으면 블록 전체를 다음 페이지로.
   // (가드가 signatures()에만 있으면 문구·날짜는 전 페이지 하단에 남고 서명만 넘어가 분리되고,
   //  문구·날짜가 하단 여백을 침범하면 pdfkit 자동 흘림으로 요소가 페이지마다 흩어진다)
-  const sigBlockH = mm(6) + mm(6) + mm(13) + 3 * 24 + 12;
+  const sigBlockH = gapSigLead + SIG_CONFIRM_GAP + gapSigDate + SIG_TAIL_H;
   if (y + sigBlockH > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
-  y += mm(6);
-  doc.font("KR").fontSize(11).fillColor("#000").text("위와 같이 근무(출근) 하였음을 확인함", x, y, { width: W, align: "center" }); y += mm(6);
+  y += gapSigLead;
+  doc.font("KR").fontSize(11).fillColor("#000").text("위와 같이 근무(출근) 하였음을 확인함", x, y, { width: W, align: "center" }); y += SIG_CONFIRM_GAP;
   // ★KST 벽시계일. 서버(UTC)에서 raw getFullYear/Month/Date는 KST 00~09시 생성 시 하루 밀림(공단 제출 문서).
   const today = new Date(Date.now() + 9 * 3600 * 1000);
-  doc.text(`${today.getUTCFullYear()}년     ${today.getUTCMonth() + 1}월     ${today.getUTCDate()}일`, x, y, { width: W, align: "center" }); y += mm(13);
+  doc.text(`${today.getUTCFullYear()}년     ${today.getUTCMonth() + 1}월     ${today.getUTCDate()}일`, x, y, { width: W, align: "center" }); y += gapSigDate;
 
   const s = p.signatures ?? {};
   signatures(doc, y, [
