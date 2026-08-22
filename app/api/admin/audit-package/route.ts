@@ -37,7 +37,7 @@ function measuredTimeH(raw: string | null | undefined, fallback: string): string
 }
 function levelWithTime(score: number | null | undefined, timeH: string): string {
   const label = scoreLabel(score);
-  return label ? `${label}\n${timeH}` : timeH;   // ★괄호 없음(사용자 확정 2026-08-23)
+  return label ? `${label}\n(${timeH})` : timeH;   // ★괄호는 라벨 있을 때만(사용자 확정 2026-08-23)
 }
 function safeFilename(s: string) { return s.replace(/[\\/:*?"<>|]/g, "_"); }
 

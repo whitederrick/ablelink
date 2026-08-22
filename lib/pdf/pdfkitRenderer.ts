@@ -505,9 +505,9 @@ function dailyLog(kind: "TRAINING" | "ADAPTATION", p: any): Promise<Buffer> {
         String(e.guidance ?? ""),
         String(e.task ?? ""),
         // 수행정도는 미입력일 수 있다(기관에 따라 측정시간만 기재) — 라벨이 없으면 빈 줄을 남기지 않는다.
-        //  ★측정시간에 괄호를 두르지 않는다(사용자 확정 2026-08-23).
+        //  ★괄호는 라벨이 있을 때만(사용자 확정 2026-08-23) — 라벨 없이 괄호만 뜨면 어색하다.
         e.performanceLabel
-          ? `${e.performanceLabel}${e.performanceTime ? `\n${e.performanceTime}` : ""}`
+          ? `${e.performanceLabel}${e.performanceTime ? `\n(${e.performanceTime})` : ""}`
           : (e.performanceTime ? String(e.performanceTime) : ""),
         String(e.coaching ?? ""),
       ],
