@@ -186,15 +186,18 @@ type TimeCellEntry = {
 
 function drawTimeCell(
   doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number,
-  e: TimeCellEntry | null | undefined, holiday = false,
+  e: TimeCellEntry | null | undefined, mark: string | null = null,
 ) {
   doc.lineWidth(0.6).rect(x, y, w, h).stroke("#000");
-  // 휴무일(커스텀 휴무·공휴일)이라 출근 행이 없는 날 — 빈 서식만 두면 '쉰 날'인지 '기록이 빠진 날'인지
-  //  문서만 봐서는 구분되지 않는다(2026-08-22 사용자 지적). 보정대기와 같은 방식으로 사유를 찍는다.
-  if (!e && holiday) {
+  // 근무하지 않은 날은 **사유를 글자로** 찍는다 — 빈 서식만 두면 '쉰 날'인지 '기록이 빠진 날'인지
+  //  문서만 봐서는 구분되지 않는다(2026-08-22~23 사용자 지적). 보정대기와 같은 방식이다.
+  //   · 휴무 = 커스텀 휴무일(SiteHoliday) · 평일 공휴일
+  //   · 주말 = 토·일 중 근무 기록이 없는 날
+  //  ★사유가 붙지 않은 평일 공백만 원본 빈 서식(: / ~ : / (h))으로 남는다 — 그게 곧 '기록 누락' 신호다.
+  if (!e && mark) {
     const lineH = 10.2;
     doc.font("KR").fontSize(8).fillColor("#475569");
-    doc.text("휴무", x, y + Math.max(0, (h - lineH) / 2), { width: w, align: "center" });
+    doc.text(mark, x, y + Math.max(0, (h - lineH) / 2), { width: w, align: "center" });
     doc.fillColor("#000");
     return;
   }
@@ -212,7 +215,9 @@ function drawTimeCell(
   const hrs = e?.hours ?? e?.totalHours;
   const l1 = s || ":";
   const l2 = `~ ${en || ":"}`;
-  const l3 = hrs != null && hrs !== "" ? `(${hrs}h)` : "(h)";
+  // ★근무한 날의 시간은 괄호 없이(2026-08-23 사용자 확정). 빈 서식의 `(h)` 는 원본 양식 표기라 유지 —
+  //  여기까지 오는 건 사유가 붙지 않은 '기록 누락' 칸뿐이다.
+  const l3 = hrs != null && hrs !== "" ? `${hrs}h` : "(h)";
   doc.font("KR").fontSize(9).fillColor("#000");
   const lineH = 10.2;
   let ty = y + Math.max(0, (h - lineH * 3) / 2);
@@ -314,19 +319,23 @@ function attendanceSheet(p: any): Promise<Buffer> {
     cell(doc, x, y, labelW, dateH, "일자", { size: 10 });
     week.forEach((c, i) => cell(doc, x + labelW + dayW * i, y, dayW, dateH, c.ymd ? mdLabel(c.ymd) : "/", { size: 10 }));
     y += dateH;
+    // 근무하지 않은 날의 사유. i=5 토, i=6 일.
+    //  ★주말이 우선한다 — 토·일에 걸린 공휴일은 '휴무'가 아니라 '주말'로 읽는 게 자연스럽다.
+    //  ★근무 기록이 있으면(주말 출근·공휴일 출근) mark 를 무시하고 시각이 찍힌다(drawTimeCell 이 e 우선).
+    const markOf = (c: WeekCell, i: number): string | null =>
+      !c.ymd ? null : i >= 5 ? "주말" : holidaySet.has(c.ymd) ? "휴무" : null;
+
     // 총 지도시간
     cell(doc, x, y, labelW, totalH, "총\n지도시간", { size: 10 });
-    // ★주말(i=5 토, 6 일)은 요일 헤더로 자명해 표기하지 않는다 — 평일에 빈 칸일 때만 사유를 찍는다.
-    week.forEach((c, i) => drawTimeCell(
-      doc, x + labelW + dayW * i, y, dayW, totalH, c.e,
-      i < 5 && !!c.ymd && holidaySet.has(c.ymd),
-    ));
+    week.forEach((c, i) => drawTimeCell(doc, x + labelW + dayW * i, y, dayW, totalH, c.e, markOf(c, i)));
     y += totalH;
     // 1:多 지도
     cell(doc, x, y, labelW, multiH, "1:多 지도", { size: 10 });
     week.forEach((c, i) => {
       const mv = c.e ? (c.e.multiHours ?? c.e.oneToManyHours) : "";
-      cell(doc, x + labelW + dayW * i, y, dayW, multiH, mv ? `(${mv}h)` : "(h)", { size: 10 });
+      // 근무일은 괄호 없이 시간만. 사유가 붙은 날(휴무·주말)은 적을 것이 없으므로 '-'.
+      const text = mv ? `${mv}h` : (!c.e && markOf(c, i) ? "-" : "(h)");
+      cell(doc, x + labelW + dayW * i, y, dayW, multiH, text, { size: 10 });
     });
     y += multiH;
   }
@@ -496,9 +505,10 @@ function dailyLog(kind: "TRAINING" | "ADAPTATION", p: any): Promise<Buffer> {
         String(e.guidance ?? ""),
         String(e.task ?? ""),
         // 수행정도는 미입력일 수 있다(기관에 따라 측정시간만 기재) — 라벨이 없으면 빈 줄을 남기지 않는다.
+        //  ★측정시간에 괄호를 두르지 않는다(사용자 확정 2026-08-23).
         e.performanceLabel
-          ? `${e.performanceLabel}${e.performanceTime ? `\n(${e.performanceTime})` : ""}`
-          : (e.performanceTime ? `(${e.performanceTime})` : ""),
+          ? `${e.performanceLabel}${e.performanceTime ? `\n${e.performanceTime}` : ""}`
+          : (e.performanceTime ? String(e.performanceTime) : ""),
         String(e.coaching ?? ""),
       ],
       lefts: [false, false, false, false, true, false, true],

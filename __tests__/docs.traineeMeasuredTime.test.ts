@@ -87,20 +87,20 @@ const adaptation = (score: number | null, difficulty: string | null) =>
 
 describe("일지 측정시간 — 직무지도원 입력값이 그대로 나간다", () => {
   it("입력값 4 → (4H). ★근무형태 고정값 5.5H 로 덮어쓰지 않는다", () => {
-    expect(training(4, "4").rows[0].taskLevelMeasured).toBe("잘함\n(4H)");
+    expect(training(4, "4").rows[0].taskLevelMeasured).toBe("잘함\n4H");
     expect(training(4, "4").rows[0].taskLevelMeasured).not.toContain("5.5");
   });
   it("입력값 4.5 · '4.5H' · '4.5h' 모두 (4.5H) 로 정규화", () => {
     for (const raw of ["4.5", "4.5H", "4.5h", " 4.5 "]) {
-      expect(training(3, raw).rows[0].taskLevelMeasured).toBe("보통\n(4.5H)");
+      expect(training(3, raw).rows[0].taskLevelMeasured).toBe("보통\n4.5H");
     }
   });
   it("미입력이면 근무형태 기본값(장애인 관점)으로 채운다", () => {
-    expect(training(3, null).rows[0].taskLevelMeasured).toBe("보통\n(4.5H)");
-    expect(training(3, "").rows[0].taskLevelMeasured).toBe("보통\n(4.5H)");
+    expect(training(3, null).rows[0].taskLevelMeasured).toBe("보통\n4.5H");
+    expect(training(3, "").rows[0].taskLevelMeasured).toBe("보통\n4.5H");
   });
   it("숫자로 읽을 수 없는 입력은 워커가 쓴 그대로 존중", () => {
-    expect(training(3, "4~5").rows[0].taskLevelMeasured).toBe("보통\n(4~5)");
+    expect(training(3, "4~5").rows[0].taskLevelMeasured).toBe("보통\n4~5");
   });
   it("적응지도일지도 같은 규칙", () => {
     expect(adaptation(5, "4").entries[0].performanceTime).toBe("4H");
@@ -109,17 +109,17 @@ describe("일지 측정시간 — 직무지도원 입력값이 그대로 나간�
 });
 
 describe("수행정도 미입력(null)", () => {
-  it("훈련일지 — 라벨 없이 측정시간만, 앞에 빈 줄을 남기지 않는다", () => {
+  it("훈련일지 — 라벨 없이 측정시간만(괄호 없음), 앞에 빈 줄을 남기지 않는다", () => {
     const cell = training(null, "4").rows[0].taskLevelMeasured;
-    expect(cell).toBe("(4H)");
+    expect(cell).toBe("4H");
     expect(cell.startsWith("\n")).toBe(false);
   });
   it("적응지도일지 — performanceLabel 이 빈 문자열", () => {
     expect(adaptation(null, "4").entries[0].performanceLabel).toBe("");
     expect(adaptation(null, "4").entries[0].performanceTime).toBe("4H");
   });
-  it("점수가 있으면 종전대로 라벨 + 줄바꿈 + 측정시간", () => {
-    expect(training(1, "8").rows[0].taskLevelMeasured).toBe("매우못함\n(8H)");
-    expect(training(5, "8").rows[0].taskLevelMeasured).toBe("매우잘함\n(8H)");
+  it("점수가 있으면 라벨 + 줄바꿈 + 측정시간(괄호 없음)", () => {
+    expect(training(1, "8").rows[0].taskLevelMeasured).toBe("매우못함\n8H");
+    expect(training(5, "8").rows[0].taskLevelMeasured).toBe("매우잘함\n8H");
   });
 });

@@ -28,9 +28,11 @@ function measuredTimeH(raw: string | null | undefined, fallback: string): string
 
 // 수행정도는 미입력(null)일 수 있다 — 기관에 따라 측정시간만 기재한다(사용자 확정 2026-08-22).
 //  라벨이 없으면 앞줄을 비우지 않고 측정시간만 한 줄로 둔다(빈 줄이 셀 상단에 남지 않도록).
+//  ★측정시간에 괄호를 두르지 않는다(사용자 확정 2026-08-23). 종전 `(4.5H)` 는 수행정도 라벨 아래
+//   붙는 부연이라 괄호가 있었는데, 라벨이 없으면 괄호만 뜬 모양이 되어 어색했다. 라벨 유무와 무관하게 뺀다.
 function levelWithTime(score: number | null | undefined, timeH: string): string {
   const label = scoreLabel(score);
-  return label ? `${label}\n(${timeH})` : `(${timeH})`;
+  return label ? `${label}\n${timeH}` : timeH;
 }
 
 export interface DocTimeValues {
