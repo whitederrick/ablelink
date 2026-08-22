@@ -467,7 +467,10 @@ function dailyLog(kind: "TRAINING" | "ADAPTATION", p: any): Promise<Buffer> {
         e.workTime ? String(e.workTime) : TIME_TPL,
         String(e.guidance ?? ""),
         String(e.task ?? ""),
-        `${e.performanceLabel ?? ""}${e.performanceTime ? `\n(${e.performanceTime})` : ""}`,
+        // 수행정도는 미입력일 수 있다(기관에 따라 측정시간만 기재) — 라벨이 없으면 빈 줄을 남기지 않는다.
+        e.performanceLabel
+          ? `${e.performanceLabel}${e.performanceTime ? `\n(${e.performanceTime})` : ""}`
+          : (e.performanceTime ? `(${e.performanceTime})` : ""),
         String(e.coaching ?? ""),
       ],
       lefts: [false, false, false, false, true, false, true],

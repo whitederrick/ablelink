@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     // taskName 기준 중복 제거(최신 우선), 빈 과제 제외
     const seen = new Set<string>();
-    const tasks: { taskName: string; taskScore: number; measurementTime: string }[] = [];
+    const tasks: { taskName: string; taskScore: number | null; measurementTime: string }[] = [];
     for (const l of logs) {
       const t = l.tasks[0];
       const name = t?.taskName?.trim();
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       seen.add(name);
       tasks.push({
         taskName: name,
-        taskScore: t?.performanceScore ?? 3,
+        taskScore: t?.performanceScore ?? null,  // 미입력 보존(2026-08-22)
         measurementTime: t?.difficulty ?? "",
       });
       if (tasks.length >= 10) break;

@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
       r.timeGroup != null ? String(r.timeGroup) : "",
       r.content ?? "",
       r.evaluation ?? "",
-      r.tasks.map(t => `${t.taskName}(${t.performanceScore}점)`).join("; "),
+      r.tasks.map(t => t.performanceScore != null ? `${t.taskName}(${t.performanceScore}점)` : `${t.taskName}`).join("; "),
     ]);
     const filename = `일지_${from}_${to}.${format}`;
     return fileResponse(

@@ -25,6 +25,20 @@ function scoreLabel(n?: number | null) {
   if (!n) return "";
   return ({ 1: "매우못함", 2: "못함", 3: "보통", 4: "잘함", 5: "매우잘함" } as any)[n] || String(n);
 }
+// 측정시간·수행정도 규칙은 lib/docs/traineeDocPayload 와 동일해야 한다(이 라우트는 payload 조립 사본을
+//  유지하기로 한 결정이 있어 병합하지 않는다 — doc_payload_unify 보류). 규칙이 갈리면 감사ZIP만 값이 달라진다.
+//  · 측정시간 = 워커 입력값(TraineeLogTask.difficulty) 우선, 없으면 근무형태 기본값(장애인 관점)
+//  · 수행정도 = 미입력 가능 → 라벨 없으면 측정시간만
+function measuredTimeH(raw: string | null | undefined, fallback: string): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return fallback;
+  const m = /^(\d+(?:\.\d+)?)\s*[Hh]?$/.exec(s);
+  return m ? `${m[1]}H` : s;
+}
+function levelWithTime(score: number | null | undefined, timeH: string): string {
+  const label = scoreLabel(score);
+  return label ? `${label}\n(${timeH})` : `(${timeH})`;
+}
 function safeFilename(s: string) { return s.replace(/[\\/:*?"<>|]/g, "_"); }
 
 // ─── route ──────────────────────────────────────────────────────────────────
@@ -197,7 +211,10 @@ export async function GET(request: NextRequest) {
               attendanceStatus: l.evaluation || "출석",
               trainingTime: docTimes.trainingTimeH,
               guidanceFlag: docTimes.guidanceYN, task: l.tasks[0]?.taskName || "",
-              taskLevelMeasured: `${scoreLabel(l.tasks[0]?.performanceScore)}\n(${docTimes.measTimeH})`,
+              taskLevelMeasured: levelWithTime(
+                l.tasks[0]?.performanceScore,
+                measuredTimeH(l.tasks[0]?.difficulty, docTimes.traineeMeasTimeH),
+              ),
               evalGuidance: l.content || "",
             })),
             signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
@@ -228,7 +245,8 @@ export async function GET(request: NextRequest) {
               dateISO: l.attendance.workDate, attendance: l.evaluation || "출석",
               workTime: docTimes.workTimeRange, guidance: docTimes.guidanceYN, task: l.tasks[0]?.taskName || "",
               performanceLabel: scoreLabel(l.tasks[0]?.performanceScore),
-              performanceTime: docTimes.measTimeH, coaching: l.content || "",
+              performanceTime: measuredTimeH(l.tasks[0]?.difficulty, docTimes.traineeMeasTimeH),
+              coaching: l.content || "",
             })),
             signatures: { worker: sigs.worker, govAgent: sigs.govAgent },
           };

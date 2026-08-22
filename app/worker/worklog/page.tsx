@@ -92,7 +92,7 @@ function WorklogForm() {
   const [traineeName, setTraineeName] = useState(params.get("traineeName") ?? "");
   const [trainees, setTrainees]       = useState<{ id: string; name: string; gender: string }[]>([]);
   // #8: 기간 내 사용한 수행과제 목록(재사용 선택용)
-  const [recentTasks, setRecentTasks] = useState<{ taskName: string; taskScore: number; measurementTime: string }[]>([]);
+  const [recentTasks, setRecentTasks] = useState<{ taskName: string; taskScore: number | null; measurementTime: string }[]>([]);
 
   const isAdaptation = trainingType === "ADAPTATION";
   const trainingLabel = trainingType === "PRE" ? "사전훈련" : trainingType === "FIELD" ? "현장훈련" : "적응지도";
@@ -116,7 +116,10 @@ function WorklogForm() {
   const [logDate, setLogDate] = useState(todayStr);
   const [attendance, setAttendance] = useState<Attendance>("출석");
   const [taskName, setTaskName] = useState("");
-  const [taskScore, setTaskScore] = useState(3);
+  // 수행정도는 ★기본이 미입력(null)이다 — 기관에 따라 측정시간만 기재한다(사용자 확정 2026-08-22).
+  //  useScore 체크를 켜야 1~5 선택이 나타나고, 끄면 선택값을 지운다.
+  const [taskScore, setTaskScore] = useState<number | null>(null);
+  const [useScore, setUseScore] = useState(false);
   const [measurementTime, setMeasurementTime] = useState("");
   const [content, setContent] = useState("");
   const [specialNotes, setSpecialNotes] = useState("");  // 적응지도 전용
@@ -170,8 +173,10 @@ function WorklogForm() {
         // 측정 시간 자동 입력 (수정 모드가 아닐 때만)
         if (!logId && !measurementTime) {
           const wt = d.data.workType;
+          // ★측정시간 = 장애인이 근무한 시간(오전·오후 = 근무 4H + 휴게 0.5H, 전일 = 8H 상한).
+          //  직무지도원 관점의 인정 지도시간(출퇴근지도 포함 5.5H)과 다르다 — 사용자 확정 2026-08-22.
           if (wt === "FULL_DAY") setMeasurementTime("8");
-          else if (wt === "AM" || wt === "PM") setMeasurementTime("4");
+          else if (wt === "AM" || wt === "PM") setMeasurementTime("4.5");
           else if (wt === "CUSTOM" && d.data.customWorkStart && d.data.customWorkEnd) {
             const hrs = diffHours(d.data.customWorkStart, d.data.customWorkEnd);
             if (hrs > 0) setMeasurementTime(String(hrs));
@@ -205,7 +210,8 @@ function WorklogForm() {
         setLogDate(l.workDate || todayStr);
         setAttendance((l.attendance as Attendance) || "출석");
         setTaskName(l.taskName || "");
-        setTaskScore(l.taskScore || 3);
+        setTaskScore(l.taskScore ?? null);
+        setUseScore(l.taskScore != null);   // 저장된 값이 있을 때만 체크 상태로 복원
         setMeasurementTime(l.measurementTime || "");
         setContent(l.content || "");
         setSpecialNotes(l.specialNotes || "");
@@ -254,7 +260,7 @@ function WorklogForm() {
           const form = new FormData();
           form.append("audio", blob, `rec.${mimeType.includes("mp4") ? "mp4" : "webm"}`);
           form.append("traineeName", traineeName);
-          form.append("taskScore", String(taskScore));
+          form.append("taskScore", taskScore == null ? "" : String(taskScore));
           form.append("sentenceCount", String(sentenceCount));
           form.append("raw", recRawRef.current ? "1" : "0");
           const res = await fetch("/api/worker/ai/voice-to-log", { method: "POST", body: form });
@@ -355,7 +361,7 @@ function WorklogForm() {
           extTimeGroup: isMulti ? extra : 0,
           totalRecognizedTime: totalTime,
           taskName,
-          taskScore,
+          taskScore: useScore ? taskScore : null,   // 체크 해제면 미입력으로 저장
           measurementTime,
           specialNotes: isAdaptation ? specialNotes : "",
           content: finalContent,
@@ -607,7 +613,7 @@ function WorklogForm() {
                 <button
                   key={i}
                   type="button"
-                  onClick={() => { setTaskName(t.taskName); setTaskScore(t.taskScore); if (t.measurementTime) setMeasurementTime(t.measurementTime); }}
+                  onClick={() => { setTaskName(t.taskName); setTaskScore(t.taskScore); setUseScore(t.taskScore != null); if (t.measurementTime) setMeasurementTime(t.measurementTime); }}
                   className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition active:scale-95 ${
                     taskName === t.taskName ? "border-sky-500 bg-sky-50 text-sky-700" : "border-slate-200 bg-slate-50 text-slate-600"
                   }`}
@@ -624,16 +630,28 @@ function WorklogForm() {
 
         {/* ── 수행정도 + 측정시간 ── */}
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
-          <p className="mb-3 text-sm font-black text-slate-700">수행 정도</p>
-          <div className="flex gap-1.5">
-            {[1, 2, 3, 4, 5].map(n => (
-              <button key={n} type="button" onClick={() => setTaskScore(n)}
-                className={`flex flex-1 flex-col items-center gap-1.5 rounded-xl border py-2.5 transition active:scale-95 ${taskScore === n ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
-                <span className="text-base font-black">{n}</span>
-                <span className="text-center text-[9px] font-semibold leading-tight">{SCORE_LABELS[n - 1]}</span>
-              </button>
-            ))}
-          </div>
+          {/* 수행정도는 기관에 따라 기재하지 않는다 — 등록 여부를 직무지도원이 고른다(기본 미입력). */}
+          <label className="mb-3 flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={useScore}
+              onChange={e => { setUseScore(e.target.checked); if (!e.target.checked) setTaskScore(null); }}
+              className="h-5 w-5 shrink-0 cursor-pointer accent-slate-950"
+            />
+            <span className="text-sm font-black text-slate-700">수행 정도 등록</span>
+            {!useScore && <span className="text-[11px] font-semibold text-slate-400">미입력 — 측정시간만 기재됩니다</span>}
+          </label>
+          {useScore && (
+            <div className="flex gap-1.5">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button key={n} type="button" onClick={() => setTaskScore(n)}
+                  className={`flex flex-1 flex-col items-center gap-1.5 rounded-xl border py-2.5 transition active:scale-95 ${taskScore === n ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
+                  <span className="text-base font-black">{n}</span>
+                  <span className="text-center text-[9px] font-semibold leading-tight">{SCORE_LABELS[n - 1]}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="mt-4 flex items-center gap-3">
             <span className="text-sm font-semibold text-slate-600 whitespace-nowrap">측정 시간</span>
             <div className="relative flex-1">

@@ -38,7 +38,8 @@ export async function GET(request: NextRequest) {
       success: true,
       content:         prevLog.content ?? "",
       taskName:        prevLog.tasks[0]?.taskName ?? "",
-      taskScore:       prevLog.tasks[0]?.performanceScore ?? 3,
+      // 수행정도는 미입력(null)일 수 있다 — 종전의 `?? 3` 은 미입력을 '보통'으로 되살렸다(2026-08-22).
+      taskScore:       prevLog.tasks[0]?.performanceScore ?? null,
       measurementTime: prevLog.tasks[0]?.difficulty ?? "",
     });
   } catch (error: any) {

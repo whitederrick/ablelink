@@ -168,14 +168,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 수행정도는 ★미입력(null)이 기본이다 — 기관에 따라 일지에 측정시간만 기재한다(사용자 확정 2026-08-22).
+    //  종전 `Number(taskScore) || 3` 은 선택하지 않아도 3(보통)을 저장해, '보통을 고른 것'과 구분이 불가능했다.
+    //  1~5 정수만 인정하고 그 밖(미선택·빈값·범위 밖)은 전부 null 로 떨어뜨린다.
+    const scoreNum = Number(taskScore);
+    const performanceScore =
+      Number.isInteger(scoreNum) && scoreNum >= 1 && scoreNum <= 5 ? scoreNum : null;
+
     // 과제 정보 저장
     await prisma.traineeLogTask.deleteMany({ where: { logId: log.id } });
-    if (taskScore || taskName) {
+    // ★측정시간도 이 행에 저장되므로 생성 조건에 포함한다. 수행정도가 기본 미입력이 되면서,
+    //  '과제명 없이 측정시간만' 입력한 일지의 시간이 통째로 사라질 수 있었다.
+    if (performanceScore != null || taskName || measurementTime) {
       await prisma.traineeLogTask.create({
         data: {
           logId: log.id,
           taskName: taskName?.trim() || "수행과제",
-          performanceScore: Number(taskScore) || 3,
+          performanceScore,
           difficulty: measurementTime ? String(measurementTime).trim() : null,  // 측정시간
           feedback: specialNotes?.trim() || null,                               // 특이사항
         },

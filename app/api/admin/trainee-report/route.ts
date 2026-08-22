@@ -110,9 +110,12 @@ export async function GET(request: NextRequest) {
           a.startTime && a.logs.some(l => l.traineeId === tid)
         ).length;
 
+        // ★수행정도는 미입력(null)일 수 있다(2026-08-22) — 평균에서 제외한다.
+        //  null 을 0 으로 세면 기재하지 않은 기관의 훈련생이 실제보다 낮게 집계된다.
         const scores = attendances
           .flatMap(a => a.logs.filter(l => l.traineeId === tid))
-          .flatMap(l => l.tasks.map(t => t.performanceScore));
+          .flatMap(l => l.tasks.map(t => t.performanceScore))
+          .filter((n): n is number => n != null);
         const avgScore = scores.length > 0
           ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10
           : null;

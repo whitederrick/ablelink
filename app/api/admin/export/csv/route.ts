@@ -199,7 +199,7 @@ export async function GET(req: NextRequest) {
     const lines = [
       header,
       ...logRows.map(r => {
-        const taskStr = r.tasks.map(t => `${t.taskName}(${t.performanceScore}점)`).join("; ");
+        const taskStr = r.tasks.map(t => t.performanceScore != null ? `${t.taskName}(${t.performanceScore}점)` : `${t.taskName}`).join("; ");
         return row([
           r.attendance.workDate,
           r.attendance.user?.workerName ?? "",

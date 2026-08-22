@@ -14,11 +14,32 @@ function scoreLabel(n?: number | null): string {
   return ({ 1: "매우못함", 2: "못함", 3: "보통", 4: "잘함", 5: "매우잘함" } as any)[n] || String(n);
 }
 
+// 측정시간 = ★직무지도원이 일지에 입력한 값이 그대로 나간다(사용자 확정 2026-08-22).
+//  저장 위치는 TraineeLogTask.difficulty(문자열). 종전에는 이 값을 화면 4곳에서만 읽고 PDF는 근무형태
+//  고정값(docTimes.measTimeH)을 찍어, 4를 입력해도 문서엔 5.5가 나갔다.
+//  미입력이면 근무형태 기본값(장애인 관점 traineeMeasTimeH — 오전·오후 4.5 / 전일 8)으로 채운다.
+function measuredTimeH(raw: string | null | undefined, fallback: string): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return fallback;
+  // "4" · "4.5" · "4.5H" · "4.5h" 를 모두 "4.5H" 로. 숫자로 못 읽으면 입력값을 그대로 존중한다.
+  const m = /^(\d+(?:\.\d+)?)\s*[Hh]?$/.exec(s);
+  return m ? `${m[1]}H` : s;
+}
+
+// 수행정도는 미입력(null)일 수 있다 — 기관에 따라 측정시간만 기재한다(사용자 확정 2026-08-22).
+//  라벨이 없으면 앞줄을 비우지 않고 측정시간만 한 줄로 둔다(빈 줄이 셀 상단에 남지 않도록).
+function levelWithTime(score: number | null | undefined, timeH: string): string {
+  const label = scoreLabel(score);
+  return label ? `${label}\n(${timeH})` : `(${timeH})`;
+}
+
 export interface DocTimeValues {
   trainingTimeH: string;
   guidanceYN: string;
   measTimeH: string;
   workTimeRange: string;
+  /** 일지 측정시간 기본값(장애인 관점). 워커 입력값이 없을 때만 쓰인다. */
+  traineeMeasTimeH: string;
 }
 
 /** traineeLog + 관계(attendance, tasks)에서 payload 조립에 쓰는 최소 형태. */
@@ -27,7 +48,8 @@ export interface TraineeLogLike {
   evaluation: string | null;
   content: string | null;
   attendance: { workDate: string };
-  tasks: { taskName: string | null; performanceScore: number | null }[];
+  /** difficulty = 측정시간(워커 입력, 문자열). 컬럼명이 의미와 다르지만 기존 저장 위치를 유지한다. */
+  tasks: { taskName: string | null; performanceScore: number | null; difficulty?: string | null }[];
 }
 
 /** 확정 평가(traineeEvaluation)에서 쓰는 최소 형태. null이면 빈 점수/소견. */
@@ -64,7 +86,10 @@ export function trainingDailyLogPayload(args: {
       trainingTime: docTimes.trainingTimeH,
       guidanceFlag: docTimes.guidanceYN,
       task: l.tasks[0]?.taskName || "",
-      taskLevelMeasured: `${scoreLabel(l.tasks[0]?.performanceScore)}\n(${docTimes.measTimeH})`,
+      taskLevelMeasured: levelWithTime(
+        l.tasks[0]?.performanceScore,
+        measuredTimeH(l.tasks[0]?.difficulty, docTimes.traineeMeasTimeH),
+      ),
       evalGuidance: l.content || "",
     })),
     signatures,
@@ -120,7 +145,7 @@ export function adaptationDailyLogPayload(args: {
       guidance: docTimes.guidanceYN,
       task: l.tasks[0]?.taskName || "",
       performanceLabel: scoreLabel(l.tasks[0]?.performanceScore),
-      performanceTime: docTimes.measTimeH,
+      performanceTime: measuredTimeH(l.tasks[0]?.difficulty, docTimes.traineeMeasTimeH),
       coaching: l.content || "",
     })),
     signatures,

@@ -24,11 +24,13 @@ function fmtH(h: number): string {
 
 export type DailyDocTimes = {
   trainingTimeH: string;  // 훈련시간 (예: "4H")
-  measTimeH: string;      // 수행정도 아래 측정시간 (예: "5.5H")
+  measTimeH: string;      // 출근부 인정 지도시간 (예: "5.5H") — ★직무지도원 관점
   trainingHours: number;  // 훈련시간 숫자값 (예: 4)
-  measHours: number;      // 측정(인정) 시간 숫자값 (예: 5.5)
+  measHours: number;      // 측정(인정) 시간 숫자값 (예: 5.5) — ★직무지도원 관점
   workTimeRange: string;  // 근무시간 범위 (예: "08:30~13:30")
   guidanceYN: "Y" | "N";  // 출퇴근·휴게 지도 여부
+  traineeMeasTimeH: string;  // 일지 '수행정도(측정시간)' 기본값 (예: "4.5H") — ★장애인 관점
+  traineeMeasHours: number;  // 위 숫자값 (예: 4.5)
 };
 
 export function dailyDocTimes(
@@ -65,6 +67,19 @@ export function dailyDocTimes(
   else extraH = 0.5 + (commute ? 1.0 : 0); // AM / PM
   const measH = trainH + extraH;
 
+  // 일지 '수행정도(측정시간)' 기본값 = ★장애인(훈련생)이 실제 근무한 시간 (사용자 확정 2026-08-22).
+  //  위 measH 는 **직무지도원 관점**의 인정 지도시간(출퇴근지도 1H 포함 → AM/PM 5.5)이고 출근부·급여의
+  //  기준이라 절대불변이다(work_hours_rules 2026-06-18). 일지는 관점이 달라 값도 다르다 —
+  //  일지를 쓰는 순간의 주어는 장애인이므로 출퇴근지도 시간은 들어가지 않는다.
+  //   · 오전/오후 = 근무 4H + 휴게 0.5H = 4.5H
+  //   · 전일      = 8H (근로시간 상한이라 휴게를 더해 8을 넘길 수 없다)
+  //   · 커스텀    = 지정 창 그대로(종료-시작)
+  //  ★이 값은 어디까지나 **기본값(프리필)** 이다. 직무지도원이 입력한 값이 있으면 그 값이 그대로 일지에 나간다.
+  const traineeMeasH =
+    workType === "FULL_DAY" ? 8
+    : workType === "CUSTOM" ? trainH
+    : trainH + 0.5; // AM / PM
+
   return {
     trainingTimeH: fmtH(trainH),
     measTimeH: fmtH(measH),
@@ -72,5 +87,7 @@ export function dailyDocTimes(
     measHours: measH,
     workTimeRange: `${wt.start}~${wt.end}`,
     guidanceYN: commute ? "Y" : "N",
+    traineeMeasTimeH: fmtH(traineeMeasH),
+    traineeMeasHours: traineeMeasH,
   };
 }

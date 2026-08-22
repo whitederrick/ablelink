@@ -48,7 +48,8 @@ export async function GET(
         totalTime:       Number(log.totalRecognizedTime),
         content:         log.content ?? "",
         taskName:        log.tasks[0]?.taskName ?? "",
-        taskScore:       log.tasks[0]?.performanceScore ?? 3,
+        // 수행정도 미입력(null) 보존 — `?? 3` 이면 수정 화면에서 '보통'이 선택된 것처럼 보인다(2026-08-22).
+        taskScore:       log.tasks[0]?.performanceScore ?? null,
         measurementTime: log.tasks[0]?.difficulty ?? "",
         specialNotes:    log.tasks[0]?.feedback ?? "",
         isCompleted:     log.isCompleted,
