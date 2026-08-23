@@ -190,25 +190,35 @@ describe("출근부 — 휴무 사유의 어절 보존", () => {
     expect(count(d, "휴무")).toBe(1);
   });
 
-  it("공백이 있으면 그 자리에서 나뉜다 — 사유 전체가 한 번에 그려진다", async () => {
-    // 렌더러는 문자열을 통째로 넘기고 줄바꿈은 pdfkit 이 공백에서 처리한다.
+  it("공백이 있으면 그 자리에서 나뉜다 — 줄마다 따로 그린다", async () => {
+    // ★렌더러가 줄을 직접 나눠 그린다(균형 배치). pdfkit 의 greedy 줄바꿈을 쓰지 않는다.
     const d = await render(H("사업체 여름휴가"));
-    expect(count(d, "사업체 여름휴가")).toBe(1);
+    expect(count(d, "사업체")).toBe(1);
+    expect(count(d, "여름휴가")).toBe(1);
   });
 });
 
 // 2026-08-23 — "사유를 꼭 고쳐 써야 하나?" 지적.
 //  줄바꿈 위치를 사용자가 공백으로 맞추게 하는 대신, **한 줄에 통째로 들어가도록 먼저 글자를 줄인다.**
 //  줄바꿈 자체가 없어지므로 어색하게 나뉠 일이 없다. 한 줄에 못 넣을 때만 어절 단위로 접는다.
-describe("출근부 — 휴무 사유는 한 줄 우선", () => {
+describe("출근부 — 휴무 사유는 8pt 유지 + 어절 균형 줄바꿈", () => {
   const H = (label: string) => ({ ...BASE, holidays: ["2026-08-05"], holidayLabels: { "2026-08-05": label } });
 
-  it("★공백이 있어도 한 줄에 들어가도록 글자를 줄인다 — '사업체 여름 휴가'", async () => {
+  it("★'사업체 여름 휴가' → `사업체` / `여름 휴가` (8pt 유지)", async () => {
+    // ★greedy 였다면 `사업체 여름` / `휴가` 가 된다 — 균형 배치라야 원하는 모양이 나온다.
     const d = await render(H("사업체 여름 휴가"));
-    expect(count(d, "사업체 여름 휴가")).toBe(1);
-    // 8pt 로는 59.1pt 라 한 줄(55.9pt)을 넘는다 → 줄여서 한 줄에 넣는다.
-    expect(sizeOf("사업체 여름 휴가")).toBeLessThan(8);
-    expect(sizeOf("사업체 여름 휴가")).toBeGreaterThanOrEqual(6);
+    expect(count(d, "사업체")).toBe(1);
+    expect(count(d, "여름 휴가")).toBe(1);
+    expect(count(d, "사업체 여름")).toBe(0);
+    expect(sizeOf("사업체")).toBe(8);
+    expect(sizeOf("여름 휴가")).toBe(8);
+  });
+
+  it("★'사업체 패밀리데이' → `사업체` / `패밀리데이` (8pt 유지)", async () => {
+    const d = await render(H("사업체 패밀리데이"));
+    expect(count(d, "사업체")).toBe(1);
+    expect(count(d, "패밀리데이")).toBe(1);
+    expect(sizeOf("패밀리데이")).toBe(8);
   });
 
   it("짧은 사유는 종전 그대로 8pt 한 줄(무변화)", async () => {
@@ -217,13 +227,13 @@ describe("출근부 — 휴무 사유는 한 줄 우선", () => {
     expect(sizeOf("창립기념일")).toBe(8);
   });
 
-  it("★11자 사유도 한 줄에 들어간다 — '하계 집중 휴가 기간'", async () => {
+  it("★긴 사유도 폰트를 줄이지 않는다 — '하계 집중 휴가 기간'", async () => {
     const d = await render(H("하계 집중 휴가 기간"));
-    expect(count(d, "하계 집중 휴가 기간")).toBe(1);
-    expect(sizeOf("하계 집중 휴가 기간")).toBeLessThan(8);
+    expect(count(d, "하계 집중 휴가 기간")).toBe(0);   // 한 줄로 밀어 넣지 않는다
+    expect(sizeOf("하계 집중")).toBe(8);
   });
 
-  it("한 줄에 못 넣으면 접되 어절은 보존한다 — 6pt 로도 안 되면 '휴무'", async () => {
+  it("6pt 로도 어절이 한 줄에 안 들어가면 '휴무'", async () => {
     const d = await render(H("사업장사정에의한임시휴무일정안내"));
     expect(count(d, "휴무")).toBe(1);
   });

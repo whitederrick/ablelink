@@ -184,6 +184,62 @@ type TimeCellEntry = {
   hours?: number | string; totalHours?: number | string;
 };
 
+/**
+ * 어절(공백 기준)을 **최소 줄 수**로 나누되, 그 줄 수 안에서 **가장 긴 줄이 가장 짧아지도록** 배치한다.
+ *
+ * ★pdfkit 기본 줄바꿈은 greedy 라 앞줄을 꽉 채운다 — `사업체 여름 휴가` 가
+ *  `사업체 여름` / `휴가` 로 나뉘어 어색하다. 균형 배치는 `사업체` / `여름 휴가` 를 고른다
+ *  (2026-08-23 사용자 요청). 어절 수가 적어(사유 문구) DP 비용은 무시할 만하다.
+ *
+ * @returns 줄 배열. 어절 하나가 한 줄보다 넓어 나눌 수 없으면 null.
+ */
+function balancedLines(doc: PDFKit.PDFDocument, words: string[], tw: number): string[] | null {
+  const n = words.length;
+  if (n === 0) return null;
+  const wd = (s: string) => doc.widthOfString(s);
+  // 최소 줄 수 = greedy 로 센다.
+  let need = 1, cur = words[0];
+  if (wd(cur) > tw) return null;
+  for (let i = 1; i < n; i++) {
+    if (wd(words[i]) > tw) return null;
+    const cand = `${cur} ${words[i]}`;
+    if (wd(cand) <= tw) cur = cand;
+    else { need++; cur = words[i]; }
+  }
+  // words[i..] 를 k줄로 나눌 때 '가장 긴 줄'의 최소값과 첫 줄의 끝 위치.
+  const memo = new Map<string, { cost: number; cut: number }>();
+  const solve = (i: number, k: number): { cost: number; cut: number } => {
+    const key = `${i}:${k}`;
+    const hit = memo.get(key);
+    if (hit) return hit;
+    let best = { cost: Infinity, cut: n };
+    if (k === 1) {
+      const line = words.slice(i).join(" ");
+      best = { cost: wd(line) <= tw ? wd(line) : Infinity, cut: n };
+    } else {
+      let line = "";
+      for (let j = i; j <= n - k; j++) {
+        line = line ? `${line} ${words[j]}` : words[j];
+        const lw = wd(line);
+        if (lw > tw) break;
+        const rest = solve(j + 1, k - 1);
+        const cost = Math.max(lw, rest.cost);
+        if (cost < best.cost) best = { cost, cut: j + 1 };
+      }
+    }
+    memo.set(key, best);
+    return best;
+  };
+  if (solve(0, need).cost === Infinity) return null;
+  const out: string[] = [];
+  for (let i = 0, k = need; k > 0; k--) {
+    const cut = k === 1 ? n : solve(i, k).cut;
+    out.push(words.slice(i, cut).join(" "));
+    i = cut;
+  }
+  return out;
+}
+
 function drawTimeCell(
   doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number,
   e: TimeCellEntry | null | undefined, mark: string | null = null,
@@ -209,31 +265,29 @@ function drawTimeCell(
       //     "사업체 여름 휴가" → `사업체 여름` / `휴가` · "사업체 여름휴가" → `사업체` / `여름휴가`
       //  ★글자를 잘라내지 않는다. 6pt 로도 안 들어가면 '휴무'로 되돌린다 —
       //   셀 밖으로 흘러 표를 깨뜨리는 것보다 낫다.
+      // ★**글자 크기는 8pt 를 유지하고 어절 단위로 접는다**(2026-08-23 사용자 확정).
+      //  폰트를 줄여 한 줄에 밀어 넣으면 그 칸만 작아져 보기 나쁘다 — 차라리 두 줄이 낫다.
+      //  ★줄바꿈은 **균형 배치**다(balancedLines). greedy 로 앞줄을 꽉 채우면
+      //   `사업체 여름` / `휴가` 가 되는데, 원하는 모양은 `사업체` / `여름 휴가` 다.
+      //  ★글자를 줄이는 경우는 딱 하나 — **어절 하나가 한 줄보다 넓을 때**(줄이지 않으면 어절이
+      //   글자 사이에서 쪼개진다). 6pt 로도 안 되거나 셀 높이를 넘으면 '휴무'로 되돌린다.
       const pad = 2, tw = w - pad * 2;
       const words = mark.split(" ").filter(Boolean);
       const widest = () => Math.max(...words.map((t) => doc.widthOfString(t)));
       let fs = 8;
       doc.fontSize(fs);
-      // ① **한 줄에 통째로** 들어가도록 먼저 줄인다 — 줄바꿈 자체를 없애는 것이 가장 깔끔하고,
-      //    사용자가 사유 문구를 고쳐 쓰지 않아도 된다(2026-08-23 사용자 지적).
-      //    실측: "사업체 여름 휴가"(9자)=7.5pt · "하계 집중 휴가 기간"(11자)=6pt 로 한 줄에 들어간다.
-      while (doc.widthOfString(mark) > tw && fs > 6) { fs -= 0.5; doc.fontSize(fs); }
-      if (doc.widthOfString(mark) <= tw) {
-        const th1 = doc.heightOfString(mark, { width: tw, align: "center" });
-        doc.text(mark, x + pad, y + Math.max(0, (h - th1) / 2), { width: tw, align: "center" });
+      while (widest() > tw && fs > 6) { fs -= 0.5; doc.fontSize(fs); }
+      let lines = balancedLines(doc, words, tw);
+      while (lines && lines.length * doc.currentLineHeight() > h - 2 && fs > 6) {
+        fs -= 0.5; doc.fontSize(fs);
+        lines = balancedLines(doc, words, tw);
+      }
+      if (!lines || lines.length * doc.currentLineHeight() > h - 2) {
+        doc.fontSize(8).text("휴무", x, y + Math.max(0, (h - lineH) / 2), { width: w, align: "center" });
       } else {
-        // ② 한 줄에 못 넣으면 접는다. 이때도 **어절은 쪼개지 않는다** — 모든 어절이 한 줄에
-        //    들어갈 때까지 줄인다. 줄이 나뉘는 위치는 등록한 사유의 공백 위치가 된다.
-        fs = 8;
-        doc.fontSize(fs);
-        while (widest() > tw && fs > 6) { fs -= 0.5; doc.fontSize(fs); }
-        let th = doc.heightOfString(mark, { width: tw, align: "center" });
-        while (th > h - 2 && fs > 6) { fs -= 0.5; doc.fontSize(fs); th = doc.heightOfString(mark, { width: tw, align: "center" }); }
-        if (widest() > tw || th > h - 2) {
-          doc.fontSize(8).text("휴무", x, y + Math.max(0, (h - lineH) / 2), { width: w, align: "center" });
-        } else {
-          doc.text(mark, x + pad, y + Math.max(0, (h - th) / 2), { width: tw, align: "center" });
-        }
+        const lh = doc.currentLineHeight();
+        let ty = y + Math.max(0, (h - lines.length * lh) / 2);
+        for (const ln of lines) { doc.text(ln, x + pad, ty, { width: tw, align: "center" }); ty += lh; }
       }
     }
     doc.fillColor("#000");
