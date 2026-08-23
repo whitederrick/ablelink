@@ -106,8 +106,18 @@ export async function buildAttendanceSheetPayload(
       date: { gte: start, lte: end },
       countAsWorkday: false,
     },
-    select: { assignmentId: true, date: true },
+    select: { assignmentId: true, date: true, reason: true },
   });
+  // ★사용자가 등록한 **휴무 사유를 그대로** 문서에 싣는다(2026-08-23 사용자 요청).
+  //  전부 '휴무'로만 찍으면 무슨 사유의 휴무인지 알 수 없어 오해의 소지가 있다.
+  //  · 사유가 비어 있으면 렌더러가 '휴무'로 되돌린다(공휴일도 사유가 없어 같은 경로).
+  //  · 같은 날짜에 배정이 여럿이면 먼저 등록된 것을 쓴다(출근부는 현장 단위라 실제로는 1건).
+  //  · 줄바꿈·연속 공백은 한 칸으로 정리한다 — 셀 안에서 줄이 깨지지 않도록.
+  const holidayLabels: Record<string, string> = {};
+  for (const h of holidayRows) {
+    const r = (h.reason ?? "").replace(/\s+/g, " ").trim();
+    if (r && !holidayLabels[h.date]) holidayLabels[h.date] = r;
+  }
   const holidayKeys = new Set(holidayRows.map((h) => `${h.assignmentId}:${h.date}`));
   const attendances = holidayKeys.size
     ? attendanceRows.filter((a) => !holidayKeys.has(`${a.assignmentId}:${a.workDate}`))
@@ -220,6 +230,8 @@ export async function buildAttendanceSheetPayload(
     //  · 커스텀 휴무일(SiteHoliday, countAsWorkday=false) + 한국 공휴일. 주말은 요일로 자명해 렌더러가 건너뛴다.
     //  · 근무 인정일(countAsWorkday=true)과 공휴일 출근은 출근 행이 있어 시각이 찍히므로 표기 대상이 아니다.
     holidays: [...new Set([...getKrHolidayDates(start, end), ...holidayRows.map((h) => h.date)])].sort(),
+    //  ★날짜별 사유. 없는 날짜는 렌더러가 '휴무'로 찍는다.
+    holidayLabels,
     weeklyHolidayCount: 0,
     monthlyLeaveCount,
     allowanceTotalWon: "0",

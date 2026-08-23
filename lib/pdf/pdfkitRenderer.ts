@@ -197,7 +197,23 @@ function drawTimeCell(
   if (!e && mark) {
     const lineH = 10.2;
     doc.font("KR").fontSize(8).fillColor("#475569");
-    doc.text(mark, x, y + Math.max(0, (h - lineH) / 2), { width: w, align: "center" });
+    // ★짧은 사유('휴무'·'주말' 등)는 **종전과 완전히 같은 좌표·글자크기**로 찍는다 — 기존 문서 무변화.
+    if (doc.widthOfString(mark) <= w - 4) {
+      doc.text(mark, x, y + Math.max(0, (h - lineH) / 2), { width: w, align: "center" });
+    } else {
+      // 사용자가 등록한 **긴 사유** — 셀을 넘지 않도록 글자만 줄여 맞춘다(최소 6pt).
+      //  ★글자를 잘라내지 않는다(단어 잘림 금지). 6pt 로도 안 들어가면 '휴무'로 되돌린다 —
+      //   셀 밖으로 흘러 표를 깨뜨리는 것보다 낫다.
+      const pad = 2, tw = w - pad * 2;
+      let fs = 8;
+      let th = doc.heightOfString(mark, { width: tw, align: "center" });
+      while (th > h - 2 && fs > 6) { fs -= 0.5; doc.fontSize(fs); th = doc.heightOfString(mark, { width: tw, align: "center" }); }
+      if (th > h - 2) {
+        doc.fontSize(8).text("휴무", x, y + Math.max(0, (h - lineH) / 2), { width: w, align: "center" });
+      } else {
+        doc.text(mark, x + pad, y + Math.max(0, (h - th) / 2), { width: tw, align: "center" });
+      }
+    }
     doc.fillColor("#000");
     return;
   }
@@ -253,6 +269,14 @@ function attendanceSheet(p: any): Promise<Buffer> {
   // 휴무일(커스텀 휴무 + 공휴일). payload 에 없으면 빈 집합 → 종전 동작 그대로.
   const holidaySet = new Set<string>(
     (Array.isArray(p.holidays) ? p.holidays : []).map((d: unknown) => normYmd(String(d ?? ""))).filter(Boolean),
+  );
+  // ★사용자가 등록한 휴무 사유(2026-08-23). 있으면 '휴무' 대신 그 문구를 찍는다 —
+  //  전부 '휴무'로만 보이면 무슨 휴무인지 알 수 없어 오해의 소지가 있다는 사용자 지적.
+  //  공휴일은 사유가 없으므로 종전대로 '휴무'. payload 에 없으면 빈 맵 → 종전 동작 그대로.
+  const holidayLabels = new Map<string, string>(
+    Object.entries((p.holidayLabels ?? {}) as Record<string, unknown>)
+      .map(([d, v]) => [normYmd(String(d ?? "")), String(v ?? "").replace(/\s+/g, " ").trim()] as [string, string])
+      .filter(([d, v]) => !!d && !!v),
   );
   const weeks: WeekCell[][] = [];
   if (start && end) {
@@ -323,7 +347,7 @@ function attendanceSheet(p: any): Promise<Buffer> {
     //  ★주말이 우선한다 — 토·일에 걸린 공휴일은 '휴무'가 아니라 '주말'로 읽는 게 자연스럽다.
     //  ★근무 기록이 있으면(주말 출근·공휴일 출근) mark 를 무시하고 시각이 찍힌다(drawTimeCell 이 e 우선).
     const markOf = (c: WeekCell, i: number): string | null =>
-      !c.ymd ? null : i >= 5 ? "주말" : holidaySet.has(c.ymd) ? "휴무" : null;
+      !c.ymd ? null : i >= 5 ? "주말" : holidaySet.has(c.ymd) ? (holidayLabels.get(c.ymd) || "휴무") : null;
 
     // 총 지도시간
     cell(doc, x, y, labelW, totalH, "총\n지도시간", { size: 10 });

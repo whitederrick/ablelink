@@ -104,3 +104,56 @@ describe("출근부 — 시간 표기에서 괄호 제거", () => {
     expect(d).toContain("(h)");
   });
 });
+
+// 2026-08-23 사용자 요청 — 등록한 휴무 사유를 출근부에 그대로 싣는다.
+//  '휴무'로만 찍으면 무슨 사유의 휴무인지 알 수 없어 오해의 소지가 있다.
+//  ★셀이 좁으므로(하루 칸 ≈ 60pt) 넘칠 때는 **글자만 줄이고 잘라내지 않는다.**
+//   6pt 로도 안 들어가면 '휴무'로 되돌린다 — 표가 깨지는 것보다 낫다.
+describe("출근부 — 등록한 휴무 사유 표기", () => {
+  it("★사유가 등록된 휴무일은 그 사유가 찍힌다", async () => {
+    const d = await render({ ...BASE, holidays: ["2026-08-05"], holidayLabels: { "2026-08-05": "창립기념일" } });
+    expect(count(d, "창립기념일")).toBe(1);
+    expect(count(d, "휴무")).toBe(0);
+  });
+
+  it("사유가 없는 휴무일은 종전대로 '휴무'(공휴일 포함)", async () => {
+    const d = await render({ ...BASE, holidays: ["2026-08-05", "2026-08-06"], holidayLabels: { "2026-08-05": "창립기념일" } });
+    expect(count(d, "창립기념일")).toBe(1);
+    expect(count(d, "휴무")).toBe(1);   // 08-06 은 사유 없음
+  });
+
+  it("빈 문자열·공백만 있는 사유는 '휴무'로 되돌린다", async () => {
+    const d = await render({ ...BASE, holidays: ["2026-08-05"], holidayLabels: { "2026-08-05": "   " } });
+    expect(count(d, "휴무")).toBe(1);
+  });
+
+  it("★주말이 사유보다 우선한다(토요일에 사유가 있어도 '주말')", async () => {
+    const d = await render({ ...BASE, holidays: ["2026-08-08"], holidayLabels: { "2026-08-08": "창립기념일" } });
+    expect(count(d, "주말")).toBe(1);
+    expect(count(d, "창립기념일")).toBe(0);
+  });
+
+  it("★근무 기록이 있으면 사유를 무시하고 시각이 찍힌다", async () => {
+    // 08-03(월)은 근무일 — 사유를 걸어도 시각이 이긴다.
+    const d = await render({ ...BASE, holidays: ["2026-08-03"], holidayLabels: { "2026-08-03": "창립기념일" } });
+    expect(count(d, "창립기념일")).toBe(0);
+    expect(d).toContain("5.5h");
+  });
+
+  it("줄바꿈·연속 공백이 섞인 사유도 한 줄로 정리해 찍는다", async () => {
+    const d = await render({ ...BASE, holidays: ["2026-08-05"], holidayLabels: { "2026-08-05": "창립\n\n기념일" } });
+    expect(count(d, "창립 기념일")).toBe(1);
+  });
+
+  it("★셀을 넘기는 아주 긴 사유는 '휴무'로 되돌린다(표를 깨뜨리지 않는다)", async () => {
+    const long = "사업장 사정으로 인한 임시 휴무이며 자세한 사항은 담당 매니저에게 문의하시기 바랍니다";
+    const d = await render({ ...BASE, holidays: ["2026-08-05"], holidayLabels: { "2026-08-05": long } });
+    expect(count(d, long)).toBe(0);
+    expect(count(d, "휴무")).toBe(1);
+  });
+
+  it("holidayLabels 가 없어도 종전 동작 그대로(무회귀)", async () => {
+    const d = await render({ ...BASE, holidays: ["2026-08-05"] });
+    expect(count(d, "휴무")).toBe(1);
+  });
+});
