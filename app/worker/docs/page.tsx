@@ -268,6 +268,22 @@ function DocsContent() {
     URL.revokeObjectURL(url);
   }
 
+  /**
+   * 만든 PDF 를 **새 탭**으로 연다.
+   * ★종전에는 결과 블록 안에 `<object data:application/pdf;base64,…>` 로 끼워 넣었는데,
+   *  CSP `object-src 'none'` 에 막혀 **항상** 대체 문구("브라우저에서 미리보기를 지원하지 않습니다")만
+   *  떴다 — 브라우저가 아니라 우리 정책이 막은 것이라 안내 자체가 사실과 달랐다.
+   * ★revoke 를 즉시 하지 않는다(새 탭이 아직 읽는 중이다) — 다운로드와 다른 점.
+   */
+  function handleOpen(docId: string) {
+    const r = docStates[docId].result;
+    if (!r?.pdfBase64) return;
+    const blob = new Blob([Uint8Array.from(atob(r.pdfBase64), c => c.charCodeAt(0))], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
   const checkedCount = DOC_TYPES.filter(d => docStates[d.id].checked).length;
   const needsManagerSignChecked = DOC_TYPES.some(d => NEEDS_MANAGER_SIGN.has(d.id) && docStates[d.id].checked);
 
@@ -531,47 +547,46 @@ function DocsContent() {
                         </div>
                       )}
 
-                      {/* 발송 결과 */}
-                      {state.result && (
-                        <div className={`mb-3 rounded-xl border p-3 ${state.result.success ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
-                          <p className={`text-xs font-black leading-relaxed ${state.result.success ? "text-emerald-700" : "text-rose-700"}`}>
-                            {state.result.msg}
-                          </p>
-                          {state.result.success && state.result.pdfBase64 && (
-                            <div className="mt-2 space-y-2">
-                              <button
-                                onClick={() => handleDownload(id)}
-                                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-slate-950 py-2 text-xs font-black text-white transition active:scale-[0.97]"
-                              >
-                                <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                                PDF 다운로드 (사본)
-                              </button>
-                              <object
-                                data={`data:application/pdf;base64,${state.result.pdfBase64}`}
-                                type="application/pdf"
-                                className="h-96 w-full rounded-lg border border-slate-200"
-                              >
-                                <p className="p-3 text-xs text-slate-400">
-                                  브라우저에서 PDF 미리보기를 지원하지 않습니다. 위 다운로드 버튼을 이용해 주세요.
-                                </p>
-                              </object>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* 개별 발송 버튼 */}
+                      {/* ★누르는 버튼이 먼저, 결과가 그 아래. 종전에는 순서가 거꾸로라
+                          "미리보기를 눌렀는데 왜 위에 다운로드가 생기지?" 가 됐다. */}
                       <button
                         onClick={() => sendDoc(id)}
                         disabled={state.loading}
                         className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-black text-slate-700 transition active:scale-[0.97] disabled:opacity-50"
                       >
                         {state.loading ? (
-                          <><Clock className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> 생성 중...</>
+                          <><Clock className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> 만드는 중...</>
                         ) : (
-                          <><FileText className="h-3.5 w-3.5" aria-hidden="true" /> 미리보기 (PDF 확인)</>
+                          <><FileText className="h-3.5 w-3.5" aria-hidden="true" /> PDF 만들기 (제출 전 확인)</>
                         )}
                       </button>
+
+                      {/* 결과 — 열기·저장. ★인라인 뷰어(`<object>`)는 CSP 에 막혀 늘 죽어 있었으므로 걷어냈다. */}
+                      {state.result && (
+                        <div className={`mt-3 rounded-xl border p-3 ${state.result.success ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
+                          <p className={`break-keep text-xs font-black leading-relaxed ${state.result.success ? "text-emerald-700" : "text-rose-700"}`}>
+                            {state.result.msg}
+                          </p>
+                          {state.result.success && state.result.pdfBase64 && (
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              <button
+                                onClick={() => handleOpen(id)}
+                                className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white py-2.5 text-xs font-black text-slate-700 transition active:scale-[0.97]"
+                              >
+                                <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                                PDF 열기
+                              </button>
+                              <button
+                                onClick={() => handleDownload(id)}
+                                className="flex items-center justify-center gap-1.5 rounded-lg bg-slate-950 py-2.5 text-xs font-black text-white transition active:scale-[0.97]"
+                              >
+                                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                                PDF 저장
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -594,8 +609,12 @@ function DocsContent() {
                 <><Check className="h-5 w-5" aria-hidden="true" /> 위탁기관에 최종 제출 ({checkedCount}개)</>
               )}
             </button>
-            <p className="mx-4 mt-1.5 text-center text-[11px] font-semibold text-slate-400">
-              제출하면 담당 매니저가 앱에서 확인·서명합니다. 수정 후 재제출 시 새 버전으로 관리됩니다.
+            {/* ★모바일에서 한 줄로 흘리면 문장 중간이 어색하게 잘린다 → 문장 단위로 2줄 고정.
+                `break-keep`(word-break: keep-all)으로 한국어 단어가 쪼개지는 것도 막는다. */}
+            <p className="mx-4 mt-1.5 break-keep text-center text-[11px] font-semibold leading-relaxed text-slate-400">
+              제출하면 담당 매니저가 앱에서 확인·서명합니다.
+              <br />
+              수정 후 재제출 시 새 버전으로 관리됩니다.
             </p>
           </>
         )}
@@ -603,7 +622,7 @@ function DocsContent() {
         {/* 안내 */}
         <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4 text-center">
           <p className="text-xs font-semibold leading-relaxed text-slate-400">
-'위탁기관에 최종 제출'을 누르면 담당 매니저 앱으로 전달됩니다.<br />
+            &apos;위탁기관에 최종 제출&apos;을 누르면 담당 매니저 앱으로 전달됩니다.<br />
             직무지도원 서명은 등록된 서명이 자동 삽입됩니다.
           </p>
         </div>

@@ -119,7 +119,7 @@ export default function WorkerLoginPage() {
             <p className="font-semibold text-slate-500">
               비밀번호를 잊으셨나요?
               <br />
-              소속 기관(담당 매니저)에 문의하시면 바로 재설정해 드립니다.
+              소속 기관(담당 매니저)에 문의하시면 재설정해 드립니다.
             </p>
             <Link
               href="/worker/reset-password"

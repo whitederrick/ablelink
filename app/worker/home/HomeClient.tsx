@@ -961,8 +961,16 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
               <CheckCircle2 className="h-5 w-5 text-sky-500" aria-hidden="true" />
               <p className="text-sm font-black text-sky-900">출퇴근 자동 처리</p>
             </div>
-            <p className="text-center text-sm font-semibold leading-6 text-sky-700">
-              이 현장은 출퇴근 버튼을 사용하지 않아요. 근무형태 기준으로 출근부가 매일 자동으로 작성됩니다.
+            {/* ★문장 단위로 줄을 고정한다 — 한 줄로 흘리면 모바일에서 중간이 어색하게 잘린다.
+                `break-keep`(word-break: keep-all)으로 한국어 어절이 쪼개지는 것도 막는다.
+                ★캘린더 화면의 실제 버튼 이름은 "출퇴근 없이 출근부 일괄 작성"이다(calendar/page.tsx:303).
+                버튼 이름을 바꾸면 이 문장도 함께 고칠 것. */}
+            <p className="break-keep text-center text-sm font-semibold leading-6 text-sky-700">
+              이 현장은 출퇴근 버튼을 사용하지 않아요.
+              <br />
+              캘린더 메뉴에 출근부 일괄 작성 버튼을 누르면,
+              <br />
+              근무형태 및 해당 날짜 기준으로 출근부가 자동 작성됩니다.
             </p>
             <p className="mt-3 text-center text-xs font-semibold text-sky-500">
               변경이 필요하면 시스템 관리자에게 문의하세요.
