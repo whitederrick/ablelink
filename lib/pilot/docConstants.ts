@@ -58,3 +58,17 @@ export function toPilotServiceStep(v: unknown): PilotServiceStep {
 // ASCII 공백 15개 = 49.5pt ≈ 17.5mm (사용자 확정 2026-08-13).
 //  참고: 공백 1개 = 3.3pt, 활자 한글 3자 ≈ 32pt ≈ 11mm — 손글씨는 그보다 커서 여유를 둔다.
 export const PILOT_HANDWRITE_BLANK = "               ";
+
+/**
+ * 사업체 담당자 **서명 슬롯이 있는** 문서 — 운영 `/worker/docs`(page.tsx:67 `NEEDS_MANAGER_SIGN`)와 같은 집합이다.
+ *
+ * ★적응지도 일지는 서명 2행(직무지도원·위탁기관 담당자)뿐이라 여기에 없다(`pdfkitRenderer:557` 은 3행,
+ *  적응지도 일지 렌더러는 2행). 슬롯이 없는 문서에 서명을 붙이려 하면 조회만 하고 버려지는
+ *  **소비처 0인 죽은 경로**가 된다 — 화면도 서버도 이 집합으로 판단한다.
+ */
+export const PILOT_DOCS_WITH_COMPANY_SIGN: readonly PilotDocType[] = ["ATTENDANCE_SHEET", "TRAINING_DAILY_LOG"];
+
+/** 이 문서에 사업체 담당자 서명이 들어가는가. */
+export function pilotDocHasCompanySign(docType: string): boolean {
+  return (PILOT_DOCS_WITH_COMPANY_SIGN as readonly string[]).includes(docType);
+}

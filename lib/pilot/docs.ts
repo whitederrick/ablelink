@@ -9,8 +9,13 @@
 //  `agencyAgent` 는 종합평가 2종 전용이므로 파일럿은 건드리지 않는다.
 //
 // ★사업체 담당자 이름은 `Site.businessContactName` 에서 **명시적으로** 넣는다(F25b).
-//  기존 경로는 서명 토큰의 `signerName` 을 쓰므로 토큰이 없는 파일럿에서는 빈 문자열이 된다.
-//  ★단 서명 이미지(`imageUrl`)는 만들지도 넣지도 않는다 — 대면 서명 흐름은 그대로 둔다.
+//  서명을 받았으면 그 토큰의 `signerName` 이 우선한다(기존 경로와 같은 규칙).
+//
+// ★★사업체 담당자 **서명 이미지**는 2026-08-23 에 추가됐다(그전에는 수기 서명 전제로 비워 뒀다).
+//  업로드는 운영 `POST /api/worker/docs/inperson-sign` 을 **그대로 재사용**한다 — 파일럿 때문에
+//  운영 코드를 고치지 않는다는 원칙에 따라 새 업로드 라우트를 만들지 않았다(이미지 검증·Storage 경로·
+//  토큰 발급 규율이 두 벌로 갈리는 것도 막는다). 여기서는 그렇게 만들어진
+//  `SiteSignToken`(signRole=company_manager) 을 **읽기만** 한다.
 
 import { prisma } from "@/lib/prisma";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
@@ -21,14 +26,14 @@ import { dbKey } from "./registry";
 import { PilotError } from "./resources";
 import {
   PILOT_DOC_TYPES, PILOT_HANDWRITE_BLANK, PILOT_DOCS_BY_STEP, PILOT_SERVICE_STEP_LABEL,
-  toPilotServiceStep, type PilotDocType,
+  toPilotServiceStep, pilotDocHasCompanySign, type PilotDocType,
 } from "./docConstants";
 
 // ★상수의 정의는 `./docConstants` 가 갖는다 — 검증 스윕이 prisma·supabase 를 끌어오지 않도록
 //  분리했다. 소비처 편의를 위해 여기서 재수출한다.
 export {
   PILOT_DOC_TYPES, PILOT_HANDWRITE_BLANK, PILOT_SERVICE_STEPS, PILOT_DOCS_BY_STEP,
-  PILOT_SERVICE_STEP_LABEL, toPilotServiceStep,
+  PILOT_SERVICE_STEP_LABEL, PILOT_DOCS_WITH_COMPANY_SIGN, toPilotServiceStep, pilotDocHasCompanySign,
 } from "./docConstants";
 export type { PilotDocType } from "./docConstants";
 
@@ -73,6 +78,32 @@ export async function assertPilotDocAccess(workerId: bigint, assignmentId: bigin
   return { pilotId: wRes.pilotId, assignment };
 }
 
+/**
+ * 이 배정·기간의 **사업체 담당자 서명**을 찾는다.
+ *
+ * 규칙은 운영 `lib/docs/buildDocPayload.ts:127-142` 의 폴백과 **같다** — 같은 배정·기간의
+ * 사용 완료(`usedAt`) `company_manager` 토큰 중 **가장 최근 것**.
+ *
+ * ★`docType` 은 비교하지 않는다. 같은 기간의 출근부·훈련일지는 **한 번 서명으로 함께 적용**되는 것이
+ *  기존 규칙이다(buildDocPayload:119 주석). 파일럿만 다르게 굴면 참여자가 문서마다 다시 서명하게 된다.
+ *
+ * ★운영과 달리 화면이 넘기는 **토큰 파라미터를 받지 않는다.** 파일럿 화면은 서명 직후 같은 배정·기간으로
+ *  돌아오므로 위 폴백만으로 충분하고, 배지 표시는 `/api/pilot/docs/sign-status` 가 **같은 이 함수**로
+ *  판정한다 — 화면이 "서명 완료"라는데 PDF 는 비어 있는(또는 그 반대의) 어긋남이 구조적으로 안 생긴다.
+ */
+export async function findPilotCompanySignature(assignmentId: bigint, start: string, end: string) {
+  const rec = await prisma.siteSignToken.findFirst({
+    where: {
+      assignmentId, periodStart: start, periodEnd: end,
+      signRole: "company_manager", usedAt: { not: null },
+    },
+    orderBy: { usedAt: "desc" },
+    select: { signatureUrl: true, signerName: true, usedAt: true },
+  });
+  if (!rec?.signatureUrl) return null;
+  return { signatureUrl: rec.signatureUrl, signerName: rec.signerName || "", usedAt: rec.usedAt! };
+}
+
 export interface PilotDocInput {
   workerId: bigint;
   assignmentId: bigint;
@@ -85,6 +116,7 @@ export interface PilotDocInput {
 /**
  * 파일럿 문서 payload 를 만든다. **PDF 를 그리는 데 필요한 것만** 조립하고
  * DocumentRun·DocumentVersion·서명 토큰·Storage 는 **아무것도 만들지 않는다**(§9 미리보기·다운로드 전용).
+ * ★사업체 담당자 서명은 **읽기만** 한다 — 토큰을 만드는 곳은 서명 화면(`/pilot/docs/sign`)뿐이다.
  */
 export async function buildPilotDocPayload(input: PilotDocInput) {
   const { workerId, assignmentId, start, end, traineeId } = input;
@@ -119,8 +151,19 @@ export async function buildPilotDocPayload(input: PilotDocInput) {
 
   // ★위탁기관 담당자 = 이름을 모르는 대상이므로 **수기 공란**. 서명 이미지는 넣지 않는다.
   const govAgent = { name: PILOT_HANDWRITE_BLANK, imageUrl: undefined as string | undefined };
-  // ★사업체 담당자 = 이름을 아는 대상이므로 **실명**. 서명 이미지는 만들지도 넣지도 않는다.
-  const companyManager = { name: site.businessContactName ?? "", imageUrl: undefined as string | undefined };
+  // ★사업체 담당자 = 이름을 아는 대상이므로 **실명**. 서명을 받았으면 서명자가 적은 이름이 우선한다.
+  //  ★서명 슬롯이 없는 문서(적응지도 일지)에서는 **조회조차 하지 않는다** — 읽어도 쓸 데가 없는
+  //   죽은 경로를 만들지 않기 위해서다(렌더러가 2행뿐이라 넣어도 사라진다).
+  const companySig = pilotDocHasCompanySign(docType)
+    ? await findPilotCompanySignature(assignmentId, start, end)
+    : null;
+  const companyImg = companySig
+    ? await (await import("@/lib/signatureImage")).imageToDataUri(companySig.signatureUrl)
+    : undefined;
+  const companyManager = {
+    name: companySig?.signerName || site.businessContactName || "",
+    imageUrl: companyImg,
+  };
   const workerSig = { name: worker?.workerName ?? "", imageUrl: workerImg };
 
   const docTimes = dailyDocTimes(assignment.workType, assignment.commuteGuidanceIncluded, assignment.customWorkStart, assignment.customWorkEnd);

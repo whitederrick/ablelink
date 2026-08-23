@@ -5,11 +5,15 @@
 //   · 접근 검증 2단 — 레지스트리 등록 ∩ 실제 소유. 비파일럿·타 파일럿·타인 배정은 404.
 //   · 허용 문서 3종만. 종합평가 등은 400.
 //   · govAgent.name = 수기 공란(공백만), companyManager.name = Site.businessContactName(F25b).
-//   · companyManager.imageUrl 을 만들지도 넣지도 않는다.
+//   · ★사업체 담당자 서명(2026-08-23 추가) — 서명 전에는 imageUrl 이 없고, 토큰 선택 규칙이 정확하며,
+//     서명 슬롯이 없는 문서(적응지도 일지)는 조회조차 하지 않는다.
+//   · ★서명이 실제로 PDF 에 들어가는지는 **HTTP 경계**에서만 확인할 수 있다(아래 [7-2]).
+//     `lib/signatureImage` 가 `server-only` 를 물고 그 패키지가 설치돼 있지 않아 tsx 가 로드하지 못한다.
 //   · ★생성물 0 — DocumentRun·DocumentVersion·서명 토큰이 늘지 않는다.
 //   · ★서명 Storage 경로 재수집 가능성(§10-1 ②) — Worker.signatureUrl 에서 경로를 복원할 수 있는가.
 //
 // 실행: npx tsx scripts/verify-pilot-docs.mts
+//      (서명 end-to-end 까지: PILOT_SMOKE_BASE_URL=http://localhost:3000 + dev 서버)
 
 import { readFileSync } from "node:fs";
 for (const line of readFileSync(new URL("../.env", import.meta.url), "utf8").split("\n")) {
@@ -44,6 +48,22 @@ function signaturePathFromStoredMirror(stored?: string | null): string | null {
   return null;
 }
 const S = { signaturePathFromStored: signaturePathFromStoredMirror };
+// ★워커 세션은 **직접 서명**해서 만든다 — 로그인 API 를 타면 Upstash 레이트리밋(운영 인스턴스 공유)을
+//  건드린다. 파일럿 초기화 검증(verify-pilot-purge.mts:378)과 같은 방식이다.
+import * as sessNs from "../app/worker/_lib/session";
+type SessModule = typeof import("../app/worker/_lib/session");
+const SESS = (sessNs as unknown as { default?: SessModule }).default ?? (sessNs as unknown as SessModule);
+
+// ★서명이 PDF 에 실제로 들어가는지는 dev 서버로만 확인할 수 있다(server-only 제약).
+//  값이 없으면 그 검사를 **"건너뜀"으로 출력**한다 — 조용한 통과를 만들지 않는다.
+const BASE = (process.env.PILOT_SMOKE_BASE_URL || "").replace(/\/+$/, "");
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+// 1x1 투명 PNG — 업로드 라우트의 magic-bytes 검증을 통과하는 최소 이미지.
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+function httpSkipped(label: string) {
+  console.log(`  ⚠️ 건너뜀(HTTP 미검증) — ${label}. PILOT_SMOKE_BASE_URL 를 주고 dev 서버와 함께 실행하세요.`);
+}
 
 assertWritableDb("파일럿 문서 검증(테스트 자원 생성·삭제)");
 
@@ -128,7 +148,7 @@ async function main() {
   // ★손글씨 기입 폭 — 공백 1개 = 3.3pt 이므로 15개 = 49.5pt ≈ 17.5mm(활자 한글 3자의 약 1.5배).
   ok("★공란 폭 확보(≥ 45pt ≈ 16mm)", String(attSig.govAgent?.name ?? "").length * 3.3 >= 45, `${String(attSig.govAgent?.name ?? "").length}자 = ${(String(attSig.govAgent?.name ?? "").length * 3.3).toFixed(1)}pt`);
   ok("★출근부 companyManager = businessContactName", attSig.companyManager?.name === CONTACT, String(attSig.companyManager?.name));
-  ok("★companyManager.imageUrl 미생성", attSig.companyManager?.imageUrl === undefined);
+  ok("★서명 전에는 companyManager.imageUrl 없음", attSig.companyManager?.imageUrl === undefined);
   ok("govAgent.imageUrl 미생성", attSig.govAgent?.imageUrl === undefined);
 
   const trn = await D.buildPilotDocPayload({ workerId: w.id, assignmentId: a.id, docType: "TRAINING_DAILY_LOG", start: START, end: END, traineeId: tr.trainee.id.toString() });
@@ -248,6 +268,110 @@ async function main() {
   const wrow = await prisma.worker.findUnique({ where: { id: w.id }, select: { signatureUrl: true } });
   console.log(`     (파일럿 워커 signatureUrl = ${JSON.stringify(wrow?.signatureUrl)} — 서명 등록 전이면 null 이 정상)`);
   ok("★재수집 함수가 DB 값에서 경로를 뽑을 수 있음(5단계 게이트 성립)", S.signaturePathFromStored(wrow?.signatureUrl) === null || typeof S.signaturePathFromStored(wrow?.signatureUrl) === "string");
+
+  console.log("\n[7-1] ★사업체 담당자 서명 — 토큰 선택 규칙");
+  // ★payload 를 만들지 않는 **별도 기간**에서 규칙만 본다.
+  //  실제 기간에 서명을 붙이면 그 뒤의 payload 조립이 `lib/signatureImage`(server-only)를 물어
+  //  tsx 에서 로드 자체가 안 된다 — 그 경로는 [7-2] HTTP 경계에서 본다.
+  const P1 = "2026-09-01", P2 = "2026-09-30";
+  const mkToken = (over: Record<string, unknown>) => prisma.siteSignToken.create({
+    data: {
+      token: `vpd-${STAMP}-${Math.random().toString(36).slice(2, 10)}`,
+      docType: "ATTENDANCE_SHEET", assignmentId: a.id, periodStart: P1, periodEnd: P2,
+      signRole: "company_manager", signerName: "무시될이름", signatureUrl: "inperson/x/none.png",
+      usedAt: new Date(), expiresAt: new Date(Date.now() + 86400000),
+      ...over,
+    },
+    select: { id: true },
+  });
+
+  ok("서명 전 = null", (await D.findPilotCompanySignature(a.id, P1, P2)) === null);
+  // 정답이 아닌 것들 — 하나씩 만들어 두고 **여전히 null** 인지 본다(오귀속 방지).
+  await mkToken({ periodStart: "2026-10-01", periodEnd: "2026-10-31" });          // 다른 기간
+  await mkToken({ signRole: "gov_agent" });                                        // 다른 역할
+  await mkToken({ usedAt: null });                                                 // 서명 미완료
+  await mkToken({ assignmentId: aAdapt.id });                                      // 다른 배정
+  ok("★다른 기간·다른 역할·미사용·다른 배정 토큰은 무시된다",
+    (await D.findPilotCompanySignature(a.id, P1, P2)) === null);
+
+  await mkToken({ signerName: "박담당", usedAt: new Date(Date.now() - 60_000) });
+  const first = await D.findPilotCompanySignature(a.id, P1, P2);
+  ok("★맞는 토큰을 찾는다(서명자명 포함)", first?.signerName === "박담당", JSON.stringify(first?.signerName));
+  await mkToken({ signerName: "최담당", usedAt: new Date() });
+  const latest = await D.findPilotCompanySignature(a.id, P1, P2);
+  ok("★가장 최근 서명이 이긴다(다시 서명 받기)", latest?.signerName === "최담당", JSON.stringify(latest?.signerName));
+  // ★docType 은 비교하지 않는다 — 한 번 서명으로 같은 기간의 출근부·훈련일지에 함께 들어간다(운영과 같은 규칙).
+  ok("★훈련일지도 같은 서명을 쓴다(docType 무관)",
+    (await D.findPilotCompanySignature(a.id, P1, P2))?.signerName === "최담당");
+
+  ok("서명 슬롯 집합 = 출근부·훈련일지",
+    D.pilotDocHasCompanySign("ATTENDANCE_SHEET") && D.pilotDocHasCompanySign("TRAINING_DAILY_LOG")
+    && !D.pilotDocHasCompanySign("ADAPTATION_DAILY_LOG"));
+
+  console.log("\n[7-2] ★서명이 실제로 PDF 에 들어가는가 (HTTP 경계)");
+  if (!BASE) {
+    httpSkipped("사업체 담당자 서명 end-to-end");
+  } else if (!SUPABASE_URL || !SERVICE_KEY) {
+    httpSkipped("Storage 환경변수 없음");
+  } else {
+    const cookie = `${SESS.WORKER_COOKIE}=${await SESS.signWorkerToken({ workerId: w.id.toString(), loginId: phone, name: "이지도" } as never)}`;
+    const q = new URLSearchParams({ assignmentId: a.id.toString(), periodStart: START, periodEnd: END });
+
+    const st0 = await (await fetch(`${BASE}/api/pilot/docs/sign-status?${q}&docType=ATTENDANCE_SHEET`, { headers: { cookie } })).json();
+    ok("서명 전 sign-status = signed:false", st0?.success === true && st0.signed === false, JSON.stringify(st0));
+
+    // ★양성 대조 — 서명 전 PDF 를 먼저 받아 둔다. 이게 없으면 뒤의 '커졌다'가 무엇 대비인지 알 수 없다.
+    const pdf0 = await fetch(`${BASE}/api/pilot/docs/preview?${q}&docType=ATTENDANCE_SHEET`, { headers: { cookie } });
+    const size0 = (await pdf0.arrayBuffer()).byteLength;
+    ok("[양성대조] 서명 전 출근부 PDF 200", pdf0.status === 200, String(pdf0.status));
+
+    // 업로드는 **운영 라우트 재사용** — 파일럿 화면이 실제로 호출하는 그 경로다.
+    const fd = new FormData();
+    fd.append("signature", new Blob([PNG], { type: "image/png" }), "sign.png");
+    fd.append("docType", "ATTENDANCE_SHEET");
+    fd.append("periodStart", START);
+    fd.append("periodEnd", END);
+    fd.append("signerName", "박담당");
+    fd.append("assignmentId", a.id.toString());
+    const up = await fetch(`${BASE}/api/worker/docs/inperson-sign`, { method: "POST", headers: { cookie }, body: fd });
+    const upJson = await up.json().catch(() => null);
+    ok("★운영 inperson-sign 라우트가 파일럿 워커를 그대로 받는다(플랜 게이트 통과)",
+      up.status === 200 && upJson?.success === true, `${up.status} ${JSON.stringify(upJson?.message ?? "")}`);
+
+    const st1 = await (await fetch(`${BASE}/api/pilot/docs/sign-status?${q}&docType=ATTENDANCE_SHEET`, { headers: { cookie } })).json();
+    ok("★서명 후 sign-status = signed:true + 서명자명", st1?.signed === true && st1?.signerName === "박담당", JSON.stringify(st1));
+
+    const pdf1 = await fetch(`${BASE}/api/pilot/docs/preview?${q}&docType=ATTENDANCE_SHEET`, { headers: { cookie } });
+    const size1 = (await pdf1.arrayBuffer()).byteLength;
+    ok("★★서명 이미지가 PDF 에 실제로 들어간다(바이트 증가)", size1 > size0, `${size0} → ${size1}`);
+
+    // ★적응지도 일지는 서명 슬롯이 없다 — 조회 자체를 지원하지 않는다고 답해야 한다.
+    const qa = new URLSearchParams({ assignmentId: aAdapt.id.toString(), periodStart: START, periodEnd: END, docType: "ADAPTATION_DAILY_LOG" });
+    const st2 = await (await fetch(`${BASE}/api/pilot/docs/sign-status?${qa}`, { headers: { cookie } })).json();
+    ok("★적응지도 일지 = supported:false", st2?.success === true && st2.supported === false, JSON.stringify(st2));
+
+    // ★접근 검증 2단은 여기서도 적용된다 — 비파일럿 배정은 404.
+    const foreign = await prisma.siteAssignment.findFirst({ where: { id: { notIn: [a.id, aAdapt.id] } }, select: { id: true } });
+    if (foreign) {
+      const qf = new URLSearchParams({ assignmentId: foreign.id.toString(), periodStart: START, periodEnd: END });
+      const rf = await fetch(`${BASE}/api/pilot/docs/sign-status?${qf}`, { headers: { cookie } });
+      ok("★레지스트리 밖 배정의 서명 상태는 404", rf.status === 404, String(rf.status));
+    }
+    const rNoAuth = await fetch(`${BASE}/api/pilot/docs/sign-status?${q}`);
+    ok("무인증 401", rNoAuth.status === 401, String(rNoAuth.status));
+
+    // ★검증이 만든 Storage 객체는 되돌린다 — 정리는 레지스트리 기반이라 이 객체를 못 잡는다.
+    const objPath = (await prisma.siteSignToken.findFirst({
+      where: { assignmentId: a.id, periodStart: START, signRole: "company_manager" },
+      orderBy: { usedAt: "desc" }, select: { signatureUrl: true },
+    }))?.signatureUrl;
+    if (objPath) {
+      const del = await fetch(`${SUPABASE_URL}/storage/v1/object/signatures/${objPath}`, {
+        method: "DELETE", headers: { Authorization: `Bearer ${SERVICE_KEY}` },
+      });
+      ok("서명 객체 정리", del.ok || del.status === 404, String(del.status));
+    }
+  }
 }
 
 const extraPilots: { pilotId: bigint; agencyId: bigint; workerId: bigint }[] = [];

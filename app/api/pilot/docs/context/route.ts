@@ -35,7 +35,9 @@ export async function GET(request: NextRequest) {
       where: { id: { in: asgIds }, workerId },
       select: {
         id: true, startDate: true, endDate: true, workType: true, serviceStep: true,
-        site: { select: { id: true, companyName: true } },
+        // ★businessContactName — 서명 화면의 담당자 성함 기본값. 없으면 서명자가 빈 칸을 받고,
+        //  운영 업로드 라우트가 "사업체 담당자"라는 대체 문자열을 넣어 실명이 문서에서 사라진다.
+        site: { select: { id: true, companyName: true, businessContactName: true } },
       },
       orderBy: { id: "asc" },
     });
@@ -67,6 +69,7 @@ export async function GET(request: NextRequest) {
         id: a.id.toString(),
         siteId: a.site?.id.toString() ?? "",
         companyName: a.site?.companyName ?? "",
+        businessContactName: a.site?.businessContactName ?? "",
         workType: a.workType,
         // ★서비스 단계 — 화면이 이 값으로 문서 목록을 좁힌다(서버도 같은 기준으로 거부한다).
         serviceStep: toPilotServiceStep(a.serviceStep),
