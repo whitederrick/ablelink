@@ -886,7 +886,12 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
       </header>
 
       {/* ── 컨텐츠 ── */}
-      <div className="mx-auto max-w-md px-4 pb-28 pt-4 space-y-4">
+      {/* ★하단 여백 — 퀵메뉴(FAB)가 마지막 카드를 가리지 않도록 한다.
+          FAB 는 `fixed bottom-24`(96px) + `h-14`(56px) = 바닥에서 **152px** 를 차지하는데
+          종전 `pb-28`(112px)은 그보다 작아, 끝까지 스크롤해도 마지막 카드(근무형태·알람)의
+          아랫줄이 FAB 뒤에 남았다. 176px 로 늘려 24px 여유를 둔다.
+          FAB 는 hasSite 일 때만 그려지므로 여백도 그때만 늘린다. */}
+      <div className={`mx-auto max-w-md px-4 pt-4 space-y-4 ${hasSite ? "pb-44" : "pb-28"}`}>
 
         {/* 파이프라인 게이트 안내(출근 전 필요한 단계 사전 안내) */}
         {homeData?.pipelineGate && (
