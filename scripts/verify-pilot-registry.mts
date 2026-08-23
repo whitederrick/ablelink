@@ -110,8 +110,10 @@ async function main() {
     startDate: "2026-08-03", endDate: "2026-08-28",
   });
   ok("ASSIGNMENT 레지스트리 = 1", (await cnt("ASSIGNMENT")) === 1);
-  const arow = await prisma.siteAssignment.findUnique({ where: { id: a.id }, select: { attendanceButtonExempt: true, workType: true, agencyId: true, commuteGuidanceIncluded: true } });
+  const arow = await prisma.siteAssignment.findUnique({ where: { id: a.id }, select: { attendanceButtonExempt: true, workType: true, agencyId: true, commuteGuidanceIncluded: true, connectedAt: true } });
   ok("★attendanceButtonExempt = true (출퇴근 버튼 없이 일괄 작성)", arow?.attendanceButtonExempt === true);
+  // ★비어 있으면 워커 홈이 "배정 연결 필요" 배너를 띄우는데(homeSummary.ts:248) 파일럿은 인증코드를 받을 경로가 없다.
+  ok("★connectedAt 기록 — 워커 홈에 '배정 연결' 배너가 뜨지 않는다", arow?.connectedAt != null, String(arow?.connectedAt));
   ok("agencyId = 전용 기관 (급여 스코프 격리)", arow?.agencyId === p.agencyId);
   ok("FULL_DAY 는 출퇴근지도 미포함", arow?.commuteGuidanceIncluded === false);
   await expectFail("CUSTOM 근무형태 거부 (시각 없으면 09:00~18:00로 조용히 대체됨)", () =>

@@ -380,6 +380,12 @@ export async function createPilotAssignment(pilotId: bigint, input: {
         serviceStep,
         commuteGuidanceIncluded: commute,
         attendanceButtonExempt: true,
+        // ★연결 완료로 만든다(2026-08-23). 비우면 워커 홈이 `pipelineGate="NOT_CONNECTED"` 로 판정해
+        //  "새 현장 배정 연결이 필요해요 + [배정 연결]" 배너를 띄우는데(homeSummary.ts:248),
+        //  파일럿 참여자는 **인증코드를 받을 경로가 없어** 눌러도 진행되지 않는다.
+        //  운영 규칙과도 일치한다 — 운영자가 임시 비밀번호로 계정을 발급하는 경로는 그 시점에
+        //  `connectedAt` 을 함께 기록한다(`worker/contracts:363`). 파일럿 계정 발급이 정확히 그 형태다.
+        connectedAt: new Date(),
       },
       select: { id: true, workType: true, serviceStep: true, startDate: true, endDate: true },
     });
