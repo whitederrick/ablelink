@@ -10,13 +10,26 @@ import PDFDocument from "pdfkit";
 //  ★근무일 시간은 괄호 없이(2026-08-23).
 
 let draws: string[] = [];
+// ★그릴 때의 글자 크기도 같이 기록한다 — "한 줄에 넣으려고 줄였는가"를 단언하려면 필요하다.
+let sizes: number[] = [];
+let curSize = 0;
 let capturing = false;
-const proto = PDFDocument.prototype as unknown as { text: (...a: unknown[]) => unknown };
+const proto = PDFDocument.prototype as unknown as {
+  text: (...a: unknown[]) => unknown;
+  fontSize: (...a: unknown[]) => unknown;
+};
 const origText = proto.text;
+const origFontSize = proto.fontSize;
+proto.fontSize = function (this: unknown, ...args: unknown[]) {
+  curSize = Number(args[0] ?? curSize);
+  return (origFontSize as (...a: unknown[]) => unknown).apply(this, args);
+};
 proto.text = function (this: unknown, ...args: unknown[]) {
-  if (capturing) draws.push(String(args[0] ?? ""));
+  if (capturing) { draws.push(String(args[0] ?? "")); sizes.push(curSize); }
   return (origText as (...a: unknown[]) => unknown).apply(this, args);
 };
+/** 그 문구를 그릴 때 쓴 글자 크기. */
+const sizeOf = (t: string) => sizes[draws.indexOf(t)];
 
 const ENTRY = (date: string) => ({ date, start: "12:30", end: "18:00", hours: 5.5, multiHours: 5.5 });
 // 기간 2026-08-03(월) ~ 08-08(토). 근무 = 월·화·금.
@@ -32,7 +45,7 @@ const BASE = {
 
 async function render(payload: Record<string, unknown>): Promise<string[]> {
   const { renderPdfKit } = await import("@/lib/pdf/pdfkitRenderer");
-  draws = []; capturing = true;
+  draws = []; sizes = []; capturing = true;
   await renderPdfKit("ATTENDANCE_SHEET" as never, payload as never);
   capturing = false;
   return draws;
@@ -181,5 +194,37 @@ describe("출근부 — 휴무 사유의 어절 보존", () => {
     // 렌더러는 문자열을 통째로 넘기고 줄바꿈은 pdfkit 이 공백에서 처리한다.
     const d = await render(H("사업체 여름휴가"));
     expect(count(d, "사업체 여름휴가")).toBe(1);
+  });
+});
+
+// 2026-08-23 — "사유를 꼭 고쳐 써야 하나?" 지적.
+//  줄바꿈 위치를 사용자가 공백으로 맞추게 하는 대신, **한 줄에 통째로 들어가도록 먼저 글자를 줄인다.**
+//  줄바꿈 자체가 없어지므로 어색하게 나뉠 일이 없다. 한 줄에 못 넣을 때만 어절 단위로 접는다.
+describe("출근부 — 휴무 사유는 한 줄 우선", () => {
+  const H = (label: string) => ({ ...BASE, holidays: ["2026-08-05"], holidayLabels: { "2026-08-05": label } });
+
+  it("★공백이 있어도 한 줄에 들어가도록 글자를 줄인다 — '사업체 여름 휴가'", async () => {
+    const d = await render(H("사업체 여름 휴가"));
+    expect(count(d, "사업체 여름 휴가")).toBe(1);
+    // 8pt 로는 59.1pt 라 한 줄(55.9pt)을 넘는다 → 줄여서 한 줄에 넣는다.
+    expect(sizeOf("사업체 여름 휴가")).toBeLessThan(8);
+    expect(sizeOf("사업체 여름 휴가")).toBeGreaterThanOrEqual(6);
+  });
+
+  it("짧은 사유는 종전 그대로 8pt 한 줄(무변화)", async () => {
+    const d = await render(H("창립기념일"));
+    expect(count(d, "창립기념일")).toBe(1);
+    expect(sizeOf("창립기념일")).toBe(8);
+  });
+
+  it("★11자 사유도 한 줄에 들어간다 — '하계 집중 휴가 기간'", async () => {
+    const d = await render(H("하계 집중 휴가 기간"));
+    expect(count(d, "하계 집중 휴가 기간")).toBe(1);
+    expect(sizeOf("하계 집중 휴가 기간")).toBeLessThan(8);
+  });
+
+  it("한 줄에 못 넣으면 접되 어절은 보존한다 — 6pt 로도 안 되면 '휴무'", async () => {
+    const d = await render(H("사업장사정에의한임시휴무일정안내"));
+    expect(count(d, "휴무")).toBe(1);
   });
 });

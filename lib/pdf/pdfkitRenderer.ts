@@ -214,13 +214,26 @@ function drawTimeCell(
       const widest = () => Math.max(...words.map((t) => doc.widthOfString(t)));
       let fs = 8;
       doc.fontSize(fs);
-      while (widest() > tw && fs > 6) { fs -= 0.5; doc.fontSize(fs); }
-      let th = doc.heightOfString(mark, { width: tw, align: "center" });
-      while (th > h - 2 && fs > 6) { fs -= 0.5; doc.fontSize(fs); th = doc.heightOfString(mark, { width: tw, align: "center" }); }
-      if (widest() > tw || th > h - 2) {
-        doc.fontSize(8).text("휴무", x, y + Math.max(0, (h - lineH) / 2), { width: w, align: "center" });
+      // ① **한 줄에 통째로** 들어가도록 먼저 줄인다 — 줄바꿈 자체를 없애는 것이 가장 깔끔하고,
+      //    사용자가 사유 문구를 고쳐 쓰지 않아도 된다(2026-08-23 사용자 지적).
+      //    실측: "사업체 여름 휴가"(9자)=7.5pt · "하계 집중 휴가 기간"(11자)=6pt 로 한 줄에 들어간다.
+      while (doc.widthOfString(mark) > tw && fs > 6) { fs -= 0.5; doc.fontSize(fs); }
+      if (doc.widthOfString(mark) <= tw) {
+        const th1 = doc.heightOfString(mark, { width: tw, align: "center" });
+        doc.text(mark, x + pad, y + Math.max(0, (h - th1) / 2), { width: tw, align: "center" });
       } else {
-        doc.text(mark, x + pad, y + Math.max(0, (h - th) / 2), { width: tw, align: "center" });
+        // ② 한 줄에 못 넣으면 접는다. 이때도 **어절은 쪼개지 않는다** — 모든 어절이 한 줄에
+        //    들어갈 때까지 줄인다. 줄이 나뉘는 위치는 등록한 사유의 공백 위치가 된다.
+        fs = 8;
+        doc.fontSize(fs);
+        while (widest() > tw && fs > 6) { fs -= 0.5; doc.fontSize(fs); }
+        let th = doc.heightOfString(mark, { width: tw, align: "center" });
+        while (th > h - 2 && fs > 6) { fs -= 0.5; doc.fontSize(fs); th = doc.heightOfString(mark, { width: tw, align: "center" }); }
+        if (widest() > tw || th > h - 2) {
+          doc.fontSize(8).text("휴무", x, y + Math.max(0, (h - lineH) / 2), { width: w, align: "center" });
+        } else {
+          doc.text(mark, x + pad, y + Math.max(0, (h - th) / 2), { width: tw, align: "center" });
+        }
       }
     }
     doc.fillColor("#000");
