@@ -202,13 +202,22 @@ function drawTimeCell(
       doc.text(mark, x, y + Math.max(0, (h - lineH) / 2), { width: w, align: "center" });
     } else {
       // 사용자가 등록한 **긴 사유** — 셀을 넘지 않도록 글자만 줄여 맞춘다(최소 6pt).
-      //  ★글자를 잘라내지 않는다(단어 잘림 금지). 6pt 로도 안 들어가면 '휴무'로 되돌린다 —
+      //  ★★줄바꿈은 **공백에서만** 일어난다(pdfkit greedy). 어절 하나가 한 줄보다 넓을 때에만
+      //   글자 사이에서 쪼개지므로, **모든 어절이 한 줄에 들어갈 때까지 글자를 줄인다** —
+      //   이러면 어절이 잘리는 일이 없다(2026-08-23 사용자 지적: "단어 잘림 조심").
+      //   → 줄이 나뉘는 위치는 곧 **등록한 사유의 공백 위치**다.
+      //     "사업체 여름 휴가" → `사업체 여름` / `휴가` · "사업체 여름휴가" → `사업체` / `여름휴가`
+      //  ★글자를 잘라내지 않는다. 6pt 로도 안 들어가면 '휴무'로 되돌린다 —
       //   셀 밖으로 흘러 표를 깨뜨리는 것보다 낫다.
       const pad = 2, tw = w - pad * 2;
+      const words = mark.split(" ").filter(Boolean);
+      const widest = () => Math.max(...words.map((t) => doc.widthOfString(t)));
       let fs = 8;
+      doc.fontSize(fs);
+      while (widest() > tw && fs > 6) { fs -= 0.5; doc.fontSize(fs); }
       let th = doc.heightOfString(mark, { width: tw, align: "center" });
       while (th > h - 2 && fs > 6) { fs -= 0.5; doc.fontSize(fs); th = doc.heightOfString(mark, { width: tw, align: "center" }); }
-      if (th > h - 2) {
+      if (widest() > tw || th > h - 2) {
         doc.fontSize(8).text("휴무", x, y + Math.max(0, (h - lineH) / 2), { width: w, align: "center" });
       } else {
         doc.text(mark, x + pad, y + Math.max(0, (h - th) / 2), { width: tw, align: "center" });

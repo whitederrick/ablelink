@@ -157,3 +157,29 @@ describe("출근부 — 등록한 휴무 사유 표기", () => {
     expect(count(d, "휴무")).toBe(1);
   });
 });
+
+// 2026-08-23 추가 지적 — "단어 잘림 조심".
+//  줄바꿈은 **공백에서만** 일어난다(pdfkit greedy). 어절 하나가 한 줄보다 넓을 때만 글자 사이에서
+//  쪼개지므로, 모든 어절이 한 줄에 들어갈 때까지 글자를 줄인다 → 어절이 잘리지 않는다.
+describe("출근부 — 휴무 사유의 어절 보존", () => {
+  const H = (label: string) => ({ ...BASE, holidays: ["2026-08-05"], holidayLabels: { "2026-08-05": label } });
+
+  it("★공백 없는 긴 어절도 쪼개지 않고 글자를 줄여 통째로 찍는다", async () => {
+    // 9자 붙여쓰기 = 8pt 에서 69.8pt > 한 줄 55.9pt → 6pt 로 줄이면 52.3pt 로 들어간다.
+    const d = await render(H("창립기념일행사준비"));
+    expect(count(d, "창립기념일행사준비")).toBe(1);
+    expect(count(d, "휴무")).toBe(0);
+  });
+
+  it("★6pt 로도 어절이 한 줄에 안 들어가면 '휴무'로 되돌린다(쪼개지 않는다)", async () => {
+    const d = await render(H("사업장사정에의한임시휴무일정안내"));   // 16자 붙여쓰기
+    expect(count(d, "사업장사정에의한임시휴무일정안내")).toBe(0);
+    expect(count(d, "휴무")).toBe(1);
+  });
+
+  it("공백이 있으면 그 자리에서 나뉜다 — 사유 전체가 한 번에 그려진다", async () => {
+    // 렌더러는 문자열을 통째로 넘기고 줄바꿈은 pdfkit 이 공백에서 처리한다.
+    const d = await render(H("사업체 여름휴가"));
+    expect(count(d, "사업체 여름휴가")).toBe(1);
+  });
+});
