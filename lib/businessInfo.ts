@@ -26,9 +26,9 @@ export const BUSINESS_INFO: BusinessInfo = {
   companyNameEn: "Platforest",
   representative: "곽은하",
   bizRegNo: "197-86-02010",
-  mailOrderNo: null,      // TODO: 제0000-지역-0000호 (통신판매업 신고 후)
+  mailOrderNo: "제2026-서울금천-1798호",
   address: "서울특별시 금천구 디지털로 130, 13층 1309호 (가산동, 남성프라자)",
-  phone: "010-8484-7141",
+  phone: "070-4300-7141",
   email: "platforest.inc@gmail.com", // 문의용(회신 가능). 도메인 메일함은 보류(신규 도메인 무료전달 다 막힘) — 우선 gmail 직접 표기
   hosting: "Vercel Inc.",
   privacyOfficer: "곽은하(대표)",
