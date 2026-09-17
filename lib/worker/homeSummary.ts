@@ -7,7 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { getKstDateString } from "@/lib/time";
 import { getWorkerPremiumStatus, getWorkerDocAccess } from "@/lib/planGuard";
 import { getConfig } from "@/lib/systemConfig";
-import { effectiveServiceStep, serviceStepToTrainingType, effectiveTrainingType } from "@/lib/serviceStep";
+import { effectiveServiceStep, serviceStepToTrainingType } from "@/lib/serviceStep";
+import { getMissingLogItems } from "@/lib/worker/missingLogs";
 
 function getKstNowDate(): Date {
   const nowStr = new Date().toLocaleString("sv-SE", { timeZone: "Asia/Seoul" });
@@ -56,7 +57,7 @@ export interface HomeSummary {
     items: { attendanceId: string; workDate: string; siteName: string; trainingType: "PRE" | "FIELD" | "ADAPTATION"; trainees: { id: string; name: string; gender: string }[] }[];
   };
   // 오늘 일지 상태
-  today: { loggedTraineeIds: string[]; missingTraineeCount: number };
+  today: { loggedTraineeIds: string[]; missingTraineeCount: number; logIdByTraineeId: Record<string, string> };
   // 퇴근 미실행(과거 출근만 하고 퇴근 안 누른 보정대기 건) — 사유와 함께 늦은 퇴근 처리 필요
   missedClockOuts: { attendanceId: string; workDate: string; siteName: string }[];
   // 배정 요청(REQUESTED) — 매니저가 보낸 요청, 워커가 수락(희망 근무형태 선택)/거절
@@ -146,7 +147,7 @@ export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: 
   const [
     premiumStatus, docAccessStatus,
     rawNotices, unreadCount, setting,
-    missingAttendances, todayLogs, missedRows, requestRows,
+    missingItems, todayLogs, missedRows, requestRows,
     msgBefore, msgWorking, msgDone, msgClosed,
   ] = await Promise.all([
     getWorkerPremiumStatus(workerId),
@@ -164,23 +165,15 @@ export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: 
       where: { workerId },
       select: { clockInAlertMinutes: true, clockOutAlertMinutes: true },
     }),
-    // 미완료 일지(최근 3개월, 완료된 본인 일지 0건) — 캘린더·매니저 대시보드와 일치(draft=미완료).
-    prisma.dailyAttendance.findMany({
-      where: { workerId, workDate: { gte: from }, logs: { none: { writerId: workerId, isCompleted: true } } },
-      include: {
-        site: { select: { companyName: true, trainees: { where: { status: { in: ["TRAINING", "EMPLOYED"] } }, select: { id: true, name: true, gender: true } } } },
-        assignment: { select: { serviceStep: true, adaptationStartDate: true } },
-      },
-      orderBy: { workDate: "desc" },
-      take: 30,
-    }),
-    // 오늘 일지 상태(완료된 일지의 훈련생) — todayAttendance 없으면 빈 배열.
+    // 미작성 일지(최근 3개월) — 훈련생 단위(부분 작성된 날도 포함). /worker/logs/missing과 단일 로직.
+    getMissingLogItems(workerId, from, 30),
+    // 오늘 일지 상태(완료된 일지의 훈련생 + 수정 진입용 logId) — todayAttendance 없으면 빈 배열.
     todayAttendance
       ? prisma.traineeLog.findMany({
           where: { writerId: workerId, attendanceId: todayAttendance.id, isCompleted: true },
-          select: { traineeId: true },
+          select: { id: true, traineeId: true },
         })
-      : Promise.resolve([] as { traineeId: bigint }[]),
+      : Promise.resolve([] as { id: bigint; traineeId: bigint }[]),
     // 퇴근 미실행(과거 WORKING) — ★실제 출근(actualStartTime)한 행만. 일지 placeholder(시각 없는 WORKING)는
     //  출근한 적이 없으므로 '퇴근 미실행 보정대기'로 노출하지 않는다.
     prisma.dailyAttendance.findMany({
@@ -207,17 +200,11 @@ export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: 
     yearMonth: n.yearMonth, link: n.link ?? null, read: n.readAt !== null, createdAt: n.createdAt.toISOString(),
   }));
 
-  const missingItems = missingAttendances.map(a => ({
-    attendanceId: a.id.toString(),
-    workDate: a.workDate,
-    siteName: a.site.companyName,
-    // 해당 출근일 기준으로 훈련/적응지도 판정(전환일 반영)
-    trainingType: effectiveTrainingType(a.assignment?.serviceStep, a.assignment?.adaptationStartDate, a.workDate),
-    trainees: a.site.trainees.map(t => ({ id: t.id.toString(), name: t.name, gender: t.gender })),
-  }));
-
   const loggedTraineeIds: string[] = todayLogs.map(l => l.traineeId.toString());
   const missingTraineeCount = trainees.filter(t => !loggedTraineeIds.includes(t.id.toString())).length;
+  // 오늘 이미 완료된 일지의 logId — 홈에서 재진입 시 빈 폼으로 덮어쓰지 않고 수정 모드로 열기 위함.
+  const todayLogIdByTraineeId: Record<string, string> = {};
+  for (const l of todayLogs) todayLogIdByTraineeId[l.traineeId.toString()] = l.id.toString();
 
   const missedClockOuts = missedRows.map(a => ({
     attendanceId: a.id.toString(),
@@ -283,7 +270,7 @@ export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: 
     },
     homeMessages: { BEFORE: msgBefore, WORKING: msgWorking, DONE: msgDone, CLOSED: msgClosed },
     missing: { count: missingItems.length, items: missingItems },
-    today: { loggedTraineeIds, missingTraineeCount },
+    today: { loggedTraineeIds, missingTraineeCount, logIdByTraineeId: todayLogIdByTraineeId },
     missedClockOuts,
     pendingRequests,
     activeAssignmentId: activeAssignment?.id ? String(activeAssignment.id) : null,

@@ -300,6 +300,9 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
   // 놓친 업무 / 오늘 일지 상태
   const [missingCount,   setMissingCount]   = useState(initialData?.missing.count ?? 0);
   const [todayMissing,   setTodayMissing]   = useState(initialData?.today.missingTraineeCount ?? 0);
+  // 오늘 이미 작성완료된 훈련생 — 목록/선택시트 배지 표시 + 재진입 시 수정모드 판단용
+  const [todayLoggedIds, setTodayLoggedIds] = useState<string[]>(initialData?.today.loggedTraineeIds ?? []);
+  const [todayLogIdByTraineeId, setTodayLogIdByTraineeId] = useState<Record<string, string>>(initialData?.today.logIdByTraineeId ?? {});
   // 오늘 일지 쓰기 — 훈련생 선택 시트
   const [showLogPicker,  setShowLogPicker]  = useState(false);
   // 퇴근 미실행(보정대기) — 늦은 퇴근 처리
@@ -330,6 +333,8 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
       setClockOutAlert(d.alarm.clockOutAlertMinutes);
       setMissingCount(d.missing.count);
       setTodayMissing(d.today.missingTraineeCount);
+      setTodayLoggedIds(d.today.loggedTraineeIds ?? []);
+      setTodayLogIdByTraineeId(d.today.logIdByTraineeId ?? {});
       setMissedClockOuts(d.missedClockOuts ?? []);
       setPendingRequests(d.pendingRequests ?? []);
       setActiveAssignments(d.activeAssignments ?? []);
@@ -659,11 +664,14 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
 
   // 일지 작성 진입 (출근 안 눌러도 가능 — 서버가 출근기록 자동 생성)
   function goWorklog(trainee: Trainee) {
+    const existingLogId = todayLogIdByTraineeId[trainee.id];
     const params = new URLSearchParams({
       traineeId: trainee.id,
       traineeName: trainee.name,
       trainingType: homeData?.trainingType || "FIELD",
       ...(homeData?.attendanceId ? { attendanceId: homeData.attendanceId } : {}),
+      // 오늘 이미 작성완료된 훈련생이면 수정 모드로 열어 기존 내용을 불러온다(빈 폼 저장 시 덮어쓰기 방지).
+      ...(existingLogId ? { logId: existingLogId } : {}),
     });
     router.push(`/worker/worklog?${params.toString()}`);
   }
@@ -1175,17 +1183,27 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
                   ? `/worker/evaluation/adaptation?traineeId=${t.id}&traineeName=${encodeURIComponent(t.name)}&periodStart=${ps}&periodEnd=${pe}`
                   : `/worker/evaluation/training?traineeId=${t.id}&traineeName=${encodeURIComponent(t.name)}&periodStart=${ps}&periodEnd=${pe}`;
 
+                const isLogged = todayLoggedIds.includes(t.id);
+
                 return (
                   <div
                     key={t.id}
                     className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm"
                   >
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-sm font-black text-slate-600">
+                    <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl text-sm font-black ${isLogged ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
                       {t.name.slice(0, 1)}
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-black text-slate-900">{t.name}</p>
-                      <p className="text-xs font-semibold text-slate-400">{t.gender === "M" ? "남성" : "여성"}</p>
+                      <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold">
+                        {isLogged ? (
+                          <span className="flex items-center gap-1 text-emerald-600">
+                            <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> 오늘 일지 작성완료
+                          </span>
+                        ) : (
+                          <span className="text-amber-600">오늘 일지 미작성</span>
+                        )}
+                      </p>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -1200,7 +1218,7 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
                         className="flex items-center gap-1 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white transition active:scale-95"
                       >
                         <ClipboardList className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
-                        일지 작성
+                        {isLogged ? "일지 수정" : "일지 작성"}
                       </button>
                     </div>
                   </div>
@@ -1311,22 +1329,33 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
             <p className="mb-1 text-base font-black text-slate-900">어떤 훈련생 일지를 쓸까요?</p>
             <p className="mb-5 text-sm font-semibold text-slate-400">훈련생을 선택하면 일지 작성으로 이동합니다.</p>
             <div className="space-y-2">
-              {traineeList.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => { setShowLogPicker(false); goWorklog(t); }}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5 text-left transition active:scale-95"
-                >
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-slate-200 text-sm font-black text-slate-600">
-                    {t.name.slice(0, 1)}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-black text-slate-900">{t.name}</p>
-                    <p className="text-xs font-semibold text-slate-400">{t.gender === "M" ? "남성" : "여성"}</p>
-                  </div>
-                  <ChevronRight className="h-5 w-5 text-slate-300" aria-hidden="true" />
-                </button>
-              ))}
+              {[...traineeList]
+                .sort((a, b) => Number(todayLoggedIds.includes(a.id)) - Number(todayLoggedIds.includes(b.id)))
+                .map(t => {
+                  const isLogged = todayLoggedIds.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => { setShowLogPicker(false); goWorklog(t); }}
+                      className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5 text-left transition active:scale-95"
+                    >
+                      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl text-sm font-black ${isLogged ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
+                        {t.name.slice(0, 1)}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-black text-slate-900">{t.name}</p>
+                        {isLogged ? (
+                          <p className="flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                            <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> 작성완료 · 수정하려면 선택
+                          </p>
+                        ) : (
+                          <p className="text-xs font-semibold text-amber-600">미작성</p>
+                        )}
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-slate-300" aria-hidden="true" />
+                    </button>
+                  );
+                })}
             </div>
             <button onClick={() => setShowLogPicker(false)} className="mt-4 w-full rounded-2xl border border-slate-200 py-3 text-sm font-black text-slate-500">
               취소
