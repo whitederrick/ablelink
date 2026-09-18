@@ -89,7 +89,10 @@ export async function GET(request: NextRequest) {
     //  기록이 캘린더에서 사라지던 회귀 방지. 같은 날 다중현장 충돌은 아래 dayMap에서 활성 배정 우선으로 해소.
     const attendances = await prisma.dailyAttendance.findMany({
       where: { workerId, workDate: { gte: startDate, lte: endDate } },
-      include: { logs: { select: { id: true, isCompleted: true } } },
+      include: {
+        logs: { select: { id: true, isCompleted: true, traineeId: true } },
+        assignment: { select: { agencyId: true } },
+      },
       orderBy: { workDate: "asc" },
     });
 
@@ -99,11 +102,13 @@ export async function GET(request: NextRequest) {
     const monthSiteIdBig = monthSiteIds.map(s => BigInt(s));
     const monthAsgIds = [...new Set(attendances.map(a => a.assignmentId?.toString()).filter((x): x is string => !!x))];
 
-    // 현장명(라벨용) — 같은날 다중현장 기록을 시각적으로 구분하기 위해.
+    // 현장명(라벨용) — 같은날 다중현장 기록을 시각적으로 구분하기 위해. agencyId는 아래 훈련생 배지의
+    //  크로스테넌트(공유현장) 스코프 판정용(2026-07-21 감사 정책과 동일 — lib/worker/missingLogs.ts 참조).
     const sites = monthSiteIdBig.length
-      ? await prisma.site.findMany({ where: { id: { in: monthSiteIdBig } }, select: { id: true, companyName: true } })
+      ? await prisma.site.findMany({ where: { id: { in: monthSiteIdBig } }, select: { id: true, companyName: true, agencyId: true } })
       : [];
     const siteNameById = new Map(sites.map(s => [s.id.toString(), s.companyName]));
+    const siteAgencyById = new Map(sites.map(s => [s.id.toString(), s.agencyId]));
 
     // 휴무일 조회 (공휴일 + 사이트별 커스텀)
     const nationalHolidays = getKrHolidays(year, month);
@@ -136,18 +141,23 @@ export async function GET(request: NextRequest) {
             startDate: { lte: new Date(endDate + "T23:59:59+09:00") },
             OR: [{ endDate: null }, { endDate: { gte: new Date(startDate + "T00:00:00+09:00") } }],
           },
-          select: { siteId: true, startDate: true, endDate: true },
+          select: { siteId: true, startDate: true, endDate: true, traineeId: true, trainee: { select: { name: true, gender: true } } },
         })
       : [];
-    const rangesBySite = new Map<string, { s: string; e: string | null }[]>();
+    type PlacementRange = { s: string; e: string | null; traineeId: string; name: string; gender: string };
+    const rangesBySite = new Map<string, PlacementRange[]>();
     for (const p of placementsAll) {
       const k = p.siteId.toString();
       const arr = rangesBySite.get(k) ?? [];
-      arr.push({ s: getKstDateString(p.startDate), e: p.endDate ? getKstDateString(p.endDate) : null });
+      arr.push({
+        s: getKstDateString(p.startDate), e: p.endDate ? getKstDateString(p.endDate) : null,
+        traineeId: p.traineeId.toString(), name: p.trainee.name, gender: p.trainee.gender,
+      });
       rangesBySite.set(k, arr);
     }
-    const traineeCountOnSite = (siteId: string, dateStr: string): number =>
-      (rangesBySite.get(siteId) ?? []).filter(p => p.s <= dateStr && (p.e === null || p.e >= dateStr)).length;
+    const traineesOnSite = (siteId: string, dateStr: string): PlacementRange[] =>
+      (rangesBySite.get(siteId) ?? []).filter(p => p.s <= dateStr && (p.e === null || p.e >= dateStr));
+    const traineeCountOnSite = (siteId: string, dateStr: string): number => traineesOnSite(siteId, dateStr).length;
     // 조회 월 말일 기준 인원(요약/응답 표시용 대표값) — 활성 현장 기준.
     const traineeCount = assignment?.siteId ? traineeCountOnSite(assignment.siteId.toString(), endDate) : 0;
 
@@ -156,6 +166,7 @@ export async function GET(request: NextRequest) {
     const todayStr = nowKst.toISOString().slice(0, 10);
 
     // 날짜별 상태 맵
+    type DayTraineeBadge = { id: string; name: string; gender: string; completed: boolean; logId: string | null };
     type DayEntry = {
       status: DayStatus;
       attendanceId: string;
@@ -166,6 +177,7 @@ export async function GET(request: NextRequest) {
       traineeCount: number;
       holidayName?: string;
       siteName?: string | null; // 그날 표시된 기록의 현장명(멀티현장 구분용)
+      trainees?: DayTraineeBadge[]; // 훈련생별 완료 배지(1:多 부분작성 시각화, 2026-09-18)
     };
     const dayMap: Record<string, DayEntry> = {};
 
@@ -182,6 +194,18 @@ export async function GET(request: NextRequest) {
       const completedLogs = att.logs.filter(l => l.isCompleted).length;
       // ★그 기록의 실제 현장 인원으로 색상 판정(활성현장 인원으로 타현장 기록을 오판정하던 문제 수정).
       const dayTraineeCount = traineeCountOnSite(att.siteId.toString(), att.workDate);
+      // 훈련생별 완료 배지 — 공유(divergent) 현장 크로스테넌트 PII 차단(2026-07-21 감사 정책과 동일,
+      //  lib/worker/missingLogs.ts 참조): 배정 기관과 현장 소유 기관이 일치할 때만 노출, 불일치·null이면 빈 배열.
+      const siteAgencyId = siteAgencyById.get(att.siteId.toString());
+      const scopedTrainees = att.assignment?.agencyId != null && siteAgencyId === att.assignment.agencyId
+        ? traineesOnSite(att.siteId.toString(), att.workDate)
+        : [];
+      const logByTraineeId = new Map(att.logs.filter(l => l.isCompleted).map(l => [l.traineeId.toString(), l.id.toString()]));
+      const trainees: DayTraineeBadge[] = scopedTrainees.map(t => ({
+        id: t.traineeId, name: t.name, gender: t.gender,
+        completed: logByTraineeId.has(t.traineeId),
+        logId: logByTraineeId.get(t.traineeId) ?? null,
+      }));
       dayMap[att.workDate] = {
         status: calcStatus({
           hasStart:       !!att.startTime,
@@ -198,6 +222,7 @@ export async function GET(request: NextRequest) {
         logCount:     completedLogs,
         traineeCount: dayTraineeCount,
         siteName:     siteNameById.get(att.siteId.toString()) ?? null,
+        trainees,
       };
     }
 

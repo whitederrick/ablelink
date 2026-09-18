@@ -20,6 +20,14 @@ import { getActiveAssignmentCookie } from "../_lib/activeAssignmentCookie";
 // ─── 타입 ──────────────────────────────────────────────
 type DayStatus = "GREEN" | "ORANGE" | "RED" | "NONE" | "HOLIDAY";
 
+interface DayTraineeBadge {
+  id: string;
+  name: string;
+  gender: string;
+  completed: boolean;
+  logId: string | null;
+}
+
 interface DayData {
   status: DayStatus;
   attendanceId: string;
@@ -29,6 +37,7 @@ interface DayData {
   logCount: number;
   traineeCount: number;
   holidayName?: string;
+  trainees?: DayTraineeBadge[];
 }
 
 interface CalendarData {
@@ -588,7 +597,31 @@ export default function CalendarPage() {
                     <p className="text-center text-sm font-semibold text-slate-400">출근 기록이 없습니다.</p>
                   )}
 
-                  {selectedDay.data.traineeCount > 0 && (
+                  {selectedDay.data.trainees && selectedDay.data.trainees.length > 0 ? (
+                    <div className="flex flex-wrap justify-center gap-1.5">
+                      {selectedDay.data.trainees.map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setSelectedDay(null);
+                            const aid = selectedDay.data.attendanceId;
+                            const tt = data?.trainingType || "FIELD";
+                            const p = new URLSearchParams({
+                              traineeId: t.id, traineeName: t.name, trainingType: tt,
+                              ...(aid ? { attendanceId: aid } : {}),
+                              ...(t.logId ? { logId: t.logId } : {}),
+                            });
+                            router.push(`/worker/worklog?${p.toString()}`);
+                          }}
+                          className={`rounded-full border px-2.5 py-1 text-xs font-black transition active:scale-95 ${
+                            t.completed ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"
+                          }`}
+                        >
+                          {t.completed ? "✓ " : "미작성 · "}{t.name}
+                        </button>
+                      ))}
+                    </div>
+                  ) : selectedDay.data.traineeCount > 0 && (
                     <p className="text-center text-sm font-semibold text-slate-500">
                       일지 {selectedDay.data.logCount}/{selectedDay.data.traineeCount}명 완료
                     </p>
