@@ -144,6 +144,7 @@ function WorklogForm() {
   const [error, setError] = useState("");
   const [loadingLog, setLoadingLog] = useState(false);
   const [loadError, setLoadError] = useState(false); // 수정모드 로드 실패 — 빈 폼으로 원본 덮어쓰기 방지
+  const [siteError, setSiteError] = useState(""); // 신규 작성인데 배정을 못 찾은 경우(배정 만료 등) — 저장 시 오해 소지 있는 메시지 대신 실제 사유 표시
 
   const premium = siteInfo.premiumAccess ?? false;
   const isExempt = siteInfo.attendanceButtonExempt ?? false;
@@ -182,6 +183,10 @@ function WorklogForm() {
             if (hrs > 0) setMeasurementTime(String(hrs));
           }
         }
+      } else if (!logId) {
+        // 신규 작성인데 배정 자체를 못 찾은 경우(배정 만료 등) — siteId/assignmentId가 비어 저장 시
+        // "출근 기록이 없습니다"로 오해 소지 있는 메시지가 뜨던 것을 막고 실제 사유를 바로 보여준다.
+        setSiteError(d.message || "현장 정보를 불러오지 못했습니다.");
       }
     }).catch(e => console.error("[worker/worklog] 현장 정보 로드 실패", e));
   }, []);
@@ -383,6 +388,14 @@ function WorklogForm() {
   if (loadingLog) {
     return <div className="flex min-h-dvh items-center justify-center bg-slate-50">
       <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-950" />
+    </div>;
+  }
+
+  // 신규 작성인데 배정을 못 찾은 경우 — 빈 폼 대신 실제 사유 표시(원인 오귀속 방지)
+  if (!logId && siteError) {
+    return <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-slate-50 p-6 text-center">
+      <p className="text-sm font-semibold text-rose-500">{siteError}</p>
+      <button onClick={() => router.back()} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-black text-slate-600 active:scale-95">돌아가기</button>
     </div>;
   }
 
