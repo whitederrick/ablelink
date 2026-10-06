@@ -113,6 +113,9 @@ function WorklogForm() {
   // 일지 내용
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  // 미래 일지 사전 작성(2026-10-06 확정): 이번 달 말까지만 허용 — 배정 기간이 더 멀어도 월을 넘겨 쓰진 못한다.
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const maxLogDate = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, "0")}-${String(monthEnd.getDate()).padStart(2, "0")}`;
   const [logDate, setLogDate] = useState(todayStr);
   const [attendance, setAttendance] = useState<Attendance>("출석");
   const [taskName, setTaskName] = useState("");
@@ -490,7 +493,7 @@ function WorklogForm() {
         <div className={`rounded-2xl border p-4 ${(() => { const d = new Date(logDate + "T00:00:00"); const dow = d.getDay(); return (dow === 0 || dow === 6) ? "border-amber-200 bg-amber-50" : "border-slate-100 bg-white"; })()}`}>
           <div className="flex items-center justify-between">
             <span className="text-sm font-black text-slate-700">날짜</span>
-            <input type="date" value={logDate}
+            <input type="date" value={logDate} max={maxLogDate}
               onChange={e => { if (!attendanceId || logId) setLogDate(e.target.value); }}
               readOnly={!!attendanceId && !logId}
               className={`rounded-xl border px-3 py-2 text-sm font-semibold text-slate-900 outline-none ${(attendanceId && !logId) ? "border-slate-100 bg-slate-100 text-slate-400 cursor-not-allowed" : "border-slate-200 bg-slate-50 focus:border-sky-400"}`} />
@@ -522,6 +525,12 @@ function WorklogForm() {
             }
             return null;
           })()}
+          {logDate > todayStr && (
+            <div className="mt-2 flex items-start gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
+              <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-sky-600" />
+              <p className="text-[11px] font-semibold text-sky-700">아직 지나지 않은 날짜예요. 이번 달 말({maxLogDate})까지만 미리 작성할 수 있어요.</p>
+            </div>
+          )}
         </div>
 
         {/* 출결 */}

@@ -20,6 +20,13 @@ export function getKstDateString(date = new Date()) {
 // KST 기준 시:분:초 문자열(2자리). 렌더 위치 무관 — 서버(UTC)/클라(로컬) 어디서 계산해도
 //  동일한 KST 값을 출력한다(한국은 서머타임 없이 항상 UTC+9라 고정 오프셋으로 안전).
 //  → SSR 시계가 서버 타임존(UTC)으로 렌더돼 직접 접속 시 9시간 어긋나던 문제 근본 차단.
+// KST 기준 '이번 달 말일' 문자열. 미래 일지 사전 작성 상한(2026-10-06 확정: 월말까지만)에 사용.
+export function getKstMonthEndDateString(date = new Date()) {
+  const [y, m] = getKstDateString(date).split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate(); // m(1-indexed)을 monthIndex로 넘기면 day0=해당 월 말일
+  return `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+}
+
 export function getKstHms(date = new Date()) {
   const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
   return {
