@@ -644,11 +644,11 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
           <table className="mt-4 w-full table-fixed text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs font-black text-slate-500">
-                <th className="w-[120px] py-2 pr-3">직무지도원</th>
-                <th className="w-[160px] py-2 pr-3">사업체</th>
-                <th className="w-[120px] py-2 pr-3">서비스 단계</th>
-                <th className="w-[110px] py-2 pr-3">근무형태</th>
-                <th className="w-[220px] py-2 pr-3">기간</th>
+                <th className="w-[110px] py-2 pr-3">직무지도원</th>
+                <th className="w-[140px] py-2 pr-3">사업체</th>
+                <th className="w-[110px] py-2 pr-3">서비스 단계</th>
+                <th className="w-[100px] py-2 pr-3">근무형태</th>
+                <th className="w-[310px] py-2 pr-3">기간</th>
                 <th className="w-[90px] py-2">출퇴근</th>
                 <th className="w-[130px] py-2">작업</th>
               </tr>
@@ -670,9 +670,11 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
                   </td>
                   <td className="py-2.5 pr-3">
                     <div className="flex items-center gap-1">
-                      <input type="date" value={editAsg.startDate} onChange={(e) => setEditAsg((p) => ({ ...p, startDate: e.target.value }))} className={`w-full ${T.input}`} />
-                      <span className="text-slate-400">~</span>
-                      <input type="date" value={editAsg.endDate} onChange={(e) => setEditAsg((p) => ({ ...p, endDate: e.target.value }))} className={`w-full ${T.input}`} />
+                      <input type="date" value={editAsg.startDate} onChange={(e) => setEditAsg((p) => ({ ...p, startDate: e.target.value }))}
+                        className="h-9 w-[135px] flex-shrink-0 rounded-lg border border-slate-200 bg-white px-1.5 text-xs font-semibold text-slate-900 outline-none focus:border-sky-400" />
+                      <span className="flex-shrink-0 text-slate-400">~</span>
+                      <input type="date" value={editAsg.endDate} onChange={(e) => setEditAsg((p) => ({ ...p, endDate: e.target.value }))}
+                        className="h-9 w-[135px] flex-shrink-0 rounded-lg border border-slate-200 bg-white px-1.5 text-xs font-semibold text-slate-900 outline-none focus:border-sky-400" />
                     </div>
                   </td>
                   <td className="truncate py-2.5 font-semibold text-slate-500">{a.attendanceButtonExempt ? "면제" : "사용"}</td>
