@@ -356,10 +356,14 @@ export default function HomeClient({ session, initialData }: { session: WorkerPa
     await refresh();
   }, [refresh]);
 
-  // initialData가 없을 때(서버 프리페치 실패)만 클라이언트 폴백 조회
+  // ★항상 마운트 시 백그라운드로 한 번 더 조회한다(2026-10-06). initialData가 있을 때만 생략하면,
+  //  일지 작성 후 "저장 → 뒤로가기"로 돌아올 때 Next.js가 떠나기 전의 캐시된 화면을 재사용해
+  //  방금 작성한 일지 상태가 반영 안 된 화면이 보이는 버그가 있었다(로그아웃 후 재로그인해야만
+  //  갱신 — 완전히 새 요청이라 캐시를 안 타서). initialData는 첫 페인트만 즉시 채우는 용도이고,
+  //  loading은 initialData가 있으면 false로 시작하므로(line 267) 이 재조회는 화면 깜빡임이 없다.
   useEffect(() => {
-    if (!initialData) refresh();
-  }, [initialData, refresh]);
+    refresh();
+  }, [refresh]);
 
   // 배정 요청 회신: 수락(희망 근무형태) / 거절
   async function respondRequest(assignmentId: string, action: "accept" | "decline", workType?: string) {
