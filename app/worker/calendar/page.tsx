@@ -451,13 +451,18 @@ export default function CalendarPage() {
                   >
                     {day}
                   </span>
-                  {status !== "NONE" && (
+                  {/* 1:多인 날은 점 대신 "완료/전체" 숫자로 — 모달을 열지 않아도 부분작성이 바로 보이게. */}
+                  {status !== "NONE" && dayData && dayData.traineeCount > 1 ? (
+                    <span className="text-[9px] font-black leading-none tabular-nums" style={{ color: st.color }}>
+                      {dayData.logCount}/{dayData.traineeCount}
+                    </span>
+                  ) : status !== "NONE" ? (
                     <span
                       className="h-1.5 w-1.5 rounded-full"
                       style={{ backgroundColor: st.color }}
                     />
-                  )}
-                  {status === "GREEN" && (
+                  ) : null}
+                  {status === "GREEN" && (!dayData || dayData.traineeCount <= 1) && (
                     <span className="text-[9px] font-black text-emerald-500">✓</span>
                   )}
                   {isNationalHoliday && (
