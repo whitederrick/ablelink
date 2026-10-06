@@ -641,59 +641,28 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
         </div>
 
         {d.assignments.length > 0 && (
-          // ★table-fixed를 쓰지 않는다 — 수정모드 날짜 입력 2개가 고정 폭보다 넓어지면 출퇴근·작업
-          //  컬럼과 겹치던 문제가 있었다(2026-10-06). auto 레이아웃이면 그 행의 실제 필요 폭만큼 컬럼이
-          //  자동으로 넓어지고, 뒤 컬럼들이 그만큼 오른쪽으로 밀려 겹치지 않는다.
-          <table className="mt-4 w-full text-sm">
+          // ★수정은 이 표 안에서 행을 바꿔치기하지 않는다(2026-10-06) — 인라인 편집으로 바꾸면
+          //  입력창 때문에 컬럼 폭이 다시 계산되어 표 전체(다른 행·헤더까지)가 들썩였다.
+          //  "수정" 버튼은 아래 모달을 띄우기만 하고, 표 레이아웃은 항상 고정되어 있다.
+          <table className="mt-4 w-full table-fixed text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs font-black text-slate-500">
-                <th className="py-2 pr-3">직무지도원</th>
-                <th className="py-2 pr-3">사업체</th>
-                <th className="py-2 pr-3">서비스 단계</th>
-                <th className="py-2 pr-3">근무형태</th>
-                <th className="py-2 pr-3">기간</th>
-                <th className="py-2 pr-3">출퇴근</th>
-                <th className="py-2">작업</th>
+                <th className="w-[140px] py-2 pr-3">직무지도원</th>
+                <th className="w-[180px] py-2 pr-3">사업체</th>
+                <th className="w-[130px] py-2 pr-3">서비스 단계</th>
+                <th className="w-[110px] py-2 pr-3">근무형태</th>
+                <th className="w-[200px] py-2 pr-3">기간</th>
+                <th className="w-[90px] py-2">출퇴근</th>
+                <th className="w-[110px] py-2">작업</th>
               </tr>
             </thead>
             <tbody>
-              {d.assignments.map((a) => editAsgId === a.id ? (
-                <tr key={a.id} className="border-b border-slate-100 bg-slate-50">
-                  <td className="max-w-[110px] truncate py-2.5 pr-3 font-black text-slate-900">{workerName(a.workerId)}</td>
-                  <td className="max-w-[140px] truncate py-2.5 pr-3 font-semibold text-slate-500">{siteName(a.siteId)}</td>
-                  <td className="py-2.5 pr-3">
-                    <select value={editAsg.serviceStep} onChange={(e) => setEditAsg((p) => ({ ...p, serviceStep: e.target.value }))} className={`w-full ${T.input}`}>
-                      {SERVICE_STEPS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
-                    </select>
-                  </td>
-                  <td className="py-2.5 pr-3">
-                    <select value={editAsg.workType} onChange={(e) => setEditAsg((p) => ({ ...p, workType: e.target.value }))} className={`w-full ${T.input}`}>
-                      {WORK_TYPES.map((w) => <option key={w.v} value={w.v}>{w.label}</option>)}
-                    </select>
-                  </td>
-                  <td className="py-2.5 pr-3">
-                    <div className="flex items-center gap-1">
-                      <input type="date" value={editAsg.startDate} onChange={(e) => setEditAsg((p) => ({ ...p, startDate: e.target.value }))}
-                        className={`w-[170px] flex-shrink-0 ${T.input}`} />
-                      <span className="flex-shrink-0 text-slate-400">~</span>
-                      <input type="date" value={editAsg.endDate} onChange={(e) => setEditAsg((p) => ({ ...p, endDate: e.target.value }))}
-                        className={`w-[170px] flex-shrink-0 ${T.input}`} />
-                    </div>
-                  </td>
-                  <td className="truncate py-2.5 font-semibold text-slate-500">{a.attendanceButtonExempt ? "면제" : "사용"}</td>
-                  <td className="py-2.5">
-                    <div className="flex items-center gap-2">
-                      <button disabled={busy} onClick={saveEditAsg} className="text-xs font-black text-sky-600 hover:underline disabled:opacity-40">저장</button>
-                      <button disabled={busy} onClick={() => setEditAsgId(null)} className="text-xs font-black text-slate-400 hover:underline disabled:opacity-40">취소</button>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
+              {d.assignments.map((a) => (
                 <tr key={a.id} className="border-b border-slate-100">
-                  <td className="max-w-[110px] truncate py-2.5 pr-3 font-black text-slate-900">{workerName(a.workerId)}</td>
-                  <td className="max-w-[140px] truncate py-2.5 pr-3 font-semibold text-slate-500">{siteName(a.siteId)}</td>
-                  <td className="max-w-[110px] truncate py-2.5 pr-3 font-semibold text-slate-700">{SERVICE_STEPS.find((x) => x.v === a.serviceStep)?.label ?? a.serviceStep ?? "-"}</td>
-                  <td className="max-w-[100px] truncate py-2.5 pr-3 font-semibold text-slate-700">{WORK_TYPES.find((w) => w.v === a.workType)?.label ?? a.workType}</td>
+                  <td className="truncate py-2.5 pr-3 font-black text-slate-900">{workerName(a.workerId)}</td>
+                  <td className="truncate py-2.5 pr-3 font-semibold text-slate-500">{siteName(a.siteId)}</td>
+                  <td className="truncate py-2.5 pr-3 font-semibold text-slate-700">{SERVICE_STEPS.find((x) => x.v === a.serviceStep)?.label ?? a.serviceStep ?? "-"}</td>
+                  <td className="truncate py-2.5 pr-3 font-semibold text-slate-700">{WORK_TYPES.find((w) => w.v === a.workType)?.label ?? a.workType}</td>
                   <td className="truncate py-2.5 pr-3 font-semibold text-slate-500">
                     {a.startDate.slice(0, 10)} ~ {a.endDate ? a.endDate.slice(0, 10) : "무기한"}
                   </td>
@@ -907,6 +876,49 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
         }}
         onClose={() => setMapPick(null)}
       />
+
+      {/* 배정 수정 모달 — 표는 항상 고정, 이 팝업에서만 값을 고친다(2026-10-06, 인라인 편집이
+          표 전체 레이아웃을 흔들던 문제를 모달 분리로 해결). */}
+      {editAsgId && (() => {
+        const editing = d.assignments.find((x) => x.id === editAsgId);
+        if (!editing) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-5" onClick={() => setEditAsgId(null)}>
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <p className="mb-1 text-base font-black text-slate-900">배정 수정</p>
+              <p className="mb-4 text-xs font-semibold text-slate-400">{workerName(editing.workerId)} · {siteName(editing.siteId)}</p>
+              <div className="space-y-3">
+                <div>
+                  <label className={T.label}>서비스 단계</label>
+                  <select value={editAsg.serviceStep} onChange={(e) => setEditAsg((p) => ({ ...p, serviceStep: e.target.value }))} className={`w-full ${T.input}`}>
+                    {SERVICE_STEPS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={T.label}>근무형태</label>
+                  <select value={editAsg.workType} onChange={(e) => setEditAsg((p) => ({ ...p, workType: e.target.value }))} className={`w-full ${T.input}`}>
+                    {WORK_TYPES.map((w) => <option key={w.v} value={w.v}>{w.label}</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className={T.label}>배정 시작일</label>
+                    <input type="date" value={editAsg.startDate} onChange={(e) => setEditAsg((p) => ({ ...p, startDate: e.target.value }))} className={`w-full ${T.input}`} />
+                  </div>
+                  <div>
+                    <label className={T.label}>배정 종료일</label>
+                    <input type="date" value={editAsg.endDate} onChange={(e) => setEditAsg((p) => ({ ...p, endDate: e.target.value }))} className={`w-full ${T.input}`} />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <button disabled={busy} onClick={() => setEditAsgId(null)} className={T.btnSecondary}>취소</button>
+                <button disabled={busy} onClick={saveEditAsg} className={T.btnPrimary}>저장</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
