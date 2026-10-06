@@ -641,23 +641,26 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
         </div>
 
         {d.assignments.length > 0 && (
-          <table className="mt-4 w-full table-fixed text-sm">
+          // ★table-fixed를 쓰지 않는다 — 수정모드 날짜 입력 2개가 고정 폭보다 넓어지면 출퇴근·작업
+          //  컬럼과 겹치던 문제가 있었다(2026-10-06). auto 레이아웃이면 그 행의 실제 필요 폭만큼 컬럼이
+          //  자동으로 넓어지고, 뒤 컬럼들이 그만큼 오른쪽으로 밀려 겹치지 않는다.
+          <table className="mt-4 w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs font-black text-slate-500">
-                <th className="w-[110px] py-2 pr-3">직무지도원</th>
-                <th className="w-[140px] py-2 pr-3">사업체</th>
-                <th className="w-[110px] py-2 pr-3">서비스 단계</th>
-                <th className="w-[100px] py-2 pr-3">근무형태</th>
-                <th className="w-[310px] py-2 pr-3">기간</th>
-                <th className="w-[90px] py-2">출퇴근</th>
-                <th className="w-[130px] py-2">작업</th>
+                <th className="py-2 pr-3">직무지도원</th>
+                <th className="py-2 pr-3">사업체</th>
+                <th className="py-2 pr-3">서비스 단계</th>
+                <th className="py-2 pr-3">근무형태</th>
+                <th className="py-2 pr-3">기간</th>
+                <th className="py-2 pr-3">출퇴근</th>
+                <th className="py-2">작업</th>
               </tr>
             </thead>
             <tbody>
               {d.assignments.map((a) => editAsgId === a.id ? (
                 <tr key={a.id} className="border-b border-slate-100 bg-slate-50">
-                  <td className="truncate py-2.5 pr-3 font-black text-slate-900">{workerName(a.workerId)}</td>
-                  <td className="truncate py-2.5 pr-3 font-semibold text-slate-500">{siteName(a.siteId)}</td>
+                  <td className="max-w-[110px] truncate py-2.5 pr-3 font-black text-slate-900">{workerName(a.workerId)}</td>
+                  <td className="max-w-[140px] truncate py-2.5 pr-3 font-semibold text-slate-500">{siteName(a.siteId)}</td>
                   <td className="py-2.5 pr-3">
                     <select value={editAsg.serviceStep} onChange={(e) => setEditAsg((p) => ({ ...p, serviceStep: e.target.value }))} className={`w-full ${T.input}`}>
                       {SERVICE_STEPS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
@@ -671,10 +674,10 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
                   <td className="py-2.5 pr-3">
                     <div className="flex items-center gap-1">
                       <input type="date" value={editAsg.startDate} onChange={(e) => setEditAsg((p) => ({ ...p, startDate: e.target.value }))}
-                        className="h-9 w-[135px] flex-shrink-0 rounded-lg border border-slate-200 bg-white px-1.5 text-xs font-semibold text-slate-900 outline-none focus:border-sky-400" />
+                        className={`w-[170px] flex-shrink-0 ${T.input}`} />
                       <span className="flex-shrink-0 text-slate-400">~</span>
                       <input type="date" value={editAsg.endDate} onChange={(e) => setEditAsg((p) => ({ ...p, endDate: e.target.value }))}
-                        className="h-9 w-[135px] flex-shrink-0 rounded-lg border border-slate-200 bg-white px-1.5 text-xs font-semibold text-slate-900 outline-none focus:border-sky-400" />
+                        className={`w-[170px] flex-shrink-0 ${T.input}`} />
                     </div>
                   </td>
                   <td className="truncate py-2.5 font-semibold text-slate-500">{a.attendanceButtonExempt ? "면제" : "사용"}</td>
@@ -687,10 +690,10 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
                 </tr>
               ) : (
                 <tr key={a.id} className="border-b border-slate-100">
-                  <td className="truncate py-2.5 pr-3 font-black text-slate-900">{workerName(a.workerId)}</td>
-                  <td className="truncate py-2.5 pr-3 font-semibold text-slate-500">{siteName(a.siteId)}</td>
-                  <td className="truncate py-2.5 pr-3 font-semibold text-slate-700">{SERVICE_STEPS.find((x) => x.v === a.serviceStep)?.label ?? a.serviceStep ?? "-"}</td>
-                  <td className="truncate py-2.5 pr-3 font-semibold text-slate-700">{WORK_TYPES.find((w) => w.v === a.workType)?.label ?? a.workType}</td>
+                  <td className="max-w-[110px] truncate py-2.5 pr-3 font-black text-slate-900">{workerName(a.workerId)}</td>
+                  <td className="max-w-[140px] truncate py-2.5 pr-3 font-semibold text-slate-500">{siteName(a.siteId)}</td>
+                  <td className="max-w-[110px] truncate py-2.5 pr-3 font-semibold text-slate-700">{SERVICE_STEPS.find((x) => x.v === a.serviceStep)?.label ?? a.serviceStep ?? "-"}</td>
+                  <td className="max-w-[100px] truncate py-2.5 pr-3 font-semibold text-slate-700">{WORK_TYPES.find((w) => w.v === a.workType)?.label ?? a.workType}</td>
                   <td className="truncate py-2.5 pr-3 font-semibold text-slate-500">
                     {a.startDate.slice(0, 10)} ~ {a.endDate ? a.endDate.slice(0, 10) : "무기한"}
                   </td>
