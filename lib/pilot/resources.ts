@@ -37,10 +37,14 @@ function reqStr(v: unknown, label: string, min = 1): string {
   if (s.length < min) throw new PilotError(400, "INVALID_INPUT", `${label}을(를) 입력해 주세요.`);
   return s;
 }
+// ★2026-10-06 수정: 이전엔 `+09:00`(KST 자정의 정확한 instant)로 파싱했는데, start_date/end_date
+//  컬럼이 timestamp without time zone이고 앱의 다른 모든 곳(운영자 배정 등록 등)은 날짜 전용 문자열을
+//  UTC 자정으로 파싱해(`new Date("YYYY-MM-DD")`) 저장·표시한다. 그 변환과 다른 변환을 여기서만 쓰다 보니
+//  저장 후 화면에 하루 전날로 표시되는 버그가 있었다(10/1 입력 → 9/30 저장). 앱 전역 규칙에 맞춘다.
 function reqDate(v: unknown, label: string): Date {
   const s = String(v ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw new PilotError(400, "INVALID_DATE", `${label}은(는) YYYY-MM-DD 형식이어야 합니다.`);
-  const d = new Date(`${s}T00:00:00+09:00`);
+  const d = new Date(`${s}T00:00:00.000Z`);
   if (Number.isNaN(d.getTime())) throw new PilotError(400, "INVALID_DATE", `${label}이(가) 올바르지 않습니다.`);
   return d;
 }
@@ -144,7 +148,7 @@ async function assertPilotWritable(tx: Prisma.TransactionClient, pilotId: bigint
 }
 
 /** 레지스트리에 등록된 자원인지 확인한다(교차 파일럿·비파일럿 자원 차단). */
-async function assertOwned(pilotId: bigint, kind: "SITE" | "WORKER" | "TRAINEE", id: bigint) {
+async function assertOwned(pilotId: bigint, kind: "SITE" | "WORKER" | "TRAINEE" | "ASSIGNMENT", id: bigint) {
   const hit = await prisma.pilotResource.findUnique({
     where: { kind_resourceKey: { kind, resourceKey: dbKey(id) } },
     select: { pilotId: true },
@@ -391,6 +395,71 @@ export async function createPilotAssignment(pilotId: bigint, input: {
     });
     await recordDbResource(tx, pilotId, "ASSIGNMENT", asg.id);
     return asg;
+  });
+}
+
+/** 파일럿 배정을 수정한다(근무형태·서비스 단계·기간·출퇴근지도 포함 여부). 넘기지 않은 필드는 그대로 둔다. */
+export async function updatePilotAssignment(pilotId: bigint, assignmentId: bigint, input: {
+  workType?: unknown; serviceStep?: unknown;
+  startDate?: unknown; endDate?: unknown; commuteGuidanceIncluded?: unknown;
+}) {
+  await assertOwned(pilotId, "ASSIGNMENT", assignmentId);
+
+  const data: Prisma.SiteAssignmentUpdateInput = {};
+
+  if (input.workType !== undefined) {
+    const workType = String(input.workType ?? "");
+    if (!(PILOT_WORK_TYPES as readonly string[]).includes(workType)) {
+      throw new PilotError(400, "INVALID_WORK_TYPE", "근무형태는 오전 4시간 · 오후 4시간 · 전일 8시간 중 하나여야 합니다.");
+    }
+    data.workType = workType;
+    // FULL_DAY는 출퇴근지도를 강제로 포함하지 않는다(createPilotAssignment와 동일 규칙).
+    data.commuteGuidanceIncluded = workType === "FULL_DAY" ? false : input.commuteGuidanceIncluded !== false;
+  } else if (input.commuteGuidanceIncluded !== undefined) {
+    data.commuteGuidanceIncluded = input.commuteGuidanceIncluded !== false;
+  }
+
+  if (input.serviceStep !== undefined) {
+    const stepRaw = String(input.serviceStep ?? "");
+    if (!(PILOT_SERVICE_STEPS as readonly string[]).includes(stepRaw)) {
+      throw new PilotError(400, "INVALID_SERVICE_STEP", "서비스 단계는 지원고용 훈련 · 취업 후 적응지도 중 하나여야 합니다.");
+    }
+    data.serviceStep = stepRaw as PilotServiceStep;
+  }
+
+  let startDate: Date | undefined;
+  let endDate: Date | undefined;
+  if (input.startDate !== undefined) { startDate = reqDate(input.startDate, "배정 시작일"); data.startDate = startDate; }
+  if (input.endDate !== undefined) { endDate = reqDate(input.endDate, "배정 종료일"); data.endDate = endDate; }
+
+  return prisma.$transaction(async (tx) => {
+    await assertPilotWritable(tx, pilotId);
+    // 둘 중 하나만 바뀌어도 기존 반대쪽 값과 비교해 역전되지 않는지 확인한다.
+    const existing = await tx.siteAssignment.findUnique({ where: { id: assignmentId }, select: { startDate: true, endDate: true } });
+    if (!existing) throw new PilotError(404, "NOT_FOUND", "배정을 찾을 수 없습니다.");
+    const nextStart = startDate ?? existing.startDate;
+    const nextEnd = endDate ?? existing.endDate;
+    if (nextEnd && nextEnd < nextStart) throw new PilotError(400, "INVALID_RANGE", "배정 종료일이 시작일보다 빠릅니다.");
+
+    const asg = await tx.siteAssignment.update({
+      where: { id: assignmentId },
+      data,
+      select: { id: true, workType: true, serviceStep: true, startDate: true, endDate: true },
+    });
+    return asg;
+  });
+}
+
+/** 파일럿 배정을 완전 삭제한다(출근부·일지 등 종속 자원은 cascade로 함께 제거). */
+export async function deletePilotAssignment(pilotId: bigint, assignmentId: bigint) {
+  await assertOwned(pilotId, "ASSIGNMENT", assignmentId);
+
+  return prisma.$transaction(async (tx) => {
+    await assertPilotWritable(tx, pilotId);
+    await tx.siteAssignment.delete({ where: { id: assignmentId } });
+    // 레지스트리에도 지워진 자원을 남겨두지 않는다 — 초기화(purge) 단계의 deleteMany는 이미 없는 id도
+    //  허용하므로 안전상 필수는 아니지만, 기록을 실제 상태와 맞춰 둔다.
+    await tx.pilotResource.deleteMany({ where: { pilotId, kind: "ASSIGNMENT", resourceKey: dbKey(assignmentId) } });
   });
 }
 

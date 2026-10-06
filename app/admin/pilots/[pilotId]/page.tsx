@@ -193,6 +193,9 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
   // ── 5) 배정 ──────────────────────────────────────────────────
   const [asg, setAsg] = useState({ workerId: "", siteId: "", serviceStep: "FIELD_TRAINING", workType: "FULL_DAY", startDate: "", endDate: "" });
   const asgReady = asg.workerId && asg.siteId && asg.serviceStep && asg.workType && asg.startDate && asg.endDate;
+  // 등록된 배정 수정/삭제(2026-10-06) — 날짜 입력 버그로 잘못 저장된 기간을 바로잡을 수 있어야 한다.
+  const [editAsgId, setEditAsgId] = useState<string | null>(null);
+  const [editAsg, setEditAsg] = useState({ serviceStep: "", workType: "", startDate: "", endDate: "" });
 
   // ── 6) 초기화 ────────────────────────────────────────────────
   // ★되돌릴 수 없는 작업이다. 미리보기 없이는 실행 버튼을 열지 않는다.
@@ -259,6 +262,43 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
   const purged = purgeResult != null || (purgePrev != null && purgePrev.stage !== "READY");
   const siteName = (id: string) => d.sites.find((s) => s.id === id)?.companyName ?? "—";
   const workerName = (id: string) => d.workers.find((w) => w.id === id)?.workerName ?? "—";
+
+  function startEditAsg(a: Detail["assignments"][number]) {
+    setEditAsgId(a.id);
+    setEditAsg({
+      serviceStep: a.serviceStep ?? "FIELD_TRAINING",
+      workType: a.workType ?? "FULL_DAY",
+      startDate: a.startDate.slice(0, 10),
+      endDate: a.endDate ? a.endDate.slice(0, 10) : "",
+    });
+  }
+
+  async function saveEditAsg() {
+    if (!editAsgId) return;
+    if (!editAsg.startDate || !editAsg.endDate) { alert("배정 시작일과 종료일을 모두 입력하세요."); return; }
+    if (editAsg.endDate < editAsg.startDate) { alert("배정 종료일이 시작일보다 빠릅니다."); return; }
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/admin/pilots/${pilotId}/assignments/${editAsgId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editAsg),
+      });
+      const j = await r.json();
+      if (!r.ok || !j?.success) { alert(j?.message || "수정에 실패했습니다."); return; }
+      setEditAsgId(null);
+      await load();
+    } finally { setBusy(false); }
+  }
+
+  async function deleteAsg(id: string) {
+    if (!window.confirm("이 배정을 완전히 삭제합니다. 연결된 출근부·일지도 함께 지워지며 되돌릴 수 없습니다. 진행할까요?")) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/admin/pilots/${pilotId}/assignments/${id}`, { method: "DELETE" });
+      const j = await r.json();
+      if (!r.ok || !j?.success) { alert(j?.message || "삭제에 실패했습니다."); return; }
+      await load();
+    } finally { setBusy(false); }
+  }
   const c = d.registry.counts;
 
   return (
@@ -604,16 +644,46 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
           <table className="mt-4 w-full table-fixed text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs font-black text-slate-500">
-                <th className="w-[140px] py-2 pr-3">직무지도원</th>
-                <th className="w-[200px] py-2 pr-3">사업체</th>
-                <th className="w-[130px] py-2 pr-3">서비스 단계</th>
-                <th className="w-[130px] py-2 pr-3">근무형태</th>
-                <th className="w-[200px] py-2 pr-3">기간</th>
-                <th className="w-[110px] py-2">출퇴근</th>
+                <th className="w-[120px] py-2 pr-3">직무지도원</th>
+                <th className="w-[160px] py-2 pr-3">사업체</th>
+                <th className="w-[120px] py-2 pr-3">서비스 단계</th>
+                <th className="w-[110px] py-2 pr-3">근무형태</th>
+                <th className="w-[220px] py-2 pr-3">기간</th>
+                <th className="w-[90px] py-2">출퇴근</th>
+                <th className="w-[130px] py-2">작업</th>
               </tr>
             </thead>
             <tbody>
-              {d.assignments.map((a) => (
+              {d.assignments.map((a) => editAsgId === a.id ? (
+                <tr key={a.id} className="border-b border-slate-100 bg-slate-50">
+                  <td className="truncate py-2.5 pr-3 font-black text-slate-900">{workerName(a.workerId)}</td>
+                  <td className="truncate py-2.5 pr-3 font-semibold text-slate-500">{siteName(a.siteId)}</td>
+                  <td className="py-2.5 pr-3">
+                    <select value={editAsg.serviceStep} onChange={(e) => setEditAsg((p) => ({ ...p, serviceStep: e.target.value }))} className={`w-full ${T.input}`}>
+                      {SERVICE_STEPS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
+                    </select>
+                  </td>
+                  <td className="py-2.5 pr-3">
+                    <select value={editAsg.workType} onChange={(e) => setEditAsg((p) => ({ ...p, workType: e.target.value }))} className={`w-full ${T.input}`}>
+                      {WORK_TYPES.map((w) => <option key={w.v} value={w.v}>{w.label}</option>)}
+                    </select>
+                  </td>
+                  <td className="py-2.5 pr-3">
+                    <div className="flex items-center gap-1">
+                      <input type="date" value={editAsg.startDate} onChange={(e) => setEditAsg((p) => ({ ...p, startDate: e.target.value }))} className={`w-full ${T.input}`} />
+                      <span className="text-slate-400">~</span>
+                      <input type="date" value={editAsg.endDate} onChange={(e) => setEditAsg((p) => ({ ...p, endDate: e.target.value }))} className={`w-full ${T.input}`} />
+                    </div>
+                  </td>
+                  <td className="truncate py-2.5 font-semibold text-slate-500">{a.attendanceButtonExempt ? "면제" : "사용"}</td>
+                  <td className="py-2.5">
+                    <div className="flex items-center gap-2">
+                      <button disabled={busy} onClick={saveEditAsg} className="text-xs font-black text-sky-600 hover:underline disabled:opacity-40">저장</button>
+                      <button disabled={busy} onClick={() => setEditAsgId(null)} className="text-xs font-black text-slate-400 hover:underline disabled:opacity-40">취소</button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
                 <tr key={a.id} className="border-b border-slate-100">
                   <td className="truncate py-2.5 pr-3 font-black text-slate-900">{workerName(a.workerId)}</td>
                   <td className="truncate py-2.5 pr-3 font-semibold text-slate-500">{siteName(a.siteId)}</td>
@@ -623,6 +693,12 @@ export default function PilotSetupPage({ params }: { params: Promise<{ pilotId: 
                     {a.startDate.slice(0, 10)} ~ {a.endDate ? a.endDate.slice(0, 10) : "무기한"}
                   </td>
                   <td className="truncate py-2.5 font-semibold text-slate-500">{a.attendanceButtonExempt ? "면제" : "사용"}</td>
+                  <td className="py-2.5">
+                    <div className="flex items-center gap-2">
+                      <button disabled={busy} onClick={() => startEditAsg(a)} className="text-xs font-black text-sky-600 hover:underline disabled:opacity-40">수정</button>
+                      <button disabled={busy} onClick={() => deleteAsg(a.id)} className="text-xs font-black text-rose-600 hover:underline disabled:opacity-40">삭제</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
