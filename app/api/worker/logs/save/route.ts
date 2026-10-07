@@ -142,6 +142,17 @@ export async function POST(request: NextRequest) {
       ? await prisma.traineeLog.findUnique({ where: { id: BigInt(logId) } })
       : await prisma.traineeLog.findFirst({ where: { traineeId: BigInt(traineeId), attendanceId: resolvedAttendanceId } });
 
+    // 신규 작성(logId 없음)인데 같은 훈련생·같은 출근기록의 일지가 이미 있으면 조용히 덮어쓰지 않고 확인을 요구한다
+    //  (임시저장·완료 일지가 빈 폼 저장으로 소실되던 경로 차단). 클라이언트가 확인 후 overwrite:true로 재전송.
+    if (!logId && existing && body.overwrite !== true) {
+      return NextResponse.json({
+        success: false,
+        code: "LOG_EXISTS",
+        existingCompleted: existing.isCompleted,
+        message: "이 날짜에 이미 작성된 일지가 있습니다.",
+      }, { status: 409 });
+    }
+
     const logData = {
       traineeId: BigInt(traineeId),
       attendanceId: resolvedAttendanceId,

@@ -246,7 +246,7 @@ export default function BatchWorklogPage() {
   }
 
   // ── 일괄 저장 ────────────────────────────────────────────────
-  async function submitAll() {
+  async function submitAll(overwrite = false) {
     const toSave = drafts.filter(d => d.selected);
     if (toSave.length === 0) { alert("저장할 일지를 선택해주세요."); return; }
     setSubmitting(true);
@@ -256,6 +256,7 @@ export default function BatchWorklogPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           assignmentId,
+          overwrite: overwrite || undefined,
           logs: toSave.map(d => ({
             date:         d.date,
             traineeId:    d.traineeId,
@@ -267,6 +268,18 @@ export default function BatchWorklogPage() {
         }),
       });
       const data = await res.json();
+      if (!data.success && data.code === "OVERWRITE_CONFIRM" && Array.isArray(data.conflicts)) {
+        // 이미 작성된 일지가 있음 — 덮어쓸 목록을 보여주고 확인 후에만 재전송(취소하면 아무것도 저장하지 않음).
+        const nameOf = (id: string) => trainees.find(t => t.id === id)?.name ?? "";
+        const lines = (data.conflicts as { date: string; traineeId: string; completed: boolean }[])
+          .slice(0, 8)
+          .map(c => `· ${c.date} ${nameOf(c.traineeId)} (${c.completed ? "작성 완료" : "임시저장"})`);
+        const more = data.conflicts.length > 8 ? `\n… 외 ${data.conflicts.length - 8}건` : "";
+        if (confirm(`이미 작성된 일지 ${data.conflicts.length}건이 있습니다.\n\n${lines.join("\n")}${more}\n\n덮어쓰면 기존 내용은 사라집니다. 덮어쓰시겠습니까?`)) {
+          await submitAll(true);
+        }
+        return;
+      }
       if (!data.success) { alert(data.message || "저장 실패"); return; }
       setDone(true);
     } catch {
@@ -730,7 +743,7 @@ export default function BatchWorklogPage() {
             })}
 
             <button
-              onClick={submitAll}
+              onClick={() => submitAll()}
               disabled={submitting || drafts.filter(d => d.selected).length === 0}
               className="w-full rounded-2xl bg-slate-950 py-4 text-base font-black text-white active:scale-[0.98] disabled:opacity-50"
             >

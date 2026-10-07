@@ -112,6 +112,37 @@ export async function POST(request: NextRequest) {
       });
       for (const r of existingRows) dateToAttendanceId.set(r.workDate, r.id);
 
+      // 이미 작성된 일지(임시저장·완료)를 조용히 덮어쓰지 않는다 — 어떤 일지가 덮어써지는지 알리고 확인(overwrite:true)을 요구.
+      //  출근기록 생성 등 어떤 쓰기보다 먼저 판정해, 취소 시 부작용이 없게 한다.
+      if (body.overwrite !== true && existingRows.length > 0) {
+        const dupRows = await prisma.traineeLog.findMany({
+          where: {
+            attendanceId: { in: existingRows.map(r => r.id) },
+            traineeId: { in: uniqueTraineeIds.map(t => BigInt(t)) },
+          },
+          select: { attendanceId: true, traineeId: true, isCompleted: true },
+        });
+        const dupByKey = new Map(dupRows.map(r => [`${r.attendanceId}_${r.traineeId}`, r.isCompleted]));
+        const conflicts: { date: string; traineeId: string; completed: boolean }[] = [];
+        const seen = new Set<string>();
+        for (const l of logs) {
+          const attId = dateToAttendanceId.get(l.date);
+          if (attId == null) continue;
+          const k = `${attId}_${l.traineeId}`;
+          if (seen.has(k) || !dupByKey.has(k)) continue;
+          seen.add(k);
+          conflicts.push({ date: l.date, traineeId: String(l.traineeId), completed: dupByKey.get(k) === true });
+        }
+        if (conflicts.length > 0) {
+          return NextResponse.json({
+            success: false,
+            code: "OVERWRITE_CONFIRM",
+            conflicts,
+            message: "이미 작성된 일지가 있습니다.",
+          }, { status: 409 });
+        }
+      }
+
       const todayKST = getKstDateString();
       const toCreate: string[] = [];
       for (const date of uniqueDates) {

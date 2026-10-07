@@ -329,7 +329,7 @@ function WorklogForm() {
     } catch { alert("서버와 연결할 수 없습니다."); } finally { setDeleting(false); }
   }
 
-  async function handleSave(isComplete: boolean) {
+  async function handleSave(isComplete: boolean, overwrite = false) {
     setError("");
     if (logId && loadError) {
       // 원본 로드 실패 상태 — 저장하면 빈값으로 덮어쓰므로 차단.
@@ -378,9 +378,18 @@ function WorklogForm() {
           siteId: siteId || undefined,
           assignmentId: assignmentId || undefined,
           logId: logId || undefined,  // 수정 모드: 날짜 변경 시 해당 일지를 그 날짜로 이동
+          overwrite: overwrite || undefined,
         }),
       });
       const data = await res.json();
+      if (!data.success && data.code === "LOG_EXISTS") {
+        // 같은 훈련생·날짜에 이미 일지가 있음 — 덮어쓰기 전에 반드시 확인(취소하면 입력 내용은 그대로 유지).
+        const kind = data.existingCompleted ? "작성 완료된" : "임시저장된";
+        if (confirm(`이 날짜에 이미 ${kind} 일지가 있습니다.\n지금 입력한 내용으로 덮어쓰시겠습니까?\n덮어쓰면 기존 내용은 사라집니다.`)) {
+          await handleSave(isComplete, true);
+        }
+        return;
+      }
       if (!data.success) { setError(data.message || "저장 실패"); return; }
       try { localStorage.removeItem(draftKey); } catch {}
       setSaved(true);
@@ -448,7 +457,7 @@ function WorklogForm() {
           </span>
           <span className="text-xs font-semibold text-slate-400">{traineeName || "훈련생 선택"}</span>
         </div>
-        <button onClick={() => handleSave(true)} disabled={saving}
+        <button onClick={() => handleSave(true)} disabled={saving || saved}
           className="rounded-xl bg-slate-950 px-3 py-1.5 text-sm font-black text-white transition active:scale-95 disabled:opacity-60">
           {saving ? "저장중" : logId ? "수정 완료" : "완료"}
         </button>
@@ -783,7 +792,7 @@ function WorklogForm() {
           <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-center text-sm font-semibold text-rose-700">{error}</div>
         )}
 
-        <button onClick={() => handleSave(false)} disabled={saving}
+        <button onClick={() => handleSave(false)} disabled={saving || saved}
           className="min-h-12 w-full rounded-2xl bg-slate-700 text-base font-black text-white transition active:scale-[0.97] disabled:opacity-70">
           임시저장
         </button>
