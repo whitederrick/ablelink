@@ -11,7 +11,7 @@ export interface MissingLogItem {
   workDate: string;
   siteName: string;
   trainingType: "PRE" | "FIELD" | "ADAPTATION";
-  trainees: { id: string; name: string; gender: string }[]; // 이 날짜에 아직 완료 일지가 없는 훈련생만
+  trainees: { id: string; name: string; gender: string; draftLogId?: string }[]; // draftLogId=임시저장 일지(이어쓰기용). 이 날짜에 아직 완료 일지가 없는 훈련생만
 }
 
 export async function getMissingLogItems(workerId: bigint, fromDate: string, take = 30): Promise<MissingLogItem[]> {
@@ -29,8 +29,8 @@ export async function getMissingLogItems(workerId: bigint, fromDate: string, tak
         },
       },
       assignment: { select: { serviceStep: true, adaptationStartDate: true, agencyId: true } },
-      // 완료된 일지만 "작성됨"으로 인정 — 임시저장(isCompleted:false)은 여전히 미작성 취급.
-      logs: { where: { writerId: workerId, isCompleted: true }, select: { traineeId: true } },
+      // 완료된 일지만 "작성됨"으로 인정 — 임시저장(isCompleted:false)은 여전히 미작성 취급(단 이어쓰기용 id는 전달).
+      logs: { where: { writerId: workerId }, select: { id: true, traineeId: true, isCompleted: true } },
     },
     orderBy: { workDate: "desc" },
   });
@@ -42,7 +42,8 @@ export async function getMissingLogItems(workerId: bigint, fromDate: string, tak
     // 기관이 일치할 때만 훈련생 노출. 불일치·null이면 빈 목록(fail-closed).
     const asgAgencyId = a.assignment?.agencyId;
     const scopedTrainees = asgAgencyId != null && a.site.agencyId === asgAgencyId ? a.site.trainees : [];
-    const doneIds = new Set(a.logs.map(l => l.traineeId.toString()));
+    const doneIds = new Set(a.logs.filter(l => l.isCompleted).map(l => l.traineeId.toString()));
+    const draftIds = new Map(a.logs.filter(l => !l.isCompleted).map(l => [l.traineeId.toString(), l.id.toString()]));
     const missingTrainees = scopedTrainees.filter(t => !doneIds.has(t.id.toString()));
     if (missingTrainees.length === 0) continue;
 
@@ -51,7 +52,7 @@ export async function getMissingLogItems(workerId: bigint, fromDate: string, tak
       workDate: a.workDate,
       siteName: a.site.companyName,
       trainingType,
-      trainees: missingTrainees.map(t => ({ id: t.id.toString(), name: t.name, gender: t.gender })),
+      trainees: missingTrainees.map(t => ({ id: t.id.toString(), name: t.name, gender: t.gender, ...(draftIds.has(t.id.toString()) ? { draftLogId: draftIds.get(t.id.toString()) } : {}) })),
     });
     if (items.length >= take) break;
   }

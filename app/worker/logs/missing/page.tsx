@@ -10,6 +10,7 @@ interface Trainee {
   id: string;
   name: string;
   gender: string;
+  draftLogId?: string;
 }
 
 interface MissingLog {
@@ -100,6 +101,7 @@ export default function MissingLogsPage() {
       traineeId:    trainee.id,
       traineeName:  trainee.name,
       trainingType: item.trainingType,
+      ...(trainee.draftLogId ? { logId: trainee.draftLogId } : {}), // 임시저장본이 있으면 수정 모드로 이어쓰기
     });
     router.push(`/worker/worklog?${params.toString()}`);
   }

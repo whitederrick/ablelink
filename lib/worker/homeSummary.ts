@@ -167,13 +167,14 @@ export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: 
     }),
     // 미작성 일지(최근 3개월) — 훈련생 단위(부분 작성된 날도 포함). /worker/logs/missing과 단일 로직.
     getMissingLogItems(workerId, from, 30),
-    // 오늘 일지 상태(완료된 일지의 훈련생 + 수정 진입용 logId) — todayAttendance 없으면 빈 배열.
+    // 오늘 일지 상태(완료 여부 + 수정 진입용 logId) — todayAttendance 없으면 빈 배열.
+    //  임시저장(isCompleted:false)도 가져온다: 재진입 시 그 일지를 수정 모드로 열어 이어 쓰게 하기 위함.
     todayAttendance
       ? prisma.traineeLog.findMany({
-          where: { writerId: workerId, attendanceId: todayAttendance.id, isCompleted: true },
-          select: { id: true, traineeId: true },
+          where: { writerId: workerId, attendanceId: todayAttendance.id },
+          select: { id: true, traineeId: true, isCompleted: true },
         })
-      : Promise.resolve([] as { id: bigint; traineeId: bigint }[]),
+      : Promise.resolve([] as { id: bigint; traineeId: bigint; isCompleted: boolean }[]),
     // 퇴근 미실행(과거 WORKING) — ★실제 출근(actualStartTime)한 행만. 일지 placeholder(시각 없는 WORKING)는
     //  출근한 적이 없으므로 '퇴근 미실행 보정대기'로 노출하지 않는다.
     prisma.dailyAttendance.findMany({
@@ -200,9 +201,9 @@ export async function buildHomeSummary(workerId: bigint, selectedAssignmentId?: 
     yearMonth: n.yearMonth, link: n.link ?? null, read: n.readAt !== null, createdAt: n.createdAt.toISOString(),
   }));
 
-  const loggedTraineeIds: string[] = todayLogs.map(l => l.traineeId.toString());
+  const loggedTraineeIds: string[] = todayLogs.filter(l => l.isCompleted).map(l => l.traineeId.toString());
   const missingTraineeCount = trainees.filter(t => !loggedTraineeIds.includes(t.id.toString())).length;
-  // 오늘 이미 완료된 일지의 logId — 홈에서 재진입 시 빈 폼으로 덮어쓰지 않고 수정 모드로 열기 위함.
+  // 오늘 이미 작성(완료·임시저장)된 일지의 logId — 홈에서 재진입 시 빈 폼으로 덮어쓰지 않고 수정 모드로 열기 위함.
   const todayLogIdByTraineeId: Record<string, string> = {};
   for (const l of todayLogs) todayLogIdByTraineeId[l.traineeId.toString()] = l.id.toString();
 
