@@ -201,10 +201,12 @@ export async function GET(request: NextRequest) {
         ? traineesOnSite(att.siteId.toString(), att.workDate)
         : [];
       const logByTraineeId = new Map(att.logs.filter(l => l.isCompleted).map(l => [l.traineeId.toString(), l.id.toString()]));
+      // 임시저장 일지도 logId는 내려준다 — 없으면 클릭 시 빈 폼이 열려 임시저장본이 사라진 것처럼 보인다(완료 판정은 불변).
+      const anyLogByTraineeId = new Map(att.logs.map(l => [l.traineeId.toString(), l.id.toString()]));
       const trainees: DayTraineeBadge[] = scopedTrainees.map(t => ({
         id: t.traineeId, name: t.name, gender: t.gender,
         completed: logByTraineeId.has(t.traineeId),
-        logId: logByTraineeId.get(t.traineeId) ?? null,
+        logId: anyLogByTraineeId.get(t.traineeId) ?? null,
       }));
       dayMap[att.workDate] = {
         status: calcStatus({
