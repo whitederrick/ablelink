@@ -4,7 +4,7 @@ import { countStaleInputs, staleDraftMessage } from "@/lib/payroll/staleDraft";
 
 function fakeDb(att: number, leave: number) {
   const dailyAttendance = { count: vi.fn(async () => att) };
-  const annualLeaveEntry = { count: vi.fn(async () => leave) };
+  const annualLeaveEntry = { count: vi.fn(async (_args?: { where: Record<string, unknown> }) => leave) };
   return { dailyAttendance, annualLeaveEntry } as unknown as Parameters<typeof countStaleInputs>[0] & {
     dailyAttendance: typeof dailyAttendance; annualLeaveEntry: typeof annualLeaveEntry;
   };
@@ -31,7 +31,7 @@ describe("countStaleInputs", () => {
         isFinalClosed: true, startTime: { not: null }, updatedAt: { gt: since },
       },
     });
-    const lw = db.annualLeaveEntry.count.mock.calls[0][0].where;
+    const lw = db.annualLeaveEntry.count.mock.calls[0][0]!.where;
     expect(lw.agencyId).toBe(BigInt(7));
     expect(lw.kind).toBe("USE");
     expect(lw.effectiveDate).toEqual({ gte: new Date("2026-02-01T00:00:00.000Z"), lte: new Date("2026-02-28T00:00:00.000Z") });
