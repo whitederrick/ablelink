@@ -1,6 +1,8 @@
 // scripts/fix-site-coords.mts
 // 시드 현장 좌표가 임의값(한강 위)이라, 주소 구(區)에 맞는 실제 육지 좌표로 보정 + 근태 GPS 재생성.
 import { prisma } from "../lib/prisma";
+import { assertWritableDb } from "./_dbGuard.mts";
+assertWritableDb("현장 GPS 좌표 일괄 덮어쓰기");
 
 // 서울 자치구 대략 중심(육지)
 const DISTRICTS: { key: string; lat: number; lon: number }[] = [

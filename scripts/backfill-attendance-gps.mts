@@ -2,6 +2,8 @@
 // 시드 근태에 GPS 좌표 채우기 — 지도 뷰 시연용. 현장 좌표 기준 약간의 오차로 출근/퇴근 위치 생성.
 // 약 1/7은 허용범위 밖(이탈)으로 만들어 지도에서 🟠로 표시되게 함.
 import { prisma } from "../lib/prisma";
+import { assertWritableDb } from "./_dbGuard.mts";
+assertWritableDb("출근기록 GPS 백필");
 
 async function main() {
   const atts = await prisma.dailyAttendance.findMany({

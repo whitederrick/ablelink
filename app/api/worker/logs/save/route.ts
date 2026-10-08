@@ -5,7 +5,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { getKstDateString, getKstMonthEndDateString, isValidYmd } from "@/lib/time";
-import { checkLogText } from "@/lib/docs/logTextLimit";
+import { checkLogText, checkLogHours, checkShortText, MAX_TASK_NAME_LEN, MAX_MEASUREMENT_LEN } from "@/lib/docs/logTextLimit";
 import { audit } from "@/lib/audit";
 import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 
@@ -49,7 +49,12 @@ export async function POST(request: NextRequest) {
     }
 
     // ★2026-07-21 감사 P2: 지도사항(content)·특이사항(specialNotes) 길이 상한(무상한이면 장문 일지가 PDF 셀 붕괴).
-    const lenErr = checkLogText("지도사항", content) ?? checkLogText("특이사항", specialNotes);
+    const lenErr = checkLogText("지도사항", content) ?? checkLogText("특이사항", specialNotes)
+      // 2026-10-08 감사 P3: 과제명·측정시간 길이와 시간 숫자(NaN·음수·과대값) 검증.
+      ?? checkShortText("과제명", taskName, MAX_TASK_NAME_LEN) ?? checkShortText("측정시간", measurementTime, MAX_MEASUREMENT_LEN)
+      ?? checkLogHours("1:1 지도시간", time1on1) ?? checkLogHours("1:多 지도시간", timeGroup)
+      ?? checkLogHours("1:1 연장시간", extTime1on1) ?? checkLogHours("1:多 연장시간", extTimeGroup)
+      ?? checkLogHours("인정시간", totalRecognizedTime);
     if (lenErr) return NextResponse.json({ success: false, message: lenErr }, { status: 400 });
 
     const writerId = BigInt(session.workerId);

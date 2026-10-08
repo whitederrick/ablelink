@@ -3,6 +3,8 @@
 // startDate = 해당 현장의 최초 배정 시작일(없으면 트레이니 생성일, 그것도 없으면 2026-01-01).
 // 운영은 훈련생 0이라 무영향(dev 테스트 데이터 정정용). 멱등: 이미 열린 배치 있으면 건너뜀.
 import { PrismaClient } from "@prisma/client";
+import { assertWritableDb } from "./_dbGuard.mts";
+assertWritableDb("훈련생 배치 백필");
 const prisma = new PrismaClient();
 
 const FALLBACK = new Date("2026-01-01T00:00:00+09:00");

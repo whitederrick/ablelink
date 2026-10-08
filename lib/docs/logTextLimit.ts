@@ -12,3 +12,27 @@ export function checkLogText(label: string, v: unknown): string | null {
   }
   return null;
 }
+
+// ── 2026-10-08 감사 P3: 일지 숫자·짧은 텍스트 입력 검증 ──
+//  숫자: NaN("abc")은 Prisma 500, 음수·거대값은 그대로 저장돼 출근부·급여 시간 합산을 오염시켰다.
+//  짧은 텍스트(과제명·측정시간)는 상한이 없어 지도사항 800자 상한을 우회해 PDF 셀을 다시 붕괴시킬 수 있었다.
+export const MAX_LOG_HOURS = 24;
+export const MAX_TASK_NAME_LEN = 100;
+export const MAX_MEASUREMENT_LEN = 50;
+export const MAX_BATCH_LOGS = 2000;
+
+/** 시간(시간 단위) 값 검증. 미입력(undefined·null·"")은 통과(기본값 0 적용). 잘못되면 사용자 메시지(400). */
+export function checkLogHours(label: string, v: unknown): string | null {
+  if (v === undefined || v === null || v === "") return null;
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  if (!Number.isFinite(n) || n < 0 || n > MAX_LOG_HOURS) {
+    return `${label}은(는) 0 이상 ${MAX_LOG_HOURS} 이하의 숫자로 입력해 주세요.`;
+  }
+  return null;
+}
+
+/** 짧은 텍스트 길이 상한. */
+export function checkShortText(label: string, v: unknown, max: number): string | null {
+  if (typeof v === "string" && v.length > max) return `${label}은(는) ${max}자 이내로 입력해 주세요.`;
+  return null;
+}

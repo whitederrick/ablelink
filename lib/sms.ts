@@ -11,8 +11,14 @@ export async function sendSms(params: {
   const sender  = process.env.KAKAO_ALIMTALK_SENDER_PHONE;
 
   if (!apiKey || !userid || !sender) {
-    // 개발/테스트 환경: 콘솔에만 출력
-    console.log(`[SMS stub] to=${params.phone} | ${params.message}`);
+    // 키 미설정(개발/테스트 또는 운영 설정 누락): 발송하지 않는다. 본문에는 임시 비밀번호·인증번호가 들어갈 수 있고
+    //  전화번호는 개인정보라 로그(운영에서는 Vercel 로그에 남음)에 원문을 쓰지 않는다 — 2026-10-08 감사 P3.
+    //  개발 중 내용 확인이 필요하면 SMS_STUB_VERBOSE=1일 때만 개발 환경에서 원문을 출력한다.
+    const verbose = process.env.SMS_STUB_VERBOSE === "1" && process.env.NODE_ENV !== "production";
+    const tail = params.phone.replace(/\D/g, "").slice(-4);
+    console.log(verbose
+      ? `[SMS stub] to=${params.phone} | ${params.message}`
+      : `[SMS stub] 발송 설정 없음 — 미발송 (수신 ***${tail}, ${params.message.length}자)`);
     return;
   }
 

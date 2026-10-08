@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
+import { audit } from "@/lib/audit";
 import { checkQuota } from "@/lib/planGuard";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 import { withWorkerAssignmentLock, withSiteAndWorkersAssignmentLock, withPostAndWorkerLock } from "@/lib/assignmentLock";
@@ -170,6 +171,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (e instanceof AppAlreadyProcessed) return NextResponse.json({ success: false, message: "이미 처리된 신청입니다." }, { status: 409 });
       throw e;
     }
+
+    // 수락·반려와 자동 배정 여부 증빙(2026-10-08 감사 P2: 수락은 배정을 만드는데 누가 했는지 기록이 없었다).
+    await audit(session, {
+      entityType: "RecruitApplication", entityId: appId, action: "update",
+      summary: `모집 지원 ${action === "accept" ? "수락" : "반려"}${action === "accept" ? (autoAssigned ? " · 현장 자동 배정 생성" : " · 자동 배정 없음") : ""}`,
+      after: { status: action === "accept" ? "ACCEPTED" : "REJECTED", autoAssigned },
+    });
 
     // 직무지도원에게 알림(매칭 결과) — WorkerNotice.agencyId 필수라 위탁기관 공고일 때만
     if (app.post.agencyId) {

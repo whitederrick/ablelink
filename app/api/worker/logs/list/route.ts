@@ -35,6 +35,8 @@ export async function GET(request: NextRequest) {
         tasks:      true,
       },
       orderBy: { attendance: { workDate: "desc" } },
+      // 기간 필터가 없으면 그 워커의 전체 일지(+과제)를 읽던 것에 상한 — 2026-10-08 감사 P2. 최신순이라 오래된 것만 잘린다.
+      take: 1000,
     });
 
     return NextResponse.json({

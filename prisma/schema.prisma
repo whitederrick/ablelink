@@ -357,6 +357,8 @@ model Trainee {
   supervisions TraineeSupervision[]
   site         Site?               @relation(fields: [currentSiteId], references: [id])
 
+  // 현장별 훈련생 조회(currentSiteId + status)가 약 10곳 — 인덱스 없이 풀스캔이던 것(2026-10-08 감사 P2).
+  @@index([currentSiteId, status])
   @@map("trainees")
 }
 

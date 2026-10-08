@@ -8,6 +8,7 @@ import { requireAdminOrManagerSession } from "@/lib/managerScope";
 import { parseBigInt } from "@/lib/adminScope";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { filterAgencyWorkers } from "@/lib/noticeTargets";
+import { internalLinkOrNull } from "@/lib/safeLink";
 
 export async function GET(req: NextRequest) {
   try {
@@ -71,6 +72,11 @@ export async function POST(req: NextRequest) {
 
     if (!title || !msgBody)
       return NextResponse.json({ success: false, message: "title, body 필수" }, { status: 400 });
+
+    // 이동 링크는 앱 내부 경로만(외부 주소로 보내는 피싱 경로 차단 — 2026-10-08 감사 P3). 비어 있으면 링크 없음.
+    const safeLink = typeof link === "string" && link.trim() ? internalLinkOrNull(link) : null;
+    if (typeof link === "string" && link.trim() && !safeLink)
+      return NextResponse.json({ success: false, message: "링크는 앱 안의 경로(/로 시작)만 입력할 수 있습니다." }, { status: 400 });
 
     // 발송 범위 결정 — 명시적 audience 우선, 없으면 입력값으로 추론(하위호환).
     const mode: "ALL" | "GROUP" | "INDIVIDUAL" =
@@ -164,7 +170,7 @@ export async function POST(req: NextRequest) {
         type:  noticeType,
         kind,
         yearMonth: yearMonth || null,
-        link: typeof link === "string" && link ? link.slice(0, 300) : null,
+        link: safeLink,
       };
     }).filter((r): r is NonNullable<typeof r> => r !== null);
 

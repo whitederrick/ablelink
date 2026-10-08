@@ -138,7 +138,7 @@ export async function computePayrollItems(
       //  면제/일괄 정상행(actualStartTime=null·startTime有)은 유지(2026-07-06 가드제거 사유 회피).
       where: { workerId: { in: userIds }, workDate: { gte: periodStart, lte: periodEnd }, isFinalClosed: true, startTime: { not: null }, assignment: { agencyId } },
       select: {
-        workerId: true,
+        workerId: true, assignmentId: true,
         workDate: true, startTime: true, endTime: true,
         actualStartTime: true, actualEndTime: true, payrollConfirmedAt: true,
         assignment: { select: { siteId: true, workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true, site: { select: { lateThresholdMin: true } } } },
@@ -171,7 +171,7 @@ export async function computePayrollItems(
     //  (P1-11 경계주 판정 위해 lookback 시작일부터 로드 — 전월 부분 주의 휴무도 반영.)
     prisma.siteHoliday.findMany({
       where: { assignment: { workerId: { in: userIds }, agencyId }, countAsWorkday: false, date: { gte: lookbackStartISO, lte: periodEnd } },
-      select: { date: true, assignment: { select: { workerId: true } } },
+      select: { date: true, assignmentId: true, assignment: { select: { workerId: true } } },
     }),
     // P1-11: 전월 말 lookback 출근(주휴 경계주 만근 판정 전용). 당월 계산엔 미사용.
     prisma.dailyAttendance.findMany({
@@ -206,6 +206,11 @@ export async function computePayrollItems(
   for (const l of allLeaveUse) { const k = idKey(l.workerId); (leaveByW.get(k) ?? (leaveByW.set(k, []), leaveByW.get(k)!)).push(l); }
   const holByW = new Map<string, { date: string }[]>();
   for (const h of allHolidays) { const k = idKey(h.assignment.workerId); (holByW.get(k) ?? (holByW.set(k, []), holByW.get(k)!)).push({ date: h.date }); }
+  // 근무 미인정 휴무일(countAsWorkday=false)로 등록된 (배정, 날짜) — 그 날 남아 있는 출근 행은 급여에서 제외한다.
+  //  출근부(attendanceSheetPayload)가 같은 쌍으로 제외하고, MONTHLY 일할도 이미 휴무일을 소정근로일에서 빼므로 시급·일급제만
+  //  지급하던 불일치를 없앤다(2026-10-08 감사 P2). 근무로 인정하려면 매니저가 해당 휴무일을 '근무 인정'으로 바꾼다.
+  const holKeysByW = new Map<string, Set<string>>();
+  for (const h of allHolidays) { const k = idKey(h.assignment.workerId); (holKeysByW.get(k) ?? (holKeysByW.set(k, new Set()), holKeysByW.get(k)!)).add(`${h.assignmentId}:${h.date}`); }
   // desc/asc 정렬 → 워커별 '첫 행'이 각각 최신/최초(기존 findFirst와 동치).
   const empLatestByW = new Map<string, (typeof allEmpLatest)[number]>();
   for (const e of allEmpLatest) { if (!empLatestByW.has(idKey(e.workerId))) empLatestByW.set(idKey(e.workerId), e); }
@@ -217,7 +222,7 @@ export async function computePayrollItems(
     return {
       workerId,
       payContracts: payByW.get(idKey(workerId)) ?? [],
-      attendances: attByW.get(idKey(workerId)) ?? [],
+      attendances: (attByW.get(idKey(workerId)) ?? []).filter((a) => !holKeysByW.get(idKey(workerId))?.has(`${a.assignmentId}:${a.workDate}`)),
       placements: allPlacements.filter((p) => siteSet.has(idKey(p.siteId))),
       empContract: empLatestByW.get(idKey(workerId)) ?? null,
       firstContract: empFirstByW.get(idKey(workerId)) ?? null,

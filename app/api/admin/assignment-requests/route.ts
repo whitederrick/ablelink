@@ -10,6 +10,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit } from "@/lib/audit";
 import { findTimeConflict, OCCUPYING_STATUSES, isSameAgencyConflict } from "@/lib/assignmentOverlap";
 import { withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
 import { findCapacityOverflow, getSiteCapacityState, CAPACITY_SLOTS } from "@/lib/assignmentCapacity";
@@ -124,10 +125,12 @@ export async function POST(req: NextRequest) {
         select: { id: true },
       });
       if (!asgn) return NextResponse.json({ success: false, message: "수락한 후보만 탈락 처리할 수 있습니다." }, { status: 409 });
-      await prisma.siteAssignment.updateMany({
+      const dropped = await prisma.siteAssignment.updateMany({
         where: { id, status: "ACCEPTED" },
         data: { status: "DROPPED", rejectedAt: new Date(), statusReason: "담당자 탈락" },
       });
+      // 누가 후보를 탈락시켰는지 추적(2026-10-08 감사 P2: 배정요청 확정·탈락·복원에 감사 기록이 없었다).
+      if (dropped.count > 0) await audit(scope, { entityType: "SiteAssignment", entityId: id, action: "update", summary: "배정 후보 탈락(담당자)", before: { status: "ACCEPTED" }, after: { status: "DROPPED" } });
       return NextResponse.json({ success: true, status: "DROPPED" });
     }
 
@@ -143,7 +146,8 @@ export async function POST(req: NextRequest) {
       const restoreTo = asgn.workType ? "ACCEPTED" : "REQUESTED";
       const data: any = { status: restoreTo, rejectedAt: null, statusReason: null };
       if (asgn.replyDeadline && asgn.replyDeadline < new Date()) data.replyDeadline = null;
-      await prisma.siteAssignment.updateMany({ where: { id, status: { in: ["DROPPED", "EXPIRED"] } }, data });
+      const restored = await prisma.siteAssignment.updateMany({ where: { id, status: { in: ["DROPPED", "EXPIRED"] } }, data });
+      if (restored.count > 0) await audit(scope, { entityType: "SiteAssignment", entityId: id, action: "update", summary: "배정 후보 되돌리기(탈락·기한초과 복원)", after: { status: restoreTo } });
       return NextResponse.json({ success: true, status: restoreTo });
     }
 
@@ -249,6 +253,11 @@ export async function POST(req: NextRequest) {
           });
         } catch { /* 알림 실패 무시 */ }
       }
+      await audit(scope, {
+        entityType: "Site", entityId: siteId, action: "update",
+        summary: `배정 최종 확정: 선정 ${selectedIds.length}명(선정되지 않은 수락 후보는 제외 처리)`,
+        after: { selectedAssignmentIds: selectedIds.map((x) => x.toString()) },
+      });
       return NextResponse.json({ success: true, assigned: selectedIds.length, full: conflictOut.isFull });
     }
 
