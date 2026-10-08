@@ -5,6 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { effectiveTrainingType } from "@/lib/serviceStep";
+import { getKstDateString } from "@/lib/time";
 
 export interface MissingLogItem {
   attendanceId: string;
@@ -14,9 +15,14 @@ export interface MissingLogItem {
   trainees: { id: string; name: string; gender: string; draftLogId?: string }[]; // draftLogId=임시저장 일지(이어쓰기용). 이 날짜에 아직 완료 일지가 없는 훈련생만
 }
 
-export async function getMissingLogItems(workerId: bigint, fromDate: string, take = 30): Promise<MissingLogItem[]> {
+// toDate 기본값 = 오늘(KST). 미래 일지 사전 작성(f6004db)이 미래 날짜에 placeholder 출근기록을 만들므로 상한이 없으면
+//  미리 써 둔 날(임시저장·1:多 일부 완료)이 "미작성"으로 잡히고, 날짜 내림차순+take 제한 때문에 미래 날짜가
+//  앞줄을 차지해 실제로 밀린 과거 일지를 목록 밖으로 밀어냈다(2026-10-08 감사 P2).
+export async function getMissingLogItems(
+  workerId: bigint, fromDate: string, take = 30, toDate: string = getKstDateString(),
+): Promise<MissingLogItem[]> {
   const attendances = await prisma.dailyAttendance.findMany({
-    where: { workerId, workDate: { gte: fromDate } },
+    where: { workerId, workDate: { gte: fromDate, lte: toDate } },
     include: {
       site: {
         select: {
