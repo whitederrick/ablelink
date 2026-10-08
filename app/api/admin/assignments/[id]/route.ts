@@ -45,12 +45,17 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     //  점유상태(ACTIVE/CONFIRMED/ASSIGNED)만 ENDED로 돌리는 불변식과 정합.
     const CONSENTED_CANCEL = ["ACCEPTED", "ASSIGNED", "CONFIRMED", "ACTIVE"];
     const isConsented = CONSENTED_CANCEL.includes(existing.status);
-    await prisma.siteAssignment.update({
-      where: { id: assignmentId },
+    // 조회 시점의 상태에서만 전이(CAS) — 그 사이 워커가 수락(REQUESTED→ACCEPTED 등)했다면 count=0이라 덮어쓰지 않고 409.
+    //  (2026-10-08 감사 P2: 락·상태조건 없이 update해 동시 수락을 EXPIRED/ENDED로 덮을 수 있었다.)
+    const cancelled = await prisma.siteAssignment.updateMany({
+      where: { id: assignmentId, status: existing.status },
       data: isConsented
         ? { status: "ENDED", endedAt: new Date(), statusReason: reason }
         : { status: "EXPIRED", statusReason: reason },
     });
+    if (cancelled.count === 0) {
+      return NextResponse.json({ success: false, message: "배정 상태가 방금 변경되었습니다. 새로고침 후 다시 시도해주세요." }, { status: 409 });
+    }
     await audit(session, { entityType: "SiteAssignment", entityId: assignmentId, action: "delete", summary: `배정 취소(종료): ${reason}` });
     return NextResponse.json({ success: true, message: "배정이 취소(종료)되었습니다." });
   } catch (e: any) {
