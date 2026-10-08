@@ -80,22 +80,6 @@ export async function listVersions(runId: string): Promise<DocumentVersionItem[]
   return data.items ?? [];
 }
 
-export async function createVersion(input: {
-  runId: string;
-  stage: DocStage;
-  pdfUrl: string;
-  pdfFileName?: string | null;
-  sourceData?: any; // undefined/null/object 모두 허용
-}): Promise<DocumentVersionItem> {
-  const res = await fetch(`/api/admin/document-versions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  const data = await j<{ success: boolean; item: DocumentVersionItem }>(res);
-  return data.item;
-}
-
 export async function listSubmissionLogs(runId: string): Promise<DocumentSubmissionLogItem[]> {
   const res = await fetch(
     `/api/admin/document-submission-logs?runId=${encodeURIComponent(runId)}`,

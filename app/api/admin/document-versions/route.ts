@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
 import { logAccess } from "@/lib/accessLog";
-import { Prisma, DocumentStage } from "@prisma/client";
+import { DocumentStage } from "@prisma/client";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -122,96 +122,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: 버전 생성 + DocumentRun.currentVersion 갱신
-// body: { runId, stage(PRE|FINAL), pdfUrl, pdfFileName?, sourceData? }
-// ✅ sourceData 처리 규칙
-// - undefined: 필드 생략
-// - null: Prisma.JsonNull 저장(JSON null)
-// - object/value: 그대로 저장
-export async function POST(req: NextRequest) {
-  try {
-    const scope = await requireManagerSession(req);
-
-    const body = await req.json();
-    const runIdStr = String(body?.runId || "").trim();
-    const stageStr = String(body?.stage || "").trim();
-    const pdfUrl = String(body?.pdfUrl || "").trim();
-
-    if (!runIdStr) throw new Error("VALIDATION:runId");
-    if (!isValidNumericId(runIdStr)) throw new Error("VALIDATION:runId");
-    if (!stageStr || !Object.values(DocumentStage).includes(stageStr as any)) throw new Error("VALIDATION:stage");
-    if (!pdfUrl) throw new Error("VALIDATION:pdfUrl");
-
-    const runId = BigInt(runIdStr);
-
-    const run = await prisma.documentRun.findUnique({
-      where: { id: runId },
-      select: { id: true, agencyId: true },
-    });
-    if (!run) throw new Error("NOT_FOUND");
-    // 실귀속 = run.agencyId(GET과 동일 — 형제 라우트 기준 통일, null이면 fail-closed).
-    if (run.agencyId == null || run.agencyId !== scope.agencyId) throw new Error("FORBIDDEN");
-
-    const nextVersionNo =
-      (await prisma.documentVersion.aggregate({
-        where: { runId },
-        _max: { versionNo: true },
-      }))._max.versionNo ?? 0;
-
-    const pdfFileName = body?.pdfFileName == null ? null : String(body.pdfFileName).trim();
-
-    // ✅ 타입 안전한 JSON 처리
-    let sourceDataInput: Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue | undefined;
-    if (Object.prototype.hasOwnProperty.call(body, "sourceData")) {
-      if (body.sourceData === null) {
-        sourceDataInput = Prisma.JsonNull;
-      } else {
-        sourceDataInput = body.sourceData as Prisma.InputJsonValue;
-      }
-    } else {
-      sourceDataInput = undefined;
-    }
-
-    const created = await prisma.$transaction(async (tx) => {
-      const v = await tx.documentVersion.create({
-        data: {
-          run: { connect: { id: runId } },
-          versionNo: nextVersionNo + 1,
-          stage: stageStr as any,
-          pdfUrl,
-          pdfFileName,
-
-          ...(sourceDataInput !== undefined ? { sourceData: sourceDataInput } : {}),
-
-          createdByManager: { connect: { id: scope.managerId } },
-        },
-        select: {
-          id: true,
-          runId: true,
-          versionNo: true,
-          stage: true,
-          pdfUrl: true,
-          pdfFileName: true,
-          sourceData: true,
-          createdAt: true,
-          createdByWorkerId: true,
-          createdByManagerId: true,
-        },
-      });
-
-      await tx.documentRun.update({
-        where: { id: runId },
-        data: { currentVersion: { connect: { id: v.id } } },
-      });
-
-      return v;
-    });
-
-    return NextResponse.json({ success: true, item: toItem(created) });
-  } catch (e: any) {
-    if (e instanceof Response) return e;
-    const msg = e?.message || "UNKNOWN";
-    const st = errToStatus(msg);
-    return NextResponse.json({ success: false, message: st === 500 ? "서버 오류" : msg }, { status: st });
-  }
-}
+// POST(버전 생성)는 2026-10-08 제거: 앱 내 호출처가 없고(클라이언트 createVersion도 미사용),
+//  매니저가 임의 sourceData/pdfUrl로 currentVersion을 바꿔 제출·서명 단계 검사 없이 공단 발송 본문을
+//  위조할 수 있는 경로였다. 버전은 워커 제출/매니저 서명 등 정식 경로가 생성한다.
