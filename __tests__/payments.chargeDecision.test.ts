@@ -61,10 +61,35 @@ describe("decideChargeOutcome — HTTP 오류(Toss 응답 확정)", () => {
       wipeBillingKey: true,
     });
   });
-  it("카드 거절(파싱된 4xx, code 있음) → 유예 이내여도 즉시 강등 + 키삭제(확정 실패)", () => {
-    expect(decideChargeOutcome({ kind: "http_error", status: 400, parsed: true }, 0, GRACE)).toEqual({
+  it("카드 거절(화이트리스트 code의 4xx) → 유예 이내여도 즉시 강등 + 키삭제(확정 실패)", () => {
+    for (const code of ["REJECT_CARD_COMPANY", "INVALID_STOPPED_CARD", "EXCEED_MAX_DAILY_PAYMENT_COUNT"]) {
+      expect(decideChargeOutcome({ kind: "http_error", status: 400, parsed: true, code }, 0, GRACE)).toEqual({
+        action: "downgrade",
+        wipeBillingKey: true,
+      });
+    }
+  });
+  it("★2026-10-08 P1 회귀: 인증·설정 오류(UNAUTHORIZED_KEY 등)는 유예 초과여도 강등·키삭제 금지, 재시도", () => {
+    for (const [status, code] of [[401, "UNAUTHORIZED_KEY"], [401, "INVALID_API_KEY"], [403, "FORBIDDEN_REQUEST"], [400, "INVALID_REQUEST"]] as const) {
+      expect(decideChargeOutcome({ kind: "http_error", status, parsed: true, code }, 99, GRACE)).toEqual({
+        action: "retry",
+        wipeBillingKey: false,
+      });
+    }
+  });
+  it("미분류 4xx code(원인 불명) → 유예 이내 재시도, 초과 시 강등+키삭제(5xx와 동일)", () => {
+    expect(decideChargeOutcome({ kind: "http_error", status: 400, parsed: true, code: "SOME_NEW_CODE" }, 1, GRACE)).toEqual({
+      action: "retry",
+      wipeBillingKey: false,
+    });
+    expect(decideChargeOutcome({ kind: "http_error", status: 400, parsed: true, code: "SOME_NEW_CODE" }, 3, GRACE)).toEqual({
       action: "downgrade",
       wipeBillingKey: true,
+    });
+    // code 필드 자체가 누락된 parsed:true도 미분류로 취급
+    expect(decideChargeOutcome({ kind: "http_error", status: 400, parsed: true }, 0, GRACE)).toEqual({
+      action: "retry",
+      wipeBillingKey: false,
     });
   });
   it("★재감사 회귀: 비-JSON/빈 본문 4xx(프록시·WAF) → 확정 실패 아님, 재시도(키 보존)", () => {

@@ -15,7 +15,7 @@ import { outboundAllowed } from "@/lib/outboundGuard";
 import { PAID_AGENCY_PLANS, isPaidAgencyPlan } from "@/lib/plans";
 import { PLAN_LIMITS } from "@/lib/planGuard";
 import { refundSubscriptionPayment } from "@/lib/payments/tossRefund";
-import { decideChargeOutcome, isTwinCronAdvance, type ChargeOutcome } from "@/lib/payments/chargeDecision";
+import { decideChargeOutcome, isConfigErrorCode, isTwinCronAdvance, type ChargeOutcome } from "@/lib/payments/chargeDecision";
 import { timingSafeEqual } from "crypto";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
@@ -48,6 +48,12 @@ export async function POST(request: NextRequest) {
   if (!outboundAllowed()) {
     console.log("[charge] dev 안전모드 — 실제 결제 건너뜀");
     return NextResponse.json({ success: true, skipped: true, reason: "dev 안전모드(OUTBOUND_LIVE=1로 강제)" });
+  }
+
+  // 시크릿키 미설정이면 모든 청구가 401로 실패한다 — 한 건도 시도하지 않고 즉시 중단(경보).
+  if (!TOSS_SECRET_KEY) {
+    console.error("[charge] ★TOSS_PAYMENTS_SECRET_KEY 미설정 — 정기결제 전체 중단(강등·키삭제 없음)");
+    return NextResponse.json({ success: false, message: "결제 키가 설정되지 않았습니다." }, { status: 500 });
   }
 
   const today = new Date();
@@ -117,7 +123,7 @@ export async function POST(request: NextRequest) {
       } else {
         // parsed = Toss 에러 본문(code)이 실제로 왔는가. 비-JSON/빈 본문(프록시·WAF 4xx)이면 false →
         //  확정 실패 아님(불확정)으로 취급해 즉시 강등+키삭제를 피한다.
-        outcome = { kind: "http_error", status: res.status, parsed: !!data?.code };
+        outcome = { kind: "http_error", status: res.status, parsed: !!data?.code, code: data?.code };
         reasonMsg = data?.message ?? `HTTP ${res.status}${data?.code ? "" : "(본문 없음)"}`;
       }
     } catch (err: any) {
@@ -195,6 +201,9 @@ export async function POST(request: NextRequest) {
     } else if (decision.action === "retry") {
       // nextBillingAt 유지 → 다음 cron 재시도(빌링키 보존 → 멱등 복구 경로 유지)
       results.push({ agencyId: agency.id.toString(), status: "retry", reason: reasonMsg });
+      if (outcome.kind === "http_error" && isConfigErrorCode(outcome.code)) {
+        console.error(`[charge] ★토스 인증·설정 오류(${outcome.code}) — 강등하지 않고 재시도. 시크릿키/계정 설정 확인 필요: ${agency.name}`, reasonMsg);
+      }
       console.warn(`[charge] 재시도(연체 ${daysOverdue}일/유예 ${GRACE_DAYS}·또는 불확정): ${agency.name}`, reasonMsg);
     } else {
       // 확정 실패(카드 거절 등)·유예 초과 → 강등. wipeBillingKey일 때만 키 삭제(재등록 유도).
