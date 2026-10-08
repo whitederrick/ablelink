@@ -820,8 +820,8 @@ export default function AttendanceInboxClient() {
                           <td className={`${T.td} w-px whitespace-nowrap font-semibold text-slate-900`}>{it.workerName}</td>
                           <td className={`${T.td} w-px`}><div className="max-w-[140px] truncate">{it.siteName}</div></td>
                           <td className={`${T.td} w-px whitespace-nowrap`}>{fmtYmdDots(it.workDate)}</td>
-                          <td className={T.td}>
-                            <div className="flex flex-wrap items-center gap-1.5">
+                          <td className={`${T.td} whitespace-nowrap`}>
+                            <div className="flex flex-nowrap items-center gap-1.5">
                               {it.payrollPending ? (
                                 <span className="inline-flex items-center rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">보정대기</span>
                               ) : null}

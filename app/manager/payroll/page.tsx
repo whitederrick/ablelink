@@ -689,8 +689,8 @@ export default function PayrollPage() {
                       <td className={`${T.td} whitespace-nowrap`}>
                         {c.workerName} <span className="text-[13px] text-slate-500">({maskLoginId(c.loginId)})</span>
                       </td>
-                      <td className={T.td}>
-                        <div className="flex flex-wrap gap-1">
+                      <td className={`${T.td} whitespace-nowrap`}>
+                        <div className="flex flex-nowrap gap-1">
                           <span className={`${T.badge} ${c.workerType === "INTERNAL" ? "bg-amber-50 text-amber-600" : "bg-slate-50 text-slate-600"}`}>
                             {c.workerType === "INTERNAL" ? "내부" : "외부"}
                           </span>
@@ -700,8 +700,8 @@ export default function PayrollPage() {
                           <span className={`${T.badge} bg-slate-50 text-slate-600`}>{payTypeLabel[c.payType]}</span>
                         </div>
                       </td>
-                      <td className={`${T.td}`}>
-                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <td className={`${T.td} whitespace-nowrap`}>
+                        <div className="flex flex-nowrap items-baseline gap-x-2 gap-y-0.5">
                           <span className="font-semibold">
                             {comma(c.baseAmount)}원{c.payType === "HOURLY" ? "/h" : c.payType === "DAILY" ? "/일" : "/월"}
                           </span>
@@ -797,7 +797,7 @@ export default function PayrollPage() {
                 <tbody>
                   {dPageItems.map(d => (
                     <tr key={d.id} className={T.trBase}>
-                      <td className={T.td}>{d.name}</td>
+                      <td className={T.td}><div className="max-w-[240px] truncate" title={d.name}>{d.name}</div></td>
                       <td className={T.td}>
                         <span className={`${T.badge} bg-slate-50 text-slate-600`}>
                           {d.type === "FIXED" ? "고정" : "비율"}

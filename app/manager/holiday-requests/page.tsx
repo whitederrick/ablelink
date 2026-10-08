@@ -220,7 +220,7 @@ export default function HolidayRequestsPage() {
             <tbody>
               {pageItems.map(row => (
                 <tr key={row.id} className={T.trBase}>
-                  <td className={T.td + " tabular-nums"}>{row.date}</td>
+                  <td className={T.td + " tabular-nums whitespace-nowrap"}>{row.date}</td>
                   <td className={`${T.td} whitespace-nowrap`}>{row.workerName}</td>
                   <td className={T.td}><div className="max-w-[150px] truncate">{row.siteName}</div></td>
                   <td className={T.td}><div className="max-w-[180px] truncate">{row.reason ?? "-"}</div></td>
@@ -246,7 +246,7 @@ export default function HolidayRequestsPage() {
                       </button>
                     </div>
                   </td>
-                  <td className={T.td}>
+                  <td className={`${T.td} whitespace-nowrap`}>
                     {row.pendingRequest ? (
                       <span className="flex items-center gap-1 font-semibold text-amber-600">
                         <Clock className="h-3.5 w-3.5" />
@@ -256,10 +256,10 @@ export default function HolidayRequestsPage() {
                       <span className="text-slate-400">없음</span>
                     )}
                   </td>
-                  <td className={T.td}>
+                  <td className={`${T.td} whitespace-nowrap`}>
                     {!row.pendingRequest && (
                       <button onClick={() => openRequest(row)}
-                        className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
+                        className="flex items-center gap-1 whitespace-nowrap rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 active:scale-95">
                         <Send className="h-3 w-3" />삭제 요청
                       </button>
                     )}
