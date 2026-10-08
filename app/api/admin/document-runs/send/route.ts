@@ -14,7 +14,8 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { renderPdfToBuffer, type DocumentType } from "@/lib/pdf";
 import { PRISMA_TO_PDF_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { injectManagerSignature } from "@/lib/docs/managerSig";
-import { missingSignatureLabels } from "@/lib/docs/requiredSignatures";
+import { missingSignatureLabels, sigRequirement, SIG_LABEL } from "@/lib/docs/requiredSignatures";
+import { imageToDataUri } from "@/lib/signatureImage";
 import { sendEmailWithAttachments } from "@/lib/email";
 import { logAccess } from "@/lib/accessLog";
 import { audit } from "@/lib/audit";
@@ -97,11 +98,20 @@ export async function POST(req: NextRequest) {
     // ── 발송 게이트(매니저→공단): 선택 문서 중 필수 서명이 하나라도 누락이면 전체 발송 차단 + 경고 ──
     //   직무지도원/사업체 담당자 서명은 제출 스냅샷에서, 매니저 서명은 run.managerSignatureUrl(명시 sign)로 점검.
     const sigBlockers: string[] = [];
+    const sigCache = new Map<string, string | null>(); // PERF-8: 매니저 서명 요청스코프 캐시(url→dataUri) — 게이트·렌더 공용
     for (const r of runs) {
       const who = r.traineeId != null ? (traineeMap.get(r.traineeId.toString()) ?? "") : (r.worker?.workerName ?? "");
       const ps = getKstDateString(r.periodStart);
       const pe = getKstDateString(r.periodEnd);
       const lacks = missingSignatureLabels(r.docType, r.currentVersion?.sourceData, r.managerSignatureUrl);
+      // 2026-10-08 P1: URL 문자열만 있고 실제 서명 이미지 파일이 사라진 경우(매니저가 서명을 재등록/삭제하며
+      //  옛 파일이 지워진 과거 데이터) 서명 칸이 빈 PDF가 공단에 나가지 않도록 '누락'으로 취급한다.
+      if (r.managerSignatureUrl && sigRequirement(r.docType).manager && !lacks.includes(SIG_LABEL.manager)) {
+        if (!sigCache.has(r.managerSignatureUrl)) {
+          sigCache.set(r.managerSignatureUrl, (await imageToDataUri(r.managerSignatureUrl)) ?? null);
+        }
+        if (!sigCache.get(r.managerSignatureUrl)) lacks.push(`${SIG_LABEL.manager}(서명 이미지 유실)`);
+      }
       if (lacks.length) {
         sigBlockers.push(`· ${DOC_LABEL[r.docType] ?? r.docType}${who ? `(${who})` : ""} ${ps}~${pe} — ${lacks.join("·")} 서명 누락`);
       }
@@ -145,7 +155,6 @@ export async function POST(req: NextRequest) {
     let sent = 0;
     const failures: string[] = [];
     const sentRunIds: bigint[] = []; // 발송 성공한 문서 → 공단 제출완료 자동 기록
-    const sigCache = new Map<string, string | null>(); // PERF-8: 매니저 서명 요청스코프 캐시(url→dataUri)
 
     for (const { label, runs: grpRuns } of groups.values()) {
       const usedNames = new Set<string>();

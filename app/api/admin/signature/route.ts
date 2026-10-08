@@ -9,6 +9,7 @@ import { requireManagerSession } from "@/lib/managerScope";
 import { prisma } from "@/lib/prisma";
 import { validateSignatureImage } from "@/lib/imageValidation";
 import { signatureDisplayUrl } from "@/lib/signatureImage";
+import { isManagerSignatureInUse } from "@/lib/docs/managerSignatureFile";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -38,15 +39,10 @@ export async function POST(request: NextRequest) {
     if (!imgCheck.valid)
       return NextResponse.json({ success: false, message: imgCheck.error }, { status: 400 });
 
-    // 기존 서명 삭제
     const existing = await prisma.manager.findUnique({
       where: { id: scope.managerId },
       select: { signatureUrl: true },
     });
-    if (existing?.signatureUrl) {
-      const oldPath = extractPath(existing.signatureUrl);
-      if (oldPath) await deleteStorage(oldPath);
-    }
 
     const fileName = `admin/${scope.managerId}/signature_${Date.now()}.png`;
     const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${fileName}`, {
@@ -70,6 +66,13 @@ export async function POST(request: NextRequest) {
       data: { signatureUrl: publicUrl },
     });
 
+    // 새 서명이 저장된 뒤에 옛 파일 정리(업로드 실패 시 기존 서명 보존).
+    //  이미 서명된 문서가 참조 중인 파일은 지우지 않는다(서명 칸이 빈 채로 발송되던 P1).
+    if (existing?.signatureUrl && existing.signatureUrl !== publicUrl) {
+      const oldPath = extractPath(existing.signatureUrl);
+      if (oldPath && !(await isManagerSignatureInUse(existing.signatureUrl))) await deleteStorage(oldPath);
+    }
+
     return NextResponse.json({ success: true, signatureUrl: await signatureDisplayUrl(publicUrl) });
   } catch (e: any) {
     if (e instanceof Response) return e;
@@ -84,14 +87,15 @@ export async function DELETE(request: NextRequest) {
       where: { id: scope.managerId },
       select: { signatureUrl: true },
     });
-    if (manager?.signatureUrl) {
-      const path = extractPath(manager.signatureUrl);
-      if (path) await deleteStorage(path);
-    }
     await prisma.manager.update({
       where: { id: scope.managerId },
       data: { signatureUrl: null },
     });
+    // 계정 서명 해제 후 파일 정리 — 이미 서명된 문서가 참조 중이면 파일은 남긴다.
+    if (manager?.signatureUrl) {
+      const path = extractPath(manager.signatureUrl);
+      if (path && !(await isManagerSignatureInUse(manager.signatureUrl))) await deleteStorage(path);
+    }
     return NextResponse.json({ success: true });
   } catch (e: any) {
     if (e instanceof Response) return e;

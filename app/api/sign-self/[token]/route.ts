@@ -8,6 +8,7 @@ import { validateSignatureImage } from "@/lib/imageValidation";
 import { getSelfSignToken, consumeSelfSignTokenAtomic } from "@/lib/selfSignToken";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { getRateLimitIp } from "@/lib/clientIp";
+import { isManagerSignatureInUse } from "@/lib/docs/managerSignatureFile";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -78,12 +79,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     const managerId = BigInt(claimed.id);
 
-    // 기존 서명 삭제
     const existing = await prisma.manager.findUnique({ where: { id: managerId }, select: { signatureUrl: true } });
-    if (existing?.signatureUrl) {
-      const oldPath = extractPath(existing.signatureUrl);
-      if (oldPath) await deleteStorage(oldPath);
-    }
 
     const fileName = `admin/${managerId}/signature_${Date.now()}.png`;
     const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${fileName}`, {
@@ -102,6 +98,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${fileName}`;
     await prisma.manager.update({ where: { id: managerId }, data: { signatureUrl: publicUrl } });
+    // 새 서명 저장 후 옛 파일 정리 — 이미 서명된 문서가 참조 중이면 남긴다(서명 칸이 빈 채 발송되던 P1).
+    if (existing?.signatureUrl && existing.signatureUrl !== publicUrl) {
+      const oldPath = extractPath(existing.signatureUrl);
+      if (oldPath && !(await isManagerSignatureInUse(existing.signatureUrl))) await deleteStorage(oldPath);
+    }
     // (토큰은 위에서 원자적으로 소비됨 — 여기서 별도 삭제 불필요)
 
     return NextResponse.json({ success: true });
