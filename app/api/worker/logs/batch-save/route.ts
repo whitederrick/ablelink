@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
     // 날짜별 attendanceId 확보 (없으면 생성) — 날짜별 순차 2쿼리(N+1) → 일괄 조회+createMany(한 달 31일도 3쿼리).
     const dateToAttendanceId = new Map<string, bigint>();
     const skippedOutOfRange: string[] = []; // 배정 기간 밖이라 저장 못 한 날짜(응답에 명시)
+    const skippedNoAttendance: string[] = []; // 출근기록 없는 오늘·미래 날짜(출근 체크인 전이라 저장 못 함 — 응답에 명시)
     {
       const existingRows = await prisma.dailyAttendance.findMany({
         where: { assignmentId: assignId, workDate: { in: uniqueDates } },
@@ -128,6 +129,8 @@ export async function POST(request: NextRequest) {
         for (const l of logs) {
           const attId = dateToAttendanceId.get(l.date);
           if (attId == null) continue;
+          // 저장 루프에서 '훈련생 미재적'으로 건너뛸 로그는 덮어써지지 않으므로 확인창에 올리지 않는다.
+          if (traineeCountOnDate(placementsByTrainee.get(String(l.traineeId)) ?? [], l.date, siteId) < 1) continue;
           const k = `${attId}_${l.traineeId}`;
           if (seen.has(k) || !dupByKey.has(k)) continue;
           seen.add(k);
@@ -150,8 +153,9 @@ export async function POST(request: NextRequest) {
         // M8: 배정 기간 밖 날짜엔 출근기록 생성 금지(기간 밖 날짜가 출근부·급여에 새는 것 방지).
         //  ★조용히 버리지 않고 어떤 날짜가 제외됐는지 응답에 담는다(워커가 일부 누락을 인지하도록).
         if ((asgStart && date < asgStart) || (asgEnd && date > asgEnd)) { skippedOutOfRange.push(date); continue; }
-        // 오늘 날짜는 clock-in 없이 생성 불가 — 스킵
-        if (date >= todayKST) continue;
+        // 오늘·미래 날짜는 clock-in 없이 생성 불가 — 스킵. ★조용히 버리지 않고 응답에 명시한다(예전엔 안내 없이 누락되고
+        //  클라이언트는 saved:0이어도 완료 화면을 띄웠다).
+        if (date >= todayKST) { skippedNoAttendance.push(date); continue; }
         toCreate.push(date);
       }
       if (toCreate.length) {
@@ -214,8 +218,12 @@ export async function POST(request: NextRequest) {
       const existingId = existingByKey.get(logKey(attendanceId, traineeId));
       const existing = existingId != null ? { id: existingId } : null;
 
+      // 덮어쓰기는 '교체'다(확인창이 "기존 내용은 사라집니다"로 안내). logData에 없는 연장·인정시간과 과제 행(측정시간·특이사항)이
+      //  남아 새 내용과 섞이지 않도록 함께 초기화한다(스키마 기본값 0).
+      const overwriteData = { ...logData, extTime1on1: 0, extTimeGroup: 0, totalRecognizedTime: 0 };
       if (existing) {
-        await prisma.traineeLog.update({ where: { id: existing.id }, data: logData });
+        await prisma.traineeLog.update({ where: { id: existing.id }, data: overwriteData });
+        await prisma.traineeLogTask.deleteMany({ where: { logId: existing.id } });
       } else {
         // DB 유니크(attendance_id, trainee_id)로 동시/재시도 중복 방지 — 충돌 시 기존 행 갱신.
         try {
@@ -224,7 +232,8 @@ export async function POST(request: NextRequest) {
           if (e?.code !== "P2002") throw e;
           const dup = await prisma.traineeLog.findFirst({ where: { traineeId, attendanceId }, select: { id: true } });
           if (!dup) throw e;
-          await prisma.traineeLog.update({ where: { id: dup.id }, data: logData });
+          await prisma.traineeLog.update({ where: { id: dup.id }, data: overwriteData });
+          await prisma.traineeLogTask.deleteMany({ where: { logId: dup.id } });
         }
       }
       saved++;
@@ -237,12 +246,14 @@ export async function POST(request: NextRequest) {
     const skipMsgs = [
       ...(skippedOutOfRange.length ? [`${skippedOutOfRange.length}개 날짜는 배정 기간 밖이라 저장되지 않았습니다: ${skippedOutOfRange.join(", ")}`] : []),
       ...(skippedNotEnrolled.length ? [`${skippedNotEnrolled.length}건은 해당 날짜에 훈련생이 현장 재적이 아니라 저장되지 않았습니다: ${skippedNotEnrolled.join(", ")}`] : []),
+      ...(skippedNoAttendance.length ? [`${skippedNoAttendance.length}개 날짜는 출근 기록이 없는 오늘·미래 날짜라 저장되지 않았습니다(출근 체크인 후 작성): ${skippedNoAttendance.join(", ")}`] : []),
     ];
     return NextResponse.json({
       success: true,
       saved,
       ...(skippedOutOfRange.length ? { skippedOutOfRange } : {}),
       ...(skippedNotEnrolled.length ? { skippedNotEnrolled } : {}),
+      ...(skippedNoAttendance.length ? { skippedNoAttendance } : {}),
       ...(skipMsgs.length ? { message: skipMsgs.join(" / ") } : {}),
     });
   } catch (error: unknown) {

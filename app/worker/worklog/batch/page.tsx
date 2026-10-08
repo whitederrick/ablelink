@@ -281,6 +281,9 @@ export default function BatchWorklogPage() {
         return;
       }
       if (!data.success) { alert(data.message || "저장 실패"); return; }
+      // 일부(또는 전부)가 제외됐으면 사유를 알린다. 한 건도 저장되지 않았으면 완료 화면으로 넘어가지 않는다.
+      if (data.message) alert(data.message);
+      if ((data.saved ?? 0) === 0) return;
       setDone(true);
     } catch {
       alert("저장 중 오류가 발생했습니다.");
