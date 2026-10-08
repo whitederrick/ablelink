@@ -8,6 +8,7 @@ import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { overtimeMinutesForDay, workEndMinutesForDay, manualExtHoursFromLogs } from "@/lib/attendance/overtime";
 import { computeWeeklyHoliday } from "@/lib/payroll/weeklyHoliday";
 import { floorWon } from "@/lib/payroll/floorWon";
+import { isUnderOneCalendarMonth, calendarMonthsElapsed } from "@/lib/payroll/calendarMonths";
 import { computeNightHolidayMinutes, type NightHolidayRow } from "@/lib/payroll/nightHoliday";
 import { resolveWorkingWeekdaySet } from "@/lib/payroll/weekdays";
 import { getKrHolidays } from "@/lib/krHolidays";
@@ -34,23 +35,7 @@ function spanDays(start: Date, end: Date): number {
   return Math.max(0, Math.floor((end.getTime() - start.getTime()) / DAY_MS) + 1);
 }
 
-// start에 n개월 더하기(달력 기준, 말일 클램프). UTC 기준.
-function addMonthsClampUTC(d: Date, n: number): Date {
-  const day = d.getUTCDate();
-  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
-  const lastDay = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
-  t.setUTCDate(Math.min(day, lastDay));
-  return t;
-}
-
-// 계약기간[start, end](양끝 포함)이 달력 기준 1개월 미만인가 → 일용근로자 판정.
-// 1개월 이상 = (start + 1개월) <= (end + 1일). 월별 일수 차이(2월 28/29 등)를 정확히 반영.
-function isUnderOneCalendarMonth(start: Date, end: Date): boolean {
-  const startPlus1 = addMonthsClampUTC(start, 1).getTime();
-  const endPlus1 = end.getTime() + DAY_MS;
-  return startPlus1 > endPlus1;
-}
-
+// 달력 기준 개월 계산(일용 1개월 미만·계속근로 개월)은 lib/payroll/calendarMonths 단일 출처.
 export type PayrollItemInput = {
   workerId: bigint;
   grossPay: Decimal;
@@ -656,7 +641,8 @@ export async function computePayrollItems(
       ? isUnderOneCalendarMonth(empContract.contractStart, empContract.contractEnd)
       : false;
     const firstStart = firstContract?.contractStart ?? empContract?.contractStart ?? periodStartDate;
-    const continuousMonths = spanDays(firstStart, periodEndDate) / 30;
+    // 계속근로 개월 = 달력 기준(고용보험 3개월 판정). 종전 '경과일수 ÷ 30'은 2월이 낀 기간에서 달력 3개월이 찬 날에도 3.0 미만이었다.
+    const continuousMonths = calendarMonthsElapsed(firstStart, periodEndDate);
     const elig = determineEligibility(
       {
         hasEmploymentContract: !!empContract,
