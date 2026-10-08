@@ -12,12 +12,13 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 import { generateTempPassword } from "@/lib/tempPassword";
 import bcrypt from "bcryptjs";
+import { audit } from "@/lib/audit";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
-    await requireAdminSession(req);
+    const scope = await requireAdminSession(req);
 
     const { id } = await params;
     const managerId = parseBigInt(id);
@@ -39,6 +40,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       const tempPassword = supplied.length >= 8 ? supplied : generateTempPassword();
       // #5(17차): 비번 초기화 시 sessionVersion +1 → 발급된 모든 기존 JWT 무효화(탈취 세션 회수). 워커와 동일.
       await prisma.manager.update({ where: { id: managerId }, data: { passwordHash: await bcrypt.hash(tempPassword, 12), sessionVersion: { increment: 1 } } });
+      // 매니저 계정 비밀번호 초기화 증빙(2026-10-08 감사 P2). 임시 비밀번호 값은 기록하지 않는다.
+      await audit(scope, { entityType: "Manager", entityId: managerId, action: "update", summary: "매니저 계정 비밀번호 초기화 · 기존 세션 무효화" });
       return NextResponse.json({ success: true, message: "임시 비밀번호가 발급되었습니다.", tempPassword });
     }
 
@@ -46,6 +49,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (action === "update") {
       const displayName = body?.displayName != null ? String(body.displayName).trim() || null : null;
       await prisma.manager.update({ where: { id: managerId }, data: { displayName } });
+      await audit(scope, { entityType: "Manager", entityId: managerId, action: "update", summary: "매니저 담당자명 수정", after: { displayName } });
       return NextResponse.json({ success: true, message: "관리자 정보가 저장되었습니다." });
     }
 
@@ -63,6 +67,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       data: { isActive: nextActive },
       select: { id: true, isActive: true },
     });
+    await audit(scope, { entityType: "Manager", entityId: managerId, action: "update", summary: `매니저 계정 ${updated.isActive ? "활성화" : "비활성화"}`, before: { isActive: existing.isActive }, after: { isActive: updated.isActive } });
     return NextResponse.json({ success: true, id: String(updated.id), isActive: updated.isActive, message: updated.isActive ? "활성화되었습니다." : "비활성화되었습니다." });
   } catch (e: any) {
     if (e instanceof Response) return e;

@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/adminScope";
+import { audit } from "@/lib/audit";
 import { parseHometaxTable, extractChildCreditFromText, summarizeBrackets } from "@/lib/payroll/incomeTax";
 
 export async function GET(req: NextRequest) {
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdminSession(req);
+    const scope = await requireAdminSession(req);
     const b = await req.json().catch(() => ({}));
     const year = Number(b?.year);
     if (!Number.isInteger(year) || year < 2000 || year > 2100) {
@@ -57,6 +58,8 @@ export async function POST(req: NextRequest) {
       create: { year, data: brackets as any, meta: { childCredit } as any, rowCount: brackets.length },
       update: { data: brackets as any, meta: { childCredit } as any, rowCount: brackets.length },
     });
+    // 전 기관 소득세 자동 산정에 쓰이는 표의 등록·교체 증빙(2026-10-08 감사 P2).
+    await audit(scope, { entityType: "IncomeTaxTable", entityId: year, action: "update", summary: `근로소득 간이세액표 ${year}년 등록·교체(${brackets.length}행)` });
     return NextResponse.json({ success: true, year, rowCount: brackets.length, childCredit, summary: summarizeBrackets(brackets) });
   } catch (e: any) {
     if (e instanceof Response) return e;

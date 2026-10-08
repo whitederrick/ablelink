@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManagerSession } from "@/lib/managerScope";
+import { audit } from "@/lib/audit";
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -27,6 +28,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     // (현장별 다시급 제거로 override/고아 개념이 없어져 삭제 가드 불필요 — 자기 기관 급여 기준은 자유 삭제.)
     await prisma.payContract.delete({ where: { id } });
+    // 급여 기준 삭제 증빙(2026-10-08 감사 P2) — 지급액에 직접 영향.
+    await audit(scope, { entityType: "PayContract", entityId: id, action: "delete", summary: "급여 기준(계약) 삭제", before: { workerId: contract.workerId.toString(), payType: contract.payType, baseAmount: String(contract.baseAmount) } });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     if (e && typeof e.status === "number") return e as any;

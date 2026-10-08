@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
+import { audit } from "@/lib/audit";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -133,6 +134,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       });
       if (claim.count === 0) return NextResponse.json({ success: false, message: "이미 처리된 신청입니다." }, { status: 409 });
       const updated = await prisma.managerSignupRequest.findUnique({ where: { id: requestId } });
+      await audit(scope, { entityType: "ManagerSignupRequest", entityId: requestId, action: "update", summary: "매니저 가입 신청 반려", after: { status: "REJECTED" } });
       return NextResponse.json({ success: true, item: toDetail(updated!, null) });
     }
 
@@ -220,6 +222,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       throw e;
     }
 
+    // 승인 = 위탁기관·매니저 로그인 계정 발급 → 누가 승인했는지 증빙(2026-10-08 감사 P2). 계정 식별자·해시는 기록하지 않는다.
+    await audit(scope, { entityType: "ManagerSignupRequest", entityId: requestId, action: "update", summary: "매니저 가입 신청 승인(위탁기관·매니저 계정 발급)", after: { status: "APPROVED", agencyId: String(result.agencyId), managerId: String(result.managerId) } });
     return NextResponse.json({ success: true, item: toDetail(result, null) });
   } catch (e: any) {
     if (e instanceof Response) return e;

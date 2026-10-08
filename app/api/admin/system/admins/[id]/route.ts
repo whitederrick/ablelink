@@ -6,13 +6,14 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminSession, parseBigInt } from "@/lib/adminScope";
 import { generateTempPassword } from "@/lib/tempPassword";
 import bcrypt from "bcryptjs";
+import { audit } from "@/lib/audit";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdminSession(req);
+    const scope = await requireAdminSession(req);
 
     const { id } = await params;
     const adminId = parseBigInt(id);
@@ -30,11 +31,14 @@ export async function PATCH(
       const passwordHash = await bcrypt.hash(tempPassword, 12);
       // #5(17차): 비번 초기화 시 sessionVersion +1 → 발급된 모든 기존 JWT 무효화(탈취 세션 회수). 워커와 동일.
       await prisma.admin.update({ where: { id: admin.id }, data: { passwordHash, sessionVersion: { increment: 1 } } });
+      // 운영자 계정 비밀번호 초기화 증빙(2026-10-08 감사 P2). 임시 비밀번호 값은 기록하지 않는다.
+      await audit(scope, { entityType: "Admin", entityId: admin.id, action: "update", summary: `운영자 계정 비밀번호 초기화(${admin.loginId ?? admin.id}) · 기존 세션 무효화` });
       return NextResponse.json({ success: true, message: "임시 비밀번호가 발급되었습니다.", tempPassword });
     }
 
     if (action === "toggle-active") {
       await prisma.admin.update({ where: { id: admin.id }, data: { isActive: !admin.isActive } });
+      await audit(scope, { entityType: "Admin", entityId: admin.id, action: "update", summary: `운영자 계정 ${admin.isActive ? "비활성화" : "활성화"}(${admin.loginId ?? admin.id})`, before: { isActive: admin.isActive }, after: { isActive: !admin.isActive } });
       return NextResponse.json({ success: true, message: admin.isActive ? "계정이 비활성화되었습니다." : "계정이 활성화되었습니다." });
     }
 
@@ -56,6 +60,7 @@ export async function PATCH(
         }
       }
       await prisma.admin.update({ where: { id: admin.id }, data: updateData });
+      await audit(scope, { entityType: "Admin", entityId: admin.id, action: "update", summary: `운영자 계정 정보 수정(${admin.loginId ?? admin.id})`, before: admin, after: updateData });
       return NextResponse.json({ success: true });
     }
 
