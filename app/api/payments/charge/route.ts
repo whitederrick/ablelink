@@ -16,6 +16,7 @@ import { PAID_AGENCY_PLANS, isPaidAgencyPlan } from "@/lib/plans";
 import { PLAN_LIMITS } from "@/lib/planGuard";
 import { refundSubscriptionPayment } from "@/lib/payments/tossRefund";
 import { decideChargeOutcome, isConfigErrorCode, isTwinCronAdvance, type ChargeOutcome } from "@/lib/payments/chargeDecision";
+import { acquireBillingLock, releaseBillingLock } from "@/lib/payments/billingLock";
 import { timingSafeEqual } from "crypto";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
@@ -74,9 +75,32 @@ export async function POST(request: NextRequest) {
   const results = [];
 
   for (const agency of agencies) {
+   let locked = false; // 기관 결제 변경 락 보유 시 finally에서 해제
    // 기관 단위 예외 격리 — 계산·DB 등 예상 못한 예외가 직렬 크론 루프 전체를 죽여 이후 기관 청구를
    //  굶기지 않도록(fetch 예외는 내부에서 이미 처리). 예외 기관만 건너뛰고 다음으로.
    try {
+    // 해지·구독 변경과 같은 락을 공유 — 해지의 환불~강등 사이에 크론이 새 주기를 청구하면 그 결제가 환불 없이
+    //  supersede 되던 경합(2026-10-08 감사 P2). 락이 잡혀 있으면 이번 회차는 건너뛴다(결제일 미변경 = 다음 cron 재시도).
+    if (!(await acquireBillingLock(agency.id))) {
+      results.push({ agencyId: agency.id.toString(), status: "skipped_busy" });
+      console.warn(`[charge] 결제 변경 처리 중이라 건너뜀(다음 회차 재시도): ${agency.name}`);
+      continue;
+    }
+    locked = true;
+    // 락 획득 전에 읽은 스냅샷은 낡았을 수 있다(그 사이 해지·플랜변경 완료). 최신 상태가 달라졌으면 청구하지 않는다.
+    const fresh = await prisma.agency.findUnique({
+      where: { id: agency.id },
+      select: { planType: true, tossBillingKey: true, nextBillingAt: true },
+    });
+    if (
+      !fresh || !isPaidAgencyPlan(fresh.planType) || !fresh.tossBillingKey || fresh.tossBillingKey !== agency.tossBillingKey
+      || fresh.planType !== agency.planType
+      || fresh.nextBillingAt?.getTime() !== agency.nextBillingAt?.getTime()
+    ) {
+      results.push({ agencyId: agency.id.toString(), status: "skipped_stale" });
+      console.warn(`[charge] 기관 상태가 바뀌어 건너뜀(해지·변경 반영): ${agency.name}`);
+      continue;
+    }
     // 운영자 딜(협상가·주기) 반영. 표준 월정액은 customAmount 없을 때만.
     const { amount, cycle } = effectiveBilling(agency);
     if (!amount) continue;
@@ -222,6 +246,8 @@ export async function POST(request: NextRequest) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[charge] 기관 처리 예외(건너뜀): ${agency.name}`, msg);
       results.push({ agencyId: agency.id.toString(), status: "error", reason: msg });
+   } finally {
+      if (locked) await releaseBillingLock(agency.id);
    }
   }
 
