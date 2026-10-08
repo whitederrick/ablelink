@@ -18,6 +18,7 @@ import { imageToDataUri } from "@/lib/signatureImage";
 import { logAccess } from "@/lib/accessLog";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 import { isValidYmd } from "@/lib/time";
+import { checkDocPeriod } from "@/lib/docs/periodLimit";
 
 
 const DOC_LABELS: Record<string, string> = {
@@ -49,6 +50,8 @@ export async function POST(request: NextRequest) {
     // 날짜 왕복검증(submit·preview와 통일) — 실존불가 날짜 Invalid Date 500 차단.
     if (!isValidYmd(String(periodStart)) || !isValidYmd(String(periodEnd)))
       return NextResponse.json({ success:false, message:"기간(YYYY-MM-DD)이 올바르지 않습니다." }, { status:400 });
+    const docPeriodErr = checkDocPeriod(String(periodStart), String(periodEnd));
+    if (docPeriodErr) return NextResponse.json({ success: false, message: docPeriodErr }, { status: 400 });
     if (traineeId != null && !/^[0-9]+$/.test(String(traineeId)))
       return NextResponse.json({ success:false, message:"잘못된 훈련생 ID입니다." }, { status:400 });
 

@@ -16,6 +16,7 @@ import { imageToDataUri } from "@/lib/signatureImage";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { logAccess } from "@/lib/accessLog";
 import { isValidYmd } from "@/lib/time";
+import { checkDocPeriod } from "@/lib/docs/periodLimit";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,8 @@ export async function GET(request: NextRequest) {
     if (!isValidYmd(periodStart) || !isValidYmd(periodEnd)) {
       return NextResponse.json({ success: false, message: "기간 형식 오류 (YYYY-MM-DD)" }, { status: 400 });
     }
+    const docPeriodErr = checkDocPeriod(periodStart, periodEnd);
+    if (docPeriodErr) return NextResponse.json({ success: false, message: docPeriodErr }, { status: 400 });
 
     const workerId = BigInt(workerIdRaw);
 

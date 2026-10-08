@@ -12,7 +12,8 @@ export const runtime = "nodejs";
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
-import { getKstDateString } from "@/lib/time";
+import { getKstDateString, isValidYmd } from "@/lib/time";
+import { checkDocPeriod } from "@/lib/docs/periodLimit";
 
 function formatKST(d: Date): string {
   const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
@@ -37,6 +38,11 @@ export async function GET(request: NextRequest) {
     const def = defaultPeriod();
     const startStr = searchParams.get("periodStart") || def.start;
     const endStr   = searchParams.get("periodEnd")   || def.end;
+    // 형식·실존·기간 길이 검증 — 예전엔 검증이 없어 임의 문자열이 DB 필터로 들어가고 무한 기간도 조회됐다(생성/미리보기 라우트와 동일 기준).
+    if (!isValidYmd(startStr) || !isValidYmd(endStr))
+      return NextResponse.json({ success: false, message: "기간(YYYY-MM-DD)이 올바르지 않습니다." }, { status: 400 });
+    const docPeriodErr = checkDocPeriod(startStr, endStr);
+    if (docPeriodErr) return NextResponse.json({ success: false, message: docPeriodErr }, { status: 400 });
 
     const workerId = BigInt(session.workerId);
 

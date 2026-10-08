@@ -13,6 +13,7 @@ import { buildDocPayload, DocPayloadError } from "@/lib/docs/buildDocPayload";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { isValidYmd } from "@/lib/time";
+import { checkDocPeriod } from "@/lib/docs/periodLimit";
 import { audit } from "@/lib/audit";
 
 const MAX_VERSIONS_PER_RUN = 20; // 보존: run당 최근 N개 버전만 유지(과도 누적·PII 적재 방지)
@@ -40,6 +41,8 @@ export async function POST(req: NextRequest) {
 
     if (!isValidYmd(periodStart) || !isValidYmd(periodEnd)) // 왕복검증(가짜 날짜→DocumentRun 경로 Invalid Date 500 차단)
       return NextResponse.json({ success: false, message: "기간(YYYY-MM-DD)이 필요합니다." }, { status: 400 });
+    const docPeriodErr = checkDocPeriod(periodStart, periodEnd);
+    if (docPeriodErr) return NextResponse.json({ success: false, message: docPeriodErr }, { status: 400 });
     if (!Array.isArray(documents) || documents.length === 0)
       return NextResponse.json({ success: false, message: "제출할 문서가 없습니다." }, { status: 400 });
 

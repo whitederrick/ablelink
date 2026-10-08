@@ -14,6 +14,7 @@ import { resolveDocTrainee } from "@/lib/docs/traineeSiteGuard";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { logAccess } from "@/lib/accessLog";
 import { isValidYmd } from "@/lib/time";
+import { checkDocPeriod } from "@/lib/docs/periodLimit";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 
 
@@ -34,6 +35,8 @@ export async function GET(request: NextRequest) {
     const traineeId   = searchParams.get("traineeId");
     // 날짜 왕복검증(submit과 통일) — 실존불가 날짜가 findTraineeAtSiteInPeriod의 Invalid Date로 500나던 것 차단.
     if (!isValidYmd(periodStart) || !isValidYmd(periodEnd)) return NextResponse.json({ success:false, message:"기간(YYYY-MM-DD)이 올바르지 않습니다." }, { status:400 });
+    const docPeriodErr = checkDocPeriod(periodStart, periodEnd);
+    if (docPeriodErr) return NextResponse.json({ success: false, message: docPeriodErr }, { status: 400 });
     const workerIdRaw = searchParams.get("workerId");
     const assignmentIdRaw = searchParams.get("assignmentId");
 

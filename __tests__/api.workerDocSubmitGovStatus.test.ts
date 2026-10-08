@@ -22,24 +22,25 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/app/worker/_lib/session", () => ({ getWorkerSessionFromReq: async () => ({ workerId: "5" }) }));
 vi.mock("@/lib/rateLimit", () => ({ checkRateLimit: async () => ({ allowed: true }) }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
+const buildFn = vi.fn(async () => ({
+  payload: { writtenYMD: "2026-10-08" },
+  meta: { workerName: "홍", assignmentId: BigInt(22), siteId: BigInt(2), traineeId: null, traineeName: null },
+}));
 vi.mock("@/lib/docs/buildDocPayload", () => ({
   DocPayloadError: class extends Error { status = 400; extra = {}; },
-  buildDocPayload: async () => ({
-    payload: { writtenYMD: "2026-10-08" },
-    meta: { workerName: "홍", assignmentId: BigInt(22), siteId: BigInt(2), traineeId: null, traineeName: null },
-  }),
+  buildDocPayload: (...a: unknown[]) => (buildFn as (...x: unknown[]) => unknown)(...a),
 }));
 
 import { POST } from "@/app/api/worker/docs/submit/route";
 
-const submit = () =>
+const submit = (periodStart = "2026-10-01", periodEnd = "2026-10-31") =>
   POST(new Request("http://x/api/worker/docs/submit", {
     method: "POST",
-    body: JSON.stringify({ periodStart: "2026-10-01", periodEnd: "2026-10-31", documents: [{ docType: "ATTENDANCE_SHEET" }] }),
+    body: JSON.stringify({ periodStart, periodEnd, documents: [{ docType: "ATTENDANCE_SHEET" }] }),
   }) as never);
 
 describe("POST /api/worker/docs/submit — 재제출과 공단 제출 상태", () => {
-  beforeEach(() => { runFindFirst.mockReset(); runUpdate.mockReset(); });
+  beforeEach(() => { runFindFirst.mockReset(); runUpdate.mockReset(); buildFn.mockClear(); });
 
   it("공단 제출완료(SUBMITTED) 문서를 재제출하면 재제출 요구(RESUBMIT)로 되돌린다", async () => {
     runFindFirst.mockResolvedValue({ id: BigInt(9), govStatus: "SUBMITTED" });
@@ -62,5 +63,15 @@ describe("POST /api/worker/docs/submit — 재제출과 공단 제출 상태", (
     const data = runUpdate.mock.calls[0][0].data;
     expect(data).not.toHaveProperty("govSubmittedAt");
     expect(data).not.toHaveProperty("govSubmitCount");
+  });
+
+  it("기간 상한: 0001-01-01~9999-12-31 같은 무한 기간은 400이고 payload 생성조차 시작하지 않는다", async () => {
+    const res = await submit("0001-01-01", "9999-12-31");
+    expect(res.status).toBe(400);
+    expect(buildFn).not.toHaveBeenCalled();
+  });
+
+  it("기간 역전(시작>종료)도 400", async () => {
+    expect((await submit("2026-10-31", "2026-10-01")).status).toBe(400);
   });
 });

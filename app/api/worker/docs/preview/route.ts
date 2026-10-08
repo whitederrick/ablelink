@@ -8,6 +8,7 @@ import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
 import { isValidYmd } from "@/lib/time";
+import { checkDocPeriod } from "@/lib/docs/periodLimit";
 import { buildDocFileName, contentDisposition } from "@/lib/pdf/filename";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
 import { buildAttendanceSheetPayload } from "@/lib/docs/attendanceSheetPayload";
@@ -36,6 +37,8 @@ export async function GET(request: NextRequest) {
     if (!docType) return NextResponse.json({ success:false, message:"docType 필요" }, { status:400 });
     // 날짜 왕복검증(submit과 통일) — 실존불가 날짜가 findTraineeAtSiteInPeriod의 Invalid Date로 500나던 것 차단.
     if (!isValidYmd(periodStart) || !isValidYmd(periodEnd)) return NextResponse.json({ success:false, message:"기간(YYYY-MM-DD)이 올바르지 않습니다." }, { status:400 });
+    const docPeriodErr = checkDocPeriod(periodStart, periodEnd);
+    if (docPeriodErr) return NextResponse.json({ success: false, message: docPeriodErr }, { status: 400 });
 
     const workerId = BigInt(session.workerId);
     // 멀티현장: 클라가 선택 배정(assignmentId)을 주면 그 현장으로 미리보기(소유 검증). 없으면 최신 1건 폴백.
