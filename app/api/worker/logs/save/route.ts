@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
       content,
       isCompleted,
       logDate,    // attendanceId 없을 때 날짜 기준 조회/생성용
-      siteId,     // 출근 기록 자동 생성 시 필요
-      assignmentId: assignmentIdFromBody,
+      siteId: siteIdRaw,     // 출근 기록 자동 생성 시 필요
+      assignmentId: assignmentIdFromBodyRaw,
       logId,      // 수정 모드: 있으면 해당 일지를 logDate의 출근기록으로 이동(날짜 이동) 가능
     } = body;
 
@@ -55,7 +55,10 @@ export async function POST(request: NextRequest) {
     const writerId = BigInt(session.workerId);
 
     // 날짜 기준 출근기록 조회/생성 (없으면 현장 배정 기반 생성)
-    async function findOrCreateAttendance(workDate: string): Promise<bigint> {
+    async function findOrCreateAttendance(workDate: string, scope?: { assignmentId: string; siteId: string }): Promise<bigint> {
+      // scope: 수정 모드(logId)에서 일지가 이미 속한 배정·현장 — 쿠키의 '현재 선택 배정'(body)보다 우선한다.
+      const assignmentIdFromBody = scope?.assignmentId ?? assignmentIdFromBodyRaw;
+      const siteId = scope?.siteId ?? siteIdRaw;
       // ★멀티현장: assignmentId가 주어지면 그 배정으로 스코프해 조회한다(@@unique(assignmentId,workDate)).
       //  과거엔 {workerId, workDate}로 아무 현장 기록이나 집어와, 같은 날 다른 현장에 배정된 워커의 일지가
       //  엉뚱한 현장 출근기록에 붙거나 훈련생 가드에 오차단됐다. (소유 검증은 아래 create 경로 + 하단 attRow 검증.)
@@ -97,7 +100,27 @@ export async function POST(request: NextRequest) {
     const workDate = logDate || getKstDateString(); // KST 기준(서버 UTC라 자정~09시 전날로 잡히던 문제 방지)
     try {
       if (logId) {
-        resolvedAttendanceId = await findOrCreateAttendance(workDate);
+        // 2026-10-08 감사 P2: 수정 모드는 일지가 이미 붙은 출근기록·배정을 기준으로 해석한다. 예전엔 항상 쿠키의 활성 배정으로
+        //  재조회해, 같은 날 AM/PM 두 현장을 뛰는 워커가 다른 현장의 임시저장을 열면 엉뚱한 현장에 빈 출근기록이 생기고
+        //  (이후 403) 그 행이 남았다. 소유권 검사도 출근기록 생성 이전으로 당긴다.
+        if (!/^[0-9]+$/.test(String(logId))) throw new Error("VALIDATION:잘못된 일지 ID입니다.");
+        const cur = await prisma.traineeLog.findUnique({
+          where: { id: BigInt(logId) },
+          select: { writerId: true, attendanceId: true, attendance: { select: { workDate: true, assignmentId: true, siteId: true } } },
+        });
+        if (!cur) return NextResponse.json({ success: false, message: "일지를 찾을 수 없습니다." }, { status: 404 });
+        if (cur.writerId !== writerId) return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+        // logDate 누락(직접 API 호출·클라 버그)이면 날짜를 바꾸지 않는다 — 예전엔 조용히 오늘로 옮겨 버렸다.
+        const targetDate = logDate ? workDate : cur.attendance.workDate;
+        if (cur.attendance.workDate === targetDate) {
+          resolvedAttendanceId = cur.attendanceId; // 날짜 불변 → 그 출근기록 그대로
+        } else {
+          // 날짜 이동 → 같은 배정·현장의 새 날짜 출근기록(없으면 생성)
+          resolvedAttendanceId = await findOrCreateAttendance(targetDate, {
+            assignmentId: cur.attendance.assignmentId.toString(),
+            siteId: cur.attendance.siteId.toString(),
+          });
+        }
       } else if (attendanceId) {
         if (!/^[0-9]+$/.test(String(attendanceId))) throw new Error("VALIDATION:잘못된 출근 기록입니다.");
         resolvedAttendanceId = BigInt(attendanceId);
