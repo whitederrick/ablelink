@@ -15,6 +15,7 @@ import { determineEligibility, determineIncomeType, isIllegalBusinessIncome, typ
 import { standardMonthlyIncome } from "@/lib/payroll/pensionBase";
 import { monthlyStandardHours } from "@/lib/payroll/ordinaryHours";
 import { traineeCountOnDate } from "@/lib/traineePlacement";
+import { buildPaidLeaveCredit, sumCredit, hourlyLeavePay, dailyLeavePay, type LeaveUseRow } from "@/lib/payroll/paidLeave";
 import { Decimal } from "@prisma/client/runtime/library";
 import type { PayrollBreakdown } from "@/lib/payroll/breakdown";
 
@@ -114,7 +115,7 @@ export async function computePayrollItems(
   const idKey = (id: bigint) => id.toString();
   const allSiteIds = [...new Set(assignments.map((a) => a.siteId))];
 
-  const [allPayContracts, allAttendances, allPlacements, allEmpLatest, allEmpFirst, allHolidays, allLookbackAtt] = await Promise.all([
+  const [allPayContracts, allAttendances, allPlacements, allEmpLatest, allEmpFirst, allHolidays, allLookbackAtt, allLeaveUse] = await Promise.all([
     // 같은 기관 다시급: 유효한 계약 전부(기관 기본 siteId=null + 현장별 override). 금액만 현장별 적용.
     //  급여월과 '겹치는' 계약(effectiveFrom<=월말 AND (effectiveTo=null OR >=월초)). 최신(effectiveFrom desc) 우선.
     prisma.payContract.findMany({
@@ -182,6 +183,15 @@ export async function computePayrollItems(
         assignment: { select: { siteId: true, workType: true, commuteGuidanceIncluded: true, customWorkStart: true, customWorkEnd: true, attendanceButtonExempt: true, site: { select: { lateThresholdMin: true } } } },
       },
     }),
+    // 연차 사용(USE) 원장 — 승인된 연차일을 출근으로 간주(월급제 일할·주휴 개근)하고 시급·일급제 연차일 임금을 지급한다.
+    //  경계주 주휴 판정을 위해 lookback 시작일부터 로드. 날짜는 원장 관례대로 해당일 UTC 자정.
+    prisma.annualLeaveEntry.findMany({
+      where: {
+        agencyId, workerId: { in: userIds }, kind: "USE",
+        effectiveDate: { gte: new Date(`${lookbackStartISO}T00:00:00.000Z`), lte: new Date(`${periodEnd}T00:00:00.000Z`) },
+      },
+      select: { workerId: true, effectiveDate: true, days: true },
+    }),
   ]);
 
   // 워커별 그룹핑 — 쿼리의 정렬 순서를 보존하므로 기존 per-worker orderBy와 동일한 결과.
@@ -191,6 +201,8 @@ export async function computePayrollItems(
   for (const a of allAttendances) { const k = idKey(a.workerId); (attByW.get(k) ?? (attByW.set(k, []), attByW.get(k)!)).push(a); }
   const lookbackByW = new Map<string, typeof allLookbackAtt>();
   for (const a of allLookbackAtt) { const k = idKey(a.workerId); (lookbackByW.get(k) ?? (lookbackByW.set(k, []), lookbackByW.get(k)!)).push(a); }
+  const leaveByW = new Map<string, LeaveUseRow[]>();
+  for (const l of allLeaveUse) { const k = idKey(l.workerId); (leaveByW.get(k) ?? (leaveByW.set(k, []), leaveByW.get(k)!)).push(l); }
   const holByW = new Map<string, { date: string }[]>();
   for (const h of allHolidays) { const k = idKey(h.assignment.workerId); (holByW.get(k) ?? (holByW.set(k, []), holByW.get(k)!)).push({ date: h.date }); }
   // desc/asc 정렬 → 워커별 '첫 행'이 각각 최신/최초(기존 findFirst와 동치).
@@ -210,10 +222,11 @@ export async function computePayrollItems(
       firstContract: empFirstByW.get(idKey(workerId)) ?? null,
       customHolidays: holByW.get(idKey(workerId)) ?? [],
       lookbackAtt: lookbackByW.get(idKey(workerId)) ?? [],
+      leaveRows: leaveByW.get(idKey(workerId)) ?? [],
     };
   });
 
-  for (const { workerId, payContracts, attendances, placements, empContract, firstContract, customHolidays, lookbackAtt } of userDataList) {
+  for (const { workerId, payContracts, attendances, placements, empContract, firstContract, customHolidays, lookbackAtt, leaveRows } of userDataList) {
     // 기관 기본 계약(siteId=null) = 급여유형·소득유형·4대보험·기본금액의 기준.
     //  (findMany는 effectiveFrom desc 정렬 → 각 그룹의 최신이 앞. 최신 기본계약 우선.)
     //  ★기본계약 없이 현장 override만 있으면(고아) '급여 계약 없음'으로 처리한다 —
@@ -293,6 +306,11 @@ export async function computePayrollItems(
       if (monthHolidaySet.has(`${yearMonth}-${String(d).padStart(2, "0")}`)) continue;
       scheduledWorkdaysInMonth++;
     }
+    // 연차 사용일 인정(소정근로일에 걸친 USE만, 하루 1.0 상한). 기록이 없으면 전부 빈 Map → 아래 분기 전부 비활성(무회귀).
+    const leaveHolidaySet = new Set<string>([...monthHolidaySet, ...Object.keys(getKrHolidays(prevY, prevM))]);
+    const { credit: leaveCreditAll, ignored: leaveIgnoredAll } = buildPaidLeaveCredit({ rows: leaveRows, workingWeekdays, holidaySet: leaveHolidaySet });
+    const monthLeaveCredit = new Map([...leaveCreditAll].filter(([d]) => d.startsWith(`${yearMonth}-`)));
+    const monthLeaveIgnoredDays = sumCredit(new Map([...leaveIgnoredAll].filter(([d]) => d.startsWith(`${yearMonth}-`))));
     // 연장근로 = 일반 배정은 퇴근시각(actualEndTime) 자동 산정(전일은 저녁식사 1h 무급 제외),
     //            출퇴근버튼 면제 배정은 일지 수동입력(extTime). 분 단위.
     const overtimeMinutes = confirmedAtt.reduce(
@@ -324,6 +342,8 @@ export async function computePayrollItems(
         hasAttendance: workedDays > 0,
         freelancerOverride: contract?.incomeType === "BUSINESS" && !empContract,
       });
+      // 연차 급여 반영은 근로소득(EMPLOYMENT)에만. 사업소득자에겐 연차 개념이 없다.
+      const leaveOn = gateIncomeType === "EMPLOYMENT" && leaveCreditAll.size > 0;
 
       let ordinaryWage = 0;
       if (contract.payType === "HOURLY") {
@@ -378,6 +398,8 @@ export async function computePayrollItems(
           if (monthHolidaySet.has(a.workDate)) continue;
           proRateDaySet.add(a.workDate);
         }
+        // 승인된 연차일은 출근한 것으로 센다(유급) — 연차 쓴 날이 결근 공제로 감액되던 문제.
+        if (leaveOn) for (const d of monthLeaveCredit.keys()) proRateDaySet.add(d);
         // 방어(18차): 소정요일 출근이 0인데 실제 출근은 있는 경우(MONTHLY인데 근로계약 미설정→workingWeekdays가
         //  월~금 기본 폴백이거나, 계약 소정요일이 실제 근무요일과 어긋난 오설정)에는 17차 이전처럼 달력 출근일
         //  (workedDays)로 폴백한다. 소정요일 오설정 때문에 개근자가 0원/과소 처리되는 파국을 막는다(계약 있으면 무영향).
@@ -392,11 +414,38 @@ export async function computePayrollItems(
         const weeklySojeHours = contractDailySojeMin != null ? (contractDailySojeMin / 60) * wpw : 40;
         const stdHours = monthlyStandardHours(weeklySojeHours);
         ordinaryWage = stdHours > 0 ? Math.round(rate / stdHours) : Math.round(rate / 209);
+        const leaveNote = leaveOn && monthLeaveCredit.size > 0 ? `, 연차 ${sumCredit(monthLeaveCredit)}일 포함` : "";
         calcMethods["기본급"] = prorate
-          ? `월 ${rate.toLocaleString()}원 × ${proRateDays}/${schedDays}일 (일할)`
+          ? `월 ${rate.toLocaleString()}원 × ${proRateDays}/${schedDays}일 (일할${leaveNote})`
           : `월 ${rate.toLocaleString()}원`;
         breakdown = { payType: "MONTHLY", monthlyRate: rate, scheduledWorkdays: schedDays, workedDays, prorateWorkdays: proRateDays, prorated: prorate, workedMinutes, pendingDays };
+        if (leaveOn && monthLeaveCredit.size > 0) breakdown.paidLeaveDays = sumCredit(monthLeaveCredit);
       }
+
+      // 시급·일급제 연차일 임금(유급연차 라인). 월급제는 위 일할에 이미 포함. 기록 없으면 이 블록 전체 비활성.
+      if (leaveOn && contract.payType !== "MONTHLY" && monthLeaveCredit.size > 0) {
+        const leaveDaysTotal = sumCredit(monthLeaveCredit);
+        let leavePay = 0, leaveHours = 0, method = "";
+        if (contract.payType === "HOURLY") {
+          if (contractDailySojeMin != null && ordinaryWage > 0) {
+            ({ hours: leaveHours, pay: leavePay } = hourlyLeavePay({ credit: monthLeaveCredit, dailySojeMin: contractDailySojeMin, wage: ordinaryWage }));
+            method = `연차 ${leaveDaysTotal}일 × 1일 소정 ${+(contractDailySojeMin / 60).toFixed(2)}h × ${ordinaryWage.toLocaleString()}원`;
+          } else {
+            breakdown.paidLeaveNote = "계약 소정근로시간이 없어 연차일 임금을 자동 계산하지 못했습니다 — 유급연차 금액을 직접 입력하세요.";
+          }
+        } else {
+          const r = dailyLeavePay({ credit: monthLeaveCredit, workedDates: new Set(confirmedAtt.map((a) => a.workDate)), dailyRate: baseRate });
+          leavePay = r.pay;
+          leaveHours = contractDailySojeMin != null ? (r.days * contractDailySojeMin) / 60 : 0;
+          method = `연차 ${r.days}일 × ${baseRate.toLocaleString()}원 (출근일은 일급에 포함)`;
+        }
+        grossPay += leavePay;
+        breakdown.paidLeaveDays = leaveDaysTotal;
+        breakdown.paidLeavePay = leavePay;
+        breakdown.paidLeaveHours = +leaveHours.toFixed(2);
+        if (method) calcMethods["유급연차"] = method;
+      }
+      if (gateIncomeType === "EMPLOYMENT" && monthLeaveIgnoredDays > 0) breakdown.paidLeaveIgnoredDays = monthLeaveIgnoredDays;
 
       if (gateIncomeType === "EMPLOYMENT" && overtimeHours > 0 && ordinaryWage > 0) {
         const overtimePay = Math.round(overtimeHours * ordinaryWage * 1.5);
@@ -505,6 +554,12 @@ export async function computePayrollItems(
           const fallback = Math.max(0, span - unpaidBreakMin(a.assignment?.workType, span));
           return { dateISO: a.workDate, scheduledMinutes: contractDailySojeMin ?? fallback };
         });
+        // 연차 사용일은 출근한 날로 센다 — 연차 하루가 그 주 개근을 깨뜨려 주휴수당이 탈락하던 문제.
+        //  이미 출근 행이 있는 날은 중복 추가 안 함. 소정시간 미상이면 0분(개근 판정에만 쓰이고 평균 소정시간은 안 흔든다).
+        if (leaveOn) {
+          const have = new Set(days.map((d) => d.dateISO));
+          for (const d of leaveCreditAll.keys()) if (!have.has(d)) days.push({ dateISO: d, scheduledMinutes: contractDailySojeMin ?? 0 });
+        }
         // 경계주 소정근로일 판정용 공휴일 = 당월+커스텀(monthHolidaySet, lookback 커스텀 포함) + 전월 법정공휴일.
         const whHolidaySet = new Set<string>([...monthHolidaySet, ...Object.keys(getKrHolidays(prevY, prevM))]);
         const wh = computeWeeklyHoliday({
@@ -533,7 +588,9 @@ export async function computePayrollItems(
     const owage = Number(bd.ordinaryWage ?? 0);
     const whPay = Number(bd.weeklyHolidayPay ?? 0);
     const whHours = owage > 0 ? +(whPay / owage).toFixed(1) : 0;
-    const basePay = Math.round(grossPay - Number(bd.overtimePay ?? 0) - Number(bd.nightPay ?? 0) - Number(bd.holidayPay ?? 0) - Number(bd.holidayOtExtraPay ?? 0) - whPay);
+    const leavePayLine = Number(bd.paidLeavePay ?? 0);
+    const leaveHoursLine = Number(bd.paidLeaveHours ?? 0);
+    const basePay = Math.round(grossPay - Number(bd.overtimePay ?? 0) - Number(bd.nightPay ?? 0) - Number(bd.holidayPay ?? 0) - Number(bd.holidayOtExtraPay ?? 0) - whPay - leavePayLine);
     const payLines: { key: string; name: string; hours: number; amount: number; method?: string }[] = [];
     if (bd.payType === "HOURLY") {
       const rate1 = Number(contract?.baseAmount ?? bd.hourlyRate ?? 0);
@@ -560,9 +617,11 @@ export async function computePayrollItems(
     }
     payLines.push({ key: "weeklyHoliday", name: "주휴수당", hours: whHours, amount: whPay, method: calcMethods["주휴수당"] ?? "" });
     payLines.push({ key: "paidHoliday", name: "유급휴일", hours: 0, amount: 0 });
-    payLines.push({ key: "paidLeave", name: "유급연차", hours: 0, amount: 0 });
+    payLines.push(leavePayLine > 0
+      ? { key: "paidLeave", name: "유급연차", hours: +leaveHoursLine.toFixed(1), amount: leavePayLine, method: calcMethods["유급연차"] ?? "" }
+      : { key: "paidLeave", name: "유급연차", hours: 0, amount: 0 });
     payLines.push({ key: "education", name: "교육수당", hours: 0, amount: 0 });
-    const totalHours = +((bd.payType === "HOURLY" ? paidHours : workedHours) + whHours).toFixed(1);
+    const totalHours = +((bd.payType === "HOURLY" ? paidHours : workedHours) + whHours + leaveHoursLine).toFixed(1);
 
     // 기본사항
     const wa = assignments.find((a) => a.workerId === workerId);

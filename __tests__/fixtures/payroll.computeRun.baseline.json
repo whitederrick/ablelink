@@ -1,0 +1,556 @@
+[
+  {
+    "workerId": "1",
+    "grossPay": "1890952",
+    "totalDeduction": "177825",
+    "netPay": "1713127",
+    "workedDays": 19,
+    "workedMinutes": 10260,
+    "breakdown": {
+      "payType": "MONTHLY",
+      "monthlyRate": 2090000,
+      "scheduledWorkdays": 21,
+      "workedDays": 19,
+      "prorateWorkdays": 19,
+      "prorated": true,
+      "workedMinutes": 10260,
+      "pendingDays": 0,
+      "ordinaryWage": 10000,
+      "calcMethods": {
+        "기본급": "월 2,090,000원 × 19/21일 (일할)"
+      },
+      "pensionBase": 1890952,
+      "pensionBaseClamped": false,
+      "incomeType": "EMPLOYMENT",
+      "deductionBreakdown": {
+        "소득세": 0,
+        "주민세": 0,
+        "국민연금": 85092,
+        "건강보험": 67034,
+        "장기요양보험": 8681,
+        "고용보험": 17018
+      },
+      "payLines": [
+        {
+          "key": "base",
+          "name": "기본급",
+          "hours": 171,
+          "amount": 1890952,
+          "method": "월 2,090,000원 × 19/21일 (일할)"
+        },
+        {
+          "key": "weeklyHoliday",
+          "name": "주휴수당",
+          "hours": 0,
+          "amount": 0,
+          "method": ""
+        },
+        {
+          "key": "paidHoliday",
+          "name": "유급휴일",
+          "hours": 0,
+          "amount": 0
+        },
+        {
+          "key": "paidLeave",
+          "name": "유급연차",
+          "hours": 0,
+          "amount": 0
+        },
+        {
+          "key": "education",
+          "name": "교육수당",
+          "hours": 0,
+          "amount": 0
+        }
+      ],
+      "deductLines": [
+        {
+          "key": "incomeTax",
+          "name": "소득세",
+          "amount": 0
+        },
+        {
+          "key": "localTax",
+          "name": "주민세",
+          "amount": 0
+        },
+        {
+          "key": "pension",
+          "name": "국민연금",
+          "amount": 85092
+        },
+        {
+          "key": "health",
+          "name": "건강보험",
+          "amount": 67034
+        },
+        {
+          "key": "ltc",
+          "name": "장기요양보험",
+          "amount": 8681
+        },
+        {
+          "key": "employment",
+          "name": "고용보험",
+          "amount": 17018
+        }
+      ],
+      "basicInfo": {
+        "job": "직무지도",
+        "placementType": "지원고용 현장훈련",
+        "placementDate": "2026-01-01",
+        "dependents": 1,
+        "childUnder20": 0,
+        "withholdingRate": 100
+      },
+      "totalHours": 171,
+      "insurance": {
+        "incomeType": "EMPLOYMENT",
+        "tier": "REGULAR",
+        "insurances": [
+          "pension",
+          "health",
+          "ltc",
+          "employment",
+          "industrial"
+        ],
+        "workerDeductible": [
+          "pension",
+          "health",
+          "ltc",
+          "employment"
+        ],
+        "needsPensionReview": false,
+        "employerIndustrial": 18910,
+        "rateYear": 2026,
+        "taxYear": 2026,
+        "employmentMonths": 12.2,
+        "monthlyHours": 152,
+        "monthlyDays": 19,
+        "continuousMonths": 11.1
+      }
+    }
+  },
+  {
+    "workerId": "2",
+    "grossPay": "1845520",
+    "totalDeduction": "173552",
+    "netPay": "1671968",
+    "workedDays": 20,
+    "workedMinutes": 10800,
+    "breakdown": {
+      "payType": "HOURLY",
+      "hourlyRate": 10030,
+      "hourlyRate2Plus": null,
+      "oneToOneHours": 160,
+      "oneToManyHours": 0,
+      "used2PlusRate": false,
+      "workedMinutes": 10800,
+      "workedHours": 180,
+      "paidMinutes": 9600,
+      "paidHours": 160,
+      "workedDays": 20,
+      "pendingDays": 0,
+      "weeklyHolidayPay": 240720,
+      "weeklyHolidayDetail": {
+        "eligibleWeeks": 3,
+        "avgWeeklyHours": 40,
+        "meets15h": true
+      },
+      "ordinaryWage": 10030,
+      "calcMethods": {
+        "기본급": "160시간 × 10,030원 (휴게 제외)",
+        "주휴수당": "3주 적격 · 주 소정 40h: (소정÷40×8×10,030원)"
+      },
+      "pensionBase": 1845520,
+      "pensionBaseClamped": false,
+      "incomeType": "EMPLOYMENT",
+      "deductionBreakdown": {
+        "소득세": 0,
+        "주민세": 0,
+        "국민연금": 83048,
+        "건강보험": 65423,
+        "장기요양보험": 8472,
+        "고용보험": 16609
+      },
+      "payLines": [
+        {
+          "key": "support1",
+          "name": "1인지원",
+          "hours": 160,
+          "amount": 1604800,
+          "method": "지원시간 × 10,030원"
+        },
+        {
+          "key": "support2",
+          "name": "2인이상지원",
+          "hours": 0,
+          "amount": 0,
+          "method": "지원시간 × 12,036원"
+        },
+        {
+          "key": "weeklyHoliday",
+          "name": "주휴수당",
+          "hours": 24,
+          "amount": 240720,
+          "method": "3주 적격 · 주 소정 40h: (소정÷40×8×10,030원)"
+        },
+        {
+          "key": "paidHoliday",
+          "name": "유급휴일",
+          "hours": 0,
+          "amount": 0
+        },
+        {
+          "key": "paidLeave",
+          "name": "유급연차",
+          "hours": 0,
+          "amount": 0
+        },
+        {
+          "key": "education",
+          "name": "교육수당",
+          "hours": 0,
+          "amount": 0
+        }
+      ],
+      "deductLines": [
+        {
+          "key": "incomeTax",
+          "name": "소득세",
+          "amount": 0
+        },
+        {
+          "key": "localTax",
+          "name": "주민세",
+          "amount": 0
+        },
+        {
+          "key": "pension",
+          "name": "국민연금",
+          "amount": 83048
+        },
+        {
+          "key": "health",
+          "name": "건강보험",
+          "amount": 65423
+        },
+        {
+          "key": "ltc",
+          "name": "장기요양보험",
+          "amount": 8472
+        },
+        {
+          "key": "employment",
+          "name": "고용보험",
+          "amount": 16609
+        }
+      ],
+      "basicInfo": {
+        "job": "직무지도",
+        "placementType": "지원고용 현장훈련",
+        "placementDate": "2026-01-01",
+        "dependents": 1,
+        "childUnder20": 0,
+        "withholdingRate": 100
+      },
+      "totalHours": 184,
+      "insurance": {
+        "incomeType": "EMPLOYMENT",
+        "tier": "REGULAR",
+        "insurances": [
+          "pension",
+          "health",
+          "ltc",
+          "employment",
+          "industrial"
+        ],
+        "workerDeductible": [
+          "pension",
+          "health",
+          "ltc",
+          "employment"
+        ],
+        "needsPensionReview": false,
+        "employerIndustrial": 18455,
+        "rateYear": 2026,
+        "taxYear": 2026,
+        "employmentMonths": 12.2,
+        "monthlyHours": 160,
+        "monthlyDays": 20,
+        "continuousMonths": 11.1
+      }
+    }
+  },
+  {
+    "workerId": "3",
+    "grossPay": "1840000",
+    "totalDeduction": "173035",
+    "netPay": "1666965",
+    "workedDays": 20,
+    "workedMinutes": 10800,
+    "breakdown": {
+      "payType": "DAILY",
+      "dailyRate": 80000,
+      "workedDays": 20,
+      "workedMinutes": 10800,
+      "pendingDays": 0,
+      "weeklyHolidayPay": 240000,
+      "weeklyHolidayDetail": {
+        "eligibleWeeks": 3,
+        "avgWeeklyHours": 40,
+        "meets15h": true
+      },
+      "ordinaryWage": 10000,
+      "calcMethods": {
+        "기본급": "20일 × 80,000원",
+        "주휴수당": "3주 적격 · 주 소정 40h: (소정÷40×8×10,000원)"
+      },
+      "pensionBase": 1840000,
+      "pensionBaseClamped": false,
+      "incomeType": "EMPLOYMENT",
+      "deductionBreakdown": {
+        "소득세": 0,
+        "주민세": 0,
+        "국민연금": 82800,
+        "건강보험": 65228,
+        "장기요양보험": 8447,
+        "고용보험": 16560
+      },
+      "payLines": [
+        {
+          "key": "base",
+          "name": "기본급",
+          "hours": 180,
+          "amount": 1600000,
+          "method": "20일 × 80,000원"
+        },
+        {
+          "key": "weeklyHoliday",
+          "name": "주휴수당",
+          "hours": 24,
+          "amount": 240000,
+          "method": "3주 적격 · 주 소정 40h: (소정÷40×8×10,000원)"
+        },
+        {
+          "key": "paidHoliday",
+          "name": "유급휴일",
+          "hours": 0,
+          "amount": 0
+        },
+        {
+          "key": "paidLeave",
+          "name": "유급연차",
+          "hours": 0,
+          "amount": 0
+        },
+        {
+          "key": "education",
+          "name": "교육수당",
+          "hours": 0,
+          "amount": 0
+        }
+      ],
+      "deductLines": [
+        {
+          "key": "incomeTax",
+          "name": "소득세",
+          "amount": 0
+        },
+        {
+          "key": "localTax",
+          "name": "주민세",
+          "amount": 0
+        },
+        {
+          "key": "pension",
+          "name": "국민연금",
+          "amount": 82800
+        },
+        {
+          "key": "health",
+          "name": "건강보험",
+          "amount": 65228
+        },
+        {
+          "key": "ltc",
+          "name": "장기요양보험",
+          "amount": 8447
+        },
+        {
+          "key": "employment",
+          "name": "고용보험",
+          "amount": 16560
+        }
+      ],
+      "basicInfo": {
+        "job": "직무지도",
+        "placementType": "지원고용 현장훈련",
+        "placementDate": "2026-01-01",
+        "dependents": 1,
+        "childUnder20": 0,
+        "withholdingRate": 100
+      },
+      "totalHours": 204,
+      "insurance": {
+        "incomeType": "EMPLOYMENT",
+        "tier": "REGULAR",
+        "insurances": [
+          "pension",
+          "health",
+          "ltc",
+          "employment",
+          "industrial"
+        ],
+        "workerDeductible": [
+          "pension",
+          "health",
+          "ltc",
+          "employment"
+        ],
+        "needsPensionReview": false,
+        "employerIndustrial": 18400,
+        "rateYear": 2026,
+        "taxYear": 2026,
+        "employmentMonths": 12.2,
+        "monthlyHours": 160,
+        "monthlyDays": 20,
+        "continuousMonths": 11.1
+      }
+    }
+  },
+  {
+    "workerId": "4",
+    "grossPay": "1990476",
+    "totalDeduction": "187185",
+    "netPay": "1803291",
+    "workedDays": 20,
+    "workedMinutes": 10800,
+    "breakdown": {
+      "payType": "MONTHLY",
+      "monthlyRate": 2090000,
+      "scheduledWorkdays": 21,
+      "workedDays": 20,
+      "prorateWorkdays": 20,
+      "prorated": true,
+      "workedMinutes": 10800,
+      "pendingDays": 0,
+      "ordinaryWage": 10000,
+      "calcMethods": {
+        "기본급": "월 2,090,000원 × 20/21일 (일할)"
+      },
+      "pensionBase": 1990476,
+      "pensionBaseClamped": false,
+      "incomeType": "EMPLOYMENT",
+      "deductionBreakdown": {
+        "소득세": 0,
+        "주민세": 0,
+        "국민연금": 89571,
+        "건강보험": 70562,
+        "장기요양보험": 9138,
+        "고용보험": 17914
+      },
+      "payLines": [
+        {
+          "key": "base",
+          "name": "기본급",
+          "hours": 180,
+          "amount": 1990476,
+          "method": "월 2,090,000원 × 20/21일 (일할)"
+        },
+        {
+          "key": "weeklyHoliday",
+          "name": "주휴수당",
+          "hours": 0,
+          "amount": 0,
+          "method": ""
+        },
+        {
+          "key": "paidHoliday",
+          "name": "유급휴일",
+          "hours": 0,
+          "amount": 0
+        },
+        {
+          "key": "paidLeave",
+          "name": "유급연차",
+          "hours": 0,
+          "amount": 0
+        },
+        {
+          "key": "education",
+          "name": "교육수당",
+          "hours": 0,
+          "amount": 0
+        }
+      ],
+      "deductLines": [
+        {
+          "key": "incomeTax",
+          "name": "소득세",
+          "amount": 0
+        },
+        {
+          "key": "localTax",
+          "name": "주민세",
+          "amount": 0
+        },
+        {
+          "key": "pension",
+          "name": "국민연금",
+          "amount": 89571
+        },
+        {
+          "key": "health",
+          "name": "건강보험",
+          "amount": 70562
+        },
+        {
+          "key": "ltc",
+          "name": "장기요양보험",
+          "amount": 9138
+        },
+        {
+          "key": "employment",
+          "name": "고용보험",
+          "amount": 17914
+        }
+      ],
+      "basicInfo": {
+        "job": "직무지도",
+        "placementType": "지원고용 현장훈련",
+        "placementDate": "2026-01-01",
+        "dependents": 1,
+        "childUnder20": 0,
+        "withholdingRate": 100
+      },
+      "totalHours": 180,
+      "insurance": {
+        "incomeType": "EMPLOYMENT",
+        "tier": "REGULAR",
+        "insurances": [
+          "pension",
+          "health",
+          "ltc",
+          "employment",
+          "industrial"
+        ],
+        "workerDeductible": [
+          "pension",
+          "health",
+          "ltc",
+          "employment"
+        ],
+        "needsPensionReview": false,
+        "employerIndustrial": 19905,
+        "rateYear": 2026,
+        "taxYear": 2026,
+        "employmentMonths": 12.2,
+        "monthlyHours": 160,
+        "monthlyDays": 20,
+        "continuousMonths": 11.1
+      }
+    }
+  }
+]

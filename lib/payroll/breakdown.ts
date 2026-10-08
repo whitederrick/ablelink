@@ -70,6 +70,12 @@ export interface PayrollBreakdown {
   scheduledWorkdays?: number;
   prorateWorkdays?: number; // 일할 분자(소정근로일 출근 dedup, schedDays 상한)
   prorated?: boolean;
+  // 연차 사용일 급여 반영(2026-10-08) — 연차 기록이 있을 때만 채워진다.
+  paidLeaveDays?: number; // 인정된 연차 일수(소정근로일에 걸친 USE, 하루 1.0 상한)
+  paidLeavePay?: number; // 시급·일급제 연차일 임금(월급제는 일할에 포함돼 0/미설정)
+  paidLeaveHours?: number;
+  paidLeaveNote?: string; // 자동 계산 불가 사유
+  paidLeaveIgnoredDays?: number; // 휴일·비소정일에 등록돼 임금에 반영되지 않은 연차 일수
   // 가산수당
   overtimeHours?: number;
   overtimePay?: number;
