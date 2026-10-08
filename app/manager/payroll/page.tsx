@@ -385,8 +385,16 @@ export default function PayrollPage() {
     if (!confirm(`${selectedRun.yearMonth} 급여를 최종 확정하시겠습니까?\n확정 후에는 수정할 수 없습니다.`)) return;
     setFinalizing(true);
     try {
-      const res = await fetch(`/api/admin/payroll/runs/${selectedRun.id}`, { method: "POST" });
-      const d = await res.json();
+      let res = await fetch(`/api/admin/payroll/runs/${selectedRun.id}`, { method: "POST" });
+      let d = await res.json();
+      // 계산 이후 근태·연차가 바뀐 초안 — 다시 계산할지, 알고도 확정할지 확인(취소하면 확정하지 않음).
+      if (res.status === 409 && d.code === "STALE_DRAFT") {
+        if (!confirm(`${d.message}\n\n'취소'를 누르고 같은 월을 다시 '계산'한 뒤 확정하는 것을 권장합니다.\n그래도 지금 초안 그대로 확정하시겠습니까?`)) return;
+        res = await fetch(`/api/admin/payroll/runs/${selectedRun.id}`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acknowledgeStale: true }),
+        });
+        d = await res.json();
+      }
       if (d.success) {
         setSelectedRun(prev => prev ? { ...prev, status: "FINALIZED", finalizedAt: d.finalizedAt } : null);
         loadRuns();

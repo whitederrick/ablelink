@@ -462,6 +462,9 @@ model DailyAttendance {
   isManagerFinalClosed Boolean    @default(false) @map("is_manager_final_closed")
   managerFinalAt       DateTime?  @map("manager_final_at")
   managerFinalBy       BigInt?    @map("manager_final_by")
+  // 마지막 수정 시각 — 급여 초안 계산 이후 근태가 바뀌었는지 확정 시 판정하는 용도(2026-10-08).
+  //  마이그레이션 시점의 기존 행은 1970-01-01로 채워 기존 초안이 오탐되지 않게 했다(신규 행·수정부터 실제 시각).
+  updatedAt            DateTime   @default(now()) @updatedAt @map("updated_at")
 
   site Site   @relation(fields: [siteId], references: [id])
   user Worker @relation(fields: [workerId], references: [id])

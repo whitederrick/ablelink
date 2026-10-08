@@ -11,6 +11,7 @@ import type { Prisma } from "@prisma/client";
 import { audit } from "@/lib/audit";
 import type { PayrollBreakdown } from "@/lib/payroll/breakdown";
 import { parseBigInt } from "@/lib/adminScope";
+import { countStaleInputs, staleDraftMessage } from "@/lib/payroll/staleDraft";
 
 function itemDto(i: any) {
   return {
@@ -230,6 +231,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ run
     }
     if (run.status === "FINALIZED") {
       return NextResponse.json({ success: false, message: "이미 확정되었습니다." }, { status: 409 });
+    }
+
+    // 계산 이후 입력(근태·연차)이 바뀐 초안은 확정 전에 경고 — 다시 계산하거나, 알고도 확정(acknowledgeStale)하게 한다.
+    //  (확정 후엔 수정할 수 없어 낡은 금액이 그대로 굳는다.) 판정 실패가 확정을 막지는 않는다.
+    const body = await req.json().catch(() => ({}));
+    if (body?.acknowledgeStale !== true) {
+      try {
+        const stale = await countStaleInputs(prisma, { agencyId: run.agencyId, yearMonth: run.yearMonth, since: run.createdAt });
+        if (stale.total > 0) {
+          return NextResponse.json({ success: false, code: "STALE_DRAFT", message: staleDraftMessage(stale), stale }, { status: 409 });
+        }
+      } catch (e) {
+        console.error("[payroll finalize stale check]", e);
+      }
     }
 
     // ★원자적 전이(C6): 더블탭 동시 확정 시 둘 다 DRAFT를 읽고 위 가드를 통과한 뒤 각각 update+알림+감사를
