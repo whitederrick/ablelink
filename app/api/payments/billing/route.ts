@@ -14,6 +14,7 @@ import { outboundAllowed } from "@/lib/outboundGuard";
 import { computeProRataRefund } from "@/lib/payments/refund";
 import { refundSubscriptionPayment } from "@/lib/payments/tossRefund";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { acquireBillingLock, releaseBillingLock, BILLING_BUSY_MESSAGE } from "@/lib/payments/billingLock";
 
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const TOSS_API = "https://api.tosspayments.com/v1";
@@ -23,6 +24,7 @@ function tossAuth() {
 }
 
 export async function POST(request: NextRequest) {
+  let lockedAgencyId: bigint | null = null; // 기관 결제 변경 락 보유 시 finally에서 해제
   try {
     const scope = await requireManagerSession(request);
 
@@ -62,6 +64,13 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // 같은 기관의 구독·플랜변경·해지는 한 번에 하나만 — 동시 요청이 서로 다른 orderId(플랜별)로 이중 결제되던 문제.
+    //  (락 이전의 검증·예산 검사에서 거절된 요청은 락을 잡지 않는다.)
+    if (!(await acquireBillingLock(scope.agencyId))) {
+      return NextResponse.json({ success: false, message: BILLING_BUSY_MESSAGE }, { status: 409 });
+    }
+    lockedAgencyId = scope.agencyId;
 
     // 운영자 딜(주기·협상가) 반영을 위해 위탁기관 조회
     const agencyRow = await prisma.agency.findUnique({
@@ -236,7 +245,9 @@ export async function POST(request: NextRequest) {
     //  이력의 paymentKey는 해지 시 잔여일 일할 부분환불(토스 부분취소)에 사용. ALREADY_PROCESSED 복구 경로는
     //  paymentKey가 응답에 없으므로 기존 값을 보존(null이면 환불 시 orders/{orderId} 조회 폴백).
     const paymentKey: string | null = chargeData.paymentKey ?? null;
-    await prisma.$transaction([
+    // ★2차 방어선(CAS): 요청 시작 시점에 읽은 billingEpoch와 같을 때만 활성화한다. 락이 못 막은 경합(Redis 장애 폴백 등)이나
+    //  처리 중 해지·다른 구독이 끼어들어 epoch가 바뀌었다면 count=0 → 방금 결제를 자동 전액 환불하고 중단한다.
+    const [paymentRow, activated] = await prisma.$transaction([
       prisma.subscriptionPayment.upsert({
         where: { orderId },
         create: {
@@ -251,8 +262,8 @@ export async function POST(request: NextRequest) {
         },
         update: paymentKey ? { paymentKey } : {},
       }),
-      prisma.agency.update({
-        where: { id: BigInt(agencyId) },
+      prisma.agency.updateMany({
+        where: { id: BigInt(agencyId), billingEpoch: agencyRow.billingEpoch },
         data: {
           planType: effectivePlanType,
           tossBillingKey: billingKey,
@@ -273,6 +284,27 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
+    if (activated.count === 0) {
+      const refund = await refundSubscriptionPayment({
+        paymentId: paymentRow.id,
+        amount: paymentRow.amount,
+        reason: "구독 처리 경합 — 자동 전액 취소",
+        kind: "CONFLICT",
+      });
+      if (refund.ok) {
+        console.warn(`[payments/billing] 활성화 경합 감지 — 자동 전액 취소: agencyId=${agencyId} orderId=${orderId} ${paymentRow.amount}원`);
+        return NextResponse.json(
+          { success: false, message: "다른 구독 변경과 겹쳐 결제가 취소되었습니다(전액 환불). 현재 구독 상태를 확인한 뒤 다시 시도해 주세요." },
+          { status: 409 },
+        );
+      }
+      console.error(`[payments/billing] ★활성화 경합 결제 자동취소 실패 — 수동 환불 필요: agencyId=${agencyId} orderId=${orderId}`, refund.reason);
+      return NextResponse.json(
+        { success: false, message: "다른 구독 변경과 겹쳐 결제가 중복되었습니다. 환불 처리 중 문제가 발생해 고객센터에 문의해 주세요." },
+        { status: 500 },
+      );
+    }
+
     console.log(`[payments/billing] 구독 완료: agencyId=${agencyId}, plan=${effectivePlanType}, amount=${amount}`);
 
     // paymentKey는 응답에 싣지 않는다(P3 — 클라이언트 소비처 없음·표면적 축소, DB 이력에 저장됨).
@@ -289,5 +321,7 @@ export async function POST(request: NextRequest) {
       { success: false, message: "서버 오류가 발생했습니다." },
       { status: 500 }
     );
+  } finally {
+    if (lockedAgencyId != null) await releaseBillingLock(lockedAgencyId);
   }
 }

@@ -16,11 +16,13 @@ import { refundSubscriptionPayment } from "@/lib/payments/tossRefund";
 import { hasPaidUsageSince } from "@/lib/payments/paidUsage";
 import { outboundAllowed } from "@/lib/outboundGuard";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { acquireBillingLock, releaseBillingLock, BILLING_BUSY_MESSAGE } from "@/lib/payments/billingLock";
 import { audit } from "@/lib/audit";
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
+  let lockedAgencyId: bigint | null = null; // 기관 결제 변경 락 보유 시 finally에서 해제
   try {
     // 구독 해지는 본인 위탁기관 매니저만. (이전: 워커 세션 + 스코프 미검증 → 임의 위탁기관 해지 가능 버그)
     const scope = await requireManagerSession(request);
@@ -31,6 +33,12 @@ export async function POST(request: NextRequest) {
     if (!rl.allowed) {
       return NextResponse.json({ success: false, message: "요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
     }
+
+    // 구독·플랜변경과 동시 실행되면 환불 대상이 어긋난다 — 같은 기관의 결제 상태 변경은 한 번에 하나만.
+    if (!(await acquireBillingLock(scope.agencyId))) {
+      return NextResponse.json({ success: false, message: BILLING_BUSY_MESSAGE }, { status: 409 });
+    }
+    lockedAgencyId = scope.agencyId;
 
     // 유료 플랜 게이트 — FREE/TRIAL 기관의 해지 호출은 무의미(잔존 결제행 반복 환불 차단, 2026-07-21 감사 P1).
     const agency = await prisma.agency.findUnique({
@@ -181,5 +189,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof Response) return error;
     console.error("[payments/cancel]", error);
     return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
+  } finally {
+    if (lockedAgencyId != null) await releaseBillingLock(lockedAgencyId);
   }
 }
