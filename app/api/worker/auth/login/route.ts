@@ -8,7 +8,7 @@ import { getRateLimitIp } from "@/lib/clientIp";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
-import { checkRateLimit, resetRateLimit } from "@/lib/rateLimit";
+import { checkRateLimit, resetRateLimit, accountRateLimitKey, ACCOUNT_LOGIN_POLICY } from "@/lib/rateLimit";
 import { signWorkerToken, WORKER_COOKIE, workerCookieOptions } from "@/app/worker/_lib/session";
 
 export async function POST(request: Request) {
@@ -38,8 +38,22 @@ export async function POST(request: Request) {
         { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
       );
     }
-    // ②IP+계정 조합(기존): 특정 계정 집중 브루트포스 차단(성공 시 리셋).
-    const rateLimitKey = `login:${ip}:${loginId}`;
+    // ②계정 단독 축(2026-10-08 감사 P2): IP+계정 키만 있으면 IP를 바꿀 때마다 시도 예산이 새로 생겨, 알려진 loginId(=전화번호)
+    //  하나를 분산 IP로 무제한 두드릴 수 있었다. DB 조회 '전에' 검사해 존재하지 않는 계정도 동일하게 적용(열거 불가).
+    //  예산은 IP+계정(10회)보다 느슨하게(20회) — 조일수록 남의 계정을 고의로 잠그기 쉽다. 이미 로그인된 기기는
+    //  90일 롤링 쿠키라 잠금의 영향을 받지 않는다(신규 로그인만 대기).
+    const acctKey = accountRateLimitKey("worker-login-acct", loginId);
+    const acctRl = await checkRateLimit(acctKey, ACCOUNT_LOGIN_POLICY);
+    if (!acctRl.allowed) {
+      const retryAfterSec = Math.ceil((acctRl.retryAfterMs ?? 0) / 1000);
+      return NextResponse.json(
+        { success: false, message: `로그인 시도가 너무 많습니다. ${Math.ceil(retryAfterSec / 60)}분 후 다시 시도해주세요.` },
+        { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
+      );
+    }
+    // ③IP+계정 조합(기존): 특정 IP의 특정 계정 집중 브루트포스 차단(성공 시 리셋).
+    //  키의 loginId는 해시로 — 전화번호 원문이 Redis 키 목록에 남아 유효 계정 사전이 되지 않게 한다.
+    const rateLimitKey = accountRateLimitKey(`login:${ip}`, loginId);
     const rl = await checkRateLimit(rateLimitKey);
 
     if (!rl.allowed) {
@@ -79,8 +93,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // 로그인 성공 → rate limit 초기화
+    // 로그인 성공 → 계정 축·IP+계정 축 초기화. IP 전역 축은 초기화하지 않는다(성공 로그인을 끼워 스프레이를 은폐하는 것 방지).
     await resetRateLimit(rateLimitKey);
+    await resetRateLimit(acctKey);
 
     // 활동(휴면) 상태 판정용 마지막 로그인 시각 갱신
     await prisma.worker.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch((e) => { console.error("[worker/login lastLoginAt]", e); });
