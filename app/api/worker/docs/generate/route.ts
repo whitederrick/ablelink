@@ -20,6 +20,8 @@ import { resolveDocAssignment } from "@/lib/docs/resolveDocAssignment";
 import { findTraineeAtSiteInPeriod } from "@/lib/docs/traineeSiteGuard";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { audit } from "@/lib/audit";
+import { maskEmailForLog } from "@/lib/maskEmail";
 
 // 간단·보수적 이메일 형식 검증(발신 남용·오발송 방지용). RFC 완벽 준수보다 명백한 오입력 차단이 목적.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -292,6 +294,16 @@ export async function POST(request: NextRequest) {
         console.error("[docs/generate] 이메일 발송 실패:", err?.message ?? err);
         emailError = "이메일 발송에 실패했습니다. PDF는 정상 생성되었습니다.";
       }
+    }
+
+    // 이메일 발송은 훈련생(장애인) 개인정보가 담긴 PDF를 외부 주소로 내보내는 행위 — 접속기록(AccessLog)은 정보주체 본인(워커)을
+    //  기록하지 않는 설계라, 워커 행위도 남기는 감사 이벤트로 발송 시도를 기록한다(수신자는 마스킹, 2026-10-08 감사 P2).
+    if (sendEmail && toEmail) {
+      await audit(session, {
+        entityType: "DocumentRun", action: "email-send",
+        summary: `문서 이메일 ${emailSent ? "발송" : "발송 실패"}: ${DOC_LABELS[docType] || docType} ${start}~${end} → ${maskEmailForLog(String(toEmail))}`,
+        payload: { docType, traineeId: traineeId != null ? String(traineeId) : null, periodStart: start, periodEnd: end, to: maskEmailForLog(String(toEmail)), sent: emailSent },
+      });
     }
 
     return NextResponse.json({
