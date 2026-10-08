@@ -32,7 +32,7 @@ export const DOC_SUBMIT_BADGE: Record<DocSubmitKey, { label: string; tone: Badge
   WORKER_DRAFTING:   { label: "직무지도원 작성중",        tone: "slate" },
   WORKER_SUBMITTED:  { label: "직무지도원 제출 완료",      tone: "amber" },
   AGENCY_CONFIRMED:  { label: "위탁기관 담당자 확정 완료", tone: "sky" },
-  AGENCY_SIGNED:     { label: "위탁기관 담당자 서명 완료", tone: "violet" },
+  AGENCY_SIGNED:     { label: "위탁기관 담당자 서명 완료", tone: "teal" },
   CHANGES_REQUESTED: { label: "수정요청",                tone: "rose" },
   GOV_RESUBMIT:      { label: "공단 재제출 요구",         tone: "rose" },
   GOV_SUBMITTED:     { label: "공단 제출 완료",           tone: "emerald" },

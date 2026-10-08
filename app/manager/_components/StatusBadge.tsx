@@ -4,14 +4,14 @@
 
 import { T } from "../_styles";
 
-export type BadgeTone = "amber" | "sky" | "emerald" | "rose" | "violet" | "slate";
+export type BadgeTone = "amber" | "sky" | "emerald" | "rose" | "teal" | "slate";
 
 const TONE_CLS: Record<BadgeTone, string> = {
   amber:   "bg-amber-50 text-amber-600",
   sky:     "bg-sky-50 text-sky-600",
   emerald: "bg-emerald-50 text-emerald-600",
   rose:    "bg-rose-50 text-rose-600",
-  violet:  "bg-violet-50 text-violet-600",
+  teal:    "bg-teal-50 text-teal-600",
   slate:   "bg-slate-100 text-slate-500",
 };
 

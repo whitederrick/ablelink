@@ -4,7 +4,7 @@
 
 import type { ReactNode } from "react";
 
-export type StatTone = "slate" | "sky" | "emerald" | "amber" | "rose" | "violet";
+export type StatTone = "slate" | "sky" | "emerald" | "amber" | "rose" | "teal";
 
 const NUM_CLS: Record<StatTone, string> = {
   slate:   "text-slate-900",
@@ -12,7 +12,7 @@ const NUM_CLS: Record<StatTone, string> = {
   emerald: "text-emerald-600",
   amber:   "text-amber-600",
   rose:    "text-rose-600",
-  violet:  "text-violet-600",
+  teal:    "text-teal-600",
 };
 
 export interface StatItem {
