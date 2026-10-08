@@ -13,6 +13,8 @@ import { signatureDisplayUrl } from "@/lib/signatureImage";
 import { resolveDocAssignment } from "@/lib/docs/resolveDocAssignment";
 import { normalizeDocType } from "@/lib/pdf";
 import { randomUUID } from "crypto";
+import { isValidYmd } from "@/lib/time";
+import { checkDocPeriod } from "@/lib/docs/periodLimit";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -45,6 +47,13 @@ export async function POST(request: NextRequest) {
     if (!docType || !periodStart || !periodEnd) {
       return NextResponse.json({ success: false, message: "문서 정보가 누락되었습니다." }, { status: 400 });
     }
+    // 기간 형식·실존·길이 검증 — 값이 Storage 경로(upsert)와 DB에 그대로 들어가므로 임의 문자열을 받지 않는다(2026-10-08 감사 P3).
+    //  다른 문서 라우트(generate·submit·preview)와 같은 기준.
+    if (!isValidYmd(periodStart) || !isValidYmd(periodEnd)) {
+      return NextResponse.json({ success: false, message: "기간(YYYY-MM-DD)이 올바르지 않습니다." }, { status: 400 });
+    }
+    const periodErr = checkDocPeriod(periodStart, periodEnd);
+    if (periodErr) return NextResponse.json({ success: false, message: periodErr }, { status: 400 });
 
     // ★서명을 '선택 현장(assignmentId)'에 귀속 — 최신 배정을 임의로 고르면 다중현장 워커의 사업체 서명이
     //  엉뚱한 현장 문서에 붙는다(CD1). 문서 생성/미리보기와 동일한 resolveDocAssignment로 통일.
