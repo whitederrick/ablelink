@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminOrManagerSession } from "@/lib/managerScope";
+import { audit } from "@/lib/audit";
 
 function errToStatus(msg: string) {
   if (msg === "UNAUTHORIZED") return 401;
@@ -34,9 +35,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!site) throw new Error("NOT_FOUND");
     if (session.kind === "manager" && site.agencyId !== session.agencyId) throw new Error("FORBIDDEN");
 
+    // 소유 축 = 배정의 agencyId(현장 agencyId 아님 — 현장은 기관 간 공유될 수 있다). 매니저는 자기 기관 배정만 바꾼다.
+    //  예전엔 siteId만으로 갱신해, 같은 현장의 타 기관 배정까지 출퇴근 면제가 바뀌었다(근태·급여 영향). 운영자는 전체.
     const result = await prisma.siteAssignment.updateMany({
-      where: { siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+      where: {
+        siteId,
+        status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] },
+        ...(session.kind === "manager" ? { agencyId: session.agencyId } : {}),
+      },
       data: { attendanceButtonExempt: exempt },
+    });
+    await audit(session, {
+      entityType: "Site", entityId: siteId, action: "update",
+      summary: `현장 출퇴근 관리 면제 일괄 ${exempt ? "적용" : "해제"} (배정 ${result.count}건)`,
+      after: { attendanceButtonExempt: exempt },
     });
 
     return NextResponse.json({ success: true, updated: result.count, exempt });
