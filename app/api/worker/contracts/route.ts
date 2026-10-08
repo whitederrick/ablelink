@@ -8,6 +8,9 @@ import { prisma } from "@/lib/prisma";
 import { sendAlimtalk } from "@/lib/kakao";
 import { getAcknowledgement } from "@/lib/contractTemplates";
 import { imageToDataUri } from "@/lib/signatureImage";
+import { validateDataUriImage } from "@/lib/imageValidation";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { getRateLimitIp } from "@/lib/clientIp";
 import { findTimeConflict, OCCUPYING_STATUSES } from "@/lib/assignmentOverlap";
 import { withSiteAndWorkersAssignmentLock } from "@/lib/assignmentLock";
 import { checkSiteCapacity } from "@/lib/assignmentCapacity";
@@ -24,6 +27,10 @@ const WORK_TYPE_LABELS: Record<string, string> = {
 
 // GET: 토큰으로 계약서 조회 (비로그인 허용 — 카카오 링크 접근)
 export async function GET(req: NextRequest) {
+  // 공개 API(인증 없음, 토큰이 인증 역할) — IP 기준 rate limit. /api/sign/[token] GET과 같은 느슨한 예산(공유 IP 오차단 방지).
+  const rl = await checkRateLimit(`contract-get:${getRateLimitIp(req)}`, { max: 60, windowSec: 15 * 60, blockSec: 5 * 60 });
+  if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
+
   const { searchParams } = new URL(req.url);
   const token = searchParams.get("token");
 
@@ -104,13 +111,18 @@ export async function GET(req: NextRequest) {
       templateKey: (contract as any).templateKey ?? "STANDARD",
       // 프로필에 저장된 전자서명 — 있으면 서명란에 자동 채움(다시 그리기 가능)
       //  서명 버킷 private 대응: base64 data URI로 반환(표시 + 재사용 제출 모두 가능).
-      savedSignatureUrl: (await imageToDataUri(contract.user.signatureUrl)) ?? null,
+      //  서명 가능한 상태(PENDING)일 때만 내려준다 — 취소·서명완료 계약의 링크로 워커의 서명 이미지를 계속 꺼낼 수 없게(2026-10-08 감사 P2).
+      savedSignatureUrl: contract.status === "PENDING" ? ((await imageToDataUri(contract.user.signatureUrl)) ?? null) : null,
     },
   });
 }
 
 // POST: 직무지도원 서명 처리
 export async function POST(req: NextRequest) {
+  // 공개 API — 서명 제출 남용(대용량 이미지 반복 업로드·토큰 대입) 방어. 정상 사용은 계약당 1~2회.
+  const rl = await checkRateLimit(`contract-sign:${getRateLimitIp(req)}`, { max: 20, windowSec: 15 * 60, blockSec: 5 * 60 });
+  if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
+
   const body = await req.json().catch(() => ({})); // 빈/비정상 본문 → 아래 필수값 검사로 400(unhandled 500 방지)
   const { token, signatureUrl, workerFilledSiteName, workerFilledWorkType, workerFilledAddress, heardHandwritingUrl } = body;
 
@@ -119,7 +131,7 @@ export async function POST(req: NextRequest) {
   }
   // 듣고 인지함 손글씨(07 성동) — 있으면 형식·크기 검증
   if (heardHandwritingUrl != null) {
-    if (typeof heardHandwritingUrl !== "string" || !heardHandwritingUrl.startsWith("data:image/")) {
+    if (typeof heardHandwritingUrl !== "string" || !validateDataUriImage(heardHandwritingUrl).valid) {
       return NextResponse.json({ success: false, message: "잘못된 손글씨 형식입니다." }, { status: 400 });
     }
     if (heardHandwritingUrl.length > 2 * 1024 * 1024) {
@@ -129,7 +141,8 @@ export async function POST(req: NextRequest) {
   if (typeof token !== "string" || token.length > 128) {
     return NextResponse.json({ success: false, message: "잘못된 토큰입니다." }, { status: 400 });
   }
-  if (!signatureUrl.startsWith("data:image/")) {
+  // 접두사만이 아니라 내용(매직바이트)까지 확인 — SVG·임의 바이트가 서명으로 저장돼 PDF에서 빠지는 것 방지.
+  if (typeof signatureUrl !== "string" || !validateDataUriImage(signatureUrl).valid) {
     return NextResponse.json({ success: false, message: "잘못된 서명 형식입니다." }, { status: 400 });
   }
   if (signatureUrl.length > 2 * 1024 * 1024) {

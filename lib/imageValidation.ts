@@ -34,3 +34,17 @@ export async function validateSignatureImage(blob: Blob): Promise<{ valid: boole
 
   return { valid: true, mime };
 }
+
+/**
+ * data URI 서명 이미지의 내용 기반 검증(공개 토큰 경로용). 접두사(data:image/)만 보면 SVG·임의 바이트가 '서명'으로 저장돼
+ * PDF에서 조용히 빠지는 '서명완료인데 서명이 안 보이는 계약'이 생긴다(2026-10-08 감사 P2). 앞 몇 바이트만 디코딩해 PNG/JPEG/WebP인지 확인한다.
+ */
+export function validateDataUriImage(uri: unknown): { valid: boolean; mime?: AllowedMime; error?: string } {
+  if (typeof uri !== "string") return { valid: false, error: "이미지 형식이 올바르지 않습니다." };
+  const m = /^data:image\/(png|jpeg|jpg|webp);base64,/i.exec(uri.slice(0, 40));
+  if (!m) return { valid: false, error: "지원하지 않는 이미지 형식입니다. (PNG, JPEG, WebP만 허용)" };
+  const header = new Uint8Array(Buffer.from(uri.slice(m[0].length, m[0].length + 24), "base64"));
+  const mime = detectMime(header);
+  if (!mime) return { valid: false, error: "지원하지 않는 이미지 형식입니다. (PNG, JPEG, WebP만 허용)" };
+  return { valid: true, mime };
+}
