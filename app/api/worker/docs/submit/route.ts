@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
         // DocumentRun upsert(현장×문서종류×기간×훈련생) — nullable traineeId 때문에 findFirst+create.
         let run = await tx.documentRun.findFirst({
           where: { assignmentId: meta.assignmentId, docType: prismaDocType, periodStart: pStart, traineeId: meta.traineeId },
-          select: { id: true },
+          select: { id: true, govStatus: true },
         });
         if (!run) {
           run = await tx.documentRun.create({
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
               openAt: now,
               dueAt: pEnd,
             },
-            select: { id: true },
+            select: { id: true, govStatus: true },
           });
         }
 
@@ -137,6 +137,10 @@ export async function POST(req: NextRequest) {
             // 재제출 = 새 내용 버전 → 이전 매니저·기관 서명 무효화(매니저 재검토 전 구 서명이 공단 발송되는 것 방지).
             managerSignatureUrl: null, managerSignedAt: null, managerSignerName: null,
             agencySignatureUrl: null, agencySignedAt: null,
+            // 공단에 이미 제출한 문서(SUBMITTED)를 워커가 고쳐 다시 제출하면 새 내용은 아직 공단에 안 나갔다 — '제출완료'로 두면
+            //  공단 제출 내역·일지 관리에서 미발송 사실이 가려진다. 재제출 요구(RESUBMIT)로 되돌려 매니저 작업 목록에 다시 올린다.
+            //  (제출시각·발송 횟수는 이력이라 유지. NONE·RESUBMIT은 그대로.)
+            ...(run.govStatus === "SUBMITTED" ? { govStatus: "RESUBMIT" } : {}),
           },
         });
 
