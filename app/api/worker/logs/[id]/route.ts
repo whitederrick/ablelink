@@ -4,6 +4,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { parseBigInt } from "@/lib/adminScope";
+import { checkLogText } from "@/lib/docs/logTextLimit";
 
 export async function GET(
   request: NextRequest,
@@ -83,6 +84,9 @@ export async function PATCH(
     const body = await request.json().catch(() => ({}));
     if (typeof body.content !== "string")
       return NextResponse.json({ success: false, message: "content 필드가 필요합니다." }, { status: 400 });
+    // 단건 저장·일괄 저장과 같은 지도사항 길이 상한 — 이 경로만 빠져 있어 800자 제한(PDF 셀 붕괴 방어)을 우회할 수 있었다.
+    const lenErr = checkLogText("지도사항", body.content);
+    if (lenErr) return NextResponse.json({ success: false, message: lenErr }, { status: 400 });
 
     // 확정된 일지 수정 시 자동 확정 취소 후 저장
     await prisma.traineeLog.update({
