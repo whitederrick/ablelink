@@ -19,6 +19,7 @@ import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { overtimeMinutesForDay, manualExtHoursFromLogs } from "@/lib/attendance/overtime";
 import { isMultiTraineeOnDate } from "@/lib/traineePlacement";
 import { getKrHolidayDates } from "@/lib/krHolidays";
+import { getKstDateString } from "@/lib/time";
 
 function fmtHHMM(d: Date): string {
   const kst = new Date(d.getTime() + 9 * 3600000);
@@ -223,6 +224,8 @@ export async function buildAttendanceSheetPayload(
     companyName,
     periodStartYMD: fmtDot(start),
     periodEndYMD:   fmtDot(end),
+    // 작성일 — 이 payload가 만들어진(제출 스냅샷이 저장되는) KST 날짜. 렌더러가 재렌더 시각 대신 이 값을 찍는다.
+    writtenYMD: getKstDateString(),
     totalDays: entries.length,
     totalHours: baseTotal + extTotal,
     // ★출근부에서 빈 칸이 '쉰 날'인지 '기록이 빠진 날'인지 문서만 봐서는 구분되지 않던 것(2026-08-22 사용자 지적).

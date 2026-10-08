@@ -4,6 +4,7 @@
 import fs from "fs";
 import path from "path";
 import PDFDocument from "pdfkit";
+import { resolveWrittenDate } from "./writtenDate";
 
 const FONT_DIR = path.join(process.cwd(), "public", "fonts");
 
@@ -447,9 +448,10 @@ function attendanceSheet(p: any): Promise<Buffer> {
   if (y + sigBlockH > pageBottom(doc)) { doc.addPage(); y = doc.page.margins.top; }
   y += gapSigLead;
   doc.font("KR").fontSize(11).fillColor("#000").text("위와 같이 근무(출근) 하였음을 확인함", x, y, { width: W, align: "center" }); y += SIG_CONFIRM_GAP;
-  // ★KST 벽시계일. 서버(UTC)에서 raw getFullYear/Month/Date는 KST 00~09시 생성 시 하루 밀림(공단 제출 문서).
-  const today = new Date(Date.now() + 9 * 3600 * 1000);
-  doc.text(`${today.getUTCFullYear()}년     ${today.getUTCMonth() + 1}월     ${today.getUTCDate()}일`, x, y, { width: W, align: "center" }); y += gapSigDate;
+  // 작성일 = payload 생성(제출 스냅샷 저장) 시점의 KST 날짜. 렌더 시각으로 찍으면 재렌더(공단 발송·ZIP·재다운로드)마다
+  //  날짜가 바뀐다. 이전 스냅샷(writtenYMD 없음)만 렌더 시각(KST 벽시계일)으로 폴백 — lib/pdf/writtenDate.
+  const wd = resolveWrittenDate(p.writtenYMD);
+  doc.text(`${wd.y}년     ${wd.m}월     ${wd.d}일`, x, y, { width: W, align: "center" }); y += gapSigDate;
 
   const s = p.signatures ?? {};
   signatures(doc, y, [
