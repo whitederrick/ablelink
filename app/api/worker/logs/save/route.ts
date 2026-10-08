@@ -200,8 +200,17 @@ export async function POST(request: NextRequest) {
         log = await prisma.traineeLog.create({ data: logData });
       } catch (e: any) {
         if (e?.code !== "P2002") throw e;
-        const dup = await prisma.traineeLog.findFirst({ where: { attendanceId: resolvedAttendanceId, traineeId: BigInt(traineeId) }, select: { id: true } });
+        const dup = await prisma.traineeLog.findFirst({ where: { attendanceId: resolvedAttendanceId, traineeId: BigInt(traineeId) }, select: { id: true, isCompleted: true } });
         if (!dup) throw e;
+        // 존재 확인(LOG_EXISTS) 이후 다른 기기·탭이 먼저 만든 일지와 충돌한 경합 — 확인 없이 덮어쓰지 않는다.
+        if (body.overwrite !== true) {
+          return NextResponse.json({
+            success: false,
+            code: "LOG_EXISTS",
+            existingCompleted: dup.isCompleted,
+            message: "이 날짜에 이미 작성된 일지가 있습니다.",
+          }, { status: 409 });
+        }
         log = await prisma.traineeLog.update({ where: { id: dup.id }, data: logData });
       }
     }

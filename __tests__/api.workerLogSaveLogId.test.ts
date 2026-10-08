@@ -9,10 +9,11 @@ const attCreate = vi.fn();
 const logFindFirst = vi.fn();
 const logUpdate = vi.fn();
 const asgFindUnique = vi.fn();
+const logCreate = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    traineeLog: { findUnique: (...a: unknown[]) => logFindUnique(...a), findFirst: (...a: unknown[]) => logFindFirst(...a), update: (...a: unknown[]) => logUpdate(...a) },
+    traineeLog: { findUnique: (...a: unknown[]) => logFindUnique(...a), findFirst: (...a: unknown[]) => logFindFirst(...a), update: (...a: unknown[]) => logUpdate(...a), create: (...a: unknown[]) => logCreate(...a) },
     dailyAttendance: { findFirst: (...a: unknown[]) => attFindFirst(...a), findUnique: (...a: unknown[]) => attFindUnique(...a), create: (...a: unknown[]) => attCreate(...a) },
     siteAssignment: { findUnique: (...a: unknown[]) => asgFindUnique(...a) },
     traineeLogTask: { deleteMany: vi.fn(), create: vi.fn() },
@@ -33,7 +34,7 @@ const post = (body: Record<string, unknown>) =>
 
 describe("POST /api/worker/logs/save — logId 모드", () => {
   beforeEach(() => {
-    [logFindUnique, attFindFirst, attFindUnique, attCreate, logFindFirst, logUpdate, asgFindUnique].forEach((m) => m.mockReset());
+    [logFindUnique, attFindFirst, attFindUnique, attCreate, logFindFirst, logUpdate, asgFindUnique, logCreate].forEach((m) => m.mockReset());
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-08T03:00:00.000Z"));
     logFindUnique.mockImplementation(async (a: { select?: object }) => (a.select ? curLog : { id: BigInt(100), writerId: W, isCompleted: false }));
@@ -81,5 +82,23 @@ describe("POST /api/worker/logs/save — logId 모드", () => {
     const res = await post({ logId: "100", logDate: "2026-10-06" });
     expect(res.status).toBe(404);
     expect(attCreate).not.toHaveBeenCalled();
+  });
+
+  it("신규 저장이 동시 생성과 충돌(P2002)해도 overwrite 확인 없이 덮어쓰지 않고 LOG_EXISTS 409", async () => {
+    logFindFirst.mockResolvedValueOnce(null) // 존재 확인 시점엔 없었음
+      .mockResolvedValueOnce({ id: BigInt(55), isCompleted: false }); // 그 사이 다른 기기가 먼저 생성
+    logCreate.mockRejectedValue(Object.assign(new Error("dup"), { code: "P2002" }));
+    const res = await post({ attendanceId: "900" });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("LOG_EXISTS");
+    expect(logUpdate).not.toHaveBeenCalled();
+  });
+
+  it("같은 경합이라도 사용자가 overwrite를 확인했으면 기존 일지를 갱신", async () => {
+    logFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: BigInt(55), isCompleted: false });
+    logCreate.mockRejectedValue(Object.assign(new Error("dup"), { code: "P2002" }));
+    const res = await post({ attendanceId: "900", overwrite: true });
+    expect(res.status).toBe(200);
+    expect(logUpdate.mock.calls[0][0].where).toEqual({ id: BigInt(55) });
   });
 });
