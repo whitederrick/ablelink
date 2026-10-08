@@ -11,7 +11,7 @@ import { WorkStatus } from "@prisma/client";
 import { audit } from "@/lib/audit";
 import { traineeCountOnDate, type PlacementSpan } from "@/lib/traineePlacement";
 import { getKstDateString, isValidYmd } from "@/lib/time";
-import { checkLogText } from "@/lib/docs/logTextLimit";
+import { checkLogText, checkLogHours, MAX_BATCH_LOGS } from "@/lib/docs/logTextLimit";
 
 interface LogEntry {
   date: string;
@@ -43,8 +43,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "유효하지 않은 날짜가 포함되어 있습니다." }, { status: 400 });
     }
     // ★2026-07-21 감사 P2: 지도사항(content)·평가(evaluation) 길이 상한 — 장문 일지 PDF 셀 붕괴 방어.
+    //  2026-10-08 감사 P3: logs 배열 개수 상한과 지도시간 숫자 검증(NaN·음수·과대값).
+    if (logs.length > MAX_BATCH_LOGS) {
+      return NextResponse.json({ success: false, message: `한 번에 ${MAX_BATCH_LOGS}건까지만 저장할 수 있습니다.` }, { status: 400 });
+    }
     for (const l of logs) {
-      const lenErr = checkLogText("지도사항", l?.content) ?? checkLogText("평가", l?.evaluation);
+      const lenErr = checkLogText("지도사항", l?.content) ?? checkLogText("평가", l?.evaluation)
+        ?? checkLogHours("1:1 지도시간", l?.time1on1) ?? checkLogHours("1:多 지도시간", l?.timeGroup);
       if (lenErr) return NextResponse.json({ success: false, message: lenErr }, { status: 400 });
     }
 
