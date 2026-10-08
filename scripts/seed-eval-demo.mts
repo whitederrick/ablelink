@@ -2,6 +2,8 @@
 // 직무지도원 평가 관리 데모 — 종료 배정 + 평가 3종 상태(미요청/요청/완료) 생성.
 import { prisma } from "../lib/prisma";
 import crypto from "crypto";
+import { assertWritableDb } from "./_dbGuard.mts";
+assertWritableDb("평가 데모 시드(배정 종료·설문 생성)");
 
 const FORM = {
   title: "직무지도원 역량 평가표",

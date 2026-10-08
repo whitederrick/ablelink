@@ -2,6 +2,8 @@
 // 기존 워커 loginId를 전화번호(숫자)로 교정 — 전화번호 로그인 정상화.
 // 비파괴: loginId 필드만 갱신. `npx tsx scripts/fix-worker-loginid.mts`
 import { prisma } from "../lib/prisma";
+import { assertWritableDb } from "./_dbGuard.mts";
+assertWritableDb("워커 로그인ID 일괄 변경");
 
 async function main() {
   const workers = await prisma.worker.findMany({ select: { id: true, loginId: true, phoneNumber: true, workerName: true } });

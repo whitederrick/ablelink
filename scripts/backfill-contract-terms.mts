@@ -1,6 +1,8 @@
 // scripts/backfill-contract-terms.mts
 // 시드 계약에 업무내용·소정근로·임금·근무장소 채우기(데모용). 실제는 계약폼에서 필수 입력됨.
 import { prisma } from "../lib/prisma";
+import { assertWritableDb } from "./_dbGuard.mts";
+assertWritableDb("근로계약 조건 백필");
 
 const TIMES: Record<string, { s: string; e: string }> = {
   FULL_DAY: { s: "09:00", e: "18:00" },
