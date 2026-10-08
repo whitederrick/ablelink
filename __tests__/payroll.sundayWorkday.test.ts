@@ -2,14 +2,13 @@
 //  + 원 단위 절사(floorWon) 부동소수점 오차 회귀.
 import { describe, it, expect, vi } from "vitest";
 import { floorWon } from "@/lib/payroll/floorWon";
-import { installPrismaMock, normalize, AGENCY, YEAR_MONTH } from "./helpers/payrollRunHarness";
+import { normalize, AGENCY, YEAR_MONTH } from "./helpers/payrollRunHarness";
 
 const W = BigInt(9);
 const SITE = BigInt(1);
 
 async function run(contract: { weeklyHoliday: string | null; workingWeekdays: string | null; workDaysPerWeek: number }) {
   vi.resetModules();
-  installPrismaMock();
   // 2026-11-01(일) 하루만 근무하는 시급제 워커 하나로 모의 DB 덮어쓰기.
   vi.doMock("@/lib/prisma", () => ({
     prisma: {
