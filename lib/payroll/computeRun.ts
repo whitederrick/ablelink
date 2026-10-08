@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { isPayrollPending } from "@/lib/attendance/payrollGate";
 import { overtimeMinutesForDay, workEndMinutesForDay, manualExtHoursFromLogs } from "@/lib/attendance/overtime";
 import { computeWeeklyHoliday } from "@/lib/payroll/weeklyHoliday";
+import { floorWon } from "@/lib/payroll/floorWon";
 import { computeNightHolidayMinutes, type NightHolidayRow } from "@/lib/payroll/nightHoliday";
 import { resolveWorkingWeekdaySet } from "@/lib/payroll/weekdays";
 import { getKrHolidays } from "@/lib/krHolidays";
@@ -483,7 +484,9 @@ export async function computePayrollItems(
           const dow = new Date(Date.UTC(yy, mm2 - 1, dd)).getUTCDay();
           // 휴일근로(공휴일·주휴일). 커스텀휴무는 여기 미포함=일반급여(가산 없음).
           const span = Math.max(0, e - s);
-          const rowIsHoliday = holidaySet.has(a.workDate) || dow === whDow;
+          //  주휴일 요일이라도 계약의 근무요일(workingWeekdays)에 들어 있으면 소정근로일이라 휴일근로가 아니다
+          //  (weeklyHoliday가 비어 기본 '일'로 읽히는데 근무요일을 일요일 포함으로 명시한 계약 — 2026-10-08 감사 P2).
+          const rowIsHoliday = holidaySet.has(a.workDate) || (dow === whDow && !workingWeekdays.has(dow));
           nhRows.push({
             workDate: a.workDate, startMin: s, endMin: e, nightEndMin: eNight,
             isHoliday: rowIsHoliday,
@@ -701,13 +704,13 @@ export async function computePayrollItems(
           );
           const pensionBase = pBase ?? grossPay;
           // ★4대보험 근로자부담금은 법정 원단위 절사(버림). Math.round는 소수부≥0.5에서 1원 과다공제(주민세 floor와 정합).
-          pushDed("pension", "국민연금", Math.floor(pensionBase * Number(insuranceRates.nationalPension)));
+          pushDed("pension", "국민연금", floorWon(pensionBase * Number(insuranceRates.nationalPension)));
           breakdown.pensionBase = pensionBase;         // 명세 투명성(적용된 기준소득월액)
           breakdown.pensionBaseClamped = pBase != null; // 등급표 적용 여부(하한/상한)
         }
-        if (ded.has("health"))     pushDed("health", "건강보험", Math.floor(grossPay * Number(insuranceRates.healthInsurance)));
-        if (ded.has("ltc"))        pushDed("ltc", "장기요양보험", Math.floor(grossPay * Number(insuranceRates.longTermCare)));
-        if (ded.has("employment")) pushDed("employment", "고용보험", Math.floor(grossPay * Number(insuranceRates.employmentInsurance)));
+        if (ded.has("health"))     pushDed("health", "건강보험", floorWon(grossPay * Number(insuranceRates.healthInsurance)));
+        if (ded.has("ltc"))        pushDed("ltc", "장기요양보험", floorWon(grossPay * Number(insuranceRates.longTermCare)));
+        if (ded.has("employment")) pushDed("employment", "고용보험", floorWon(grossPay * Number(insuranceRates.employmentInsurance)));
       }
     }
 
