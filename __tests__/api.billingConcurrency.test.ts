@@ -23,6 +23,7 @@ vi.mock("@/lib/outboundGuard", () => ({ outboundAllowed: () => true }));
 
 import { POST } from "@/app/api/payments/billing/route";
 import { acquireBillingLock, releaseBillingLock } from "@/lib/payments/billingLock";
+import { resetRateLimit } from "@/lib/rateLimit";
 
 const req = () =>
   new Request("http://x/api/payments/billing", {
@@ -36,6 +37,7 @@ describe("POST /api/payments/billing — 동시성 방어", () => {
   beforeEach(async () => {
     agencyFind.mockReset(); txFn.mockReset(); refundFn.mockReset(); fetchFn.mockReset(); agencyUpdateMany.mockReset();
     await releaseBillingLock(BigInt(1));
+    await resetRateLimit("payments-billing:1"); // 라우트 자체 분당 예산 초기화
     agencyFind.mockResolvedValue({ planType: "FREE", billingCycle: "MONTHLY", customAmount: null, billingEpoch: 3 });
     fetchFn
       .mockResolvedValueOnce(ok({ billingKey: "bk" })) // 빌링키 발급
@@ -80,13 +82,26 @@ describe("POST /api/payments/billing — 동시성 방어", () => {
     expect((await res.json()).success).toBe(false);
   });
 
-  it("처리 중 예외가 나도 락이 해제된다(다음 요청이 영구히 막히지 않음)", async () => {
+  it("빌링키 발급 호출이 예외로 끝나면 502(상태 변경 없음)이고 락이 해제된다", async () => {
     fetchFn.mockReset();
     fetchFn.mockRejectedValue(new Error("network"));
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await POST(req());
     err.mockRestore();
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(502);
+    expect(txFn).not.toHaveBeenCalled();
+    expect(await acquireBillingLock(BigInt(1))).toBe(true);
+  });
+
+  it("결제 호출이 예외(결과 불확정)면 강등·활성화 없이 502 + 재시도 안내, 락 해제", async () => {
+    fetchFn.mockReset();
+    fetchFn.mockResolvedValueOnce(ok({ billingKey: "bk" })).mockRejectedValueOnce(new Error("timeout"));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await POST(req());
+    err.mockRestore();
+    expect(res.status).toBe(502);
+    expect((await res.json()).message).toContain("다시 시도");
+    expect(txFn).not.toHaveBeenCalled(); // 활성화·강등 트랜잭션 없음
     expect(await acquireBillingLock(BigInt(1))).toBe(true);
   });
 });

@@ -19,6 +19,12 @@ import { acquireBillingLock, releaseBillingLock, BILLING_BUSY_MESSAGE } from "@/
 const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
 const TOSS_API = "https://api.tosspayments.com/v1";
 
+// 토스 응답 본문(성공·에러 공용) — 이 라우트가 읽는 필드만.
+type TossBody = {
+  code?: string; message?: string; billingKey?: string; paymentKey?: string; orderId?: string;
+  customerEmail?: string; customerName?: string;
+};
+
 function tossAuth() {
   return "Basic " + Buffer.from(TOSS_SECRET_KEY + ":").toString("base64");
 }
@@ -105,16 +111,27 @@ export async function POST(request: NextRequest) {
     //   먼저라, 위조 authKey로 호출하면 구플랜 잔여분만 환불되고(토스 부분취소 실행) 발급이 400으로 실패해
     //   '환불 수령 + 구플랜 유지'가 반복 가능했다(무기한 무료 이용). 발급을 먼저 해 authKey를 검증한 뒤에만
     //   환불/과금 상태를 건드린다.
-    const billingRes = await fetch(`${TOSS_API}/billing/authorizations/issue`, {
-      method: "POST",
-      headers: {
-        Authorization: tossAuth(),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ authKey, customerKey }),
-    });
-
-    const billingData = await billingRes.json();
+    let billingRes: Response;
+    let billingData: TossBody;
+    try {
+      billingRes = await fetch(`${TOSS_API}/billing/authorizations/issue`, {
+        method: "POST",
+        // 벤더 스톨이 함수 한도까지 요청·기관 락을 붙잡지 않도록 타임아웃(발급 단계는 아직 과금·환불 전이라 안전하게 중단).
+        signal: AbortSignal.timeout(15000),
+        headers: {
+          Authorization: tossAuth(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ authKey, customerKey }),
+      });
+      billingData = await billingRes.json().catch(() => ({}));
+    } catch (e) {
+      console.error("[payments/billing] 빌링키 발급 호출 예외:", e);
+      return NextResponse.json(
+        { success: false, message: "카드사 응답을 받지 못했습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 502 },
+      );
+    }
 
     if (!billingRes.ok) {
       console.error("[payments/billing] 빌링키 발급 실패:", billingData);
@@ -173,24 +190,42 @@ export async function POST(request: NextRequest) {
     const orderId = buildSubscribeOrderId(agencyId, agencyRow.billingEpoch, effectivePlanType);
 
     // 3. 최초 결제
-    const chargeRes = await fetch(`${TOSS_API}/billing/${billingKey}`, {
-      method: "POST",
-      headers: {
-        Authorization: tossAuth(),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        customerKey,
-        amount,
-        orderId,
-        orderName: `${PLAN_NAMES[effectivePlanType]} ${cycleLabel(cycle)} 구독`,
-        customerEmail: billingData.customerEmail || null,
-        customerName: billingData.customerName || null,
-        taxFreeAmount: 0,
-      }),
-    });
-
-    const chargeData = await chargeRes.json();
+    let chargeRes: Response;
+    let chargeData: TossBody;
+    try {
+      chargeRes = await fetch(`${TOSS_API}/billing/${billingKey}`, {
+        method: "POST",
+        // 타임아웃·네트워크 예외 = 결제가 됐는지 모르는 불확정 상태(정기결제 크론과 같은 취급).
+        signal: AbortSignal.timeout(15000),
+        headers: {
+          Authorization: tossAuth(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          customerKey,
+          amount,
+          orderId,
+          orderName: `${PLAN_NAMES[effectivePlanType]} ${cycleLabel(cycle)} 구독`,
+          customerEmail: billingData.customerEmail || null,
+          customerName: billingData.customerName || null,
+          taxFreeAmount: 0,
+        }),
+      });
+      chargeData = await chargeRes.json().catch(() => ({}));
+    } catch (e) {
+      // 불확정이므로 강등·키삭제·'결제 실패' 단정을 하지 않는다. orderId가 (epoch×플랜) 고정이라 같은 요청의 재시도는
+      //  멱등이다(이미 결제됐으면 ALREADY_PROCESSED로 복구, 아니면 1회만 결제) — 안심하고 재시도하도록 안내한다.
+      console.error(`[payments/billing] 결제 호출 예외(결과 불확정) agencyId=${agencyId} orderId=${orderId} priorPlanChanged=${priorPlanChanged}:`, e);
+      return NextResponse.json(
+        {
+          success: false,
+          message: priorPlanChanged
+            ? "결제 결과를 확인하지 못했습니다. 기존 구독 잔여분은 이미 환불되었습니다. 같은 플랜으로 다시 시도해 주세요(중복 결제되지 않습니다)."
+            : "결제 결과를 확인하지 못했습니다. 같은 플랜으로 다시 시도해 주세요(중복 결제되지 않습니다).",
+        },
+        { status: 502 },
+      );
+    }
 
     // 이미 이 orderId로 결제 완료(직전 성공 후 DB 실패 재시도) = 성공 간주, 아래 DB 보정으로 진행.
     const alreadyPaid = !chargeRes.ok && chargeData?.code === "ALREADY_PROCESSED_PAYMENT";
