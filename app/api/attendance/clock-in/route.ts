@@ -113,6 +113,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "FORBIDDEN" }, { status: 403 });
     }
 
+    // [STEP 1-0] 출퇴근 버튼 면제 배정 가드 — 면제 배정은 출근부가 cron/일괄작성으로 만들어지므로 버튼 출근을 받지 않는다.
+    //   화면이 버튼을 숨기는 것과 별개로 서버에서도 막는다(오래된 화면·캐시로 눌리면 퇴근 미실행 기록이 생김, 2026-10-06 실사례).
+    if (assignment.attendanceButtonExempt) {
+      return NextResponse.json(
+        { success: false, code: "ATTENDANCE_EXEMPT", message: "이 현장은 출퇴근 버튼을 사용하지 않습니다. 캘린더에서 출근부 일괄 작성을 이용해 주세요." },
+        { status: 409 }
+      );
+    }
+
     // [STEP 1-1] 배정 기간 가드 — M8(batch-save/cron/bulk-generate)과 동일 기준의 5번째 생성지점.
     //   ENDED 자동전환이 없어 endDate 경과 후에도 status가 ACTIVE로 남으므로(수동취소 전까지),
     //   오늘이 배정기간 [startDate,endDate] 밖이면 출근기록을 만들지 않는다(기간 밖 출근이 출근부·급여에 새는 것 방지).
