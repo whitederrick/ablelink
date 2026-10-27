@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { prisma } from "@/lib/prisma";
 import { renderPdfToBuffer, normalizeDocType } from "@/lib/pdf";
-import { isValidYmd } from "@/lib/time";
+import { isValidYmd, getKstDateString } from "@/lib/time";
+import { checkRequestedWrittenDate } from "@/lib/pdf/writtenDate";
 import { checkDocPeriod } from "@/lib/docs/periodLimit";
 import { buildDocFileName, contentDisposition } from "@/lib/pdf/filename";
 import { dailyDocTimes } from "@/lib/pdf/dailyDocTimes";
@@ -39,6 +40,10 @@ export async function GET(request: NextRequest) {
     if (!isValidYmd(periodStart) || !isValidYmd(periodEnd)) return NextResponse.json({ success:false, message:"기간(YYYY-MM-DD)이 올바르지 않습니다." }, { status:400 });
     const docPeriodErr = checkDocPeriod(periodStart, periodEnd);
     if (docPeriodErr) return NextResponse.json({ success: false, message: docPeriodErr }, { status: 400 });
+
+    // 출근부 작성일(선택) — 비면 문서를 만든 날. 상한=오늘·기간 종료일 중 늦은 날.
+    const written = checkRequestedWrittenDate(searchParams.get("writtenDate"), periodEnd, getKstDateString());
+    if (written.error) return NextResponse.json({ success: false, message: written.error }, { status: 400 });
 
     const workerId = BigInt(session.workerId);
     // 멀티현장: 클라가 선택 배정(assignmentId)을 주면 그 현장으로 미리보기(소유 검증). 없으면 최신 1건 폴백.
@@ -111,6 +116,7 @@ export async function GET(request: NextRequest) {
         },
         // 미리보기는 사업체 담당자 서명 자동 주입 안 함(제출 스냅샷에서만 표시).
         signatures: { govAgent: sigs.govAgent, companyManager: { name: "", imageUrl: undefined }, worker: sigs.worker },
+        writtenYMD: written.value,
       }));
     } else if (docType === "TRAINING_DAILY_LOG") {
       const trainee = previewTrainee!;

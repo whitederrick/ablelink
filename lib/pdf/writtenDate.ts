@@ -23,3 +23,18 @@ export function resolveWrittenDate(writtenYMD: unknown, now: number = Date.now()
   const k = new Date(now + 9 * 3600 * 1000);
   return { y: k.getUTCFullYear(), m: k.getUTCMonth() + 1, d: k.getUTCDate() };
 }
+
+/**
+ * 사용자가 지정한 출근부 작성일 검증 — 단일 출처(워커·파일럿 라우트가 함께 쓴다).
+ * 비어 있으면 null(= 종전대로 문서를 만든 날). 형식·실존이 아니면 오류 메시지.
+ * 상한 = 오늘과 기간 종료일 중 늦은 날 — 월말 제출분을 월초에 미리 만들 수 있게 하되 그 이후의 날짜는 막는다.
+ */
+export function checkRequestedWrittenDate(
+  raw: unknown, periodEnd: string, todayYmd: string,
+): { value: string | null; error: string | null } {
+  if (raw == null || raw === "") return { value: null, error: null };
+  if (!isYmd(raw)) return { value: null, error: "작성일(YYYY-MM-DD)이 올바르지 않습니다." };
+  const limit = periodEnd > todayYmd ? periodEnd : todayYmd;
+  if (raw > limit) return { value: null, error: `작성일은 ${limit}까지만 지정할 수 있습니다. (기간 종료일 또는 오늘 중 늦은 날)` };
+  return { value: raw, error: null };
+}

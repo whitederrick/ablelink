@@ -40,6 +40,8 @@ export interface BuildDocOptions {
   companyManagerSignToken?: string | null;
   /** 멀티현장: 선택 배정(assignmentId). 주면 그 현장으로 문서 생성(소유 검증). 없으면 최신 1건 폴백. */
   assignmentId?: string | number | bigint | null;
+  /** 출근부 작성일(YYYY-MM-DD, 호출부가 검증). 없으면 문서를 만든 날. 출근부 외 문서는 쓰지 않는다. */
+  writtenYMD?: string | null;
 }
 
 export interface DocPayloadMeta {
@@ -189,6 +191,7 @@ export async function buildDocPayload(opts: BuildDocOptions): Promise<DocPayload
         attendanceButtonExempt: assignment.attendanceButtonExempt ?? null,
       },
       signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
+      writtenYMD: opts.writtenYMD ?? null,
     }));
 
   } else if (docType === "TRAINING_DAILY_LOG") {

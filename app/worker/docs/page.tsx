@@ -81,6 +81,7 @@ function DocsContent() {
   const [siteInfo, setSiteInfo] = useState<SiteInfo | null>(null);
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
+  const [writtenDate, setWrittenDate] = useState(""); // 출근부 작성일(선택) — 비면 문서를 만든 날
   const [signToken, setSignToken] = useState<string | null>(null);
   const [signStatus, setSignStatus] = useState<"none" | "done">("none");
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -201,6 +202,7 @@ function DocsContent() {
           docType: docId,
           periodStart,
           periodEnd,
+          writtenDate: docId === "ATTENDANCE_SHEET" && writtenDate ? writtenDate : undefined,
           traineeId: state.traineeIds[0] || undefined,
           companyManagerSignToken: signToken || undefined,
           assignmentId: activeAssignmentId || undefined,
@@ -247,7 +249,7 @@ function DocsContent() {
       const res = await fetch("/api/worker/docs/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ periodStart, periodEnd, documents, companyManagerSignToken: signToken || undefined, assignmentId: activeAssignmentId || undefined }),
+        body: JSON.stringify({ periodStart, periodEnd, writtenDate: writtenDate || undefined, documents, companyManagerSignToken: signToken || undefined, assignmentId: activeAssignmentId || undefined }),
       });
       const data = await res.json();
       if (data.success) alert(`${data.submitted}건을 위탁기관에 제출했습니다. 담당 매니저에게 알림이 전송되었습니다.`);
@@ -378,6 +380,26 @@ function DocsContent() {
             />
           </div>
         </div>
+
+        {/* 출근부 작성일 — 출근부를 선택했을 때만 */}
+        {docStates["ATTENDANCE_SHEET"]?.checked && (
+          <div className="mx-4 mt-3 rounded-2xl border border-slate-100 bg-white p-4">
+            <p className="mb-1 text-sm font-black text-slate-700">출근부 작성일 <span className="text-xs font-semibold text-slate-400">(선택)</span></p>
+            <p className="mb-3 text-xs font-semibold text-slate-400">출근부 맨 아래 「위와 같이 근무(출근) 하였음을 확인함」 밑의 날짜입니다. 비워 두면 문서를 만든 날짜가 찍힙니다.</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={writtenDate}
+                max={periodEnd > new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10) ? periodEnd : new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10)}
+                onChange={e => setWrittenDate(e.target.value)}
+                className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+              />
+              {writtenDate && (
+                <button type="button" onClick={() => setWrittenDate("")} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-500">지우기</button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 사업체담당자 서명 (출근부·훈련일지 선택 시 표시) */}
         {needsManagerSignChecked && (

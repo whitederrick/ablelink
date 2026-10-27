@@ -24,3 +24,25 @@ describe("resolveWrittenDate", () => {
     }
   });
 });
+
+import { checkRequestedWrittenDate } from "@/lib/pdf/writtenDate";
+
+describe("checkRequestedWrittenDate — 사용자 지정 작성일", () => {
+  const TODAY = "2026-10-05";
+  it("비어 있으면 지정 없음(null) — 종전처럼 문서를 만든 날", () => {
+    for (const v of [undefined, null, ""]) expect(checkRequestedWrittenDate(v, "2026-10-31", TODAY)).toEqual({ value: null, error: null });
+  });
+  it("기간 종료일(말일)까지는 오늘보다 미래여도 허용", () => {
+    expect(checkRequestedWrittenDate("2026-10-31", "2026-10-31", TODAY)).toEqual({ value: "2026-10-31", error: null });
+  });
+  it("종료일 다음 날(미래)은 거절", () => {
+    expect(checkRequestedWrittenDate("2026-11-01", "2026-10-31", TODAY).error).toBeTruthy();
+  });
+  it("지난 기간을 뒤늦게 만들 때는 오늘까지 허용(종료일 이후여도)", () => {
+    expect(checkRequestedWrittenDate("2026-10-05", "2026-09-30", TODAY)).toEqual({ value: "2026-10-05", error: null });
+    expect(checkRequestedWrittenDate("2026-10-06", "2026-09-30", TODAY).error).toBeTruthy();
+  });
+  it("형식·실존이 아니면 거절", () => {
+    for (const bad of ["2026-02-30", "20261031", "abc", 20261031, {}]) expect(checkRequestedWrittenDate(bad, "2026-10-31", TODAY).error).toBeTruthy();
+  });
+});

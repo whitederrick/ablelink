@@ -12,7 +12,8 @@ import { DocumentStage } from "@prisma/client";
 import { buildDocPayload, DocPayloadError } from "@/lib/docs/buildDocPayload";
 import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { checkRateLimit } from "@/lib/rateLimit";
-import { isValidYmd } from "@/lib/time";
+import { isValidYmd, getKstDateString } from "@/lib/time";
+import { checkRequestedWrittenDate } from "@/lib/pdf/writtenDate";
 import { checkDocPeriod } from "@/lib/docs/periodLimit";
 import { audit } from "@/lib/audit";
 
@@ -37,12 +38,15 @@ export async function POST(req: NextRequest) {
     if (!rl.allowed) return NextResponse.json({ success: false, message: "요청이 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429 });
 
     const body = await req.json().catch(() => ({}));
-    const { periodStart, periodEnd, documents, companyManagerSignToken, assignmentId } = body;
+    const { periodStart, periodEnd, documents, companyManagerSignToken, assignmentId, writtenDate } = body;
 
     if (!isValidYmd(periodStart) || !isValidYmd(periodEnd)) // 왕복검증(가짜 날짜→DocumentRun 경로 Invalid Date 500 차단)
       return NextResponse.json({ success: false, message: "기간(YYYY-MM-DD)이 필요합니다." }, { status: 400 });
     const docPeriodErr = checkDocPeriod(periodStart, periodEnd);
     if (docPeriodErr) return NextResponse.json({ success: false, message: docPeriodErr }, { status: 400 });
+    // 출근부 작성일(선택) — 비면 제출한 날. 상한=오늘·기간 종료일 중 늦은 날. (출근부 외 문서는 쓰지 않는다)
+    const written = checkRequestedWrittenDate(writtenDate, periodEnd, getKstDateString());
+    if (written.error) return NextResponse.json({ success: false, message: written.error }, { status: 400 });
     if (!Array.isArray(documents) || documents.length === 0)
       return NextResponse.json({ success: false, message: "제출할 문서가 없습니다." }, { status: 400 });
 
@@ -61,7 +65,7 @@ export async function POST(req: NextRequest) {
 
       let built;
       try {
-        built = await buildDocPayload({ workerId, docType, periodStart, periodEnd, traineeId, companyManagerSignToken, assignmentId });
+        built = await buildDocPayload({ workerId, docType, periodStart, periodEnd, traineeId, companyManagerSignToken, assignmentId, writtenYMD: written.value });
       } catch (e: any) {
         if (e instanceof DocPayloadError)
           return NextResponse.json({ success: false, message: `${DOC_LABELS[docType] || docType}: ${e.message}`, ...(e.extra || {}) }, { status: e.status });

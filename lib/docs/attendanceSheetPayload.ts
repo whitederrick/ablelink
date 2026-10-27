@@ -54,6 +54,8 @@ export interface BuildAttendanceSheetArgs {
   fallbackAssignment: AttendanceAssignmentFields;
   /** 서명은 호출 맥락마다 다름(제출=실서명, 미리보기·생성=공란 등) → 호출부가 결정. */
   signatures: AttendanceSheetSignatures;
+  /** 사용자가 지정한 작성일(YYYY-MM-DD, 호출부가 checkRequestedWrittenDate 로 검증). 없으면 문서를 만든 KST 날짜. */
+  writtenYMD?: string | null;
 }
 
 export interface BuildAttendanceSheetResult {
@@ -68,7 +70,7 @@ export interface BuildAttendanceSheetResult {
 export async function buildAttendanceSheetPayload(
   args: BuildAttendanceSheetArgs,
 ): Promise<BuildAttendanceSheetResult> {
-  const { workerId, start, end, siteId, companyName, workerName, workerPhone, fallbackAssignment, signatures } = args;
+  const { workerId, start, end, siteId, companyName, workerName, workerPhone, fallbackAssignment, signatures, writtenYMD } = args;
 
   // ★현장 필터 필수: 멀티현장 직무지도원이 같은 기간 다른 현장(B) 출근기록을 가지면
   //   siteId 필터가 없을 경우 이 현장(siteId=A) 출근부에 B현장 행이 섞인다(공단 문서 오염).
@@ -225,7 +227,7 @@ export async function buildAttendanceSheetPayload(
     periodStartYMD: fmtDot(start),
     periodEndYMD:   fmtDot(end),
     // 작성일 — 이 payload가 만들어진(제출 스냅샷이 저장되는) KST 날짜. 렌더러가 재렌더 시각 대신 이 값을 찍는다.
-    writtenYMD: getKstDateString(),
+    writtenYMD: writtenYMD ?? getKstDateString(),
     totalDays: entries.length,
     totalHours: baseTotal + extTotal,
     // ★출근부에서 빈 칸이 '쉰 날'인지 '기록이 빠진 날'인지 문서만 봐서는 구분되지 않던 것(2026-08-22 사용자 지적).

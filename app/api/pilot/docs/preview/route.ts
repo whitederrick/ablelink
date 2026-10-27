@@ -12,7 +12,8 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
 import { renderPdfToBuffer } from "@/lib/pdf";
-import { isValidYmd } from "@/lib/time";
+import { isValidYmd, getKstDateString } from "@/lib/time";
+import { checkRequestedWrittenDate } from "@/lib/pdf/writtenDate";
 import { buildDocFileName, contentDisposition } from "@/lib/pdf/filename";
 import { buildPilotDocPayload } from "@/lib/pilot/docs";
 import { toPilotResponse } from "@/lib/pilot/httpError";
@@ -34,6 +35,9 @@ export async function GET(request: NextRequest) {
       throw new PilotError(400, "INVALID_PERIOD", "기간(YYYY-MM-DD)이 올바르지 않습니다.");
     }
     if (!/^\d+$/.test(assignmentIdRaw)) throw new PilotError(400, "INVALID_INPUT", "배정을 선택해 주세요.");
+    // 출근부 작성일(선택) — 비면 문서를 만든 날. 상한=오늘·기간 종료일 중 늦은 날.
+    const written = checkRequestedWrittenDate(sp.get("writtenDate"), end, getKstDateString());
+    if (written.error) throw new PilotError(400, "INVALID_WRITTEN_DATE", written.error);
 
     // ★접근 검증 2단은 buildPilotDocPayload 안에서 수행한다
     //  (레지스트리 등록 + 실제 소유 일치). 미등록이면 404.
@@ -41,7 +45,7 @@ export async function GET(request: NextRequest) {
     //  입력 문자열을 그대로 쓰지 않는다.
     const { payload, companyName, docType: verified } = await buildPilotDocPayload({
       workerId: BigInt(session.workerId), assignmentId: BigInt(assignmentIdRaw),
-      docType, start, end, traineeId,
+      docType, start, end, traineeId, writtenYMD: written.value,
     });
 
     const pdf = await renderPdfToBuffer({ documentType: verified, payload });

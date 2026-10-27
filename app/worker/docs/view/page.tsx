@@ -88,6 +88,7 @@ function DocsViewInner() {
   const [docType,         setDocType]         = useState<DocType>("attendance-sheet");
   const [periodStart,     setPeriodStart]     = useState(def.start);
   const [periodEnd,       setPeriodEnd]       = useState(def.end);
+  const [writtenDate,      setWrittenDate]     = useState(""); // 출근부 작성일(선택) — 비면 문서를 만든 날
   const [selectedTrainee, setSelectedTrainee] = useState("");
   const [trainees,        setTrainees]        = useState<{id: string; name: string; gender: string}[]>([]);
   const [trainingType,    setTrainingType]    = useState<"PRE"|"FIELD"|"ADAPTATION">("FIELD");
@@ -130,6 +131,7 @@ function DocsViewInner() {
     const p = new URLSearchParams({
       docType, periodStart, periodEnd,
       ...(selectedTrainee ? { traineeId: selectedTrainee } : {}),
+      ...(docType === "attendance-sheet" && writtenDate ? { writtenDate } : {}),
       ...(activeAssignmentId ? { assignmentId: activeAssignmentId } : {}),
     });
     return `/api/worker/docs/preview?${p.toString()}`;
@@ -359,6 +361,24 @@ function DocsViewInner() {
               />
             </div>
           </div>
+
+          {docType === "attendance-sheet" && (
+            <div className="rounded-2xl border border-slate-100 bg-white p-4">
+              <p className="mb-1 text-sm font-black text-slate-700">작성일 <span className="text-xs font-semibold text-slate-400">(선택)</span></p>
+              <p className="mb-3 text-xs font-semibold text-slate-400">출근부 맨 아래 「위와 같이 근무(출근) 하였음을 확인함」 밑의 날짜입니다. 비워 두면 문서를 만든 날짜가 찍힙니다.</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date" value={writtenDate}
+                  max={periodEnd > new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10) ? periodEnd : new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10)}
+                  onChange={e => setWrittenDate(e.target.value)}
+                  className="h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-400"
+                />
+                {writtenDate && (
+                  <button type="button" onClick={() => setWrittenDate("")} className="h-10 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-500">지우기</button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* 조회 버튼 */}
           <button

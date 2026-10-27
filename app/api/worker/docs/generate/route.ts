@@ -5,7 +5,8 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server";
 import { getWorkerSessionFromReq } from "@/app/worker/_lib/session";
-import { isValidYmd } from "@/lib/time";
+import { isValidYmd, getKstDateString } from "@/lib/time";
+import { checkRequestedWrittenDate } from "@/lib/pdf/writtenDate";
 import { checkDocPeriod } from "@/lib/docs/periodLimit";
 import { checkPlanAccess } from "@/lib/planGuard";
 import { prisma } from "@/lib/prisma";
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     if (!planCheck.allowed) return NextResponse.json({ success: false, message: planCheck.message }, { status: 403 });
 
     const body = await request.json().catch(() => ({}));
-    const { docType, periodStart, periodEnd, sendEmail, toEmail, traineeId, companyManagerSignToken, assignmentId } = body;
+    const { docType, periodStart, periodEnd, sendEmail, toEmail, traineeId, companyManagerSignToken, assignmentId, writtenDate } = body;
 
     if (!docType) return NextResponse.json({ success: false, message: "문서 종류를 선택해주세요." }, { status: 400 });
     // 날짜 왕복검증(submit·preview·admin generate와 통일) — 실존불가 날짜가 findTraineeAtSiteInPeriod의 Invalid Date로 500나던 것 차단.
@@ -55,6 +56,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "기간(YYYY-MM-DD)이 올바르지 않습니다." }, { status: 400 });
     const docPeriodErr = checkDocPeriod(String(periodStart), String(periodEnd));
     if (docPeriodErr) return NextResponse.json({ success: false, message: docPeriodErr }, { status: 400 });
+    // 출근부 작성일(선택) — 비면 문서를 만든 날. 상한=오늘·기간 종료일 중 늦은 날.
+    const written = checkRequestedWrittenDate(writtenDate, String(periodEnd), getKstDateString());
+    if (written.error) return NextResponse.json({ success: false, message: written.error }, { status: 400 });
     // traineeId는 훈련생 문서에서 BigInt로 쓰임 — 비숫자면 500 대신 400(P3 위생).
     if (traineeId != null && !/^\d+$/.test(String(traineeId))) return NextResponse.json({ success: false, message: "잘못된 훈련생 ID입니다." }, { status: 400 });
 
@@ -170,6 +174,7 @@ export async function POST(request: NextRequest) {
           attendanceButtonExempt: assignment.attendanceButtonExempt ?? null,
         },
         signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
+        writtenYMD: written.value,
       }));
 
     } else if (docType === "TRAINING_DAILY_LOG") {

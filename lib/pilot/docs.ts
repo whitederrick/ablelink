@@ -111,6 +111,8 @@ export interface PilotDocInput {
   start: string;
   end: string;
   traineeId?: string | null;
+  /** 출근부 작성일(YYYY-MM-DD, 호출부가 검증). 없으면 문서를 만든 날. */
+  writtenYMD?: string | null;
 }
 
 /**
@@ -204,6 +206,7 @@ export async function buildPilotDocPayload(input: PilotDocInput) {
         attendanceButtonExempt: assignment.attendanceButtonExempt ?? null,
       },
       signatures: { govAgent, companyManager, worker: workerSig },
+      writtenYMD: input.writtenYMD ?? null,
     });
     return { payload, docType, companyName: site.companyName };
   }

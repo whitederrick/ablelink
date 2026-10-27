@@ -53,6 +53,7 @@ function PilotDocsContent() {
   const [traineeId, setTraineeId] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
+  const [writtenDate, setWrittenDate] = useState(""); // 출근부 작성일(선택) — 비면 문서를 만든 날
   const [busy, setBusy] = useState(false);
 
   // 사업체 담당자 서명 — 배지는 **서버 판정**을 그대로 쓴다(화면이 기억한 상태가 아니라).
@@ -143,6 +144,7 @@ function PilotDocsContent() {
   function url(kind: "preview" | "generate") {
     const p = new URLSearchParams({ docType, periodStart: start, periodEnd: end, assignmentId: asgId });
     if (doc.needsTrainee && traineeId) p.set("traineeId", traineeId);
+    if (docType === "ATTENDANCE_SHEET" && writtenDate) p.set("writtenDate", writtenDate);
     return `/api/pilot/docs/${kind}?${p.toString()}`;
   }
 
@@ -213,6 +215,21 @@ function PilotDocsContent() {
             {visibleDocs.map((d) => <option key={d.v} value={d.v}>{d.label}</option>)}
           </select>
         </div>
+
+        {docType === "ATTENDANCE_SHEET" && (
+          <div>
+            <label className={L}>작성일 <span className="text-xs font-semibold text-slate-400">(선택)</span></label>
+            <p className="mb-1.5 text-xs font-semibold text-slate-400">출근부 맨 아래 「위와 같이 근무(출근) 하였음을 확인함」 밑의 날짜입니다. 비워 두면 문서를 만든 날짜가 찍힙니다.</p>
+            <div className="flex items-center gap-2">
+              <input type="date" value={writtenDate}
+                max={end > new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10) ? end : new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10)}
+                onChange={(e) => setWrittenDate(e.target.value)} className={F} />
+              {writtenDate && (
+                <button type="button" onClick={() => setWrittenDate("")} className="shrink-0 rounded-xl border border-slate-300 px-3 py-3 text-sm font-semibold text-slate-500">지우기</button>
+              )}
+            </div>
+          </div>
+        )}
 
         {doc.needsTrainee && (
           <div>
