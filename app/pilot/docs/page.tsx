@@ -219,7 +219,7 @@ function PilotDocsContent() {
         {docType === "ATTENDANCE_SHEET" && (
           <div>
             <label className={L}>작성일 <span className="text-xs font-semibold text-slate-400">(선택)</span></label>
-            <p className="mb-1.5 text-xs font-semibold text-slate-400">출근부 맨 아래 「위와 같이 근무(출근) 하였음을 확인함」 밑의 날짜입니다. 비워 두면 문서를 만든 날짜가 찍힙니다.</p>
+            <p className="mb-1.5 text-xs font-semibold text-slate-400">출근부 맨 아래 「위와 같이 근무(출근) 하였음을 확인함」 밑의 날짜입니다. 비워 두면 문서를 만든 날짜가 찍힙니다. 아울러, 해당 일자 기준으로 모든 출근부가 자동 작성됩니다.</p>
             <div className="flex items-center gap-2">
               <input type="date" value={writtenDate}
                 max={end > new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10) ? end : new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10)}

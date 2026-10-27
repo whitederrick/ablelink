@@ -20,6 +20,7 @@ import { overtimeMinutesForDay, manualExtHoursFromLogs } from "@/lib/attendance/
 import { isMultiTraineeOnDate } from "@/lib/traineePlacement";
 import { getKrHolidayDates } from "@/lib/krHolidays";
 import { getKstDateString } from "@/lib/time";
+import { computeWorkTimes } from "@/lib/workSchedule";
 
 function fmtHHMM(d: Date): string {
   const kst = new Date(d.getTime() + 9 * 3600000);
@@ -54,7 +55,11 @@ export interface BuildAttendanceSheetArgs {
   fallbackAssignment: AttendanceAssignmentFields;
   /** 서명은 호출 맥락마다 다름(제출=실서명, 미리보기·생성=공란 등) → 호출부가 결정. */
   signatures: AttendanceSheetSignatures;
-  /** 사용자가 지정한 작성일(YYYY-MM-DD, 호출부가 checkRequestedWrittenDate 로 검증). 없으면 문서를 만든 KST 날짜. */
+  /**
+   * 사용자가 지정한 작성일(YYYY-MM-DD, 호출부가 checkRequestedWrittenDate 로 검증). 없으면 문서를 만든 KST 날짜.
+   * ★지정하면 아직 오지 않은 날(오늘~작성일, 기간 안)의 근무일도 문서에 채운다 — 월말 제출분을 미리 출력하기 위함.
+   *  DB(DailyAttendance)에는 아무것도 쓰지 않는다(급여·일지에 영향 없음) — 문서에 찍히는 값만 만든다.
+   */
   writtenYMD?: string | null;
 }
 
@@ -196,6 +201,58 @@ export async function buildAttendanceSheetPayload(
       _multi: multi,                   // 날짜별 1:多 플래그(총계 분리용, 렌더 미사용)
     };
   });
+
+  // ── 작성일까지 미리 채우기(작성일 지정 시에만) ──
+  //  대상 = 오늘 이후(오늘 포함) ~ min(작성일, 기간 끝) 중 출근 기록이 아직 없는 날. 지난 날의 빈 칸은 '기록 누락'
+  //  신호이므로 절대 채우지 않는다. 제외 = 주말·공휴일·휴무일(SiteHoliday)·연차 사용일·배정 기간 밖.
+  //  시각·시간은 근무형태 표준값(computeWorkTimes·dailyDocTimes) — 일괄생성(bulk-generate)과 같은 기준.
+  const todayYmd = getKstDateString();
+  const fillTo = writtenYMD && writtenYMD < end ? writtenYMD : end;
+  const fillFrom = start > todayYmd ? start : todayYmd;
+  if (writtenYMD && fillFrom <= fillTo) {
+    const [asgRows, leaveRows] = await Promise.all([
+      prisma.siteAssignment.findMany({
+        where: { workerId, siteId, status: { in: ["ASSIGNED", "CONFIRMED", "ACTIVE"] } },
+        select: { startDate: true, endDate: true },
+      }),
+      prisma.annualLeaveEntry.findMany({
+        where: {
+          workerId, kind: "USE",
+          effectiveDate: { gte: new Date(`${fillFrom}T00:00:00.000Z`), lte: new Date(`${fillTo}T00:00:00.000Z`) },
+        },
+        select: { effectiveDate: true },
+      }),
+    ]);
+    const asgRanges = asgRows.map((r) => ({
+      s: r.startDate ? getKstDateString(r.startDate) : null,
+      e: r.endDate ? getKstDateString(r.endDate) : null,
+    }));
+    const leaveDays = new Set(leaveRows.map((r) => r.effectiveDate.toISOString().slice(0, 10)));
+    const haveDays = new Set(attendanceRows.map((a) => a.workDate));
+    const skipDays = new Set([...getKrHolidayDates(fillFrom, fillTo), ...holidayRows.map((h) => h.date), ...leaveDays]);
+    const times = computeWorkTimes(
+      fallbackAssignment.workType, fallbackAssignment.commuteGuidanceIncluded ?? true,
+      fallbackAssignment.customWorkStart, fallbackAssignment.customWorkEnd,
+    );
+    const fillHours = dailyDocTimes(
+      fallbackAssignment.workType, fallbackAssignment.commuteGuidanceIncluded,
+      fallbackAssignment.customWorkStart, fallbackAssignment.customWorkEnd,
+    ).measHours;
+    for (let cur = Date.UTC(+fillFrom.slice(0, 4), +fillFrom.slice(5, 7) - 1, +fillFrom.slice(8, 10)); ; cur += 86400000) {
+      const ymd = new Date(cur).toISOString().slice(0, 10);
+      if (ymd > fillTo) break;
+      const wd = new Date(cur).getUTCDay();
+      if (wd === 0 || wd === 6) continue;
+      if (haveDays.has(ymd) || skipDays.has(ymd)) continue;
+      if (!asgRanges.some((r) => (!r.s || ymd >= r.s) && (!r.e || ymd <= r.e))) continue;
+      const multi = isMultiOnDate(ymd);
+      entries.push({
+        date: ymd, start: times.start, end: times.end, pending: false,
+        hours: fillHours, multiHours: multi ? fillHours : 0, _ext: 0, _multi: multi,
+      });
+    }
+    entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  }
 
   // 월차(연차) 사용 횟수 — 정식 연차 모듈 원장(USE)에서 그 기간 사용 일수 합(반차 0.5 포함).
   //  종전 하드코딩 0을 대체(사용자 확정: 신규 생성분부터 연동, 제출 스냅샷은 불변). 기관 스코프는

@@ -365,7 +365,7 @@ function DocsViewInner() {
           {docType === "attendance-sheet" && (
             <div className="rounded-2xl border border-slate-100 bg-white p-4">
               <p className="mb-1 text-sm font-black text-slate-700">작성일 <span className="text-xs font-semibold text-slate-400">(선택)</span></p>
-              <p className="mb-3 text-xs font-semibold text-slate-400">출근부 맨 아래 「위와 같이 근무(출근) 하였음을 확인함」 밑의 날짜입니다. 비워 두면 문서를 만든 날짜가 찍힙니다.</p>
+              <p className="mb-3 text-xs font-semibold text-slate-400">출근부 맨 아래 「위와 같이 근무(출근) 하였음을 확인함」 밑의 날짜입니다. 비워 두면 문서를 만든 날짜가 찍힙니다. 아울러, 해당 일자 기준으로 모든 출근부가 자동 작성됩니다.</p>
               <div className="flex items-center gap-2">
                 <input
                   type="date" value={writtenDate}
