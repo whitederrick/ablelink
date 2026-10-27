@@ -13,7 +13,8 @@ import { trainingDailyLogPayload, traineeFinalEvalPayload, adaptationDailyLogPay
 import { resolveDocTrainee } from "@/lib/docs/traineeSiteGuard";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { logAccess } from "@/lib/accessLog";
-import { isValidYmd } from "@/lib/time";
+import { isValidYmd, getKstDateString } from "@/lib/time";
+import { checkRequestedWrittenDate } from "@/lib/pdf/writtenDate";
 import { checkDocPeriod } from "@/lib/docs/periodLimit";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
 
@@ -37,6 +38,9 @@ export async function GET(request: NextRequest) {
     if (!isValidYmd(periodStart) || !isValidYmd(periodEnd)) return NextResponse.json({ success:false, message:"기간(YYYY-MM-DD)이 올바르지 않습니다." }, { status:400 });
     const docPeriodErr = checkDocPeriod(periodStart, periodEnd);
     if (docPeriodErr) return NextResponse.json({ success: false, message: docPeriodErr }, { status: 400 });
+    // 출근부 작성일(선택) — 비면 문서를 만든 날. 상한=오늘·기간 종료일 중 늦은 날.
+    const written = checkRequestedWrittenDate(searchParams.get("writtenDate"), periodEnd, getKstDateString());
+    if (written.error) return NextResponse.json({ success: false, message: written.error }, { status: 400 });
     const workerIdRaw = searchParams.get("workerId");
     const assignmentIdRaw = searchParams.get("assignmentId");
 
@@ -118,6 +122,7 @@ export async function GET(request: NextRequest) {
           attendanceButtonExempt: assignment.attendanceButtonExempt ?? null,
         },
         signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
+        writtenYMD: written.value,
       }));
     } else if (docType === "TRAINING_DAILY_LOG") {
       const trainee = guardedTrainee!; // C1 가드에서 이미 검증(null이면 위에서 400)

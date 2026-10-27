@@ -17,7 +17,8 @@ import { PDF_TO_PRISMA_DOCTYPE } from "@/lib/docs/docTypeMap";
 import { imageToDataUri } from "@/lib/signatureImage";
 import { logAccess } from "@/lib/accessLog";
 import { checkAgencyPlanAccess } from "@/lib/planGuard";
-import { isValidYmd } from "@/lib/time";
+import { isValidYmd, getKstDateString } from "@/lib/time";
+import { checkRequestedWrittenDate } from "@/lib/pdf/writtenDate";
 import { checkDocPeriod } from "@/lib/docs/periodLimit";
 
 
@@ -54,6 +55,9 @@ export async function POST(request: NextRequest) {
     if (docPeriodErr) return NextResponse.json({ success: false, message: docPeriodErr }, { status: 400 });
     if (traineeId != null && !/^[0-9]+$/.test(String(traineeId)))
       return NextResponse.json({ success:false, message:"잘못된 훈련생 ID입니다." }, { status:400 });
+    // 출근부 작성일(선택) — 비면 문서를 만든 날. 상한=오늘·기간 종료일 중 늦은 날.
+    const written = checkRequestedWrittenDate(body.writtenDate, String(periodEnd), getKstDateString());
+    if (written.error) return NextResponse.json({ success:false, message: written.error }, { status:400 });
 
     const workerId = BigInt(workerIdRaw);
     const start = periodStart, end = periodEnd;
@@ -137,6 +141,7 @@ export async function POST(request: NextRequest) {
           attendanceButtonExempt: assignment.attendanceButtonExempt ?? null,
         },
         signatures: { govAgent: sigs.govAgent, companyManager: { name: "", imageUrl: undefined }, worker: sigs.worker },
+        writtenYMD: written.value,
       }));
 
     } else if (docType === "TRAINING_DAILY_LOG") {

@@ -66,6 +66,7 @@ export default function AdminDocsPage() {
   const [traineeId,     setTraineeId]     = useState("");
   const [periodStart,   setPeriodStart]   = useState(def.start);
   const [periodEnd,     setPeriodEnd]     = useState(def.end);
+  const [writtenDate,   setWrittenDate]   = useState(""); // 출근부 작성일(선택) — 비면 문서를 만든 날
   const [query,         setQuery]         = useState("");
   const [loadingWorkers, setLoadingWorkers] = useState(false);
   // 공단 제출(SUBMITTED) 완료 → 문서 조회에서 제외할 키 집합
@@ -125,7 +126,7 @@ export default function AdminDocsPage() {
   function previewUrl() {
     if (!row) return "";
     // assignmentId 명시 = 이 행(현장)의 배정으로 주소지정(preview C2 — 미지정 시 최신 배정 폴백이라 멀티현장 오지정).
-    const p = new URLSearchParams({ workerId: row.workerId, assignmentId: row.assignmentId, docType, periodStart, periodEnd, ...(traineeId ? { traineeId } : {}) });
+    const p = new URLSearchParams({ workerId: row.workerId, assignmentId: row.assignmentId, docType, periodStart, periodEnd, ...(traineeId ? { traineeId } : {}), ...(docType === "attendance-sheet" && writtenDate ? { writtenDate } : {}) });
     return `/api/admin/docs/preview?${p.toString()}`;
   }
 
@@ -250,6 +251,19 @@ export default function AdminDocsPage() {
                   <p className="mt-0.5 text-xs font-semibold text-slate-400">{periodStart} ~ {periodEnd}</p>
                 </div>
               </div>
+
+              {docType === "attendance-sheet" && (
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[13px] font-black text-slate-700">작성일(선택)</span>
+                  <input type="date" value={writtenDate} onChange={e => setWrittenDate(e.target.value)}
+                    max={periodEnd > new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10) ? periodEnd : new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10)}
+                    className={`w-auto ${T.input}`} />
+                  {writtenDate && (
+                    <button type="button" onClick={() => setWrittenDate("")} className="inline-flex h-7 items-center rounded-md border border-slate-200 bg-white px-2 text-[12px] font-bold text-slate-600 hover:bg-slate-50">지우기</button>
+                  )}
+                  <span className="text-xs font-semibold text-slate-400">비우면 문서를 만든 날짜가 찍히고, 지정하면 그 일자까지 출근부가 자동 작성됩니다.</span>
+                </div>
+              )}
 
               {/* 미리보기 */}
               {ready && docType && row && submittedKeys.has(submittedKey(row.workerId, docType, row.siteId, needsTrainee ? traineeId : undefined)) ? (
