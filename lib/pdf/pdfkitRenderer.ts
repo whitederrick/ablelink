@@ -118,10 +118,10 @@ function signatures(
   doc.fontSize(11);
   for (const r of rows) {
     // 이름을 알 수 없는 칸(위탁기관 담당자 — handwriteBlank)은 출력 후 손으로 적도록 공백만 둔다(밑줄 없음 — 공단 원본 서식 그대로).
-    //  공백 1개 ≈ 3.3pt → 30개 ≈ 99pt ≈ 35mm. 인쇄된 이름(3자≈12mm)보다 충분히 넓어야 손글씨가 들어간다.
+    //  공백 1개 ≈ 3.3pt → 21개 ≈ 69pt ≈ 24mm. 인쇄된 이름(3자≈12mm)의 2배 — 30개(35mm)는 사용자가 넓다고 해서 30% 줄임.
     //  사업체담당자는 서명받을 때 이름이 들어오므로 대상이 아니다.
     const rawName = r.sig?.name ?? "";
-    const name = r.handwriteBlank && rawName.trim() === "" ? " ".repeat(30) : rawName;
+    const name = r.handwriteBlank && rawName.trim() === "" ? " ".repeat(21) : rawName;
     const line = `${r.label} : ${name}    ${tail}`;
     doc.font("KR").fontSize(11).fillColor("#000").text(line, left, cy, { width: right - left, align: "right" });
     // 서명 이미지(있으면) "(서명 또는 인)" 텍스트 중앙에 겹쳐 그림
