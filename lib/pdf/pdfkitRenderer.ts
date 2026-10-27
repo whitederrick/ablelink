@@ -105,7 +105,7 @@ function title(doc: PDFKit.PDFDocument, text: string, y: number, size = 17, opts
 // 서명란 (라벨: 이름 (서명 또는 인)[+이미지])
 // right/left를 주면 위쪽 표의 우측 끝에 맞춰 정렬(출근부는 20mm 여백이라 기본값과 다름).
 function signatures(
-  doc: PDFKit.PDFDocument, y: number, rows: { label: string; sig?: Sig }[],
+  doc: PDFKit.PDFDocument, y: number, rows: { label: string; sig?: Sig; handwriteBlank?: boolean }[],
   opts: { tail?: string; left?: number; right?: number } = {},
 ): number {
   const { tail = "(서명 또는 인)", left = MARGIN, right = doc.page.width - MARGIN } = opts;
@@ -117,7 +117,11 @@ function signatures(
   let cy = y + 6;
   doc.fontSize(11);
   for (const r of rows) {
-    const name = r.sig?.name ?? "";
+    // 이름을 알 수 없는 칸(위탁기관 담당자 — handwriteBlank)은 출력 후 손으로 적도록 공백만 둔다(밑줄 없음 — 공단 원본 서식 그대로).
+    //  공백 1개 ≈ 3.3pt → 30개 ≈ 99pt ≈ 35mm. 인쇄된 이름(3자≈12mm)보다 충분히 넓어야 손글씨가 들어간다.
+    //  사업체담당자는 서명받을 때 이름이 들어오므로 대상이 아니다.
+    const rawName = r.sig?.name ?? "";
+    const name = r.handwriteBlank && rawName.trim() === "" ? " ".repeat(30) : rawName;
     const line = `${r.label} : ${name}    ${tail}`;
     doc.font("KR").fontSize(11).fillColor("#000").text(line, left, cy, { width: right - left, align: "right" });
     // 서명 이미지(있으면) "(서명 또는 인)" 텍스트 중앙에 겹쳐 그림
@@ -455,7 +459,7 @@ function attendanceSheet(p: any): Promise<Buffer> {
 
   const s = p.signatures ?? {};
   signatures(doc, y, [
-    { label: "(공단/위탁기관) 담당자", sig: s.govAgent },
+    { label: "(공단/위탁기관) 담당자", sig: s.govAgent, handwriteBlank: true },
     { label: "사업체담당자", sig: s.companyManager },
     { label: "직무지도원", sig: s.worker },
   ], { left: x, right: x + W });
@@ -627,7 +631,7 @@ function dailyLog(kind: "TRAINING" | "ADAPTATION", p: any): Promise<Buffer> {
     cell(doc, x, y, widths[0], ihh, "특이사항", { vertical: true, bold: true, size: 8 });
     cell(doc, x + widths[0], y, W - widths[0], ihh, p.issues ?? "", { align: "left", size: 9 });
     y += ihh + 18;
-    signatures(doc, y, [{ label: "직무지도원", sig: s.worker }, { label: "위탁기관 담당자", sig: s.govAgent }], { left: x, right: x + W });
+    signatures(doc, y, [{ label: "직무지도원", sig: s.worker }, { label: "위탁기관 담당자", sig: s.govAgent, handwriteBlank: true }], { left: x, right: x + W });
   } else {
     const rowsData: any[] = Array.isArray(p.rows) ? p.rows : [];
     // 원본 비율(상·하단 정렬): 누적 0.279=훈련시간|지도여부(=훈련생명|사업체명), 수행정도[0.47,0.62]가 T2(0.545) 가로지름, 평가 0.38(원본 수준).
@@ -657,7 +661,7 @@ function dailyLog(kind: "TRAINING" | "ADAPTATION", p: any): Promise<Buffer> {
     y += 18;
     // (서명)은 우측 끝에 붙이지 않고 여백을 둬 실제 서명 공간 확보
     signatures(doc, y, [
-      { label: "(공단/위탁기관) 담당자", sig: s.govAgent },
+      { label: "(공단/위탁기관) 담당자", sig: s.govAgent, handwriteBlank: true },
       { label: "사업체담당자", sig: s.companyManager },
       { label: "직무지도원", sig: s.worker },
     ], { tail: "(서 명)", left: x, right: x + W - mm(10) });
@@ -784,7 +788,7 @@ function finalEval(kind: "TRAINEE" | "ADAPTATION", p: any): Promise<Buffer> {
 
   const s = p.signatures ?? {};
   // 서명 문구: 훈련생=「(서 명)」, 적응지도=「(서명 또는 인)」. 우측 여백(적응지도는 더 작게=오른쪽으로).
-  signatures(doc, y, [{ label: "직무지도원", sig: s.worker }, { label: "(위탁기관) 담당자", sig: s.agencyAgent }],
+  signatures(doc, y, [{ label: "직무지도원", sig: s.worker }, { label: "(위탁기관) 담당자", sig: s.agencyAgent, handwriteBlank: true }],
     { tail: isTrainee ? "(서 명)" : "(서명 또는 인)", left: x, right: x + W - (isTrainee ? mm(15) : mm(6)) });
   return toBuffer(doc);
 }
