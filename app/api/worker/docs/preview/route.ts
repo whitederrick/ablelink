@@ -72,8 +72,14 @@ export async function GET(request: NextRequest) {
         orderBy: { id:"asc" },
       });
     }
-    const [workerImg] = await Promise.all([
+    // 사업체 담당자 대면 서명 — 발송(buildDocPayload)과 같은 기준(이 배정·이 기간의 가장 최근 완료분).
+    const companyToken = await prisma.siteSignToken.findFirst({
+      where: { assignmentId: assignment.id, periodStart, periodEnd, signRole: "company_manager", usedAt: { not: null } },
+      orderBy: { usedAt: "desc" },
+    });
+    const [workerImg, companyImg] = await Promise.all([
       imageToDataUri(user?.signatureUrl),
+      imageToDataUri(companyToken?.signatureUrl),
     ]);
     // 매니저(govAgent/agencyAgent) 서명은 실시간 미리보기에서 자동 주입하지 않는다.
     //  → 매니저 서명은 명시적 서명 액션을 거친 제출본 스냅샷에서만 표시된다.
@@ -81,6 +87,7 @@ export async function GET(request: NextRequest) {
       worker:       { name: user?.workerName||"",            imageUrl: workerImg },
       govAgent:    { name: adminForSign?.displayName||"", imageUrl: undefined },
       agencyAgent: { name: adminForSign?.displayName||"", imageUrl: undefined },
+      companyManager: { name: companyToken?.signerName||"", imageUrl: companyImg },
     };
 
     const site = assignment.site;
@@ -114,8 +121,7 @@ export async function GET(request: NextRequest) {
           customWorkEnd: assignment.customWorkEnd ?? null,
           attendanceButtonExempt: assignment.attendanceButtonExempt ?? null,
         },
-        // 미리보기는 사업체 담당자 서명 자동 주입 안 함(제출 스냅샷에서만 표시).
-        signatures: { govAgent: sigs.govAgent, companyManager: { name: "", imageUrl: undefined }, worker: sigs.worker },
+        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
         writtenYMD: written.value,
       }));
     } else if (docType === "TRAINING_DAILY_LOG") {
@@ -128,7 +134,7 @@ export async function GET(request: NextRequest) {
         traineeName: trainee?.name || "", companyName: site.companyName,
         preStartYmd: assignment.stepStart?.toISOString().slice(0, 10) || start,
         start, end, logs, docTimes,
-        signatures: { govAgent: sigs.govAgent, companyManager: { name: "", imageUrl: undefined }, worker: sigs.worker },
+        signatures: { govAgent: sigs.govAgent, companyManager: sigs.companyManager, worker: sigs.worker },
       });
     } else if (docType === "ADAPTATION_DAILY_LOG") {
       const trainee = previewTrainee!;
